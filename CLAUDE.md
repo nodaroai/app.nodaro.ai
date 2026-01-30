@@ -725,6 +725,60 @@ Example: Image node output → connects to both Video node AND next Image node a
 | Text to Speech | ElevenLabs | PlayHT, Azure TTS |
 | Generate Script | Claude | GPT-4, Gemini |
 
+#### 4. Dynamic Input Handles
+
+**Every configuration field in a node can optionally receive its value from an incoming connection instead of being set manually in the config panel.**
+
+**Resolution rule:**
+- If a field has an incoming connection → use the connected value
+- If no connection → use the value from the config panel (fallback)
+
+This means any node's config is a mix of static values (set in the panel) and dynamic values (received from connected nodes). Dynamic inputs appear as additional handles on the left side of the node.
+
+**Benefits:**
+- **Write once, connect many**: Define a style guide in one Text Input node, connect it to every Generate Image node
+- **Dynamic parameters from n8n**: Pass `scene_count`, `style`, `model` as workflow variables from API/n8n
+- **Visual clarity**: See at a glance where each value comes from (connection vs. manual)
+- **Mix static + dynamic**: Some fields from connections, others from config panel
+
+**How it works in the UI:**
+
+```
+┌─────────────────────────────────────────┐
+│ 🎨 Generate Image - Scene 3             │
+│                                         │
+│ Provider: [Nano Banana ▼]    ← manual   │
+│ Style:    ●─── connected ───── [Text]   │
+│ Aspect:   [16:9 ▼]          ← manual   │
+│ Neg Prompt: ●── connected ── [Text]     │
+│                                         │
+│ ● = dynamic input handle (left side)    │
+│     When connected, config field is     │
+│     grayed out with "Connected" label   │
+└─────────────────────────────────────────┘
+```
+
+**Dynamic input handles on nodes:**
+
+| Node | Dynamic Input Handles | Type |
+|------|-----------------------|------|
+| Generate Script | `style_guide`, `tone`, `scene_count`, `target_length`, `provider_model` | text, text, number, number, model |
+| Generate Image | `style`, `negative_prompt`, `aspect_ratio`, `provider_model` | text, text, text, model |
+| Image to Video | `duration`, `motion`, `camera_motion`, `provider_model` | number, text, text, model |
+| Text to Speech | `voice_id`, `speed`, `provider_model` | text, number, model |
+| Combine Videos | `transition`, `transition_duration` | text, number |
+
+**Connection type compatibility:**
+
+| Output Type | Can Connect To |
+|-------------|----------------|
+| text | Any text/string field |
+| number | Any number field |
+| model | Provider/model fields on AI nodes |
+| image | Image input fields |
+| video | Video input fields |
+| audio | Audio input fields |
+
 ### Input Nodes
 
 ```typescript
@@ -760,6 +814,66 @@ interface RSSFeedNode {
     extractFields: string[]; // ['title', 'description', 'image']
   };
 }
+
+// --- Dynamic Input Nodes ---
+// These nodes provide values that connect to dynamic input handles on other nodes.
+
+interface TextInputNode {
+  type: 'text-input';
+  data: {
+    label: string;           // Display name (e.g. "Style Guide", "Tone")
+    text: string;            // The text value
+    placeholder?: string;    // Placeholder hint
+  };
+  inputs: [];
+  outputs: ['text'];         // Connects to any text/string dynamic input handle
+  creditCost: 0;
+
+  // Use cases:
+  // - Style guide shared across multiple Generate Image nodes
+  // - Tone/mood shared across multiple Generate Script nodes
+  // - Negative prompt shared across image nodes
+  // - Custom prompt fragments
+}
+
+interface NumberInputNode {
+  type: 'number-input';
+  data: {
+    label: string;           // Display name (e.g. "Scene Count", "Duration")
+    value: number;           // The number value
+    min?: number;            // Minimum allowed value
+    max?: number;            // Maximum allowed value
+    step?: number;           // Increment step (default 1)
+  };
+  inputs: [];
+  outputs: ['number'];       // Connects to any number dynamic input handle
+  creditCost: 0;
+
+  // Use cases:
+  // - Scene count shared across workflow
+  // - Duration parameter
+  // - Transition duration
+  // - Speed/pitch for TTS
+}
+
+interface ModelSelectorNode {
+  type: 'model-selector';
+  data: {
+    label: string;           // Display name (e.g. "Image Model", "Video Model")
+    category: 'image' | 'video' | 'voice' | 'script'; // Filters available models
+    provider: string;        // Selected provider (e.g. "nano-banana")
+    model: string;           // Selected model (e.g. "gemini-2.5-flash-image")
+  };
+  inputs: [];
+  outputs: ['model'];        // Connects to provider/model dynamic input handle on AI nodes
+  creditCost: 0;
+
+  // Use cases:
+  // - Select model once, connect to all image generation nodes
+  // - Swap entire workflow's model by changing one node
+  // - A/B test: duplicate workflow, change only the Model Selector
+  // - n8n users can pass model selection as workflow variable
+}
 ```
 
 ### AI Nodes
@@ -778,6 +892,8 @@ interface GenerateScriptNode {
     stylePresetId?: string;  // Optional style preset to guide visual descriptions
   };
   inputs: ['prompt'];
+  // Dynamic input handles (optional, override config panel values when connected):
+  dynamicInputs: ['style_guide', 'tone', 'scene_count', 'target_length', 'provider_model'];
   outputs: ['script', 'scenes'];
   creditCost: 2;
 
@@ -811,6 +927,8 @@ interface GenerateImageNode {
     stylePresetId?: string;    // Style preset to apply
   };
   inputs: ['prompt', 'reference?'];  // Reference accepts MULTIPLE connections
+  // Dynamic input handles (optional, override config panel values when connected):
+  dynamicInputs: ['style', 'negative_prompt', 'aspect_ratio', 'provider_model'];
   outputs: ['image'];                // Output can connect to MULTIPLE nodes
   creditCost: 5;
 
