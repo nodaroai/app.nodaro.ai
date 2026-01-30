@@ -1,6 +1,6 @@
 "use client"
 
-import { Type, ImageIcon, Film, Merge } from "lucide-react"
+import { Type, BookOpen, ImageIcon, Film, Merge } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
@@ -15,6 +15,7 @@ interface NodeOption {
 
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-prompt", label: "Text Prompt", icon: <Type className="h-4 w-4" />, category: "Input" },
+  { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI" },
   { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI" },
   { type: "image-to-video", label: "Image to Video", icon: <Film className="h-4 w-4" />, category: "AI" },
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing" },

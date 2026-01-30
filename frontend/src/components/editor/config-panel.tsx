@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type {
   TextPromptData,
+  GenerateScriptData,
   GenerateImageData,
   ImageToVideoData,
   CombineVideosData,
@@ -71,6 +72,12 @@ export function ConfigPanel() {
               onUpdate={update}
             />
           )}
+          {selectedNode.type === "generate-script" && (
+            <GenerateScriptConfig
+              data={selectedNode.data as GenerateScriptData}
+              onUpdate={update}
+            />
+          )}
           {selectedNode.type === "generate-image" && (
             <GenerateImageConfig
               data={selectedNode.data as GenerateImageData}
@@ -118,6 +125,88 @@ function TextPromptConfig({
           value={data.text}
           onChange={(e) => onUpdate({ text: e.target.value })}
           placeholder="Enter your story prompt..."
+        />
+      </div>
+    </div>
+  )
+}
+
+function GenerateScriptConfig({
+  data,
+  onUpdate,
+}: {
+  readonly data: GenerateScriptData
+  readonly onUpdate: (d: Record<string, unknown>) => void
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Provider</Label>
+        <Select
+          value={data.provider}
+          onValueChange={(v) => onUpdate({ provider: v as GenerateScriptData["provider"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="gemini">Gemini Flash</SelectItem>
+            <SelectItem value="claude">Claude</SelectItem>
+            <SelectItem value="gpt">GPT</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="scene-count">Number of Scenes</Label>
+        <Input
+          id="scene-count"
+          type="number"
+          min={1}
+          max={20}
+          value={data.sceneCount}
+          onChange={(e) => onUpdate({ sceneCount: parseInt(e.target.value, 10) || 5 })}
+        />
+      </div>
+      <div>
+        <Label>Structure</Label>
+        <Select
+          value={data.structure}
+          onValueChange={(v) => onUpdate({ structure: v as GenerateScriptData["structure"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="freeform">Freeform</SelectItem>
+            <SelectItem value="8-step">8-Step Story</SelectItem>
+            <SelectItem value="custom">Custom</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="style-guide">Style Guide</Label>
+        <Textarea
+          id="style-guide"
+          rows={3}
+          value={data.styleGuide}
+          onChange={(e) => onUpdate({ styleGuide: e.target.value })}
+          placeholder="e.g. children's book illustration, watercolor..."
+        />
+      </div>
+      <div>
+        <Label htmlFor="tone">Tone</Label>
+        <Input
+          id="tone"
+          value={data.tone}
+          onChange={(e) => onUpdate({ tone: e.target.value })}
+          placeholder="e.g. whimsical, dramatic, educational"
+        />
+      </div>
+      <div>
+        <Label htmlFor="target-length">Target Length (seconds)</Label>
+        <Input
+          id="target-length"
+          type="number"
+          min={10}
+          max={600}
+          value={data.targetLength}
+          onChange={(e) => onUpdate({ targetLength: parseInt(e.target.value, 10) || 60 })}
         />
       </div>
     </div>

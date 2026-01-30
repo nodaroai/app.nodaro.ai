@@ -36,14 +36,28 @@ export type CombineVideosData = {
   transitionDuration: number
 }
 
+export type GenerateScriptData = {
+  [key: string]: unknown
+  label: string
+  provider: "gemini" | "claude" | "gpt"
+  model: string
+  sceneCount: number
+  styleGuide: string
+  structure: "freeform" | "8-step" | "custom"
+  tone: string
+  targetLength: number
+}
+
 export type SceneNodeData =
   | TextPromptData
+  | GenerateScriptData
   | GenerateImageData
   | ImageToVideoData
   | CombineVideosData
 
 export type SceneNodeType =
   | "text-prompt"
+  | "generate-script"
   | "generate-image"
   | "image-to-video"
   | "combine-videos"
@@ -73,6 +87,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Text Prompt",
       text: "",
       variables: {},
+    },
+  },
+  {
+    type: "generate-script",
+    label: "Generate Script",
+    category: "ai",
+    creditCost: 2,
+    inputs: ["prompt"],
+    outputs: ["scenes"],
+    defaultData: {
+      label: "Generate Script",
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      sceneCount: 5,
+      styleGuide: "",
+      structure: "freeform",
+      tone: "",
+      targetLength: 60,
     },
   },
   {
