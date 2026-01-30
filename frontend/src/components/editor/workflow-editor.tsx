@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useCallback, useEffect } from "react"
 import { ReactFlowProvider } from "@xyflow/react"
 import { WorkflowCanvas } from "./workflow-canvas"
 import { NodeToolbar } from "./node-toolbar"
@@ -15,7 +15,7 @@ interface WorkflowEditorProps {
 }
 
 export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
-  const { save, load, saving, loading } = useWorkflowPersistence()
+  const { save, load, saving, loading } = useWorkflowPersistence(projectId)
   const fetchProjects = useProjectsStore((s) => s.fetchProjects)
 
   useEffect(() => {
@@ -29,15 +29,28 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     fetchProjects()
   }, [fetchProjects])
 
-  function handleSave() {
+  const handleSave = useCallback(() => {
     if (projectId) {
       save(projectId)
     }
-  }
+  }, [projectId, save])
 
   function handleRun() {
     // TODO: Execute workflow via API
   }
+
+  // Ctrl+S keyboard shortcut
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [handleSave])
 
   return (
     <div className="flex flex-col h-screen">

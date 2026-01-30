@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, ChevronRight, Save, Play, AlertTriangle, CheckCircle } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, Play, AlertTriangle, CheckCircle, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -25,6 +25,8 @@ export function EditorToolbar({ projectId, onSave, onRun, saving }: EditorToolba
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const isDirty = useWorkflowStore((s) => s.isDirty)
+  const saveStatus = useWorkflowStore((s) => s.saveStatus)
+  const saveError = useWorkflowStore((s) => s.saveError)
   const project = useProjectsStore((s) =>
     projectId ? s.projects.find((p) => p.id === projectId) : undefined,
   )
@@ -81,11 +83,42 @@ export function EditorToolbar({ projectId, onSave, onRun, saving }: EditorToolba
           onChange={(e) => setWorkflowName(e.target.value)}
           className="w-28 sm:w-48 h-8 text-sm"
         />
-        {isDirty && (
-          <Badge variant="outline" className="text-xs shrink-0 hidden sm:flex">
-            Unsaved
-          </Badge>
-        )}
+
+        {/* Save status indicator */}
+        <div className="hidden sm:flex items-center gap-1 text-xs shrink-0">
+          {saveStatus === "saving" && (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <span className="text-muted-foreground">Saving...</span>
+            </>
+          )}
+          {saveStatus === "saved" && (
+            <>
+              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+              <span className="text-green-600 dark:text-green-400">Saved</span>
+            </>
+          )}
+          {saveStatus === "error" && (
+            <>
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+              <span className="text-destructive" title={saveError ?? undefined}>Save failed</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={onSave}
+                title="Retry save"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </>
+          )}
+          {saveStatus === "idle" && isDirty && (
+            <Badge variant="outline" className="text-xs">
+              Unsaved
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">

@@ -10,6 +10,8 @@ import {
 import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType } from "@/types/nodes"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
+export type SaveStatus = "idle" | "saving" | "saved" | "error"
+
 interface WorkflowState {
   readonly workflowId: string | null
   readonly workflowName: string
@@ -17,6 +19,8 @@ interface WorkflowState {
   readonly edges: WorkflowEdge[]
   readonly selectedNodeId: string | null
   readonly isDirty: boolean
+  readonly saveStatus: SaveStatus
+  readonly saveError: string | null
 
   readonly setWorkflowId: (id: string | null) => void
   readonly setWorkflowName: (name: string) => void
@@ -32,6 +36,7 @@ interface WorkflowState {
   readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
+  readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
 }
 
 let nextNodeId = 1
@@ -49,6 +54,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   edges: [],
   selectedNodeId: null,
   isDirty: false,
+  saveStatus: "idle" as SaveStatus,
+  saveError: null,
 
   setWorkflowId: (id) => set({ workflowId: id }),
 
@@ -157,6 +164,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       edges,
       selectedNodeId: null,
       isDirty: false,
+      saveStatus: "idle" as SaveStatus,
+      saveError: null,
     })
   },
 
@@ -169,8 +178,12 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       edges: [],
       selectedNodeId: null,
       isDirty: false,
+      saveStatus: "idle" as SaveStatus,
+      saveError: null,
     })
   },
 
   markClean: () => set({ isDirty: false }),
+
+  setSaveStatus: (status, error = null) => set({ saveStatus: status, saveError: error }),
 }))

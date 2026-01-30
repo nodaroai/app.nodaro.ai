@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -10,27 +10,38 @@ interface SaveResult {
   readonly error?: string
 }
 
-export function useWorkflowPersistence() {
+const AUTO_SAVE_DELAY = 2000
+const SAVED_DISPLAY_DURATION = 2000
+
+export function useWorkflowPersistence(projectId?: string) {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Use individual selectors to avoid re-rendering on every node/edge change
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow)
   const setWorkflowId = useWorkflowStore((s) => s.setWorkflowId)
   const markClean = useWorkflowStore((s) => s.markClean)
+  const setSaveStatus = useWorkflowStore((s) => s.setSaveStatus)
 
   const save = useCallback(
-    async (projectId: string): Promise<SaveResult> => {
+    async (pid?: string): Promise<SaveResult> => {
+      const resolvedProjectId = pid ?? projectId
+      if (!resolvedProjectId) return { success: false, error: "No project ID" }
+
+      const { workflowId, workflowName, nodes, edges } =
+        useWorkflowStore.getState()
+
+      // Don't save empty workflows
+      if (nodes.length === 0) return { success: false, error: "Empty workflow" }
+
       setSaving(true)
+      setSaveStatus("saving")
       try {
         const supabase = createClient()
 
-        // Read current state at call time, not at render time
-        const { workflowId, workflowName, nodes, edges } =
-          useWorkflowStore.getState()
-
         const payload = {
-          project_id: projectId,
+          project_id: resolvedProjectId,
           name: workflowName,
           nodes: JSON.parse(JSON.stringify(nodes)),
           edges: JSON.parse(JSON.stringify(edges)),
@@ -42,10 +53,16 @@ export function useWorkflowPersistence() {
             .update(payload)
             .eq("id", workflowId)
 
-          if (error) return { success: false, error: error.message }
+          if (error) {
+            setSaveStatus("error", error.message)
+            return { success: false, error: error.message }
+          }
         } else {
           const { data: { user } } = await supabase.auth.getUser()
-          if (!user) return { success: false, error: "Not authenticated" }
+          if (!user) {
+            setSaveStatus("error", "Not authenticated")
+            return { success: false, error: "Not authenticated" }
+          }
 
           const { data, error } = await supabase
             .from("workflows")
@@ -53,22 +70,38 @@ export function useWorkflowPersistence() {
             .select("id")
             .single()
 
-          if (error) return { success: false, error: error.message }
+          if (error) {
+            setSaveStatus("error", error.message)
+            return { success: false, error: error.message }
+          }
           setWorkflowId(data.id)
         }
 
         markClean()
+        setSaveStatus("saved")
+
+        // Clear any existing fade timer
+        if (savedFadeTimerRef.current) {
+          clearTimeout(savedFadeTimerRef.current)
+        }
+        savedFadeTimerRef.current = setTimeout(() => {
+          // Only reset if still in "saved" state
+          const current = useWorkflowStore.getState().saveStatus
+          if (current === "saved") {
+            setSaveStatus("idle")
+          }
+        }, SAVED_DISPLAY_DURATION)
+
         return { success: true }
       } catch (err) {
-        return {
-          success: false,
-          error: err instanceof Error ? err.message : "Failed to save",
-        }
+        const message = err instanceof Error ? err.message : "Failed to save"
+        setSaveStatus("error", message)
+        return { success: false, error: message }
       } finally {
         setSaving(false)
       }
     },
-    [setWorkflowId, markClean],
+    [projectId, setWorkflowId, markClean, setSaveStatus],
   )
 
   const load = useCallback(
@@ -103,6 +136,36 @@ export function useWorkflowPersistence() {
     },
     [loadWorkflow],
   )
+
+  // Debounced auto-save: subscribe to store changes
+  useEffect(() => {
+    const unsubscribe = useWorkflowStore.subscribe((state) => {
+      if (!state.isDirty || !projectId || state.nodes.length === 0) return
+
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+      autoSaveTimerRef.current = setTimeout(() => {
+        save()
+      }, AUTO_SAVE_DELAY)
+    })
+
+    return () => {
+      unsubscribe()
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+    }
+  }, [projectId, save])
+
+  // Cleanup fade timer on unmount
+  useEffect(() => {
+    return () => {
+      if (savedFadeTimerRef.current) {
+        clearTimeout(savedFadeTimerRef.current)
+      }
+    }
+  }, [])
 
   return { save, load, saving, loading }
 }
