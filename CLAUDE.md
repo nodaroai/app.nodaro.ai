@@ -313,11 +313,20 @@ CREATE TABLE public.projects (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Folders (organize workflows within projects)
+CREATE TABLE public.folders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Workflows (the node graph)
 CREATE TABLE public.workflows (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    folder_id UUID REFERENCES public.folders(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     description TEXT,
     nodes JSONB NOT NULL DEFAULT '[]',        -- React Flow nodes
@@ -507,7 +516,9 @@ CREATE POLICY "Users can view own subscription" ON public.subscriptions
 ```sql
 -- Performance indexes
 CREATE INDEX idx_projects_user_id ON public.projects(user_id);
+CREATE INDEX idx_folders_project_id ON public.folders(project_id);
 CREATE INDEX idx_workflows_project_id ON public.workflows(project_id);
+CREATE INDEX idx_workflows_folder_id ON public.workflows(folder_id);
 CREATE INDEX idx_workflows_user_id ON public.workflows(user_id);
 CREATE INDEX idx_jobs_workflow_id ON public.jobs(workflow_id);
 CREATE INDEX idx_jobs_user_id ON public.jobs(user_id);
@@ -2431,6 +2442,44 @@ scenenode/
 ├── README.md
 └── CLAUDE.md                   # This file
 ```
+
+---
+
+## Responsive Design
+
+All pages are fully responsive and mobile-friendly.
+
+### Dashboard Pages
+
+- **Sidebar**: Collapses off-screen on mobile (<768px), revealed via hamburger menu with overlay backdrop
+- **Mobile header**: Appears on small screens with hamburger button, logo, and theme toggle
+- **Projects grid**: Adjusts from 3 columns (desktop) to 2 (tablet) to 1 (mobile)
+- **Project detail**: Padding and font sizes scale down; settings button hidden on small screens
+
+### Workflow Editor
+
+- **Node toolbar**: Collapsible on mobile via floating action button (FAB) at bottom-left; always visible on desktop
+- **Config panel**: Full-screen overlay on mobile; fixed 320px sidebar on desktop
+- **Touch targets**: Node handles enlarge to 20px on touch devices (`@media(pointer:coarse)`) for easier connection dragging
+- **Pinch to zoom**: Enabled via `zoomOnPinch` prop on ReactFlow; zoom range 0.2x-2x
+- **MiniMap**: Hidden on mobile to save screen space
+- **Editor toolbar**: Breadcrumbs hidden on small screens; button labels collapse to icon-only; workflow name input narrows
+
+### Light/Dark Mode
+
+Theme toggle (Sun/Moon icon) is accessible on every page:
+- **Dashboard pages**: In the sidebar footer (desktop) and mobile header bar
+- **Editor**: In the editor toolbar (top-right)
+- Theme persists across sessions via `next-themes` with `class` attribute strategy
+
+### Breakpoints
+
+| Breakpoint | Tailwind | Behavior |
+|------------|----------|----------|
+| <640px | default | Single column, icon-only buttons, collapsed sidebar |
+| 640-767px | `sm:` | Wider inputs, text labels on buttons |
+| 768px+ | `md:` | Sidebar visible, full breadcrumbs, MiniMap shown |
+| 1024px+ | `lg:` | 3-column project grid |
 
 ---
 

@@ -94,7 +94,7 @@ export function BaseNode({
           id={h.id}
           type={h.type}
           position={h.position}
-          className="!w-3 !h-3 !bg-primary !border-2 !border-background"
+          className="!w-3 !h-3 !bg-primary !border-2 !border-background touch-manipulation [@media(pointer:coarse)]:!w-5 [@media(pointer:coarse)]:!h-5"
           style={h.top ? { top: h.top } : undefined}
         />
       ))}

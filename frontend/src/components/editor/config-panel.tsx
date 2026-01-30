@@ -45,7 +45,7 @@ export function ConfigPanel() {
   }
 
   return (
-    <div className="absolute top-0 right-0 z-10 h-full w-80 bg-card border-l shadow-lg flex flex-col">
+    <div className="absolute inset-0 z-10 bg-card shadow-lg flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-80 sm:border-l">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="text-sm font-semibold">Node Settings</h3>
         <Button variant="ghost" size="icon" onClick={() => selectNode(null)}>

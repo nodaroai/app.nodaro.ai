@@ -21,6 +21,20 @@ interface ContextMenuState {
   readonly y: number
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)")
+    setIsMobile(mql.matches)
+    function onChange(e: MediaQueryListEvent) {
+      setIsMobile(e.matches)
+    }
+    mql.addEventListener("change", onChange)
+    return () => mql.removeEventListener("change", onChange)
+  }, [])
+  return isMobile
+}
+
 export function WorkflowCanvas() {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -31,6 +45,7 @@ export function WorkflowCanvas() {
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const isMobile = useIsMobile()
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
@@ -78,14 +93,20 @@ export function WorkflowCanvas() {
         nodeTypes={nodeTypes}
         fitView
         deleteKeyCode="Delete"
-        className="bg-background"
+        className="bg-background touch-manipulation"
+        zoomOnPinch
+        panOnDrag
+        minZoom={0.2}
+        maxZoom={2}
       >
         <Controls className="!bg-card !border !shadow-sm" />
-        <MiniMap
-          className="!bg-card !border !shadow-sm"
-          nodeColor="#8b5cf6"
-          maskColor="rgba(0, 0, 0, 0.1)"
-        />
+        {!isMobile && (
+          <MiniMap
+            className="!bg-card !border !shadow-sm"
+            nodeColor="#8b5cf6"
+            maskColor="rgba(0, 0, 0, 0.1)"
+          />
+        )}
         <Background
           variant={BackgroundVariant.Dots}
           gap={16}

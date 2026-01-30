@@ -12,7 +12,7 @@ interface WorkflowEditorProps {
   readonly workflowId?: string
 }
 
-export function WorkflowEditor({ projectId }: WorkflowEditorProps) {
+export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const { save, saving } = useWorkflowPersistence()
 
   function handleSave() {
@@ -27,7 +27,13 @@ export function WorkflowEditor({ projectId }: WorkflowEditorProps) {
 
   return (
     <div className="flex flex-col h-screen">
-      <EditorToolbar onSave={handleSave} onRun={handleRun} saving={saving} />
+      <EditorToolbar
+        projectId={projectId}
+        workflowId={workflowId}
+        onSave={handleSave}
+        onRun={handleRun}
+        saving={saving}
+      />
       <div className="flex-1 relative">
         <ReactFlowProvider>
           <WorkflowCanvas />
