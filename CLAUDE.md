@@ -6,7 +6,10 @@
 
 ### Core Value Proposition
 - **Visual Workflow Editor**: Drag-and-drop interface using React Flow
+- **Build from Prompt**: Describe a video in plain text, get a complete workflow auto-generated (nodes + connections). Edit the generated flow as needed.
 - **Graph-Based Workflows**: Not linear pipelines - support branching, merging, loops
+- **Character Consistency**: Define characters per project with name, description, reference image, and visual traits. Characters are automatically injected into Generate Image nodes to maintain visual consistency across scenes.
+- **Style Presets**: Library of visual styles (system presets + user-created) for quick-start workflows. Each preset stores generation settings, aspect ratios, and style prompts.
 - **Model Agnostic**: Swap AI providers without changing workflows
 - **API First**: Full API access for n8n/Make.com integration
 - **Self-hostable**: Open source with Sustainable Use License
@@ -149,6 +152,70 @@ Character consistency maintained through the chain!
 | Multiple outputs (several videos) | ✅ | MVP |
 | Different formats from same concept | ✅ | MVP |
 | Loop/Batch (full series) | ✅ | Phase 2 |
+| Build from Prompt (auto-generate workflow) | ✅ | MVP |
+| Character consistency (project-level characters) | ✅ | MVP |
+| Style presets (system + user-created) | ✅ | MVP |
+
+### Build from Prompt
+
+A button in the editor toolbar that takes a plain text description and auto-generates a complete workflow (nodes + edges). The user can then edit, rearrange, or extend the generated flow.
+
+**How it works:**
+
+1. User clicks "Build from Prompt" in the editor toolbar
+2. A dialog appears with a text area: "Describe the video you want to create"
+3. The description is sent to an LLM (Claude/Gemini) with a system prompt that understands SceneNode's node types
+4. The LLM returns a JSON structure: `{ nodes: [...], edges: [...] }`
+5. The workflow is loaded into the editor canvas
+6. The original prompt is stored in `workflows.source_prompt` for reference
+
+**Example:**
+
+```
+User prompt: "Create a 60-second children's story about a brave rabbit who saves
+the forest from a storm. 5 scenes, narrator voice, word-highlight captions."
+
+Generated workflow:
+  Text Prompt → Generate Script (5 scenes) → Generate Image ×5 → Image to Video ×5
+  → Combine Videos → Add Audio (ElevenLabs narrator) → Add Captions (word-highlight)
+  → Save to Storage
+```
+
+The generated workflow is fully editable - users can change providers, adjust prompts, add/remove nodes, or restructure the graph.
+
+### Character Consistency
+
+Characters are defined at the **project level** and can be reused across all workflows in that project.
+
+**Character definition includes:**
+- **Name**: e.g. "Sir Aldric"
+- **Description**: e.g. "A brave knight in his 30s"
+- **Reference image**: An uploaded or generated image that defines the character's appearance
+- **Visual traits** (JSONB): Structured attributes like `{ hair: "blonde", build: "athletic", clothing: "steel plate armor with blue cape", distinguishing: "scar on left cheek" }`
+
+**Usage in workflows:**
+- Generate Image nodes have a "Characters" section in their config panel
+- Users select which project characters should appear in that scene
+- The node automatically appends character descriptions and passes reference images to the AI provider
+- This maintains visual consistency across all scenes in a workflow
+
+### Style Presets
+
+Pre-configured visual style templates for quick-start workflows.
+
+**System presets** (built-in):
+- Children's Storybook, Anime, Photorealistic, Watercolor, Comic Book, Film Noir, etc.
+
+**User presets** (custom):
+- Users can save their current generation settings as a reusable preset
+- Stored per user, accessible across all their projects
+
+**Preset settings include:**
+- Image provider + model
+- Style prompt additions
+- Aspect ratio
+- Negative prompt
+- Any provider-specific parameters
 
 ---
 
@@ -321,6 +388,28 @@ CREATE TABLE public.folders (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Characters (per-project, for visual consistency across scenes)
+CREATE TABLE public.characters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    reference_image_url TEXT,
+    visual_traits JSONB NOT NULL DEFAULT '{}', -- { hair: "blonde", age: "young", clothing: "armor", etc. }
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Style Presets (system + user-created visual style templates)
+CREATE TABLE public.style_presets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    thumbnail_url TEXT,
+    settings JSONB NOT NULL DEFAULT '{}',     -- { aspectRatio, provider, model, negativePrompt, stylePrompt, etc. }
+    is_system BOOLEAN NOT NULL DEFAULT FALSE, -- TRUE for built-in presets
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE, -- NULL for system presets
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Workflows (the node graph)
 CREATE TABLE public.workflows (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -329,6 +418,7 @@ CREATE TABLE public.workflows (
     folder_id UUID REFERENCES public.folders(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     description TEXT,
+    source_prompt TEXT,                       -- Original prompt if workflow was auto-generated via "Build from Prompt"
     nodes JSONB NOT NULL DEFAULT '[]',        -- React Flow nodes
     edges JSONB NOT NULL DEFAULT '[]',        -- React Flow edges
     settings JSONB NOT NULL DEFAULT '{}',
@@ -465,6 +555,8 @@ CREATE TABLE public.credit_purchases (
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.characters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.style_presets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workflows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
@@ -481,6 +573,18 @@ CREATE POLICY "Users can update own profile" ON public.profiles
 -- Projects: Users can only access their own projects
 CREATE POLICY "Users can CRUD own projects" ON public.projects
     FOR ALL USING (auth.uid() = user_id);
+
+-- Characters: Access via project ownership (user_id on project)
+CREATE POLICY "Users can CRUD own characters" ON public.characters
+    FOR ALL USING (
+        EXISTS (SELECT 1 FROM public.projects WHERE id = project_id AND user_id = auth.uid())
+    );
+
+-- Style Presets: Users can read system presets + CRUD their own
+CREATE POLICY "Users can read system presets" ON public.style_presets
+    FOR SELECT USING (is_system = TRUE OR user_id = auth.uid());
+CREATE POLICY "Users can CRUD own presets" ON public.style_presets
+    FOR ALL USING (user_id = auth.uid());
 
 -- Workflows: Users can only access their own workflows
 CREATE POLICY "Users can CRUD own workflows" ON public.workflows
@@ -517,6 +621,9 @@ CREATE POLICY "Users can view own subscription" ON public.subscriptions
 -- Performance indexes
 CREATE INDEX idx_projects_user_id ON public.projects(user_id);
 CREATE INDEX idx_folders_project_id ON public.folders(project_id);
+CREATE INDEX idx_characters_project_id ON public.characters(project_id);
+CREATE INDEX idx_style_presets_user_id ON public.style_presets(user_id);
+CREATE INDEX idx_style_presets_is_system ON public.style_presets(is_system) WHERE is_system = TRUE;
 CREATE INDEX idx_workflows_project_id ON public.workflows(project_id);
 CREATE INDEX idx_workflows_folder_id ON public.workflows(folder_id);
 CREATE INDEX idx_workflows_user_id ON public.workflows(user_id);
@@ -668,10 +775,28 @@ interface GenerateScriptNode {
     sceneCount?: number;
     tone?: string;
     targetLength?: number;   // seconds
+    stylePresetId?: string;  // Optional style preset to guide visual descriptions
   };
   inputs: ['prompt'];
   outputs: ['script', 'scenes'];
   creditCost: 2;
+
+  // Enhanced Prompt Generation:
+  // The Generate Script node produces CINEMATIC scripts, not just structured briefs.
+  // Each scene description includes:
+  // - Camera movement and framing (close-up, wide shot, tracking)
+  // - Pacing and rhythm (fast cuts, slow reveal, beat)
+  // - Sensory details (lighting, atmosphere, textures, colors)
+  // - Scale and environment (intimate room, vast landscape, crowd)
+  // - Character action and emotion (not just "character walks" but HOW they walk)
+  // - Transition suggestions between scenes
+  //
+  // Example output per scene:
+  // "WIDE SHOT - A lone knight stands at the edge of a crumbling stone bridge.
+  //  Golden hour light cuts through mist rising from the chasm below.
+  //  His armor catches the light as he grips his sword, knuckles white.
+  //  Camera slowly PUSHES IN as wind whips his tattered cloak.
+  //  The scale of the canyon dwarfs him - we feel his isolation."
 }
 
 interface GenerateImageNode {
@@ -682,15 +807,32 @@ interface GenerateImageNode {
     style?: string;
     aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3';
     negativePrompt?: string;
+    characterIds?: string[];   // Project characters to include in this image
+    stylePresetId?: string;    // Style preset to apply
   };
   inputs: ['prompt', 'reference?'];  // Reference accepts MULTIPLE connections
   outputs: ['image'];                // Output can connect to MULTIPLE nodes
   creditCost: 5;
-  
+
   // Reference input can receive:
   // - Uploaded images (for character consistency)
   // - Output from previous Generate Image node (for chaining)
   // - Multiple images at once (Nano Banana supports up to 14)
+
+  // Character Consistency:
+  // When characterIds are set, the node automatically:
+  // 1. Loads character data (name, description, visual_traits, reference_image_url) from the project
+  // 2. Appends character descriptions to the image prompt
+  //    e.g. "Include character 'Sir Aldric': tall male knight, blonde hair, steel plate armor, blue cape, scar on left cheek"
+  // 3. Passes character reference images as additional reference inputs to the provider
+  // 4. This ensures the same character looks consistent across all scenes
+  //
+  // Characters are defined at the PROJECT level (not per workflow), so they
+  // can be reused across multiple workflows within the same project.
+  //
+  // UI: The node config panel shows a "Characters" section with checkboxes
+  // for each project character. Selecting a character adds their visual traits
+  // and reference image to the generation request.
 }
 
 interface ImageToVideoNode {
