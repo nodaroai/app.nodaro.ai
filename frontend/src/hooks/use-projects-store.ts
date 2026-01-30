@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { createClient } from "@/lib/supabase"
 
 export interface Project {
   readonly id: string
@@ -29,134 +29,336 @@ interface ProjectsState {
   readonly projects: Project[]
   readonly folders: Folder[]
   readonly workflowMetas: WorkflowMeta[]
+  readonly loading: boolean
+  readonly error: string | null
 
-  readonly createProject: (name: string, description?: string) => Project
-  readonly deleteProject: (id: string) => void
-  readonly updateProject: (id: string, updates: { name?: string; description?: string }) => void
+  readonly fetchProjects: () => Promise<void>
+  readonly fetchProjectData: (projectId: string) => Promise<void>
 
-  readonly createFolder: (projectId: string, name: string) => Folder
-  readonly renameFolder: (id: string, name: string) => void
-  readonly deleteFolder: (id: string) => void
+  readonly createProject: (name: string, description?: string) => Promise<Project | null>
+  readonly deleteProject: (id: string) => Promise<void>
+  readonly updateProject: (id: string, updates: { name?: string; description?: string }) => Promise<void>
 
-  readonly createWorkflow: (projectId: string, name: string, folderId?: string | null) => WorkflowMeta
-  readonly deleteWorkflow: (id: string) => void
-  readonly renameWorkflow: (id: string, name: string) => void
-  readonly moveWorkflow: (id: string, folderId: string | null) => void
-  readonly duplicateWorkflow: (id: string) => WorkflowMeta | null
+  readonly createFolder: (projectId: string, name: string) => Promise<Folder | null>
+  readonly renameFolder: (id: string, name: string) => Promise<void>
+  readonly deleteFolder: (id: string) => Promise<void>
+
+  readonly createWorkflow: (projectId: string, name: string, folderId?: string | null) => Promise<WorkflowMeta | null>
+  readonly deleteWorkflow: (id: string) => Promise<void>
+  readonly renameWorkflow: (id: string, name: string) => Promise<void>
+  readonly moveWorkflow: (id: string, folderId: string | null) => Promise<void>
+  readonly duplicateWorkflow: (id: string) => Promise<WorkflowMeta | null>
 }
 
-function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+function toProject(row: Record<string, unknown>): Project {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: (row.description as string) ?? "",
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
 }
 
-function nowIso(): string {
-  return new Date().toISOString()
+function toFolder(row: Record<string, unknown>): Folder {
+  return {
+    id: row.id as string,
+    projectId: row.project_id as string,
+    name: row.name as string,
+    createdAt: row.created_at as string,
+  }
 }
 
-export const useProjectsStore = create<ProjectsState>()(
-  persist(
-    (set, get) => ({
-      projects: [],
-      folders: [],
-      workflowMetas: [],
+function toWorkflowMeta(row: Record<string, unknown>): WorkflowMeta {
+  return {
+    id: row.id as string,
+    projectId: row.project_id as string,
+    folderId: (row.folder_id as string) ?? null,
+    name: row.name as string,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
+}
 
-      createProject: (name, description = "") => {
-        const project: Project = {
-          id: generateId("proj"),
+export const useProjectsStore = create<ProjectsState>((set, get) => ({
+  projects: [],
+  folders: [],
+  workflowMetas: [],
+  loading: false,
+  error: null,
+
+  fetchProjects: async () => {
+    set({ loading: true, error: null })
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        set({ error: error.message, loading: false })
+        return
+      }
+      set({ projects: data.map(toProject), loading: false })
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to fetch projects", loading: false })
+    }
+  },
+
+  fetchProjectData: async (projectId: string) => {
+    set({ loading: true, error: null })
+    try {
+      const supabase = createClient()
+
+      const [foldersRes, workflowsRes] = await Promise.all([
+        supabase
+          .from("folders")
+          .select("*")
+          .eq("project_id", projectId)
+          .order("created_at"),
+        supabase
+          .from("workflows")
+          .select("id, project_id, folder_id, name, created_at, updated_at")
+          .eq("project_id", projectId)
+          .order("created_at", { ascending: false }),
+      ])
+
+      if (foldersRes.error) {
+        set({ error: foldersRes.error.message, loading: false })
+        return
+      }
+      if (workflowsRes.error) {
+        set({ error: workflowsRes.error.message, loading: false })
+        return
+      }
+
+      set({
+        folders: foldersRes.data.map(toFolder),
+        workflowMetas: workflowsRes.data.map(toWorkflowMeta),
+        loading: false,
+      })
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to fetch project data", loading: false })
+    }
+  },
+
+  createProject: async (name, description = "") => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+
+      const { data, error } = await supabase
+        .from("projects")
+        .insert({ name, description, user_id: user.id })
+        .select()
+        .single()
+
+      if (error || !data) return null
+
+      const project = toProject(data)
+      set((s) => ({ projects: [project, ...s.projects] }))
+      return project
+    } catch {
+      return null
+    }
+  },
+
+  deleteProject: async (id) => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("projects").delete().eq("id", id)
+      if (error) return
+
+      set((s) => ({
+        projects: s.projects.filter((p) => p.id !== id),
+        folders: s.folders.filter((f) => f.projectId !== id),
+        workflowMetas: s.workflowMetas.filter((w) => w.projectId !== id),
+      }))
+    } catch {
+      // silent
+    }
+  },
+
+  updateProject: async (id, updates) => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("projects").update(updates).eq("id", id)
+      if (error) return
+
+      set((s) => ({
+        projects: s.projects.map((p) =>
+          p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p,
+        ),
+      }))
+    } catch {
+      // silent
+    }
+  },
+
+  createFolder: async (projectId, name) => {
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from("folders")
+        .insert({ project_id: projectId, name })
+        .select()
+        .single()
+
+      if (error || !data) return null
+
+      const folder = toFolder(data)
+      set((s) => ({ folders: [...s.folders, folder] }))
+      return folder
+    } catch {
+      return null
+    }
+  },
+
+  renameFolder: async (id, name) => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("folders").update({ name }).eq("id", id)
+      if (error) return
+
+      set((s) => ({
+        folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)),
+      }))
+    } catch {
+      // silent
+    }
+  },
+
+  deleteFolder: async (id) => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("folders").delete().eq("id", id)
+      if (error) return
+
+      set((s) => ({
+        folders: s.folders.filter((f) => f.id !== id),
+        workflowMetas: s.workflowMetas.map((w) =>
+          w.folderId === id ? { ...w, folderId: null } : w,
+        ),
+      }))
+    } catch {
+      // silent
+    }
+  },
+
+  createWorkflow: async (projectId, name, folderId = null) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+
+      const { data, error } = await supabase
+        .from("workflows")
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          folder_id: folderId,
           name,
-          description,
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
-        }
-        set((s) => ({ projects: [...s.projects, project] }))
-        return project
-      },
+        })
+        .select("id, project_id, folder_id, name, created_at, updated_at")
+        .single()
 
-      deleteProject: (id) =>
-        set((s) => ({
-          projects: s.projects.filter((p) => p.id !== id),
-          folders: s.folders.filter((f) => f.projectId !== id),
-          workflowMetas: s.workflowMetas.filter((w) => w.projectId !== id),
-        })),
+      if (error || !data) return null
 
-      updateProject: (id, updates) =>
-        set((s) => ({
-          projects: s.projects.map((p) =>
-            p.id === id ? { ...p, ...updates, updatedAt: nowIso() } : p,
-          ),
-        })),
+      const wf = toWorkflowMeta(data)
+      set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
+      return wf
+    } catch {
+      return null
+    }
+  },
 
-      createFolder: (projectId, name) => {
-        const folder: Folder = {
-          id: generateId("folder"),
-          projectId,
-          name,
-          createdAt: nowIso(),
-        }
-        set((s) => ({ folders: [...s.folders, folder] }))
-        return folder
-      },
+  deleteWorkflow: async (id) => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("workflows").delete().eq("id", id)
+      if (error) return
 
-      renameFolder: (id, name) =>
-        set((s) => ({
-          folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)),
-        })),
+      set((s) => ({
+        workflowMetas: s.workflowMetas.filter((w) => w.id !== id),
+      }))
+    } catch {
+      // silent
+    }
+  },
 
-      deleteFolder: (id) =>
-        set((s) => ({
-          folders: s.folders.filter((f) => f.id !== id),
-          workflowMetas: s.workflowMetas.map((w) =>
-            w.folderId === id ? { ...w, folderId: null } : w,
-          ),
-        })),
+  renameWorkflow: async (id, name) => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from("workflows").update({ name }).eq("id", id)
+      if (error) return
 
-      createWorkflow: (projectId, name, folderId = null) => {
-        const wf: WorkflowMeta = {
-          id: generateId("wf"),
-          projectId,
-          folderId: folderId ?? null,
-          name,
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
-        }
-        set((s) => ({ workflowMetas: [...s.workflowMetas, wf] }))
-        return wf
-      },
+      set((s) => ({
+        workflowMetas: s.workflowMetas.map((w) =>
+          w.id === id ? { ...w, name, updatedAt: new Date().toISOString() } : w,
+        ),
+      }))
+    } catch {
+      // silent
+    }
+  },
 
-      deleteWorkflow: (id) =>
-        set((s) => ({
-          workflowMetas: s.workflowMetas.filter((w) => w.id !== id),
-        })),
+  moveWorkflow: async (id, folderId) => {
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from("workflows")
+        .update({ folder_id: folderId })
+        .eq("id", id)
+      if (error) return
 
-      renameWorkflow: (id, name) =>
-        set((s) => ({
-          workflowMetas: s.workflowMetas.map((w) =>
-            w.id === id ? { ...w, name, updatedAt: nowIso() } : w,
-          ),
-        })),
+      set((s) => ({
+        workflowMetas: s.workflowMetas.map((w) =>
+          w.id === id ? { ...w, folderId, updatedAt: new Date().toISOString() } : w,
+        ),
+      }))
+    } catch {
+      // silent
+    }
+  },
 
-      moveWorkflow: (id, folderId) =>
-        set((s) => ({
-          workflowMetas: s.workflowMetas.map((w) =>
-            w.id === id ? { ...w, folderId, updatedAt: nowIso() } : w,
-          ),
-        })),
+  duplicateWorkflow: async (id) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
 
-      duplicateWorkflow: (id) => {
-        const source = get().workflowMetas.find((w) => w.id === id)
-        if (!source) return null
-        const copy: WorkflowMeta = {
-          id: generateId("wf"),
-          projectId: source.projectId,
-          folderId: source.folderId,
-          name: `${source.name} (Copy)`,
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
-        }
-        set((s) => ({ workflowMetas: [...s.workflowMetas, copy] }))
-        return copy
-      },
-    }),
-    { name: "scenenode-projects" },
-  ),
-)
+      // Fetch original workflow with nodes/edges
+      const { data: original, error: fetchError } = await supabase
+        .from("workflows")
+        .select("*")
+        .eq("id", id)
+        .single()
+
+      if (fetchError || !original) return null
+
+      const { data, error } = await supabase
+        .from("workflows")
+        .insert({
+          project_id: original.project_id,
+          user_id: user.id,
+          folder_id: original.folder_id,
+          name: `${original.name} (Copy)`,
+          nodes: original.nodes,
+          edges: original.edges,
+          settings: original.settings,
+        })
+        .select("id, project_id, folder_id, name, created_at, updated_at")
+        .single()
+
+      if (error || !data) return null
+
+      const wf = toWorkflowMeta(data)
+      set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
+      return wf
+    } catch {
+      return null
+    }
+  },
+}))

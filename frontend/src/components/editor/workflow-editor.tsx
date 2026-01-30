@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { ReactFlowProvider } from "@xyflow/react"
 import { WorkflowCanvas } from "./workflow-canvas"
 import { NodeToolbar } from "./node-toolbar"
@@ -13,7 +14,13 @@ interface WorkflowEditorProps {
 }
 
 export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
-  const { save, saving } = useWorkflowPersistence()
+  const { save, load, saving, loading } = useWorkflowPersistence()
+
+  useEffect(() => {
+    if (workflowId) {
+      load(workflowId)
+    }
+  }, [workflowId, load])
 
   function handleSave() {
     if (projectId) {

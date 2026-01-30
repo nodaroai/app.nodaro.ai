@@ -45,9 +45,12 @@ export function useWorkflowPersistence() {
 
           if (error) return { success: false, error: error.message }
         } else {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (!user) return { success: false, error: "Not authenticated" }
+
           const { data, error } = await supabase
             .from("workflows")
-            .insert(payload)
+            .insert({ ...payload, user_id: user.id })
             .select("id")
             .single()
 

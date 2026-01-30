@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Search } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Plus, Search, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useProjectsStore } from "@/hooks/use-projects-store"
@@ -10,10 +10,16 @@ import { CreateProjectDialog } from "@/components/dashboard/create-project-dialo
 
 export default function ProjectsPage() {
   const projects = useProjectsStore((s) => s.projects)
+  const loading = useProjectsStore((s) => s.loading)
+  const fetchProjects = useProjectsStore((s) => s.fetchProjects)
   const createProject = useProjectsStore((s) => s.createProject)
   const deleteProject = useProjectsStore((s) => s.deleteProject)
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  useEffect(() => {
+    fetchProjects()
+  }, [fetchProjects])
 
   const filtered = search
     ? projects.filter((p) =>
@@ -42,7 +48,11 @@ export default function ProjectsPage() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <p className="text-sm">
             {projects.length === 0

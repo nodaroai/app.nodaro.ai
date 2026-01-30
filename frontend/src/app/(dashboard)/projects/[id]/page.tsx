@@ -1,8 +1,8 @@
 "use client"
 
-import { use } from "react"
+import { use, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Settings } from "lucide-react"
+import { ArrowLeft, Settings, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useProjectsStore } from "@/hooks/use-projects-store"
@@ -17,6 +17,22 @@ export default function ProjectPage({
 }) {
   const { id } = use(params)
   const project = useProjectsStore((s) => s.projects.find((p) => p.id === id))
+  const loading = useProjectsStore((s) => s.loading)
+  const fetchProjects = useProjectsStore((s) => s.fetchProjects)
+  const fetchProjectData = useProjectsStore((s) => s.fetchProjectData)
+
+  useEffect(() => {
+    fetchProjects()
+    fetchProjectData(id)
+  }, [id, fetchProjects, fetchProjectData])
+
+  if (loading && !project) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   if (!project) {
     return (
