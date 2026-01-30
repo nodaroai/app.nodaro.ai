@@ -1,15 +1,17 @@
 "use client"
 
+import { type FC } from "react"
 import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
   type EdgeProps,
+  type Edge,
 } from "@xyflow/react"
 import { X } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
-export function DeletableEdge({
+export const DeletableEdge: FC<EdgeProps<Edge>> = ({
   id,
   sourceX,
   sourceY,
@@ -20,7 +22,7 @@ export function DeletableEdge({
   style,
   markerEnd,
   selected,
-}: EdgeProps) {
+}) => {
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
 
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -40,7 +42,7 @@ export function DeletableEdge({
         style={{
           ...style,
           strokeWidth: selected ? 3 : 2,
-          stroke: selected ? "hsl(var(--primary))" : "hsl(var(--muted-foreground) / 0.4)",
+          stroke: selected ? "hsl(var(--primary))" : undefined,
         }}
       />
       {selected && (

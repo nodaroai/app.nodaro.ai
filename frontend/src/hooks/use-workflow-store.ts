@@ -69,7 +69,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   onConnect: (connection) =>
     set((state) => ({
       edges: addEdge(
-        { ...connection, id: `edge_${Date.now()}`, type: "deletable" },
+        { ...connection, id: `edge_${Date.now()}` },
         state.edges,
       ),
       isDirty: true,

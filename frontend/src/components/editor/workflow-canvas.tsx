@@ -12,13 +12,8 @@ import {
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
-import { DeletableEdge } from "./deletable-edge"
 import { NodeContextMenu } from "./node-context-menu"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-
-const edgeTypes = {
-  deletable: DeletableEdge,
-}
 
 interface NodeContextMenuState {
   readonly nodeId: string
@@ -100,8 +95,6 @@ export function WorkflowCanvas() {
         onPaneClick={handlePaneClick}
         onNodeContextMenu={handleNodeContextMenu}
         nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        defaultEdgeOptions={{ type: "deletable" }}
         fitView
         deleteKeyCode="Delete"
         className="bg-background touch-manipulation"
