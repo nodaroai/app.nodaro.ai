@@ -32,16 +32,26 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Redirect unauthenticated users to login (except auth routes and root)
-  if (!user && pathname.startsWith("/projects")) {
+  const protectedPrefixes = ["/projects", "/settings", "/admin"]
+  if (!user && protectedPrefixes.some((p) => pathname.startsWith(p))) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)
   }
 
-  if (!user && pathname.startsWith("/settings")) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/login"
-    return NextResponse.redirect(url)
+  // Admin routes: check role in profiles table
+  if (user && pathname.startsWith("/admin")) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+
+    if (!profile || !["admin", "super_admin"].includes(profile.role)) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/projects"
+      return NextResponse.redirect(url)
+    }
   }
 
   // Redirect authenticated users away from login

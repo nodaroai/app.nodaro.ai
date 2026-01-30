@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { FolderOpen, Settings, Menu, X, LogOut } from "lucide-react"
+import { FolderOpen, Settings, Shield, Menu, X, LogOut } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -21,7 +21,7 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, signOut } = useAuth()
+  const { user, isAdmin, signOut } = useAuth()
 
   // Don't show the dashboard shell for the editor route
   const isEditor = pathname.includes("/workflows/")
@@ -83,6 +83,16 @@ export default function DashboardLayout({
               </Link>
             )
           })}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent/50 transition-colors"
+            >
+              <Shield className="h-4 w-4" />
+              Admin
+            </Link>
+          )}
         </nav>
         <div className="px-4 py-3 border-t space-y-2">
           {user && (

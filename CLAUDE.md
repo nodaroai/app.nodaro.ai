@@ -351,6 +351,7 @@ CREATE TABLE public.profiles (
     avatar_url TEXT,
     tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'basic', 'pro', 'business', 'enterprise')),
     credits_balance INTEGER NOT NULL DEFAULT 50,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'super_admin')),
     storage_used_bytes BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -3309,6 +3310,38 @@ useQuery({
   enabled: status !== 'completed' && status !== 'failed'
 })
 ```
+
+---
+
+## Admin Panel
+
+### Overview
+
+Admin panel at `/admin` for platform management. Only accessible to users with `role` = `admin` or `super_admin` in the profiles table.
+
+### Routes
+
+| Route | Purpose |
+|-------|---------|
+| `/admin` | Dashboard with stats (total users, projects, workflows, jobs, credits used) |
+| `/admin/users` | List all users with tier, credits, role, join date |
+| `/admin/jobs` | List all jobs with status filter, user, workflow, credits |
+| `/admin/usage` | Usage logs with action, provider, credits, user |
+
+### Access Control
+
+- **Middleware**: `/admin/*` routes check `profiles.role` in middleware; non-admins redirected to `/projects`
+- **Client-side**: `useAuth()` hook exposes `role` and `isAdmin` boolean
+- **RLS policies**: Admin users have SELECT access on all key tables (profiles, projects, workflows, jobs, usage_logs, assets)
+- **Sidebar**: Admin link (Shield icon) only visible when `isAdmin` is true
+
+### User Roles
+
+| Role | Access |
+|------|--------|
+| `user` | Standard dashboard, own projects/workflows |
+| `admin` | All of `user` + admin panel read access |
+| `super_admin` | All of `admin` + future write operations |
 
 ---
 
