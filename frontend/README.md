@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SceneNode.ai
 
-## Getting Started
+Visual workflow platform for AI video generation. Build video creation pipelines by connecting nodes, with each node representing an AI operation (image generation, video creation, voiceover, etc.).
 
-First, run the development server:
+## Features
+
+- **Visual Workflow Editor** - Drag-and-drop node-based interface powered by React Flow
+- **Graph-Based Workflows** - Branching, merging, and chaining (not just linear pipelines)
+- **Multiple Node Types** - Text Prompt, Generate Script, Generate Image, Image to Video, Combine Videos
+- **Project Organization** - Projects with folders, drag-and-drop workflow management
+- **Mobile Responsive** - Full editor and dashboard on mobile with touch-optimized controls
+- **Light/Dark Mode** - System-aware theme toggle on all pages
+- **Model Agnostic** - Swap AI providers without changing workflows
+
+<!-- TODO: Add screenshots -->
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- npm or pnpm
+
+### Development
 
 ```bash
+# Clone
+git clone https://github.com/asafna2/SceneNode-ai.git
+cd SceneNode-ai/frontend
+
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Build
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Test
 
-## Learn More
+```bash
+npm test
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 16 (App Router) |
+| UI Components | shadcn/ui + Tailwind CSS |
+| Visual Editor | React Flow |
+| State Management | Zustand |
+| Backend | FastAPI (Python) - planned |
+| Database | Supabase (PostgreSQL) - planned |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+frontend/
+  src/
+    app/              # Next.js app router pages
+      (auth)/         # Login, signup (planned)
+      (dashboard)/    # Dashboard pages
+        projects/     # Projects list and detail
+    components/
+      dashboard/      # Project cards, folder items, workflow cards
+      editor/         # Workflow canvas, toolbar, config panel
+      nodes/          # Custom node components (base, text-prompt, etc.)
+      ui/             # shadcn/ui components
+    hooks/            # Zustand stores (projects, workflow)
+    lib/              # Utilities (validation, cn helper)
+    types/            # TypeScript type definitions
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Routes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Route | Page |
+|-------|------|
+| `/projects` | Projects list (grid) |
+| `/projects/[id]` | Single project (tabs: Workflows, Assets, Jobs) |
+| `/projects/[id]/workflows/[workflowId]` | Workflow editor |
+| `/settings` | Settings (placeholder) |
+
+## License
+
+Sustainable Use License - See [LICENSE](../LICENSE)
