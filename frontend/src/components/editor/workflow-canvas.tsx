@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   ReactFlow,
   Controls,
@@ -12,7 +12,14 @@ import {
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
+import { NodeContextMenu } from "./node-context-menu"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+
+interface ContextMenuState {
+  readonly nodeId: string
+  readonly x: number
+  readonly y: number
+}
 
 export function WorkflowCanvas() {
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -21,6 +28,9 @@ export function WorkflowCanvas() {
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange)
   const onConnect = useWorkflowStore((s) => s.onConnect)
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
@@ -31,34 +41,67 @@ export function WorkflowCanvas() {
 
   const handlePaneClick = useCallback(() => {
     selectNode(null)
+    setContextMenu(null)
   }, [selectNode])
 
+  const handleNodeContextMenu: NodeMouseHandler = useCallback(
+    (event, node) => {
+      event.preventDefault()
+      selectNode(node.id)
+      setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
+    },
+    [selectNode],
+  )
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "d" && selectedNodeId) {
+        e.preventDefault()
+        duplicateNode(selectedNodeId)
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [selectedNodeId, duplicateNode])
+
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
-      onNodeClick={handleNodeClick}
-      onPaneClick={handlePaneClick}
-      nodeTypes={nodeTypes}
-      fitView
-      deleteKeyCode="Delete"
-      className="bg-background"
-    >
-      <Controls className="!bg-card !border !shadow-sm" />
-      <MiniMap
-        className="!bg-card !border !shadow-sm"
-        nodeColor="#8b5cf6"
-        maskColor="rgba(0, 0, 0, 0.1)"
-      />
-      <Background
-        variant={BackgroundVariant.Dots}
-        gap={16}
-        size={1}
-        className="!bg-background"
-      />
-    </ReactFlow>
+    <>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={handleNodeClick}
+        onPaneClick={handlePaneClick}
+        onNodeContextMenu={handleNodeContextMenu}
+        nodeTypes={nodeTypes}
+        fitView
+        deleteKeyCode="Delete"
+        className="bg-background"
+      >
+        <Controls className="!bg-card !border !shadow-sm" />
+        <MiniMap
+          className="!bg-card !border !shadow-sm"
+          nodeColor="#8b5cf6"
+          maskColor="rgba(0, 0, 0, 0.1)"
+        />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={16}
+          size={1}
+          className="!bg-background"
+        />
+      </ReactFlow>
+
+      {contextMenu && (
+        <NodeContextMenu
+          nodeId={contextMenu.nodeId}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+    </>
   )
 }
