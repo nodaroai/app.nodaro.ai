@@ -7,6 +7,7 @@ import { NodeToolbar } from "./node-toolbar"
 import { ConfigPanel } from "./config-panel"
 import { EditorToolbar } from "./editor-toolbar"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
+import { useProjectsStore } from "@/hooks/use-projects-store"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -15,12 +16,18 @@ interface WorkflowEditorProps {
 
 export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const { save, load, saving, loading } = useWorkflowPersistence()
+  const fetchProjects = useProjectsStore((s) => s.fetchProjects)
 
   useEffect(() => {
     if (workflowId) {
       load(workflowId)
     }
   }, [workflowId, load])
+
+  // Ensure projects are loaded for breadcrumbs
+  useEffect(() => {
+    fetchProjects()
+  }, [fetchProjects])
 
   function handleSave() {
     if (projectId) {

@@ -14,21 +14,20 @@ export function useWorkflowPersistence() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const {
-    workflowId,
-    workflowName,
-    nodes,
-    edges,
-    setWorkflowId,
-    loadWorkflow,
-    markClean,
-  } = useWorkflowStore()
+  // Use individual selectors to avoid re-rendering on every node/edge change
+  const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow)
+  const setWorkflowId = useWorkflowStore((s) => s.setWorkflowId)
+  const markClean = useWorkflowStore((s) => s.markClean)
 
   const save = useCallback(
     async (projectId: string): Promise<SaveResult> => {
       setSaving(true)
       try {
         const supabase = createClient()
+
+        // Read current state at call time, not at render time
+        const { workflowId, workflowName, nodes, edges } =
+          useWorkflowStore.getState()
 
         const payload = {
           project_id: projectId,
@@ -69,7 +68,7 @@ export function useWorkflowPersistence() {
         setSaving(false)
       }
     },
-    [workflowId, workflowName, nodes, edges, setWorkflowId, markClean],
+    [setWorkflowId, markClean],
   )
 
   const load = useCallback(
