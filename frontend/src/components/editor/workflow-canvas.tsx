@@ -17,7 +17,7 @@ import { NodeContextMenu } from "./node-context-menu"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 const edgeTypes = {
-  default: DeletableEdge,
+  deletable: DeletableEdge,
 }
 
 interface NodeContextMenuState {
@@ -101,6 +101,7 @@ export function WorkflowCanvas() {
         onNodeContextMenu={handleNodeContextMenu}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        defaultEdgeOptions={{ type: "deletable" }}
         fitView
         deleteKeyCode="Delete"
         className="bg-background touch-manipulation"
