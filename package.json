@@ -1,0 +1,10 @@
+{
+  "name": "scenenode-ai",
+  "private": true,
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "lint": "cd frontend && npm run lint",
+    "start": "cd frontend && npm run start"
+  }
+}

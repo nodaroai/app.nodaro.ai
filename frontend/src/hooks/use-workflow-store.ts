@@ -1,0 +1,146 @@
+import { create } from "zustand"
+import {
+  applyNodeChanges,
+  applyEdgeChanges,
+  addEdge,
+  type NodeChange,
+  type EdgeChange,
+  type Connection,
+} from "@xyflow/react"
+import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType } from "@/types/nodes"
+import { NODE_DEFINITIONS } from "@/types/nodes"
+
+interface WorkflowState {
+  readonly workflowId: string | null
+  readonly workflowName: string
+  readonly nodes: WorkflowNode[]
+  readonly edges: WorkflowEdge[]
+  readonly selectedNodeId: string | null
+  readonly isDirty: boolean
+
+  readonly setWorkflowId: (id: string | null) => void
+  readonly setWorkflowName: (name: string) => void
+  readonly onNodesChange: (changes: NodeChange<WorkflowNode>[]) => void
+  readonly onEdgesChange: (changes: EdgeChange<WorkflowEdge>[]) => void
+  readonly onConnect: (connection: Connection) => void
+  readonly addNode: (type: SceneNodeType, position: { x: number; y: number }) => void
+  readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
+  readonly deleteNode: (nodeId: string) => void
+  readonly selectNode: (nodeId: string | null) => void
+  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
+  readonly clearWorkflow: () => void
+  readonly markClean: () => void
+}
+
+let nextNodeId = 1
+
+function generateNodeId(): string {
+  const id = `node_${nextNodeId}`
+  nextNodeId += 1
+  return id
+}
+
+export const useWorkflowStore = create<WorkflowState>((set) => ({
+  workflowId: null,
+  workflowName: "Untitled Workflow",
+  nodes: [],
+  edges: [],
+  selectedNodeId: null,
+  isDirty: false,
+
+  setWorkflowId: (id) => set({ workflowId: id }),
+
+  setWorkflowName: (name) => set({ workflowName: name, isDirty: true }),
+
+  onNodesChange: (changes) =>
+    set((state) => ({
+      nodes: applyNodeChanges(changes, state.nodes),
+      isDirty: true,
+    })),
+
+  onEdgesChange: (changes) =>
+    set((state) => ({
+      edges: applyEdgeChanges(changes, state.edges),
+      isDirty: true,
+    })),
+
+  onConnect: (connection) =>
+    set((state) => ({
+      edges: addEdge(
+        { ...connection, id: `edge_${Date.now()}` },
+        state.edges,
+      ),
+      isDirty: true,
+    })),
+
+  addNode: (type, position) => {
+    const definition = NODE_DEFINITIONS.find((d) => d.type === type)
+    if (!definition) return
+
+    const newNode: WorkflowNode = {
+      id: generateNodeId(),
+      type,
+      position,
+      data: { ...definition.defaultData },
+    }
+
+    set((state) => ({
+      nodes: [...state.nodes, newNode],
+      isDirty: true,
+    }))
+  },
+
+  updateNodeData: (nodeId, data) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, ...data } as SceneNodeData }
+          : node,
+      ),
+      isDirty: true,
+    })),
+
+  deleteNode: (nodeId) =>
+    set((state) => ({
+      nodes: state.nodes.filter((n) => n.id !== nodeId),
+      edges: state.edges.filter(
+        (e) => e.source !== nodeId && e.target !== nodeId,
+      ),
+      selectedNodeId:
+        state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+      isDirty: true,
+    })),
+
+  selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
+
+  loadWorkflow: (id, name, nodes, edges) => {
+    nextNodeId =
+      nodes.reduce((max, n) => {
+        const num = parseInt(n.id.replace("node_", ""), 10)
+        return isNaN(num) ? max : Math.max(max, num)
+      }, 0) + 1
+
+    set({
+      workflowId: id,
+      workflowName: name,
+      nodes,
+      edges,
+      selectedNodeId: null,
+      isDirty: false,
+    })
+  },
+
+  clearWorkflow: () => {
+    nextNodeId = 1
+    set({
+      workflowId: null,
+      workflowName: "Untitled Workflow",
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+      isDirty: false,
+    })
+  },
+
+  markClean: () => set({ isDirty: false }),
+}))

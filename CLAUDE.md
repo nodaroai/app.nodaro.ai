@@ -1,0 +1,3060 @@
+# SceneNode.ai - Project Specification
+
+## Overview
+
+**SceneNode.ai** is a visual workflow platform for AI video generation. Users build video creation pipelines by connecting nodes (like n8n), with each node representing an AI operation (image generation, video creation, voiceover, etc.).
+
+### Core Value Proposition
+- **Visual Workflow Editor**: Drag-and-drop interface using React Flow
+- **Graph-Based Workflows**: Not linear pipelines - support branching, merging, loops
+- **Model Agnostic**: Swap AI providers without changing workflows
+- **API First**: Full API access for n8n/Make.com integration
+- **Self-hostable**: Open source with Sustainable Use License
+
+### Target Users
+1. **Direct Users**: Content creators building video workflows in the UI
+2. **Automation Users**: n8n/Make.com users calling our API
+3. **Self-hosters**: Developers running their own instance with their API keys
+
+---
+
+## Workflow Capabilities
+
+**SceneNode is NOT a linear pipeline.** It's a full graph-based workflow system.
+
+### Key Differentiator
+
+| Other Tools | SceneNode |
+|-------------|-----------|
+| Linear: A → B → C → D | Graph: branching, merging, loops |
+| One input → One output | Multiple inputs → Multiple outputs |
+| Fixed structure | Unlimited flexibility |
+
+### Supported Patterns
+
+#### 1. Branching - Multiple Endings from Same Concept
+
+```
+                                    ┌─────────────┐     ┌─────────────┐
+                                    │ 🎬 Video    │────▶│ 💾 Save     │
+                               ┌───▶│ Happy End   │     │ "happy.mp4" │
+                               │    └─────────────┘     └─────────────┘
+                               │
+┌─────────────┐    ┌─────────────┐
+│ 📝 Prompt   │───▶│ 🎨 Generate │
+│ "A knight   │    │  8 Scenes   │───┐
+│  on quest"  │    │             │   │
+└─────────────┘    └─────────────┘   │    ┌─────────────┐     ┌─────────────┐
+                               │    │    │ 🎬 Video    │────▶│ 💾 Save     │
+                               └───▶├───▶│ Sad End     │     │ "sad.mp4"   │
+                                    │    └─────────────┘     └─────────────┘
+                                    │
+                                    │    ┌─────────────┐     ┌─────────────┐
+                                    └───▶│ 🎬 Video    │────▶│ 💾 Save     │
+                                         │ Plot Twist  │     │ "twist.mp4" │
+                                         └─────────────┘     └─────────────┘
+
+                                         3 videos from same concept!
+```
+
+#### 2. Reference Chain - Each Image as Reference for Next
+
+```
+┌─────────────┐
+│ 🖼️ Upload   │
+│ Knight.png  │─────────────────────────────────────────────────┐
+└─────────────┘                                                 │
+                                                                │ (reference)
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐        │
+│ 📝 Scene 1  │────▶│ 🎨 Image 1  │────▶│ 🎬 Video 1  │        │
+│ "Knight in  │     │ (ref: orig) │──┐  └─────────────┘        │
+│  castle"    │     └─────────────┘  │                         │
+└─────────────┘                      │                         │
+                                     │ (output = next ref)     │
+┌─────────────┐     ┌─────────────┐  │  ┌─────────────┐        │
+│ 📝 Scene 2  │────▶│ 🎨 Image 2  │◀─┘─▶│ 🎬 Video 2  │        │
+│ "Knight     │     │ (ref: img1) │──┐  └─────────────┘        │
+│  fights"    │     └─────────────┘  │                         │
+└─────────────┘                      │                         │
+                                     │                         │
+┌─────────────┐     ┌─────────────┐  │  ┌─────────────┐        │
+│ 📝 Scene 3  │────▶│ 🎨 Image 3  │◀─┘─▶│ 🎬 Video 3  │────────┤
+│ "Knight     │     │ (ref: img2) │     └─────────────┘        │
+│  wins"      │     └─────────────┘                            │
+└─────────────┘                                                │
+                                                               ▼
+                                                        ┌─────────────┐
+                                                        │ 🔗 Combine  │
+                                                        │  All Videos │
+                                                        └─────────────┘
+
+Character consistency maintained through the chain!
+```
+
+#### 3. Multiple Inputs + Multiple Outputs
+
+```
+┌─────────────┐
+│ 🖼️ Hero     │────┐
+│ image       │    │
+└─────────────┘    │
+                   │     ┌─────────────┐     ┌─────────────┐
+┌─────────────┐    ├────▶│ 🎨 Generate │────▶│ 🎬 TikTok   │───▶ 💾 9:16
+│ 🖼️ Villain  │────┤     │ Battle Scene│     │ Version     │
+│ image       │    │     └─────────────┘     └─────────────┘
+└─────────────┘    │            │
+                   │            │            ┌─────────────┐
+┌─────────────┐    │            └───────────▶│ 🎬 YouTube  │───▶ 💾 16:9
+│ 🖼️ Castle   │────┘                         │ Version     │
+│ background  │                              └─────────────┘
+└─────────────┘
+
+         3 images in ──▶ 2 videos out (different formats)
+```
+
+#### 4. Series Generation from Single Template
+
+```
+┌─────────────┐     ┌─────────────┐
+│ 📝 Template │     │ 🖼️ Character│
+│ "Episode    │     │ Reference   │
+│  structure" │     └──────┬──────┘
+└──────┬──────┘            │
+       │                   │
+       ▼                   ▼
+┌──────────────────────────────────┐
+│      📋 Episode Generator        │
+│         (Loop Node)              │
+└──────────────────────────────────┘
+       │
+       ├────▶ Episode 1 ───▶ 💾
+       │
+       ├────▶ Episode 2 ───▶ 💾
+       │
+       ├────▶ Episode 3 ───▶ 💾
+       │
+       └────▶ Episode 4 ───▶ 💾
+
+         Full series from one template!
+```
+
+### Capabilities Summary
+
+| Capability | Supported | Phase |
+|------------|-----------|-------|
+| Multiple images as input | ✅ | MVP |
+| Reference chain (image → reference for next) | ✅ | MVP |
+| Branching (split to multiple directions) | ✅ | MVP |
+| Merging (combine multiple branches) | ✅ | MVP |
+| Multiple outputs (several videos) | ✅ | MVP |
+| Different formats from same concept | ✅ | MVP |
+| Loop/Batch (full series) | ✅ | Phase 2 |
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Reason |
+|-------|------------|--------|
+| **Frontend** | Next.js 14 (App Router) | SSR, Vercel deploy, React ecosystem |
+| **Visual Editor** | React Flow | Industry standard for node-based UIs |
+| **Backend** | FastAPI (Python) | Async, auto-docs, AI library ecosystem |
+| **Database** | Supabase (PostgreSQL) | RLS, Auth, Realtime, managed |
+| **Queue** | Redis + BullMQ | Proven at scale, job flows, priorities |
+| **Storage** | Cloudflare R2 | S3-compatible, no egress fees |
+| **Auth** | Supabase Auth (Google OAuth) + API Keys | Gmail login for UI, API keys for automation |
+| **Payments** | Paddle | Subscriptions + usage-based, handles VAT/tax globally |
+
+### AI Providers (Abstracted)
+
+**MVP (via Replicate):**
+| Category | Model |
+|----------|-------|
+| **Image Generation** | google/nano-banana-pro |
+| **Video Generation** | google/veo-3 |
+| **Script/QA** | google/gemini-2.5-flash |
+
+**Phase 2+ (additional providers):**
+| Category | Providers |
+|----------|-----------|
+| **Image Generation** | Flux, DALL-E |
+| **Video Generation** | Kling, Runway, Pika |
+| **Voice** | ElevenLabs, PlayHT |
+| **Script/QA** | Claude, GPT |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         FRONTEND                                 │
+│                    Next.js 14 (Vercel)                          │
+│                                                                  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │   Editor    │  │  Dashboard  │  │   Settings  │              │
+│  │ (React Flow)│  │  (Projects) │  │  (Billing)  │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                          API LAYER                               │
+│                    FastAPI (Railway)                             │
+│                                                                  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │  /projects  │  │  /workflows │  │    /jobs    │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │   /nodes    │  │   /render   │  │  /webhooks  │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       PROCESSING LAYER                           │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                    Redis + BullMQ                        │    │
+│  │                                                          │    │
+│  │   Queues:                                                │    │
+│  │   - video-generation (parent jobs)                       │    │
+│  │   - scenes (child jobs - parallelizable)                 │    │
+│  │   - webhooks (delivery)                                  │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                      Workers                             │    │
+│  │                                                          │    │
+│  │   - Image Worker (Nano Banana, Flux, etc.)              │    │
+│  │   - Video Worker (VEO, Kling, etc.)                     │    │
+│  │   - Voice Worker (ElevenLabs, etc.)                     │    │
+│  │   - Webhook Worker (delivery + retries)                 │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        DATA LAYER                                │
+│                                                                  │
+│  ┌──────────────────┐              ┌──────────────────┐         │
+│  │    Supabase      │              │  Cloudflare R2   │         │
+│  │   (PostgreSQL)   │              │    (Storage)     │         │
+│  │                  │              │                  │         │
+│  │  - Users         │              │  - Images        │         │
+│  │  - Projects      │              │  - Videos        │         │
+│  │  - Workflows     │              │  - Audio         │         │
+│  │  - Jobs          │              │                  │         │
+│  │  - Usage         │              │                  │         │
+│  └──────────────────┘              └──────────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    AI PROVIDER ABSTRACTION                       │
+│                                                                  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │   Image     │  │    Video    │  │    Voice    │              │
+│  │  Provider   │  │   Provider  │  │   Provider  │              │
+│  │  Interface  │  │  Interface  │  │  Interface  │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+│         │                │                │                      │
+│         ▼                ▼                ▼                      │
+│  ┌───────────┐    ┌───────────┐    ┌───────────┐                │
+│  │NanoBanana │    │    VEO    │    │ElevenLabs │                │
+│  │   Flux    │    │   Kling   │    │  PlayHT   │                │
+│  │  DALL-E   │    │  Runway   │    │   Azure   │                │
+│  └───────────┘    └───────────┘    └───────────┘                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Database Schema
+
+### Core Tables
+
+```sql
+-- Users (extends Supabase auth.users)
+CREATE TABLE public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    full_name TEXT,
+    avatar_url TEXT,
+    tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'basic', 'pro', 'business', 'enterprise')),
+    credits_balance INTEGER NOT NULL DEFAULT 50,
+    storage_used_bytes BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- API Keys
+CREATE TABLE public.api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE, -- SHA256 hash of the key
+    key_prefix TEXT NOT NULL, -- First 8 chars for identification (sn_live_abc12345...)
+    last_used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Projects
+CREATE TABLE public.projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    settings JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Workflows (the node graph)
+CREATE TABLE public.workflows (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    nodes JSONB NOT NULL DEFAULT '[]',        -- React Flow nodes
+    edges JSONB NOT NULL DEFAULT '[]',        -- React Flow edges
+    settings JSONB NOT NULL DEFAULT '{}',
+    is_template BOOLEAN NOT NULL DEFAULT FALSE,
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Workflow History (for undo/versioning)
+CREATE TABLE public.workflow_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workflow_id UUID NOT NULL REFERENCES public.workflows(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    nodes JSONB NOT NULL,
+    edges JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Jobs (workflow executions)
+CREATE TABLE public.jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workflow_id UUID NOT NULL REFERENCES public.workflows(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    parent_job_id UUID REFERENCES public.jobs(id) ON DELETE CASCADE, -- For scene jobs
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'queued', 'processing', 'completed', 'failed', 'cancelled')),
+    priority INTEGER NOT NULL DEFAULT 0, -- Higher = more priority
+    progress INTEGER NOT NULL DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
+    credits_estimated INTEGER,
+    credits_used INTEGER,
+    input_data JSONB NOT NULL DEFAULT '{}',
+    output_data JSONB,
+    error_message TEXT,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Job Checkpoints (for resuming failed jobs)
+CREATE TABLE public.job_checkpoints (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id UUID NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
+    step TEXT NOT NULL,  -- 'script', 'images', 'video', 'audio', 'complete'
+    data JSONB NOT NULL, -- Intermediate results
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Assets (generated files)
+CREATE TABLE public.assets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    job_id UUID REFERENCES public.jobs(id) ON DELETE SET NULL,
+    type TEXT NOT NULL CHECK (type IN ('image', 'video', 'audio', 'document')),
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes BIGINT NOT NULL,
+    r2_key TEXT NOT NULL,       -- Cloudflare R2 object key
+    r2_url TEXT NOT NULL,       -- Public URL
+    metadata JSONB DEFAULT '{}', -- dimensions, duration, etc.
+    expires_at TIMESTAMPTZ,      -- Based on tier retention
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Webhooks
+CREATE TABLE public.webhooks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    secret TEXT,                 -- For HMAC signature
+    events TEXT[] NOT NULL DEFAULT ARRAY['job.completed', 'job.failed'],
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Webhook Deliveries (for retry tracking)
+CREATE TABLE public.webhook_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    webhook_id UUID NOT NULL REFERENCES public.webhooks(id) ON DELETE CASCADE,
+    job_id UUID REFERENCES public.jobs(id) ON DELETE SET NULL,
+    event TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    response_status INTEGER,
+    response_body TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_retry_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Usage Logs (for billing)
+CREATE TABLE public.usage_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    job_id UUID REFERENCES public.jobs(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,        -- 'image_generation', 'video_generation', etc.
+    provider TEXT NOT NULL,      -- 'nano_banana', 'veo', 'elevenlabs'
+    credits_used INTEGER NOT NULL,
+    cost_usd DECIMAL(10, 6),     -- Our actual cost
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Subscriptions
+CREATE TABLE public.subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    paddle_subscription_id TEXT UNIQUE,
+    paddle_customer_id TEXT,
+    tier TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('active', 'past_due', 'canceled', 'incomplete')),
+    current_period_start TIMESTAMPTZ,
+    current_period_end TIMESTAMPTZ,
+    cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Credit Purchases (top-ups)
+CREATE TABLE public.credit_purchases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    paddle_transaction_id TEXT UNIQUE,
+    credits INTEGER NOT NULL,
+    amount_usd DECIMAL(10, 2) NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### Row Level Security
+
+```sql
+-- Enable RLS on all tables
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workflows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.webhooks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- Profiles: Users can only see/edit their own profile
+CREATE POLICY "Users can view own profile" ON public.profiles
+    FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles
+    FOR UPDATE USING (auth.uid() = id);
+
+-- Projects: Users can only access their own projects
+CREATE POLICY "Users can CRUD own projects" ON public.projects
+    FOR ALL USING (auth.uid() = user_id);
+
+-- Workflows: Users can only access their own workflows
+CREATE POLICY "Users can CRUD own workflows" ON public.workflows
+    FOR ALL USING (auth.uid() = user_id);
+
+-- Jobs: Users can only access their own jobs
+CREATE POLICY "Users can CRUD own jobs" ON public.jobs
+    FOR ALL USING (auth.uid() = user_id);
+
+-- Assets: Users can only access their own assets
+CREATE POLICY "Users can CRUD own assets" ON public.assets
+    FOR ALL USING (auth.uid() = user_id);
+
+-- API Keys: Users can only manage their own keys
+CREATE POLICY "Users can CRUD own API keys" ON public.api_keys
+    FOR ALL USING (auth.uid() = user_id);
+
+-- Webhooks: Users can only manage their own webhooks
+CREATE POLICY "Users can CRUD own webhooks" ON public.webhooks
+    FOR ALL USING (auth.uid() = user_id);
+
+-- Usage logs: Users can only view their own usage
+CREATE POLICY "Users can view own usage" ON public.usage_logs
+    FOR SELECT USING (auth.uid() = user_id);
+
+-- Subscriptions: Users can only view their own subscription
+CREATE POLICY "Users can view own subscription" ON public.subscriptions
+    FOR SELECT USING (auth.uid() = user_id);
+```
+
+### Indexes
+
+```sql
+-- Performance indexes
+CREATE INDEX idx_projects_user_id ON public.projects(user_id);
+CREATE INDEX idx_workflows_project_id ON public.workflows(project_id);
+CREATE INDEX idx_workflows_user_id ON public.workflows(user_id);
+CREATE INDEX idx_jobs_workflow_id ON public.jobs(workflow_id);
+CREATE INDEX idx_jobs_user_id ON public.jobs(user_id);
+CREATE INDEX idx_jobs_status ON public.jobs(status);
+CREATE INDEX idx_jobs_parent_job_id ON public.jobs(parent_job_id);
+CREATE INDEX idx_assets_user_id ON public.assets(user_id);
+CREATE INDEX idx_assets_job_id ON public.assets(job_id);
+CREATE INDEX idx_assets_expires_at ON public.assets(expires_at);
+CREATE INDEX idx_usage_logs_user_id ON public.usage_logs(user_id);
+CREATE INDEX idx_usage_logs_created_at ON public.usage_logs(created_at);
+CREATE INDEX idx_api_keys_key_hash ON public.api_keys(key_hash);
+CREATE INDEX idx_webhook_deliveries_next_retry ON public.webhook_deliveries(next_retry_at) WHERE delivered_at IS NULL;
+```
+
+---
+
+## Node Types Specification
+
+### How Nodes Connect
+
+Nodes have **inputs** (left side) and **outputs** (right side). 
+
+**Key principles:**
+- One output can connect to **multiple** inputs (branching)
+- Multiple outputs can connect to **one** input (merging)
+- Output of one node can serve as **reference** for another (chaining)
+- Same node can output to **different formats** (e.g., TikTok + YouTube)
+
+```
+Example: Image node output → connects to both Video node AND next Image node as reference
+
+    ┌─────────────┐
+    │ 🎨 Image 1  │─────┬────▶ [🎬 Video 1]
+    │   Output    │     │
+    └─────────────┘     │
+                        └────▶ [🎨 Image 2 as Reference Input]
+```
+
+### Node Configuration Principles
+
+#### 1. Model Selection Per Node
+
+**Every AI node allows the user to select which provider/model to use.**
+
+```
+┌─────────────────────────────────────────┐
+│ 🎨 Generate Image - Scene 3             │
+│                                         │
+│ Provider: [Nano Banana ▼]               │
+│           ├─ Nano Banana (recommended)  │
+│           ├─ Flux                       │
+│           ├─ DALL-E                     │
+│           └─ Midjourney API             │
+│                                         │
+│ Model: [gemini-2.5-flash-image ▼]       │
+└─────────────────────────────────────────┘
+```
+
+**Use cases:**
+- Scene 1-4: Nano Banana (character consistency)
+- Scene 5 (dream sequence): Flux (intentionally different style)
+- Scene 6-8: Nano Banana (back to reality)
+
+#### 2. Editable Prompts Per Node
+
+**Every node that uses prompts allows:**
+- Auto-generated prompt from Script Generator
+- Manual editing of the prompt
+- Writing prompt from scratch
+
+```
+┌─────────────────────────────────────────┐
+│ 🎨 Generate Image - Scene 3             │
+│                                         │
+│ Prompt Mode: [Auto-generated ▼] [✏️]    │
+│              ├─ Auto-generated          │
+│              └─ Manual                  │
+│                                         │
+│ ┌─────────────────────────────────────┐ │
+│ │ The knight stands before the       │ │
+│ │ dragon, sword raised, flames       │ │
+│ │ reflecting in his armor...         │ │
+│ │                                    │ │
+│ │ [Edit] [Reset to Auto]             │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ ☑️ Pass to next scene as reference     │
+└─────────────────────────────────────────┘
+```
+
+#### 3. Default Providers (Can Always Change)
+
+| Node Type | Default Provider | Alternatives |
+|-----------|------------------|--------------|
+| Generate Image | Nano Banana | Flux, DALL-E, Midjourney |
+| Image to Video | VEO 3.1 | Kling, Runway, Pika |
+| Text to Speech | ElevenLabs | PlayHT, Azure TTS |
+| Generate Script | Claude | GPT-4, Gemini |
+
+### Input Nodes
+
+```typescript
+interface TextPromptNode {
+  type: 'text-prompt';
+  data: {
+    text: string;
+    variables?: Record<string, string>; // Template variables
+  };
+}
+
+interface UploadImageNode {
+  type: 'upload-image';
+  data: {
+    assetId?: string;        // Reference to uploaded asset
+    url?: string;            // Or external URL
+  };
+}
+
+interface UploadVideoNode {
+  type: 'upload-video';
+  data: {
+    assetId?: string;
+    url?: string;
+  };
+}
+
+interface RSSFeedNode {
+  type: 'rss-feed';
+  data: {
+    feedUrl: string;
+    itemIndex?: number;      // Which item to use (0 = latest)
+    extractFields: string[]; // ['title', 'description', 'image']
+  };
+}
+```
+
+### AI Nodes
+
+```typescript
+interface GenerateScriptNode {
+  type: 'generate-script';
+  data: {
+    provider: 'claude' | 'gpt' | 'gemini';
+    model?: string;
+    systemPrompt?: string;
+    structure?: 'freeform' | '8-step' | 'custom';
+    sceneCount?: number;
+    tone?: string;
+    targetLength?: number;   // seconds
+  };
+  inputs: ['prompt'];
+  outputs: ['script', 'scenes'];
+  creditCost: 2;
+}
+
+interface GenerateImageNode {
+  type: 'generate-image';
+  data: {
+    provider: 'nano-banana' | 'flux' | 'dalle';
+    model?: string;
+    style?: string;
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3';
+    negativePrompt?: string;
+  };
+  inputs: ['prompt', 'reference?'];  // Reference accepts MULTIPLE connections
+  outputs: ['image'];                // Output can connect to MULTIPLE nodes
+  creditCost: 5;
+  
+  // Reference input can receive:
+  // - Uploaded images (for character consistency)
+  // - Output from previous Generate Image node (for chaining)
+  // - Multiple images at once (Nano Banana supports up to 14)
+}
+
+interface ImageToVideoNode {
+  type: 'image-to-video';
+  data: {
+    provider: 'veo' | 'kling' | 'runway' | 'pika';
+    model?: string;
+    duration?: number;       // seconds
+    motion?: 'subtle' | 'moderate' | 'dynamic';
+    cameraMotion?: 'static' | 'pan-left' | 'pan-right' | 'zoom-in' | 'zoom-out';
+  };
+  inputs: ['image', 'motion-prompt?'];
+  outputs: ['video'];        // Note: VEO 3 outputs video WITH ambient audio
+  creditCost: 20;
+  
+  // IMPORTANT: Some providers (VEO 3) generate video WITH audio.
+  // If user wants different audio:
+  // 1. Use Extract Audio node to separate audio from video
+  // 2. Adjust volume of extracted audio (e.g., 20% for background)
+  // 3. Add ElevenLabs voiceover
+  // 4. Mix both audio tracks
+  // 5. Combine with silent video
+}
+
+interface TextToSpeechNode {
+  type: 'text-to-speech';
+  data: {
+    provider: 'elevenlabs' | 'playht' | 'azure';
+    voiceId: string;
+    language?: string;
+    speed?: number;
+    pitch?: number;
+  };
+  inputs: ['text'];
+  outputs: ['audio'];
+  creditCost: 3;
+  
+  // ElevenLabs is ALWAYS available as an option.
+  // Even if video was generated with VEO audio, user can:
+  // 1. Extract/mute VEO audio
+  // 2. Generate new voiceover with ElevenLabs
+  // 3. Mix both or use only ElevenLabs
+}
+
+interface QACheckNode {
+  type: 'qa-check';
+  data: {
+    provider: 'claude' | 'gpt';
+    checkType: 'content' | 'quality' | 'consistency' | 'safety';
+    threshold?: number;      // 0-1, auto-approve above this
+    criteria?: string[];
+  };
+  inputs: ['content'];
+  outputs: ['approved', 'rejected', 'feedback'];
+  creditCost: 1;
+}
+```
+
+### Processing Nodes
+
+```typescript
+interface CombineVideosNode {
+  type: 'combine-videos';
+  data: {
+    transition?: 'cut' | 'fade' | 'dissolve';
+    transitionDuration?: number;
+  };
+  inputs: ['videos[]'];  // Accepts UNLIMITED video connections
+  outputs: ['video'];
+  creditCost: 2;
+  
+  // Can merge videos from multiple branches back into one
+}
+
+interface AddAudioNode {
+  type: 'add-audio';
+  data: {
+    audioType: 'voiceover' | 'background' | 'both';
+    voiceoverVolume?: number;
+    backgroundVolume?: number;
+    backgroundAssetId?: string;
+  };
+  inputs: ['video', 'audio'];
+  outputs: ['video'];
+  creditCost: 1;
+}
+
+interface AddCaptionsNode {
+  type: 'add-captions';
+  data: {
+    style: 'subtitle' | 'word-highlight' | 'karaoke';
+    position: 'bottom' | 'top' | 'center';
+    fontFamily?: string;
+    fontSize?: number;
+    color?: string;
+    backgroundColor?: string;
+  };
+  inputs: ['video', 'transcript?'];
+  outputs: ['video'];
+  creditCost: 2;
+}
+
+interface ResizeVideoNode {
+  type: 'resize-video';
+  data: {
+    targetAspect: '1:1' | '16:9' | '9:16' | '4:5';
+    method: 'crop' | 'pad' | 'stretch';
+    padColor?: string;
+  };
+  inputs: ['video'];
+  outputs: ['video'];
+  creditCost: 1;
+}
+
+interface ExtractAudioNode {
+  type: 'extract-audio';
+  data: {
+    outputSilentVideo: boolean;  // Also output video without audio
+    audioFormat?: 'mp3' | 'wav' | 'aac';
+  };
+  inputs: ['video'];
+  outputs: ['audio', 'silent-video?'];  // Can output both
+  creditCost: 1;
+  
+  // Use case: VEO 3 generates video WITH audio, but you want to:
+  // 1. Extract the audio (ambient sounds)
+  // 2. Lower its volume
+  // 3. Add ElevenLabs voiceover on top
+}
+
+interface MixAudioNode {
+  type: 'mix-audio';
+  data: {
+    tracks: Array<{
+      volume: number;        // 0-100 (percentage)
+      startTime?: number;    // Offset in seconds
+      fadeIn?: number;       // Fade in duration
+      fadeOut?: number;      // Fade out duration
+      loop?: boolean;        // Loop if shorter than video
+    }>;
+  };
+  inputs: ['audio[]'];       // Accepts MULTIPLE audio inputs
+  outputs: ['audio'];
+  creditCost: 1;
+  
+  // Example: Mix VEO ambient (20%) + ElevenLabs voice (100%)
+}
+
+interface AdjustVolumeNode {
+  type: 'adjust-volume';
+  data: {
+    volume: number;          // 0-200 (percentage, >100 = amplify)
+    normalize?: boolean;     // Auto-normalize levels
+    fadeIn?: number;
+    fadeOut?: number;
+  };
+  inputs: ['audio'];
+  outputs: ['audio'];
+  creditCost: 0;  // Simple processing, no AI
+}
+
+interface TrimVideoNode {
+  type: 'trim-video';
+  data: {
+    startTime: number;       // Seconds
+    endTime?: number;        // Seconds (optional, defaults to end)
+    duration?: number;       // Alternative: specify duration instead of endTime
+  };
+  inputs: ['video'];
+  outputs: ['video'];
+  creditCost: 0;  // Simple processing, no AI
+}
+```
+
+### Audio Processing Example Flow
+
+```
+VEO 3 video with ambient audio → Extract → Mix with ElevenLabs → Final video
+
+┌─────────────┐
+│ 🎬 VEO 3    │
+│ Video+Audio │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│ 🔇 Extract      │
+│    Audio        │
+├─────────────────┤
+│ Outputs:        │
+│ • Silent video ─┼────────────────────────────┐
+│ • VEO audio   ──┼───┐                        │
+└─────────────────┘   │                        │
+                      ▼                        │
+               ┌─────────────┐                 │
+               │ 🔊 Adjust   │                 │
+               │ Volume: 20% │                 │
+               └──────┬──────┘                 │
+                      │                        │
+┌─────────────┐       │                        │
+│ 🎤 Eleven   │       │                        │
+│   Labs      │       │                        │
+│ (100% vol)  │       │                        │
+└──────┬──────┘       │                        │
+       │              │                        │
+       └──────┬───────┘                        │
+              ▼                                │
+       ┌─────────────┐                         │
+       │ 🔀 Mix      │                         │
+       │   Audio     │                         │
+       │             │                         │
+       │ Track 1: 20%│                         │
+       │ Track 2:100%│                         │
+       └──────┬──────┘                         │
+              │                                │
+              └────────────┬───────────────────┘
+                           ▼
+                    ┌─────────────┐
+                    │ 🔗 Add      │
+                    │   Audio     │
+                    │ to Video    │
+                    └──────┬──────┘
+                           │
+                           ▼
+                       💾 Save
+```
+
+### Output Nodes
+
+```typescript
+interface SaveToStorageNode {
+  type: 'save-to-storage';
+  data: {
+    filename?: string;       // Template: {{project_name}}_{{timestamp}}
+    format?: 'mp4' | 'webm' | 'mov';
+    quality?: 'draft' | 'standard' | 'high' | '4k';
+  };
+  inputs: ['video'];
+  outputs: ['asset'];
+  creditCost: 0;
+}
+
+interface WebhookOutputNode {
+  type: 'webhook-output';
+  data: {
+    webhookId: string;
+    includeAssetUrl: boolean;
+    customPayload?: Record<string, any>;
+  };
+  inputs: ['data'];
+  outputs: [];
+  creditCost: 0;
+}
+```
+
+### Workflow Validation
+
+Before running a workflow, the system validates it and shows warnings/errors.
+
+**Validation runs:**
+1. When user clicks "Run"
+2. Before job is queued
+3. Shows warnings in UI (user can proceed)
+4. Shows errors in UI (user must fix)
+
+#### Warnings (Can Proceed)
+
+| Condition | Warning Message | Suggestion |
+|-----------|-----------------|------------|
+| VEO → Add Audio (no Extract) | "VEO video has audio. This may conflict with added audio." | Add Extract Audio node |
+| Image node without reference | "No reference image. Character consistency may vary." | Add reference image |
+| Long video (> 5 min) without checkpoints | "Long workflow without save points." | Add intermediate Save nodes |
+| High credit cost (> 500) | "This workflow costs ~500 credits." | Confirm before run |
+
+#### Errors (Must Fix)
+
+| Condition | Error Message |
+|-----------|---------------|
+| No output node | "Workflow has no output. Add a Save or Webhook node." |
+| Disconnected nodes | "Node 'X' is not connected to the workflow." |
+| Circular reference | "Circular dependency detected between nodes." |
+| Missing required input | "Node 'Generate Image' is missing required input 'prompt'." |
+| Invalid configuration | "Node 'Text to Speech' has no voice selected." |
+| Insufficient credits | "You need 209 credits but only have 50." |
+
+#### Implementation
+
+```typescript
+interface ValidationResult {
+  valid: boolean;
+  errors: ValidationMessage[];
+  warnings: ValidationMessage[];
+  estimatedCredits: number;
+}
+
+interface ValidationMessage {
+  nodeId: string;
+  type: 'error' | 'warning';
+  message: string;
+  suggestion?: string;
+  suggestedNode?: string;  // Node type to add
+}
+
+function validateWorkflow(workflow: Workflow): ValidationResult {
+  const errors: ValidationMessage[] = [];
+  const warnings: ValidationMessage[] = [];
+  
+  // Check for output node
+  const hasOutput = workflow.nodes.some(n => 
+    ['save-to-storage', 'webhook-output'].includes(n.type)
+  );
+  if (!hasOutput) {
+    errors.push({
+      nodeId: 'workflow',
+      type: 'error',
+      message: 'Workflow has no output. Add a Save or Webhook node.',
+      suggestedNode: 'save-to-storage'
+    });
+  }
+  
+  // Check VEO + Add Audio conflict
+  for (const node of workflow.nodes) {
+    if (node.type === 'add-audio') {
+      const inputNode = getInputNode(workflow, node, 'video');
+      if (inputNode?.type === 'image-to-video' && 
+          inputNode.data.provider === 'veo') {
+        // Check if there's an Extract Audio between them
+        if (!hasExtractAudioBetween(workflow, inputNode, node)) {
+          warnings.push({
+            nodeId: node.id,
+            type: 'warning',
+            message: 'VEO video has audio. This may conflict with added audio.',
+            suggestion: 'Add Extract Audio node to separate VEO audio first.',
+            suggestedNode: 'extract-audio'
+          });
+        }
+      }
+    }
+  }
+  
+  // ... more validations
+  
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    estimatedCredits: calculateCredits(workflow)
+  };
+}
+```
+
+#### UI Behavior
+
+```
+User clicks "Run"
+       │
+       ▼
+  Validate Workflow
+       │
+       ├─ Errors? ──▶ Show errors, disable Run button
+       │
+       └─ Warnings? ──▶ Show warnings dialog
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+                    ▼                   ▼
+              "Fix Issues"        "Run Anyway"
+                    │                   │
+                    ▼                   ▼
+              Back to editor      Queue job
+```
+
+### Credit Cost Table
+
+| Node Type | Credits | ~Cost to Us | Price to User |
+|-----------|---------|-------------|---------------|
+| generate-script | 2 | $0.01 | $0.02 |
+| generate-image | 5 | $0.02 | $0.04 |
+| image-to-video | 20 | $0.10 | $0.20 |
+| text-to-speech | 3 | $0.01 | $0.02 |
+| qa-check | 1 | $0.005 | $0.01 |
+| combine-videos | 2 | $0.01 | $0.02 |
+| add-audio | 1 | $0.005 | $0.01 |
+| add-captions | 2 | $0.01 | $0.02 |
+| resize-video | 1 | $0.005 | $0.01 |
+| **extract-audio** | 1 | $0.005 | $0.01 |
+| **mix-audio** | 1 | $0.005 | $0.01 |
+| **adjust-volume** | 0 | $0 | $0 |
+| **trim-video** | 0 | $0 | $0 |
+
+**Note:** Simple processing nodes (adjust-volume, trim-video) are FREE - no AI involved.
+
+**Total for typical 1-minute video (8 scenes):**
+- Script: 2 credits
+- Images: 8 × 5 = 40 credits
+- Videos: 8 × 20 = 160 credits
+- Voice: 3 credits
+- Combine: 2 credits
+- Captions: 2 credits
+- **Total: ~209 credits (~$2.09)**
+
+**Total for video with mixed audio (VEO ambient + ElevenLabs):**
+- Script: 2 credits
+- Images: 8 × 5 = 40 credits
+- Videos: 8 × 20 = 160 credits
+- Extract Audio: 1 credit
+- Voice (ElevenLabs): 3 credits
+- Mix Audio: 1 credit
+- Combine: 2 credits
+- Captions: 2 credits
+- **Total: ~211 credits (~$2.11)**
+
+---
+
+## API Specification
+
+### Authentication
+
+```
+Authorization: Bearer sn_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+API keys start with:
+- `sn_live_` - Production keys
+- `sn_test_` - Test keys (sandbox mode)
+
+### Base URL
+
+```
+Production: https://api.scenenode.ai/v1
+Self-hosted: https://your-domain.com/api/v1
+```
+
+### Endpoints
+
+#### Projects
+
+```
+GET    /projects                 - List all projects
+POST   /projects                 - Create project
+GET    /projects/:id             - Get project
+PATCH  /projects/:id             - Update project
+DELETE /projects/:id             - Delete project
+```
+
+#### Workflows
+
+```
+GET    /projects/:id/workflows   - List workflows in project
+POST   /projects/:id/workflows   - Create workflow
+GET    /workflows/:id            - Get workflow
+PATCH  /workflows/:id            - Update workflow
+DELETE /workflows/:id            - Delete workflow
+POST   /workflows/:id/duplicate  - Duplicate workflow
+```
+
+#### Jobs (Executions)
+
+```
+POST   /workflows/:id/run        - Execute workflow
+GET    /jobs                     - List all jobs
+GET    /jobs/:id                 - Get job status
+GET    /jobs/:id/progress        - Get detailed progress (SSE stream)
+POST   /jobs/:id/cancel          - Cancel job
+POST   /jobs/:id/retry           - Retry failed job
+```
+
+#### Quick Render (Simplified API for n8n users)
+
+```
+POST   /render                   - One-shot video generation
+```
+
+Request:
+```json
+{
+  "prompt": "A story about a brave knight",
+  "style": "children-book",
+  "duration": 60,
+  "voice": "narrator-male",
+  "aspect_ratio": "9:16",
+  "webhook_url": "https://your-n8n.com/webhook/xxx",
+  "options": {
+    "add_captions": true,
+    "caption_style": "word-highlight",
+    "background_music": "epic-orchestral"
+  }
+}
+```
+
+Response:
+```json
+{
+  "job_id": "job_xxxxx",
+  "status": "queued",
+  "estimated_credits": 209,
+  "estimated_duration_seconds": 180,
+  "progress_url": "https://api.scenenode.ai/v1/jobs/job_xxxxx/progress"
+}
+```
+
+#### Assets
+
+```
+GET    /assets                   - List assets
+GET    /assets/:id               - Get asset details
+DELETE /assets/:id               - Delete asset
+POST   /assets/upload            - Upload asset (multipart)
+```
+
+#### Webhooks
+
+```
+GET    /webhooks                 - List webhooks
+POST   /webhooks                 - Create webhook
+PATCH  /webhooks/:id             - Update webhook
+DELETE /webhooks/:id             - Delete webhook
+GET    /webhooks/:id/deliveries  - List delivery attempts
+POST   /webhooks/:id/test        - Send test webhook
+```
+
+#### Account
+
+```
+GET    /account                  - Get account info
+GET    /account/usage            - Get usage stats
+GET    /account/api-keys         - List API keys
+POST   /account/api-keys         - Create API key
+DELETE /account/api-keys/:id     - Revoke API key
+```
+
+### Webhook Payload
+
+```json
+{
+  "event": "job.completed",
+  "timestamp": "2026-01-29T21:30:00Z",
+  "data": {
+    "job_id": "job_xxxxx",
+    "workflow_id": "wf_xxxxx",
+    "status": "completed",
+    "duration_seconds": 165,
+    "credits_used": 209,
+    "output": {
+      "video_url": "https://r2.scenenode.ai/xxxxx/output.mp4",
+      "thumbnail_url": "https://r2.scenenode.ai/xxxxx/thumb.jpg",
+      "duration": 62.5,
+      "resolution": "1080x1920"
+    }
+  }
+}
+```
+
+### Webhook Signature
+
+```
+X-SceneNode-Signature: sha256=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Verify with:
+```python
+import hmac
+import hashlib
+
+def verify_webhook(payload: bytes, signature: str, secret: str) -> bool:
+    expected = 'sha256=' + hmac.new(
+        secret.encode(),
+        payload,
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+```
+
+### Rate Limits
+
+| Tier | Requests/Minute | Headers |
+|------|-----------------|---------|
+| Free | 5 | X-RateLimit-Limit, X-RateLimit-Remaining |
+| Basic | 30 | X-RateLimit-Reset |
+| Pro | 60 | |
+| Business | 120 | |
+| Enterprise | 300 | |
+
+### Idempotency
+
+Prevent duplicate charges when user clicks "Run" twice accidentally.
+
+**Header:**
+```
+X-Idempotency-Key: <unique-string>
+```
+
+**Behavior:**
+| Scenario | Result |
+|----------|--------|
+| Same key sent within 5 minutes | Return existing job (no new charge) |
+| Same key after 5 minutes | Create new job |
+| No key provided | Create new job (default) |
+
+**Client generates:**
+```javascript
+const idempotencyKey = `${workflowId}-${Date.now()}-${crypto.randomUUID()}`;
+```
+
+**Server implementation:**
+```python
+async def create_job(request: Request, workflow_id: str):
+    idempotency_key = request.headers.get("X-Idempotency-Key")
+    
+    if idempotency_key:
+        # Check if job with this key exists (created < 5 min ago)
+        existing = await db.jobs.find_one({
+            "idempotency_key": idempotency_key,
+            "created_at": {"$gt": datetime.now() - timedelta(minutes=5)}
+        })
+        if existing:
+            return existing  # Return existing job, no new charge
+    
+    # Create new job
+    job = await create_new_job(workflow_id, idempotency_key)
+    return job
+```
+
+**Why this matters:**
+- User double-clicks "Run" → Charged once, not twice
+- Network retry → Same job returned
+- n8n webhook retry → No duplicate videos
+
+### Error Responses
+
+```json
+{
+  "error": {
+    "code": "insufficient_credits",
+    "message": "You need 209 credits but only have 50",
+    "details": {
+      "required": 209,
+      "available": 50
+    }
+  }
+}
+```
+
+Error codes:
+- `unauthorized` - Invalid or missing API key
+- `forbidden` - Valid key but no permission
+- `not_found` - Resource doesn't exist
+- `validation_error` - Invalid request body
+- `insufficient_credits` - Not enough credits
+- `rate_limited` - Too many requests
+- `provider_error` - AI provider failed
+- `internal_error` - Our fault
+
+---
+
+## n8n Integration
+
+### Overview
+
+SceneNode provides an official n8n community node for seamless integration. Users can create videos directly from their n8n workflows.
+
+**Target:** n8n users who want to automate video creation as part of larger workflows (RSS → Video → TikTok).
+
+### n8n Node - 3 Operations (MVP)
+
+| Operation | Use Case | Input | Output |
+|-----------|----------|-------|--------|
+| **Quick Render** | 90% of users | text | video_url |
+| **Run Workflow** | Complex flows | workflow_id + variables | video_url |
+| **Get Job Status** | Async mode | job_id | status + video_url |
+
+### Credential Setup
+
+The n8n Node supports two connection types:
+
+#### Option 1: SceneNode Cloud (Recommended)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  SceneNode API - Credential                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Connection Type: [SceneNode Cloud ▼]                           │
+│                   ├─ SceneNode Cloud (recommended)              │
+│                   └─ Self-Hosted                                │
+│                                                                 │
+│  ───────────────────────────────────────────────────            │
+│                                                                 │
+│  API Key *: [sn_live_••••••••••••••••••••••••]                 │
+│                                                                 │
+│  ℹ️ Get your API key from:                                      │
+│     https://scenenode.ai/settings/api-keys                      │
+│                                                                 │
+│                                         [Test] [Save]           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Option 2: Self-Hosted (Requires License)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  SceneNode API - Credential                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Connection Type: [Self-Hosted ▼]                               │
+│                   ├─ SceneNode Cloud (recommended)              │
+│                   └─ Self-Hosted                                │
+│                                                                 │
+│  ───────────────────────────────────────────────────            │
+│                                                                 │
+│  License Key *: [lic_••••••••••••••••••••••••]                 │
+│                                                                 │
+│  Server URL *:  [https://my-server.com/api      ]              │
+│                                                                 │
+│  ───────────────────────────────────────────────────            │
+│                                                                 │
+│  ℹ️ Self-Hosted License: $9/month                               │
+│     • Unlimited usage                                           │
+│     • You pay AI providers directly                             │
+│     • No watermark                                              │
+│                                                                 │
+│     Get license: https://scenenode.ai/pricing/self-hosted       │
+│                                                                 │
+│                                         [Test] [Save]           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### License Validation (Self-Hosted)
+
+```
+n8n Node ──▶ Self-Hosted SceneNode ──▶ Validates license
+                                              │
+                                              ▼
+                                       license.scenenode.ai
+                                       (checks if key valid)
+                                              │
+                                              ▼
+                                       ✅ Valid → Works
+                                       ❌ Invalid → Error
+```
+
+**License server only checks:**
+- Is the license key valid?
+- Is it not revoked?
+
+**No user data is transmitted.**
+
+### Operation 1: Quick Render
+
+The most common operation - turn text into a complete video.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  SceneNode - Quick Render                                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─ REQUIRED ─────────────────────────────────────────────────┐ │
+│  │                                                             │ │
+│  │  Text *                                                     │ │
+│  │  ┌─────────────────────────────────────────────────────┐   │ │
+│  │  │ {{ $json.article_text }}                            │   │ │
+│  │  └─────────────────────────────────────────────────────┘   │ │
+│  │  The text/story to turn into a video                        │ │
+│  │                                                             │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  ┌─ OPTIONS ──────────────────────────────────────────────────┐ │
+│  │                                                             │ │
+│  │  Style                     Duration (seconds)               │ │
+│  │  [Children's Story ▼]      [60                    ]        │ │
+│  │                                                             │ │
+│  │  Aspect Ratio              Voice                            │ │
+│  │  [9:16 (TikTok/Reels) ▼]   [Narrator - Male ▼]             │ │
+│  │                                                             │ │
+│  │  ☑️ Add Captions                                            │ │
+│  │                                                             │ │
+│  │  Caption Style                                              │ │
+│  │  [Word Highlight ▼]                                         │ │
+│  │                                                             │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  ┌─ ADVANCED ─────────────────────────────────────────────────┐ │
+│  │                                                             │ │
+│  │  Reference Image (for character consistency)                │ │
+│  │  ┌─────────────────────────────────────────────────────┐   │ │
+│  │  │ {{ $json.character_url }}                           │   │ │
+│  │  └─────────────────────────────────────────────────────┘   │ │
+│  │                                                             │ │
+│  │  Image Provider            Video Provider                   │ │
+│  │  [Nano Banana ▼]           [VEO 3.1 ▼]                     │ │
+│  │                                                             │ │
+│  │  Wait for Completion                                        │ │
+│  │  [Yes ▼]                                                    │ │
+│  │  ├─ Yes (wait up to 10 min)                                │ │
+│  │  └─ No (return job_id, use webhook)                        │ │
+│  │                                                             │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Output (Wait = Yes):**
+```json
+{
+  "job_id": "job_abc123",
+  "status": "completed",
+  "video_url": "https://r2.scenenode.ai/xxx/video.mp4",
+  "thumbnail_url": "https://r2.scenenode.ai/xxx/thumb.jpg",
+  "duration": 62.5,
+  "resolution": "1080x1920",
+  "credits_used": 209
+}
+```
+
+**Output (Wait = No):**
+```json
+{
+  "job_id": "job_abc123",
+  "status": "processing",
+  "progress_url": "https://api.scenenode.ai/v1/jobs/job_abc123"
+}
+```
+
+### Operation 2: Run Workflow
+
+Run a workflow created in SceneNode UI, passing variables from n8n.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  SceneNode - Run Workflow                                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─ REQUIRED ─────────────────────────────────────────────────┐ │
+│  │                                                             │ │
+│  │  Workflow *                                                 │ │
+│  │  [My Story Template ▼]                                      │ │
+│  │  ├─ My Story Template (wf_abc123)                          │ │
+│  │  ├─ News to Video (wf_def456)                              │ │
+│  │  ├─ Product Ad (wf_ghi789)                                 │ │
+│  │  └─ + Create at scenenode.ai                               │ │
+│  │                                                             │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  ┌─ WORKFLOW VARIABLES ───────────────────────────────────────┐ │
+│  │                                                             │ │
+│  │  ℹ️ Variables defined in your SceneNode workflow:           │ │
+│  │                                                             │ │
+│  │  prompt * (required)                                        │ │
+│  │  ┌─────────────────────────────────────────────────────┐   │ │
+│  │  │ {{ $json.article_text }}                            │   │ │
+│  │  └─────────────────────────────────────────────────────┘   │ │
+│  │                                                             │ │
+│  │  reference_image (optional)                                 │ │
+│  │  ┌─────────────────────────────────────────────────────┐   │ │
+│  │  │ {{ $json.main_image }}                              │   │ │
+│  │  └─────────────────────────────────────────────────────┘   │ │
+│  │                                                             │ │
+│  │  style (optional, default: "children")                      │ │
+│  │  ┌─────────────────────────────────────────────────────┐   │ │
+│  │  │                                                     │   │ │
+│  │  └─────────────────────────────────────────────────────┘   │ │
+│  │                                                             │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  ┌─ OPTIONS ──────────────────────────────────────────────────┐ │
+│  │                                                             │ │
+│  │  Wait for Completion                                        │ │
+│  │  [Yes ▼]                                                    │ │
+│  │                                                             │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Output:**
+```json
+{
+  "job_id": "job_xyz789",
+  "workflow_id": "wf_abc123",
+  "workflow_name": "My Story Template",
+  "status": "completed",
+  "outputs": {
+    "video": {
+      "url": "https://r2.scenenode.ai/xxx/video.mp4",
+      "duration": 65.2
+    },
+    "thumbnail": {
+      "url": "https://r2.scenenode.ai/xxx/thumb.jpg"
+    }
+  },
+  "credits_used": 215
+}
+```
+
+### Operation 3: Get Job Status
+
+Check the status of an async job.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  SceneNode - Get Job Status                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Job ID *                                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ {{ $json.job_id }}                                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Output (in progress):**
+```json
+{
+  "job_id": "job_abc123",
+  "status": "processing",
+  "progress": 45,
+  "current_step": "Generating video for scene 4/8",
+  "started_at": "2026-01-29T21:30:00Z",
+  "estimated_completion": "2026-01-29T21:33:00Z"
+}
+```
+
+**Output (completed):**
+```json
+{
+  "job_id": "job_abc123",
+  "status": "completed",
+  "progress": 100,
+  "video_url": "https://r2.scenenode.ai/xxx/video.mp4",
+  "thumbnail_url": "https://r2.scenenode.ai/xxx/thumb.jpg",
+  "duration": 62.5,
+  "credits_used": 209,
+  "started_at": "2026-01-29T21:30:00Z",
+  "completed_at": "2026-01-29T21:33:15Z"
+}
+```
+
+**Output (failed):**
+```json
+{
+  "job_id": "job_abc123",
+  "status": "failed",
+  "error": "Image generation failed: Rate limit exceeded",
+  "failed_at_step": "generate-images",
+  "credits_used": 2
+}
+```
+
+### Example n8n Flow: News to TikTok
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         n8n: News to TikTok                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌──────────────┐                                                           │
+│   │  📰 RSS      │  output: {title, link, description}                      │
+│   │  Tech News   │                                                           │
+│   └──────┬───────┘                                                           │
+│          │                                                                   │
+│          ▼                                                                   │
+│   ┌──────────────┐                                                           │
+│   │  🌐 HTTP     │  output: {article_text, main_image}                      │
+│   │  Request     │  (scrape full article)                                   │
+│   └──────┬───────┘                                                           │
+│          │                                                                   │
+│          ▼                                                                   │
+│   ┌──────────────┐                                                           │
+│   │  🎬 Scene    │  Operation: Quick Render                                  │
+│   │     Node     │  Text: {{ $json.article_text }}                          │
+│   │              │  Style: News Report                                       │
+│   │              │  Wait: Yes                                                │
+│   └──────┬───────┘                                                           │
+│          │         output: {video_url, thumbnail_url}                        │
+│          ▼                                                                   │
+│   ┌──────────────┐                                                           │
+│   │  📱 TikTok   │  video: {{ $json.video_url }}                            │
+│   │   Upload     │                                                           │
+│   └──────┬───────┘                                                           │
+│          │         output: {post_url}                                        │
+│          ▼                                                                   │
+│   ┌──────────────┐                                                           │
+│   │  💬 Telegram │  "New video: {{ $json.post_url }}"                       │
+│   │   Message    │                                                           │
+│   └──────────────┘                                                           │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Workflow Variables (SceneNode UI)
+
+Users can define variables in their SceneNode workflows that can be passed from n8n:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Workflow Settings (SceneNode UI)                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Variables (for API/n8n):                                       │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Name            │ Type     │ Default    │ Required      │   │
+│  ├─────────────────────────────────────────────────────────┤   │
+│  │ prompt          │ string   │ -          │ ✅            │   │
+│  │ reference_image │ url      │ -          │ ☐             │   │
+│  │ voice_text      │ string   │ {{prompt}} │ ☐             │   │
+│  │ style           │ select   │ children   │ ☐             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  [+ Add Variable]                                               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Async Mode with Webhook
+
+For long-running jobs, use async mode with n8n's built-in webhook:
+
+```
+n8n timeout = 60 seconds (default)
+Video generation = 3-5 minutes
+Solution: Async + Webhook
+```
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  SceneNode   │     │   n8n Wait   │     │   Continue   │
+│  Quick Render│────▶│   (paused)   │────▶│   Workflow   │
+│  Wait: No    │     │              │     │              │
+└──────────────┘     └──────────────┘     └──────────────┘
+       │                    ▲
+       │                    │
+       └── webhook ─────────┘
+           (when video ready)
+```
+
+### Phase 2 Operations (Future)
+
+| Operation | Use Case |
+|-----------|----------|
+| Generate Script | Get script only, review before video |
+| Generate Images | Get images only |
+| Generate Video | Convert images to video clips |
+| Generate Voice | Get voiceover only |
+
+These will be added for power users who need granular control.
+
+---
+
+## Editions & Pricing Model
+
+### Three Editions
+
+| Edition | Price | Who It's For |
+|---------|-------|--------------|
+| **Self-Hosted** | $0 | Developers who want full control |
+| **Self-Hosted + n8n** | $9/month | Developers who need n8n integration |
+| **Cloud** | $25-200/month | Businesses who want managed service |
+
+### What's the Difference?
+
+**It's the SAME code.** The only difference is where it runs and who manages it.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SELF-HOSTED (FREE)                                 │
+│                                                                              │
+│   You install on your server + You bring your own API keys                  │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  SceneNode                                                          │   │
+│   │  ✅ Visual Editor                                                   │   │
+│   │  ✅ All Nodes                                                       │   │
+│   │  ✅ API                                                             │   │
+│   │  ✅ Webhooks                                                        │   │
+│   │  ✅ Unlimited usage (you pay Gemini/ElevenLabs directly)           │   │
+│   │  ✅ No watermark                                                    │   │
+│   │  ❌ n8n Node (requires license)                                    │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   Cost: $0 to us, ~$X/month to AI providers based on usage                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      SELF-HOSTED + n8n LICENSE ($9/month)                    │
+│                                                                              │
+│   Same as above + Official n8n Node                                         │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  SceneNode (SAME CODE)                                              │   │
+│   │  ✅ Everything from Self-Hosted                                     │   │
+│   │  ✅ Official n8n Node                                               │   │
+│   │                                                                     │   │
+│   │  License Key: [lic_xxxxxxxxxxxx]                                    │   │
+│   │         │                                                           │   │
+│   │         ▼                                                           │   │
+│   │  license.scenenode.ai ──▶ "Did they pay this month?" ──▶ ✅/❌     │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   Cost: $9/month to us (pure profit), ~$X/month to AI providers             │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CLOUD ($25-200/month)                              │
+│                                                                              │
+│   We manage everything. You just use it.                                    │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  SceneNode Cloud                                                    │   │
+│   │  ✅ Everything from Self-Hosted                                     │   │
+│   │  ✅ n8n Node included                                               │   │
+│   │  ✅ Managed infrastructure                                          │   │
+│   │  ✅ Priority Queue                                                  │   │
+│   │  ✅ Team Collaboration                                              │   │
+│   │  ✅ Analytics                                                       │   │
+│   │  ✅ Support (Email/Priority/SLA)                                    │   │
+│   │  ✅ SSO/SAML (Enterprise)                                           │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   Cost: $25-200/month to us (includes AI costs via credits)                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Feature Comparison
+
+| Feature | Self-Hosted | Self-Hosted + n8n | Cloud |
+|---------|-------------|-------------------|-------|
+| **Price** | $0 | $9/month | $25-200/month |
+| Visual Editor | ✅ | ✅ | ✅ |
+| All Nodes | ✅ | ✅ | ✅ |
+| API | ✅ | ✅ | ✅ |
+| Webhooks | ✅ | ✅ | ✅ |
+| Unlimited Usage | ✅ | ✅ | By credits |
+| No Watermark | ✅ | ✅ | Pro+ |
+| **n8n Node** | ❌ | ✅ | ✅ |
+| Priority Queue | ❌ | ❌ | Pro+ |
+| Team Collaboration | ❌ | ❌ | ✅ |
+| Analytics | ❌ | ❌ | ✅ |
+| SSO/SAML | ❌ | ❌ | Enterprise |
+| Support | Community | Basic | Email/Priority/SLA |
+
+### Cloud Pricing Tiers
+
+| Tier | Price | Credits/Month | Storage | Max Video | Resolution |
+|------|-------|---------------|---------|-----------|------------|
+| **Free** | $0 | 50 | 1 GB | 1 min | 720p |
+| **Basic** | $25 | 500 | 10 GB | 3 min | 1080p |
+| **Pro** | $49 | 1,200 | 50 GB | 10 min | 1080p |
+| **Business** | $99 | 3,000 | 200 GB | 30 min | 4K |
+| **Enterprise** | $200 | 7,000 | 500 GB | Unlimited | 4K |
+
+### Cloud Feature Matrix
+
+| Feature | Free | Basic | Pro | Business | Enterprise |
+|---------|------|-------|-----|----------|------------|
+| API Access | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Webhooks | ❌ | ✅ | ✅ | ✅ | ✅ |
+| n8n Node | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Projects | 1 | 3 | 10 | Unlimited | Unlimited |
+| Team Members | 1 | 1 | 3 | 10 | Unlimited |
+| Remove Watermark | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Priority Queue | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Analytics | ❌ | Basic | Full | Full | Full + Export |
+| SSO/SAML | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Audit Logs | ❌ | ❌ | ❌ | ✅ | ✅ |
+| White-label | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Support | Forum | Forum | Email | Priority | Dedicated SLA |
+
+### Credit Top-ups (Cloud Only)
+
+| Credits | Price | Per Credit |
+|---------|-------|------------|
+| 500 | $10 | $0.020 |
+| 1,500 | $25 | $0.017 |
+| 5,000 | $75 | $0.015 |
+| 15,000 | $200 | $0.013 |
+
+### License Validation (Self-Hosted + n8n)
+
+The n8n Node checks license validity on startup and periodically:
+
+```python
+# Runs when n8n Node initializes
+async def validate_license(license_key: str) -> bool:
+    response = await fetch("https://license.scenenode.ai/validate", {
+        "key": license_key
+    })
+    return response.valid and not response.revoked
+
+# What we check:
+# ✅ Is the key format valid?
+# ✅ Is the key in our database?
+# ✅ Has the user paid this month?
+# ✅ Is the key not revoked?
+
+# What we DON'T collect:
+# ❌ User data
+# ❌ Workflow data
+# ❌ Usage statistics
+# ❌ IP addresses (beyond basic request)
+```
+
+### Revenue Model Summary
+
+| Edition | Revenue | Our Cost | Profit |
+|---------|---------|----------|--------|
+| Self-Hosted | $0 | $0 | $0 |
+| Self-Hosted + n8n | $9/month | ~$0 | ~$9/month |
+| Cloud | $25-200/month | AI + Infra | Variable |
+
+### Who Chooses What?
+
+```
+Developer wants to try it?
+    │
+    └─▶ Self-Hosted (free) ──▶ Likes it?
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                    ▼                             ▼
+            Needs n8n?                    Doesn't want to
+                │                         manage servers?
+                ▼                             │
+        Self-Hosted + n8n                     ▼
+           ($9/month)                   Cloud ($25+/month)
+```
+
+---
+
+## Environment Variables
+
+### Required (All Deployments)
+
+```bash
+# Database & Auth
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Google OAuth (configure in Supabase Dashboard → Authentication → Providers → Google)
+# Required: Google Cloud Console → Create OAuth 2.0 credentials
+# Redirect URL: https://xxxxx.supabase.co/auth/v1/callback
+
+# Storage
+R2_ACCOUNT_ID=xxxxx
+R2_ACCESS_KEY_ID=xxxxx
+R2_SECRET_ACCESS_KEY=xxxxx
+R2_BUCKET_NAME=scenenode-assets
+R2_PUBLIC_URL=https://assets.scenenode.ai
+
+# Redis
+REDIS_URL=redis://default:xxxxx@xxxxx.railway.app:6379
+
+# Security
+API_SECRET_KEY=xxxxx  # For signing API keys
+WEBHOOK_SECRET_KEY=xxxxx  # Default webhook signing
+ENCRYPTION_KEY=xxxxx  # For encrypting sensitive data
+```
+
+### AI Providers (MVP)
+
+```bash
+# Replicate - provides access to all models needed for MVP
+# Nano Banana, VEO, Gemini Flash - all available through Replicate
+REPLICATE_API_TOKEN=r8_xxxxx
+```
+
+### AI Providers (Optional - Phase 2+)
+
+```bash
+# Direct API access (if needed for pricing/rate limits)
+GEMINI_API_KEY=xxxxx           # Direct Google access
+OPENAI_API_KEY=xxxxx           # For DALL-E, GPT
+ANTHROPIC_API_KEY=xxxxx        # For Claude QA
+ELEVENLABS_API_KEY=xxxxx       # For voice (better quality)
+KLING_API_KEY=xxxxx            # Direct Kling access
+RUNWAY_API_KEY=xxxxx           # Direct Runway access
+```
+
+### Payments (Cloud only)
+
+```bash
+PADDLE_API_KEY=pdl_live_xxxxx
+PADDLE_WEBHOOK_SECRET=whsec_xxxxx
+PADDLE_PRICE_ID_BASIC=pri_xxxxx
+PADDLE_PRICE_ID_PRO=pri_xxxxx
+PADDLE_PRICE_ID_BUSINESS=pri_xxxxx
+PADDLE_PRICE_ID_ENTERPRISE=pri_xxxxx
+```
+
+### Optional
+
+```bash
+# Email (for webhook failure notifications)
+RESEND_API_KEY=xxxxx
+FROM_EMAIL=notifications@scenenode.ai
+
+# Monitoring
+SENTRY_DSN=https://xxxxx@sentry.io/xxxxx
+
+# Feature flags
+ENABLE_ANALYTICS=true
+ENABLE_WATERMARK=true  # Set false for self-hosted
+```
+
+---
+
+## Deployment
+
+### Cloud (Managed)
+
+```
+Frontend:  Vercel
+Backend:   Railway (FastAPI)
+Workers:   Railway (Python workers)
+Redis:     Railway (Redis)
+Database:  Supabase (managed)
+Storage:   Cloudflare R2
+```
+
+### Self-Hosted (Docker Compose)
+
+```yaml
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      # ... other env vars
+    depends_on:
+      - redis
+      - postgres
+
+  worker:
+    build: ./backend
+    command: python -m scenenode.worker
+    environment:
+      - REDIS_URL=redis://redis:6379
+      # ... same as backend
+    depends_on:
+      - redis
+      - backend
+    deploy:
+      replicas: 2  # Scale based on load
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=scenenode
+      - POSTGRES_USER=scenenode
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  redis_data:
+  postgres_data:
+```
+
+### Self-Hosted Notes
+
+1. **Bring Your Own API Keys**: Self-hosters provide their own AI provider keys
+2. **No Paddle**: Billing disabled, unlimited usage
+3. **No Watermark**: Configurable via env var
+4. **Local Storage Option**: Can use local filesystem instead of R2
+
+---
+
+## Monitoring & Observability
+
+### Error Tracking (Sentry)
+
+```python
+# backend/scenenode/config.py
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    environment=os.getenv("ENVIRONMENT", "development"),
+    traces_sample_rate=0.1,
+)
+```
+
+**What to capture:**
+- Failed jobs (with workflow_id, user_id, error message)
+- Provider errors (API failures, timeouts)
+- Unexpected exceptions
+- Slow transactions (> 30s)
+
+### Metrics (Prometheus + Grafana)
+
+**Key metrics to track:**
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `jobs_total` | Counter | Total jobs created |
+| `jobs_completed` | Counter | Successfully completed jobs |
+| `jobs_failed` | Counter | Failed jobs |
+| `job_duration_seconds` | Histogram | Time to complete job |
+| `queue_depth` | Gauge | Jobs waiting in queue |
+| `credits_consumed` | Counter | Total credits used |
+| `provider_requests` | Counter | Requests to AI providers |
+| `provider_latency` | Histogram | AI provider response time |
+
+**Example implementation:**
+```python
+from prometheus_client import Counter, Histogram, Gauge
+
+jobs_total = Counter('jobs_total', 'Total jobs', ['workflow_type'])
+jobs_completed = Counter('jobs_completed', 'Completed jobs')
+jobs_failed = Counter('jobs_failed', 'Failed jobs', ['error_type'])
+job_duration = Histogram('job_duration_seconds', 'Job duration')
+queue_depth = Gauge('queue_depth', 'Jobs in queue', ['queue_name'])
+```
+
+### Alerts
+
+| Condition | Severity | Action |
+|-----------|----------|--------|
+| Job stuck > 10 minutes | Warning | Slack notification |
+| Job stuck > 30 minutes | Critical | PagerDuty + auto-retry |
+| Error rate > 5% (5 min window) | Critical | PagerDuty |
+| Queue depth > 100 | Warning | Slack notification |
+| Queue depth > 500 | Critical | Scale workers |
+| Worker offline > 2 minutes | Critical | PagerDuty |
+| Provider error rate > 10% | Warning | Slack + check provider status |
+
+### Dead Letter Queue
+
+Failed jobs after max retries go to DLQ for manual inspection:
+
+```python
+# Worker configuration
+RETRY_ATTEMPTS = 3
+RETRY_DELAY = [60, 300, 900]  # 1min, 5min, 15min
+
+async def process_job(job):
+    try:
+        await execute_workflow(job)
+    except Exception as e:
+        if job.attempts >= RETRY_ATTEMPTS:
+            await move_to_dlq(job, error=str(e))
+            await notify_admin(job)
+        else:
+            raise  # BullMQ will retry
+```
+
+### Health Checks
+
+```python
+# backend/scenenode/api/routes/health.py
+
+@router.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": settings.VERSION,
+        "checks": {
+            "database": await check_database(),
+            "redis": await check_redis(),
+            "storage": await check_r2(),
+        }
+    }
+
+@router.get("/health/workers")
+async def worker_health():
+    return {
+        "active_workers": await get_active_worker_count(),
+        "queue_depths": {
+            "video": await get_queue_depth("video"),
+            "image": await get_queue_depth("image"),
+            "voice": await get_queue_depth("voice"),
+        },
+        "jobs_processing": await get_processing_count(),
+    }
+```
+
+### Dashboard (Grafana)
+
+**Panels to include:**
+1. Jobs per minute (line chart)
+2. Success vs failure rate (pie chart)
+3. Average job duration (line chart)
+4. Queue depths (stacked area)
+5. Credits consumed per hour (bar chart)
+6. Provider latency by provider (line chart)
+7. Error rate by error type (stacked bar)
+8. Active workers (gauge)
+
+---
+
+## License
+
+### Sustainable Use License
+
+Based on the n8n/Fair-code model:
+
+```
+SceneNode.ai Sustainable Use License
+
+Copyright (c) 2026 [Company Name]
+
+Permission is hereby granted to any person obtaining a copy of this 
+software and associated documentation files (the "Software"):
+
+1. PERMITTED USES:
+   - Use the Software for personal projects
+   - Use the Software for internal business purposes
+   - Modify the Software for your own use
+   - Self-host the Software on your own infrastructure
+
+2. PROHIBITED USES:
+   - Offering the Software as a commercial hosted service to third parties
+   - Selling, licensing, or sublicensing the Software
+   - Removing or modifying license/attribution notices
+
+3. ATTRIBUTION:
+   - You must retain all copyright and license notices
+   - If you modify the Software, you must indicate changes made
+
+4. NO WARRANTY:
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+For commercial hosting licenses, contact: license@scenenode.ai
+```
+
+### What's Open
+
+| Component | Open Source |
+|-----------|-------------|
+| Visual Editor | ✅ |
+| All Nodes | ✅ |
+| API Server | ✅ |
+| Workers | ✅ |
+| Database Schema | ✅ |
+
+### What's Cloud-Only
+
+| Component | Reason |
+|-----------|--------|
+| Queue Priority | Requires managed infrastructure |
+| Analytics Dashboard | Connected to billing |
+| Team Collaboration | Requires central auth |
+| SSO/SAML | Enterprise feature |
+| White-label | Enterprise feature |
+
+---
+
+## Repository Architecture
+
+### Two Separate Repositories
+
+**The website and the application are completely separate codebases.**
+
+| Repository | URL | Purpose |
+|------------|-----|---------|
+| `scenenode` | app.scenenode.ai | The application (product) |
+| `scenenode-website` | scenenode.ai | Marketing website (landing page) |
+
+**Why separate?**
+- Claude Code can't accidentally break the app when working on the website
+- Different deploy pipelines
+- Different technologies if needed
+- Clear separation of concerns
+
+### URL Structure
+
+```
+scenenode.ai              → Marketing website (landing page, pricing, about)
+app.scenenode.ai          → The application (dashboard, editor, settings)
+api.scenenode.ai          → The API (FastAPI backend)
+docs.scenenode.ai         → Documentation (Docusaurus/GitBook)
+license.scenenode.ai      → License validation server (for n8n Node)
+```
+
+### Repository 1: scenenode (Application)
+
+```
+github.com/scenenode/scenenode
+
+scenenode/
+├── frontend/              # Next.js 14 - The App
+├── backend/               # FastAPI - The API
+├── docker-compose.yml
+├── README.md
+└── CLAUDE.md
+```
+
+**Deployed to:**
+- Frontend: Vercel (app.scenenode.ai)
+- Backend: Railway (api.scenenode.ai)
+
+### Repository 2: scenenode-website (Marketing)
+
+```
+github.com/scenenode/scenenode-website
+
+scenenode-website/
+├── src/
+│   ├── pages/
+│   │   ├── index.astro        # Home page
+│   │   ├── pricing.astro      # Pricing page
+│   │   ├── about.astro        # About page
+│   │   └── contact.astro      # Contact page
+│   ├── components/
+│   │   ├── Hero.astro
+│   │   ├── Features.astro
+│   │   ├── Pricing.astro
+│   │   ├── Testimonials.astro
+│   │   └── Footer.astro
+│   └── layouts/
+│       └── Layout.astro
+├── public/
+│   └── images/
+├── package.json
+└── README.md
+```
+
+**Technology:** Astro (or simple HTML/Tailwind - fast, SEO-friendly)
+
+**Deployed to:** Vercel (scenenode.ai)
+
+### Why Astro for Website?
+
+| Criteria | Next.js | Astro |
+|----------|---------|-------|
+| Purpose | App (interactive) | Website (static) |
+| JS shipped | A lot | Almost zero |
+| Build time | Slower | Fast |
+| SEO | Good | Excellent |
+| Complexity | Higher | Lower |
+
+**The app needs Next.js (React, state, interactivity).**
+**The website just needs to look good and load fast.**
+
+### Claude Code Instructions
+
+```
+⚠️ IMPORTANT: Website and App are SEPARATE repositories.
+
+When working on the WEBSITE (scenenode-website):
+- Only touch files in scenenode-website/
+- Never import from the app
+- Focus on: landing page, pricing, marketing
+
+When working on the APP (scenenode):
+- Only touch files in scenenode/
+- Never touch the website
+- Focus on: editor, dashboard, API
+```
+
+---
+
+## Project Structure
+
+```
+scenenode/
+├── frontend/                    # Next.js 14
+│   ├── app/
+│   │   ├── (auth)/             # Login, signup
+│   │   ├── (dashboard)/        # Main app
+│   │   │   ├── projects/
+│   │   │   ├── workflows/
+│   │   │   ├── jobs/
+│   │   │   └── settings/
+│   │   └── api/                # Next.js API routes (proxy)
+│   ├── components/
+│   │   ├── editor/             # React Flow editor
+│   │   ├── nodes/              # Custom node components
+│   │   └── ui/                 # shadcn/ui components
+│   ├── lib/
+│   │   ├── supabase.ts
+│   │   ├── api.ts
+│   │   └── utils.ts
+│   └── package.json
+│
+├── backend/                     # FastAPI
+│   ├── scenenode/
+│   │   ├── __init__.py
+│   │   ├── main.py             # FastAPI app
+│   │   ├── config.py           # Settings from env
+│   │   ├── api/
+│   │   │   ├── routes/
+│   │   │   │   ├── projects.py
+│   │   │   │   ├── workflows.py
+│   │   │   │   ├── jobs.py
+│   │   │   │   ├── render.py
+│   │   │   │   └── webhooks.py
+│   │   │   ├── deps.py         # Dependencies
+│   │   │   └── auth.py         # API key auth
+│   │   ├── models/             # Pydantic models
+│   │   ├── services/
+│   │   │   ├── workflow_engine.py
+│   │   │   ├── job_manager.py
+│   │   │   └── credit_manager.py
+│   │   ├── providers/          # AI provider abstraction
+│   │   │   ├── base.py
+│   │   │   ├── image/
+│   │   │   │   ├── nano_banana.py
+│   │   │   │   ├── flux.py
+│   │   │   │   └── dalle.py
+│   │   │   ├── video/
+│   │   │   │   ├── veo.py
+│   │   │   │   └── kling.py
+│   │   │   └── voice/
+│   │   │       └── elevenlabs.py
+│   │   ├── workers/
+│   │   │   ├── __init__.py
+│   │   │   ├── image_worker.py
+│   │   │   ├── video_worker.py
+│   │   │   ├── voice_worker.py
+│   │   │   └── webhook_worker.py
+│   │   └── utils/
+│   │       ├── storage.py      # R2 client
+│   │       └── security.py
+│   ├── tests/
+│   ├── requirements.txt
+│   └── Dockerfile
+│
+├── docker-compose.yml          # Self-hosted deployment
+├── docker-compose.dev.yml      # Local development
+├── .env.example
+├── LICENSE
+├── README.md
+└── CLAUDE.md                   # This file
+```
+
+---
+
+## Development Workflow
+
+### Local Setup
+
+```bash
+# Clone
+git clone https://github.com/scenenode/scenenode.git
+cd scenenode
+
+# Copy env
+cp .env.example .env
+# Fill in your API keys
+
+# Start services
+docker-compose -f docker-compose.dev.yml up -d
+
+# Frontend
+cd frontend
+npm install
+npm run dev
+
+# Backend
+cd backend
+pip install -r requirements.txt
+uvicorn scenenode.main:app --reload
+
+# Workers
+python -m scenenode.workers
+```
+
+### Testing
+
+```bash
+# Backend tests
+cd backend
+pytest
+
+# Frontend tests
+cd frontend
+npm test
+
+# E2E tests
+npm run test:e2e
+```
+
+---
+
+## Development Guidelines
+
+### Testing Requirements
+
+**Every piece of code must have tests.** No exceptions.
+
+#### Backend (Python/FastAPI)
+
+```bash
+# Run tests
+cd backend
+pytest
+
+# Run with coverage
+pytest --cov=scenenode --cov-report=html
+```
+
+**Test structure:**
+```
+backend/
+├── tests/
+│   ├── unit/
+│   │   ├── test_workflow_engine.py
+│   │   ├── test_credit_manager.py
+│   │   ├── test_job_manager.py
+│   │   └── providers/
+│   │       ├── test_nano_banana.py
+│   │       ├── test_veo.py
+│   │       └── test_elevenlabs.py
+│   ├── integration/
+│   │   ├── test_api_projects.py
+│   │   ├── test_api_workflows.py
+│   │   ├── test_api_jobs.py
+│   │   └── test_api_render.py
+│   └── conftest.py          # Fixtures
+```
+
+**What to test:**
+| Component | Test Type | What to Verify |
+|-----------|-----------|----------------|
+| API endpoints | Integration | Status codes, response format, auth |
+| Workflow engine | Unit | Node execution order, branching logic |
+| Credit manager | Unit | Deduction, balance check, rollback |
+| AI providers | Unit + Mock | Request format, response parsing, error handling |
+| Job queue | Integration | Job creation, status updates, retries |
+
+**Example test:**
+```python
+# tests/unit/test_credit_manager.py
+import pytest
+from scenenode.services.credit_manager import CreditManager
+
+class TestCreditManager:
+    def test_deduct_credits_success(self, db_session, user_with_credits):
+        """Should deduct credits when user has sufficient balance."""
+        manager = CreditManager(db_session)
+        result = manager.deduct(user_with_credits.id, amount=50)
+        
+        assert result.success == True
+        assert result.new_balance == 150  # Started with 200
+    
+    def test_deduct_credits_insufficient(self, db_session, user_with_credits):
+        """Should fail when user has insufficient credits."""
+        manager = CreditManager(db_session)
+        result = manager.deduct(user_with_credits.id, amount=500)
+        
+        assert result.success == False
+        assert result.error == "insufficient_credits"
+    
+    def test_estimate_workflow_cost(self, db_session):
+        """Should calculate correct cost for workflow."""
+        manager = CreditManager(db_session)
+        workflow = {
+            "nodes": [
+                {"type": "generate-script"},      # 2 credits
+                {"type": "generate-image"},       # 5 credits × 8 scenes
+                {"type": "image-to-video"},       # 20 credits × 8 scenes
+            ]
+        }
+        cost = manager.estimate(workflow, scene_count=8)
+        
+        assert cost == 202  # 2 + 40 + 160
+```
+
+#### Frontend (Next.js/React)
+
+```bash
+# Run tests
+cd frontend
+npm test
+
+# Run with coverage
+npm test -- --coverage
+```
+
+**Test structure:**
+```
+frontend/
+├── __tests__/
+│   ├── components/
+│   │   ├── editor/
+│   │   │   ├── Canvas.test.tsx
+│   │   │   ├── NodePanel.test.tsx
+│   │   │   └── PropertiesPanel.test.tsx
+│   │   └── ui/
+│   │       └── Button.test.tsx
+│   ├── hooks/
+│   │   ├── useWorkflow.test.ts
+│   │   └── useCredits.test.ts
+│   └── utils/
+│       └── nodeValidation.test.ts
+```
+
+**What to test:**
+| Component | Test Type | What to Verify |
+|-----------|-----------|----------------|
+| React components | Unit | Rendering, user interactions |
+| Custom hooks | Unit | State changes, side effects |
+| Utility functions | Unit | Input/output correctness |
+| API calls | Integration | Request/response handling |
+
+#### E2E Tests (Playwright)
+
+```bash
+npm run test:e2e
+```
+
+**Test structure:**
+```
+e2e/
+├── tests/
+│   ├── auth.spec.ts           # Login, signup, logout
+│   ├── projects.spec.ts       # CRUD operations
+│   ├── workflow-editor.spec.ts # Node drag, connect, configure
+│   ├── job-execution.spec.ts  # Run workflow, track progress
+│   └── billing.spec.ts        # Credits, subscription
+```
+
+**Critical E2E flows:**
+1. User signs up → Creates project → Builds workflow → Runs → Gets video
+2. User connects n8n → Sends request → Receives video URL
+3. User runs out of credits → Sees error → Buys more → Continues
+
+### Documentation Requirements
+
+**Documentation must be updated with every feature.** Users should always know what they can do and how.
+
+#### Documentation Structure
+
+```
+docs/
+├── getting-started/
+│   ├── quickstart.md          # 5-minute first video
+│   ├── concepts.md            # Nodes, workflows, credits
+│   └── ui-overview.md         # Editor walkthrough
+│
+├── nodes/
+│   ├── input/
+│   │   ├── text-prompt.md
+│   │   ├── upload-image.md
+│   │   └── upload-video.md
+│   ├── ai/
+│   │   ├── generate-script.md
+│   │   ├── generate-image.md
+│   │   ├── image-to-video.md
+│   │   └── text-to-speech.md
+│   ├── processing/
+│   │   ├── combine-videos.md
+│   │   ├── add-audio.md
+│   │   ├── extract-audio.md
+│   │   ├── mix-audio.md
+│   │   └── add-captions.md
+│   └── output/
+│       ├── save-to-storage.md
+│       └── webhook.md
+│
+├── api/
+│   ├── authentication.md
+│   ├── endpoints.md
+│   ├── webhooks.md
+│   └── rate-limits.md
+│
+├── n8n/
+│   ├── installation.md
+│   ├── quick-render.md
+│   ├── run-workflow.md
+│   └── examples.md
+│
+├── self-hosting/
+│   ├── docker-setup.md
+│   ├── configuration.md
+│   └── license.md
+│
+└── tutorials/
+    ├── story-video.md         # Create a children's story
+    ├── news-to-tiktok.md      # RSS to video automation
+    ├── product-ad.md          # E-commerce video
+    └── branching-endings.md   # Multiple video outputs
+```
+
+#### Node Documentation Template
+
+Every node must have documentation following this template:
+
+```markdown
+# [Node Name]
+
+## Overview
+One sentence description of what this node does.
+
+## When to Use
+- Use case 1
+- Use case 2
+
+## Inputs
+| Input | Type | Required | Description |
+|-------|------|----------|-------------|
+| prompt | string | Yes | The text prompt for generation |
+| reference | image | No | Reference image for consistency |
+
+## Outputs
+| Output | Type | Description |
+|--------|------|-------------|
+| image | image | The generated image |
+
+## Configuration
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| provider | select | Nano Banana | AI provider to use |
+| style | select | - | Visual style preset |
+| aspectRatio | select | 16:9 | Output aspect ratio |
+
+## Credit Cost
+X credits per execution.
+
+## Examples
+
+### Basic Usage
+[Screenshot + explanation]
+
+### With Reference Image
+[Screenshot + explanation]
+
+## Tips
+- Tip 1 for better results
+- Tip 2 for common issues
+
+## Related Nodes
+- [Generate Script](./generate-script.md)
+- [Image to Video](./image-to-video.md)
+```
+
+#### API Documentation Template
+
+```markdown
+# [Endpoint Name]
+
+## Endpoint
+`POST /v1/render`
+
+## Description
+What this endpoint does.
+
+## Authentication
+Requires API key in header: `Authorization: Bearer sn_live_xxx`
+
+## Request
+
+### Headers
+| Header | Required | Description |
+|--------|----------|-------------|
+| Authorization | Yes | Bearer token |
+| Content-Type | Yes | application/json |
+
+### Body
+```json
+{
+  "text": "string (required)",
+  "style": "string (optional)",
+  "duration": "number (optional)"
+}
+```
+
+### Parameters
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| text | string | Yes | - | The story/content |
+| style | string | No | "children" | Visual style |
+| duration | number | No | 60 | Target duration in seconds |
+
+## Response
+
+### Success (200)
+```json
+{
+  "job_id": "job_xxx",
+  "status": "completed",
+  "video_url": "https://..."
+}
+```
+
+### Error (4xx/5xx)
+```json
+{
+  "error": {
+    "code": "insufficient_credits",
+    "message": "You need 209 credits but only have 50"
+  }
+}
+```
+
+## Code Examples
+
+### cURL
+```bash
+curl -X POST https://api.scenenode.ai/v1/render \
+  -H "Authorization: Bearer sn_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "A brave knight..."}'
+```
+
+### Python
+```python
+import requests
+
+response = requests.post(
+    "https://api.scenenode.ai/v1/render",
+    headers={"Authorization": "Bearer sn_live_xxx"},
+    json={"text": "A brave knight..."}
+)
+```
+
+### JavaScript
+```javascript
+const response = await fetch("https://api.scenenode.ai/v1/render", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer sn_live_xxx",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ text: "A brave knight..." })
+});
+```
+
+## Rate Limits
+See [Rate Limits](./rate-limits.md)
+```
+
+#### Documentation Rules
+
+1. **Update on every PR** - If code changes, docs change
+2. **Screenshots required** - For UI features, include screenshots
+3. **Code examples required** - For API/SDK, include working examples
+4. **Keep it simple** - User should understand in 30 seconds
+5. **Version docs** - Major versions get separate docs
+
+#### Live Documentation Updates (Claude Code)
+
+**As Claude Code builds features, it MUST update documentation in real-time.**
+
+| When Building... | Update These Docs |
+|------------------|-------------------|
+| Docker setup | `docs/self-hosting/docker-setup.md`, `README.md` |
+| New Node | `docs/nodes/[category]/[node].md` |
+| API endpoint | `docs/api/endpoints.md` |
+| n8n Node | `docs/n8n/installation.md` |
+| Environment variable | `docs/self-hosting/configuration.md`, `.env.example` |
+| Database change | `docs/self-hosting/docker-setup.md` (migrations) |
+| New feature | `CHANGELOG.md` |
+
+**README.md must always have:**
+
+```markdown
+# SceneNode
+
+## Quick Start (5 minutes)
+
+### Option 1: Cloud (Recommended)
+1. Go to https://scenenode.ai
+2. Sign up
+3. Create your first video
+
+### Option 2: Self-Hosted (Docker)
+
+#### Requirements
+- Docker & Docker Compose
+- 4GB RAM minimum
+- API keys for: Gemini, ElevenLabs (optional)
+
+#### Installation
+\`\`\`bash
+# Clone
+git clone https://github.com/scenenode/scenenode.git
+cd scenenode
+
+# Configure
+cp .env.example .env
+# Edit .env with your API keys
+
+# Run
+docker-compose up -d
+
+# Open
+http://localhost:3000
+\`\`\`
+
+#### Getting API Keys
+- **Gemini**: https://makersuite.google.com/app/apikey
+- **ElevenLabs**: https://elevenlabs.io/api (optional, for voice)
+
+## Documentation
+- [Full Documentation](https://docs.scenenode.ai)
+- [API Reference](https://docs.scenenode.ai/api)
+- [n8n Integration](https://docs.scenenode.ai/n8n)
+
+## License
+Sustainable Use License - See [LICENSE](./LICENSE)
+```
+
+**Claude Code Workflow:**
+
+```
+1. Write code for feature
+2. Write tests for feature
+3. Update relevant docs
+4. Update CHANGELOG.md
+5. Commit all together
+```
+
+**Example - Adding a new node:**
+
+```
+Claude Code builds "Mix Audio" node:
+
+1. Creates: backend/scenenode/nodes/mix_audio.py
+2. Creates: backend/tests/unit/nodes/test_mix_audio.py
+3. Creates: docs/nodes/processing/mix-audio.md
+4. Updates: docs/nodes/README.md (add to list)
+5. Updates: CHANGELOG.md
+```
+
+#### Changelog
+
+Maintain a CHANGELOG.md:
+
+```markdown
+# Changelog
+
+## [1.2.0] - 2026-02-15
+
+### Added
+- Mix Audio node for combining multiple audio tracks
+- Extract Audio node for separating video and audio
+
+### Changed
+- Improved image generation speed by 30%
+
+### Fixed
+- Fixed webhook retry logic for failed deliveries
+
+## [1.1.0] - 2026-02-01
+...
+```
+
+---
+
+## Technical Decisions
+
+| Question | Decision | Reason |
+|----------|----------|--------|
+| UI Framework | shadcn/ui | Consistent design, good React Flow integration |
+| State Management | React Query (server) + Zustand (UI) | Clear separation of concerns |
+| Video Processing | FFmpeg in dedicated worker | Required for self-hosted edition |
+| Realtime Updates | Polling (MVP) → SSE (Phase 2) | No additional infrastructure needed |
+
+### Implementation Notes
+
+**State Management:**
+- React Query: workflows, jobs, projects, assets (anything from API)
+- React Flow internal state: nodes, edges, viewport
+- Zustand: selected node, panel visibility, wizard steps
+
+**Video Workers:**
+- Separate container from AI workers (CPU vs IO bound)
+- Set concurrency limit (1-2 jobs per worker)
+- Use `--threads` flag to cap FFmpeg CPU usage
+
+**Realtime Updates (MVP):**
+```typescript
+useQuery({
+  queryKey: ['job', jobId],
+  queryFn: () => fetchJobStatus(jobId),
+  refetchInterval: 3000,
+  enabled: status !== 'completed' && status !== 'failed'
+})
+```
+
+---
+
+## Phase 1 MVP Scope (Detailed Breakdown)
+
+### Phase 1.1 - Foundation (3-4 days)
+- [ ] Database schema in Supabase (users, projects, workflows, jobs)
+- [ ] Auth with Supabase (Google OAuth / Gmail login)
+- [ ] FastAPI boilerplate with basic endpoints
+- [ ] Next.js boilerplate with shadcn/ui
+- [ ] Project structure for both repos (scenenode, scenenode-website)
+
+### Phase 1.2 - Editor (4-5 days)
+- [ ] React Flow canvas setup
+- [ ] Node types: Text Prompt, Generate Image, Image to Video, Combine
+- [ ] Save/Load workflow to database
+- [ ] Workflow validation (warnings & errors before execution)
+- [ ] Node configuration panels
+
+### Phase 1.3 - Execution (5-7 days)
+- [ ] Redis + BullMQ setup
+- [ ] Workflow execution engine (topological sort, dependency resolution)
+- [ ] Replicate integration (Nano Banana for images, VEO for video)
+- [ ] Job progress tracking (polling)
+- [ ] Asset storage to Cloudflare R2
+- [ ] Error handling and basic retries
+
+### Phase 1.4 - Polish & Admin (5-7 days)
+
+**User-facing:**
+- [ ] Credit system (deduct on job completion)
+- [ ] Overage handling (prompt to upgrade when credits run out)
+- [ ] Dashboard with projects list
+- [ ] Job history view
+- [ ] Basic error messages and user feedback
+
+**Admin Panel (`/admin/*` routes):**
+- [ ] Admin middleware (check `user.role === 'admin'`)
+- [ ] User management (list, search, view profile, add/remove credits, block user)
+- [ ] Model management (enable/disable models, set credits cost per model)
+- [ ] Plans & Pricing (define tiers, credits per tier - configurable)
+- [ ] Monitoring (jobs queue status, recent errors, usage graphs)
+- [ ] Revenue dashboard (from Paddle webhooks)
+
+**Admin Panel Structure:**
+```
+app/
+├── (main)/           # Main product
+│   ├── dashboard/
+│   ├── editor/
+│   └── projects/
+└── (admin)/          # Admin panel
+    ├── users/
+    ├── models/
+    ├── billing/
+    └── monitoring/
+```
+
+**Total: 18-23 working days**
+
+After Phase 1.3 you have a working system that takes a workflow and outputs video.
+
+---
+
+### Phase 2 - API & Scale
+- [ ] API access with API keys
+- [ ] Webhooks
+- [ ] More AI providers
+- [ ] Templates library
+- [ ] Team collaboration
+
+### Phase 3+ - Enterprise
+- [ ] Analytics
+- [ ] SSO/SAML
+- [ ] White-label
+- [ ] Marketplace for templates
+
+---
+
+*Last updated: 2026-01-30*
+*Version: 1.3.0*
