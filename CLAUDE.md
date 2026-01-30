@@ -725,59 +725,76 @@ Example: Image node output → connects to both Video node AND next Image node a
 | Text to Speech | ElevenLabs | PlayHT, Azure TTS |
 | Generate Script | Claude | GPT-4, Gemini |
 
-#### 4. Dynamic Input Handles
+#### 4. Parameter Input Nodes
 
-**Every configuration field in a node can optionally receive its value from an incoming connection instead of being set manually in the config panel.**
+**Instead of configuring every field manually in the config panel, users can use dedicated Parameter Input Nodes to visually wire values into specific fields on AI nodes.**
 
 **Resolution rule:**
-- If a field has an incoming connection → use the connected value
+- If a field has an incoming connection from a Parameter Node → use the connected value
 - If no connection → use the value from the config panel (fallback)
 
-This means any node's config is a mix of static values (set in the panel) and dynamic values (received from connected nodes). Dynamic inputs appear as additional handles on the left side of the node.
+**Each Parameter Node has ONE specific output handle that only connects to matching input handles.** This prevents confusion about which field a connection targets.
 
 **Benefits:**
-- **Write once, connect many**: Define a style guide in one Text Input node, connect it to every Generate Image node
+- **No ambiguity**: A Tone Node can only connect to tone fields, not style_guide
+- **Write once, connect many**: Define tone once, connect to every Generate Script node
 - **Dynamic parameters from n8n**: Pass `scene_count`, `style`, `model` as workflow variables from API/n8n
-- **Visual clarity**: See at a glance where each value comes from (connection vs. manual)
-- **Mix static + dynamic**: Some fields from connections, others from config panel
+- **Visual clarity**: See at a glance where each value comes from
 
 **How it works in the UI:**
 
 ```
-┌─────────────────────────────────────────┐
-│ 🎨 Generate Image - Scene 3             │
-│                                         │
-│ Provider: [Nano Banana ▼]    ← manual   │
-│ Style:    ●─── connected ───── [Text]   │
-│ Aspect:   [16:9 ▼]          ← manual   │
-│ Neg Prompt: ●── connected ── [Text]     │
-│                                         │
-│ ● = dynamic input handle (left side)    │
-│     When connected, config field is     │
-│     grayed out with "Connected" label   │
-└─────────────────────────────────────────┘
+┌─────────────┐
+│  Tone       │──────→ (tone) on Generate Script
+│  "epic..."  │
+└─────────────┘
+
+┌─────────────┐
+│ Style Guide │──────→ (style_guide) on Generate Script / Generate Image
+│ "watercolor"│
+└─────────────┘
+
+┌─────────────┐
+│  Provider   │──────→ (provider) on any AI node
+│  "gemini"   │
+└─────────────┘
+
+┌─────────────┐
+│  Scenes     │──────→ (scene_count) on Generate Script
+│  Value: 8   │
+└─────────────┘
+
+┌─────────────┐
+│  Duration   │──────→ (duration) on Image to Video / (target_length) on Generate Script
+│  Value: 60  │
+└─────────────┘
+
+┌──────────────┐
+│ Aspect Ratio │──────→ (aspect_ratio) on Generate Image
+│  "16:9"      │
+└──────────────┘
 ```
 
-**Dynamic input handles on nodes:**
+**Parameter Nodes and their compatible targets:**
 
-| Node | Dynamic Input Handles | Type |
-|------|-----------------------|------|
-| Generate Script | `style_guide`, `tone`, `scene_count`, `target_length`, `provider_model` | text, text, number, number, model |
-| Generate Image | `style`, `negative_prompt`, `aspect_ratio`, `provider_model` | text, text, text, model |
-| Image to Video | `duration`, `motion`, `camera_motion`, `provider_model` | number, text, text, model |
-| Text to Speech | `voice_id`, `speed`, `provider_model` | text, number, model |
-| Combine Videos | `transition`, `transition_duration` | text, number |
+| Parameter Node | Output Handle | Compatible Input Handles On |
+|----------------|---------------|-----------------------------|
+| Tone | `tone` | Generate Script (`tone`) |
+| Style Guide | `style_guide` | Generate Script (`style_guide`), Generate Image (`style`) |
+| Provider | `provider_model` | Any AI node (`provider`, `model`) |
+| Scene Count | `scene_count` | Generate Script (`scene_count`) |
+| Duration | `duration` | Image to Video (`duration`), Generate Script (`target_length`) |
+| Aspect Ratio | `aspect_ratio` | Generate Image (`aspect_ratio`) |
 
-**Connection type compatibility:**
+**Receiving nodes and their parameter input handles:**
 
-| Output Type | Can Connect To |
-|-------------|----------------|
-| text | Any text/string field |
-| number | Any number field |
-| model | Provider/model fields on AI nodes |
-| image | Image input fields |
-| video | Video input fields |
-| audio | Audio input fields |
+| Node | Parameter Input Handles |
+|------|------------------------|
+| Generate Script | `tone`, `style_guide`, `scene_count`, `target_length`, `provider_model` |
+| Generate Image | `style`, `aspect_ratio`, `provider_model` |
+| Image to Video | `duration`, `provider_model` |
+| Text to Speech | `provider_model` |
+| Combine Videos | (none - simple processing) |
 
 ### Input Nodes
 
@@ -815,64 +832,70 @@ interface RSSFeedNode {
   };
 }
 
-// --- Dynamic Input Nodes ---
-// These nodes provide values that connect to dynamic input handles on other nodes.
+// --- Parameter Input Nodes ---
+// Each node targets a SPECIFIC parameter on AI nodes.
+// The node name tells users exactly what it controls.
 
-interface TextInputNode {
-  type: 'text-input';
+interface ToneNode {
+  type: 'tone';
   data: {
-    label: string;           // Display name (e.g. "Style Guide", "Tone")
-    text: string;            // The text value
-    placeholder?: string;    // Placeholder hint
+    tone: string;            // e.g. "dramatic", "playful", "dark"
   };
   inputs: [];
-  outputs: ['text'];         // Connects to any text/string dynamic input handle
+  outputs: ['tone'];         // Connects ONLY to 'tone' input handle
   creditCost: 0;
-
-  // Use cases:
-  // - Style guide shared across multiple Generate Image nodes
-  // - Tone/mood shared across multiple Generate Script nodes
-  // - Negative prompt shared across image nodes
-  // - Custom prompt fragments
 }
 
-interface NumberInputNode {
-  type: 'number-input';
+interface StyleGuideNode {
+  type: 'style-guide';
   data: {
-    label: string;           // Display name (e.g. "Scene Count", "Duration")
-    value: number;           // The number value
-    min?: number;            // Minimum allowed value
-    max?: number;            // Maximum allowed value
-    step?: number;           // Increment step (default 1)
+    text: string;            // Style description, e.g. "Studio Ghibli watercolor"
   };
   inputs: [];
-  outputs: ['number'];       // Connects to any number dynamic input handle
+  outputs: ['style_guide'];  // Connects ONLY to 'style_guide' input handle
   creditCost: 0;
-
-  // Use cases:
-  // - Scene count shared across workflow
-  // - Duration parameter
-  // - Transition duration
-  // - Speed/pitch for TTS
 }
 
-interface ModelSelectorNode {
-  type: 'model-selector';
+interface ProviderNode {
+  type: 'provider';
   data: {
-    label: string;           // Display name (e.g. "Image Model", "Video Model")
-    category: 'image' | 'video' | 'voice' | 'script'; // Filters available models
-    provider: string;        // Selected provider (e.g. "nano-banana")
-    model: string;           // Selected model (e.g. "gemini-2.5-flash-image")
+    category: 'image' | 'video' | 'voice' | 'script';
+    provider: string;        // e.g. "nano-banana"
+    model: string;           // e.g. "gemini-2.5-flash-image"
   };
   inputs: [];
-  outputs: ['model'];        // Connects to provider/model dynamic input handle on AI nodes
+  outputs: ['provider'];     // Connects ONLY to 'provider' input handle
   creditCost: 0;
+}
 
-  // Use cases:
-  // - Select model once, connect to all image generation nodes
-  // - Swap entire workflow's model by changing one node
-  // - A/B test: duplicate workflow, change only the Model Selector
-  // - n8n users can pass model selection as workflow variable
+interface SceneCountNode {
+  type: 'scene-count';
+  data: {
+    count: number;           // 1-20
+  };
+  inputs: [];
+  outputs: ['scene_count'];  // Connects ONLY to 'scene_count' input handle
+  creditCost: 0;
+}
+
+interface DurationNode {
+  type: 'duration';
+  data: {
+    seconds: number;         // Target duration in seconds
+  };
+  inputs: [];
+  outputs: ['duration'];     // Connects ONLY to 'duration' input handle
+  creditCost: 0;
+}
+
+interface AspectRatioNode {
+  type: 'aspect-ratio';
+  data: {
+    ratio: '1:1' | '16:9' | '9:16' | '4:3' | '4:5';
+  };
+  inputs: [];
+  outputs: ['aspect_ratio']; // Connects ONLY to 'aspect_ratio' input handle
+  creditCost: 0;
 }
 ```
 
@@ -892,8 +915,8 @@ interface GenerateScriptNode {
     stylePresetId?: string;  // Optional style preset to guide visual descriptions
   };
   inputs: ['prompt'];
-  // Dynamic input handles (optional, override config panel values when connected):
-  dynamicInputs: ['style_guide', 'tone', 'scene_count', 'target_length', 'provider_model'];
+  // Parameter input handles (optional, override config panel values when connected):
+  parameterInputs: ['tone', 'style_guide', 'provider', 'scene_count', 'duration'];
   outputs: ['script', 'scenes'];
   creditCost: 2;
 
@@ -927,8 +950,8 @@ interface GenerateImageNode {
     stylePresetId?: string;    // Style preset to apply
   };
   inputs: ['prompt', 'reference?'];  // Reference accepts MULTIPLE connections
-  // Dynamic input handles (optional, override config panel values when connected):
-  dynamicInputs: ['style', 'negative_prompt', 'aspect_ratio', 'provider_model'];
+  // Parameter input handles (optional, override config panel values when connected):
+  parameterInputs: ['style_guide', 'aspect_ratio', 'provider'];
   outputs: ['image'];                // Output can connect to MULTIPLE nodes
   creditCost: 5;
 
