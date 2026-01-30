@@ -128,6 +128,26 @@ describe("useWorkflowStore", () => {
       expect(state.edges).toHaveLength(0)
     })
 
+    it("does not affect other edges when deleting a node", () => {
+      useWorkflowStore.getState().addNode("text-prompt", { x: 0, y: 0 })
+      useWorkflowStore.getState().addNode("generate-image", { x: 200, y: 0 })
+      useWorkflowStore.getState().addNode("image-to-video", { x: 400, y: 0 })
+      const nodes = useWorkflowStore.getState().nodes
+
+      useWorkflowStore.setState({
+        edges: [
+          { id: "e1", source: nodes[0].id, target: nodes[1].id },
+          { id: "e2", source: nodes[1].id, target: nodes[2].id },
+        ],
+      })
+
+      useWorkflowStore.getState().deleteNode(nodes[0].id)
+
+      const state = useWorkflowStore.getState()
+      expect(state.edges).toHaveLength(1)
+      expect(state.edges[0].id).toBe("e2")
+    })
+
     it("clears selection when deleting selected node", () => {
       useWorkflowStore.getState().addNode("text-prompt", { x: 0, y: 0 })
       const nodeId = useWorkflowStore.getState().nodes[0].id
@@ -136,6 +156,34 @@ describe("useWorkflowStore", () => {
       useWorkflowStore.getState().deleteNode(nodeId)
 
       expect(useWorkflowStore.getState().selectedNodeId).toBeNull()
+    })
+  })
+
+  describe("deleteEdge", () => {
+    it("removes an edge by id", () => {
+      useWorkflowStore.setState({
+        edges: [
+          { id: "e1", source: "a", target: "b" },
+          { id: "e2", source: "b", target: "c" },
+        ],
+      })
+
+      useWorkflowStore.getState().deleteEdge("e1")
+
+      const state = useWorkflowStore.getState()
+      expect(state.edges).toHaveLength(1)
+      expect(state.edges[0].id).toBe("e2")
+      expect(state.isDirty).toBe(true)
+    })
+
+    it("does nothing when edge id does not exist", () => {
+      useWorkflowStore.setState({
+        edges: [{ id: "e1", source: "a", target: "b" }],
+      })
+
+      useWorkflowStore.getState().deleteEdge("nonexistent")
+
+      expect(useWorkflowStore.getState().edges).toHaveLength(1)
     })
   })
 

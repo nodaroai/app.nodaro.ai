@@ -26,6 +26,7 @@ interface WorkflowState {
   readonly addNode: (type: SceneNodeType, position: { x: number; y: number }) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   readonly deleteNode: (nodeId: string) => void
+  readonly deleteEdge: (edgeId: string) => void
   readonly duplicateNode: (nodeId: string) => void
   readonly selectNode: (nodeId: string | null) => void
   readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
@@ -131,6 +132,12 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       ),
       selectedNodeId:
         state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+      isDirty: true,
+    })),
+
+  deleteEdge: (edgeId) =>
+    set((state) => ({
+      edges: state.edges.filter((e) => e.id !== edgeId),
       isDirty: true,
     })),
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ReactFlow,
   Controls,
@@ -8,15 +8,24 @@ import {
   Background,
   BackgroundVariant,
   type NodeMouseHandler,
+  type EdgeMouseHandler,
+  type Edge,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
 import { NodeContextMenu } from "./node-context-menu"
+import { EdgeContextMenu } from "./edge-context-menu"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
-interface ContextMenuState {
+interface NodeContextMenuState {
   readonly nodeId: string
+  readonly x: number
+  readonly y: number
+}
+
+interface EdgeContextMenuState {
+  readonly edgeId: string
   readonly x: number
   readonly y: number
 }
@@ -44,26 +53,70 @@ export function WorkflowCanvas() {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const deleteNode = useWorkflowStore((s) => s.deleteNode)
+  const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
+  const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
+  const [edgeContextMenu, setEdgeContextMenu] = useState<EdgeContextMenuState | null>(null)
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const isMobile = useIsMobile()
+
+  // Apply selected styling to edges
+  const styledEdges = useMemo(
+    () =>
+      edges.map((edge) => ({
+        ...edge,
+        style: edge.id === selectedEdgeId
+          ? { stroke: "hsl(var(--primary))", strokeWidth: 3 }
+          : undefined,
+        animated: edge.id === selectedEdgeId,
+      })),
+    [edges, selectedEdgeId],
+  )
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       selectNode(node.id)
+      setSelectedEdgeId(null)
+      setEdgeContextMenu(null)
+    },
+    [selectNode],
+  )
+
+  const handleEdgeClick: EdgeMouseHandler = useCallback(
+    (_event, edge) => {
+      setSelectedEdgeId(edge.id)
+      selectNode(null)
+      setNodeContextMenu(null)
+      setEdgeContextMenu(null)
+    },
+    [selectNode],
+  )
+
+  const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
+    (event, edge) => {
+      event.preventDefault()
+      setSelectedEdgeId(edge.id)
+      selectNode(null)
+      setNodeContextMenu(null)
+      setEdgeContextMenu({ edgeId: edge.id, x: event.clientX, y: event.clientY })
     },
     [selectNode],
   )
 
   const handlePaneClick = useCallback(() => {
     selectNode(null)
-    setContextMenu(null)
+    setSelectedEdgeId(null)
+    setNodeContextMenu(null)
+    setEdgeContextMenu(null)
   }, [selectNode])
 
   const handleNodeContextMenu: NodeMouseHandler = useCallback(
     (event, node) => {
       event.preventDefault()
       selectNode(node.id)
-      setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
+      setSelectedEdgeId(null)
+      setEdgeContextMenu(null)
+      setNodeContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
     },
     [selectNode],
   )
@@ -74,25 +127,35 @@ export function WorkflowCanvas() {
         e.preventDefault()
         duplicateNode(selectedNodeId)
       }
+      if (e.key === "Delete") {
+        if (selectedEdgeId) {
+          deleteEdge(selectedEdgeId)
+          setSelectedEdgeId(null)
+        } else if (selectedNodeId) {
+          deleteNode(selectedNodeId)
+        }
+      }
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [selectedNodeId, duplicateNode])
+  }, [selectedNodeId, duplicateNode, deleteNode, selectedEdgeId, deleteEdge])
 
   return (
     <>
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
+        onEdgeContextMenu={handleEdgeContextMenu}
         onPaneClick={handlePaneClick}
         onNodeContextMenu={handleNodeContextMenu}
         nodeTypes={nodeTypes}
         fitView
-        deleteKeyCode="Delete"
+        deleteKeyCode={null}
         className="bg-background touch-manipulation"
         zoomOnPinch
         panOnDrag
@@ -115,12 +178,24 @@ export function WorkflowCanvas() {
         />
       </ReactFlow>
 
-      {contextMenu && (
+      {nodeContextMenu && (
         <NodeContextMenu
-          nodeId={contextMenu.nodeId}
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
+          nodeId={nodeContextMenu.nodeId}
+          x={nodeContextMenu.x}
+          y={nodeContextMenu.y}
+          onClose={() => setNodeContextMenu(null)}
+        />
+      )}
+
+      {edgeContextMenu && (
+        <EdgeContextMenu
+          edgeId={edgeContextMenu.edgeId}
+          x={edgeContextMenu.x}
+          y={edgeContextMenu.y}
+          onClose={() => {
+            setEdgeContextMenu(null)
+            setSelectedEdgeId(null)
+          }}
         />
       )}
     </>
