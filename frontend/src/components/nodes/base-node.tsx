@@ -1,7 +1,8 @@
 "use client"
 
-import type { ReactNode } from "react"
+import type { ReactNode, MouseEvent } from "react"
 import { Handle, Position } from "@xyflow/react"
+import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
@@ -49,16 +50,29 @@ export function BaseNode({
   selected,
 }: BaseNodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
+
+  function handleDuplicate(e: MouseEvent) {
+    e.stopPropagation()
+    duplicateNode(id)
+  }
 
   return (
     <div
       className={cn(
-        "rounded-lg border-2 shadow-sm min-w-[200px] bg-card text-card-foreground",
+        "group relative rounded-lg border-2 shadow-sm min-w-[200px] bg-card text-card-foreground",
         CATEGORY_STYLES[category],
         selected && "ring-2 ring-primary",
       )}
       onClick={() => selectNode(id)}
     >
+      <button
+        className="absolute -top-3 -right-3 z-10 hidden group-hover:flex items-center justify-center w-6 h-6 rounded-full bg-card border shadow-sm hover:bg-accent"
+        onClick={handleDuplicate}
+        aria-label="Duplicate node"
+      >
+        <Copy className="h-3 w-3" />
+      </button>
       <div
         className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-t-md text-sm font-medium",
