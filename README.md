@@ -15,7 +15,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Dropdown filtering by compatible node types (text nodes only appear in text fields, provider nodes only in provider fields)
 - Provider cascading dropdowns: Category -> Provider -> Model
 - Graph-based workflows: branching, merging, multiple inputs/outputs
-- Debounced auto-save with Ctrl+S support
+- Manual save with unsaved changes indicator and exit confirmation
 
 ### 28 Node Types
 
