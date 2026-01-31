@@ -35,6 +35,8 @@ import type {
   SceneCountData,
   DurationData,
   AspectRatioData,
+  MotionData,
+  CameraMotionData,
   GenerateScriptData,
   GenerateImageData,
   ImageToVideoData,
@@ -72,8 +74,8 @@ const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = 
   aspectRatio: ["aspect-ratio"],
   duration: ["duration"],
   targetLength: ["duration"],
-  motion: ["text-prompt"],
-  cameraMotion: ["text-prompt"],
+  motion: ["motion"],
+  cameraMotion: ["camera-motion"],
   sceneCount: ["scene-count"],
 }
 
@@ -130,6 +132,10 @@ function extractDisplayValue(data: Record<string, unknown>, nodeType: string): s
       return `${data.seconds ?? ""}s`
     case "aspect-ratio":
       return (data.ratio as string) ?? ""
+    case "motion":
+      return (data.motion as string) ?? ""
+    case "camera-motion":
+      return (data.cameraMotion as string) ?? ""
     default:
       return (data.label as string) ?? ""
   }
@@ -304,6 +310,12 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "aspect-ratio" && (
             <AspectRatioConfig data={selectedNode.data as AspectRatioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+          )}
+          {selectedNode.type === "motion" && (
+            <MotionConfig data={selectedNode.data as MotionData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+          )}
+          {selectedNode.type === "camera-motion" && (
+            <CameraMotionConfig data={selectedNode.data as CameraMotionData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
 
           {/* AI Nodes */}
@@ -594,6 +606,50 @@ function AspectRatioConfig({ data, onUpdate }: ConfigProps<AspectRatioData>) {
             <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
             <SelectItem value="4:3">4:3</SelectItem>
             <SelectItem value="4:5">4:5</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
+function MotionConfig({ data, onUpdate }: ConfigProps<MotionData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Motion</Label>
+        <Select
+          value={data.motion}
+          onValueChange={(v) => onUpdate({ motion: v as MotionData["motion"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="subtle">Subtle</SelectItem>
+            <SelectItem value="moderate">Moderate</SelectItem>
+            <SelectItem value="dynamic">Dynamic</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
+function CameraMotionConfig({ data, onUpdate }: ConfigProps<CameraMotionData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Camera Motion</Label>
+        <Select
+          value={data.cameraMotion}
+          onValueChange={(v) => onUpdate({ cameraMotion: v as CameraMotionData["cameraMotion"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="static">Static</SelectItem>
+            <SelectItem value="pan-left">Pan Left</SelectItem>
+            <SelectItem value="pan-right">Pan Right</SelectItem>
+            <SelectItem value="zoom-in">Zoom In</SelectItem>
+            <SelectItem value="zoom-out">Zoom Out</SelectItem>
           </SelectContent>
         </Select>
       </div>

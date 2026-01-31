@@ -8,6 +8,8 @@ import { ProviderNode } from "./provider-node"
 import { SceneCountNode } from "./scene-count-node"
 import { DurationNode } from "./duration-node"
 import { AspectRatioNode } from "./aspect-ratio-node"
+import { MotionNode } from "./motion-node"
+import { CameraMotionNode } from "./camera-motion-node"
 import { GenerateScriptNode } from "./generate-script-node"
 import { GenerateImageNode } from "./generate-image-node"
 import { ImageToVideoNode } from "./image-to-video-node"
@@ -38,6 +40,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "scene-count": SceneCountNode,
   "duration": DurationNode,
   "aspect-ratio": AspectRatioNode,
+  "motion": MotionNode,
+  "camera-motion": CameraMotionNode,
   // AI
   "generate-script": GenerateScriptNode,
   "generate-image": GenerateImageNode,

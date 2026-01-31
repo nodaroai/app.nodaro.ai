@@ -79,6 +79,18 @@ export type AspectRatioData = {
   ratio: "1:1" | "16:9" | "9:16" | "4:3" | "4:5"
 }
 
+export type MotionData = {
+  [key: string]: unknown
+  label: string
+  motion: "subtle" | "moderate" | "dynamic"
+}
+
+export type CameraMotionData = {
+  [key: string]: unknown
+  label: string
+  cameraMotion: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
+}
+
 // --- AI Node Data ---
 
 export type GenerateScriptData = {
@@ -240,6 +252,8 @@ export type SceneNodeData =
   | SceneCountData
   | DurationData
   | AspectRatioData
+  | MotionData
+  | CameraMotionData
   | GenerateScriptData
   | GenerateImageData
   | ImageToVideoData
@@ -267,6 +281,8 @@ export type SceneNodeType =
   | "scene-count"
   | "duration"
   | "aspect-ratio"
+  | "motion"
+  | "camera-motion"
   | "generate-script"
   | "generate-image"
   | "image-to-video"
@@ -388,6 +404,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: [],
     outputs: ["aspect_ratio"],
     defaultData: { label: "Aspect Ratio", ratio: "16:9" },
+  },
+  {
+    type: "motion",
+    label: "Motion",
+    category: "parameter",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["out"],
+    defaultData: { label: "Motion", motion: "moderate" },
+  },
+  {
+    type: "camera-motion",
+    label: "Camera Motion",
+    category: "parameter",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["out"],
+    defaultData: { label: "Camera Motion", cameraMotion: "static" },
   },
   // AI
   {
