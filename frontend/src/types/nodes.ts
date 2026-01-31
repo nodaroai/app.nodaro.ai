@@ -90,6 +90,7 @@ export type GenerateScriptData = {
 export type GenerateImageData = {
   [key: string]: unknown
   label: string
+  prompt: string
   provider: "nano-banana" | "flux" | "dalle"
   model: string
   style: string
@@ -384,7 +385,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 5,
     inputs: ["prompt", "reference"],
     outputs: ["image"],
-    defaultData: { label: "Generate Image", provider: "nano-banana", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "" },
+    defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "" },
   },
   {
     type: "image-to-video",
