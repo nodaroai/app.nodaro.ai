@@ -15,6 +15,15 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import {
+  PROVIDERS_CONFIG,
+  getProviders,
+  getProviderLabel,
+  getModels,
+  getFirstProvider,
+  getFirstModel,
+  type ProviderCategory,
+} from "@/lib/providers-config"
 import type {
   TextPromptData,
   UploadImageData,
@@ -300,13 +309,22 @@ function StyleGuideConfig({ data, onUpdate }: ConfigProps<StyleGuideData>) {
 }
 
 function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
+  const category = data.category as ProviderCategory
+  const providers = getProviders(category)
+  const models = getModels(category, data.provider)
+
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label>Category</Label>
         <Select
           value={data.category}
-          onValueChange={(v) => onUpdate({ category: v as ProviderData["category"] })}
+          onValueChange={(v) => {
+            const cat = v as ProviderCategory
+            const firstProvider = getFirstProvider(cat)
+            const firstModel = getFirstModel(cat, firstProvider)
+            onUpdate({ category: cat, provider: firstProvider, model: firstModel })
+          }}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -318,22 +336,35 @@ function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
         </Select>
       </div>
       <div>
-        <Label htmlFor="provider-name">Provider</Label>
-        <Input
-          id="provider-name"
+        <Label>Provider</Label>
+        <Select
           value={data.provider}
-          onChange={(e) => onUpdate({ provider: e.target.value })}
-          placeholder="e.g. nano-banana"
-        />
+          onValueChange={(v) => {
+            const firstModel = getFirstModel(category, v)
+            onUpdate({ provider: v, model: firstModel })
+          }}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {providers.map((p) => (
+              <SelectItem key={p} value={p}>{getProviderLabel(category, p)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div>
-        <Label htmlFor="model-name">Model</Label>
-        <Input
-          id="model-name"
+        <Label>Model</Label>
+        <Select
           value={data.model}
-          onChange={(e) => onUpdate({ model: e.target.value })}
-          placeholder="e.g. gemini-2.5-flash-image"
-        />
+          onValueChange={(v) => onUpdate({ model: v })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {models.map((m) => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   )

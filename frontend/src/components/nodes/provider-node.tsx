@@ -5,6 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Cpu } from "lucide-react"
 import { BaseNode } from "./base-node"
 import type { ProviderData } from "@/types/nodes"
+import { getProviderLabel, type ProviderCategory } from "@/lib/providers-config"
 
 function ProviderNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ProviderData
@@ -22,7 +23,9 @@ function ProviderNodeComponent({ id, data, selected }: NodeProps) {
       ]}
     >
       <p className="text-muted-foreground truncate max-w-[180px]">
-        {nodeData.provider || "Select provider..."}
+{nodeData.provider
+          ? `${getProviderLabel(nodeData.category as ProviderCategory, nodeData.provider)} / ${nodeData.model}`
+          : "Select provider..."}
       </p>
     </BaseNode>
   )
