@@ -89,14 +89,26 @@ export function BaseNode({
       {children && <div className="px-3 py-2 text-xs">{children}</div>}
 
       {handles.map((h) => (
-        <Handle
-          key={h.id}
-          id={h.id}
-          type={h.type}
-          position={h.position}
-          className="!w-3 !h-3 !bg-primary !border-2 !border-background touch-manipulation [@media(pointer:coarse)]:!w-5 [@media(pointer:coarse)]:!h-5"
-          style={h.top ? { top: h.top } : undefined}
-        />
+        <div key={h.id}>
+          <Handle
+            id={h.id}
+            type={h.type}
+            position={h.position}
+            className="!w-3 !h-3 !bg-primary !border-2 !border-background touch-manipulation [@media(pointer:coarse)]:!w-5 [@media(pointer:coarse)]:!h-5"
+            style={h.top ? { top: h.top } : undefined}
+          />
+          {h.label && h.top && (
+            <span
+              className={cn(
+                "absolute text-[9px] text-muted-foreground/70 pointer-events-none select-none leading-none",
+                h.type === "target" ? "left-3" : "right-3",
+              )}
+              style={{ top: h.top, transform: "translateY(-50%)" }}
+            >
+              {h.label}
+            </span>
+          )}
+        </div>
       ))}
     </div>
   )
