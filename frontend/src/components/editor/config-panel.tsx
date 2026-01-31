@@ -56,8 +56,40 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 interface SourceNodeInfo {
   readonly id: string
+  readonly type: string
   readonly label: string
   readonly value: string
+  readonly providerCategory?: string
+}
+
+const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
+  prompt: ["text-prompt"],
+  negativePrompt: ["text-prompt"],
+  style: ["text-prompt", "style-guide"],
+  styleGuide: ["text-prompt", "style-guide"],
+  tone: ["text-prompt", "tone"],
+  provider: ["provider"],
+  aspectRatio: ["aspect-ratio"],
+  duration: ["duration"],
+  targetLength: ["duration"],
+  motion: ["text-prompt"],
+  cameraMotion: ["text-prompt"],
+  sceneCount: ["scene-count"],
+}
+
+function getCompatibleSources(
+  field: string,
+  sources: ReadonlyArray<SourceNodeInfo>,
+  providerCategory?: string,
+): ReadonlyArray<SourceNodeInfo> {
+  const compatibleTypes = FIELD_COMPATIBLE_TYPES[field]
+  if (!compatibleTypes) return sources
+
+  return sources.filter((s) => {
+    if (!compatibleTypes.includes(s.type)) return false
+    if (s.type === "provider" && providerCategory && s.providerCategory !== providerCategory) return false
+    return true
+  })
 }
 
 function getConnectedSources(
@@ -73,8 +105,10 @@ function getConnectedSources(
     const d = source.data as Record<string, unknown>
     sources.push({
       id: source.id,
+      type: source.type as string,
       label: (d.label as string) ?? source.type ?? source.id,
       value: extractDisplayValue(d, source.type as string),
+      providerCategory: source.type === "provider" ? (d.category as string) : undefined,
     })
   }
   return sources
@@ -115,6 +149,7 @@ function MappableField({
   sources,
   fieldMappings,
   onMapField,
+  providerCategory,
   children,
 }: {
   readonly field: string
@@ -122,17 +157,19 @@ function MappableField({
   readonly sources: ReadonlyArray<SourceNodeInfo>
   readonly fieldMappings: FieldMappings
   readonly onMapField: (field: string, sourceNodeId: string | null) => void
+  readonly providerCategory?: string
   readonly children: React.ReactNode
 }) {
+  const compatible = getCompatibleSources(field, sources, providerCategory)
   const mapping = fieldMappings[field]
-  const mappedSource = mapping ? sources.find((s) => s.id === mapping.sourceNodeId) : undefined
+  const mappedSource = mapping ? compatible.find((s) => s.id === mapping.sourceNodeId) : undefined
   const isMapped = !!mappedSource
 
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
         <Label className="text-xs">{label}</Label>
-        {sources.length > 0 && (
+        {compatible.length > 0 && (
           <Select
             value={mapping?.sourceNodeId ?? "__manual__"}
             onValueChange={(v) => onMapField(field, v === "__manual__" ? null : v)}
@@ -142,7 +179,7 @@ function MappableField({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__manual__">Manual</SelectItem>
-              {sources.map((s) => (
+              {compatible.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.label}
                 </SelectItem>
@@ -569,7 +606,7 @@ function AspectRatioConfig({ data, onUpdate }: ConfigProps<AspectRatioData>) {
 function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateScriptData>) {
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="script">
         <Select
           value={data.provider}
           onValueChange={(v) => onUpdate({ provider: v as GenerateScriptData["provider"] })}
@@ -644,7 +681,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           placeholder="Describe the image to generate..."
         />
       </MappableField>
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider}
           onValueChange={(v) => onUpdate({ provider: v as GenerateImageData["provider"] })}
@@ -693,7 +730,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
 function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToVideoData>) {
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={data.provider}
           onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
@@ -751,7 +788,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
 function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToSpeechData>) {
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
         <Select
           value={data.provider}
           onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
