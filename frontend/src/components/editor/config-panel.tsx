@@ -117,6 +117,21 @@ function getConnectedSources(
   return sources
 }
 
+function getConnectedProviderModel(
+  fieldMappings: FieldMappings,
+  sources: ReadonlyArray<SourceNodeInfo>,
+  nodes: ReadonlyArray<WorkflowNode>,
+): string | undefined {
+  const providerMapping = fieldMappings.provider
+  if (!providerMapping) return undefined
+  const source = sources.find((s) => s.id === providerMapping.sourceNodeId)
+  if (!source || source.type !== "provider") return undefined
+  const sourceNode = nodes.find((n) => n.id === source.id)
+  if (!sourceNode) return undefined
+  const d = sourceNode.data as Record<string, unknown>
+  return (d.model as string) ?? undefined
+}
+
 function extractDisplayValue(data: Record<string, unknown>, nodeType: string): string {
   switch (nodeType) {
     case "text-prompt":
@@ -148,6 +163,7 @@ interface ConfigProps<T> {
   readonly sources: ReadonlyArray<SourceNodeInfo>
   readonly fieldMappings: FieldMappings
   readonly onMapField: (field: string, sourceNodeId: string | null) => void
+  readonly nodes: ReadonlyArray<WorkflowNode>
 }
 
 function MappableField({
@@ -281,96 +297,96 @@ export function ConfigPanel() {
 
           {/* Input Nodes */}
           {selectedNode.type === "text-prompt" && (
-            <TextPromptConfig data={selectedNode.data as TextPromptData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <TextPromptConfig data={selectedNode.data as TextPromptData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "upload-image" && (
-            <UploadImageConfig data={selectedNode.data as UploadImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <UploadImageConfig data={selectedNode.data as UploadImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "upload-video" && (
-            <UploadVideoConfig data={selectedNode.data as UploadVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <UploadVideoConfig data={selectedNode.data as UploadVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "rss-feed" && (
-            <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* Parameter Nodes */}
           {selectedNode.type === "tone" && (
-            <ToneConfig data={selectedNode.data as ToneData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <ToneConfig data={selectedNode.data as ToneData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "style-guide" && (
-            <StyleGuideConfig data={selectedNode.data as StyleGuideData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <StyleGuideConfig data={selectedNode.data as StyleGuideData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "provider" && (
-            <ProviderConfig data={selectedNode.data as ProviderData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <ProviderConfig data={selectedNode.data as ProviderData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "scene-count" && (
-            <SceneCountConfig data={selectedNode.data as SceneCountData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <SceneCountConfig data={selectedNode.data as SceneCountData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "duration" && (
-            <DurationConfig data={selectedNode.data as DurationData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <DurationConfig data={selectedNode.data as DurationData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "aspect-ratio" && (
-            <AspectRatioConfig data={selectedNode.data as AspectRatioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <AspectRatioConfig data={selectedNode.data as AspectRatioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "motion" && (
-            <MotionConfig data={selectedNode.data as MotionData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <MotionConfig data={selectedNode.data as MotionData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "camera-motion" && (
-            <CameraMotionConfig data={selectedNode.data as CameraMotionData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <CameraMotionConfig data={selectedNode.data as CameraMotionData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* AI Nodes */}
           {selectedNode.type === "generate-script" && (
-            <GenerateScriptConfig data={selectedNode.data as GenerateScriptData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <GenerateScriptConfig data={selectedNode.data as GenerateScriptData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "generate-image" && (
-            <GenerateImageConfig data={selectedNode.data as GenerateImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <GenerateImageConfig data={selectedNode.data as GenerateImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "image-to-video" && (
-            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "text-to-video" && (
-            <TextToVideoConfig data={selectedNode.data as TextToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <TextToVideoConfig data={selectedNode.data as TextToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "text-to-speech" && (
-            <TextToSpeechConfig data={selectedNode.data as TextToSpeechData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <TextToSpeechConfig data={selectedNode.data as TextToSpeechData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "qa-check" && (
-            <QACheckConfig data={selectedNode.data as QACheckData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <QACheckConfig data={selectedNode.data as QACheckData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* Processing Nodes */}
           {selectedNode.type === "combine-videos" && (
-            <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "add-audio" && (
-            <AddAudioConfig data={selectedNode.data as AddAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <AddAudioConfig data={selectedNode.data as AddAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "add-captions" && (
-            <AddCaptionsConfig data={selectedNode.data as AddCaptionsData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <AddCaptionsConfig data={selectedNode.data as AddCaptionsData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "resize-video" && (
-            <ResizeVideoConfig data={selectedNode.data as ResizeVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <ResizeVideoConfig data={selectedNode.data as ResizeVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "extract-audio" && (
-            <ExtractAudioConfig data={selectedNode.data as ExtractAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <ExtractAudioConfig data={selectedNode.data as ExtractAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "mix-audio" && (
-            <MixAudioConfig data={selectedNode.data as MixAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <MixAudioConfig data={selectedNode.data as MixAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "adjust-volume" && (
-            <AdjustVolumeConfig data={selectedNode.data as AdjustVolumeData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <AdjustVolumeConfig data={selectedNode.data as AdjustVolumeData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "trim-video" && (
-            <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* Output Nodes */}
           {selectedNode.type === "save-to-storage" && (
-            <SaveToStorageConfig data={selectedNode.data as SaveToStorageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <SaveToStorageConfig data={selectedNode.data as SaveToStorageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "webhook-output" && (
-            <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+            <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           <Separator />
@@ -845,10 +861,11 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
   )
 }
 
-function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToVideoData>) {
+function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes }: ConfigProps<TextToVideoData>) {
   const category: ProviderCategory = "video"
   const providers = getProviders(category)
   const models = getModels(category, data.provider)
+  const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
 
   return (
     <div className="flex flex-col gap-3">
@@ -877,18 +894,24 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField 
         </Select>
       </MappableField>
       <div>
-        <Label>Model</Label>
-        <Select
-          value={data.model}
-          onValueChange={(v) => onUpdate({ model: v })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {models.map((m) => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label className="text-xs">Model</Label>
+        {connectedModel ? (
+          <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5 truncate">
+            {connectedModel}
+          </p>
+        ) : (
+          <Select
+            value={data.model}
+            onValueChange={(v) => onUpdate({ model: v })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {models.map((m) => (
+                <SelectItem key={m} value={m}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
