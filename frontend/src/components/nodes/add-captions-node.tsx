@@ -18,8 +18,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
       credits={2}
       selected={selected}
       handles={[
-        { id: "video", type: "target", position: Position.Left, label: "Video", top: "35%" },
-        { id: "transcript", type: "target", position: Position.Left, label: "Transcript", top: "65%" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "video-out", type: "source", position: Position.Right, label: "Video" },
       ]}
     >

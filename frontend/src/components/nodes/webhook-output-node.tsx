@@ -18,7 +18,7 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
       credits={0}
       selected={selected}
       handles={[
-        { id: "data", type: "target", position: Position.Left, label: "Data" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
       ]}
     >
       <p className="text-muted-foreground truncate max-w-[180px]">

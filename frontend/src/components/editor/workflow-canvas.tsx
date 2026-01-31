@@ -7,6 +7,7 @@ import {
   MiniMap,
   Background,
   BackgroundVariant,
+  ConnectionMode,
   type NodeMouseHandler,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
@@ -95,6 +96,7 @@ export function WorkflowCanvas() {
         onPaneClick={handlePaneClick}
         onNodeContextMenu={handleNodeContextMenu}
         nodeTypes={nodeTypes}
+        connectionMode={ConnectionMode.Loose}
         fitView
         deleteKeyCode="Delete"
         className="bg-background touch-manipulation"

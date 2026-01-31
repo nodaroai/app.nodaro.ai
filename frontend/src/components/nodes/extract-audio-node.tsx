@@ -18,7 +18,7 @@ function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
       credits={1}
       selected={selected}
       handles={[
-        { id: "video", type: "target", position: Position.Left, label: "Video" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "audio", type: "source", position: Position.Right, label: "Audio", top: "35%" },
         { id: "silent-video", type: "source", position: Position.Right, label: "Silent Video", top: "65%" },
       ]}

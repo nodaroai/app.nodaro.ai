@@ -18,8 +18,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
       credits={3}
       selected={selected}
       handles={[
-        { id: "text", type: "target", position: Position.Left, label: "Text", top: "33%" },
-        { id: "voice_provider", type: "target", position: Position.Left, label: "Provider", top: "66%" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "audio", type: "source", position: Position.Right, label: "Audio" },
       ]}
     >

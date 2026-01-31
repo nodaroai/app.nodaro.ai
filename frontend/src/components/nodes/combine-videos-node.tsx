@@ -18,7 +18,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
       credits={2}
       selected={selected}
       handles={[
-        { id: "videos", type: "target", position: Position.Left, label: "Videos" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "video", type: "source", position: Position.Right, label: "Video" },
       ]}
     >

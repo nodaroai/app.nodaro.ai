@@ -18,12 +18,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={5}
       selected={selected}
       handles={[
-        { id: "prompt", type: "target", position: Position.Left, label: "Prompt", top: "15%" },
-        { id: "reference", type: "target", position: Position.Left, label: "Reference", top: "30%" },
-        { id: "negative_prompt", type: "target", position: Position.Left, label: "Neg. Prompt", top: "45%" },
-        { id: "style_guide", type: "target", position: Position.Left, label: "Style", top: "60%" },
-        { id: "image_provider", type: "target", position: Position.Left, label: "Provider", top: "75%" },
-        { id: "aspect_ratio", type: "target", position: Position.Left, label: "Ratio", top: "90%" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "image", type: "source", position: Position.Right, label: "Image" },
       ]}
     >

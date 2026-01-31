@@ -18,7 +18,7 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
       credits={1}
       selected={selected}
       handles={[
-        { id: "content", type: "target", position: Position.Left, label: "Content" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "approved", type: "source", position: Position.Right, label: "Approved", top: "40%" },
         { id: "rejected", type: "source", position: Position.Right, label: "Rejected", top: "70%" },
       ]}

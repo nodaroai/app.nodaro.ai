@@ -2,6 +2,12 @@ import type { Node, Edge } from "@xyflow/react"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output"
 
+export interface FieldMapping {
+  readonly sourceNodeId: string
+}
+
+export type FieldMappings = Readonly<Record<string, FieldMapping>>
+
 // --- Input Node Data ---
 
 export type TextPromptData = {
@@ -85,6 +91,7 @@ export type GenerateScriptData = {
   structure: "freeform" | "8-step" | "custom"
   tone: string
   targetLength: number
+  fieldMappings: FieldMappings
 }
 
 export type GenerateImageData = {
@@ -96,6 +103,7 @@ export type GenerateImageData = {
   style: string
   aspectRatio: "1:1" | "16:9" | "9:16" | "4:3"
   negativePrompt: string
+  fieldMappings: FieldMappings
 }
 
 export type ImageToVideoData = {
@@ -106,6 +114,7 @@ export type ImageToVideoData = {
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
   cameraMotion: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
+  fieldMappings: FieldMappings
 }
 
 export type TextToSpeechData = {
@@ -116,6 +125,7 @@ export type TextToSpeechData = {
   language: string
   speed: number
   pitch: number
+  fieldMappings: FieldMappings
 }
 
 export type QACheckData = {
@@ -124,6 +134,7 @@ export type QACheckData = {
   provider: "claude" | "gpt"
   checkType: "content" | "quality" | "consistency" | "safety"
   threshold: number
+  fieldMappings: FieldMappings
 }
 
 // --- Processing Node Data ---
@@ -133,6 +144,7 @@ export type CombineVideosData = {
   label: string
   transition: "cut" | "fade" | "dissolve"
   transitionDuration: number
+  fieldMappings: FieldMappings
 }
 
 export type AddAudioData = {
@@ -141,6 +153,7 @@ export type AddAudioData = {
   audioType: "voiceover" | "background" | "both"
   voiceoverVolume: number
   backgroundVolume: number
+  fieldMappings: FieldMappings
 }
 
 export type AddCaptionsData = {
@@ -150,6 +163,7 @@ export type AddCaptionsData = {
   position: "bottom" | "top" | "center"
   fontSize: number
   color: string
+  fieldMappings: FieldMappings
 }
 
 export type ResizeVideoData = {
@@ -158,6 +172,7 @@ export type ResizeVideoData = {
   targetAspect: "1:1" | "16:9" | "9:16" | "4:5"
   method: "crop" | "pad" | "stretch"
   padColor: string
+  fieldMappings: FieldMappings
 }
 
 export type ExtractAudioData = {
@@ -165,12 +180,14 @@ export type ExtractAudioData = {
   label: string
   outputSilentVideo: boolean
   audioFormat: "mp3" | "wav" | "aac"
+  fieldMappings: FieldMappings
 }
 
 export type MixAudioData = {
   [key: string]: unknown
   label: string
   trackCount: number
+  fieldMappings: FieldMappings
 }
 
 export type AdjustVolumeData = {
@@ -180,6 +197,7 @@ export type AdjustVolumeData = {
   normalize: boolean
   fadeIn: number
   fadeOut: number
+  fieldMappings: FieldMappings
 }
 
 export type TrimVideoData = {
@@ -187,6 +205,7 @@ export type TrimVideoData = {
   label: string
   startTime: number
   endTime: number
+  fieldMappings: FieldMappings
 }
 
 // --- Output Node Data ---
@@ -197,6 +216,7 @@ export type SaveToStorageData = {
   filename: string
   format: "mp4" | "webm" | "mov"
   quality: "draft" | "standard" | "high" | "4k"
+  fieldMappings: FieldMappings
 }
 
 export type WebhookOutputData = {
@@ -204,6 +224,7 @@ export type WebhookOutputData = {
   label: string
   webhookId: string
   includeAssetUrl: boolean
+  fieldMappings: FieldMappings
 }
 
 // --- Union Types ---
@@ -374,45 +395,45 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Script",
     category: "ai",
     creditCost: 2,
-    inputs: ["prompt"],
+    inputs: ["in"],
     outputs: ["scenes"],
-    defaultData: { label: "Generate Script", provider: "gemini", model: "gemini-2.5-flash", sceneCount: 5, styleGuide: "", structure: "freeform", tone: "", targetLength: 60 },
+    defaultData: { label: "Generate Script", provider: "gemini", model: "gemini-2.5-flash", sceneCount: 5, styleGuide: "", structure: "freeform", tone: "", targetLength: 60, fieldMappings: {} },
   },
   {
     type: "generate-image",
     label: "Generate Image",
     category: "ai",
     creditCost: 5,
-    inputs: ["prompt", "reference"],
+    inputs: ["in"],
     outputs: ["image"],
-    defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "" },
+    defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
   },
   {
     type: "image-to-video",
     label: "Image to Video",
     category: "ai",
     creditCost: 20,
-    inputs: ["image", "motion-prompt"],
+    inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Image to Video", provider: "veo", model: "veo-3.1", duration: 5, motion: "moderate", cameraMotion: "static" },
+    defaultData: { label: "Image to Video", provider: "veo", model: "veo-3.1", duration: 5, motion: "moderate", cameraMotion: "static", fieldMappings: {} },
   },
   {
     type: "text-to-speech",
     label: "Text to Speech",
     category: "ai",
     creditCost: 3,
-    inputs: ["text"],
+    inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Text to Speech", provider: "elevenlabs", voiceId: "", language: "en", speed: 1, pitch: 1 },
+    defaultData: { label: "Text to Speech", provider: "elevenlabs", voiceId: "", language: "en", speed: 1, pitch: 1, fieldMappings: {} },
   },
   {
     type: "qa-check",
     label: "QA Check",
     category: "ai",
     creditCost: 1,
-    inputs: ["content"],
+    inputs: ["in"],
     outputs: ["approved", "rejected"],
-    defaultData: { label: "QA Check", provider: "claude", checkType: "quality", threshold: 0.8 },
+    defaultData: { label: "QA Check", provider: "claude", checkType: "quality", threshold: 0.8, fieldMappings: {} },
   },
   // Processing
   {
@@ -420,72 +441,72 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Combine Videos",
     category: "processing",
     creditCost: 2,
-    inputs: ["videos"],
+    inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5 },
+    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, fieldMappings: {} },
   },
   {
     type: "add-audio",
     label: "Add Audio",
     category: "processing",
     creditCost: 1,
-    inputs: ["video", "audio"],
+    inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Add Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30 },
+    defaultData: { label: "Add Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, fieldMappings: {} },
   },
   {
     type: "add-captions",
     label: "Add Captions",
     category: "processing",
     creditCost: 2,
-    inputs: ["video", "transcript"],
+    inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Add Captions", style: "subtitle", position: "bottom", fontSize: 24, color: "#ffffff" },
+    defaultData: { label: "Add Captions", style: "subtitle", position: "bottom", fontSize: 24, color: "#ffffff", fieldMappings: {} },
   },
   {
     type: "resize-video",
     label: "Resize Video",
     category: "processing",
     creditCost: 1,
-    inputs: ["video"],
+    inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Resize Video", targetAspect: "9:16", method: "crop", padColor: "#000000" },
+    defaultData: { label: "Resize Video", targetAspect: "9:16", method: "crop", padColor: "#000000", fieldMappings: {} },
   },
   {
     type: "extract-audio",
     label: "Extract Audio",
     category: "processing",
     creditCost: 1,
-    inputs: ["video"],
+    inputs: ["in"],
     outputs: ["audio", "silent-video"],
-    defaultData: { label: "Extract Audio", outputSilentVideo: true, audioFormat: "mp3" },
+    defaultData: { label: "Extract Audio", outputSilentVideo: true, audioFormat: "mp3", fieldMappings: {} },
   },
   {
     type: "mix-audio",
     label: "Mix Audio",
     category: "processing",
     creditCost: 1,
-    inputs: ["audio"],
+    inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Mix Audio", trackCount: 2 },
+    defaultData: { label: "Mix Audio", trackCount: 2, fieldMappings: {} },
   },
   {
     type: "adjust-volume",
     label: "Adjust Volume",
     category: "processing",
     creditCost: 0,
-    inputs: ["audio"],
+    inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Adjust Volume", volume: 100, normalize: false, fadeIn: 0, fadeOut: 0 },
+    defaultData: { label: "Adjust Volume", volume: 100, normalize: false, fadeIn: 0, fadeOut: 0, fieldMappings: {} },
   },
   {
     type: "trim-video",
     label: "Trim Video",
     category: "processing",
     creditCost: 0,
-    inputs: ["video"],
+    inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Trim Video", startTime: 0, endTime: 0 },
+    defaultData: { label: "Trim Video", startTime: 0, endTime: 0, fieldMappings: {} },
   },
   // Output
   {
@@ -493,17 +514,17 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Save to Storage",
     category: "output",
     creditCost: 0,
-    inputs: ["video"],
+    inputs: ["in"],
     outputs: ["asset"],
-    defaultData: { label: "Save to Storage", filename: "", format: "mp4", quality: "standard" },
+    defaultData: { label: "Save to Storage", filename: "", format: "mp4", quality: "standard", fieldMappings: {} },
   },
   {
     type: "webhook-output",
     label: "Webhook Output",
     category: "output",
     creditCost: 0,
-    inputs: ["data"],
+    inputs: ["in"],
     outputs: [],
-    defaultData: { label: "Webhook Output", webhookId: "", includeAssetUrl: true },
+    defaultData: { label: "Webhook Output", webhookId: "", includeAssetUrl: true, fieldMappings: {} },
   },
 ]

@@ -18,7 +18,7 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={0}
       selected={selected}
       handles={[
-        { id: "video", type: "target", position: Position.Left, label: "Video" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "video-out", type: "source", position: Position.Right, label: "Video" },
       ]}
     >

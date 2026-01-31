@@ -68,10 +68,42 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     })),
 
   onEdgesChange: (changes) =>
-    set((state) => ({
-      edges: applyEdgeChanges(changes, state.edges),
-      isDirty: true,
-    })),
+    set((state) => {
+      const newEdges = applyEdgeChanges(changes, state.edges)
+      const removedEdges = changes
+        .filter((c): c is EdgeChange<WorkflowEdge> & { type: "remove" } => c.type === "remove")
+        .map((c) => state.edges.find((e) => e.id === c.id))
+        .filter((e): e is WorkflowEdge => e !== undefined)
+
+      if (removedEdges.length === 0) {
+        return { edges: newEdges, isDirty: true }
+      }
+
+      const nodes = state.nodes.map((node) => {
+        const edgesRemovedFromThisTarget = removedEdges.filter((e) => e.target === node.id)
+        if (edgesRemovedFromThisTarget.length === 0) return node
+
+        const nodeData = node.data as Record<string, unknown>
+        const fieldMappings = (nodeData.fieldMappings ?? {}) as Record<string, { sourceNodeId: string }>
+        if (Object.keys(fieldMappings).length === 0) return node
+
+        const removedSourceIds = new Set(edgesRemovedFromThisTarget.map((e) => e.source))
+        const stillConnectedSources = new Set(
+          newEdges.filter((e) => e.target === node.id).map((e) => e.source)
+        )
+        const trulyRemovedSources = [...removedSourceIds].filter((s) => !stillConnectedSources.has(s))
+        if (trulyRemovedSources.length === 0) return node
+
+        const trulyRemovedSet = new Set(trulyRemovedSources)
+        const cleanedMappings = Object.fromEntries(
+          Object.entries(fieldMappings).filter(([, v]) => !trulyRemovedSet.has(v.sourceNodeId))
+        )
+
+        return { ...node, data: { ...nodeData, fieldMappings: cleanedMappings } as SceneNodeData }
+      })
+
+      return { nodes, edges: newEdges, isDirty: true }
+    }),
 
   onConnect: (connection) =>
     set((state) => ({
@@ -143,10 +175,31 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     })),
 
   deleteEdge: (edgeId) =>
-    set((state) => ({
-      edges: state.edges.filter((e) => e.id !== edgeId),
-      isDirty: true,
-    })),
+    set((state) => {
+      const removedEdge = state.edges.find((e) => e.id === edgeId)
+      const newEdges = state.edges.filter((e) => e.id !== edgeId)
+
+      if (!removedEdge) return { edges: newEdges, isDirty: true }
+
+      const stillConnected = newEdges.some(
+        (e) => e.target === removedEdge.target && e.source === removedEdge.source
+      )
+      if (stillConnected) return { edges: newEdges, isDirty: true }
+
+      const nodes = state.nodes.map((node) => {
+        if (node.id !== removedEdge.target) return node
+        const nodeData = node.data as Record<string, unknown>
+        const fieldMappings = (nodeData.fieldMappings ?? {}) as Record<string, { sourceNodeId: string }>
+        if (Object.keys(fieldMappings).length === 0) return node
+
+        const cleanedMappings = Object.fromEntries(
+          Object.entries(fieldMappings).filter(([, v]) => v.sourceNodeId !== removedEdge.source)
+        )
+        return { ...node, data: { ...nodeData, fieldMappings: cleanedMappings } as SceneNodeData }
+      })
+
+      return { nodes, edges: newEdges, isDirty: true }
+    }),
 
   selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
 

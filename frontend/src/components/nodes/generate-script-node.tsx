@@ -18,12 +18,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       credits={2}
       selected={selected}
       handles={[
-        { id: "prompt", type: "target", position: Position.Left, label: "Prompt", top: "14%" },
-        { id: "script_provider", type: "target", position: Position.Left, label: "Provider", top: "28%" },
-        { id: "tone", type: "target", position: Position.Left, label: "Tone", top: "42%" },
-        { id: "style_guide", type: "target", position: Position.Left, label: "Style", top: "56%" },
-        { id: "scene_count", type: "target", position: Position.Left, label: "Scenes", top: "70%" },
-        { id: "target_length", type: "target", position: Position.Left, label: "Duration", top: "84%" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "scenes", type: "source", position: Position.Right, label: "Scenes" },
       ]}
     >

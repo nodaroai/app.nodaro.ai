@@ -17,7 +17,6 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
-  PROVIDERS_CONFIG,
   getProviders,
   getProviderLabel,
   getModels,
@@ -51,36 +50,34 @@ import type {
   TrimVideoData,
   SaveToStorageData,
   WebhookOutputData,
+  FieldMappings,
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
-interface ConnectionInfo {
-  readonly sourceLabel: string
-  readonly sourceValue: string
+interface SourceNodeInfo {
+  readonly id: string
+  readonly label: string
+  readonly value: string
 }
 
-interface ConfigProps<T> {
-  readonly data: T
-  readonly onUpdate: (d: Record<string, unknown>) => void
-  readonly connections: ReadonlyMap<string, ConnectionInfo>
-}
-
-function resolveConnections(
+function getConnectedSources(
   nodeId: string,
   edges: ReadonlyArray<WorkflowEdge>,
   nodes: ReadonlyArray<WorkflowNode>,
-): Map<string, ConnectionInfo> {
-  const map = new Map<string, ConnectionInfo>()
+): ReadonlyArray<SourceNodeInfo> {
+  const sources: SourceNodeInfo[] = []
   for (const edge of edges) {
-    if (edge.target !== nodeId || !edge.targetHandle) continue
+    if (edge.target !== nodeId) continue
     const source = nodes.find((n) => n.id === edge.source)
     if (!source) continue
     const d = source.data as Record<string, unknown>
-    const label = (d.label as string) ?? source.type
-    const value = extractDisplayValue(d, source.type as string)
-    map.set(edge.targetHandle, { sourceLabel: label, sourceValue: value })
+    sources.push({
+      id: source.id,
+      label: (d.label as string) ?? source.type ?? source.id,
+      value: extractDisplayValue(d, source.type as string),
+    })
   }
-  return map
+  return sources
 }
 
 function extractDisplayValue(data: Record<string, unknown>, nodeType: string): string {
@@ -104,18 +101,62 @@ function extractDisplayValue(data: Record<string, unknown>, nodeType: string): s
   }
 }
 
-function FieldLabel({ htmlFor, children, connection }: {
-  readonly htmlFor?: string
+interface ConfigProps<T> {
+  readonly data: T
+  readonly onUpdate: (d: Record<string, unknown>) => void
+  readonly sources: ReadonlyArray<SourceNodeInfo>
+  readonly fieldMappings: FieldMappings
+  readonly onMapField: (field: string, sourceNodeId: string | null) => void
+}
+
+function MappableField({
+  field,
+  label,
+  sources,
+  fieldMappings,
+  onMapField,
+  children,
+}: {
+  readonly field: string
+  readonly label: string
+  readonly sources: ReadonlyArray<SourceNodeInfo>
+  readonly fieldMappings: FieldMappings
+  readonly onMapField: (field: string, sourceNodeId: string | null) => void
   readonly children: React.ReactNode
-  readonly connection?: ConnectionInfo
 }) {
+  const mapping = fieldMappings[field]
+  const mappedSource = mapping ? sources.find((s) => s.id === mapping.sourceNodeId) : undefined
+  const isMapped = !!mappedSource
+
   return (
-    <div className="flex items-center gap-2">
-      <Label htmlFor={htmlFor}>{children}</Label>
-      {connection && (
-        <span className="text-xs text-primary font-medium truncate max-w-[140px]">
-          (Connected: {connection.sourceLabel})
-        </span>
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <Label className="text-xs">{label}</Label>
+        {sources.length > 0 && (
+          <Select
+            value={mapping?.sourceNodeId ?? "__manual__"}
+            onValueChange={(v) => onMapField(field, v === "__manual__" ? null : v)}
+          >
+            <SelectTrigger className="h-6 text-[10px] w-auto max-w-[160px] px-2 py-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__manual__">Manual</SelectItem>
+              {sources.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      {isMapped ? (
+        <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5 truncate">
+          {mappedSource.value || "(empty)"}
+        </p>
+      ) : (
+        children
       )}
     </div>
   )
@@ -131,16 +172,32 @@ export function ConfigPanel() {
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
-  const connections = useMemo(() => {
-    if (!selectedNodeId) return new Map<string, ConnectionInfo>()
-    return resolveConnections(selectedNodeId, edges, nodes)
+  const sources = useMemo(() => {
+    if (!selectedNodeId) return [] as SourceNodeInfo[]
+    return getConnectedSources(selectedNodeId, edges, nodes)
   }, [edges, nodes, selectedNodeId])
+
+  const fieldMappings: FieldMappings = useMemo(() => {
+    if (!selectedNode) return {}
+    const d = selectedNode.data as Record<string, unknown>
+    return (d.fieldMappings as FieldMappings) ?? {}
+  }, [selectedNode])
 
   if (!selectedNode) return null
 
   function update(data: Record<string, unknown>) {
     if (!selectedNodeId) return
     updateNodeData(selectedNodeId, data)
+  }
+
+  function handleMapField(field: string, sourceNodeId: string | null) {
+    const current = { ...fieldMappings }
+    if (sourceNodeId === null) {
+      const { [field]: _, ...rest } = current
+      update({ fieldMappings: rest })
+    } else {
+      update({ fieldMappings: { ...current, [field]: { sourceNodeId } } })
+    }
   }
 
   function handleDelete() {
@@ -168,91 +225,99 @@ export function ConfigPanel() {
             />
           </div>
 
+          {sources.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              <span className="font-medium">{sources.length} connected source{sources.length !== 1 ? "s" : ""}</span>
+              {": "}
+              {sources.map((s) => s.label).join(", ")}
+            </div>
+          )}
+
           <Separator />
 
           {/* Input Nodes */}
           {selectedNode.type === "text-prompt" && (
-            <TextPromptConfig data={selectedNode.data as TextPromptData} onUpdate={update} connections={connections} />
+            <TextPromptConfig data={selectedNode.data as TextPromptData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "upload-image" && (
-            <UploadImageConfig data={selectedNode.data as UploadImageData} onUpdate={update} connections={connections} />
+            <UploadImageConfig data={selectedNode.data as UploadImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "upload-video" && (
-            <UploadVideoConfig data={selectedNode.data as UploadVideoData} onUpdate={update} connections={connections} />
+            <UploadVideoConfig data={selectedNode.data as UploadVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "rss-feed" && (
-            <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} connections={connections} />
+            <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
 
           {/* Parameter Nodes */}
           {selectedNode.type === "tone" && (
-            <ToneConfig data={selectedNode.data as ToneData} onUpdate={update} connections={connections} />
+            <ToneConfig data={selectedNode.data as ToneData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "style-guide" && (
-            <StyleGuideConfig data={selectedNode.data as StyleGuideData} onUpdate={update} connections={connections} />
+            <StyleGuideConfig data={selectedNode.data as StyleGuideData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "provider" && (
-            <ProviderConfig data={selectedNode.data as ProviderData} onUpdate={update} connections={connections} />
+            <ProviderConfig data={selectedNode.data as ProviderData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "scene-count" && (
-            <SceneCountConfig data={selectedNode.data as SceneCountData} onUpdate={update} connections={connections} />
+            <SceneCountConfig data={selectedNode.data as SceneCountData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "duration" && (
-            <DurationConfig data={selectedNode.data as DurationData} onUpdate={update} connections={connections} />
+            <DurationConfig data={selectedNode.data as DurationData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "aspect-ratio" && (
-            <AspectRatioConfig data={selectedNode.data as AspectRatioData} onUpdate={update} connections={connections} />
+            <AspectRatioConfig data={selectedNode.data as AspectRatioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
 
           {/* AI Nodes */}
           {selectedNode.type === "generate-script" && (
-            <GenerateScriptConfig data={selectedNode.data as GenerateScriptData} onUpdate={update} connections={connections} />
+            <GenerateScriptConfig data={selectedNode.data as GenerateScriptData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "generate-image" && (
-            <GenerateImageConfig data={selectedNode.data as GenerateImageData} onUpdate={update} connections={connections} />
+            <GenerateImageConfig data={selectedNode.data as GenerateImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "image-to-video" && (
-            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} connections={connections} />
+            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "text-to-speech" && (
-            <TextToSpeechConfig data={selectedNode.data as TextToSpeechData} onUpdate={update} connections={connections} />
+            <TextToSpeechConfig data={selectedNode.data as TextToSpeechData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "qa-check" && (
-            <QACheckConfig data={selectedNode.data as QACheckData} onUpdate={update} connections={connections} />
+            <QACheckConfig data={selectedNode.data as QACheckData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
 
           {/* Processing Nodes */}
           {selectedNode.type === "combine-videos" && (
-            <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} connections={connections} />
+            <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "add-audio" && (
-            <AddAudioConfig data={selectedNode.data as AddAudioData} onUpdate={update} connections={connections} />
+            <AddAudioConfig data={selectedNode.data as AddAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "add-captions" && (
-            <AddCaptionsConfig data={selectedNode.data as AddCaptionsData} onUpdate={update} connections={connections} />
+            <AddCaptionsConfig data={selectedNode.data as AddCaptionsData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "resize-video" && (
-            <ResizeVideoConfig data={selectedNode.data as ResizeVideoData} onUpdate={update} connections={connections} />
+            <ResizeVideoConfig data={selectedNode.data as ResizeVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "extract-audio" && (
-            <ExtractAudioConfig data={selectedNode.data as ExtractAudioData} onUpdate={update} connections={connections} />
+            <ExtractAudioConfig data={selectedNode.data as ExtractAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "mix-audio" && (
-            <MixAudioConfig data={selectedNode.data as MixAudioData} onUpdate={update} connections={connections} />
+            <MixAudioConfig data={selectedNode.data as MixAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "adjust-volume" && (
-            <AdjustVolumeConfig data={selectedNode.data as AdjustVolumeData} onUpdate={update} connections={connections} />
+            <AdjustVolumeConfig data={selectedNode.data as AdjustVolumeData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "trim-video" && (
-            <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} connections={connections} />
+            <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
 
           {/* Output Nodes */}
           {selectedNode.type === "save-to-storage" && (
-            <SaveToStorageConfig data={selectedNode.data as SaveToStorageData} onUpdate={update} connections={connections} />
+            <SaveToStorageConfig data={selectedNode.data as SaveToStorageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "webhook-output" && (
-            <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} connections={connections} />
+            <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
 
           <Separator />
@@ -501,14 +566,12 @@ function AspectRatioConfig({ data, onUpdate }: ConfigProps<AspectRatioData>) {
 
 /* ── AI Node Configs ── */
 
-function GenerateScriptConfig({ data, onUpdate, connections }: ConfigProps<GenerateScriptData>) {
+function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateScriptData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <FieldLabel connection={connections.get("script_provider")}>Provider</FieldLabel>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.provider}
-          disabled={connections.has("script_provider")}
           onValueChange={(v) => onUpdate({ provider: v as GenerateScriptData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -518,19 +581,16 @@ function GenerateScriptConfig({ data, onUpdate, connections }: ConfigProps<Gener
             <SelectItem value="gpt">GPT</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div>
-        <FieldLabel htmlFor="scene-count" connection={connections.get("scene_count")}>Number of Scenes</FieldLabel>
+      </MappableField>
+      <MappableField field="sceneCount" label="Number of Scenes" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
-          id="scene-count"
           type="number"
           min={1}
           max={20}
-          disabled={connections.has("scene_count")}
           value={data.sceneCount}
           onChange={(e) => onUpdate({ sceneCount: parseInt(e.target.value, 10) || 5 })}
         />
-      </div>
+      </MappableField>
       <div>
         <Label>Structure</Label>
         <Select
@@ -545,62 +605,48 @@ function GenerateScriptConfig({ data, onUpdate, connections }: ConfigProps<Gener
           </SelectContent>
         </Select>
       </div>
-      <div>
-        <FieldLabel htmlFor="style-guide" connection={connections.get("style_guide")}>Style Guide</FieldLabel>
+      <MappableField field="styleGuide" label="Style Guide" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
-          id="style-guide"
           rows={3}
-          disabled={connections.has("style_guide")}
-          value={connections.has("style_guide") ? connections.get("style_guide")!.sourceValue : data.styleGuide}
+          value={data.styleGuide}
           onChange={(e) => onUpdate({ styleGuide: e.target.value })}
           placeholder="e.g. children's book illustration, watercolor..."
         />
-      </div>
-      <div>
-        <FieldLabel htmlFor="tone" connection={connections.get("tone")}>Tone</FieldLabel>
+      </MappableField>
+      <MappableField field="tone" label="Tone" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
-          id="tone"
-          disabled={connections.has("tone")}
-          value={connections.has("tone") ? connections.get("tone")!.sourceValue : data.tone}
+          value={data.tone}
           onChange={(e) => onUpdate({ tone: e.target.value })}
           placeholder="e.g. whimsical, dramatic, educational"
         />
-      </div>
-      <div>
-        <FieldLabel htmlFor="target-length" connection={connections.get("target_length")}>Target Length (seconds)</FieldLabel>
+      </MappableField>
+      <MappableField field="targetLength" label="Target Length (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
-          id="target-length"
           type="number"
           min={10}
           max={600}
-          disabled={connections.has("target_length")}
           value={data.targetLength}
           onChange={(e) => onUpdate({ targetLength: parseInt(e.target.value, 10) || 60 })}
         />
-      </div>
+      </MappableField>
     </div>
   )
 }
 
-function GenerateImageConfig({ data, onUpdate, connections }: ConfigProps<GenerateImageData>) {
+function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <FieldLabel htmlFor="image-prompt" connection={connections.get("prompt")}>Prompt</FieldLabel>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
-          id="image-prompt"
           rows={3}
-          disabled={connections.has("prompt")}
-          value={connections.has("prompt") ? connections.get("prompt")!.sourceValue : data.prompt}
+          value={data.prompt}
           onChange={(e) => onUpdate({ prompt: e.target.value })}
           placeholder="Describe the image to generate..."
         />
-      </div>
-      <div>
-        <FieldLabel connection={connections.get("image_provider")}>Provider</FieldLabel>
+      </MappableField>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.provider}
-          disabled={connections.has("image_provider")}
           onValueChange={(v) => onUpdate({ provider: v as GenerateImageData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -610,12 +656,10 @@ function GenerateImageConfig({ data, onUpdate, connections }: ConfigProps<Genera
             <SelectItem value="dalle">DALL-E</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div>
-        <FieldLabel connection={connections.get("aspect_ratio")}>Aspect Ratio</FieldLabel>
+      </MappableField>
+      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.aspectRatio}
-          disabled={connections.has("aspect_ratio")}
           onValueChange={(v) => onUpdate({ aspectRatio: v as GenerateImageData["aspectRatio"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -626,40 +670,32 @@ function GenerateImageConfig({ data, onUpdate, connections }: ConfigProps<Genera
             <SelectItem value="4:3">4:3</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div>
-        <FieldLabel htmlFor="style" connection={connections.get("style_guide")}>Style</FieldLabel>
+      </MappableField>
+      <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
-          id="style"
-          disabled={connections.has("style_guide")}
-          value={connections.has("style_guide") ? connections.get("style_guide")!.sourceValue : data.style}
+          value={data.style}
           onChange={(e) => onUpdate({ style: e.target.value })}
           placeholder="e.g. children-book, photorealistic"
         />
-      </div>
-      <div>
-        <FieldLabel htmlFor="negative-prompt" connection={connections.get("negative_prompt")}>Negative Prompt</FieldLabel>
+      </MappableField>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
-          id="negative-prompt"
           rows={2}
-          disabled={connections.has("negative_prompt")}
-          value={connections.has("negative_prompt") ? connections.get("negative_prompt")!.sourceValue : data.negativePrompt}
+          value={data.negativePrompt}
           onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
           placeholder="Things to avoid..."
         />
-      </div>
+      </MappableField>
     </div>
   )
 }
 
-function ImageToVideoConfig({ data, onUpdate, connections }: ConfigProps<ImageToVideoData>) {
+function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToVideoData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <FieldLabel connection={connections.get("video_provider")}>Provider</FieldLabel>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.provider}
-          disabled={connections.has("video_provider")}
           onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -670,24 +706,19 @@ function ImageToVideoConfig({ data, onUpdate, connections }: ConfigProps<ImageTo
             <SelectItem value="pika">Pika</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div>
-        <FieldLabel htmlFor="duration" connection={connections.get("duration")}>Duration (seconds)</FieldLabel>
+      </MappableField>
+      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
-          id="duration"
           type="number"
           min={1}
           max={30}
-          disabled={connections.has("duration")}
           value={data.duration}
           onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
         />
-      </div>
-      <div>
-        <FieldLabel connection={connections.get("motion")}>Motion</FieldLabel>
+      </MappableField>
+      <MappableField field="motion" label="Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.motion}
-          disabled={connections.has("motion")}
           onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -697,12 +728,10 @@ function ImageToVideoConfig({ data, onUpdate, connections }: ConfigProps<ImageTo
             <SelectItem value="dynamic">Dynamic</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div>
-        <FieldLabel connection={connections.get("camera_motion")}>Camera Motion</FieldLabel>
+      </MappableField>
+      <MappableField field="cameraMotion" label="Camera Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.cameraMotion}
-          disabled={connections.has("camera_motion")}
           onValueChange={(v) => onUpdate({ cameraMotion: v as ImageToVideoData["cameraMotion"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -714,19 +743,17 @@ function ImageToVideoConfig({ data, onUpdate, connections }: ConfigProps<ImageTo
             <SelectItem value="zoom-out">Zoom Out</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </MappableField>
     </div>
   )
 }
 
-function TextToSpeechConfig({ data, onUpdate, connections }: ConfigProps<TextToSpeechData>) {
+function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToSpeechData>) {
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <FieldLabel connection={connections.get("voice_provider")}>Provider</FieldLabel>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.provider}
-          disabled={connections.has("voice_provider")}
           onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -736,7 +763,7 @@ function TextToSpeechConfig({ data, onUpdate, connections }: ConfigProps<TextToS
             <SelectItem value="azure">Azure TTS</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </MappableField>
       <div>
         <Label htmlFor="voice-id">Voice ID</Label>
         <Input
@@ -783,7 +810,7 @@ function TextToSpeechConfig({ data, onUpdate, connections }: ConfigProps<TextToS
   )
 }
 
-function QACheckConfig({ data, onUpdate, connections }: ConfigProps<QACheckData>) {
+function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>

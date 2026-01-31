@@ -18,7 +18,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
       credits={0}
       selected={selected}
       handles={[
-        { id: "audio", type: "target", position: Position.Left, label: "Audio" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "audio-out", type: "source", position: Position.Right, label: "Audio" },
       ]}
     >

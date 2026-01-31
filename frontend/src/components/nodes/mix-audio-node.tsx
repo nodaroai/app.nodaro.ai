@@ -18,8 +18,7 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
       credits={1}
       selected={selected}
       handles={[
-        { id: "audio-1", type: "target", position: Position.Left, label: "Audio 1", top: "35%" },
-        { id: "audio-2", type: "target", position: Position.Left, label: "Audio 2", top: "65%" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "audio-out", type: "source", position: Position.Right, label: "Audio" },
       ]}
     >

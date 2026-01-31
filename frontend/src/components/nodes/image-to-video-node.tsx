@@ -18,12 +18,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={20}
       selected={selected}
       handles={[
-        { id: "image", type: "target", position: Position.Left, label: "Image", top: "14%" },
-        { id: "motion_prompt", type: "target", position: Position.Left, label: "Motion", top: "28%" },
-        { id: "video_provider", type: "target", position: Position.Left, label: "Provider", top: "42%" },
-        { id: "duration", type: "target", position: Position.Left, label: "Duration", top: "56%" },
-        { id: "motion", type: "target", position: Position.Left, label: "Motion Style", top: "70%" },
-        { id: "camera_motion", type: "target", position: Position.Left, label: "Camera", top: "84%" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "video", type: "source", position: Position.Right, label: "Video" },
       ]}
     >
