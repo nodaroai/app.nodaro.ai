@@ -10,13 +10,11 @@ interface SaveResult {
   readonly error?: string
 }
 
-const AUTO_SAVE_DELAY = 2000
 const SAVED_DISPLAY_DURATION = 2000
 
 export function useWorkflowPersistence(projectId?: string) {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow)
@@ -136,27 +134,6 @@ export function useWorkflowPersistence(projectId?: string) {
     },
     [loadWorkflow],
   )
-
-  // Debounced auto-save: subscribe to store changes
-  useEffect(() => {
-    const unsubscribe = useWorkflowStore.subscribe((state) => {
-      if (!state.isDirty || !projectId || state.nodes.length === 0) return
-
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current)
-      }
-      autoSaveTimerRef.current = setTimeout(() => {
-        save()
-      }, AUTO_SAVE_DELAY)
-    })
-
-    return () => {
-      unsubscribe()
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current)
-      }
-    }
-  }, [projectId, save])
 
   // Cleanup fade timer on unmount
   useEffect(() => {
