@@ -65,8 +65,8 @@ interface SourceNodeInfo {
 const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
   prompt: ["text-prompt"],
   negativePrompt: ["text-prompt"],
-  style: ["text-prompt", "style-guide"],
-  styleGuide: ["text-prompt", "style-guide"],
+  style: ["style-guide"],
+  styleGuide: ["style-guide"],
   tone: ["text-prompt", "tone"],
   provider: ["provider"],
   aspectRatio: ["aspect-ratio"],
