@@ -39,6 +39,14 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Admin routes: only available in cloud edition
+  const edition = process.env.NEXT_PUBLIC_EDITION || 'self-hosted'
+  if (pathname.startsWith("/admin") && edition !== 'cloud') {
+    const url = request.nextUrl.clone()
+    url.pathname = "/projects"
+    return NextResponse.redirect(url)
+  }
+
   // Admin routes: check role in profiles table
   if (user && pathname.startsWith("/admin")) {
     const { data: profile, error: profileError } = await supabase

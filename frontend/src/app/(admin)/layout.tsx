@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { isFeatureEnabled } from "@/lib/edition"
 
 const ADMIN_NAV = [
   { href: "/admin", label: "Dashboard", icon: BarChart3 },
@@ -32,7 +33,7 @@ export default function AdminLayout({
     // Give role a moment to load - loadUser fetches role after onAuthStateChange
     // sets loading=false, so we need a short delay before checking isAdmin
     const timeout = setTimeout(() => {
-      if (!user || !isAdmin) {
+      if (!isFeatureEnabled('adminPanel') || !user || !isAdmin) {
         router.replace("/projects")
       } else {
         setChecked(true)

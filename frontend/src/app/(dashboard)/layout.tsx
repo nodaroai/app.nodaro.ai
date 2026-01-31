@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { isFeatureEnabled } from "@/lib/edition"
 
 const NAV_ITEMS = [
   { href: "/projects", label: "Projects", icon: FolderOpen },
@@ -83,7 +84,7 @@ export default function DashboardLayout({
               </Link>
             )
           })}
-          {isAdmin && (
+          {isFeatureEnabled('adminPanel') && isAdmin && (
             <Link
               href="/admin"
               onClick={() => setSidebarOpen(false)}
