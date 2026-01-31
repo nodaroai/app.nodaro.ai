@@ -52,26 +52,71 @@ import type {
   SaveToStorageData,
   WebhookOutputData,
 } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+
+interface ConnectionInfo {
+  readonly sourceLabel: string
+  readonly sourceValue: string
+}
 
 interface ConfigProps<T> {
   readonly data: T
   readonly onUpdate: (d: Record<string, unknown>) => void
-  readonly connectedHandles: ReadonlySet<string>
+  readonly connections: ReadonlyMap<string, ConnectionInfo>
 }
 
-function ConnectedBadge() {
-  return <span className="text-xs text-primary font-medium">(Connected)</span>
+function resolveConnections(
+  nodeId: string,
+  edges: ReadonlyArray<WorkflowEdge>,
+  nodes: ReadonlyArray<WorkflowNode>,
+): Map<string, ConnectionInfo> {
+  const map = new Map<string, ConnectionInfo>()
+  for (const edge of edges) {
+    if (edge.target !== nodeId || !edge.targetHandle) continue
+    const source = nodes.find((n) => n.id === edge.source)
+    if (!source) continue
+    const d = source.data as Record<string, unknown>
+    const label = (d.label as string) ?? source.type
+    const value = extractDisplayValue(d, source.type as string)
+    map.set(edge.targetHandle, { sourceLabel: label, sourceValue: value })
+  }
+  return map
 }
 
-function FieldLabel({ htmlFor, children, connected }: {
+function extractDisplayValue(data: Record<string, unknown>, nodeType: string): string {
+  switch (nodeType) {
+    case "text-prompt":
+      return (data.text as string) ?? ""
+    case "tone":
+      return (data.tone as string) ?? ""
+    case "style-guide":
+      return (data.text as string) ?? ""
+    case "provider":
+      return `${data.provider ?? ""}/${data.model ?? ""}`
+    case "scene-count":
+      return `${data.count ?? ""} scenes`
+    case "duration":
+      return `${data.seconds ?? ""}s`
+    case "aspect-ratio":
+      return (data.ratio as string) ?? ""
+    default:
+      return (data.label as string) ?? ""
+  }
+}
+
+function FieldLabel({ htmlFor, children, connection }: {
   readonly htmlFor?: string
   readonly children: React.ReactNode
-  readonly connected?: boolean
+  readonly connection?: ConnectionInfo
 }) {
   return (
     <div className="flex items-center gap-2">
       <Label htmlFor={htmlFor}>{children}</Label>
-      {connected && <ConnectedBadge />}
+      {connection && (
+        <span className="text-xs text-primary font-medium truncate max-w-[140px]">
+          (Connected: {connection.sourceLabel})
+        </span>
+      )}
     </div>
   )
 }
@@ -86,16 +131,10 @@ export function ConfigPanel() {
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
-  const connectedHandles = useMemo(() => {
-    if (!selectedNodeId) return new Set<string>()
-    const handles = new Set<string>()
-    for (const edge of edges) {
-      if (edge.target === selectedNodeId && edge.targetHandle) {
-        handles.add(edge.targetHandle)
-      }
-    }
-    return handles
-  }, [edges, selectedNodeId])
+  const connections = useMemo(() => {
+    if (!selectedNodeId) return new Map<string, ConnectionInfo>()
+    return resolveConnections(selectedNodeId, edges, nodes)
+  }, [edges, nodes, selectedNodeId])
 
   if (!selectedNode) return null
 
@@ -133,87 +172,87 @@ export function ConfigPanel() {
 
           {/* Input Nodes */}
           {selectedNode.type === "text-prompt" && (
-            <TextPromptConfig data={selectedNode.data as TextPromptData} onUpdate={update} connectedHandles={connectedHandles} />
+            <TextPromptConfig data={selectedNode.data as TextPromptData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "upload-image" && (
-            <UploadImageConfig data={selectedNode.data as UploadImageData} onUpdate={update} connectedHandles={connectedHandles} />
+            <UploadImageConfig data={selectedNode.data as UploadImageData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "upload-video" && (
-            <UploadVideoConfig data={selectedNode.data as UploadVideoData} onUpdate={update} connectedHandles={connectedHandles} />
+            <UploadVideoConfig data={selectedNode.data as UploadVideoData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "rss-feed" && (
-            <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} connectedHandles={connectedHandles} />
+            <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} connections={connections} />
           )}
 
           {/* Parameter Nodes */}
           {selectedNode.type === "tone" && (
-            <ToneConfig data={selectedNode.data as ToneData} onUpdate={update} connectedHandles={connectedHandles} />
+            <ToneConfig data={selectedNode.data as ToneData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "style-guide" && (
-            <StyleGuideConfig data={selectedNode.data as StyleGuideData} onUpdate={update} connectedHandles={connectedHandles} />
+            <StyleGuideConfig data={selectedNode.data as StyleGuideData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "provider" && (
-            <ProviderConfig data={selectedNode.data as ProviderData} onUpdate={update} connectedHandles={connectedHandles} />
+            <ProviderConfig data={selectedNode.data as ProviderData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "scene-count" && (
-            <SceneCountConfig data={selectedNode.data as SceneCountData} onUpdate={update} connectedHandles={connectedHandles} />
+            <SceneCountConfig data={selectedNode.data as SceneCountData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "duration" && (
-            <DurationConfig data={selectedNode.data as DurationData} onUpdate={update} connectedHandles={connectedHandles} />
+            <DurationConfig data={selectedNode.data as DurationData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "aspect-ratio" && (
-            <AspectRatioConfig data={selectedNode.data as AspectRatioData} onUpdate={update} connectedHandles={connectedHandles} />
+            <AspectRatioConfig data={selectedNode.data as AspectRatioData} onUpdate={update} connections={connections} />
           )}
 
           {/* AI Nodes */}
           {selectedNode.type === "generate-script" && (
-            <GenerateScriptConfig data={selectedNode.data as GenerateScriptData} onUpdate={update} connectedHandles={connectedHandles} />
+            <GenerateScriptConfig data={selectedNode.data as GenerateScriptData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "generate-image" && (
-            <GenerateImageConfig data={selectedNode.data as GenerateImageData} onUpdate={update} connectedHandles={connectedHandles} />
+            <GenerateImageConfig data={selectedNode.data as GenerateImageData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "image-to-video" && (
-            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} connectedHandles={connectedHandles} />
+            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "text-to-speech" && (
-            <TextToSpeechConfig data={selectedNode.data as TextToSpeechData} onUpdate={update} connectedHandles={connectedHandles} />
+            <TextToSpeechConfig data={selectedNode.data as TextToSpeechData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "qa-check" && (
-            <QACheckConfig data={selectedNode.data as QACheckData} onUpdate={update} connectedHandles={connectedHandles} />
+            <QACheckConfig data={selectedNode.data as QACheckData} onUpdate={update} connections={connections} />
           )}
 
           {/* Processing Nodes */}
           {selectedNode.type === "combine-videos" && (
-            <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} connectedHandles={connectedHandles} />
+            <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "add-audio" && (
-            <AddAudioConfig data={selectedNode.data as AddAudioData} onUpdate={update} connectedHandles={connectedHandles} />
+            <AddAudioConfig data={selectedNode.data as AddAudioData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "add-captions" && (
-            <AddCaptionsConfig data={selectedNode.data as AddCaptionsData} onUpdate={update} connectedHandles={connectedHandles} />
+            <AddCaptionsConfig data={selectedNode.data as AddCaptionsData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "resize-video" && (
-            <ResizeVideoConfig data={selectedNode.data as ResizeVideoData} onUpdate={update} connectedHandles={connectedHandles} />
+            <ResizeVideoConfig data={selectedNode.data as ResizeVideoData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "extract-audio" && (
-            <ExtractAudioConfig data={selectedNode.data as ExtractAudioData} onUpdate={update} connectedHandles={connectedHandles} />
+            <ExtractAudioConfig data={selectedNode.data as ExtractAudioData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "mix-audio" && (
-            <MixAudioConfig data={selectedNode.data as MixAudioData} onUpdate={update} connectedHandles={connectedHandles} />
+            <MixAudioConfig data={selectedNode.data as MixAudioData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "adjust-volume" && (
-            <AdjustVolumeConfig data={selectedNode.data as AdjustVolumeData} onUpdate={update} connectedHandles={connectedHandles} />
+            <AdjustVolumeConfig data={selectedNode.data as AdjustVolumeData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "trim-video" && (
-            <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} connectedHandles={connectedHandles} />
+            <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} connections={connections} />
           )}
 
           {/* Output Nodes */}
           {selectedNode.type === "save-to-storage" && (
-            <SaveToStorageConfig data={selectedNode.data as SaveToStorageData} onUpdate={update} connectedHandles={connectedHandles} />
+            <SaveToStorageConfig data={selectedNode.data as SaveToStorageData} onUpdate={update} connections={connections} />
           )}
           {selectedNode.type === "webhook-output" && (
-            <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} connectedHandles={connectedHandles} />
+            <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} connections={connections} />
           )}
 
           <Separator />
@@ -462,14 +501,14 @@ function AspectRatioConfig({ data, onUpdate }: ConfigProps<AspectRatioData>) {
 
 /* ── AI Node Configs ── */
 
-function GenerateScriptConfig({ data, onUpdate, connectedHandles }: ConfigProps<GenerateScriptData>) {
+function GenerateScriptConfig({ data, onUpdate, connections }: ConfigProps<GenerateScriptData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <FieldLabel connected={connectedHandles.has("script_provider")}>Provider</FieldLabel>
+        <FieldLabel connection={connections.get("script_provider")}>Provider</FieldLabel>
         <Select
           value={data.provider}
-          disabled={connectedHandles.has("script_provider")}
+          disabled={connections.has("script_provider")}
           onValueChange={(v) => onUpdate({ provider: v as GenerateScriptData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -481,13 +520,13 @@ function GenerateScriptConfig({ data, onUpdate, connectedHandles }: ConfigProps<
         </Select>
       </div>
       <div>
-        <FieldLabel htmlFor="scene-count" connected={connectedHandles.has("scene_count")}>Number of Scenes</FieldLabel>
+        <FieldLabel htmlFor="scene-count" connection={connections.get("scene_count")}>Number of Scenes</FieldLabel>
         <Input
           id="scene-count"
           type="number"
           min={1}
           max={20}
-          disabled={connectedHandles.has("scene_count")}
+          disabled={connections.has("scene_count")}
           value={data.sceneCount}
           onChange={(e) => onUpdate({ sceneCount: parseInt(e.target.value, 10) || 5 })}
         />
@@ -507,34 +546,34 @@ function GenerateScriptConfig({ data, onUpdate, connectedHandles }: ConfigProps<
         </Select>
       </div>
       <div>
-        <FieldLabel htmlFor="style-guide" connected={connectedHandles.has("style_guide")}>Style Guide</FieldLabel>
+        <FieldLabel htmlFor="style-guide" connection={connections.get("style_guide")}>Style Guide</FieldLabel>
         <Textarea
           id="style-guide"
           rows={3}
-          disabled={connectedHandles.has("style_guide")}
-          value={data.styleGuide}
+          disabled={connections.has("style_guide")}
+          value={connections.has("style_guide") ? connections.get("style_guide")!.sourceValue : data.styleGuide}
           onChange={(e) => onUpdate({ styleGuide: e.target.value })}
           placeholder="e.g. children's book illustration, watercolor..."
         />
       </div>
       <div>
-        <FieldLabel htmlFor="tone" connected={connectedHandles.has("tone")}>Tone</FieldLabel>
+        <FieldLabel htmlFor="tone" connection={connections.get("tone")}>Tone</FieldLabel>
         <Input
           id="tone"
-          disabled={connectedHandles.has("tone")}
-          value={data.tone}
+          disabled={connections.has("tone")}
+          value={connections.has("tone") ? connections.get("tone")!.sourceValue : data.tone}
           onChange={(e) => onUpdate({ tone: e.target.value })}
           placeholder="e.g. whimsical, dramatic, educational"
         />
       </div>
       <div>
-        <FieldLabel htmlFor="target-length" connected={connectedHandles.has("target_length")}>Target Length (seconds)</FieldLabel>
+        <FieldLabel htmlFor="target-length" connection={connections.get("target_length")}>Target Length (seconds)</FieldLabel>
         <Input
           id="target-length"
           type="number"
           min={10}
           max={600}
-          disabled={connectedHandles.has("target_length")}
+          disabled={connections.has("target_length")}
           value={data.targetLength}
           onChange={(e) => onUpdate({ targetLength: parseInt(e.target.value, 10) || 60 })}
         />
@@ -543,25 +582,25 @@ function GenerateScriptConfig({ data, onUpdate, connectedHandles }: ConfigProps<
   )
 }
 
-function GenerateImageConfig({ data, onUpdate, connectedHandles }: ConfigProps<GenerateImageData>) {
+function GenerateImageConfig({ data, onUpdate, connections }: ConfigProps<GenerateImageData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <FieldLabel htmlFor="image-prompt" connected={connectedHandles.has("prompt")}>Prompt</FieldLabel>
+        <FieldLabel htmlFor="image-prompt" connection={connections.get("prompt")}>Prompt</FieldLabel>
         <Textarea
           id="image-prompt"
           rows={3}
-          disabled={connectedHandles.has("prompt")}
-          value={data.prompt}
+          disabled={connections.has("prompt")}
+          value={connections.has("prompt") ? connections.get("prompt")!.sourceValue : data.prompt}
           onChange={(e) => onUpdate({ prompt: e.target.value })}
           placeholder="Describe the image to generate..."
         />
       </div>
       <div>
-        <FieldLabel connected={connectedHandles.has("image_provider")}>Provider</FieldLabel>
+        <FieldLabel connection={connections.get("image_provider")}>Provider</FieldLabel>
         <Select
           value={data.provider}
-          disabled={connectedHandles.has("image_provider")}
+          disabled={connections.has("image_provider")}
           onValueChange={(v) => onUpdate({ provider: v as GenerateImageData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -573,10 +612,10 @@ function GenerateImageConfig({ data, onUpdate, connectedHandles }: ConfigProps<G
         </Select>
       </div>
       <div>
-        <FieldLabel connected={connectedHandles.has("aspect_ratio")}>Aspect Ratio</FieldLabel>
+        <FieldLabel connection={connections.get("aspect_ratio")}>Aspect Ratio</FieldLabel>
         <Select
           value={data.aspectRatio}
-          disabled={connectedHandles.has("aspect_ratio")}
+          disabled={connections.has("aspect_ratio")}
           onValueChange={(v) => onUpdate({ aspectRatio: v as GenerateImageData["aspectRatio"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -589,22 +628,22 @@ function GenerateImageConfig({ data, onUpdate, connectedHandles }: ConfigProps<G
         </Select>
       </div>
       <div>
-        <FieldLabel htmlFor="style" connected={connectedHandles.has("style_guide")}>Style</FieldLabel>
+        <FieldLabel htmlFor="style" connection={connections.get("style_guide")}>Style</FieldLabel>
         <Input
           id="style"
-          disabled={connectedHandles.has("style_guide")}
-          value={data.style}
+          disabled={connections.has("style_guide")}
+          value={connections.has("style_guide") ? connections.get("style_guide")!.sourceValue : data.style}
           onChange={(e) => onUpdate({ style: e.target.value })}
           placeholder="e.g. children-book, photorealistic"
         />
       </div>
       <div>
-        <FieldLabel htmlFor="negative-prompt" connected={connectedHandles.has("negative_prompt")}>Negative Prompt</FieldLabel>
+        <FieldLabel htmlFor="negative-prompt" connection={connections.get("negative_prompt")}>Negative Prompt</FieldLabel>
         <Textarea
           id="negative-prompt"
           rows={2}
-          disabled={connectedHandles.has("negative_prompt")}
-          value={data.negativePrompt}
+          disabled={connections.has("negative_prompt")}
+          value={connections.has("negative_prompt") ? connections.get("negative_prompt")!.sourceValue : data.negativePrompt}
           onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
           placeholder="Things to avoid..."
         />
@@ -613,14 +652,14 @@ function GenerateImageConfig({ data, onUpdate, connectedHandles }: ConfigProps<G
   )
 }
 
-function ImageToVideoConfig({ data, onUpdate, connectedHandles }: ConfigProps<ImageToVideoData>) {
+function ImageToVideoConfig({ data, onUpdate, connections }: ConfigProps<ImageToVideoData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <FieldLabel connected={connectedHandles.has("video_provider")}>Provider</FieldLabel>
+        <FieldLabel connection={connections.get("video_provider")}>Provider</FieldLabel>
         <Select
           value={data.provider}
-          disabled={connectedHandles.has("video_provider")}
+          disabled={connections.has("video_provider")}
           onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -633,22 +672,22 @@ function ImageToVideoConfig({ data, onUpdate, connectedHandles }: ConfigProps<Im
         </Select>
       </div>
       <div>
-        <FieldLabel htmlFor="duration" connected={connectedHandles.has("duration")}>Duration (seconds)</FieldLabel>
+        <FieldLabel htmlFor="duration" connection={connections.get("duration")}>Duration (seconds)</FieldLabel>
         <Input
           id="duration"
           type="number"
           min={1}
           max={30}
-          disabled={connectedHandles.has("duration")}
+          disabled={connections.has("duration")}
           value={data.duration}
           onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
         />
       </div>
       <div>
-        <FieldLabel connected={connectedHandles.has("motion")}>Motion</FieldLabel>
+        <FieldLabel connection={connections.get("motion")}>Motion</FieldLabel>
         <Select
           value={data.motion}
-          disabled={connectedHandles.has("motion")}
+          disabled={connections.has("motion")}
           onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -660,10 +699,10 @@ function ImageToVideoConfig({ data, onUpdate, connectedHandles }: ConfigProps<Im
         </Select>
       </div>
       <div>
-        <FieldLabel connected={connectedHandles.has("camera_motion")}>Camera Motion</FieldLabel>
+        <FieldLabel connection={connections.get("camera_motion")}>Camera Motion</FieldLabel>
         <Select
           value={data.cameraMotion}
-          disabled={connectedHandles.has("camera_motion")}
+          disabled={connections.has("camera_motion")}
           onValueChange={(v) => onUpdate({ cameraMotion: v as ImageToVideoData["cameraMotion"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -680,14 +719,14 @@ function ImageToVideoConfig({ data, onUpdate, connectedHandles }: ConfigProps<Im
   )
 }
 
-function TextToSpeechConfig({ data, onUpdate, connectedHandles }: ConfigProps<TextToSpeechData>) {
+function TextToSpeechConfig({ data, onUpdate, connections }: ConfigProps<TextToSpeechData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <FieldLabel connected={connectedHandles.has("voice_provider")}>Provider</FieldLabel>
+        <FieldLabel connection={connections.get("voice_provider")}>Provider</FieldLabel>
         <Select
           value={data.provider}
-          disabled={connectedHandles.has("voice_provider")}
+          disabled={connections.has("voice_provider")}
           onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -744,7 +783,7 @@ function TextToSpeechConfig({ data, onUpdate, connectedHandles }: ConfigProps<Te
   )
 }
 
-function QACheckConfig({ data, onUpdate, connectedHandles }: ConfigProps<QACheckData>) {
+function QACheckConfig({ data, onUpdate, connections }: ConfigProps<QACheckData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
