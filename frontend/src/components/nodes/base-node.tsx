@@ -18,7 +18,7 @@ interface BaseNodeProps {
   readonly id: string
   readonly label: string
   readonly icon: ReactNode
-  readonly category: "input" | "ai" | "processing" | "output"
+  readonly category: "input" | "parameter" | "ai" | "processing" | "output"
   readonly credits?: number
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode

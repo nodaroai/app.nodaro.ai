@@ -1,7 +1,13 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Type, BookOpen, ImageIcon, Film, Merge, Plus, X } from "lucide-react"
+import {
+  Type, BookOpen, ImageIcon, Film, Merge, Plus, X,
+  Upload, Video, Rss, Palette, PaintBucket, Server,
+  Hash, Clock, RatioIcon, Mic, ShieldCheck,
+  Volume2, Captions, Maximize, AudioLines, Music,
+  SlidersHorizontal, Scissors, HardDrive, Webhook,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
@@ -16,11 +22,36 @@ interface NodeOption {
 }
 
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
+  // Input
   { type: "text-prompt", label: "Text Prompt", icon: <Type className="h-4 w-4" />, category: "Input" },
+  { type: "upload-image", label: "Upload Image", icon: <Upload className="h-4 w-4" />, category: "Input" },
+  { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
+  { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
+  // Parameter
+  { type: "tone", label: "Tone", icon: <Palette className="h-4 w-4" />, category: "Parameter" },
+  { type: "style-guide", label: "Style Guide", icon: <PaintBucket className="h-4 w-4" />, category: "Parameter" },
+  { type: "provider", label: "Provider", icon: <Server className="h-4 w-4" />, category: "Parameter" },
+  { type: "scene-count", label: "Scene Count", icon: <Hash className="h-4 w-4" />, category: "Parameter" },
+  { type: "duration", label: "Duration", icon: <Clock className="h-4 w-4" />, category: "Parameter" },
+  { type: "aspect-ratio", label: "Aspect Ratio", icon: <RatioIcon className="h-4 w-4" />, category: "Parameter" },
+  // AI
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI" },
   { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI" },
   { type: "image-to-video", label: "Image to Video", icon: <Film className="h-4 w-4" />, category: "AI" },
+  { type: "text-to-speech", label: "Text to Speech", icon: <Mic className="h-4 w-4" />, category: "AI" },
+  { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI" },
+  // Processing
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing" },
+  { type: "add-audio", label: "Add Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing" },
+  { type: "add-captions", label: "Add Captions", icon: <Captions className="h-4 w-4" />, category: "Processing" },
+  { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing" },
+  { type: "extract-audio", label: "Extract Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing" },
+  { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing" },
+  { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing" },
+  { type: "trim-video", label: "Trim Video", icon: <Scissors className="h-4 w-4" />, category: "Processing" },
+  // Output
+  { type: "save-to-storage", label: "Save to Storage", icon: <HardDrive className="h-4 w-4" />, category: "Output" },
+  { type: "webhook-output", label: "Webhook Output", icon: <Webhook className="h-4 w-4" />, category: "Output" },
 ]
 
 const CATEGORIES = Array.from(new Set(NODE_OPTIONS.map((n) => n.category)))
@@ -81,7 +112,7 @@ export function NodeToolbar() {
   return (
     <>
       {/* Desktop: static sidebar panel */}
-      <div className="absolute top-4 left-4 z-10 hidden md:flex flex-col gap-2 bg-card border rounded-lg p-3 shadow-md w-48">
+      <div className="absolute top-4 left-4 z-10 hidden md:flex flex-col gap-2 bg-card border rounded-lg p-3 shadow-md w-48 max-h-[calc(100vh-6rem)] overflow-y-auto">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Add Node
         </span>
