@@ -41,6 +41,10 @@ export const PROVIDERS_CONFIG: Record<ProviderCategory, Record<string, ProviderI
       label: "Pika",
       models: ["pika-1.0", "pika-1.5"],
     },
+    sora: {
+      label: "Sora",
+      models: ["sora-1.0"],
+    },
   },
   voice: {
     elevenlabs: {

@@ -140,6 +140,18 @@ export type TextToSpeechData = {
   fieldMappings: FieldMappings
 }
 
+export type TextToVideoData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  provider: "runway" | "pika" | "sora" | "veo" | "kling"
+  model: string
+  duration: number
+  aspectRatio: "16:9" | "9:16" | "1:1"
+  negativePrompt: string
+  fieldMappings: FieldMappings
+}
+
 export type QACheckData = {
   [key: string]: unknown
   label: string
@@ -257,6 +269,7 @@ export type SceneNodeData =
   | GenerateScriptData
   | GenerateImageData
   | ImageToVideoData
+  | TextToVideoData
   | TextToSpeechData
   | QACheckData
   | CombineVideosData
@@ -286,6 +299,7 @@ export type SceneNodeType =
   | "generate-script"
   | "generate-image"
   | "image-to-video"
+  | "text-to-video"
   | "text-to-speech"
   | "qa-check"
   | "combine-videos"
@@ -450,6 +464,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Image to Video", provider: "veo", model: "veo-3.1", duration: 5, motion: "moderate", cameraMotion: "static", fieldMappings: {} },
+  },
+  {
+    type: "text-to-video",
+    label: "Text to Video",
+    category: "ai",
+    creditCost: 25,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: { label: "Text to Video", prompt: "", provider: "runway", model: "gen-3-alpha", duration: 5, aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
   },
   {
     type: "text-to-speech",

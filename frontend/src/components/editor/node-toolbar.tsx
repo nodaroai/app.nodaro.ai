@@ -40,6 +40,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI" },
   { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI" },
   { type: "image-to-video", label: "Image to Video", icon: <Film className="h-4 w-4" />, category: "AI" },
+  { type: "text-to-video", label: "Text to Video", icon: <Film className="h-4 w-4" />, category: "AI" },
   { type: "text-to-speech", label: "Text to Speech", icon: <Mic className="h-4 w-4" />, category: "AI" },
   { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI" },
   // Processing

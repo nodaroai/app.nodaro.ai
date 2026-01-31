@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.2 (Editor) - Complete.** The visual workflow editor is fully functional with 27 node types, field mapping, and provider configuration. Backend execution engine (Phase 1.3) is next.
+**Phase 1.2 (Editor) - Complete.** The visual workflow editor is fully functional with 28 node types, field mapping, and provider configuration. Backend execution engine (Phase 1.3) is next.
 
 ## Features
 
@@ -17,13 +17,13 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Graph-based workflows: branching, merging, multiple inputs/outputs
 - Debounced auto-save with Ctrl+S support
 
-### 27 Node Types
+### 28 Node Types
 
 | Category | Nodes |
 |----------|-------|
 | **Input** | Text Prompt, Upload Image, Upload Video, RSS Feed |
 | **Parameter** | Provider, Duration, Aspect Ratio, Tone, Style Guide, Scene Count, Motion, Camera Motion |
-| **AI** | Generate Script, Generate Image, Image to Video, Text to Speech, QA Check |
+| **AI** | Generate Script, Generate Image, Image to Video, Text to Video, Text to Speech, QA Check |
 | **Processing** | Combine Videos, Add Audio, Extract Audio, Mix Audio, Add Captions, Resize Video, Trim Video, Adjust Volume |
 | **Output** | Save to Storage, Webhook Output |
 

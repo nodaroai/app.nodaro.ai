@@ -40,6 +40,7 @@ import type {
   GenerateScriptData,
   GenerateImageData,
   ImageToVideoData,
+  TextToVideoData,
   TextToSpeechData,
   QACheckData,
   CombineVideosData,
@@ -327,6 +328,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "image-to-video" && (
             <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
+          )}
+          {selectedNode.type === "text-to-video" && (
+            <TextToVideoConfig data={selectedNode.data as TextToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
           )}
           {selectedNode.type === "text-to-speech" && (
             <TextToSpeechConfig data={selectedNode.data as TextToSpeechData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} />
@@ -836,6 +840,85 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             <SelectItem value="zoom-out">Zoom Out</SelectItem>
           </SelectContent>
         </Select>
+      </MappableField>
+    </div>
+  )
+}
+
+function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToVideoData>) {
+  const category: ProviderCategory = "video"
+  const providers = getProviders(category)
+  const models = getModels(category, data.provider)
+
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          value={data.prompt}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe the video to generate..."
+        />
+      </MappableField>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+        <Select
+          value={data.provider}
+          onValueChange={(v) => {
+            const firstModel = getFirstModel(category, v)
+            onUpdate({ provider: v, model: firstModel })
+          }}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {providers.map((p) => (
+              <SelectItem key={p} value={p}>{getProviderLabel(category, p)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <div>
+        <Label>Model</Label>
+        <Select
+          value={data.model}
+          onValueChange={(v) => onUpdate({ model: v })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {models.map((m) => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          type="number"
+          min={1}
+          max={30}
+          value={data.duration}
+          onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
+        />
+      </MappableField>
+      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.aspectRatio}
+          onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+            <SelectItem value="1:1">1:1 (Square)</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={2}
+          value={data.negativePrompt}
+          onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+          placeholder="Things to avoid..."
+        />
       </MappableField>
     </div>
   )
