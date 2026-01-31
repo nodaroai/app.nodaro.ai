@@ -726,75 +726,80 @@ Example: Image node output → connects to both Video node AND next Image node a
 | Text to Speech | ElevenLabs | PlayHT, Azure TTS |
 | Generate Script | Claude | GPT-4, Gemini |
 
-#### 4. Parameter Input Nodes
+#### 4. Parameter Nodes
 
-**Instead of configuring every field manually in the config panel, users can use dedicated Parameter Input Nodes to visually wire values into specific fields on AI nodes.**
+**Every field on every AI node has TWO ways to set its value:**
+1. **Config Panel Field (default)** - dropdown/input in the Node Settings panel
+2. **Parameter Node (optional)** - a separate node on canvas that connects and overrides the config value
 
 **Resolution rule:**
-- If a field has an incoming connection from a Parameter Node → use the connected value
-- If no connection → use the value from the config panel (fallback)
-
-**Each Parameter Node has ONE specific output handle that only connects to matching input handles.** This prevents confusion about which field a connection targets.
+- If a Parameter Node is connected to a field → use the connected value
+- If no connection → use the Config Panel value (fallback)
 
 **Benefits:**
-- **No ambiguity**: A Tone Node can only connect to tone fields, not style_guide
-- **Write once, connect many**: Define tone once, connect to every Generate Script node
-- **Dynamic parameters from n8n**: Pass `scene_count`, `style`, `model` as workflow variables from API/n8n
-- **Visual clarity**: See at a glance where each value comes from
+- **Write once, connect many**: Define duration once, connect to every Image to Video node
+- **Dynamic parameters from n8n**: Pass `duration`, `style`, `provider` as workflow variables from API/n8n
+- **Visual clarity**: See at a glance where each value comes from on the canvas
 
-**How it works in the UI:**
+##### Provider Nodes (4 types, one per AI category)
 
-```
-┌─────────────┐
-│  Tone       │──────→ (tone) on Generate Script
-│  "epic..."  │
-└─────────────┘
+| Node | Type | Values | Output Handle | Connects To |
+|------|------|--------|---------------|-------------|
+| ImageProviderNode | `image-provider` | nano-banana, flux, dalle, midjourney | `image_provider` | Generate Image |
+| VideoProviderNode | `video-provider` | veo, kling, runway, pika | `video_provider` | Image to Video |
+| VoiceProviderNode | `voice-provider` | elevenlabs, playht, azure | `voice_provider` | Text to Speech |
+| ScriptProviderNode | `script-provider` | claude, gpt, gemini | `script_provider` | Generate Script |
 
-┌─────────────┐
-│ Style Guide │──────→ (style_guide) on Generate Script / Generate Image
-│ "watercolor"│
-└─────────────┘
+##### Value Nodes
 
-┌─────────────┐
-│  Provider   │──────→ (provider) on any AI node
-│  "gemini"   │
-└─────────────┘
+| Node | Type | Data | Output Handle | Connects To |
+|------|------|------|---------------|-------------|
+| DurationNode | `duration` | seconds: number | `duration` | Image to Video, Generate Script |
+| AspectRatioNode | `aspect-ratio` | ratio: enum | `aspect_ratio` | Generate Image |
+| MotionNode | `motion` | motion: subtle/moderate/dynamic | `motion` | Image to Video |
+| CameraMotionNode | `camera-motion` | camera: static/pan-left/pan-right/zoom-in/zoom-out | `camera_motion` | Image to Video |
+| VoiceNode | `voice` | voiceId, voiceName, gender, tone | `voice` | Text to Speech |
 
-┌─────────────┐
-│  Scenes     │──────→ (scene_count) on Generate Script
-│  Value: 8   │
-└─────────────┘
+##### Generic TextNode
 
-┌─────────────┐
-│  Duration   │──────→ (duration) on Image to Video / (target_length) on Generate Script
-│  Value: 60  │
-└─────────────┘
+| Node | Type | Data | Output Handle | Connects To |
+|------|------|------|---------------|-------------|
+| TextNode | `text` | label: string, text: string | `text` | Any text input (tone, style_guide, negative_prompt, scene dialogue, etc.) |
 
-┌──────────────┐
-│ Aspect Ratio │──────→ (aspect_ratio) on Generate Image
-│  "16:9"      │
-└──────────────┘
-```
+User sets the label to describe what this text is for. Same node type, different uses.
 
-**Parameter Nodes and their compatible targets:**
+##### VoiceNode - Predefined Voices
 
-| Parameter Node | Output Handle | Compatible Input Handles On |
-|----------------|---------------|-----------------------------|
-| Tone | `tone` | Generate Script (`tone`) |
-| Style Guide | `style_guide` | Generate Script (`style_guide`), Generate Image (`style`) |
-| Provider | `provider_model` | Any AI node (`provider`, `model`) |
-| Scene Count | `scene_count` | Generate Script (`scene_count`) |
-| Duration | `duration` | Image to Video (`duration`), Generate Script (`target_length`) |
-| Aspect Ratio | `aspect_ratio` | Generate Image (`aspect_ratio`) |
+For MVP/Cloud, hardcoded voice list:
+- Maria (Female, Bright)
+- Oliver (Male, Upbeat)
+- James (Male, Informative)
+- Maya (Female, Firm)
+- Leo (Male, Excitable)
+- Sophie (Female, Youthful)
+- Gabriel (Male, Easy-going)
+- Alex (Male, Smooth)
 
-**Receiving nodes and their parameter input handles:**
+For Self-Hosted: same list + option to import from ElevenLabs API.
+
+##### NOT Parameter Nodes (Config Panel Only)
+
+These fields are only available in the config panel, not as Parameter Nodes:
+
+| Field | Why Not Parameter Node |
+|-------|------------------------|
+| model | Depends on provider selection, dropdown in config |
+| characterIds | Selection from project's character list, checkboxes in config |
+| stylePresetId | Selection from preset library, dropdown in config |
+
+##### Receiving Nodes and Their Parameter Input Handles
 
 | Node | Parameter Input Handles |
 |------|------------------------|
-| Generate Script | `tone`, `style_guide`, `scene_count`, `target_length`, `provider_model` |
-| Generate Image | `style`, `aspect_ratio`, `provider_model` |
-| Image to Video | `duration`, `provider_model` |
-| Text to Speech | `provider_model` |
+| Generate Script | `script_provider`, `duration`, `text` (for tone, style_guide) |
+| Generate Image | `image_provider`, `aspect_ratio`, `text` (for style_guide, negative_prompt) |
+| Image to Video | `video_provider`, `duration`, `motion`, `camera_motion` |
+| Text to Speech | `voice_provider`, `voice` |
 | Combine Videos | (none - simple processing) |
 
 ### Input Nodes
@@ -833,59 +838,59 @@ interface RSSFeedNode {
   };
 }
 
-// --- Parameter Input Nodes ---
-// Each node targets a SPECIFIC parameter on AI nodes.
-// The node name tells users exactly what it controls.
+// --- Parameter Nodes ---
+// Parameter Nodes override config panel values when connected.
+// Resolution: connected value wins, otherwise config panel fallback.
 
-interface ToneNode {
-  type: 'tone';
+// Provider Nodes (one per AI category)
+interface ImageProviderNode {
+  type: 'image-provider';
   data: {
-    tone: string;            // e.g. "dramatic", "playful", "dark"
+    provider: 'nano-banana' | 'flux' | 'dalle' | 'midjourney';
   };
   inputs: [];
-  outputs: ['tone'];         // Connects ONLY to 'tone' input handle
+  outputs: ['image_provider'];
   creditCost: 0;
 }
 
-interface StyleGuideNode {
-  type: 'style-guide';
+interface VideoProviderNode {
+  type: 'video-provider';
   data: {
-    text: string;            // Style description, e.g. "Studio Ghibli watercolor"
+    provider: 'veo' | 'kling' | 'runway' | 'pika';
   };
   inputs: [];
-  outputs: ['style_guide'];  // Connects ONLY to 'style_guide' input handle
+  outputs: ['video_provider'];
   creditCost: 0;
 }
 
-interface ProviderNode {
-  type: 'provider';
+interface VoiceProviderNode {
+  type: 'voice-provider';
   data: {
-    category: 'image' | 'video' | 'voice' | 'script';
-    provider: string;        // e.g. "nano-banana"
-    model: string;           // e.g. "gemini-2.5-flash-image"
+    provider: 'elevenlabs' | 'playht' | 'azure';
   };
   inputs: [];
-  outputs: ['provider'];     // Connects ONLY to 'provider' input handle
+  outputs: ['voice_provider'];
   creditCost: 0;
 }
 
-interface SceneCountNode {
-  type: 'scene-count';
+interface ScriptProviderNode {
+  type: 'script-provider';
   data: {
-    count: number;           // 1-20
+    provider: 'claude' | 'gpt' | 'gemini';
   };
   inputs: [];
-  outputs: ['scene_count'];  // Connects ONLY to 'scene_count' input handle
+  outputs: ['script_provider'];
   creditCost: 0;
 }
 
+// Value Nodes
 interface DurationNode {
   type: 'duration';
   data: {
     seconds: number;         // Target duration in seconds
   };
   inputs: [];
-  outputs: ['duration'];     // Connects ONLY to 'duration' input handle
+  outputs: ['duration'];
   creditCost: 0;
 }
 
@@ -895,7 +900,56 @@ interface AspectRatioNode {
     ratio: '1:1' | '16:9' | '9:16' | '4:3' | '4:5';
   };
   inputs: [];
-  outputs: ['aspect_ratio']; // Connects ONLY to 'aspect_ratio' input handle
+  outputs: ['aspect_ratio'];
+  creditCost: 0;
+}
+
+interface MotionNode {
+  type: 'motion';
+  data: {
+    motion: 'subtle' | 'moderate' | 'dynamic';
+  };
+  inputs: [];
+  outputs: ['motion'];
+  creditCost: 0;
+}
+
+interface CameraMotionNode {
+  type: 'camera-motion';
+  data: {
+    camera: 'static' | 'pan-left' | 'pan-right' | 'zoom-in' | 'zoom-out';
+  };
+  inputs: [];
+  outputs: ['camera_motion'];
+  creditCost: 0;
+}
+
+interface VoiceNode {
+  type: 'voice';
+  data: {
+    voiceId: string;
+    voiceName: string;       // e.g. "Maria", "Oliver"
+    gender: 'male' | 'female';
+    tone: string;            // e.g. "Bright", "Upbeat", "Informative"
+  };
+  inputs: [];
+  outputs: ['voice'];
+  creditCost: 0;
+  // Predefined voices (MVP):
+  // Maria (Female, Bright), Oliver (Male, Upbeat), James (Male, Informative),
+  // Maya (Female, Firm), Leo (Male, Excitable), Sophie (Female, Youthful),
+  // Gabriel (Male, Easy-going), Alex (Male, Smooth)
+}
+
+// Generic Text Node - user sets label to describe purpose
+interface TextNode {
+  type: 'text';
+  data: {
+    label: string;           // e.g. "Tone", "Style Guide", "Negative Prompt"
+    text: string;            // The actual text value
+  };
+  inputs: [];
+  outputs: ['text'];         // Connects to any text input handle
   creditCost: 0;
 }
 ```
@@ -917,7 +971,7 @@ interface GenerateScriptNode {
   };
   inputs: ['prompt'];
   // Parameter input handles (optional, override config panel values when connected):
-  parameterInputs: ['tone', 'style_guide', 'provider', 'scene_count', 'duration'];
+  parameterInputs: ['script_provider', 'duration', 'text'];  // text for tone, style_guide
   outputs: ['script', 'scenes'];
   creditCost: 2;
 
@@ -952,7 +1006,7 @@ interface GenerateImageNode {
   };
   inputs: ['prompt', 'reference?'];  // Reference accepts MULTIPLE connections
   // Parameter input handles (optional, override config panel values when connected):
-  parameterInputs: ['style_guide', 'aspect_ratio', 'provider'];
+  parameterInputs: ['image_provider', 'aspect_ratio', 'text'];  // text for style_guide, negative_prompt
   outputs: ['image'];                // Output can connect to MULTIPLE nodes
   creditCost: 5;
 
@@ -987,6 +1041,8 @@ interface ImageToVideoNode {
     cameraMotion?: 'static' | 'pan-left' | 'pan-right' | 'zoom-in' | 'zoom-out';
   };
   inputs: ['image', 'motion-prompt?'];
+  // Parameter input handles (optional, override config panel values when connected):
+  parameterInputs: ['video_provider', 'duration', 'motion', 'camera_motion'];
   outputs: ['video'];        // Note: VEO 3 outputs video WITH ambient audio
   creditCost: 20;
   
@@ -1009,9 +1065,11 @@ interface TextToSpeechNode {
     pitch?: number;
   };
   inputs: ['text'];
+  // Parameter input handles (optional, override config panel values when connected):
+  parameterInputs: ['voice_provider', 'voice'];
   outputs: ['audio'];
   creditCost: 3;
-  
+
   // ElevenLabs is ALWAYS available as an option.
   // Even if video was generated with VEO audio, user can:
   // 1. Extract/mute VEO audio
@@ -1346,6 +1404,62 @@ User clicks "Run"
                     ▼                   ▼
               Back to editor      Queue job
 ```
+
+### Execution Model
+
+SceneNode uses **step-by-step execution**, not "run all at once". Users control the flow manually, approving results before proceeding.
+
+#### Node States
+
+| State | Description | Visual Indicator |
+|-------|-------------|------------------|
+| `idle` | Not yet run | Gray border |
+| `waiting` | Waiting for upstream nodes to complete | Pulsing border |
+| `running` | Currently executing | Spinning indicator |
+| `done` | Completed successfully | Green border + preview |
+| `error` | Failed | Red border + error message |
+
+#### Node Actions
+
+| Action | Description |
+|--------|-------------|
+| **Run** | Execute this node only |
+| **Run from here** | Execute this node and all downstream nodes |
+| **Regenerate** | Run again (if not satisfied with result) |
+| **Approve** | Lock result and allow downstream to proceed |
+
+#### How It Works
+
+Each node shows:
+- Status indicator (idle/waiting/running/done/error)
+- Preview of result (when done) - thumbnail for images, player for video/audio
+- Action buttons (Run, Regenerate, Approve)
+
+This allows users to:
+1. Generate character image -> not satisfied -> **Regenerate**
+2. Satisfied -> **Approve** -> continue to next scene
+3. Full control, no wasted credits on downstream nodes if upstream result is bad
+
+#### Execution Flow
+
+```
+User clicks "Run" on a node
+       │
+       ▼
+  Are upstream nodes done?
+       │
+       ├─ No ──▶ Show warning: "Run upstream nodes first"
+       │
+       └─ Yes ──▶ Execute node
+                       │
+                       ├─ Success ──▶ Show preview + "Approve" / "Regenerate"
+                       │
+                       └─ Failure ──▶ Show error + "Retry"
+```
+
+**"Run from here"** executes the entire subgraph from the selected node downstream, auto-approving intermediate results. Useful when the user is confident in all upstream results and wants to batch-execute the rest.
+
+---
 
 ### Credit Cost Table
 
