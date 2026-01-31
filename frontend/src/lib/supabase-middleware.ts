@@ -41,14 +41,11 @@ export async function updateSession(request: NextRequest) {
 
   // Admin routes: check role in profiles table
   if (user && pathname.startsWith("/admin")) {
-    console.log("Admin check - user:", user.id)
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .single()
-
-    console.log("Admin check - profile:", profile, "error:", profileError)
 
     // Only redirect if query succeeded and role is explicitly not admin.
     // If query failed (RLS issue, network, etc.), let client-side handle it.
