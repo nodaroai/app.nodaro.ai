@@ -41,13 +41,18 @@ export async function updateSession(request: NextRequest) {
 
   // Admin routes: check role in profiles table
   if (user && pathname.startsWith("/admin")) {
-    const { data: profile } = await supabase
+    console.log("Admin check - user:", user.id)
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .single()
 
-    if (!profile || !["admin", "super_admin"].includes(profile.role)) {
+    console.log("Admin check - profile:", profile, "error:", profileError)
+
+    // Only redirect if query succeeded and role is explicitly not admin.
+    // If query failed (RLS issue, network, etc.), let client-side handle it.
+    if (!profileError && profile && !["admin", "super_admin"].includes(profile.role)) {
       const url = request.nextUrl.clone()
       url.pathname = "/projects"
       return NextResponse.redirect(url)

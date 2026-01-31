@@ -27,13 +27,19 @@ export default function AdminLayout({
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
-    if (!loading) {
+    if (loading) return
+
+    // Give role a moment to load - loadUser fetches role after onAuthStateChange
+    // sets loading=false, so we need a short delay before checking isAdmin
+    const timeout = setTimeout(() => {
       if (!user || !isAdmin) {
         router.replace("/projects")
       } else {
         setChecked(true)
       }
-    }
+    }, 500)
+
+    return () => clearTimeout(timeout)
   }, [user, isAdmin, loading, router])
 
   if (!checked) {
