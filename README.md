@@ -10,9 +10,9 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ### Visual Workflow Editor
 - Drag-and-drop node-based editor built on React Flow
-- Single input handle per node (like n8n) with field mapping in the config panel
+- Single input handle per node with field mapping in the config panel
 - Connect multiple source nodes to one target and map which source feeds which field
-- Dropdown filtering by compatible node types (text nodes only appear in text fields, provider nodes only in provider fields)
+- Dropdown filtering by compatible node types
 - Provider cascading dropdowns: Category -> Provider -> Model
 - Graph-based workflows: branching, merging, multiple inputs/outputs
 - Manual save with unsaved changes indicator and exit confirmation
@@ -33,15 +33,6 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Mobile responsive (collapsible sidebar, touch targets, pinch-to-zoom)
 - Light/Dark mode
 
-### Admin Panel
-- User management at `/admin` (cloud edition only)
-- Role-based access control (user, admin, super_admin)
-- Protected routes via middleware
-
-### Edition System
-- **Self-hosted** (free): Full editor, all nodes, no admin panel
-- **Cloud** (SaaS): Admin panel, billing, team features
-
 ### Authentication
 - Google OAuth via Supabase
 
@@ -57,7 +48,55 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | Backend | Fastify (Node.js/TypeScript) | Built |
 | Queue | Redis + BullMQ | Planned |
 | Storage | Cloudflare R2 | Planned |
-| Payments | Paddle | Planned |
+
+## Quick Start
+
+### Requirements
+- Node.js 18+
+- Supabase project (free tier works)
+- AI provider API keys (Replicate for MVP)
+
+### Installation
+
+```bash
+git clone https://github.com/scenenode/scenenode.git
+cd scenenode
+
+cp .env.example .env
+# Edit .env with your credentials (see below)
+
+# Frontend
+cd frontend
+npm install
+npm run dev
+
+# Backend (in separate terminal)
+cd backend
+npm install
+npm run dev
+
+# Open http://localhost:3000
+```
+
+### Environment Variables
+
+```bash
+# Frontend (.env in frontend/)
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+
+# Backend (.env in backend/)
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+REDIS_URL=redis://localhost:6379
+REPLICATE_API_TOKEN=r8_xxxxx
+```
+
+### Getting API Keys
+
+- **Supabase**: https://supabase.com/dashboard - Create a project, copy URL and anon key
+- **Replicate**: https://replicate.com/account/api-tokens - Provides access to Nano Banana (images) and VEO (video)
+- **ElevenLabs** (optional): https://elevenlabs.io/api - For voice generation
 
 ## Project Structure
 
@@ -67,19 +106,17 @@ scenenode/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── (auth)/           # Login, signup
-│   │   │   ├── (main)/           # Dashboard, projects, editor
-│   │   │   └── admin/            # Admin panel
+│   │   │   └── (main)/           # Dashboard, projects, editor
 │   │   ├── components/
 │   │   │   ├── editor/           # Workflow canvas, config panel, toolbar
-│   │   │   ├── nodes/            # 27 node components + base-node
+│   │   │   ├── nodes/            # 28 node components + base-node
 │   │   │   └── ui/               # shadcn/ui components
 │   │   ├── hooks/
 │   │   │   ├── use-workflow-store.ts  # Zustand workflow state
-│   │   │   ├── use-auth.ts           # Auth hook with role checking
+│   │   │   ├── use-auth.ts           # Auth hook
 │   │   │   └── use-projects-store.ts # Projects state
 │   │   ├── lib/
 │   │   │   ├── providers-config.ts   # Provider/model mappings
-│   │   │   ├── edition.ts            # Self-hosted vs cloud
 │   │   │   ├── supabase.ts           # Supabase client
 │   │   │   └── utils.ts
 │   │   └── types/
@@ -99,58 +136,6 @@ scenenode/
 └── README.md
 ```
 
-## Quick Start
-
-### Cloud (Recommended)
-
-1. Go to https://app.scenenode.ai
-2. Sign up with Google
-3. Create a project and start building workflows
-
-### Self-Hosted (Docker)
-
-```bash
-git clone https://github.com/scenenode/scenenode.git
-cd scenenode
-
-cp .env.example .env
-# Edit .env with your Supabase credentials
-
-cd frontend
-npm install
-npm run dev
-
-# Open http://localhost:3000
-```
-
-### Environment Variables
-
-```bash
-# Required
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-
-# Optional
-NEXT_PUBLIC_EDITION=cloud  # or "self-hosted" (default)
-```
-
-## Planned Features
-
-- Backend execution engine (Fastify + Redis + BullMQ)
-- AI provider integrations (Nano Banana, VEO, ElevenLabs via Replicate)
-- Job queue with progress tracking
-- Asset storage (Cloudflare R2)
-- Project-level characters for visual consistency
-- Style presets library
-- Build from Prompt (auto-generate workflow from text description)
-- Workflow export/import as JSON
-- API access for n8n/Make.com integration
-- Credits and billing system (Paddle)
-
-## License
-
-Sustainable Use License - See [LICENSE](./LICENSE)
-
 ## Development
 
 ```bash
@@ -165,5 +150,55 @@ npm run lint     # ESLint
 cd backend
 npm install
 npm run dev      # Development server
-npm run worker   # BullMQ worker
+npm run worker   # BullMQ worker (requires Redis)
 ```
+
+### Testing
+
+```bash
+# Frontend
+cd frontend
+npm test
+
+# Backend
+cd backend
+npm test
+```
+
+## API
+
+The backend exposes a REST API at `http://localhost:8000`:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/v1/projects` | GET, POST | List/create projects |
+| `/v1/projects/:id` | GET, PATCH, DELETE | Project CRUD |
+| `/v1/projects/:id/workflows` | GET, POST | List/create workflows |
+| `/v1/workflows/:id` | GET, PATCH, DELETE | Workflow CRUD |
+| `/v1/workflows/:id/run` | POST | Execute workflow |
+| `/v1/jobs` | GET | List jobs |
+| `/v1/jobs/:id` | GET | Job status |
+| `/v1/render` | POST | Quick render (one-shot) |
+
+Full API documentation: see [CLAUDE.md](./CLAUDE.md)
+
+## Planned Features
+
+- Backend execution engine (workflow runner + job queue)
+- AI provider integrations (Nano Banana, VEO, ElevenLabs via Replicate)
+- Job progress tracking
+- Asset storage (Cloudflare R2)
+- Project-level characters for visual consistency
+- Style presets library
+- Build from Prompt (auto-generate workflow from text description)
+- Workflow export/import as JSON
+- API access for n8n/Make.com integration
+
+## License
+
+Sustainable Use License - See [LICENSE](./LICENSE)
+
+## Issues
+
+Report bugs and request features at https://github.com/scenenode/scenenode/issues
