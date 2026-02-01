@@ -4,14 +4,17 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ImageToVideoData } from "@/types/nodes"
 
 function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToVideoData
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
-  const videoUrl = nodeData.generatedVideoUrl
   const results = nodeData.generatedResults ?? []
-  const olderResults = results.slice(1)
+  const activeIndex = nodeData.activeResultIndex ?? 0
+  const activeResult = results[activeIndex]
+  const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
 
   return (
     <BaseNode
@@ -33,14 +36,14 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {status === "completed" && videoUrl && (
+        {status === "completed" && activeUrl && (
           <div className="relative">
             <video
-              src={videoUrl}
+              src={activeUrl}
               className="w-full h-28 object-cover rounded-md cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation()
-                window.open(videoUrl, "_blank")
+                window.open(activeUrl, "_blank")
               }}
               autoPlay
               muted
@@ -66,16 +69,20 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {olderResults.length > 0 && (
+        {results.length > 1 && (
           <div className="flex gap-1 overflow-x-auto">
-            {olderResults.slice(0, 4).map((r) => (
+            {results.slice(0, 5).map((r, i) => (
               <video
                 key={r.jobId}
                 src={r.url}
-                className="w-10 h-10 object-cover rounded cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+                className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
+                  i === activeIndex
+                    ? "opacity-100 ring-2 ring-primary"
+                    : "opacity-50 hover:opacity-80"
+                }`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  window.open(r.url, "_blank")
+                  updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
                 }}
                 muted
                 playsInline

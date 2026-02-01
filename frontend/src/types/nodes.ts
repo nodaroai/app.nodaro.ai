@@ -125,6 +125,7 @@ export type GenerateImageData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   generatedImageUrl?: string
   generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type ImageToVideoData = {
@@ -139,6 +140,7 @@ export type ImageToVideoData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type TextToSpeechData = {

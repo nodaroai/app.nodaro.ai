@@ -83,6 +83,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 executionStatus: "completed",
                 generatedImageUrl: imageUrl,
                 generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
               })
               toast.success("Image generated", {
                 description: imageUrl ? "Click to open" : "Done",
@@ -146,6 +147,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               executionStatus: "completed",
               generatedVideoUrl: videoUrl,
               generatedResults: [newResult, ...existingResults],
+              activeResultIndex: 0,
             })
             toast.success("Video generated", {
               description: videoUrl ? "Click to open" : "Done",

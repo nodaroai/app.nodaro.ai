@@ -4,14 +4,17 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerateImageData } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateImageData
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
-  const imageUrl = nodeData.generatedImageUrl
   const results = nodeData.generatedResults ?? []
-  const olderResults = results.slice(1)
+  const activeIndex = nodeData.activeResultIndex ?? 0
+  const activeResult = results[activeIndex]
+  const activeUrl = activeResult?.url ?? nodeData.generatedImageUrl
 
   return (
     <BaseNode
@@ -33,14 +36,14 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {status === "completed" && imageUrl && (
+        {status === "completed" && activeUrl && (
           <img
-            src={imageUrl}
+            src={activeUrl}
             alt="Generated"
             className="w-full h-28 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
-              window.open(imageUrl, "_blank")
+              window.open(activeUrl, "_blank")
             }}
           />
         )}
@@ -58,17 +61,21 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {olderResults.length > 0 && (
+        {results.length > 1 && (
           <div className="flex gap-1 overflow-x-auto">
-            {olderResults.slice(0, 4).map((r) => (
+            {results.slice(0, 5).map((r, i) => (
               <img
                 key={r.jobId}
                 src={r.url}
-                alt="Previous"
-                className="w-10 h-10 object-cover rounded cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+                alt={`Result ${i + 1}`}
+                className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
+                  i === activeIndex
+                    ? "opacity-100 ring-2 ring-primary"
+                    : "opacity-50 hover:opacity-80"
+                }`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  window.open(r.url, "_blank")
+                  updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
                 }}
               />
             ))}
