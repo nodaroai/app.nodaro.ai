@@ -382,7 +382,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   function runTextToSpeechGeneration(nodeId: string, text: string, voice?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
-    updateNodeData(nodeId, { executionStatus: "running", generatedAudioUrl: undefined })
+    updateNodeData(nodeId, { executionStatus: "running" })
 
     return new Promise((resolve, reject) => {
       textToSpeech(text, voice).then(({ jobId }) => {

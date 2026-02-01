@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "worker": "tsx watch src/worker.ts",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "flush-queue": "tsx src/scripts/flush-queue.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.980.0",

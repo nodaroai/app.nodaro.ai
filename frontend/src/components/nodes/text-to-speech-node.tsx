@@ -48,13 +48,13 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
       ]}
     >
       <div className="flex flex-col gap-1">
-        {status === "running" && (
+        {status === "running" && !activeUrl && (
           <div className="flex items-center justify-center h-12 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {status !== "running" && activeUrl && (
+        {activeUrl && (
           <div className="relative group">
             <audio
               src={activeUrl}
@@ -62,6 +62,11 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
               className="w-full h-8"
               onClick={(e) => e.stopPropagation()}
             />
+            {status === "running" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
             {results.length > 0 && (
               <button
                 type="button"
