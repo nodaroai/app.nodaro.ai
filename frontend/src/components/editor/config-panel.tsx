@@ -76,6 +76,7 @@ interface SourceNodeInfo {
   readonly label: string
   readonly value: string
   readonly providerCategory?: string
+  readonly targetHandle?: string
 }
 
 const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
@@ -125,6 +126,7 @@ function getConnectedSources(
       label: (d.label as string) ?? source.type ?? source.id,
       value: extractDisplayValue(d, source.type as string),
       providerCategory: source.type === "provider" ? (d.category as string) : undefined,
+      targetHandle: edge.targetHandle ?? undefined,
     })
   }
   return sources
@@ -165,6 +167,8 @@ function extractDisplayValue(data: Record<string, unknown>, nodeType: string): s
       return (data.motion as string) ?? ""
     case "camera-motion":
       return (data.cameraMotion as string) ?? ""
+    case "reference-audio":
+      return (data.videoTitle as string) || (data.extractedAudioUrl as string) ? "Audio ready" : "No audio"
     default:
       return (data.label as string) ?? ""
   }
@@ -1426,9 +1430,12 @@ function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
   )
 }
 
-function GenerateMusicConfig({ data, onUpdate }: ConfigProps<GenerateMusicData>) {
+function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<GenerateMusicData>) {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle")
   const [ytStatus, setYtStatus] = useState<"idle" | "downloading" | "error">("idle")
+
+  const connectedPrompt = sources.find((s) => s.targetHandle === "in")
+  const connectedRef = sources.find((s) => s.targetHandle === "ref-audio")
 
   const handleFileUpload = useCallback(async (file: File) => {
     setUploadStatus("uploading")
@@ -1455,7 +1462,7 @@ function GenerateMusicConfig({ data, onUpdate }: ConfigProps<GenerateMusicData>)
   }, [data.referenceYouTubeUrl, onUpdate])
 
   const isMinimax = data.provider === "minimax"
-  const hasReference = Boolean(data.referenceAudioUrl)
+  const hasReference = Boolean(data.referenceAudioUrl) || Boolean(connectedRef)
 
   return (
     <div className="flex flex-col gap-3">
@@ -1476,13 +1483,23 @@ function GenerateMusicConfig({ data, onUpdate }: ConfigProps<GenerateMusicData>)
       </div>
       <div>
         <Label htmlFor="music-prompt">Prompt</Label>
-        <Textarea
-          id="music-prompt"
-          value={data.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Describe the music you want..."
-          rows={3}
-        />
+        {connectedPrompt ? (
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">From: </span>
+            <span className="font-medium">{connectedPrompt.label}</span>
+            {connectedPrompt.value && (
+              <p className="mt-1 text-muted-foreground truncate">{connectedPrompt.value}</p>
+            )}
+          </div>
+        ) : (
+          <Textarea
+            id="music-prompt"
+            value={data.prompt}
+            onChange={(e) => onUpdate({ prompt: e.target.value })}
+            placeholder="Describe the music you want..."
+            rows={3}
+          />
+        )}
       </div>
       {(data.provider === "musicgen" || !data.provider) && (
         <div>
@@ -1512,6 +1529,16 @@ function GenerateMusicConfig({ data, onUpdate }: ConfigProps<GenerateMusicData>)
       {isMinimax && (
         <div className="flex flex-col gap-2">
           <Label>Reference Audio</Label>
+          {connectedRef ? (
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
+              <span className="text-muted-foreground">From: </span>
+              <span className="font-medium">{connectedRef.label}</span>
+              {connectedRef.value && (
+                <p className="mt-1 text-muted-foreground truncate">{connectedRef.value}</p>
+              )}
+            </div>
+          ) : (
+          <>
           {!hasReference && (
             <p className="text-xs text-amber-500">MiniMax works best with a reference song</p>
           )}
@@ -1562,6 +1589,8 @@ function GenerateMusicConfig({ data, onUpdate }: ConfigProps<GenerateMusicData>)
               </div>
             )}
           </div>
+          </>
+          )}
         </div>
       )}
       <div>
