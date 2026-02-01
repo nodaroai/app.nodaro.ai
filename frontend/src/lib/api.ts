@@ -113,10 +113,27 @@ export async function textToSpeech(text: string, voice?: string): Promise<{ jobI
   return res.json()
 }
 
+export async function generateScriptApi(prompt: string, sceneCount?: number, tone?: string, targetDuration?: number): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt }
+  if (sceneCount !== undefined) body.sceneCount = sceneCount
+  if (tone) body.tone = tone
+  if (targetDuration !== undefined) body.targetDuration = targetDuration
+  const res = await fetch(`${API_BASE_URL}/v1/generate-script`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start script generation")
+  }
+  return res.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<{
   id: string
   status: string
-  output_data?: { imageUrl?: string; videoUrl?: string; audioUrl?: string }
+  output_data?: { imageUrl?: string; videoUrl?: string; audioUrl?: string; script?: unknown }
   error_message?: string
 }> {
   const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`)

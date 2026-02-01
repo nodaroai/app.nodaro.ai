@@ -7,6 +7,7 @@ import { imageToVideo } from "../providers/video/replicate.js"
 import { videoToVideo } from "../providers/video/video-to-video.js"
 import { textToVideo } from "../providers/video/text-to-video.js"
 import { textToSpeech } from "../providers/voice/text-to-speech.js"
+import { generateScript } from "../providers/script/script-generator.js"
 import { uploadToR2 } from "../lib/storage.js"
 
 export function createVideoWorker() {
@@ -145,6 +146,30 @@ export function createVideoWorker() {
             .eq("id", jobId)
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+        } else if (job.name === "generate-script") {
+          const { prompt, sceneCount, tone, targetDuration } = job.data as {
+            jobId: string
+            prompt: string
+            sceneCount?: number
+            tone?: string
+            targetDuration?: number
+          }
+          console.log(`[worker] generate-script ${jobId}`)
+
+          const script = await generateScript(prompt, sceneCount, tone, targetDuration)
+          await job.updateProgress(100)
+
+          await supabase
+            .from("jobs")
+            .update({
+              status: "completed",
+              progress: 100,
+              output_data: { script },
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", jobId)
+
+          console.log(`[worker] Job ${jobId} completed: "${script.title}" (${script.scenes.length} scenes)`)
         } else {
           throw new Error(`Unknown job type: ${job.name}`)
         }

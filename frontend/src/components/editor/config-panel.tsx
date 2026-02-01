@@ -399,7 +399,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech") && (
               <Button
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white"
                 onClick={() => runSingleNode?.(selectedNode.id)}

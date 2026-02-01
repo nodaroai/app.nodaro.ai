@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GeneratedResult } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GeneratedResult, GeneratedScript, GeneratedScriptResult } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -78,7 +78,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -154,6 +154,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined)
+    }
+    if (type === "generate-script") {
+      const scriptResults = (data.generatedResults as GeneratedScriptResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      const activeScript = scriptResults[activeIndex]?.script ?? (data.generatedScript as GeneratedScript | undefined)
+      if (activeScript && activeScript.scenes.length > 0) {
+        return activeScript.scenes[0].imagePrompt
+      }
     }
     return undefined
   }
@@ -427,9 +435,66 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  function runScriptGeneration(nodeId: string, prompt: string, sceneCount?: number, tone?: string, targetDuration?: number): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running" })
+
+    return new Promise((resolve, reject) => {
+      generateScriptApi(prompt, sceneCount, tone, targetDuration).then(({ jobId }) => {
+        toast.info("Script generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const script = job.output_data?.script as GeneratedScript | undefined
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as GenerateScriptData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedScriptResult = { script: script ?? { title: "", totalDuration: 0, scenes: [] }, timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedScript: script,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Script generated", { description: script?.title })
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Script generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Script generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check script generation status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start script generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
   function executeNode(node: WorkflowNode): Promise<void> {
     const { nodes, edges } = useWorkflowStore.getState()
     const inputs = resolveNodeInputs(node, nodes, edges)
+
+    if (node.type === "generate-script") {
+      const prompt = inputs.prompt ?? ""
+      if (!prompt) {
+        toast.error(`Node "${(node.data as GenerateScriptData).label}": no prompt found`)
+        return Promise.reject(new Error("No prompt"))
+      }
+      const scriptData = node.data as GenerateScriptData
+      return runScriptGeneration(node.id, prompt, scriptData.sceneCount, scriptData.tone || undefined, scriptData.targetLength || undefined)
+    }
 
     if (node.type === "generate-image") {
       const prompt = inputs.prompt ?? (node.data as GenerateImageData).prompt?.trim()

@@ -99,6 +99,27 @@ export type CameraMotionData = {
 
 // --- AI Node Data ---
 
+export interface ScriptScene {
+  readonly sceneNumber: number
+  readonly visualDescription: string
+  readonly action: string
+  readonly mood: string
+  readonly durationHint: number
+  readonly imagePrompt: string
+}
+
+export interface GeneratedScript {
+  readonly title: string
+  readonly totalDuration: number
+  readonly scenes: readonly ScriptScene[]
+}
+
+export interface GeneratedScriptResult {
+  readonly script: GeneratedScript
+  readonly timestamp: string
+  readonly jobId: string
+}
+
 export type GenerateScriptData = {
   [key: string]: unknown
   label: string
@@ -110,6 +131,10 @@ export type GenerateScriptData = {
   tone: string
   targetLength: number
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedScript?: GeneratedScript
+  generatedResults?: GeneratedScriptResult[]
+  activeResultIndex?: number
 }
 
 export type GenerateImageData = {
