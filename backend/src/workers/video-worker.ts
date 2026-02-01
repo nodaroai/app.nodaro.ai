@@ -3,6 +3,7 @@ import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { generateImage } from "../providers/image/replicate.js"
+import { imageToVideo } from "../providers/video/replicate.js"
 import { uploadToR2 } from "../lib/storage.js"
 
 export function createVideoWorker() {
@@ -13,8 +14,7 @@ export function createVideoWorker() {
   return new Worker(
     "video-generation",
     async (job) => {
-      const { jobId, prompt } = job.data as { jobId: string; prompt: string }
-      console.log(`Processing job ${jobId}: "${prompt}"`)
+      const { jobId } = job.data as { jobId: string }
 
       try {
         await supabase
@@ -22,32 +22,58 @@ export function createVideoWorker() {
           .update({ status: "processing", started_at: new Date().toISOString() })
           .eq("id", jobId)
 
-        console.log(`Calling Replicate for job ${jobId}...`)
-        const replicateUrl = await generateImage(prompt)
-        console.log(`Replicate returned: ${replicateUrl}`)
+        if (job.name === "generate-image") {
+          const { prompt } = job.data as { jobId: string; prompt: string }
+          console.log(`[worker] generate-image ${jobId}: "${prompt}"`)
 
-        await job.updateProgress(50)
+          const replicateUrl = await generateImage(prompt)
+          await job.updateProgress(50)
 
-        console.log(`Uploading to R2 for job ${jobId}...`)
-        const r2Url = await uploadToR2(replicateUrl, jobId)
-        console.log(`R2 upload complete: ${r2Url}`)
+          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          await job.updateProgress(100)
 
-        await job.updateProgress(100)
+          await supabase
+            .from("jobs")
+            .update({
+              status: "completed",
+              progress: 100,
+              output_data: { imageUrl: r2Url },
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", jobId)
 
-        await supabase
-          .from("jobs")
-          .update({
-            status: "completed",
-            progress: 100,
-            output_data: { imageUrl: r2Url },
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+        } else if (job.name === "image-to-video") {
+          const { imageUrl, prompt } = job.data as {
+            jobId: string
+            imageUrl: string
+            prompt?: string
+          }
+          console.log(`[worker] image-to-video ${jobId}`)
 
-        console.log(`Job ${jobId} completed successfully`)
+          const replicateUrl = await imageToVideo(imageUrl, prompt)
+          await job.updateProgress(50)
+
+          const r2Url = await uploadToR2(replicateUrl, jobId, "video")
+          await job.updateProgress(100)
+
+          await supabase
+            .from("jobs")
+            .update({
+              status: "completed",
+              progress: 100,
+              output_data: { videoUrl: r2Url },
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", jobId)
+
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+        } else {
+          throw new Error(`Unknown job type: ${job.name}`)
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error"
-        console.error(`Job ${jobId} failed:`, message)
+        console.error(`[worker] Job ${jobId} failed:`, message)
 
         await supabase
           .from("jobs")

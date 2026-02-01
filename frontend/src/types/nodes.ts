@@ -129,6 +129,8 @@ export type ImageToVideoData = {
   motion: "subtle" | "moderate" | "dynamic"
   cameraMotion: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedVideoUrl?: string
 }
 
 export type TextToSpeechData = {

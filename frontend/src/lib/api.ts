@@ -57,10 +57,23 @@ export async function generateImage(prompt: string): Promise<{ jobId: string }> 
   return res.json()
 }
 
+export async function generateVideo(imageUrl: string, prompt?: string): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageUrl, prompt }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start video generation")
+  }
+  return res.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<{
   id: string
   status: string
-  output_data?: { imageUrl?: string }
+  output_data?: { imageUrl?: string; videoUrl?: string }
   error_message?: string
 }> {
   const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`)

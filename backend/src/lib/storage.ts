@@ -11,23 +11,26 @@ const s3 = new S3Client({
 })
 
 export async function uploadToR2(
-  imageUrl: string,
+  sourceUrl: string,
   jobId: string,
+  type: "image" | "video" = "image",
 ): Promise<string> {
-  const response = await fetch(imageUrl)
+  const response = await fetch(sourceUrl)
   if (!response.ok) {
-    throw new Error(`Failed to download image: ${response.status}`)
+    throw new Error(`Failed to download ${type}: ${response.status}`)
   }
 
   const buffer = Buffer.from(await response.arrayBuffer())
-  const key = `images/${jobId}.png`
+  const ext = type === "video" ? "mp4" : "png"
+  const contentType = type === "video" ? "video/mp4" : "image/png"
+  const key = `${type}s/${jobId}.${ext}`
 
   await s3.send(
     new PutObjectCommand({
       Bucket: config.R2_BUCKET_NAME,
       Key: key,
       Body: buffer,
-      ContentType: "image/png",
+      ContentType: contentType,
     }),
   )
 
