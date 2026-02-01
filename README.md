@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.2 (Editor) - Complete.** The visual workflow editor is fully functional with 28 node types, field mapping, and provider configuration. Backend execution engine (Phase 1.3) is next.
+**Phase 1.3 (Execution) - In Progress.** Image generation (google/nano-banana via Replicate) and video generation (minimax/video-01 via Replicate) are working end-to-end with R2 storage. Chain workflows (Text -> Image -> Video) execute automatically. Results display in nodes with version history and deletion support.
 
 ## Features
 
@@ -46,8 +46,10 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | State Management | Zustand | Built |
 | Database + Auth | Supabase (PostgreSQL) | Built |
 | Backend | Fastify (Node.js/TypeScript) | Built |
-| Queue | Redis + BullMQ | Planned |
-| Storage | Cloudflare R2 | Planned |
+| Queue | Redis + BullMQ | Built |
+| Storage | Cloudflare R2 | Built |
+| AI (Image) | google/nano-banana via Replicate | Built |
+| AI (Video) | minimax/video-01 via Replicate | Built |
 
 ## Quick Start
 
@@ -183,12 +185,18 @@ The backend exposes a REST API at `http://localhost:8000`:
 
 Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 
+### Execution Engine
+- Image generation via google/nano-banana (Replicate)
+- Video generation via minimax/video-01 (Replicate)
+- Chain workflows: Text -> Image -> Video runs automatically
+- Generated results display directly in nodes with version history
+- Delete individual results from version history
+- Global video autoplay toggle in editor toolbar
+- Asset upload to Cloudflare R2
+- Redis + BullMQ job queue with progress tracking
+
 ## Planned Features
 
-- Backend execution engine (workflow runner + job queue)
-- AI provider integrations (Nano Banana, VEO, ElevenLabs via Replicate)
-- Job progress tracking
-- Asset storage (Cloudflare R2)
 - Project-level characters for visual consistency
 - Style presets library
 - Build from Prompt (auto-generate workflow from text description)

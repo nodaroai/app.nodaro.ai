@@ -3390,6 +3390,9 @@ Maintain a CHANGELOG.md:
 | Job Queue | BullMQ | Best-in-class for Node.js, excellent dashboard |
 | Video Processing | FFmpeg in dedicated worker | Required for self-hosted edition |
 | Realtime Updates | Polling (MVP) → SSE (Phase 2) | No additional infrastructure needed |
+| Image Generation Model | google/nano-banana via Replicate | Good quality, supports reference images, internally uses flux-schnell |
+| Video Generation Model | minimax/video-01 via Replicate | Accepts first_frame_image for image-to-video conversion |
+| Asset Storage | Cloudflare R2 | S3-compatible, no egress fees, serves generated images and videos |
 
 ### Implementation Notes
 
@@ -3464,12 +3467,16 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Node configuration panels with field mapping
 
 ### Phase 1.3 - Execution (5-7 days)
-- [ ] Redis + BullMQ setup
-- [ ] Workflow execution engine (topological sort, dependency resolution)
-- [ ] Replicate integration (Nano Banana for images, VEO for video)
-- [ ] Job progress tracking (polling)
-- [ ] Asset storage to Cloudflare R2
-- [ ] Error handling and basic retries
+- [x] Redis + BullMQ setup
+- [x] Workflow execution engine (chain: Text -> Image -> Video)
+- [x] Replicate integration (google/nano-banana for images, minimax/video-01 for video)
+- [x] Job progress tracking (polling)
+- [x] Asset storage to Cloudflare R2
+- [x] Error handling and basic retries
+- [x] Generated results display in nodes with version history
+- [x] Active result selection across multiple generations
+- [x] Delete individual results from version history
+- [x] Global video autoplay toggle in editor toolbar
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
@@ -3524,4 +3531,4 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 ---
 
 *Last updated: 2026-02-01*
-*Version: 1.4.0*
+*Version: 1.5.0*
