@@ -189,15 +189,15 @@ function MappableField({
   const isMapped = !!mappedSource
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-1.5">
-        <Label className="text-xs text-muted-foreground">{label}</Label>
+    <div className="rounded-md border border-border/50 bg-muted/20 p-3">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <Label className="text-xs font-medium">{label}</Label>
         {compatible.length > 0 && (
           <Select
             value={mapping?.sourceNodeId ?? "__manual__"}
             onValueChange={(v) => onMapField(field, v === "__manual__" ? null : v)}
           >
-            <SelectTrigger className="h-6 text-[10px] w-auto max-w-[160px] px-2 py-0">
+            <SelectTrigger className="h-6 text-[10px] w-auto max-w-[140px] px-2 py-0 shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -212,7 +212,7 @@ function MappableField({
         )}
       </div>
       {isMapped ? (
-        <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5 truncate">
+        <p className="text-xs text-muted-foreground bg-background rounded px-2.5 py-2 break-words whitespace-pre-wrap border border-border/50">
           {mappedSource.value || "(empty)"}
         </p>
       ) : (
@@ -267,7 +267,7 @@ export function ConfigPanel() {
   }
 
   return (
-    <div className="absolute inset-0 z-10 bg-card shadow-lg flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-80 sm:border-l">
+    <div className="absolute inset-0 z-10 bg-card shadow-lg flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="text-sm font-semibold">Node Settings</h3>
         <Button variant="ghost" size="icon" onClick={() => selectNode(null)}>
@@ -276,19 +276,19 @@ export function ConfigPanel() {
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-4 px-4 py-4">
-          <div>
-            <Label htmlFor="node-label" className="text-xs text-muted-foreground">Label</Label>
+        <div className="flex flex-col gap-5 p-4">
+          <div className="rounded-md border border-border/50 bg-muted/20 p-3">
+            <Label htmlFor="node-label" className="text-xs font-medium">Label</Label>
             <Input
               id="node-label"
               value={(selectedNode.data as { label: string }).label}
               onChange={(e) => update({ label: e.target.value })}
-              className="mt-1"
+              className="mt-2"
             />
           </div>
 
           {sources.length > 0 && (
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
               <span className="font-medium">{sources.length} connected source{sources.length !== 1 ? "s" : ""}</span>
               {": "}
               {sources.map((s) => s.label).join(", ")}
