@@ -151,15 +151,15 @@ export async function combineVideos(
   return res.json()
 }
 
-export async function addAudioApi(videoUrl: string, audioUrl: string, voiceoverVolume?: number, backgroundVolume?: number, keepOriginalAudio?: boolean): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/add-audio`, {
+export async function mergeVideoAudioApi(videoUrl: string, audioUrl: string, voiceoverVolume?: number, backgroundVolume?: number, keepOriginalAudio?: boolean): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/merge-video-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start add-audio")
+    throw new Error(err?.error?.message ?? "Failed to start merge-video-audio")
   }
   return res.json()
 }

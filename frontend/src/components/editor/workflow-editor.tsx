@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, addAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, AddAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -78,7 +78,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "add-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -168,7 +168,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return activeScript.scenes[0].imagePrompt
       }
     }
-    if (type === "add-audio" || type === "add-captions" || type === "resize-video" || type === "trim-video") {
+    if (type === "merge-video-audio" || type === "add-captions" || type === "resize-video" || type === "trim-video") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
@@ -214,7 +214,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.imageUrl = output
         }
-      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "combine-videos" || src.type === "add-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
+      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
         } else {
@@ -710,13 +710,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return runCombineVideos(node.id, videoUrls, combineData.transition ?? "cut", combineData.transitionDuration ?? 0.5)
     }
 
-    if (node.type === "add-audio") {
+    if (node.type === "merge-video-audio") {
       const videoUrl = inputs.videoUrl
       const audioUrl = inputs.audioUrl
-      if (!videoUrl) { toast.error(`Node "${(node.data as AddAudioData).label}": no video input`); return Promise.reject(new Error("No video")) }
-      if (!audioUrl) { toast.error(`Node "${(node.data as AddAudioData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
-      const d = node.data as AddAudioData
-      return runProcessingNode(node.id, () => addAudioApi(videoUrl, audioUrl, d.voiceoverVolume, d.backgroundVolume), "generatedVideoUrl", "Add Audio")
+      if (!videoUrl) { toast.error(`Node "${(node.data as MergeVideoAudioData).label}": no video input`); return Promise.reject(new Error("No video")) }
+      if (!audioUrl) { toast.error(`Node "${(node.data as MergeVideoAudioData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
+      const d = node.data as MergeVideoAudioData
+      return runProcessingNode(node.id, () => mergeVideoAudioApi(videoUrl, audioUrl, d.voiceoverVolume, d.backgroundVolume), "generatedVideoUrl", "Merge Video & Audio")
     }
 
     if (node.type === "extract-audio") {

@@ -49,7 +49,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI" },
   // Processing
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing" },
-  { type: "add-audio", label: "Add Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing" },
+  { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing" },
   { type: "add-captions", label: "Add Captions", icon: <Captions className="h-4 w-4" />, category: "Processing" },
   { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing" },
   { type: "extract-audio", label: "Extract Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing" },

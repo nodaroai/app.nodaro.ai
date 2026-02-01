@@ -294,7 +294,7 @@ export type CombineVideosData = {
   activeResultIndex?: number
 }
 
-export type AddAudioData = {
+export type MergeVideoAudioData = {
   [key: string]: unknown
   label: string
   audioType: "voiceover" | "background" | "both"
@@ -429,7 +429,7 @@ export type SceneNodeData =
   | GenerateMusicData
   | TextToAudioData
   | CombineVideosData
-  | AddAudioData
+  | MergeVideoAudioData
   | AddCaptionsData
   | ResizeVideoData
   | ExtractAudioData
@@ -463,7 +463,7 @@ export type SceneNodeType =
   | "generate-music"
   | "text-to-audio"
   | "combine-videos"
-  | "add-audio"
+  | "merge-video-audio"
   | "add-captions"
   | "resize-video"
   | "extract-audio"
@@ -699,13 +699,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, fieldMappings: {} },
   },
   {
-    type: "add-audio",
-    label: "Add Audio",
+    type: "merge-video-audio",
+    label: "Merge Video & Audio",
     category: "processing",
     creditCost: 1,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Add Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, fieldMappings: {} },
+    defaultData: { label: "Merge Video & Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, fieldMappings: {} },
   },
   {
     type: "add-captions",

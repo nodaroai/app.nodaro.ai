@@ -7,7 +7,7 @@ const CREDIT_COSTS: Record<string, number> = {
   "text-to-speech": 3,
   "qa-check": 1,
   "combine-videos": 2,
-  "add-audio": 1,
+  "merge-video-audio": 1,
   "add-captions": 2,
   "resize-video": 1,
   "extract-audio": 1,

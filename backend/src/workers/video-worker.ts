@@ -10,7 +10,7 @@ import { textToSpeech, type VoiceProvider } from "../providers/voice/text-to-spe
 import { generateScript, type ScriptProvider } from "../providers/script/script-generator.js"
 import { uploadToR2, uploadFileToR2 } from "../lib/storage.js"
 import { combineVideos } from "../providers/video/combine-videos.js"
-import { addAudio } from "../providers/video/add-audio.js"
+import { mergeVideoAudio } from "../providers/video/merge-video-audio.js"
 import { extractAudio } from "../providers/video/extract-audio.js"
 import { trimVideo } from "../providers/video/trim-video.js"
 import { resizeVideo } from "../providers/video/resize-video.js"
@@ -219,13 +219,13 @@ export function createVideoWorker() {
             .eq("id", jobId)
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
-        } else if (job.name === "add-audio") {
+        } else if (job.name === "merge-video-audio") {
           const { videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio } = job.data as {
             jobId: string; videoUrl: string; audioUrl: string
             voiceoverVolume?: number; backgroundVolume?: number; keepOriginalAudio?: boolean
           }
-          console.log(`[worker] add-audio ${jobId}`)
-          const outputPath = await addAudio({ videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio })
+          console.log(`[worker] merge-video-audio ${jobId}`)
+          const outputPath = await mergeVideoAudio({ videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio })
           await job.updateProgress(80)
           const r2Url = await uploadFileToR2(outputPath, jobId, "video")
           await cleanupWorkDir(dirname(outputPath))

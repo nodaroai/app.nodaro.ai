@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 
-const addAudioBody = z.object({
+const mergeVideoAudioBody = z.object({
   videoUrl: z.string().url(),
   audioUrl: z.string().url(),
   voiceoverVolume: z.number().min(0).max(200).optional().default(100),
@@ -11,9 +11,9 @@ const addAudioBody = z.object({
   keepOriginalAudio: z.boolean().optional().default(true),
 })
 
-export async function addAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/add-audio", async (req, reply) => {
-    const parsed = addAudioBody.safeParse(req.body)
+export async function mergeVideoAudioRoutes(app: FastifyInstance) {
+  app.post("/v1/merge-video-audio", async (req, reply) => {
+    const parsed = mergeVideoAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
@@ -26,7 +26,7 @@ export async function addAudioRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: "fb48d4d5-cd33-4599-816a-3262e4908522",
         status: "pending",
-        input_data: { ...parsed.data, type: "add-audio" },
+        input_data: { ...parsed.data, type: "merge-video-audio" },
       })
       .select("id")
       .single()
@@ -35,7 +35,7 @@ export async function addAudioRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    await videoQueue.add("add-audio", { jobId: job.id, ...parsed.data })
+    await videoQueue.add("merge-video-audio", { jobId: job.id, ...parsed.data })
     return { jobId: job.id }
   })
 }

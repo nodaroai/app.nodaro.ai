@@ -21,7 +21,7 @@ import { QACheckNode } from "./qa-check-node"
 import { GenerateMusicNode } from "./generate-music-node"
 import { TextToAudioNode } from "./text-to-audio-node"
 import { CombineVideosNode } from "./combine-videos-node"
-import { AddAudioNode } from "./add-audio-node"
+import { MergeVideoAudioNode } from "./merge-video-audio-node"
 import { AddCaptionsNode } from "./add-captions-node"
 import { ResizeVideoNode } from "./resize-video-node"
 import { ExtractAudioNode } from "./extract-audio-node"
@@ -60,7 +60,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "text-to-audio": TextToAudioNode,
   // Processing
   "combine-videos": CombineVideosNode,
-  "add-audio": AddAudioNode,
+  "merge-video-audio": MergeVideoAudioNode,
   "add-captions": AddCaptionsNode,
   "resize-video": ResizeVideoNode,
   "extract-audio": ExtractAudioNode,

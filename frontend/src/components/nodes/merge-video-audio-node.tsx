@@ -7,10 +7,10 @@ import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import type { AddAudioData } from "@/types/nodes"
+import type { MergeVideoAudioData } from "@/types/nodes"
 
-function AddAudioNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as AddAudioData
+function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
+  const nodeData = data as MergeVideoAudioData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -70,7 +70,7 @@ function AddAudioNodeComponent({ id, data, selected }: NodeProps) {
               playsInline
             />
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
-              Audio Added
+              Merged
             </div>
             {results.length > 0 && (
               <button
@@ -151,4 +151,4 @@ function AddAudioNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-export const AddAudioNode = memo(AddAudioNodeComponent)
+export const MergeVideoAudioNode = memo(MergeVideoAudioNodeComponent)

@@ -56,7 +56,7 @@ import type {
   GenerateMusicData,
   TextToAudioData,
   CombineVideosData,
-  AddAudioData,
+  MergeVideoAudioData,
   AddCaptionsData,
   ResizeVideoData,
   ExtractAudioData,
@@ -393,8 +393,8 @@ export function ConfigPanel() {
           {selectedNode.type === "combine-videos" && (
             <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
-          {selectedNode.type === "add-audio" && (
-            <AddAudioConfig data={selectedNode.data as AddAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          {selectedNode.type === "merge-video-audio" && (
+            <MergeVideoAudioConfig data={selectedNode.data as MergeVideoAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "add-captions" && (
             <AddCaptionsConfig data={selectedNode.data as AddCaptionsData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -1735,14 +1735,14 @@ function CombineVideosConfig({ data, onUpdate }: ConfigProps<CombineVideosData>)
   )
 }
 
-function AddAudioConfig({ data, onUpdate }: ConfigProps<AddAudioData>) {
+function MergeVideoAudioConfig({ data, onUpdate }: ConfigProps<MergeVideoAudioData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label>Audio Type</Label>
         <Select
           value={data.audioType}
-          onValueChange={(v) => onUpdate({ audioType: v as AddAudioData["audioType"] })}
+          onValueChange={(v) => onUpdate({ audioType: v as MergeVideoAudioData["audioType"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>

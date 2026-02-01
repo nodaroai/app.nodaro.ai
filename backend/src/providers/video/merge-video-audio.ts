@@ -1,7 +1,7 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 
-interface AddAudioOptions {
+interface MergeVideoAudioOptions {
   readonly videoUrl: string
   readonly audioUrl: string
   readonly voiceoverVolume?: number
@@ -9,16 +9,16 @@ interface AddAudioOptions {
   readonly keepOriginalAudio?: boolean
 }
 
-export async function addAudio(options: AddAudioOptions): Promise<string> {
+export async function mergeVideoAudio(options: MergeVideoAudioOptions): Promise<string> {
   const { videoUrl, audioUrl, voiceoverVolume = 100, backgroundVolume = 100, keepOriginalAudio = false } = options
-  const workDir = await createWorkDir("add-audio")
+  const workDir = await createWorkDir("merge-video-audio")
 
   try {
     const videoPath = join(workDir, "input.mp4")
     const audioPath = join(workDir, "audio.mp3")
     const outputPath = join(workDir, "output.mp4")
 
-    console.log("[addAudio] Downloading video and audio")
+    console.log("[mergeVideoAudio] Downloading video and audio")
     await downloadFile(videoUrl, videoPath)
     await downloadFile(audioUrl, audioPath)
 
@@ -69,7 +69,7 @@ export async function addAudio(options: AddAudioOptions): Promise<string> {
       ])
     }
 
-    console.log(`[addAudio] Output: ${outputPath}`)
+    console.log(`[mergeVideoAudio] Output: ${outputPath}`)
     return outputPath
   } catch (err) {
     await cleanupWorkDir(workDir)
