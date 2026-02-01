@@ -3477,6 +3477,8 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Active result selection across multiple generations
 - [x] Delete individual results from version history
 - [x] Global video autoplay toggle in editor toolbar
+- [x] Single-node execution (Run button per node, hanging tab style)
+- [x] Floating Execute/Stop workflow buttons (bottom center)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

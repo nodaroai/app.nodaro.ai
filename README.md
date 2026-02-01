@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - In Progress.** Image generation (google/nano-banana via Replicate) and video generation (minimax/video-01 via Replicate) are working end-to-end with R2 storage. Chain workflows (Text -> Image -> Video) execute automatically. Results display in nodes with version history and deletion support.
+**Phase 1.3 (Execution) - Complete.** Image generation (google/nano-banana via Replicate) and video generation (minimax/video-01 via Replicate) are working end-to-end with R2 storage. Chain workflows (Text -> Image -> Video) execute automatically. Single-node execution with per-node Run buttons. Results display in nodes with version history and deletion support.
 
 ## Features
 
@@ -192,6 +192,7 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - Generated results display directly in nodes with version history
 - Delete individual results from version history
 - Global video autoplay toggle in editor toolbar
+- Per-node Run button (hover to reveal, hanging tab below node)
 - Asset upload to Cloudflare R2
 - Redis + BullMQ job queue with progress tracking
 
