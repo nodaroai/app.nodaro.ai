@@ -2,7 +2,7 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Loader2, AlertCircle } from "lucide-react"
+import { Film, Loader2, AlertCircle, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ImageToVideoData } from "@/types/nodes"
@@ -16,6 +16,21 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+
+  function handleDeleteResult(indexToDelete: number) {
+    const newResults = results.filter((_, i) => i !== indexToDelete)
+    let newActiveIndex = activeIndex
+    if (indexToDelete === activeIndex) {
+      newActiveIndex = 0
+    } else if (indexToDelete < activeIndex) {
+      newActiveIndex = activeIndex - 1
+    }
+    updateNodeData(id, {
+      generatedResults: newResults,
+      activeResultIndex: newActiveIndex,
+      generatedVideoUrl: newResults[newActiveIndex]?.url,
+    })
+  }
 
   return (
     <BaseNode
@@ -38,7 +53,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && activeUrl && (
-          <div className="relative">
+          <div className="relative group">
             <video
               src={activeUrl}
               className="w-full h-28 object-cover rounded-md cursor-pointer"
@@ -54,6 +69,19 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
               Video
             </div>
+            {results.length > 0 && (
+              <button
+                type="button"
+                className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDeleteResult(activeIndex)
+                }}
+                title="Delete this result"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
         )}
 
@@ -73,21 +101,32 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {results.length > 1 && (
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
-              <video
-                key={r.jobId}
-                src={r.url}
-                className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
-                  i === activeIndex
-                    ? "opacity-100 ring-2 ring-primary"
-                    : "opacity-50 hover:opacity-80"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
-                }}
-                muted
-                playsInline
-              />
+              <div key={r.jobId} className="relative group/thumb shrink-0">
+                <video
+                  src={r.url}
+                  className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
+                    i === activeIndex
+                      ? "opacity-100 ring-2 ring-primary"
+                      : "opacity-50 hover:opacity-80"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                  }}
+                  muted
+                  playsInline
+                />
+                <button
+                  type="button"
+                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDeleteResult(i)
+                  }}
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </div>
             ))}
           </div>
         )}

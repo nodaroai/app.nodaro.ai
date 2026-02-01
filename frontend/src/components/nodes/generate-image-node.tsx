@@ -2,7 +2,7 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerateImageData } from "@/types/nodes"
@@ -15,6 +15,21 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedImageUrl
+
+  function handleDeleteResult(indexToDelete: number) {
+    const newResults = results.filter((_, i) => i !== indexToDelete)
+    let newActiveIndex = activeIndex
+    if (indexToDelete === activeIndex) {
+      newActiveIndex = 0
+    } else if (indexToDelete < activeIndex) {
+      newActiveIndex = activeIndex - 1
+    }
+    updateNodeData(id, {
+      generatedResults: newResults,
+      activeResultIndex: newActiveIndex,
+      generatedImageUrl: newResults[newActiveIndex]?.url,
+    })
+  }
 
   return (
     <BaseNode
@@ -37,15 +52,30 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && activeUrl && (
-          <img
-            src={activeUrl}
-            alt="Generated"
-            className="w-full h-28 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation()
-              window.open(activeUrl, "_blank")
-            }}
-          />
+          <div className="relative group">
+            <img
+              src={activeUrl}
+              alt="Generated"
+              className="w-full h-28 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation()
+                window.open(activeUrl, "_blank")
+              }}
+            />
+            {results.length > 0 && (
+              <button
+                type="button"
+                className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDeleteResult(activeIndex)
+                }}
+                title="Delete this result"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
         )}
 
         {status === "failed" && !activeUrl && (
@@ -64,20 +94,31 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         {results.length > 1 && (
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
-              <img
-                key={r.jobId}
-                src={r.url}
-                alt={`Result ${i + 1}`}
-                className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
-                  i === activeIndex
-                    ? "opacity-100 ring-2 ring-primary"
-                    : "opacity-50 hover:opacity-80"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
-                }}
-              />
+              <div key={r.jobId} className="relative group/thumb shrink-0">
+                <img
+                  src={r.url}
+                  alt={`Result ${i + 1}`}
+                  className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
+                    i === activeIndex
+                      ? "opacity-100 ring-2 ring-primary"
+                      : "opacity-50 hover:opacity-80"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
+                  }}
+                />
+                <button
+                  type="button"
+                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDeleteResult(i)
+                  }}
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </div>
             ))}
           </div>
         )}
