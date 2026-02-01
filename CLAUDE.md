@@ -3395,6 +3395,9 @@ Maintain a CHANGELOG.md:
 | Asset Storage | Cloudflare R2 | S3-compatible, no egress fees, serves generated images and videos |
 | Execution Model | Frontend DAG Engine | Topological sort, parallel execution per level, sequential between levels |
 | Translation | google/gemini-2.5-flash via Replicate | Creative prompt translation (Hebrew, etc. to English) |
+| Music Generation | MusicGen, MiniMax, Lyria, Bark via Replicate | Multiple providers with genre/mood control, provider switching |
+| Audio Processing | FFmpeg (Add Audio, Extract, Mix, Adjust Volume) | All audio processing nodes use FFmpeg, not AI providers |
+| TTS Model | elevenlabs/turbo-v2.5 via Replicate | 26 voice options, natural speech |
 
 ### Workflow Execution Engine
 
@@ -3502,6 +3505,16 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Parallel execution at each level (Promise.allSettled)
 - [x] Sequential execution with dependency waiting between levels
 - [x] Reference image support (Image → Image chains via nano-banana)
+- [x] Generate Script with storyboard preview (inline scene strip + full-screen modal)
+- [x] Storyboard Modal: per-scene image generation, "Generate All Images" batch, version history per scene
+- [x] Expand to Nodes: one-click storyboard → Generate Image + Image to Video per scene, optional Combine Videos, horizontal/vertical layout, auto-run, intelligent credit estimation
+- [x] Generate Music node (MusicGen, MiniMax, Lyria, Bark providers with genre/mood/instrumental options)
+- [x] Reference Audio node (YouTube URL preview, audio extraction, connects to Generate Music for MiniMax)
+- [x] FFmpeg processing nodes: Add Audio (multi-track mixer), Extract Audio, Trim Video, Resize Video, Adjust Volume, Add Captions, Mix Audio
+- [x] Delete confirmation dialog for all version history deletions
+- [x] Text to Speech via elevenlabs/turbo-v2.5 (Replicate) with 26 voice options
+- [x] Text to Video node
+- [x] 30 node types total (Input: 5, Parameter: 8, AI: 8, Processing: 7, Output: 2)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
@@ -3555,5 +3568,5 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 
 ---
 
-*Last updated: 2026-02-02*
-*Version: 1.6.0*
+*Last updated: 2026-02-01*
+*Version: 1.7.0*
