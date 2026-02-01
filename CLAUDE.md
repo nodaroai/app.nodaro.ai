@@ -177,7 +177,7 @@ the forest from a storm. 5 scenes, narrator voice, word-highlight captions."
 
 Generated workflow:
   Text Prompt → Generate Script (5 scenes) → Generate Image ×5 → Image to Video ×5
-  → Combine Videos → Add Audio (ElevenLabs narrator) → Add Captions (word-highlight)
+  → Combine Videos → Merge Video & Audio (ElevenLabs narrator) → Add Captions (word-highlight)
   → Save to Storage
 ```
 
@@ -1047,20 +1047,26 @@ interface ImageToVideoNode {
     duration?: number;       // seconds
     motion?: 'subtle' | 'moderate' | 'dynamic';
     cameraMotion?: 'static' | 'pan-left' | 'pan-right' | 'zoom-in' | 'zoom-out';
+    generateAudio?: boolean; // VEO 3 only: generate AI audio from prompt
   };
   inputs: ['image', 'motion-prompt?'];
   // Parameter input handles (optional, override config panel values when connected):
   parameterInputs: ['video_provider', 'duration', 'motion', 'camera_motion'];
-  outputs: ['video'];        // Note: VEO 3 outputs video WITH ambient audio
+  outputs: ['video'];        // Note: VEO 3 can output video WITH AI-generated audio
   creditCost: 20;
-  
-  // IMPORTANT: Some providers (VEO 3) generate video WITH audio.
-  // If user wants different audio:
-  // 1. Use Extract Audio node to separate audio from video
-  // 2. Adjust volume of extracted audio (e.g., 20% for background)
-  // 3. Add ElevenLabs voiceover
-  // 4. Mix both audio tracks
-  // 5. Combine with silent video
+
+  // VEO 3 AUDIO:
+  // VEO 3 has a `generate_audio` toggle (default: true when VEO selected).
+  // When enabled, VEO generates AI audio from the prompt (ambient sounds, etc.).
+  // VEO does NOT accept external audio files - it only generates audio from prompt.
+  // If user wants custom audio instead:
+  // 1. Disable generate_audio on the Image to Video node
+  // 2. Use Merge Video & Audio node to combine with custom audio
+  // For mixing VEO audio with custom audio:
+  // 1. Keep generate_audio enabled
+  // 2. Use Extract Audio node to separate VEO audio
+  // 3. Adjust volume, mix with custom audio
+  // 4. Merge back with silent video
 }
 
 interface TextToSpeechNode {
@@ -1083,6 +1089,40 @@ interface TextToSpeechNode {
   // 1. Extract/mute VEO audio
   // 2. Generate new voiceover with ElevenLabs
   // 3. Mix both or use only ElevenLabs
+}
+
+interface GenerateMusicNode {
+  type: 'generate-music';
+  data: {
+    provider: 'musicgen' | 'minimax' | 'lyria' | 'bark';
+    genre?: string;
+    mood?: string;
+    instrumental?: boolean;
+    lyrics?: string;
+    duration?: number;
+  };
+  inputs: ['prompt', 'reference-audio?'];
+  outputs: ['audio'];
+  creditCost: 3;
+}
+
+interface TextToAudioNode {
+  type: 'text-to-audio';
+  data: {
+    provider: 'tangoflux' | 'tango' | 'audioldm' | 'bark';
+    duration?: number;       // seconds
+  };
+  inputs: ['prompt'];
+  outputs: ['audio'];
+  creditCost: 3;
+
+  // Sound effects generation from text descriptions.
+  // Use cases: ambient sounds, SFX, background audio.
+  // Provider notes:
+  // - TangoFlux (default): best quality, supports duration
+  // - Tango: good quality, no duration control
+  // - AudioLDM: supports duration as string enum ("2.5", "5.0", etc.), prompt max 200 chars
+  // - Bark: general audio, no duration control
 }
 
 interface QACheckNode {
@@ -1115,13 +1155,12 @@ interface CombineVideosNode {
   // Can merge videos from multiple branches back into one
 }
 
-interface AddAudioNode {
-  type: 'add-audio';
+interface MergeVideoAudioNode {
+  type: 'merge-video-audio';
   data: {
-    audioType: 'voiceover' | 'background' | 'both';
     voiceoverVolume?: number;
     backgroundVolume?: number;
-    backgroundAssetId?: string;
+    keepOriginalAudio?: boolean;
   };
   inputs: ['video', 'audio'];
   outputs: ['video'];
@@ -1310,7 +1349,7 @@ Before running a workflow, the system validates it and shows warnings/errors.
 
 | Condition | Warning Message | Suggestion |
 |-----------|-----------------|------------|
-| VEO → Add Audio (no Extract) | "VEO video has audio. This may conflict with added audio." | Add Extract Audio node |
+| VEO → Merge Video & Audio (no Extract) | "VEO video has audio. This may conflict with added audio." | Add Extract Audio node |
 | Image node without reference | "No reference image. Character consistency may vary." | Add reference image |
 | Long video (> 5 min) without checkpoints | "Long workflow without save points." | Add intermediate Save nodes |
 | High credit cost (> 500) | "This workflow costs ~500 credits." | Confirm before run |
@@ -1361,9 +1400,9 @@ function validateWorkflow(workflow: Workflow): ValidationResult {
     });
   }
   
-  // Check VEO + Add Audio conflict
+  // Check VEO + Merge Video & Audio conflict
   for (const node of workflow.nodes) {
-    if (node.type === 'add-audio') {
+    if (node.type === 'merge-video-audio') {
       const inputNode = getInputNode(workflow, node, 'video');
       if (inputNode?.type === 'image-to-video' && 
           inputNode.data.provider === 'veo') {
@@ -1479,7 +1518,9 @@ User clicks "Run" on a node
 | text-to-speech | 3 | $0.01 | $0.02 |
 | qa-check | 1 | $0.005 | $0.01 |
 | combine-videos | 2 | $0.01 | $0.02 |
-| add-audio | 1 | $0.005 | $0.01 |
+| merge-video-audio | 1 | $0.005 | $0.01 |
+| generate-music | 3 | $0.01 | $0.02 |
+| text-to-audio | 3 | $0.01 | $0.02 |
 | add-captions | 2 | $0.01 | $0.02 |
 | resize-video | 1 | $0.005 | $0.01 |
 | **extract-audio** | 1 | $0.005 | $0.01 |
@@ -3081,7 +3122,7 @@ docs/
 │   │   └── text-to-speech.md
 │   ├── processing/
 │   │   ├── combine-videos.md
-│   │   ├── add-audio.md
+│   │   ├── merge-video-audio.md
 │   │   ├── extract-audio.md
 │   │   ├── mix-audio.md
 │   │   └── add-captions.md
@@ -3396,7 +3437,8 @@ Maintain a CHANGELOG.md:
 | Execution Model | Frontend DAG Engine | Topological sort, parallel execution per level, sequential between levels |
 | Translation | google/gemini-2.5-flash via Replicate | Creative prompt translation (Hebrew, etc. to English) |
 | Music Generation | MusicGen, MiniMax, Lyria, Bark via Replicate | Multiple providers with genre/mood control, provider switching |
-| Audio Processing | FFmpeg (Add Audio, Extract, Mix, Adjust Volume) | All audio processing nodes use FFmpeg, not AI providers |
+| Audio Processing | FFmpeg (Merge Video & Audio, Extract, Mix, Adjust Volume) | All audio processing nodes use FFmpeg, not AI providers |
+| Text to Audio | TangoFlux, Tango, AudioLDM, Bark via Replicate | Sound effects from text descriptions |
 | TTS Model | elevenlabs/turbo-v2.5 via Replicate | 26 voice options, natural speech |
 
 ### Workflow Execution Engine
@@ -3510,11 +3552,14 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Expand to Nodes: one-click storyboard → Generate Image + Image to Video per scene, optional Combine Videos, horizontal/vertical layout, auto-run, intelligent credit estimation
 - [x] Generate Music node (MusicGen, MiniMax, Lyria, Bark providers with genre/mood/instrumental options)
 - [x] Reference Audio node (YouTube URL preview, audio extraction, connects to Generate Music for MiniMax)
-- [x] FFmpeg processing nodes: Add Audio (multi-track mixer), Extract Audio, Trim Video, Resize Video, Adjust Volume, Add Captions, Mix Audio
+- [x] FFmpeg processing nodes: Merge Video & Audio (multi-track mixer), Extract Audio, Trim Video, Resize Video, Adjust Volume, Add Captions, Mix Audio
 - [x] Delete confirmation dialog for all version history deletions
 - [x] Text to Speech via elevenlabs/turbo-v2.5 (Replicate) with 26 voice options
 - [x] Text to Video node
-- [x] 30 node types total (Input: 5, Parameter: 8, AI: 8, Processing: 7, Output: 2)
+- [x] Text to Audio node (TangoFlux/Tango/AudioLDM/Bark) for sound effects generation
+- [x] VEO 3 integration with generate_audio toggle for native AI audio
+- [x] Renamed Add Audio to Merge Video & Audio for clarity
+- [x] 32 node types total (Input: 5, Parameter: 8, AI: 9, Processing: 8, Output: 2)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

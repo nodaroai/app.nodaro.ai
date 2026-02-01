@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 30 node types across 5 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), and 7 FFmpeg processing nodes. Reference image chaining for character consistency. Single-node and full workflow execution with version history. Generate Script with storyboard preview, fullscreen modal, per-scene image generation, and one-click expand to full video pipeline. Reference Audio node for YouTube audio extraction. Delete confirmation dialog for all version deletions.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 31 node types across 5 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Reference image chaining for character consistency. Single-node and full workflow execution with version history. Generate Script with storyboard preview, fullscreen modal, per-scene image generation, and one-click expand to full video pipeline. Reference Audio node for YouTube audio extraction. Delete confirmation dialog for all version deletions.
 
 ## Features
 
@@ -17,14 +17,14 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Graph-based workflows: branching, merging, multiple inputs/outputs
 - Manual save with unsaved changes indicator and exit confirmation
 
-### 30 Node Types
+### 32 Node Types
 
 | Category | Nodes |
 |----------|-------|
 | **Input (5)** | Text Prompt, Upload Image, Upload Video, RSS Feed, Reference Audio |
 | **Parameter (8)** | Provider, Duration, Aspect Ratio, Tone, Style Guide, Scene Count, Motion, Camera Motion |
-| **AI (8)** | Generate Script, Generate Image, Image to Video, Video to Video, Text to Video, Text to Speech, Generate Music, QA Check |
-| **Processing (7)** | Combine Videos, Add Audio, Extract Audio, Mix Audio, Add Captions, Resize Video, Trim Video, Adjust Volume |
+| **AI (9)** | Generate Script, Generate Image, Image to Video, Video to Video, Text to Video, Text to Speech, Generate Music, Text to Audio, QA Check |
+| **Processing (8)** | Combine Videos, Merge Video & Audio, Extract Audio, Mix Audio, Add Captions, Resize Video, Trim Video, Adjust Volume |
 | **Output (2)** | Save to Storage, Webhook Output |
 
 ### Dashboard
@@ -49,11 +49,12 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | Queue | Redis + BullMQ | Built |
 | Storage | Cloudflare R2 | Built |
 | AI (Image) | google/nano-banana via Replicate | Built |
-| AI (Video) | minimax/video-01 via Replicate | Built |
+| AI (Video) | minimax/video-01, google/veo-3 via Replicate | Built |
 | AI (Script) | google/gemini-2.5-flash via Replicate | Built |
 | AI (TTS) | elevenlabs/turbo-v2.5 via Replicate | Built |
 | AI (Music) | MusicGen, MiniMax, Lyria, Bark via Replicate | Built |
-| Video/Audio Processing | FFmpeg (combine, trim, resize, extract, mix, captions) | Built |
+| AI (Audio) | TangoFlux, Tango, AudioLDM, Bark via Replicate | Built |
+| Video/Audio Processing | FFmpeg (merge, trim, resize, extract, mix, captions) | Built |
 
 ## Quick Start
 
@@ -114,7 +115,7 @@ scenenode/
 │   │   │   └── (main)/           # Dashboard, projects, editor
 │   │   ├── components/
 │   │   │   ├── editor/           # Workflow canvas, config panel, toolbar, script-preview-modal, expand-storyboard-dialog
-│   │   │   ├── nodes/            # 30 node components + base-node
+│   │   │   ├── nodes/            # 32 node components + base-node
 │   │   │   └── ui/               # shadcn/ui components (incl. delete-confirmation-dialog)
 │   │   ├── hooks/
 │   │   │   ├── use-workflow-store.ts  # Zustand workflow state
@@ -188,6 +189,8 @@ The backend exposes a REST API at `http://localhost:8000`:
 | `/v1/text-to-speech` | POST | Generate audio from text |
 | `/v1/combine-videos` | POST | Combine videos with FFmpeg transitions |
 | `/v1/generate-music` | POST | Generate music (MusicGen/MiniMax/Lyria/Bark) |
+| `/v1/text-to-audio` | POST | Generate sound effects (TangoFlux/Tango/AudioLDM/Bark) |
+| `/v1/merge-video-audio` | POST | Merge video and audio tracks with volume control |
 | `/v1/extract-youtube-audio` | POST | Extract audio from YouTube URL |
 | `/v1/render` | POST | Quick render (one-shot) |
 
@@ -199,7 +202,8 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - **Sequential dependencies**: Levels execute one after another, waiting for completion
 - **Reference image chaining**: Generate Image → Generate Image passes output as reference for character consistency
 - Image generation via google/nano-banana (Replicate) with smart translation (Hebrew, etc.)
-- Video generation via minimax/video-01 (Replicate)
+- Video generation via minimax/video-01, google/veo-3 (Replicate)
+- **VEO 3 native audio**: `generate_audio` toggle generates AI audio from prompt; disable for custom audio via Merge Video & Audio node
 - Video-to-video continuation/style reference
 - Text-to-speech via elevenlabs/turbo-v2.5 (Replicate) with 26 voice options
 - Generated results display directly in nodes with version history
@@ -211,8 +215,9 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - **Expand to Nodes**: One-click expansion of storyboard into Generate Image + Image to Video nodes per scene, optional Combine Videos node, horizontal/vertical layout, auto-run support, intelligent credit estimation accounting for existing images
 - **Combine Videos**: FFmpeg-based video concatenation with Cut/Fade/Dissolve transitions, xfade filter for 2-video transitions, version history, Run button
 - **Generate Music**: AI music generation with 4 providers (MusicGen, MiniMax, Lyria, Bark), genre/mood selection, instrumental mode, lyrics support
+- **Text to Audio**: Sound effects generation via TangoFlux (default), Tango, AudioLDM, Bark; for ambient sounds, SFX, background audio
 - **Reference Audio**: YouTube URL with thumbnail preview, audio extraction, connects to Generate Music as reference input for MiniMax
-- **FFmpeg Processing Nodes (7)**: Add Audio (multi-track mixer with volume control), Extract Audio, Trim Video, Resize Video, Adjust Volume, Add Captions, Mix Audio -- all use FFmpeg, not AI providers
+- **FFmpeg Processing Nodes (8)**: Merge Video & Audio (multi-track mixer with volume control), Extract Audio, Trim Video, Resize Video, Adjust Volume, Add Captions, Mix Audio -- all use FFmpeg, not AI providers
 - Per-node Run button (hover to reveal, hanging tab below node)
 - **Delete Confirmation Dialog**: Reusable component for all version history deletions across all node types
 - Asset upload to Cloudflare R2
