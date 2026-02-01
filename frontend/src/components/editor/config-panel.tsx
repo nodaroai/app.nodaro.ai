@@ -24,6 +24,7 @@ import {
   getFirstModel,
   type ProviderCategory,
 } from "@/lib/providers-config"
+import { TTS_VOICES } from "@/lib/tts-voices"
 import type {
   TextPromptData,
   UploadImageData,
@@ -1020,13 +1021,20 @@ function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField
         </Select>
       </MappableField>
       <div>
-        <Label htmlFor="voice-id">Voice ID</Label>
-        <Input
-          id="voice-id"
-          value={data.voiceId}
-          onChange={(e) => onUpdate({ voiceId: e.target.value })}
-          placeholder="Voice identifier..."
-        />
+        <Label>Voice</Label>
+        <Select
+          value={data.voiceId || "default"}
+          onValueChange={(v) => onUpdate({ voiceId: v })}
+        >
+          <SelectTrigger><SelectValue placeholder="Select voice" /></SelectTrigger>
+          <SelectContent>
+            {TTS_VOICES.map((voice) => (
+              <SelectItem key={voice.id} value={voice.id}>
+                {voice.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <Label htmlFor="language">Language</Label>

@@ -5,6 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Mic, Loader2, AlertCircle, X, Play } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { getVoiceName } from "@/lib/tts-voices"
 import type { TextToSpeechData } from "@/types/nodes"
 
 function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
@@ -125,7 +126,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
 
         <div className="flex justify-between text-muted-foreground">
           <span>{nodeData.provider}</span>
-          <span>{nodeData.voiceId || "default"}</span>
+          <span>{getVoiceName(nodeData.voiceId)}</span>
         </div>
       </div>
     </BaseNode>
