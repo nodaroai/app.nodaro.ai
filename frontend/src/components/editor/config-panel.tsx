@@ -913,12 +913,12 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="script">
         <Select
-          value={data.provider}
+          value={data.provider || "gemini"}
           onValueChange={(v) => onUpdate({ provider: v as GenerateScriptData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="gemini">Gemini Flash</SelectItem>
+            <SelectItem value="gemini">Gemini Flash (default)</SelectItem>
             <SelectItem value="claude">Claude</SelectItem>
             <SelectItem value="gpt">GPT</SelectItem>
           </SelectContent>
@@ -1090,12 +1090,12 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
       </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
-          value={data.provider}
+          value={data.provider || "nano-banana"}
           onValueChange={(v) => onUpdate({ provider: v as GenerateImageData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="nano-banana">Nano Banana</SelectItem>
+            <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
             <SelectItem value="flux">Flux</SelectItem>
             <SelectItem value="dalle">DALL-E</SelectItem>
           </SelectContent>
@@ -1139,11 +1139,12 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
-          value={data.provider}
+          value={data.provider || "minimax"}
           onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="minimax">MiniMax (default)</SelectItem>
             <SelectItem value="veo">VEO</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
@@ -1205,11 +1206,12 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
       </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
-          value={data.provider}
+          value={data.provider || "minimax"}
           onValueChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="minimax">MiniMax (default)</SelectItem>
             <SelectItem value="veo">VEO</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
@@ -1248,7 +1250,7 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
       </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
-          value={data.provider}
+          value={data.provider || "minimax"}
           onValueChange={(v) => {
             const firstModel = getFirstModel(category, v)
             onUpdate({ provider: v, model: firstModel })
@@ -1257,7 +1259,7 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {providers.map((p) => (
-              <SelectItem key={p} value={p}>{getProviderLabel(category, p)}</SelectItem>
+              <SelectItem key={p} value={p}>{getProviderLabel(category, p)}{p === "minimax" ? " (default)" : ""}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -1321,12 +1323,12 @@ function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
         <Select
-          value={data.provider}
+          value={data.provider || "elevenlabs"}
           onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+            <SelectItem value="elevenlabs">ElevenLabs (default)</SelectItem>
             <SelectItem value="playht">PlayHT</SelectItem>
             <SelectItem value="azure">Azure TTS</SelectItem>
           </SelectContent>
@@ -1476,7 +1478,7 @@ function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<GenerateMu
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="musicgen">MusicGen (Meta) - instrumental</SelectItem>
+            <SelectItem value="musicgen">MusicGen (Meta) - instrumental (default)</SelectItem>
             <SelectItem value="minimax">MiniMax Music - vocals & lyrics</SelectItem>
             <SelectItem value="lyria">Lyria 2 (Google) - high quality</SelectItem>
             <SelectItem value="bark">Bark (Suno) - speech & music</SelectItem>

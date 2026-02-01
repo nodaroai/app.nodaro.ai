@@ -5,13 +5,38 @@ const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
 export type VideoProvider = "veo" | "kling" | "runway" | "pika" | "sora" | "minimax"
 
-const VIDEO_MODELS: Record<string, string> = {
-  minimax: "minimax/video-01",
-  veo: "google/veo-2",
-  kling: "kwaivgi/kling-v1.6-pro",
-  runway: "runway/gen3a-turbo",
-  pika: "pika-labs/pika",
-  sora: "openai/sora",
+interface ModelConfig {
+  model: string
+  imageParam: string
+  extraInput?: Record<string, unknown>
+}
+
+const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
+  minimax: {
+    model: "minimax/video-01",
+    imageParam: "first_frame_image",
+    extraInput: { prompt_optimizer: true },
+  },
+  veo: {
+    model: "google/veo-2",
+    imageParam: "image",
+  },
+  kling: {
+    model: "kwaivgi/kling-v1.6-pro",
+    imageParam: "input_image",
+  },
+  runway: {
+    model: "runway/gen3a-turbo",
+    imageParam: "image",
+  },
+  pika: {
+    model: "pika-labs/pika",
+    imageParam: "image",
+  },
+  sora: {
+    model: "openai/sora",
+    imageParam: "image",
+  },
 }
 
 export async function imageToVideo(
@@ -20,18 +45,18 @@ export async function imageToVideo(
   provider?: VideoProvider,
 ): Promise<string> {
   const resolvedProvider = provider ?? "minimax"
-  const model = VIDEO_MODELS[resolvedProvider] ?? VIDEO_MODELS.minimax
-  console.log(`[imageToVideo] Provider: ${resolvedProvider}, Model: ${model}`)
-  console.log(`[imageToVideo] Input image: "${imageUrl}"`)
+  const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
+  console.log(`[imageToVideo] Provider: ${resolvedProvider}, Model: ${cfg.model}`)
+  console.log(`[imageToVideo] Input image param: "${cfg.imageParam}" = "${imageUrl}"`)
   console.log(`[imageToVideo] Motion prompt: "${prompt ?? "smooth cinematic motion"}"`)
 
   const output = await replicate.run(
-    model as `${string}/${string}`,
+    cfg.model as `${string}/${string}`,
     {
       input: {
         prompt: prompt ?? "smooth cinematic motion",
-        first_frame_image: imageUrl,
-        prompt_optimizer: true,
+        [cfg.imageParam]: imageUrl,
+        ...cfg.extraInput,
       },
     },
   )
