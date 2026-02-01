@@ -64,11 +64,11 @@ export async function generateImage(prompt: string, referenceImageUrl?: string, 
   return res.json()
 }
 
-export async function generateVideo(imageUrl: string, prompt?: string, provider?: string, audioPrompt?: string): Promise<{ jobId: string }> {
+export async function generateVideo(imageUrl: string, prompt?: string, provider?: string, generateAudio?: boolean): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageUrl, prompt, provider, audioPrompt }),
+    body: JSON.stringify({ imageUrl, prompt, provider, generateAudio }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)

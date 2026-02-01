@@ -44,17 +44,19 @@ export async function imageToVideo(
   imageUrl: string,
   prompt?: string,
   provider?: VideoProvider,
-  audioPrompt?: string,
+  generateAudio?: boolean,
 ): Promise<string> {
   const resolvedProvider = provider ?? "minimax"
   const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
-  const basePrompt = prompt ?? "smooth cinematic motion"
-  const finalPrompt = audioPrompt
-    ? `${basePrompt}. Audio: ${audioPrompt}`
-    : basePrompt
+  const finalPrompt = prompt ?? "smooth cinematic motion"
   console.log(`[imageToVideo] Provider: ${resolvedProvider}, Model: ${cfg.model}`)
   console.log(`[imageToVideo] Input image param: "${cfg.imageParam}" = "${imageUrl}"`)
   console.log(`[imageToVideo] Motion prompt: "${finalPrompt}"`)
+
+  const extraInput = { ...cfg.extraInput }
+  if (resolvedProvider === "veo") {
+    extraInput.generate_audio = generateAudio !== false
+  }
 
   const output = await replicate.run(
     cfg.model as `${string}/${string}`,
@@ -62,7 +64,7 @@ export async function imageToVideo(
       input: {
         prompt: finalPrompt,
         [cfg.imageParam]: imageUrl,
-        ...cfg.extraInput,
+        ...extraInput,
       },
     },
   )

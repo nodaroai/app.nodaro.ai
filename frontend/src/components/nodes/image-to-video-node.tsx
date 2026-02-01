@@ -47,8 +47,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={20}
       selected={selected}
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Image", top: "30%" },
-        { id: "audio-in", type: "target", position: Position.Left, label: "Audio", top: "70%" },
+        { id: "in", type: "target", position: Position.Left, label: "Image" },
         { id: "video", type: "source", position: Position.Right, label: "Video" },
       ]}
     >

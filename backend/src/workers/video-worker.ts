@@ -62,16 +62,16 @@ export function createVideoWorker() {
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "image-to-video") {
-          const { imageUrl, prompt, provider, audioPrompt } = job.data as {
+          const { imageUrl, prompt, provider, generateAudio } = job.data as {
             jobId: string
             imageUrl: string
             prompt?: string
             provider?: VideoProvider
-            audioPrompt?: string
+            generateAudio?: boolean
           }
           console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const replicateUrl = await imageToVideo(imageUrl, prompt, provider, audioPrompt)
+          const replicateUrl = await imageToVideo(imageUrl, prompt, provider, generateAudio)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "video")
