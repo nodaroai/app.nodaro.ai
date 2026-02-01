@@ -2,7 +2,7 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Loader2, AlertCircle, X } from "lucide-react"
+import { Film, Loader2, AlertCircle, X, Play } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ImageToVideoData } from "@/types/nodes"
@@ -11,6 +11,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -46,6 +47,21 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       ]}
     >
       <div className="flex flex-col gap-1">
+        {status !== "running" && (
+          <button
+            type="button"
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors self-end"
+            onClick={(e) => {
+              e.stopPropagation()
+              runSingleNode?.(id)
+            }}
+            title="Run this node only"
+          >
+            <Play className="w-3 h-3" />
+            Run
+          </button>
+        )}
+
         {status === "running" && (
           <div className="flex items-center justify-center h-28 rounded-md bg-muted/30">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

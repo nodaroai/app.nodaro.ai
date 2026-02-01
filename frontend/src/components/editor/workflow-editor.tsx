@@ -76,6 +76,56 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     toast.info("Execution stopped")
   }
 
+  async function startImageGeneration(imageNodeId: string, prompt: string, chainToVideoNodeId?: string) {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(imageNodeId, { executionStatus: "running", generatedImageUrl: undefined })
+
+    try {
+      const { jobId } = await generateImage(prompt)
+      toast.info("Image generation started", { description: `Job ID: ${jobId}` })
+
+      const poll = trackInterval(setInterval(async () => {
+        try {
+          const job = await getJobStatus(jobId)
+          if (job.status === "completed") {
+            untrackInterval(poll)
+            const imageUrl = job.output_data?.imageUrl
+            const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === imageNodeId)?.data) as GenerateImageData | undefined)?.generatedResults ?? []
+            const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
+            updateNodeData(imageNodeId, {
+              executionStatus: "completed",
+              generatedImageUrl: imageUrl,
+              generatedResults: [newResult, ...existingResults],
+              activeResultIndex: 0,
+            })
+            toast.success("Image generated", {
+              description: imageUrl ? "Click to open" : "Done",
+              action: imageUrl ? { label: "Open", onClick: () => window.open(imageUrl, "_blank") } : undefined,
+              duration: 10000,
+            })
+            if (chainToVideoNodeId && imageUrl) {
+              startVideoGeneration(chainToVideoNodeId, imageUrl)
+            }
+          } else if (job.status === "failed") {
+            untrackInterval(poll)
+            updateNodeData(imageNodeId, { executionStatus: "failed" })
+            toast.error("Image generation failed", { description: job.error_message ?? "Unknown error" })
+          }
+        } catch {
+          untrackInterval(poll)
+          updateNodeData(imageNodeId, { executionStatus: "failed" })
+          toast.error("Failed to check job status")
+        }
+      }, 2000))
+    } catch (err) {
+      setIsRunning(false)
+      updateNodeData(imageNodeId, { executionStatus: "failed" })
+      toast.error("Failed to start image generation", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    }
+  }
+
   async function handleRun() {
     const { nodes, edges, updateNodeData } = useWorkflowStore.getState()
     const textNode = nodes.find((n) => n.type === "text-prompt")
@@ -97,55 +147,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         (e) => e.source === imageNode.id && e.target === videoNode.id
       )
 
-      updateNodeData(imageNode.id, { executionStatus: "running", generatedImageUrl: undefined })
       if (hasVideoChain && videoNode) {
         updateNodeData(videoNode.id, { executionStatus: "idle", generatedVideoUrl: undefined })
       }
 
-      try {
-        const { jobId } = await generateImage(prompt)
-        toast.info("Image generation started", { description: `Job ID: ${jobId}` })
-
-        const poll = trackInterval(setInterval(async () => {
-          try {
-            const job = await getJobStatus(jobId)
-            if (job.status === "completed") {
-              untrackInterval(poll)
-              const imageUrl = job.output_data?.imageUrl
-              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === imageNode.id)?.data) as GenerateImageData | undefined)?.generatedResults ?? []
-              const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
-              updateNodeData(imageNode.id, {
-                executionStatus: "completed",
-                generatedImageUrl: imageUrl,
-                generatedResults: [newResult, ...existingResults],
-                activeResultIndex: 0,
-              })
-              toast.success("Image generated", {
-                description: imageUrl ? "Click to open" : "Done",
-                action: imageUrl ? { label: "Open", onClick: () => window.open(imageUrl, "_blank") } : undefined,
-                duration: 10000,
-              })
-              if (hasVideoChain && videoNode && imageUrl) {
-                startVideoGeneration(videoNode.id, imageUrl)
-              }
-            } else if (job.status === "failed") {
-              untrackInterval(poll)
-              updateNodeData(imageNode.id, { executionStatus: "failed" })
-              toast.error("Image generation failed", { description: job.error_message ?? "Unknown error" })
-            }
-          } catch {
-            untrackInterval(poll)
-            updateNodeData(imageNode.id, { executionStatus: "failed" })
-            toast.error("Failed to check job status")
-          }
-        }, 2000))
-      } catch (err) {
-        setIsRunning(false)
-        updateNodeData(imageNode.id, { executionStatus: "failed" })
-        toast.error("Failed to start image generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
-      }
+      await startImageGeneration(
+        imageNode.id,
+        prompt,
+        hasVideoChain && videoNode ? videoNode.id : undefined,
+      )
     }
 
     // Case 2: Upload Image -> Image to Video
@@ -161,6 +171,54 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     else {
       toast.error("Unknown workflow type. Connect nodes properly.")
+    }
+  }
+
+  function handleRunSingleNode(nodeId: string) {
+    const { nodes, edges } = useWorkflowStore.getState()
+    const node = nodes.find((n) => n.id === nodeId)
+    if (!node) return
+
+    if (node.type === "generate-image") {
+      const incomingEdge = edges.find((e) => e.target === nodeId)
+      const sourceNode = incomingEdge ? nodes.find((n) => n.id === incomingEdge.source) : undefined
+
+      let prompt: string | undefined
+      if (sourceNode?.type === "text-prompt") {
+        prompt = (sourceNode.data as TextPromptData | undefined)?.text?.trim()
+      }
+
+      if (!prompt) {
+        toast.error("No prompt found. Connect a Text Prompt node.")
+        return
+      }
+
+      setIsRunning(true)
+      startImageGeneration(nodeId, prompt)
+    } else if (node.type === "image-to-video") {
+      const incomingEdge = edges.find((e) => e.target === nodeId)
+      const sourceNode = incomingEdge ? nodes.find((n) => n.id === incomingEdge.source) : undefined
+
+      let imageUrl: string | undefined
+
+      if (sourceNode?.type === "upload-image") {
+        imageUrl = (sourceNode.data as UploadImageData | undefined)?.url?.trim()
+      } else if (sourceNode?.type === "generate-image") {
+        const imgData = sourceNode.data as GenerateImageData | undefined
+        const results = imgData?.generatedResults ?? []
+        const activeIndex = imgData?.activeResultIndex ?? 0
+        imageUrl = results[activeIndex]?.url ?? imgData?.generatedImageUrl
+      }
+
+      if (!imageUrl) {
+        toast.error("No image found. Generate or upload an image first.")
+        return
+      }
+
+      setIsRunning(true)
+      startVideoGeneration(nodeId, imageUrl)
+    } else {
+      toast.error("This node type cannot be run individually.")
     }
   }
 
@@ -210,6 +268,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       })
     }
   }
+
+  // Register single-node runner
+  useEffect(() => {
+    useWorkflowStore.getState().setRunSingleNode(handleRunSingleNode)
+    return () => useWorkflowStore.getState().setRunSingleNode(null)
+  })
 
   // Ctrl+S keyboard shortcut
   useEffect(() => {

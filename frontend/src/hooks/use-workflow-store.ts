@@ -39,6 +39,8 @@ interface WorkflowState {
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
   readonly setVideoAutoplay: (autoplay: boolean) => void
+  readonly runSingleNode: ((nodeId: string) => void) | null
+  readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
 }
 
 let nextNodeId = 1
@@ -244,4 +246,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setSaveStatus: (status, error = null) => set({ saveStatus: status, saveError: error }),
 
   setVideoAutoplay: (autoplay) => set({ videoAutoplay: autoplay }),
+
+  runSingleNode: null,
+  setRunSingleNode: (fn) => set({ runSingleNode: fn }),
 }))
