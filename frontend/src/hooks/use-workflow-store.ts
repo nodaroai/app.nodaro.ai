@@ -41,6 +41,8 @@ interface WorkflowState {
   readonly setVideoAutoplay: (autoplay: boolean) => void
   readonly runSingleNode: ((nodeId: string) => void) | null
   readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
+  readonly generateSceneImage: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null
+  readonly setGenerateSceneImage: (fn: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null) => void
 }
 
 let nextNodeId = 1
@@ -249,4 +251,6 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   runSingleNode: null,
   setRunSingleNode: (fn) => set({ runSingleNode: fn }),
+  generateSceneImage: null,
+  setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
 }))

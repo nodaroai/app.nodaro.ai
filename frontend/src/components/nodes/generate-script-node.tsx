@@ -1,9 +1,10 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { BookOpen, Loader2, AlertCircle, X, Play, FileText } from "lucide-react"
+import { BookOpen, Loader2, AlertCircle, X, Play, FileText, Sparkles, ImageIcon, Film, Maximize2 } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { ScriptPreviewModal } from "@/components/editor/script-preview-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
@@ -11,11 +12,17 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateScriptData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const generateSceneImage = useWorkflowStore((s) => s.generateSceneImage)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeScript = activeResult?.script ?? nodeData.generatedScript
+  const [showFullscreen, setShowFullscreen] = useState(false)
+
+  const sceneCount = activeScript?.scenes.length ?? 0
+  const creditsPerScene = 5 + 20 // image + video
+  const totalEstimatedCredits = 2 + sceneCount * creditsPerScene // script + scenes
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -33,7 +40,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run">
+    <div className="relative group/run" style={{ width: activeScript ? 350 : 220 }}>
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -46,7 +53,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         { id: "scenes", type: "source", position: Position.Right, label: "Scenes" },
       ]}
     >
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {status === "running" && !activeScript && (
           <div className="flex items-center justify-center h-16 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -55,24 +62,73 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
 
         {activeScript && (
           <div className="relative group">
-            <div className="rounded-md bg-muted/30 p-2 text-xs space-y-1">
+            <div className="rounded-md bg-muted/30 p-2 text-xs space-y-1.5">
               {status === "running" && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md z-10">
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
               )}
-              <div className="font-medium truncate max-w-[180px]">{activeScript.title}</div>
-              <div className="text-muted-foreground">
-                {activeScript.scenes.length} scenes / {activeScript.totalDuration}s
-              </div>
-              {activeScript.scenes.slice(0, 3).map((scene) => (
-                <div key={scene.sceneNumber} className="truncate max-w-[180px] text-muted-foreground/70">
-                  {scene.sceneNumber}. {scene.action}
+              <div className="flex items-center justify-between">
+                <div className="font-medium truncate">{activeScript.title}</div>
+                <div className="text-muted-foreground shrink-0 ml-2">
+                  {sceneCount} scenes / {activeScript.totalDuration}s
                 </div>
-              ))}
-              {activeScript.scenes.length > 3 && (
-                <div className="text-muted-foreground/50">+{activeScript.scenes.length - 3} more</div>
-              )}
+              </div>
+
+              {/* Storyboard strip */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                {activeScript.scenes.map((scene) => (
+                  <div
+                    key={scene.sceneNumber}
+                    className={`shrink-0 w-[68px] rounded bg-background/60 border p-1 flex flex-col items-center gap-0.5 ${
+                      scene.imageStatus === "failed" ? "border-red-500/40" : "border-border/40"
+                    }`}
+                  >
+                    <div className="text-[9px] font-medium text-muted-foreground">
+                      #{scene.sceneNumber}
+                    </div>
+                    <div className="w-full aspect-video rounded-sm overflow-hidden bg-muted/50 flex items-center justify-center text-muted-foreground/30">
+                      {scene.imageStatus === "completed" && (scene.generatedImages ?? []).length > 0 ? (
+                        <img src={(scene.generatedImages ?? [])[scene.activeImageIndex ?? 0]?.url} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
+                      ) : scene.imageStatus === "running" ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <ImageIcon className="w-3.5 h-3.5" />
+                      )}
+                    </div>
+                    <div className="text-[9px] text-muted-foreground">{scene.durationHint}s</div>
+                    <div className="text-[8px] text-muted-foreground/60 truncate w-full text-center">
+                      {scene.action}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Credits estimate */}
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground/70 pt-0.5 border-t border-border/30">
+                <span className="flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  Est. {totalEstimatedCredits} credits
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-0.5"><ImageIcon className="w-2.5 h-2.5" />{sceneCount * 5}</span>
+                  +
+                  <span className="flex items-center gap-0.5"><Film className="w-2.5 h-2.5" />{sceneCount * 20}</span>
+                </span>
+              </div>
+
+              {/* Expand fullscreen */}
+              <button
+                type="button"
+                className="w-full h-6 flex items-center justify-center gap-1 text-[10px] font-medium rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowFullscreen(true)
+                }}
+              >
+                <Maximize2 className="w-3 h-3" />
+                Expand Storyboard
+              </button>
             </div>
             {results.length > 0 && (
               <button
@@ -157,6 +213,56 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
           Run
         </button>
       </div>
+    )}
+    {activeScript && (
+      <ScriptPreviewModal
+        isOpen={showFullscreen}
+        onClose={() => setShowFullscreen(false)}
+        script={activeScript}
+        onGenerateScene={(sceneIndex) =>
+          generateSceneImage?.(id, sceneIndex) ?? Promise.resolve()
+        }
+        onSetActiveImage={(sceneIndex, imageIndex) => {
+          if (!activeScript) return
+          const updatedScenes = activeScript.scenes.map((s, i) =>
+            i === sceneIndex ? { ...s, activeImageIndex: imageIndex } : s
+          )
+          const updatedScript = { ...activeScript, scenes: updatedScenes }
+          updateNodeData(id, {
+            generatedScript: updatedScript,
+            ...(activeResult ? {
+              generatedResults: results.map((r, i) =>
+                i === activeIndex ? { ...r, script: updatedScript } : r
+              ),
+            } : {}),
+          })
+        }}
+        onDeleteImage={(sceneIndex, imageIndex) => {
+          if (!activeScript) return
+          const scene = activeScript.scenes[sceneIndex]
+          const images = scene.generatedImages ?? []
+          if (images.length <= 1) return
+          const newImages = images.filter((_, i) => i !== imageIndex)
+          const currentActive = scene.activeImageIndex ?? 0
+          const newActive = imageIndex === currentActive
+            ? 0
+            : imageIndex < currentActive
+              ? currentActive - 1
+              : currentActive
+          const updatedScenes = activeScript.scenes.map((s, i) =>
+            i === sceneIndex ? { ...s, generatedImages: newImages, activeImageIndex: newActive } : s
+          )
+          const updatedScript = { ...activeScript, scenes: updatedScenes }
+          updateNodeData(id, {
+            generatedScript: updatedScript,
+            ...(activeResult ? {
+              generatedResults: results.map((r, i) =>
+                i === activeIndex ? { ...r, script: updatedScript } : r
+              ),
+            } : {}),
+          })
+        }}
+      />
     )}
     </div>
   )

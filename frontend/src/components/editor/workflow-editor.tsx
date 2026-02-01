@@ -15,7 +15,7 @@ import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GeneratedResult, GeneratedScript, GeneratedScriptResult } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -609,10 +609,100 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  // Generate image for a single scene within a generate-script node
+  function updateSceneInScript(
+    scriptNodeId: string,
+    sceneIndex: number,
+    patch: Partial<{ imageStatus: "idle" | "running" | "completed" | "failed"; generatedImages: readonly SceneImageVersion[]; activeImageIndex: number }>,
+  ) {
+    const { nodes, updateNodeData } = useWorkflowStore.getState()
+    const node = nodes.find((n) => n.id === scriptNodeId)
+    if (!node) return
+    const data = node.data as GenerateScriptData
+    const script = data.generatedScript
+    if (!script) return
+
+    const updatedScenes = script.scenes.map((s, i) =>
+      i === sceneIndex ? { ...s, ...patch } : s
+    )
+    const updatedScript: GeneratedScript = { ...script, scenes: updatedScenes }
+    const results = data.generatedResults ?? []
+    const activeIdx = data.activeResultIndex ?? 0
+    const updatedResults = results.map((r, i) =>
+      i === activeIdx ? { ...r, script: updatedScript } : r
+    )
+    updateNodeData(scriptNodeId, { generatedScript: updatedScript, generatedResults: updatedResults })
+  }
+
+  async function handleGenerateSceneImage(scriptNodeId: string, sceneIndex: number): Promise<void> {
+    const { nodes } = useWorkflowStore.getState()
+    const node = nodes.find((n) => n.id === scriptNodeId)
+    if (!node) return
+
+    const scriptData = node.data as GenerateScriptData
+    const script = scriptData.generatedScript
+    if (!script || !script.scenes[sceneIndex]) return
+
+    const scene = script.scenes[sceneIndex]
+
+    updateSceneInScript(scriptNodeId, sceneIndex, { imageStatus: "running" })
+
+    try {
+      const { jobId } = await generateImage(scene.imagePrompt)
+
+      await new Promise<void>((resolve, reject) => {
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const imageUrl = (job.output_data?.imageUrl as string | undefined) ?? ""
+
+              // Read latest scene data for existing versions
+              const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === scriptNodeId)
+              const latestScene = (latestNode?.data as GenerateScriptData | undefined)?.generatedScript?.scenes[sceneIndex]
+              const existing = latestScene?.generatedImages ?? []
+              const newVersion: SceneImageVersion = { url: imageUrl, timestamp: new Date().toISOString(), jobId }
+              const newImages = [newVersion, ...existing].slice(0, 5)
+
+              updateSceneInScript(scriptNodeId, sceneIndex, {
+                imageStatus: "completed",
+                generatedImages: newImages,
+                activeImageIndex: 0,
+              })
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateSceneInScript(scriptNodeId, sceneIndex, { imageStatus: "failed" })
+              reject(new Error(job.error_message ?? "Image generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            reject(err)
+          }
+        }, 2000))
+      })
+    } catch (err) {
+      // Mark scene as failed if still running
+      const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === scriptNodeId)
+      const latestScene = (latestNode?.data as GenerateScriptData | undefined)?.generatedScript?.scenes[sceneIndex]
+      if (latestScene?.imageStatus === "running") {
+        updateSceneInScript(scriptNodeId, sceneIndex, { imageStatus: "failed" })
+      }
+      throw err
+    }
+  }
+
   // Register single-node runner
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(handleRunSingleNode)
     return () => useWorkflowStore.getState().setRunSingleNode(null)
+  })
+
+  // Register scene image generator
+  useEffect(() => {
+    useWorkflowStore.getState().setGenerateSceneImage(handleGenerateSceneImage)
+    return () => useWorkflowStore.getState().setGenerateSceneImage(null)
   })
 
   // Ctrl+S keyboard shortcut

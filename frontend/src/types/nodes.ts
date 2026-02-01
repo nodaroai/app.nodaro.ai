@@ -99,6 +99,12 @@ export type CameraMotionData = {
 
 // --- AI Node Data ---
 
+export interface SceneImageVersion {
+  readonly url: string
+  readonly timestamp: string
+  readonly jobId: string
+}
+
 export interface ScriptScene {
   readonly sceneNumber: number
   readonly visualDescription: string
@@ -106,6 +112,9 @@ export interface ScriptScene {
   readonly mood: string
   readonly durationHint: number
   readonly imagePrompt: string
+  readonly generatedImages?: readonly SceneImageVersion[]
+  readonly activeImageIndex?: number
+  readonly imageStatus?: "idle" | "running" | "completed" | "failed"
 }
 
 export interface GeneratedScript {
