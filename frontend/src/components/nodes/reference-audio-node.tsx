@@ -11,12 +11,11 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
   const status = nodeData.extractionStatus ?? "idle"
   const hasAudio = Boolean(nodeData.extractedAudioUrl)
   const hasThumbnail = Boolean(nodeData.videoThumbnail)
-  const hasContent = hasThumbnail || hasAudio
 
   return (
     <BaseNode
       id={id}
-      label={nodeData.label}
+      label="Ref Audio"
       icon={<Music className="h-4 w-4" />}
       category="input"
       credits={0}
@@ -25,45 +24,27 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
         { id: "audio-out", type: "source", position: Position.Right, label: "Audio" },
       ]}
     >
-      <div className={`flex flex-col gap-1.5 ${hasContent ? "min-w-[200px]" : ""}`}>
-        {hasThumbnail && (
-          <div className="relative w-full h-24 rounded overflow-hidden bg-muted">
-            <img src={nodeData.videoThumbnail} alt="" className="w-full h-full object-cover" />
+      <div className="flex flex-col gap-1">
+        {hasThumbnail ? (
+          <div className="w-full rounded overflow-hidden border border-border">
+            <img src={nodeData.videoThumbnail} alt="" className="w-full aspect-video object-cover" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center w-full h-12 rounded border border-dashed border-muted-foreground/30 text-muted-foreground/40">
+            <Music className="w-4 h-4" />
           </div>
         )}
         {nodeData.videoTitle && (
-          <p className="text-xs text-foreground truncate max-w-[200px]">{nodeData.videoTitle}</p>
+          <p className="text-[9px] text-muted-foreground truncate">{nodeData.videoTitle}</p>
         )}
-
-        {status === "extracting" && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span className="text-xs">Extracting audio...</span>
-          </div>
-        )}
-        {status === "ready" && hasAudio && (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1 text-green-600">
-              <CheckCircle2 className="w-3 h-3" />
-              <span className="text-xs">Audio ready</span>
-            </div>
-            <audio src={nodeData.extractedAudioUrl} controls className="w-full h-8" />
-          </div>
-        )}
-        {status === "failed" && (
-          <div className="flex items-center gap-1.5 text-red-500">
-            <AlertCircle className="w-3.5 h-3.5" />
-            <span className="text-xs">Extraction failed</span>
-          </div>
-        )}
-        {status === "idle" && !hasAudio && !hasThumbnail && (
-          <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
-            <Music className="w-5 h-5" />
-          </div>
-        )}
-        <p className="text-muted-foreground text-xs">
-          {nodeData.sourceType === "youtube" ? "YouTube" : nodeData.sourceType === "upload" ? "Upload" : "URL"}
-        </p>
+        <div className="flex items-center gap-1">
+          {status === "ready" && hasAudio && <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />}
+          {status === "extracting" && <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-500" />}
+          {status === "failed" && <AlertCircle className="w-2.5 h-2.5 text-red-500" />}
+          <span className="text-[9px] text-muted-foreground">
+            {nodeData.sourceType === "youtube" ? "YT" : "File"}
+          </span>
+        </div>
       </div>
     </BaseNode>
   )

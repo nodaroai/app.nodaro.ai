@@ -621,9 +621,9 @@ function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAudioData
           </div>
           {fetchingMeta && <p className="text-xs text-muted-foreground">Fetching video info...</p>}
           {data.videoThumbnail && (
-            <div className="rounded overflow-hidden bg-muted">
-              <img src={data.videoThumbnail} alt="" className="w-full h-20 object-cover" />
-              {data.videoTitle && <p className="text-xs p-1.5 truncate">{data.videoTitle}</p>}
+            <div className="rounded-md overflow-hidden bg-muted border border-border">
+              <img src={data.videoThumbnail} alt="" className="w-full aspect-video object-cover" />
+              {data.videoTitle && <p className="text-xs px-2 py-1.5 truncate text-foreground">{data.videoTitle}</p>}
             </div>
           )}
           <Button
@@ -1503,7 +1503,7 @@ function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<GenerateMu
           />
         )}
       </div>
-      {(data.provider === "musicgen" || !data.provider) && (
+      {(data.provider === "musicgen" || data.provider === "lyria" || !data.provider) && (
         <div>
           <Label htmlFor="music-duration">Duration (seconds)</Label>
           <Input
