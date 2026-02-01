@@ -34,6 +34,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
+    <div className="relative group/run">
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -136,23 +137,25 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           <span>{nodeData.provider}</span>
           <span>{nodeData.duration}s</span>
         </div>
-
-        {status !== "running" && (
-          <button
-            type="button"
-            className="w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] font-medium bg-orange-500/20 hover:bg-orange-500/40 text-orange-500 border border-orange-500/50 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              runSingleNode?.(id)
-            }}
-            title="Run this node only"
-          >
-            <Play className="w-3 h-3" />
-            Run
-          </button>
-        )}
       </div>
     </BaseNode>
+    {status !== "running" && (
+      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity">
+        <button
+          type="button"
+          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-b-md shadow-md transition-colors"
+          onClick={(e) => {
+            e.stopPropagation()
+            runSingleNode?.(id)
+          }}
+          title="Run this node only"
+        >
+          <Play className="w-3 h-3" />
+          Run
+        </button>
+      </div>
+    )}
+    </div>
   )
 }
 
