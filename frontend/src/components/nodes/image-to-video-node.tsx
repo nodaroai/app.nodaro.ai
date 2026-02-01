@@ -10,6 +10,7 @@ import type { ImageToVideoData } from "@/types/nodes"
 function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -45,9 +46,9 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 e.stopPropagation()
                 window.open(activeUrl, "_blank")
               }}
-              autoPlay
+              autoPlay={videoAutoplay}
               muted
-              loop
+              loop={videoAutoplay}
               playsInline
             />
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">

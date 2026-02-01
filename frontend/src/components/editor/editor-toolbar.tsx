@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowLeft, ChevronRight, Save, Play, AlertTriangle, CheckCircle, Loader2, RefreshCw } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, Play, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,8 @@ export function EditorToolbar({ projectId, onSave, onRun, saving, onNavigate }: 
   const project = useProjectsStore((s) =>
     projectId ? s.projects.find((p) => p.id === projectId) : undefined,
   )
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const setVideoAutoplay = useWorkflowStore((s) => s.setVideoAutoplay)
   const [validation, setValidation] = useState<ValidationResult | null>(null)
 
   function handleValidate() {
@@ -168,6 +170,15 @@ export function EditorToolbar({ projectId, onSave, onRun, saving, onNavigate }: 
         <Button size="sm" onClick={handleRun}>
           <Play className="h-4 w-4 sm:mr-1" />
           <span className="hidden sm:inline">Run</span>
+        </Button>
+
+        <Button
+          variant={videoAutoplay ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setVideoAutoplay(!videoAutoplay)}
+          title={videoAutoplay ? "Auto-playing videos" : "Videos paused"}
+        >
+          {videoAutoplay ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
         </Button>
 
         <ThemeToggle />

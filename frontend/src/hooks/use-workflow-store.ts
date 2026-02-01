@@ -21,6 +21,7 @@ interface WorkflowState {
   readonly isDirty: boolean
   readonly saveStatus: SaveStatus
   readonly saveError: string | null
+  readonly videoAutoplay: boolean
 
   readonly setWorkflowId: (id: string | null) => void
   readonly setWorkflowName: (name: string) => void
@@ -37,6 +38,7 @@ interface WorkflowState {
   readonly clearWorkflow: () => void
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
+  readonly setVideoAutoplay: (autoplay: boolean) => void
 }
 
 let nextNodeId = 1
@@ -56,6 +58,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   isDirty: false,
   saveStatus: "idle" as SaveStatus,
   saveError: null,
+  videoAutoplay: true,
 
   setWorkflowId: (id) => set({ workflowId: id }),
 
@@ -239,4 +242,6 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   markClean: () => set({ isDirty: false }),
 
   setSaveStatus: (status, error = null) => set({ saveStatus: status, saveError: error }),
+
+  setVideoAutoplay: (autoplay) => set({ videoAutoplay: autoplay }),
 }))
