@@ -10,6 +10,14 @@ import { textToSpeech } from "../providers/voice/text-to-speech.js"
 import { generateScript } from "../providers/script/script-generator.js"
 import { uploadToR2, uploadFileToR2 } from "../lib/storage.js"
 import { combineVideos } from "../providers/video/combine-videos.js"
+import { addAudio } from "../providers/video/add-audio.js"
+import { extractAudio } from "../providers/video/extract-audio.js"
+import { trimVideo } from "../providers/video/trim-video.js"
+import { resizeVideo } from "../providers/video/resize-video.js"
+import { adjustVolume } from "../providers/video/adjust-volume.js"
+import { addCaptions } from "../providers/video/add-captions.js"
+import { mixAudio } from "../providers/video/mix-audio.js"
+import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { promises as fs } from "node:fs"
 import { dirname } from "node:path"
 
@@ -202,6 +210,100 @@ export function createVideoWorker() {
             .eq("id", jobId)
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+        } else if (job.name === "add-audio") {
+          const { videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio } = job.data as {
+            jobId: string; videoUrl: string; audioUrl: string
+            voiceoverVolume?: number; backgroundVolume?: number; keepOriginalAudio?: boolean
+          }
+          console.log(`[worker] add-audio ${jobId}`)
+          const outputPath = await addAudio({ videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "extract-audio") {
+          const { videoUrl, audioFormat, outputSilentVideo } = job.data as {
+            jobId: string; videoUrl: string; audioFormat?: "mp3" | "wav" | "aac"; outputSilentVideo?: boolean
+          }
+          console.log(`[worker] extract-audio ${jobId}`)
+          const result = await extractAudio({ videoUrl, audioFormat, outputSilentVideo })
+          await job.updateProgress(80)
+          const audioR2Url = await uploadFileToR2(result.audioPath, jobId, "audio")
+          let silentVideoR2Url: string | undefined
+          if (result.silentVideoPath) {
+            silentVideoR2Url = await uploadFileToR2(result.silentVideoPath, `${jobId}-silent`, "video")
+          }
+          await cleanupWorkDir(dirname(result.audioPath))
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: audioR2Url, ...(silentVideoR2Url ? { videoUrl: silentVideoR2Url } : {}) }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${audioR2Url}`)
+
+        } else if (job.name === "trim-video") {
+          const { videoUrl, startTime, endTime } = job.data as {
+            jobId: string; videoUrl: string; startTime: number; endTime?: number
+          }
+          console.log(`[worker] trim-video ${jobId}`)
+          const outputPath = await trimVideo({ videoUrl, startTime, endTime })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "resize-video") {
+          const { videoUrl, targetAspect, method, padColor } = job.data as {
+            jobId: string; videoUrl: string; targetAspect: string; method: "crop" | "pad" | "stretch"; padColor?: string
+          }
+          console.log(`[worker] resize-video ${jobId}`)
+          const outputPath = await resizeVideo({ videoUrl, targetAspect, method, padColor })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "adjust-volume") {
+          const { audioUrl, volume, normalize, fadeIn, fadeOut } = job.data as {
+            jobId: string; audioUrl: string; volume?: number; normalize?: boolean; fadeIn?: number; fadeOut?: number
+          }
+          console.log(`[worker] adjust-volume ${jobId}`)
+          const outputPath = await adjustVolume({ audioUrl, volume, normalize, fadeIn, fadeOut })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "audio")
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "add-captions") {
+          const { videoUrl, text, style, position, fontSize, color, backgroundColor } = job.data as {
+            jobId: string; videoUrl: string; text: string; style?: string; position?: string; fontSize?: number; color?: string; backgroundColor?: string
+          }
+          console.log(`[worker] add-captions ${jobId}`)
+          const outputPath = await addCaptions({ videoUrl, text, style: style as "subtitle" | "word-highlight" | "karaoke" | undefined, position: position as "bottom" | "top" | "center" | undefined, fontSize, color, backgroundColor })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "mix-audio") {
+          const { audioUrls } = job.data as { jobId: string; audioUrls: string[] }
+          console.log(`[worker] mix-audio ${jobId}: ${audioUrls.length} tracks`)
+          const outputPath = await mixAudio({ audioUrls })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "audio")
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
         } else {
           throw new Error(`Unknown job type: ${job.name}`)
         }

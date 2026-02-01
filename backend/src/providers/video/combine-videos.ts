@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process"
 import { promises as fs } from "node:fs"
-import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { randomUUID } from "node:crypto"
+import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]
@@ -10,34 +8,11 @@ interface CombineOptions {
   readonly transitionDuration: number
 }
 
-async function downloadFile(url: string, dest: string): Promise<void> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to download: ${url} (${response.status})`)
-  }
-  const buffer = Buffer.from(await response.arrayBuffer())
-  await fs.writeFile(dest, buffer)
-}
-
-function runFfmpeg(args: readonly string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile("ffmpeg", args as string[], { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`ffmpeg failed: ${stderr || error.message}`))
-      } else {
-        resolve(stdout)
-      }
-    })
-  })
-}
-
 export async function combineVideos(options: CombineOptions): Promise<string> {
   const { videoUrls, transition, transitionDuration } = options
-  const workDir = join(tmpdir(), `combine-${randomUUID()}`)
-  await fs.mkdir(workDir, { recursive: true })
+  const workDir = await createWorkDir("combine")
 
   try {
-    // Download all videos
     const inputPaths: string[] = []
     for (let i = 0; i < videoUrls.length; i++) {
       const inputPath = join(workDir, `input_${i}.mp4`)
@@ -49,7 +24,6 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     const outputPath = join(workDir, "output.mp4")
 
     if (transition === "cut") {
-      // Simple concatenation using concat demuxer
       const listPath = join(workDir, "filelist.txt")
       const listContent = inputPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n")
       await fs.writeFile(listPath, listContent)
@@ -63,23 +37,16 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
         outputPath,
       ])
     } else {
-      // For fade/dissolve, re-encode with crossfade filter
-      // Build filter complex for crossfade between each pair
-      const filterParts: string[] = []
       const inputs: string[] = []
-
       for (let i = 0; i < inputPaths.length; i++) {
         inputs.push("-i", inputPaths[i])
       }
 
       if (inputPaths.length === 2) {
-        filterParts.push(
-          `[0:v][1:v]xfade=transition=${transition === "dissolve" ? "fade" : transition}:duration=${transitionDuration}:offset=0[outv]`
-        )
-        // For audio, crossfade if present
-        filterParts.push(
-          `[0:a][1:a]acrossfade=d=${transitionDuration}[outa]`
-        )
+        const filterParts: string[] = [
+          `[0:v][1:v]xfade=transition=${transition === "dissolve" ? "fade" : transition}:duration=${transitionDuration}:offset=0[outv]`,
+          `[0:a][1:a]acrossfade=d=${transitionDuration}[outa]`,
+        ]
 
         await runFfmpeg([
           "-y",
@@ -91,7 +58,6 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
           "-preset", "fast",
           outputPath,
         ]).catch(async () => {
-          // Retry without audio crossfade (some videos may not have audio)
           await runFfmpeg([
             "-y",
             ...inputs,
@@ -105,8 +71,6 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
           ])
         })
       } else {
-        // For 3+ videos with transitions, fall back to simple concat
-        // (complex xfade chains are fragile)
         const listPath = join(workDir, "filelist.txt")
         const listContent = inputPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n")
         await fs.writeFile(listPath, listContent)
@@ -125,8 +89,7 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     console.log(`[combineVideos] Output: ${outputPath}`)
     return outputPath
   } catch (err) {
-    // Cleanup on error
-    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
+    await cleanupWorkDir(workDir)
     throw err
   }
 }

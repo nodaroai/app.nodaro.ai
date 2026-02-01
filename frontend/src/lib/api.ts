@@ -147,6 +147,97 @@ export async function combineVideos(
   return res.json()
 }
 
+export async function addAudioApi(videoUrl: string, audioUrl: string, voiceoverVolume?: number, backgroundVolume?: number, keepOriginalAudio?: boolean): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/add-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start add-audio")
+  }
+  return res.json()
+}
+
+export async function extractAudioApi(videoUrl: string, audioFormat?: string, outputSilentVideo?: boolean): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/extract-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoUrl, audioFormat, outputSilentVideo }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start extract-audio")
+  }
+  return res.json()
+}
+
+export async function trimVideoApi(videoUrl: string, startTime: number, endTime?: number): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/trim-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoUrl, startTime, endTime }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start trim-video")
+  }
+  return res.json()
+}
+
+export async function resizeVideoApi(videoUrl: string, targetAspect: string, method: string, padColor?: string): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/resize-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoUrl, targetAspect, method, padColor }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start resize-video")
+  }
+  return res.json()
+}
+
+export async function adjustVolumeApi(audioUrl: string, volume?: number, normalize?: boolean, fadeIn?: number, fadeOut?: number): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/adjust-volume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ audioUrl, volume, normalize, fadeIn, fadeOut }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start adjust-volume")
+  }
+  return res.json()
+}
+
+export async function addCaptionsApi(videoUrl: string, text: string, style?: string, position?: string, fontSize?: number, color?: string, backgroundColor?: string): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/add-captions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoUrl, text, style, position, fontSize, color, backgroundColor }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start add-captions")
+  }
+  return res.json()
+}
+
+export async function mixAudioApi(audioUrls: string[]): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/mix-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ audioUrls }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start mix-audio")
+  }
+  return res.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<{
   id: string
   status: string

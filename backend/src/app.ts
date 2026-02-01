@@ -12,6 +12,13 @@ import { textToVideoRoutes } from "./routes/text-to-video.js"
 import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 import { generateScriptRoutes } from "./routes/generate-script.js"
 import { combineVideosRoutes } from "./routes/combine-videos.js"
+import { addAudioRoutes } from "./routes/add-audio.js"
+import { extractAudioRoutes } from "./routes/extract-audio.js"
+import { trimVideoRoutes } from "./routes/trim-video.js"
+import { resizeVideoRoutes } from "./routes/resize-video.js"
+import { adjustVolumeRoutes } from "./routes/adjust-volume.js"
+import { addCaptionsRoutes } from "./routes/add-captions.js"
+import { mixAudioRoutes } from "./routes/mix-audio.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -30,6 +37,13 @@ export async function buildApp() {
   await app.register(textToSpeechRoutes)
   await app.register(generateScriptRoutes)
   await app.register(combineVideosRoutes)
+  await app.register(addAudioRoutes)
+  await app.register(extractAudioRoutes)
+  await app.register(trimVideoRoutes)
+  await app.register(resizeVideoRoutes)
+  await app.register(adjustVolumeRoutes)
+  await app.register(addCaptionsRoutes)
+  await app.register(mixAudioRoutes)
 
   return app
 }

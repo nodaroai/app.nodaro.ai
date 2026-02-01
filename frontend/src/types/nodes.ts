@@ -252,6 +252,10 @@ export type AddAudioData = {
   voiceoverVolume: number
   backgroundVolume: number
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type AddCaptionsData = {
@@ -262,6 +266,10 @@ export type AddCaptionsData = {
   fontSize: number
   color: string
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type ResizeVideoData = {
@@ -271,6 +279,10 @@ export type ResizeVideoData = {
   method: "crop" | "pad" | "stretch"
   padColor: string
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type ExtractAudioData = {
@@ -279,6 +291,11 @@ export type ExtractAudioData = {
   outputSilentVideo: boolean
   audioFormat: "mp3" | "wav" | "aac"
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedAudioUrl?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type MixAudioData = {
@@ -286,6 +303,10 @@ export type MixAudioData = {
   label: string
   trackCount: number
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedAudioUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type AdjustVolumeData = {
@@ -296,6 +317,10 @@ export type AdjustVolumeData = {
   fadeIn: number
   fadeOut: number
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedAudioUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type TrimVideoData = {
@@ -304,6 +329,10 @@ export type TrimVideoData = {
   startTime: number
   endTime: number
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 // --- Output Node Data ---

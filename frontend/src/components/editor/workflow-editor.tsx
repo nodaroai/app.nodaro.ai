@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, CombineVideosData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, addAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, CombineVideosData, AddAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -78,7 +78,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "combine-videos"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "combine-videos", "add-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -168,6 +168,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return activeScript.scenes[0].imagePrompt
       }
     }
+    if (type === "add-audio" || type === "add-captions" || type === "resize-video" || type === "trim-video") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
+    }
+    if (type === "extract-audio" || type === "adjust-volume" || type === "mix-audio") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined)
+    }
     return undefined
   }
 
@@ -177,7 +187,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => n !== undefined)
 
-    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; referenceImageUrl?: string } = {}
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; referenceImageUrl?: string } = {}
 
     for (const src of sourceNodes) {
       const output = extractNodeOutput(src)
@@ -199,11 +209,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.imageUrl = output
         }
-      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "combine-videos") {
+      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "combine-videos" || src.type === "add-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
         } else {
           inputs.videoUrl = output
+        }
+      } else if (src.type === "text-to-speech" || src.type === "extract-audio" || src.type === "adjust-volume" || src.type === "mix-audio") {
+        if (node.type === "mix-audio") {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+        } else {
+          inputs.audioUrl = output
         }
       }
     }
@@ -542,6 +558,51 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  function runProcessingNode(nodeId: string, apiCall: () => Promise<{ jobId: string }>, outputKey: "generatedVideoUrl" | "generatedAudioUrl", label: string): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", [outputKey]: undefined })
+
+    return new Promise((resolve, reject) => {
+      apiCall().then(({ jobId }) => {
+        toast.info(`${label} started`, { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const url = outputKey === "generatedVideoUrl" ? job.output_data?.videoUrl : job.output_data?.audioUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as Record<string, unknown>)?.generatedResults as readonly GeneratedResult[] | undefined ?? []
+              const newResult: GeneratedResult = { url: (url as string) ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                [outputKey]: url,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success(`${label} complete`)
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error(`${label} failed`, { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? `${label} failed`))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error(`Failed to check ${label} status`)
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error(`Failed to start ${label}`, { description: err instanceof Error ? err.message : "Unknown error" })
+        reject(err)
+      })
+    })
+  }
+
   function executeNode(node: WorkflowNode): Promise<void> {
     const { nodes, edges } = useWorkflowStore.getState()
     const inputs = resolveNodeInputs(node, nodes, edges)
@@ -611,6 +672,58 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
       const combineData = node.data as CombineVideosData
       return runCombineVideos(node.id, videoUrls, combineData.transition ?? "cut", combineData.transitionDuration ?? 0.5)
+    }
+
+    if (node.type === "add-audio") {
+      const videoUrl = inputs.videoUrl
+      const audioUrl = inputs.audioUrl
+      if (!videoUrl) { toast.error(`Node "${(node.data as AddAudioData).label}": no video input`); return Promise.reject(new Error("No video")) }
+      if (!audioUrl) { toast.error(`Node "${(node.data as AddAudioData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
+      const d = node.data as AddAudioData
+      return runProcessingNode(node.id, () => addAudioApi(videoUrl, audioUrl, d.voiceoverVolume, d.backgroundVolume), "generatedVideoUrl", "Add Audio")
+    }
+
+    if (node.type === "extract-audio") {
+      const videoUrl = inputs.videoUrl
+      if (!videoUrl) { toast.error(`Node "${(node.data as ExtractAudioData).label}": no video input`); return Promise.reject(new Error("No video")) }
+      const d = node.data as ExtractAudioData
+      return runProcessingNode(node.id, () => extractAudioApi(videoUrl, d.audioFormat, d.outputSilentVideo), "generatedAudioUrl", "Extract Audio")
+    }
+
+    if (node.type === "trim-video") {
+      const videoUrl = inputs.videoUrl
+      if (!videoUrl) { toast.error(`Node "${(node.data as TrimVideoData).label}": no video input`); return Promise.reject(new Error("No video")) }
+      const d = node.data as TrimVideoData
+      return runProcessingNode(node.id, () => trimVideoApi(videoUrl, d.startTime, d.endTime || undefined), "generatedVideoUrl", "Trim Video")
+    }
+
+    if (node.type === "resize-video") {
+      const videoUrl = inputs.videoUrl
+      if (!videoUrl) { toast.error(`Node "${(node.data as ResizeVideoData).label}": no video input`); return Promise.reject(new Error("No video")) }
+      const d = node.data as ResizeVideoData
+      return runProcessingNode(node.id, () => resizeVideoApi(videoUrl, d.targetAspect, d.method, d.padColor || undefined), "generatedVideoUrl", "Resize Video")
+    }
+
+    if (node.type === "adjust-volume") {
+      const audioUrl = inputs.audioUrl
+      if (!audioUrl) { toast.error(`Node "${(node.data as AdjustVolumeData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
+      const d = node.data as AdjustVolumeData
+      return runProcessingNode(node.id, () => adjustVolumeApi(audioUrl, d.volume, d.normalize, d.fadeIn, d.fadeOut), "generatedAudioUrl", "Adjust Volume")
+    }
+
+    if (node.type === "add-captions") {
+      const videoUrl = inputs.videoUrl
+      if (!videoUrl) { toast.error(`Node "${(node.data as AddCaptionsData).label}": no video input`); return Promise.reject(new Error("No video")) }
+      const d = node.data as AddCaptionsData
+      const text = inputs.prompt ?? ""
+      if (!text) { toast.error(`Node "${d.label}": no caption text`); return Promise.reject(new Error("No text")) }
+      return runProcessingNode(node.id, () => addCaptionsApi(videoUrl, text, d.style, d.position, d.fontSize, d.color), "generatedVideoUrl", "Add Captions")
+    }
+
+    if (node.type === "mix-audio") {
+      const audioUrls = inputs.audioUrls ?? []
+      if (audioUrls.length < 2) { toast.error(`Node "${(node.data as MixAudioData).label}": need at least 2 audio inputs`); return Promise.reject(new Error("Need at least 2 audio tracks")) }
+      return runProcessingNode(node.id, () => mixAudioApi(audioUrls), "generatedAudioUrl", "Mix Audio")
     }
 
     return Promise.resolve()
