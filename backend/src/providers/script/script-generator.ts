@@ -59,7 +59,7 @@ export async function generateScript(
 
   console.log(`[generateScript] Prompt: "${prompt}", scenes: ${sceneCount}, tone: "${tone ?? "none"}"`)
 
-  const output = await replicate.run("google/gemini-2.5-flash-preview-05-20", {
+  const output = await replicate.run("google/gemini-2.5-flash", {
     input: {
       prompt: `${SYSTEM_PROMPT}\n\n${userPrompt}`,
       max_tokens: 4096,
