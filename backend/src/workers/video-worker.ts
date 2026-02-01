@@ -306,9 +306,9 @@ export function createVideoWorker() {
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "generate-music") {
-          const { prompt, provider, duration, modelVersion, lyrics } = job.data as { jobId: string; prompt: string; provider?: MusicProvider; duration?: number; modelVersion?: string; lyrics?: string }
+          const { prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl } = job.data as { jobId: string; prompt: string; provider?: MusicProvider; duration?: number; modelVersion?: string; lyrics?: string; referenceAudioUrl?: string }
           console.log(`[worker] generate-music ${jobId} (provider: ${provider ?? "musicgen"})`)
-          const replicateUrl = await generateMusic(prompt, provider, duration, modelVersion, lyrics)
+          const replicateUrl = await generateMusic(prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl)
           await job.updateProgress(50)
           const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
           await job.updateProgress(100)

@@ -241,6 +241,9 @@ export type GenerateMusicData = {
   mood: string
   instrumental: boolean
   lyrics: string
+  referenceAudioUrl: string
+  referenceYouTubeUrl: string
+  referenceSource: "none" | "upload" | "youtube"
   modelVersion: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -633,7 +636,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 5,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Generate Music", prompt: "", provider: "musicgen", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", modelVersion: "stereo-large", fieldMappings: {} },
+    defaultData: { label: "Generate Music", prompt: "", provider: "musicgen", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
   },
   // Processing
   {

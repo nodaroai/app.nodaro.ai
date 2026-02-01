@@ -238,7 +238,34 @@ export async function mixAudioApi(audioUrls: string[]): Promise<{ jobId: string 
   return res.json()
 }
 
-export async function generateMusicApi(prompt: string, provider?: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean, lyrics?: string): Promise<{ jobId: string }> {
+export async function uploadAudio(file: File): Promise<{ url: string }> {
+  const formData = new FormData()
+  formData.append("file", file)
+  const res = await fetch(`${API_BASE_URL}/v1/upload/audio`, {
+    method: "POST",
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to upload audio file")
+  }
+  return res.json()
+}
+
+export async function downloadYouTubeAudio(url: string): Promise<{ url: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/youtube-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to download YouTube audio")
+  }
+  return res.json()
+}
+
+export async function generateMusicApi(prompt: string, provider?: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean, lyrics?: string, referenceAudioUrl?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (provider) body.provider = provider
   if (duration !== undefined) body.duration = duration
@@ -246,6 +273,7 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   if (mood) body.mood = mood
   if (instrumental !== undefined) body.instrumental = instrumental
   if (lyrics) body.lyrics = lyrics
+  if (referenceAudioUrl) body.referenceAudioUrl = referenceAudioUrl
   const res = await fetch(`${API_BASE_URL}/v1/generate-music`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

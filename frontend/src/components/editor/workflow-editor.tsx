@@ -671,7 +671,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No prompt"))
       }
       const d = node.data as GenerateMusicData
-      return runProcessingNode(node.id, () => generateMusicApi(prompt, d.provider || undefined, d.duration || undefined, d.genre || undefined, d.mood || undefined, d.instrumental, d.lyrics || undefined), "generatedAudioUrl", "Generate Music")
+      const refUrl = d.referenceAudioUrl || undefined
+      return runProcessingNode(node.id, () => generateMusicApi(prompt, d.provider || undefined, d.duration || undefined, d.genre || undefined, d.mood || undefined, d.instrumental, d.lyrics || undefined, refUrl), "generatedAudioUrl", "Generate Music")
     }
 
     if (node.type === "combine-videos") {

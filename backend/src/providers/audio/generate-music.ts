@@ -21,13 +21,16 @@ async function runMusicGen(prompt: string, duration: number, modelVersion: strin
   return String(output)
 }
 
-async function runMiniMax(prompt: string, lyrics?: string): Promise<string> {
+async function runMiniMax(prompt: string, lyrics?: string, referenceAudioUrl?: string): Promise<string> {
   const input: Record<string, unknown> = {}
   if (lyrics) {
     input.lyrics = lyrics
   } else {
     // MiniMax uses lyrics field; use prompt as lyrics if none provided
     input.lyrics = `##\n${prompt}\n##`
+  }
+  if (referenceAudioUrl) {
+    input.song_file = referenceAudioUrl
   }
   const output = await replicate.run(
     "minimax/music-01:0254c7e2f54315b667dbae03da7c155822ba29ffe0457be5bc246d564be486bd",
@@ -68,6 +71,7 @@ export async function generateMusic(
   duration?: number,
   modelVersion?: string,
   lyrics?: string,
+  referenceAudioUrl?: string,
 ): Promise<string> {
   const resolvedProvider = provider ?? "musicgen"
   const resolvedDuration = duration ?? 8
@@ -78,7 +82,7 @@ export async function generateMusic(
 
   switch (resolvedProvider) {
     case "minimax":
-      resultUrl = await runMiniMax(prompt, lyrics)
+      resultUrl = await runMiniMax(prompt, lyrics, referenceAudioUrl)
       break
     case "lyria":
       resultUrl = await runLyria(prompt)
