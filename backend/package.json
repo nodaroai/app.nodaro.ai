@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "worker": "tsx src/worker.ts",
+    "worker": "tsx watch src/worker.ts",
     "lint": "eslint src/"
   },
   "dependencies": {

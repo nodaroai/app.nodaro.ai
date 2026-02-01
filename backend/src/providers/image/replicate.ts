@@ -8,14 +8,23 @@ export async function generateImage(prompt: string): Promise<string> {
     input: { prompt },
   })
 
-  if (!Array.isArray(output) || output.length === 0) {
-    throw new Error("Replicate returned no output")
+  // Replicate output can be: string[], FileOutput[], or a single FileOutput
+  // FileOutput has a .url() method or can be coerced to string
+  if (Array.isArray(output)) {
+    if (output.length === 0) {
+      throw new Error("Replicate returned empty output")
+    }
+    const item = output[0]
+    return String(item)
   }
 
-  const url = output[0]
-  if (typeof url !== "string") {
-    throw new Error(`Unexpected Replicate output type: ${typeof url}`)
+  if (output && typeof output === "object") {
+    return String(output)
   }
 
-  return url
+  if (typeof output === "string") {
+    return output
+  }
+
+  throw new Error(`Unexpected Replicate output: ${JSON.stringify(output)}`)
 }

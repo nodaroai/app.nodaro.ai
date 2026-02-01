@@ -25,7 +25,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "00000000-0000-0000-0000-000000000000",
+        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
         status: "pending",
         input_data: { prompt, type: "generate-image" },
       })
