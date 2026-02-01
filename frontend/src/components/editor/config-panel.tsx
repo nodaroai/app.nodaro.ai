@@ -1023,7 +1023,7 @@ function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField
       <div>
         <Label>Voice</Label>
         <Select
-          value={data.voiceId || "default"}
+          value={data.voiceId || "Rachel"}
           onValueChange={(v) => onUpdate({ voiceId: v })}
         >
           <SelectTrigger><SelectValue placeholder="Select voice" /></SelectTrigger>

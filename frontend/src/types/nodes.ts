@@ -528,7 +528,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Text to Speech", provider: "elevenlabs", voiceId: "", language: "en", speed: 1, pitch: 1, fieldMappings: {} },
+    defaultData: { label: "Text to Speech", provider: "elevenlabs", voiceId: "Rachel", language: "en", speed: 1, pitch: 1, fieldMappings: {} },
   },
   {
     type: "qa-check",

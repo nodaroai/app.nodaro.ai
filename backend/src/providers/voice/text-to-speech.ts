@@ -7,16 +7,15 @@ export async function textToSpeech(
   text: string,
   voice?: string,
 ): Promise<string> {
-  console.log(`[textToSpeech] Text length: ${text.length}, voice: ${voice ?? "default"}`)
+  console.log(`[textToSpeech] Text length: ${text.length}, voice: ${voice ?? "Rachel"}`)
 
   const output = await replicate.run(
-    "lucataco/xtts-v2:684bc3855b37866c0c65add2ff39c78f3dea3f4ff103a436465326e0f438d55e",
+    "elevenlabs/turbo-v2.5",
     {
       input: {
-        text,
-        speaker: "https://replicate.delivery/pbxt/Jt79w0xsT64R1JsiJ0LQZI8SoGfoSGIyPhpYKGlFtVsfGNhE/male.wav",
-        language: "en",
-        cleanup_voice: false,
+        prompt: text,
+        voice: voice || "Rachel",
+        language_code: "en",
       },
     },
   )
