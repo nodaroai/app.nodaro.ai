@@ -5,6 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { BookOpen, Loader2, AlertCircle, X, Play, FileText, Sparkles, ImageIcon, Film, Maximize2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { ScriptPreviewModal } from "@/components/editor/script-preview-modal"
+import { ExpandStoryboardDialog, type ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
@@ -13,12 +14,14 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const generateSceneImage = useWorkflowStore((s) => s.generateSceneImage)
+  const expandStoryboard = useWorkflowStore((s) => s.expandStoryboard)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeScript = activeResult?.script ?? nodeData.generatedScript
   const [showFullscreen, setShowFullscreen] = useState(false)
+  const [showExpandDialog, setShowExpandDialog] = useState(false)
 
   const sceneCount = activeScript?.scenes.length ?? 0
   const creditsPerScene = 5 + 20 // image + video
@@ -237,6 +240,10 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
             } : {}),
           })
         }}
+        onExpandToNodes={() => {
+          setShowFullscreen(false)
+          setShowExpandDialog(true)
+        }}
         onDeleteImage={(sceneIndex, imageIndex) => {
           if (!activeScript) return
           const scene = activeScript.scenes[sceneIndex]
@@ -261,6 +268,16 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               ),
             } : {}),
           })
+        }}
+      />
+    )}
+    {activeScript && (
+      <ExpandStoryboardDialog
+        isOpen={showExpandDialog}
+        onClose={() => setShowExpandDialog(false)}
+        script={activeScript}
+        onConfirm={(options: ExpandOptions) => {
+          expandStoryboard?.(id, options)
         }}
       />
     )}

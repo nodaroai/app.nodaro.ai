@@ -43,6 +43,9 @@ interface WorkflowState {
   readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
   readonly generateSceneImage: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null
   readonly setGenerateSceneImage: (fn: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null) => void
+  readonly batchAddNodesAndEdges: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
+  readonly expandStoryboard: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean }) => void) | null
+  readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean }) => void) | null) => void
 }
 
 let nextNodeId = 1
@@ -253,4 +256,22 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setRunSingleNode: (fn) => set({ runSingleNode: fn }),
   generateSceneImage: null,
   setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
+
+  batchAddNodesAndEdges: (newNodes, newEdges) => {
+    // Update nextNodeId to avoid collisions
+    for (const n of newNodes) {
+      const num = parseInt(n.id.replace("node_", ""), 10)
+      if (!isNaN(num) && num >= nextNodeId) {
+        nextNodeId = num + 1
+      }
+    }
+    set((state) => ({
+      nodes: [...state.nodes, ...newNodes],
+      edges: [...state.edges, ...newEdges],
+      isDirty: true,
+    }))
+  },
+
+  expandStoryboard: null,
+  setExpandStoryboard: (fn) => set({ expandStoryboard: fn }),
 }))

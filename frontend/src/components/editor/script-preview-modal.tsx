@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw } from "lucide-react"
+import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers } from "lucide-react"
 import type { GeneratedScript } from "@/types/nodes"
 
 interface ScriptPreviewModalProps {
@@ -12,6 +12,7 @@ interface ScriptPreviewModalProps {
   readonly onGenerateScene: (sceneIndex: number) => Promise<void>
   readonly onSetActiveImage: (sceneIndex: number, imageIndex: number) => void
   readonly onDeleteImage: (sceneIndex: number, imageIndex: number) => void
+  readonly onExpandToNodes: () => void
 }
 
 export function ScriptPreviewModal({
@@ -21,6 +22,7 @@ export function ScriptPreviewModal({
   onGenerateScene,
   onSetActiveImage,
   onDeleteImage,
+  onExpandToNodes,
 }: ScriptPreviewModalProps) {
   const [generatingAll, setGeneratingAll] = useState(false)
   const [allProgress, setAllProgress] = useState({ current: 0, total: 0 })
@@ -95,7 +97,7 @@ export function ScriptPreviewModal({
               Est. {totalCredits} credits
             </span>
           </div>
-          <div className="mt-3">
+          <div className="mt-3 flex gap-2">
             <button
               type="button"
               className="flex items-center gap-2 h-8 px-4 text-xs font-medium rounded-md bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -118,6 +120,14 @@ export function ScriptPreviewModal({
                   )}
                 </>
               )}
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 h-8 px-4 text-xs font-medium rounded-md border border-border bg-background hover:bg-muted transition-colors"
+              onClick={onExpandToNodes}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Expand to Nodes
             </button>
           </div>
         </div>

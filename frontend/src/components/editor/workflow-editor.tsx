@@ -693,6 +693,161 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
+  function handleExpandStoryboard(
+    scriptNodeId: string,
+    options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean },
+  ) {
+    const store = useWorkflowStore.getState()
+    const scriptNode = store.nodes.find((n) => n.id === scriptNodeId)
+    if (!scriptNode) return
+
+    const scriptData = scriptNode.data as GenerateScriptData
+    const activeIdx = scriptData.activeResultIndex ?? 0
+    const results = scriptData.generatedResults ?? []
+    const script = results[activeIdx]?.script ?? scriptData.generatedScript
+    if (!script) return
+
+    const scenes = script.scenes
+    const startX = scriptNode.position.x + 400
+    const startY = scriptNode.position.y
+
+    const newNodes: WorkflowNode[] = []
+    const newEdges: WorkflowEdge[] = []
+
+    let idCounter = store.nodes.reduce((max, n) => {
+      const num = parseInt(n.id.replace("node_", ""), 10)
+      return isNaN(num) ? max : Math.max(max, num)
+    }, 0) + 1
+
+    function nextId(): string {
+      const id = `node_${idCounter}`
+      idCounter += 1
+      return id
+    }
+
+    const isHorizontal = options.layout === "horizontal"
+    const sceneSpacingX = isHorizontal ? 280 : 0
+    const sceneSpacingY = isHorizontal ? 0 : 250
+    const videoOffsetX = isHorizontal ? 0 : 300
+    const videoOffsetY = isHorizontal ? 200 : 0
+
+    const videoNodeIds: string[] = []
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i]
+      const images = scene.generatedImages ?? []
+      const hasImage = images.length > 0
+
+      const imgX = startX + i * sceneSpacingX
+      const imgY = startY + i * sceneSpacingY
+
+      const imageNodeId = nextId()
+      newNodes.push({
+        id: imageNodeId,
+        type: "generate-image",
+        position: { x: imgX, y: imgY },
+        data: {
+          label: `Scene ${scene.sceneNumber} Image`,
+          prompt: scene.imagePrompt,
+          provider: "nano-banana",
+          model: "gemini-2.5-flash-image",
+          style: "",
+          aspectRatio: "16:9",
+          negativePrompt: "",
+          fieldMappings: {},
+          ...(hasImage ? {
+            executionStatus: "completed",
+            generatedImageUrl: images[scene.activeImageIndex ?? 0]?.url,
+            generatedResults: images.map((img) => ({
+              url: img.url,
+              timestamp: img.timestamp,
+              jobId: img.jobId,
+            })),
+            activeResultIndex: scene.activeImageIndex ?? 0,
+          } : {}),
+        },
+      } as WorkflowNode)
+
+      const videoNodeId = nextId()
+      videoNodeIds.push(videoNodeId)
+      newNodes.push({
+        id: videoNodeId,
+        type: "image-to-video",
+        position: { x: imgX + videoOffsetX, y: imgY + videoOffsetY },
+        data: {
+          label: `Scene ${scene.sceneNumber} Video`,
+          provider: "veo",
+          model: "veo-3.1",
+          duration: scene.durationHint,
+          motion: "moderate",
+          cameraMotion: "static",
+          fieldMappings: {},
+        },
+      } as WorkflowNode)
+
+      newEdges.push({
+        id: `edge_${Date.now()}_${i}_img_vid`,
+        source: imageNodeId,
+        sourceHandle: "image",
+        target: videoNodeId,
+        targetHandle: "in",
+      } as WorkflowEdge)
+    }
+
+    if (options.includeCombine && scenes.length > 1) {
+      const combineNodeId = nextId()
+      const combineX = isHorizontal
+        ? startX + scenes.length * sceneSpacingX + 100
+        : startX + videoOffsetX + 300
+      const combineY = isHorizontal
+        ? startY + videoOffsetY
+        : startY + ((scenes.length - 1) * sceneSpacingY) / 2
+
+      newNodes.push({
+        id: combineNodeId,
+        type: "combine-videos",
+        position: { x: combineX, y: combineY },
+        data: {
+          label: "Combine All Videos",
+          transition: "cut",
+          transitionDuration: 0.5,
+          fieldMappings: {},
+        },
+      } as WorkflowNode)
+
+      for (let i = 0; i < videoNodeIds.length; i++) {
+        newEdges.push({
+          id: `edge_${Date.now()}_${i}_vid_comb`,
+          source: videoNodeIds[i],
+          sourceHandle: "video",
+          target: combineNodeId,
+          targetHandle: "in",
+        } as WorkflowEdge)
+      }
+    }
+
+    store.batchAddNodesAndEdges(newNodes, newEdges)
+
+    const imageNodeCount = scenes.length
+    const videoNodeCount = scenes.length
+    const combineCount = options.includeCombine && scenes.length > 1 ? 1 : 0
+    const totalNodes = imageNodeCount + videoNodeCount + combineCount
+    toast.success(`Created ${totalNodes} nodes for ${scenes.length} scenes`)
+
+    if (options.autoRun) {
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i]
+        const hasImage = (scene.generatedImages ?? []).length > 0
+        if (!hasImage) {
+          const imageNode = newNodes[i * 2]
+          if (imageNode) {
+            store.runSingleNode?.(imageNode.id)
+          }
+        }
+      }
+    }
+  }
+
   // Register single-node runner
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(handleRunSingleNode)
@@ -703,6 +858,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setGenerateSceneImage(handleGenerateSceneImage)
     return () => useWorkflowStore.getState().setGenerateSceneImage(null)
+  })
+
+  // Register expand storyboard
+  useEffect(() => {
+    useWorkflowStore.getState().setExpandStoryboard(handleExpandStoryboard)
+    return () => useWorkflowStore.getState().setExpandStoryboard(null)
   })
 
   // Ctrl+S keyboard shortcut
