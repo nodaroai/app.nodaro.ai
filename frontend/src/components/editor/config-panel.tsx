@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo } from "react"
-import { X, Play } from "lucide-react"
+import { useMemo, useState } from "react"
+import { X, Play, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,12 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   getProviders,
@@ -56,6 +62,8 @@ import type {
   SaveToStorageData,
   WebhookOutputData,
   FieldMappings,
+  GeneratedScript,
+  ScriptScene,
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -699,6 +707,31 @@ function CameraMotionConfig({ data, onUpdate }: ConfigProps<CameraMotionData>) {
 /* ── AI Node Configs ── */
 
 function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateScriptData>) {
+  const [copied, setCopied] = useState(false)
+  const script = data.generatedScript
+  const results = data.generatedResults ?? []
+  const activeIndex = data.activeResultIndex ?? 0
+
+  function updateScene(sceneIndex: number, field: keyof ScriptScene, value: string | number) {
+    if (!script) return
+    const updatedScenes = script.scenes.map((s, i) =>
+      i === sceneIndex ? { ...s, [field]: value } : s,
+    )
+    const updatedScript: GeneratedScript = { ...script, scenes: updatedScenes }
+    const updatedResults = results.map((r, i) =>
+      i === activeIndex ? { ...r, script: updatedScript } : r,
+    )
+    onUpdate({ generatedScript: updatedScript, generatedResults: updatedResults })
+  }
+
+  function handleCopyImagePrompts() {
+    if (!script) return
+    const text = script.scenes.map((s) => s.imagePrompt).join("\n\n")
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="script">
@@ -761,6 +794,108 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           onChange={(e) => onUpdate({ targetLength: parseInt(e.target.value, 10) || 60 })}
         />
       </MappableField>
+
+      {script && (
+        <>
+          <Separator />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Generated Script</Label>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={handleCopyImagePrompts}
+              >
+                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                {copied ? "Copied" : "Copy Prompts"}
+              </Button>
+            </div>
+
+            <div>
+              <Label className="text-xs">Title</Label>
+              <Input
+                value={script.title}
+                onChange={(e) => {
+                  const updatedScript = { ...script, title: e.target.value }
+                  const updatedResults = results.map((r, i) =>
+                    i === activeIndex ? { ...r, script: updatedScript } : r,
+                  )
+                  onUpdate({ generatedScript: updatedScript, generatedResults: updatedResults })
+                }}
+              />
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              {script.scenes.length} scenes / {script.totalDuration}s total
+            </div>
+
+            <Accordion type="single" collapsible className="w-full">
+              {script.scenes.map((scene, i) => (
+                <AccordionItem key={scene.sceneNumber} value={`scene-${i}`}>
+                  <AccordionTrigger className="text-xs py-2 hover:no-underline">
+                    <span className="text-left truncate pr-2">
+                      Scene {scene.sceneNumber}: {scene.action.slice(0, 40)}{scene.action.length > 40 ? "..." : ""}
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <div>
+                        <Label className="text-[10px] text-muted-foreground">Visual Description</Label>
+                        <Textarea
+                          rows={3}
+                          className="text-xs"
+                          value={scene.visualDescription}
+                          onChange={(e) => updateScene(i, "visualDescription", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-muted-foreground">Action</Label>
+                        <Textarea
+                          rows={2}
+                          className="text-xs"
+                          value={scene.action}
+                          onChange={(e) => updateScene(i, "action", e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">Mood</Label>
+                          <Input
+                            className="text-xs h-7"
+                            value={scene.mood}
+                            onChange={(e) => updateScene(i, "mood", e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">Duration (s)</Label>
+                          <Input
+                            type="number"
+                            className="text-xs h-7"
+                            min={1}
+                            max={120}
+                            value={scene.durationHint}
+                            onChange={(e) => updateScene(i, "durationHint", parseInt(e.target.value, 10) || 5)}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-muted-foreground">Image Prompt (for Generate Image)</Label>
+                        <Textarea
+                          rows={3}
+                          className="text-xs"
+                          value={scene.imagePrompt}
+                          onChange={(e) => updateScene(i, "imagePrompt", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </>
+      )}
     </div>
   )
 }
