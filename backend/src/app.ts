@@ -22,6 +22,7 @@ import { mixAudioRoutes } from "./routes/mix-audio.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
 import { youtubeAudioRoutes } from "./routes/youtube-audio.js"
+import { extractYouTubeAudioRoutes } from "./routes/extract-youtube-audio.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -50,6 +51,7 @@ export async function buildApp() {
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)
   await app.register(youtubeAudioRoutes)
+  await app.register(extractYouTubeAudioRoutes)
 
   return app
 }

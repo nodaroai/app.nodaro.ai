@@ -22,7 +22,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { uploadAudio, downloadYouTubeAudio } from "@/lib/api"
+import { uploadAudio, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus } from "@/lib/api"
 import {
   getProviders,
   getProviderLabel,
@@ -37,6 +37,7 @@ import type {
   UploadImageData,
   UploadVideoData,
   RSSFeedData,
+  ReferenceAudioData,
   ToneData,
   StyleGuideData,
   ProviderData,
@@ -322,6 +323,9 @@ export function ConfigPanel() {
           {selectedNode.type === "rss-feed" && (
             <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "reference-audio" && (
+            <ReferenceAudioConfig data={selectedNode.data as ReferenceAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
 
           {/* Parameter Nodes */}
           {selectedNode.type === "tone" && (
@@ -505,6 +509,168 @@ function RSSFeedConfig({ data, onUpdate }: ConfigProps<RSSFeedData>) {
           onChange={(e) => onUpdate({ itemIndex: parseInt(e.target.value, 10) || 0 })}
         />
       </div>
+    </div>
+  )
+}
+
+function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAudioData>) {
+  const [extracting, setExtracting] = useState(false)
+  const [fetchingMeta, setFetchingMeta] = useState(false)
+
+  const handleYouTubeUrlChange = useCallback(async (url: string) => {
+    onUpdate({ youtubeUrl: url })
+    if (!url.trim()) return
+    try {
+      const parsed = new URL(url)
+      if (!parsed.hostname.includes("youtube.com") && !parsed.hostname.includes("youtu.be")) return
+    } catch {
+      return
+    }
+    setFetchingMeta(true)
+    try {
+      const meta = await fetchYouTubeOEmbed(url)
+      onUpdate({ videoTitle: meta.title, videoThumbnail: meta.thumbnail_url })
+    } catch {
+      // ignore metadata fetch errors
+    } finally {
+      setFetchingMeta(false)
+    }
+  }, [onUpdate])
+
+  const handleExtract = useCallback(async () => {
+    const url = data.youtubeUrl?.trim()
+    if (!url) return
+    setExtracting(true)
+    onUpdate({ extractionStatus: "extracting" })
+    try {
+      const { jobId } = await extractYouTubeAudioApi(url)
+      // Poll for completion
+      const poll = async (): Promise<string> => {
+        const status = await getJobStatus(jobId)
+        if (status.status === "completed" && status.output_data?.audioUrl) {
+          return status.output_data.audioUrl
+        }
+        if (status.status === "failed") {
+          throw new Error(status.error_message ?? "Extraction failed")
+        }
+        await new Promise((r) => setTimeout(r, 2000))
+        return poll()
+      }
+      const audioUrl = await poll()
+      onUpdate({ extractedAudioUrl: audioUrl, extractionStatus: "ready" })
+    } catch {
+      onUpdate({ extractionStatus: "failed" })
+    } finally {
+      setExtracting(false)
+    }
+  }, [data.youtubeUrl, onUpdate])
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    setExtracting(true)
+    onUpdate({ extractionStatus: "extracting" })
+    try {
+      const result = await uploadAudio(file)
+      onUpdate({ uploadedFileUrl: result.url, extractedAudioUrl: result.url, extractionStatus: "ready" })
+    } catch {
+      onUpdate({ extractionStatus: "failed" })
+    } finally {
+      setExtracting(false)
+    }
+  }, [onUpdate])
+
+  const handleDirectUrlSet = useCallback(() => {
+    const url = data.directUrl?.trim()
+    if (url) {
+      onUpdate({ extractedAudioUrl: url, extractionStatus: "ready" })
+    }
+  }, [data.directUrl, onUpdate])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Source</Label>
+        <Select
+          value={data.sourceType || "youtube"}
+          onValueChange={(v) => onUpdate({ sourceType: v as ReferenceAudioData["sourceType"], extractedAudioUrl: "", extractionStatus: "idle", videoTitle: "", videoThumbnail: "" })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="youtube">YouTube</SelectItem>
+            <SelectItem value="upload">Upload File</SelectItem>
+            <SelectItem value="url">Direct URL</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {(data.sourceType === "youtube" || !data.sourceType) && (
+        <div className="flex flex-col gap-2">
+          <div>
+            <Label htmlFor="yt-url">YouTube URL</Label>
+            <Input
+              id="yt-url"
+              value={data.youtubeUrl || ""}
+              onChange={(e) => handleYouTubeUrlChange(e.target.value)}
+              placeholder="https://youtube.com/watch?v=..."
+            />
+          </div>
+          {fetchingMeta && <p className="text-xs text-muted-foreground">Fetching video info...</p>}
+          {data.videoThumbnail && (
+            <div className="rounded overflow-hidden bg-muted">
+              <img src={data.videoThumbnail} alt="" className="w-full h-20 object-cover" />
+              {data.videoTitle && <p className="text-xs p-1.5 truncate">{data.videoTitle}</p>}
+            </div>
+          )}
+          <Button
+            size="sm"
+            onClick={handleExtract}
+            disabled={extracting || !data.youtubeUrl?.trim()}
+          >
+            {extracting ? "Extracting..." : "Extract Audio"}
+          </Button>
+        </div>
+      )}
+
+      {data.sourceType === "upload" && (
+        <div className="flex flex-col gap-2">
+          <Label>Audio File</Label>
+          <Input
+            type="file"
+            accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,.mp3,.wav,.m4a,.aac"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleFileUpload(file)
+            }}
+          />
+          {extracting && <p className="text-xs text-muted-foreground">Uploading...</p>}
+        </div>
+      )}
+
+      {data.sourceType === "url" && (
+        <div className="flex flex-col gap-2">
+          <div>
+            <Label htmlFor="direct-url">Audio URL</Label>
+            <Input
+              id="direct-url"
+              value={data.directUrl || ""}
+              onChange={(e) => onUpdate({ directUrl: e.target.value })}
+              placeholder="https://example.com/audio.mp3"
+            />
+          </div>
+          <Button size="sm" onClick={handleDirectUrlSet} disabled={!data.directUrl?.trim()}>
+            Set URL
+          </Button>
+        </div>
+      )}
+
+      {data.extractionStatus === "ready" && data.extractedAudioUrl && (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs text-green-600">Audio ready</p>
+          <audio src={data.extractedAudioUrl} controls className="w-full h-8" />
+        </div>
+      )}
+      {data.extractionStatus === "failed" && (
+        <p className="text-xs text-red-500">Extraction failed. Try again.</p>
+      )}
     </div>
   )
 }

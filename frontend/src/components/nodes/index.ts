@@ -10,6 +10,7 @@ import { DurationNode } from "./duration-node"
 import { AspectRatioNode } from "./aspect-ratio-node"
 import { MotionNode } from "./motion-node"
 import { CameraMotionNode } from "./camera-motion-node"
+import { ReferenceAudioNode } from "./reference-audio-node"
 import { GenerateScriptNode } from "./generate-script-node"
 import { GenerateImageNode } from "./generate-image-node"
 import { ImageToVideoNode } from "./image-to-video-node"
@@ -45,6 +46,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "aspect-ratio": AspectRatioNode,
   "motion": MotionNode,
   "camera-motion": CameraMotionNode,
+  "reference-audio": ReferenceAudioNode,
   // AI
   "generate-script": GenerateScriptNode,
   "generate-image": GenerateImageNode,

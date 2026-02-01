@@ -286,6 +286,31 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   return res.json()
 }
 
+export async function extractYouTubeAudioApi(youtubeUrl: string): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/extract-youtube-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ youtubeUrl }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start YouTube audio extraction")
+  }
+  return res.json()
+}
+
+export interface YouTubeOEmbedData {
+  title: string
+  thumbnail_url: string
+  author_name: string
+}
+
+export async function fetchYouTubeOEmbed(url: string): Promise<YouTubeOEmbedData> {
+  const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`)
+  if (!res.ok) throw new Error("Failed to fetch YouTube metadata")
+  return res.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<{
   id: string
   status: string

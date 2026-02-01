@@ -45,6 +45,20 @@ export type RSSFeedData = {
   extractFields: string[]
 }
 
+export type ReferenceAudioData = {
+  [key: string]: unknown
+  label: string
+  sourceType: "youtube" | "upload" | "url"
+  youtubeUrl: string
+  uploadedFileUrl: string
+  directUrl: string
+  videoTitle: string
+  videoThumbnail: string
+  videoDuration: string
+  extractedAudioUrl: string
+  extractionStatus: "idle" | "extracting" | "ready" | "failed"
+}
+
 // --- Parameter Node Data ---
 
 export type ToneData = {
@@ -382,6 +396,7 @@ export type SceneNodeData =
   | UploadImageData
   | UploadVideoData
   | RSSFeedData
+  | ReferenceAudioData
   | ToneData
   | StyleGuideData
   | ProviderData
@@ -414,6 +429,7 @@ export type SceneNodeType =
   | "upload-image"
   | "upload-video"
   | "rss-feed"
+  | "reference-audio"
   | "tone"
   | "style-guide"
   | "provider"
@@ -491,6 +507,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: [],
     outputs: ["content"],
     defaultData: { label: "RSS Feed", feedUrl: "", itemIndex: 0, extractFields: ["title", "description"] },
+  },
+  {
+    type: "reference-audio",
+    label: "Reference Audio",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["audio"],
+    defaultData: { label: "Reference Audio", sourceType: "youtube", youtubeUrl: "", uploadedFileUrl: "", directUrl: "", videoTitle: "", videoThumbnail: "", videoDuration: "", extractedAudioUrl: "", extractionStatus: "idle" },
   },
   // Parameter
   {

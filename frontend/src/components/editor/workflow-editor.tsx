@@ -178,6 +178,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined)
     }
+    if (type === "reference-audio") {
+      return (data.extractedAudioUrl as string | undefined)?.trim()
+    }
     return undefined
   }
 
@@ -214,6 +217,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
         } else {
           inputs.videoUrl = output
+        }
+      } else if (src.type === "reference-audio") {
+        if (node.type === "generate-music") {
+          inputs.audioUrl = output
+        } else if (node.type === "mix-audio") {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+        } else {
+          inputs.audioUrl = output
         }
       } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "extract-audio" || src.type === "adjust-volume" || src.type === "mix-audio") {
         if (node.type === "mix-audio") {
@@ -671,7 +682,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No prompt"))
       }
       const d = node.data as GenerateMusicData
-      const refUrl = d.referenceAudioUrl || undefined
+      const refUrl = inputs.audioUrl || d.referenceAudioUrl || undefined
       return runProcessingNode(node.id, () => generateMusicApi(prompt, d.provider || undefined, d.duration || undefined, d.genre || undefined, d.mood || undefined, d.instrumental, d.lyrics || undefined, refUrl), "generatedAudioUrl", "Generate Music")
     }
 

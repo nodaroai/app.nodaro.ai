@@ -32,6 +32,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
     <BaseNode id={id} label={nodeData.label} icon={<Music className="h-4 w-4" />} category="ai" credits={5} selected={selected}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Prompt" },
+        { id: "ref-audio", type: "target", position: Position.Left, label: "Ref Audio" },
         { id: "audio-out", type: "source", position: Position.Right, label: "Audio" },
       ]}
     >

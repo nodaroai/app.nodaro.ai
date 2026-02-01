@@ -19,6 +19,7 @@ import { addCaptions } from "../providers/video/add-captions.js"
 import { mixAudio } from "../providers/video/mix-audio.js"
 import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
+import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
 import { promises as fs } from "node:fs"
 import { dirname } from "node:path"
 
@@ -304,6 +305,14 @@ export function createVideoWorker() {
           await job.updateProgress(100)
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "extract-youtube-audio") {
+          const { youtubeUrl } = job.data as { jobId: string; youtubeUrl: string }
+          console.log(`[worker] extract-youtube-audio ${jobId}`)
+          const audioUrl = await extractYouTubeAudio(youtubeUrl)
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${audioUrl}`)
 
         } else if (job.name === "generate-music") {
           const { prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl } = job.data as { jobId: string; prompt: string; provider?: MusicProvider; duration?: number; modelVersion?: string; lyrics?: string; referenceAudioUrl?: string }
