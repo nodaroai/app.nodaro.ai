@@ -6,6 +6,7 @@ import { ImageIcon, Loader2, AlertCircle, X, Play } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { GenerateImageData } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -18,6 +19,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedImageUrl
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -72,7 +74,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleDeleteResult(activeIndex)
+                  setDeleteConfirm(activeIndex)
                 }}
                 title="Delete this result"
               >
@@ -117,7 +119,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                   className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleDeleteResult(i)
+                    setDeleteConfirm(i)
                   }}
                 >
                   <X className="w-2.5 h-2.5" />
@@ -157,6 +159,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         url={activeUrl}
       />
     )}
+    <DeleteConfirmationDialog
+      isOpen={deleteConfirm !== null}
+      onClose={() => setDeleteConfirm(null)}
+      onConfirm={() => {
+        if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
+      }}
+    />
     </div>
   )
 }

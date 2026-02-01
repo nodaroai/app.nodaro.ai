@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers } from "lucide-react"
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { GeneratedScript } from "@/types/nodes"
 
 interface ScriptPreviewModalProps {
@@ -26,6 +27,7 @@ export function ScriptPreviewModal({
 }: ScriptPreviewModalProps) {
   const [generatingAll, setGeneratingAll] = useState(false)
   const [allProgress, setAllProgress] = useState({ current: 0, total: 0 })
+  const [deleteConfirm, setDeleteConfirm] = useState<{ sceneIndex: number; imageIndex: number } | null>(null)
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose()
@@ -231,7 +233,7 @@ export function ScriptPreviewModal({
                             className="absolute -top-1 -right-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/ver:opacity-100 transition-opacity"
                             onClick={(e) => {
                               e.stopPropagation()
-                              onDeleteImage(i, vi)
+                              setDeleteConfirm({ sceneIndex: i, imageIndex: vi })
                             }}
                           >
                             <X className="w-2 h-2" />
@@ -255,6 +257,15 @@ export function ScriptPreviewModal({
           </div>
         </div>
       </div>
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirm !== null}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => {
+          if (deleteConfirm !== null) onDeleteImage(deleteConfirm.sceneIndex, deleteConfirm.imageIndex)
+        }}
+        title="Delete this image version?"
+        description="This action cannot be undone. The generated image will be permanently removed."
+      />
     </div>,
     document.body
   )

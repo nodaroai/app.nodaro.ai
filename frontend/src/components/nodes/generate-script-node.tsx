@@ -6,6 +6,7 @@ import { BookOpen, Loader2, AlertCircle, X, Play, FileText, Sparkles, ImageIcon,
 import { BaseNode } from "./base-node"
 import { ScriptPreviewModal } from "@/components/editor/script-preview-modal"
 import { ExpandStoryboardDialog, type ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
@@ -22,6 +23,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const activeScript = activeResult?.script ?? nodeData.generatedScript
   const [showFullscreen, setShowFullscreen] = useState(false)
   const [showExpandDialog, setShowExpandDialog] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
 
   const sceneCount = activeScript?.scenes.length ?? 0
   const creditsPerScene = 5 + 20 // image + video
@@ -139,7 +141,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                 className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleDeleteResult(activeIndex)
+                  setDeleteConfirm(activeIndex)
                 }}
                 title="Delete this result"
               >
@@ -185,7 +187,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                   className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleDeleteResult(i)
+                    setDeleteConfirm(i)
                   }}
                 >
                   <X className="w-2.5 h-2.5" />
@@ -271,6 +273,13 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         }}
       />
     )}
+    <DeleteConfirmationDialog
+      isOpen={deleteConfirm !== null}
+      onClose={() => setDeleteConfirm(null)}
+      onConfirm={() => {
+        if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
+      }}
+    />
     {activeScript && (
       <ExpandStoryboardDialog
         isOpen={showExpandDialog}
