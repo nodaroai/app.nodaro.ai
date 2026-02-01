@@ -14,22 +14,22 @@ interface ModelConfig {
 
 const AUDIO_MODEL_CONFIGS: Record<AudioProvider, ModelConfig> = {
   tangoflux: {
-    model: "declare-lab/tangoflux",
+    model: "declare-lab/tangoflux:fcdc421786888a045329d7c4e1874764433a2516b21f4c34bd3da4e054d04cf9",
     promptParam: "prompt",
     durationParam: "duration",
   },
   tango: {
-    model: "declare-lab/tango",
+    model: "declare-lab/tango:740e4f5e59bd3b871c9e5b4efbff7ded516d40aa6abf4e95fd5e8dd149b7bc3f",
     promptParam: "prompt",
     durationParam: "duration",
   },
   audioldm: {
-    model: "haoheliu/audio-ldm",
-    promptParam: "prompt",
+    model: "haoheliu/audio-ldm:b61392adecdd660326fc9cfc5398182437dbe5e97b5decfb36e1a36de68b5b95",
+    promptParam: "text",
     durationParam: "duration",
   },
   bark: {
-    model: "suno-ai/bark",
+    model: "suno-ai/bark:b76242b40d67c76ab6742e987628a2a9ac019e11d56ab96c4e91ce03b79b2787",
     promptParam: "prompt",
   },
 }
