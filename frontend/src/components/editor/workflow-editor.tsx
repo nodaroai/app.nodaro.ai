@@ -145,7 +145,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
     }
-    if (type === "image-to-video" || type === "video-to-video") {
+    if (type === "image-to-video" || type === "video-to-video" || type === "text-to-video") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
