@@ -77,6 +77,7 @@ interface SourceNodeInfo {
   readonly value: string
   readonly providerCategory?: string
   readonly targetHandle?: string
+  readonly nodeData?: Record<string, unknown>
 }
 
 const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
@@ -127,6 +128,7 @@ function getConnectedSources(
       value: extractDisplayValue(d, source.type as string),
       providerCategory: source.type === "provider" ? (d.category as string) : undefined,
       targetHandle: edge.targetHandle ?? undefined,
+      nodeData: d,
     })
   }
   return sources
@@ -1530,11 +1532,23 @@ function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<GenerateMu
         <div className="flex flex-col gap-2">
           <Label>Reference Audio</Label>
           {connectedRef ? (
-            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
-              <span className="text-muted-foreground">From: </span>
-              <span className="font-medium">{connectedRef.label}</span>
-              {connectedRef.value && (
-                <p className="mt-1 text-muted-foreground truncate">{connectedRef.value}</p>
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs flex flex-col gap-1.5">
+              <div>
+                <span className="text-muted-foreground">From: </span>
+                <span className="font-medium">{connectedRef.label}</span>
+              </div>
+              {typeof connectedRef.nodeData?.videoThumbnail === "string" && connectedRef.nodeData.videoThumbnail && (
+                <div className="rounded overflow-hidden bg-muted">
+                  <img src={connectedRef.nodeData.videoThumbnail} alt="" className="w-full h-16 object-cover" />
+                </div>
+              )}
+              {typeof connectedRef.nodeData?.videoTitle === "string" && connectedRef.nodeData.videoTitle && (
+                <p className="text-foreground truncate">{connectedRef.nodeData.videoTitle}</p>
+              )}
+              {connectedRef.nodeData?.extractedAudioUrl ? (
+                <p className="text-green-600">Audio ready</p>
+              ) : (
+                <p className="text-amber-500">No audio extracted yet</p>
               )}
             </div>
           ) : (
