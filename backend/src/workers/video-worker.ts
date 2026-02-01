@@ -24,10 +24,10 @@ export function createVideoWorker() {
           .eq("id", jobId)
 
         if (job.name === "generate-image") {
-          const { prompt } = job.data as { jobId: string; prompt: string }
+          const { prompt, referenceImageUrl } = job.data as { jobId: string; prompt: string; referenceImageUrl?: string }
           console.log(`[worker] generate-image ${jobId}: "${prompt}"`)
 
-          const replicateUrl = await generateImage(prompt)
+          const replicateUrl = await generateImage(prompt, referenceImageUrl)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "image")

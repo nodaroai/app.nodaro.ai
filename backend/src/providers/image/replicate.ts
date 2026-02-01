@@ -4,14 +4,20 @@ import { translateToEnglish } from "../../lib/translate.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
-export async function generateImage(prompt: string): Promise<string> {
+export async function generateImage(prompt: string, referenceImageUrl?: string): Promise<string> {
   console.log(`[generateImage] Original prompt: "${prompt}"`)
+  if (referenceImageUrl) {
+    console.log(`[generateImage] Reference image: "${referenceImageUrl}"`)
+  }
   const englishPrompt = await translateToEnglish(prompt)
   console.log(`[generateImage] Sending to nano-banana: "${englishPrompt}"`)
 
-  const output = await replicate.run("google/nano-banana", {
-    input: { prompt: englishPrompt },
-  })
+  const input: Record<string, unknown> = { prompt: englishPrompt }
+  if (referenceImageUrl) {
+    input.image = referenceImageUrl
+  }
+
+  const output = await replicate.run("google/nano-banana", { input })
 
   // Replicate output can be: string[], FileOutput[], or a single FileOutput
   // FileOutput has a .url() method or can be coerced to string

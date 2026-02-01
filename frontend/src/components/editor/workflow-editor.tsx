@@ -15,7 +15,7 @@ import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { generateImage, generateVideo, videoToVideo, getJobStatus } from "@/lib/api"
-import type { TextPromptData, UploadImageData, GenerateImageData, ImageToVideoData, VideoToVideoData, GeneratedResult } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, ImageToVideoData, VideoToVideoData, GeneratedResult } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -76,101 +76,333 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     toast.info("Execution stopped")
   }
 
-  async function startImageGeneration(imageNodeId: string, prompt: string, chainToVideoNodeId?: string) {
-    const { updateNodeData } = useWorkflowStore.getState()
-    updateNodeData(imageNodeId, { executionStatus: "running", generatedImageUrl: undefined })
+  // --- Graph execution helpers ---
 
-    try {
-      const { jobId } = await generateImage(prompt)
-      toast.info("Image generation started", { description: `Job ID: ${jobId}` })
+  const EXECUTABLE_TYPES = new Set(["generate-image", "image-to-video", "video-to-video"])
 
-      const poll = trackInterval(setInterval(async () => {
-        try {
-          const job = await getJobStatus(jobId)
-          if (job.status === "completed") {
-            untrackInterval(poll)
-            const imageUrl = job.output_data?.imageUrl
-            const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === imageNodeId)?.data) as GenerateImageData | undefined)?.generatedResults ?? []
-            const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
-            updateNodeData(imageNodeId, {
-              executionStatus: "completed",
-              generatedImageUrl: imageUrl,
-              generatedResults: [newResult, ...existingResults],
-              activeResultIndex: 0,
-            })
-            toast.success("Image generated", {
-              description: imageUrl ? "Click to open" : "Done",
-              action: imageUrl ? { label: "Open", onClick: () => window.open(imageUrl, "_blank") } : undefined,
-              duration: 10000,
-            })
-            if (chainToVideoNodeId && imageUrl) {
-              startVideoGeneration(chainToVideoNodeId, imageUrl)
-            }
-          } else if (job.status === "failed") {
-            untrackInterval(poll)
-            updateNodeData(imageNodeId, { executionStatus: "failed" })
-            toast.error("Image generation failed", { description: job.error_message ?? "Unknown error" })
-          }
-        } catch {
-          untrackInterval(poll)
-          updateNodeData(imageNodeId, { executionStatus: "failed" })
-          toast.error("Failed to check job status")
-        }
-      }, 2000))
-    } catch (err) {
-      setIsRunning(false)
-      updateNodeData(imageNodeId, { executionStatus: "failed" })
-      toast.error("Failed to start image generation", {
-        description: err instanceof Error ? err.message : "Unknown error",
-      })
-    }
+  function isExecutableNode(node: WorkflowNode): boolean {
+    return EXECUTABLE_TYPES.has(node.type ?? "")
   }
 
-  async function handleRun() {
-    const { nodes, edges, updateNodeData } = useWorkflowStore.getState()
-    const textNode = nodes.find((n) => n.type === "text-prompt")
-    const uploadImageNode = nodes.find((n) => n.type === "upload-image")
-    const imageNode = nodes.find((n) => n.type === "generate-image")
-    const videoNode = nodes.find((n) => n.type === "image-to-video")
+  function buildExecutionLevels(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[][] {
+    const inDegree = new Map<string, number>()
+    const children = new Map<string, string[]>()
+    const nodeMap = new Map<string, WorkflowNode>()
 
-    // Case 1: Text Prompt -> Generate Image (optionally chained to Image to Video)
-    if (textNode && imageNode) {
-      const prompt = (textNode.data as TextPromptData | undefined)?.text?.trim()
+    for (const node of nodes) {
+      nodeMap.set(node.id, node)
+      inDegree.set(node.id, 0)
+      children.set(node.id, [])
+    }
+
+    for (const edge of edges) {
+      if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue
+      inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1)
+      children.get(edge.source)?.push(edge.target)
+    }
+
+    const levels: WorkflowNode[][] = []
+    let currentLevel = nodes.filter((n) => (inDegree.get(n.id) ?? 0) === 0)
+
+    while (currentLevel.length > 0) {
+      levels.push(currentLevel)
+      const nextLevel: WorkflowNode[] = []
+      const seen = new Set<string>()
+
+      for (const node of currentLevel) {
+        for (const childId of children.get(node.id) ?? []) {
+          const newDeg = (inDegree.get(childId) ?? 1) - 1
+          inDegree.set(childId, newDeg)
+          if (newDeg === 0 && !seen.has(childId)) {
+            seen.add(childId)
+            const childNode = nodeMap.get(childId)
+            if (childNode) nextLevel.push(childNode)
+          }
+        }
+      }
+
+      currentLevel = nextLevel
+    }
+
+    return levels
+  }
+
+  function extractNodeOutput(node: WorkflowNode): string | undefined {
+    const data = node.data as Record<string, unknown>
+    const type = node.type
+
+    if (type === "text-prompt") {
+      return (data.text as string | undefined)?.trim()
+    }
+    if (type === "upload-image") {
+      return (data.url as string | undefined)?.trim()
+    }
+    if (type === "upload-video") {
+      return (data.url as string | undefined)?.trim()
+    }
+    if (type === "generate-image") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
+    }
+    if (type === "image-to-video" || type === "video-to-video") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
+    }
+    return undefined
+  }
+
+  function resolveNodeInputs(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]) {
+    const incomingEdges = edges.filter((e) => e.target === node.id)
+    const sourceNodes = incomingEdges
+      .map((e) => nodes.find((n) => n.id === e.source))
+      .filter((n): n is WorkflowNode => n !== undefined)
+
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; referenceImageUrl?: string } = {}
+
+    for (const src of sourceNodes) {
+      const output = extractNodeOutput(src)
+      if (!output) continue
+
+      if (src.type === "text-prompt") {
+        inputs.prompt = output
+      } else if (src.type === "upload-image") {
+        inputs.imageUrl = output
+      } else if (src.type === "upload-video") {
+        inputs.videoUrl = output
+      } else if (src.type === "generate-image") {
+        if (node.type === "generate-image") {
+          inputs.referenceImageUrl = output
+        } else {
+          inputs.imageUrl = output
+        }
+      } else if (src.type === "image-to-video" || src.type === "video-to-video") {
+        inputs.videoUrl = output
+      }
+    }
+
+    return inputs
+  }
+
+  // --- Promise-based node execution ---
+
+  function runImageGeneration(nodeId: string, prompt: string, referenceImageUrl?: string): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", generatedImageUrl: undefined })
+
+    return new Promise((resolve, reject) => {
+      generateImage(prompt, referenceImageUrl).then(({ jobId }) => {
+        toast.info("Image generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const imageUrl = job.output_data?.imageUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as GenerateImageData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedImageUrl: imageUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Image generated")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Image generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Image generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start image generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
+  function runVideoGeneration(nodeId: string, imageUrl: string): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
+
+    return new Promise((resolve, reject) => {
+      generateVideo(imageUrl).then(({ jobId }) => {
+        toast.info("Video generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const videoUrl = job.output_data?.videoUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as ImageToVideoData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedVideoUrl: videoUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Video generated")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Video generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Video generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check video job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start video generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
+  function runVideoToVideoGeneration(nodeId: string, sourceVideoUrl: string, prompt?: string): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
+
+    return new Promise((resolve, reject) => {
+      videoToVideo(sourceVideoUrl, prompt).then(({ jobId }) => {
+        toast.info("Video-to-video generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const videoUrl = job.output_data?.videoUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as VideoToVideoData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedVideoUrl: videoUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Video-to-video generated")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Video-to-video generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Video-to-video generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check video-to-video job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start video-to-video generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
+  function executeNode(node: WorkflowNode): Promise<void> {
+    const { nodes, edges } = useWorkflowStore.getState()
+    const inputs = resolveNodeInputs(node, nodes, edges)
+
+    if (node.type === "generate-image") {
+      const prompt = inputs.prompt ?? (node.data as GenerateImageData).prompt?.trim()
       if (!prompt) {
-        toast.error("No prompt found. Add text to the Text Prompt node.")
-        return
+        toast.error(`Node "${(node.data as GenerateImageData).label}": no prompt found`)
+        return Promise.reject(new Error("No prompt"))
       }
-
-      setIsRunning(true)
-
-      const hasVideoChain = videoNode && edges.some(
-        (e) => e.source === imageNode.id && e.target === videoNode.id
-      )
-
-      if (hasVideoChain && videoNode) {
-        updateNodeData(videoNode.id, { executionStatus: "idle", generatedVideoUrl: undefined })
-      }
-
-      await startImageGeneration(
-        imageNode.id,
-        prompt,
-        hasVideoChain && videoNode ? videoNode.id : undefined,
-      )
+      return runImageGeneration(node.id, prompt, inputs.referenceImageUrl ?? inputs.imageUrl)
     }
 
-    // Case 2: Upload Image -> Image to Video
-    else if (uploadImageNode && videoNode) {
-      const imageUrl = (uploadImageNode.data as UploadImageData | undefined)?.url?.trim()
+    if (node.type === "image-to-video") {
+      const imageUrl = inputs.imageUrl
       if (!imageUrl) {
-        toast.error("No image found. Upload an image first.")
-        return
+        toast.error(`Node "${(node.data as ImageToVideoData).label}": no image found`)
+        return Promise.reject(new Error("No image"))
       }
-      setIsRunning(true)
-      startVideoGeneration(videoNode.id, imageUrl)
+      return runVideoGeneration(node.id, imageUrl)
     }
 
-    else {
-      toast.error("Unknown workflow type. Connect nodes properly.")
+    if (node.type === "video-to-video") {
+      const sourceVideoUrl = inputs.videoUrl
+      if (!sourceVideoUrl) {
+        toast.error(`Node "${(node.data as VideoToVideoData).label}": no source video found`)
+        return Promise.reject(new Error("No source video"))
+      }
+      const prompt = (node.data as VideoToVideoData).prompt?.trim()
+      return runVideoToVideoGeneration(node.id, sourceVideoUrl, prompt)
+    }
+
+    return Promise.resolve()
+  }
+
+  // --- Main workflow execution ---
+
+  async function handleRun() {
+    const { nodes, edges } = useWorkflowStore.getState()
+
+    const executableNodes = nodes.filter(isExecutableNode)
+    if (executableNodes.length === 0) {
+      toast.error("No executable nodes found. Add Generate Image, Image to Video, or Video to Video nodes.")
+      return
+    }
+
+    const levels = buildExecutionLevels(nodes, edges)
+
+    setIsRunning(true)
+    toast.info("Executing workflow...", { description: `${executableNodes.length} node(s) to run` })
+
+    let failed = false
+    for (const level of levels) {
+      if (failed) break
+
+      const toRun = level.filter(isExecutableNode)
+      if (toRun.length === 0) continue
+
+      const results = await Promise.allSettled(
+        toRun.map((node) => executeNode(node))
+      )
+
+      if (results.some((r) => r.status === "rejected")) {
+        failed = true
+      }
+    }
+
+    if (pollIntervalsRef.current.size === 0) {
+      setIsRunning(false)
+    }
+
+    if (failed) {
+      toast.error("Workflow execution stopped due to errors")
+    } else {
+      toast.success("Workflow execution complete")
     }
   }
 
@@ -179,165 +411,19 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return
 
-    if (node.type === "generate-image") {
-      const incomingEdge = edges.find((e) => e.target === nodeId)
-      const sourceNode = incomingEdge ? nodes.find((n) => n.id === incomingEdge.source) : undefined
-
-      let prompt: string | undefined
-      if (sourceNode?.type === "text-prompt") {
-        prompt = (sourceNode.data as TextPromptData | undefined)?.text?.trim()
-      }
-
-      if (!prompt) {
-        toast.error("No prompt found. Connect a Text Prompt node.")
-        return
-      }
-
-      setIsRunning(true)
-      startImageGeneration(nodeId, prompt)
-    } else if (node.type === "image-to-video") {
-      const incomingEdge = edges.find((e) => e.target === nodeId)
-      const sourceNode = incomingEdge ? nodes.find((n) => n.id === incomingEdge.source) : undefined
-
-      let imageUrl: string | undefined
-
-      if (sourceNode?.type === "upload-image") {
-        imageUrl = (sourceNode.data as UploadImageData | undefined)?.url?.trim()
-      } else if (sourceNode?.type === "generate-image") {
-        const imgData = sourceNode.data as GenerateImageData | undefined
-        const results = imgData?.generatedResults ?? []
-        const activeIndex = imgData?.activeResultIndex ?? 0
-        imageUrl = results[activeIndex]?.url ?? imgData?.generatedImageUrl
-      }
-
-      if (!imageUrl) {
-        toast.error("No image found. Generate or upload an image first.")
-        return
-      }
-
-      setIsRunning(true)
-      startVideoGeneration(nodeId, imageUrl)
-    } else if (node.type === "video-to-video") {
-      const incomingEdge = edges.find((e) => e.target === nodeId)
-      const sourceNode = incomingEdge ? nodes.find((n) => n.id === incomingEdge.source) : undefined
-
-      let sourceVideoUrl: string | undefined
-
-      if (sourceNode?.type === "upload-video") {
-        sourceVideoUrl = (sourceNode.data as UploadImageData | undefined)?.url?.trim()
-      } else if (sourceNode?.type === "image-to-video" || sourceNode?.type === "video-to-video") {
-        const vidData = sourceNode.data as ImageToVideoData | VideoToVideoData | undefined
-        const results = vidData?.generatedResults ?? []
-        const activeIndex = vidData?.activeResultIndex ?? 0
-        sourceVideoUrl = results[activeIndex]?.url ?? vidData?.generatedVideoUrl
-      }
-
-      if (!sourceVideoUrl) {
-        toast.error("No source video found. Generate or upload a video first.")
-        return
-      }
-
-      const v2vPrompt = (node.data as VideoToVideoData | undefined)?.prompt?.trim()
-
-      setIsRunning(true)
-      startVideoToVideoGeneration(nodeId, sourceVideoUrl, v2vPrompt)
-    } else {
+    if (!isExecutableNode(node)) {
       toast.error("This node type cannot be run individually.")
+      return
     }
-  }
 
-  async function startVideoGeneration(videoNodeId: string, imageUrl: string) {
-    const { updateNodeData } = useWorkflowStore.getState()
-    updateNodeData(videoNodeId, { executionStatus: "running", generatedVideoUrl: undefined })
-
-    try {
-      const { jobId } = await generateVideo(imageUrl)
-      toast.info("Video generation started", { description: `Job ID: ${jobId}` })
-
-      const poll = trackInterval(setInterval(async () => {
-        try {
-          const job = await getJobStatus(jobId)
-          if (job.status === "completed") {
-            untrackInterval(poll)
-            const videoUrl = job.output_data?.videoUrl
-            const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === videoNodeId)?.data) as ImageToVideoData | undefined)?.generatedResults ?? []
-            const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
-            updateNodeData(videoNodeId, {
-              executionStatus: "completed",
-              generatedVideoUrl: videoUrl,
-              generatedResults: [newResult, ...existingResults],
-              activeResultIndex: 0,
-            })
-            toast.success("Video generated", {
-              description: videoUrl ? "Click to open" : "Done",
-              action: videoUrl ? { label: "Open", onClick: () => window.open(videoUrl, "_blank") } : undefined,
-              duration: 10000,
-            })
-          } else if (job.status === "failed") {
-            untrackInterval(poll)
-            updateNodeData(videoNodeId, { executionStatus: "failed" })
-            toast.error("Video generation failed", { description: job.error_message ?? "Unknown error" })
-          }
-        } catch {
-          untrackInterval(poll)
-          updateNodeData(videoNodeId, { executionStatus: "failed" })
-          toast.error("Failed to check video job status")
-        }
-      }, 2000))
-    } catch (err) {
-      setIsRunning(false)
-      updateNodeData(videoNodeId, { executionStatus: "failed" })
-      toast.error("Failed to start video generation", {
-        description: err instanceof Error ? err.message : "Unknown error",
-      })
-    }
-  }
-
-  async function startVideoToVideoGeneration(v2vNodeId: string, sourceVideoUrl: string, prompt?: string) {
-    const { updateNodeData } = useWorkflowStore.getState()
-    updateNodeData(v2vNodeId, { executionStatus: "running", generatedVideoUrl: undefined })
-
-    try {
-      const { jobId } = await videoToVideo(sourceVideoUrl, prompt)
-      toast.info("Video-to-video generation started", { description: `Job ID: ${jobId}` })
-
-      const poll = trackInterval(setInterval(async () => {
-        try {
-          const job = await getJobStatus(jobId)
-          if (job.status === "completed") {
-            untrackInterval(poll)
-            const videoUrl = job.output_data?.videoUrl
-            const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === v2vNodeId)?.data) as VideoToVideoData | undefined)?.generatedResults ?? []
-            const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
-            updateNodeData(v2vNodeId, {
-              executionStatus: "completed",
-              generatedVideoUrl: videoUrl,
-              generatedResults: [newResult, ...existingResults],
-              activeResultIndex: 0,
-            })
-            toast.success("Video-to-video generated", {
-              description: videoUrl ? "Click to open" : "Done",
-              action: videoUrl ? { label: "Open", onClick: () => window.open(videoUrl, "_blank") } : undefined,
-              duration: 10000,
-            })
-          } else if (job.status === "failed") {
-            untrackInterval(poll)
-            updateNodeData(v2vNodeId, { executionStatus: "failed" })
-            toast.error("Video-to-video generation failed", { description: job.error_message ?? "Unknown error" })
-          }
-        } catch {
-          untrackInterval(poll)
-          updateNodeData(v2vNodeId, { executionStatus: "failed" })
-          toast.error("Failed to check video-to-video job status")
-        }
-      }, 2000))
-    } catch (err) {
-      setIsRunning(false)
-      updateNodeData(v2vNodeId, { executionStatus: "failed" })
-      toast.error("Failed to start video-to-video generation", {
-        description: err instanceof Error ? err.message : "Unknown error",
-      })
-    }
+    setIsRunning(true)
+    executeNode(node).catch(() => {
+      // Error already handled via toast in executeNode
+    }).finally(() => {
+      if (pollIntervalsRef.current.size === 0) {
+        setIsRunning(false)
+      }
+    })
   }
 
   // Register single-node runner

@@ -44,11 +44,15 @@ async function request<T>(
 
 // --- Generate Image (E2E spike) ---
 
-export async function generateImage(prompt: string): Promise<{ jobId: string }> {
+export async function generateImage(prompt: string, referenceImageUrl?: string): Promise<{ jobId: string }> {
+  const body: Record<string, string> = { prompt }
+  if (referenceImageUrl) {
+    body.referenceImageUrl = referenceImageUrl
+  }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
