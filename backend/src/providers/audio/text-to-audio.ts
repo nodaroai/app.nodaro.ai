@@ -56,8 +56,9 @@ export async function textToAudio(
   console.log(`[textToAudio] Provider: ${resolvedProvider}, Model: ${cfg.model}`)
   console.log(`[textToAudio] Prompt: "${prompt}"`)
 
+  const sanitizedPrompt = resolvedProvider === "audioldm" ? prompt.substring(0, 200) : prompt
   const input: Record<string, unknown> = {
-    [cfg.promptParam]: prompt,
+    [cfg.promptParam]: sanitizedPrompt,
     ...cfg.extraInput,
   }
   if (duration !== undefined && cfg.durationParam) {
