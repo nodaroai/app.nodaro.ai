@@ -209,6 +209,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "generate-image") {
         if (node.type === "generate-image") {
           inputs.referenceImageUrl = output
+        } else if (node.type === "text-to-audio") {
+          inputs.prompt = (src.data as GenerateImageData).prompt ?? ""
         } else {
           inputs.imageUrl = output
         }
