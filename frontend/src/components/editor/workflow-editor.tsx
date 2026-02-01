@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, getJobStatus } from "@/lib/api"
-import type { TextPromptData, UploadImageData, GenerateImageData, ImageToVideoData, GeneratedResult } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, getJobStatus } from "@/lib/api"
+import type { TextPromptData, UploadImageData, GenerateImageData, ImageToVideoData, VideoToVideoData, GeneratedResult } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -217,6 +217,30 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       setIsRunning(true)
       startVideoGeneration(nodeId, imageUrl)
+    } else if (node.type === "video-to-video") {
+      const incomingEdge = edges.find((e) => e.target === nodeId)
+      const sourceNode = incomingEdge ? nodes.find((n) => n.id === incomingEdge.source) : undefined
+
+      let sourceVideoUrl: string | undefined
+
+      if (sourceNode?.type === "upload-video") {
+        sourceVideoUrl = (sourceNode.data as UploadImageData | undefined)?.url?.trim()
+      } else if (sourceNode?.type === "image-to-video" || sourceNode?.type === "video-to-video") {
+        const vidData = sourceNode.data as ImageToVideoData | VideoToVideoData | undefined
+        const results = vidData?.generatedResults ?? []
+        const activeIndex = vidData?.activeResultIndex ?? 0
+        sourceVideoUrl = results[activeIndex]?.url ?? vidData?.generatedVideoUrl
+      }
+
+      if (!sourceVideoUrl) {
+        toast.error("No source video found. Generate or upload a video first.")
+        return
+      }
+
+      const v2vPrompt = (node.data as VideoToVideoData | undefined)?.prompt?.trim()
+
+      setIsRunning(true)
+      startVideoToVideoGeneration(nodeId, sourceVideoUrl, v2vPrompt)
     } else {
       toast.error("This node type cannot be run individually.")
     }
@@ -264,6 +288,53 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       setIsRunning(false)
       updateNodeData(videoNodeId, { executionStatus: "failed" })
       toast.error("Failed to start video generation", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    }
+  }
+
+  async function startVideoToVideoGeneration(v2vNodeId: string, sourceVideoUrl: string, prompt?: string) {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(v2vNodeId, { executionStatus: "running", generatedVideoUrl: undefined })
+
+    try {
+      const { jobId } = await videoToVideo(sourceVideoUrl, prompt)
+      toast.info("Video-to-video generation started", { description: `Job ID: ${jobId}` })
+
+      const poll = trackInterval(setInterval(async () => {
+        try {
+          const job = await getJobStatus(jobId)
+          if (job.status === "completed") {
+            untrackInterval(poll)
+            const videoUrl = job.output_data?.videoUrl
+            const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === v2vNodeId)?.data) as VideoToVideoData | undefined)?.generatedResults ?? []
+            const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
+            updateNodeData(v2vNodeId, {
+              executionStatus: "completed",
+              generatedVideoUrl: videoUrl,
+              generatedResults: [newResult, ...existingResults],
+              activeResultIndex: 0,
+            })
+            toast.success("Video-to-video generated", {
+              description: videoUrl ? "Click to open" : "Done",
+              action: videoUrl ? { label: "Open", onClick: () => window.open(videoUrl, "_blank") } : undefined,
+              duration: 10000,
+            })
+          } else if (job.status === "failed") {
+            untrackInterval(poll)
+            updateNodeData(v2vNodeId, { executionStatus: "failed" })
+            toast.error("Video-to-video generation failed", { description: job.error_message ?? "Unknown error" })
+          }
+        } catch {
+          untrackInterval(poll)
+          updateNodeData(v2vNodeId, { executionStatus: "failed" })
+          toast.error("Failed to check video-to-video job status")
+        }
+      }, 2000))
+    } catch (err) {
+      setIsRunning(false)
+      updateNodeData(v2vNodeId, { executionStatus: "failed" })
+      toast.error("Failed to start video-to-video generation", {
         description: err instanceof Error ? err.message : "Unknown error",
       })
     }

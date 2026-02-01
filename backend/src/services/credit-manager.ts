@@ -2,6 +2,7 @@ const CREDIT_COSTS: Record<string, number> = {
   "generate-script": 2,
   "generate-image": 5,
   "image-to-video": 20,
+  "video-to-video": 25,
   "text-to-video": 25,
   "text-to-speech": 3,
   "qa-check": 1,

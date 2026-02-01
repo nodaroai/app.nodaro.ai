@@ -40,6 +40,7 @@ import type {
   GenerateScriptData,
   GenerateImageData,
   ImageToVideoData,
+  VideoToVideoData,
   TextToVideoData,
   TextToSpeechData,
   QACheckData,
@@ -347,6 +348,9 @@ export function ConfigPanel() {
           {selectedNode.type === "image-to-video" && (
             <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "video-to-video" && (
+            <VideoToVideoConfig data={selectedNode.data as VideoToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
           {selectedNode.type === "text-to-video" && (
             <TextToVideoConfig data={selectedNode.data as TextToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
@@ -394,7 +398,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-image" || selectedNode.type === "image-to-video") && (
+            {(selectedNode.type === "generate-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video") && (
               <Button
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -870,6 +874,44 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             <SelectItem value="zoom-out">Zoom Out</SelectItem>
           </SelectContent>
         </Select>
+      </MappableField>
+    </div>
+  )
+}
+
+function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<VideoToVideoData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          value={data.prompt}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe what to change or continue..."
+          rows={3}
+        />
+      </MappableField>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+        <Select
+          value={data.provider}
+          onValueChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="veo">VEO</SelectItem>
+            <SelectItem value="kling">Kling</SelectItem>
+            <SelectItem value="runway">Runway</SelectItem>
+            <SelectItem value="pika">Pika</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          type="number"
+          min={1}
+          max={30}
+          value={data.duration}
+          onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
+        />
       </MappableField>
     </div>
   )

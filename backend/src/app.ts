@@ -7,6 +7,7 @@ import { jobRoutes } from "./routes/jobs.js"
 import { renderRoutes } from "./routes/render.js"
 import { generateImageRoutes } from "./routes/generate-image.js"
 import { generateVideoRoutes } from "./routes/generate-video.js"
+import { videoToVideoRoutes } from "./routes/video-to-video.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -20,6 +21,7 @@ export async function buildApp() {
   await app.register(renderRoutes)
   await app.register(generateImageRoutes)
   await app.register(generateVideoRoutes)
+  await app.register(videoToVideoRoutes)
 
   return app
 }
