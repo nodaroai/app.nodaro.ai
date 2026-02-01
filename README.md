@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. Image generation (google/nano-banana), video generation (minimax/video-01), and video-to-video all working end-to-end. Reference image chaining for character consistency. Single-node and full workflow execution with version history.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. Image generation (google/nano-banana), video generation (minimax/video-01), video-to-video, and text-to-speech (ElevenLabs via Replicate) all working end-to-end. Reference image chaining for character consistency. Single-node and full workflow execution with version history.
 
 ## Features
 
@@ -50,6 +50,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | Storage | Cloudflare R2 | Built |
 | AI (Image) | google/nano-banana via Replicate | Built |
 | AI (Video) | minimax/video-01 via Replicate | Built |
+| AI (TTS) | elevenlabs/turbo-v2.5 via Replicate | Built |
 
 ## Quick Start
 
@@ -97,8 +98,7 @@ REPLICATE_API_TOKEN=r8_xxxxx
 ### Getting API Keys
 
 - **Supabase**: https://supabase.com/dashboard - Create a project, copy URL and anon key
-- **Replicate**: https://replicate.com/account/api-tokens - Provides access to Nano Banana (images) and VEO (video)
-- **ElevenLabs** (optional): https://elevenlabs.io/api - For voice generation
+- **Replicate**: https://replicate.com/account/api-tokens - Provides access to Nano Banana (images), video models, and ElevenLabs TTS
 
 ## Project Structure
 
@@ -181,6 +181,7 @@ The backend exposes a REST API at `http://localhost:8000`:
 | `/v1/workflows/:id/run` | POST | Execute workflow |
 | `/v1/jobs` | GET | List jobs |
 | `/v1/jobs/:id` | GET | Job status |
+| `/v1/text-to-speech` | POST | Generate audio from text |
 | `/v1/render` | POST | Quick render (one-shot) |
 
 Full API documentation: see [CLAUDE.md](./CLAUDE.md)
@@ -193,6 +194,7 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - Image generation via google/nano-banana (Replicate) with smart translation (Hebrew, etc.)
 - Video generation via minimax/video-01 (Replicate)
 - Video-to-video continuation/style reference
+- Text-to-speech via elevenlabs/turbo-v2.5 (Replicate) with 26 voice options
 - Generated results display directly in nodes with version history
 - Delete individual results from version history
 - Global video autoplay toggle in editor toolbar
