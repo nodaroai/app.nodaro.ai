@@ -8,6 +8,12 @@ export interface FieldMapping {
 
 export type FieldMappings = Readonly<Record<string, FieldMapping>>
 
+export interface GeneratedResult {
+  readonly url: string
+  readonly timestamp: string
+  readonly jobId: string
+}
+
 // --- Input Node Data ---
 
 export type TextPromptData = {
@@ -118,6 +124,7 @@ export type GenerateImageData = {
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   generatedImageUrl?: string
+  generatedResults?: GeneratedResult[]
 }
 
 export type ImageToVideoData = {
@@ -131,6 +138,7 @@ export type ImageToVideoData = {
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
 }
 
 export type TextToSpeechData = {

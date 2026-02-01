@@ -10,6 +10,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateImageData
   const status = nodeData.executionStatus ?? "idle"
   const imageUrl = nodeData.generatedImageUrl
+  const results = nodeData.generatedResults ?? []
+  const olderResults = results.slice(1)
 
   return (
     <BaseNode
@@ -53,6 +55,23 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         {status === "idle" && (
           <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
             <ImageIcon className="w-6 h-6" />
+          </div>
+        )}
+
+        {olderResults.length > 0 && (
+          <div className="flex gap-1 overflow-x-auto">
+            {olderResults.slice(0, 4).map((r) => (
+              <img
+                key={r.jobId}
+                src={r.url}
+                alt="Previous"
+                className="w-10 h-10 object-cover rounded cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  window.open(r.url, "_blank")
+                }}
+              />
+            ))}
           </div>
         )}
 

@@ -13,7 +13,7 @@ import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { generateImage, generateVideo, getJobStatus } from "@/lib/api"
-import type { TextPromptData, UploadImageData } from "@/types/nodes"
+import type { TextPromptData, UploadImageData, GenerateImageData, ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -77,7 +77,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             if (job.status === "completed") {
               clearInterval(poll)
               const imageUrl = job.output_data?.imageUrl
-              updateNodeData(imageNode.id, { executionStatus: "completed", generatedImageUrl: imageUrl })
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === imageNode.id)?.data) as GenerateImageData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(imageNode.id, {
+                executionStatus: "completed",
+                generatedImageUrl: imageUrl,
+                generatedResults: [newResult, ...existingResults],
+              })
               toast.success("Image generated", {
                 description: imageUrl ? "Click to open" : "Done",
                 action: imageUrl ? { label: "Open", onClick: () => window.open(imageUrl, "_blank") } : undefined,
@@ -134,7 +140,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           if (job.status === "completed") {
             clearInterval(poll)
             const videoUrl = job.output_data?.videoUrl
-            updateNodeData(videoNodeId, { executionStatus: "completed", generatedVideoUrl: videoUrl })
+            const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === videoNodeId)?.data) as ImageToVideoData | undefined)?.generatedResults ?? []
+            const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
+            updateNodeData(videoNodeId, {
+              executionStatus: "completed",
+              generatedVideoUrl: videoUrl,
+              generatedResults: [newResult, ...existingResults],
+            })
             toast.success("Video generated", {
               description: videoUrl ? "Click to open" : "Done",
               action: videoUrl ? { label: "Open", onClick: () => window.open(videoUrl, "_blank") } : undefined,
