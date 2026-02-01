@@ -19,6 +19,7 @@ import { addCaptions } from "../providers/video/add-captions.js"
 import { mixAudio } from "../providers/video/mix-audio.js"
 import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
+import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
 import { promises as fs } from "node:fs"
 import { dirname } from "node:path"
@@ -323,6 +324,16 @@ export function createVideoWorker() {
           const { prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl } = job.data as { jobId: string; prompt: string; provider?: MusicProvider; duration?: number; modelVersion?: string; lyrics?: string; referenceAudioUrl?: string }
           console.log(`[worker] generate-music ${jobId} (provider: ${provider ?? "musicgen"})`)
           const replicateUrl = await generateMusic(prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl)
+          await job.updateProgress(50)
+          const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "text-to-audio") {
+          const { prompt, provider, duration } = job.data as { jobId: string; prompt: string; provider?: AudioProvider; duration?: number }
+          console.log(`[worker] text-to-audio ${jobId} (provider: ${provider ?? "tangoflux"})`)
+          const replicateUrl = await textToAudio(prompt, provider, duration)
           await job.updateProgress(50)
           const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
           await job.updateProgress(100)

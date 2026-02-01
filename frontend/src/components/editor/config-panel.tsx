@@ -54,6 +54,7 @@ import type {
   TextToSpeechData,
   QACheckData,
   GenerateMusicData,
+  TextToAudioData,
   CombineVideosData,
   AddAudioData,
   AddCaptionsData,
@@ -383,6 +384,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "generate-music" && (
             <GenerateMusicConfig data={selectedNode.data as GenerateMusicData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "text-to-audio" && (
+            <TextToAudioConfig data={selectedNode.data as TextToAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* Processing Nodes */}
@@ -1383,6 +1387,44 @@ function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField
           onChange={(e) => onUpdate({ pitch: parseFloat(e.target.value) || 1 })}
         />
       </div>
+    </div>
+  )
+}
+
+function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToAudioData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          value={data.prompt}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe the sound effect (e.g. dog barking, rain on window)..."
+        />
+      </MappableField>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.provider || "tangoflux"}
+          onValueChange={(v) => onUpdate({ provider: v as TextToAudioData["provider"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tangoflux">TangoFlux (default)</SelectItem>
+            <SelectItem value="tango">Tango</SelectItem>
+            <SelectItem value="audioldm">AudioLDM</SelectItem>
+            <SelectItem value="bark">Bark</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          type="number"
+          min={1}
+          max={30}
+          value={data.duration}
+          onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 10 })}
+        />
+      </MappableField>
     </div>
   )
 }

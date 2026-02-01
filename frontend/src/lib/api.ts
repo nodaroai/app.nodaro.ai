@@ -269,6 +269,22 @@ export async function downloadYouTubeAudio(url: string): Promise<{ url: string }
   return res.json()
 }
 
+export async function textToAudioApi(prompt: string, provider?: string, duration?: number): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt }
+  if (provider) body.provider = provider
+  if (duration !== undefined) body.duration = duration
+  const res = await fetch(`${API_BASE_URL}/v1/text-to-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start audio generation")
+  }
+  return res.json()
+}
+
 export async function generateMusicApi(prompt: string, provider?: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean, lyrics?: string, referenceAudioUrl?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (provider) body.provider = provider

@@ -266,6 +266,19 @@ export type GenerateMusicData = {
   activeResultIndex?: number
 }
 
+export type TextToAudioData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  provider: "tangoflux" | "tango" | "audioldm" | "bark"
+  duration: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+}
+
 // --- Processing Node Data ---
 
 export type CombineVideosData = {
@@ -413,6 +426,7 @@ export type SceneNodeData =
   | TextToSpeechData
   | QACheckData
   | GenerateMusicData
+  | TextToAudioData
   | CombineVideosData
   | AddAudioData
   | AddCaptionsData
@@ -446,6 +460,7 @@ export type SceneNodeType =
   | "text-to-speech"
   | "qa-check"
   | "generate-music"
+  | "text-to-audio"
   | "combine-videos"
   | "add-audio"
   | "add-captions"
@@ -662,6 +677,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Generate Music", prompt: "", provider: "musicgen", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
+  },
+  {
+    type: "text-to-audio",
+    label: "Text to Audio",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: { label: "Text to Audio", prompt: "", provider: "tangoflux", duration: 10, fieldMappings: {} },
   },
   // Processing
   {
