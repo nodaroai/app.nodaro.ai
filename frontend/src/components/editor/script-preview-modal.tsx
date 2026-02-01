@@ -14,6 +14,7 @@ interface ScriptPreviewModalProps {
   readonly onSetActiveImage: (sceneIndex: number, imageIndex: number) => void
   readonly onDeleteImage: (sceneIndex: number, imageIndex: number) => void
   readonly onExpandToNodes: () => void
+  readonly onUpdateSceneCharacters: (sceneIndex: number, characters: string[]) => void
 }
 
 export function ScriptPreviewModal({
@@ -24,8 +25,10 @@ export function ScriptPreviewModal({
   onSetActiveImage,
   onDeleteImage,
   onExpandToNodes,
+  onUpdateSceneCharacters,
 }: ScriptPreviewModalProps) {
   const [generatingAll, setGeneratingAll] = useState(false)
+  const [characterInput, setCharacterInput] = useState<Record<number, string>>({})
   const [allProgress, setAllProgress] = useState({ current: 0, total: 0 })
   const [deleteConfirm, setDeleteConfirm] = useState<{ sceneIndex: number; imageIndex: number } | null>(null)
 
@@ -42,7 +45,7 @@ export function ScriptPreviewModal({
   if (!isOpen) return null
 
   const sceneCount = script.scenes.length
-  const totalCredits = 2 + sceneCount * 25
+  const totalCredits = 2 + sceneCount * 28
   const pendingCount = script.scenes.filter((s) => {
     const images = s.generatedImages ?? []
     return images.length === 0 && s.imageStatus !== "running"
@@ -247,9 +250,50 @@ export function ScriptPreviewModal({
                   <p className="text-[10px] text-muted-foreground italic">{scene.mood}</p>
                   <p className="text-[10px] text-muted-foreground/70 line-clamp-3">{scene.visualDescription}</p>
 
+                  {/* Character tags */}
+                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                    {(scene.characters ?? []).map((char) => (
+                      <span
+                        key={char}
+                        className="inline-flex items-center gap-0.5 h-5 px-1.5 text-[10px] font-medium rounded bg-purple-500/15 text-purple-600 dark:text-purple-400"
+                      >
+                        {char}
+                        <button
+                          type="button"
+                          className="hover:text-red-500 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onUpdateSceneCharacters(i, (scene.characters ?? []).filter((c) => c !== char))
+                          }}
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      type="text"
+                      placeholder="+ char"
+                      className="h-5 w-16 px-1 text-[10px] rounded border border-dashed border-muted-foreground/30 bg-transparent outline-none focus:border-purple-500 placeholder:text-muted-foreground/40"
+                      value={characterInput[i] ?? ""}
+                      onChange={(e) => setCharacterInput({ ...characterInput, [i]: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          const val = (characterInput[i] ?? "").trim()
+                          if (val && !(scene.characters ?? []).includes(val)) {
+                            onUpdateSceneCharacters(i, [...(scene.characters ?? []), val])
+                          }
+                          setCharacterInput({ ...characterInput, [i]: "" })
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+
                   <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 mt-auto pt-1 border-t border-border/30">
                     <span className="flex items-center gap-0.5"><ImageIcon className="w-2.5 h-2.5" />5cr</span>
                     <span className="flex items-center gap-0.5"><Film className="w-2.5 h-2.5" />20cr</span>
+                    <span className="flex items-center gap-0.5">3cr</span>
                   </div>
                 </div>
               )

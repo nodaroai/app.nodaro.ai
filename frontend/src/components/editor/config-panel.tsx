@@ -1149,14 +1149,15 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="veo">VEO 3</SelectItem>
+            <SelectItem value="veo">VEO</SelectItem>
+            <SelectItem value="veo3">VEO 3</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
             <SelectItem value="pika">Pika</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
-      {data.provider === "veo" && (
+      {data.provider === "veo3" && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 px-1">
             <input
@@ -1232,12 +1233,28 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectContent>
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
             <SelectItem value="veo">VEO</SelectItem>
+            <SelectItem value="veo3">VEO 3</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
             <SelectItem value="pika">Pika</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
+      {data.provider === "veo3" && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="v2vGenerateAudio"
+              checked={(data as Record<string, unknown>).generateAudio !== false}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="v2vGenerateAudio" className="text-xs">Generate Audio</label>
+          </div>
+          <p className="text-xs text-muted-foreground px-1">VEO 3 creates AI audio from the prompt. Disable for silent video.</p>
+        </div>
+      )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           type="number"

@@ -3,7 +3,7 @@ import { config } from "../../lib/config.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
-export type VideoProvider = "veo" | "kling" | "runway" | "pika" | "sora" | "minimax"
+export type VideoProvider = "veo" | "veo3" | "kling" | "runway" | "pika" | "sora" | "minimax"
 
 interface ModelConfig {
   model: string
@@ -18,6 +18,10 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
     extraInput: { prompt_optimizer: true },
   },
   veo: {
+    model: "google/veo-2",
+    imageParam: "image",
+  },
+  veo3: {
     model: "google/veo-3",
     imageParam: "image",
     extraInput: { generate_audio: true },
@@ -54,7 +58,7 @@ export async function imageToVideo(
   console.log(`[imageToVideo] Motion prompt: "${finalPrompt}"`)
 
   const extraInput = { ...cfg.extraInput }
-  if (resolvedProvider === "veo") {
+  if (resolvedProvider === "veo3") {
     extraInput.generate_audio = generateAudio !== false
   }
 

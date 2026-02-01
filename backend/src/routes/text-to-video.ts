@@ -5,7 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 
 const textToVideoBody = z.object({
   prompt: z.string().min(1).max(2000),
-  provider: z.enum(["veo", "kling", "runway", "pika", "sora", "minimax"]).optional(),
+  provider: z.enum(["veo", "veo3", "kling", "runway", "pika", "sora", "minimax"]).optional(),
 })
 
 export async function textToVideoRoutes(app: FastifyInstance) {

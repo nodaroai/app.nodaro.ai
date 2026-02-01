@@ -17,10 +17,13 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import type { GeneratedScript } from "@/types/nodes"
 
+export type NarrationSource = "visualDescription" | "action" | "imagePrompt"
+
 export interface ExpandOptions {
   readonly layout: "horizontal" | "vertical"
   readonly autoRun: boolean
   readonly includeCombine: boolean
+  readonly narrationSource: NarrationSource
 }
 
 interface ExpandStoryboardDialogProps {
@@ -36,9 +39,10 @@ export function ExpandStoryboardDialog({
   script,
   onConfirm,
 }: ExpandStoryboardDialogProps) {
-  const [layout, setLayout] = useState<"horizontal" | "vertical">("horizontal")
+  const [layout, setLayout] = useState<"horizontal" | "vertical">("vertical")
   const [autoRun, setAutoRun] = useState(true)
   const [includeCombine, setIncludeCombine] = useState(true)
+  const [narrationSource, setNarrationSource] = useState<NarrationSource>("visualDescription")
 
   const scenes = script.scenes
   const sceneCount = scenes.length
@@ -48,11 +52,12 @@ export function ExpandStoryboardDialog({
 
   const imageCost = scenesNeedingImages * 5
   const videoCost = sceneCount * 20
+  const ttsCost = sceneCount * 3
   const combineCost = includeCombine ? 2 : 0
-  const totalCost = imageCost + videoCost + combineCost
+  const totalCost = imageCost + videoCost + ttsCost + combineCost
 
   function handleConfirm() {
-    onConfirm({ layout, autoRun, includeCombine })
+    onConfirm({ layout, autoRun, includeCombine, narrationSource })
     onClose()
   }
 
@@ -126,6 +131,18 @@ export function ExpandStoryboardDialog({
               <span>{sceneCount}x Image to Video nodes</span>
               <span className="text-muted-foreground">{sceneCount} x 20 = {videoCost} credits</span>
             </div>
+            <div className="flex justify-between">
+              <span>{sceneCount}x Text to Speech nodes</span>
+              <span className="text-muted-foreground">{sceneCount} x 3 = {ttsCost} credits</span>
+            </div>
+            <div className="flex justify-between">
+              <span>{sceneCount}x Merge Video & Audio</span>
+              <span className="text-muted-foreground/60">0 credits</span>
+            </div>
+            <div className="flex justify-between">
+              <span>{sceneCount}x Text Prompt nodes</span>
+              <span className="text-muted-foreground/60">0 credits</span>
+            </div>
             {includeCombine && (
               <div className="flex justify-between">
                 <span>1x Combine Videos node</span>
@@ -155,7 +172,6 @@ export function ExpandStoryboardDialog({
                 <Label htmlFor="layout-h" className="flex items-center gap-1 text-sm cursor-pointer">
                   <ArrowRight className="w-3.5 h-3.5" />
                   Horizontal
-                  <span className="text-muted-foreground text-xs">(recommended)</span>
                 </Label>
               </div>
               <div className="flex items-center gap-2">
@@ -163,9 +179,27 @@ export function ExpandStoryboardDialog({
                 <Label htmlFor="layout-v" className="flex items-center gap-1 text-sm cursor-pointer">
                   <ArrowDown className="w-3.5 h-3.5" />
                   Vertical
+                  <span className="text-muted-foreground text-xs">(recommended)</span>
                 </Label>
               </div>
             </RadioGroup>
+          </div>
+
+          {/* Narration source */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Narration Text Source</Label>
+            <select
+              value={narrationSource}
+              onChange={(e) => setNarrationSource(e.target.value as NarrationSource)}
+              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="visualDescription">Visual Description (default)</option>
+              <option value="action">Action</option>
+              <option value="imagePrompt">Image Prompt</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Text used for Text to Speech narration per scene
+            </p>
           </div>
 
           {/* Checkboxes */}

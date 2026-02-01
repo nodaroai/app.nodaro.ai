@@ -21,6 +21,11 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
     model: "google/veo-2",
     videoParam: "video",
   },
+  veo3: {
+    model: "google/veo-3",
+    videoParam: "video",
+    extraInput: { generate_audio: true },
+  },
   kling: {
     model: "kwaivgi/kling-v1.6-pro",
     videoParam: "input_video",

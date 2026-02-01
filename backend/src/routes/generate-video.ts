@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 const generateVideoBody = z.object({
   imageUrl: z.string().url(),
   prompt: z.string().max(2000).optional(),
-  provider: z.enum(["veo", "kling", "runway", "pika", "sora", "minimax"]).optional(),
+  provider: z.enum(["veo", "veo3", "kling", "runway", "pika", "sora", "minimax"]).optional(),
   generateAudio: z.boolean().optional(),
 })
 

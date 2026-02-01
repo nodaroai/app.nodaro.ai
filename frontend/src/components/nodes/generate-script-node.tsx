@@ -246,6 +246,21 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
           setShowFullscreen(false)
           setShowExpandDialog(true)
         }}
+        onUpdateSceneCharacters={(sceneIndex, characters) => {
+          if (!activeScript) return
+          const updatedScenes = activeScript.scenes.map((s, i) =>
+            i === sceneIndex ? { ...s, characters } : s
+          )
+          const updatedScript = { ...activeScript, scenes: updatedScenes }
+          updateNodeData(id, {
+            generatedScript: updatedScript,
+            ...(activeResult ? {
+              generatedResults: results.map((r, i) =>
+                i === activeIndex ? { ...r, script: updatedScript } : r
+              ),
+            } : {}),
+          })
+        }}
         onDeleteImage={(sceneIndex, imageIndex) => {
           if (!activeScript) return
           const scene = activeScript.scenes[sceneIndex]

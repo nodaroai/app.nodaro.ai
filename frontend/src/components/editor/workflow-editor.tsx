@@ -914,7 +914,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   function handleExpandStoryboard(
     scriptNodeId: string,
-    options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean },
+    options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt" },
   ) {
     const store = useWorkflowStore.getState()
     const scriptNode = store.nodes.find((n) => n.id === scriptNodeId)
@@ -929,6 +929,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const scenes = script.scenes
     const startX = scriptNode.position.x + 400
     const startY = scriptNode.position.y
+    const narrationSource = options.narrationSource ?? "visualDescription"
 
     const newNodes: WorkflowNode[] = []
     const newEdges: WorkflowEdge[] = []
@@ -945,22 +946,64 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     const isHorizontal = options.layout === "horizontal"
-    const sceneSpacingX = isHorizontal ? 280 : 0
-    const sceneSpacingY = isHorizontal ? 0 : 250
-    const videoOffsetX = isHorizontal ? 0 : 300
-    const videoOffsetY = isHorizontal ? 200 : 0
 
-    const videoNodeIds: string[] = []
+    const imageNodeIds: string[] = []
+    const mergeNodeIds: string[] = []
 
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i]
       const images = scene.generatedImages ?? []
       const hasImage = images.length > 0
 
-      const imgX = startX + i * sceneSpacingX
-      const imgY = startY + i * sceneSpacingY
+      // Get narration text based on selected source
+      const narrationText = scene[narrationSource] ?? scene.visualDescription
 
+      // Calculate positions
+      let textX: number, textY: number
+      let imgX: number, imgY: number
+      let vidX: number, vidY: number
+      let ttsX: number, ttsY: number
+      let mergeX: number, mergeY: number
+
+      if (isHorizontal) {
+        const colX = startX + i * 350
+        textX = colX - 60; textY = startY + 300
+        imgX = colX; imgY = startY
+        vidX = colX - 60; vidY = startY + 150
+        ttsX = colX + 60; ttsY = startY + 300
+        mergeX = colX; mergeY = startY + 450
+      } else {
+        // Each scene is an independent vertical block with fixed internal layout
+        // Scenes stack top-to-bottom with SCENE_HEIGHT spacing (no overlap)
+        const SCENE_HEIGHT = 450
+        const baseY = startY + i * SCENE_HEIGHT
+
+        // Row 1: Generate Image (left) + Image to Video (right)
+        imgX = startX; imgY = baseY
+        vidX = startX + 300; vidY = baseY
+
+        // Row 2: Text Prompt (left) + Text to Speech (center) + Merge (right)
+        textX = startX; textY = baseY + 200
+        ttsX = startX + 300; ttsY = baseY + 200
+        mergeX = startX + 600; mergeY = baseY + 100
+      }
+
+      // 1. Text Prompt (narration for TTS)
+      const textNodeId = nextId()
+      newNodes.push({
+        id: textNodeId,
+        type: "text-prompt",
+        position: { x: textX, y: textY },
+        data: {
+          label: `Scene ${scene.sceneNumber} Narration`,
+          text: narrationText,
+          variables: {},
+        },
+      } as WorkflowNode)
+
+      // 2. Generate Image
       const imageNodeId = nextId()
+      imageNodeIds.push(imageNodeId)
       newNodes.push({
         id: imageNodeId,
         type: "generate-image",
@@ -987,15 +1030,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         },
       } as WorkflowNode)
 
+      // 3. Image to Video
       const videoNodeId = nextId()
-      videoNodeIds.push(videoNodeId)
       newNodes.push({
         id: videoNodeId,
         type: "image-to-video",
-        position: { x: imgX + videoOffsetX, y: imgY + videoOffsetY },
+        position: { x: vidX, y: vidY },
         data: {
           label: `Scene ${scene.sceneNumber} Video`,
-          provider: "veo",
+          provider: "veo3",
           model: "veo-3.1",
           duration: scene.durationHint,
           motion: "moderate",
@@ -1004,6 +1047,49 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         },
       } as WorkflowNode)
 
+      // 4. Text to Speech
+      const ttsNodeId = nextId()
+      newNodes.push({
+        id: ttsNodeId,
+        type: "text-to-speech",
+        position: { x: ttsX, y: ttsY },
+        data: {
+          label: `Scene ${scene.sceneNumber} Voice`,
+          provider: "elevenlabs",
+          voiceId: "Rachel",
+          language: "en",
+          speed: 1,
+          pitch: 1,
+          fieldMappings: {},
+        },
+      } as WorkflowNode)
+
+      // 5. Merge Video & Audio
+      const mergeNodeId = nextId()
+      mergeNodeIds.push(mergeNodeId)
+      newNodes.push({
+        id: mergeNodeId,
+        type: "merge-video-audio",
+        position: { x: mergeX, y: mergeY },
+        data: {
+          label: `Scene ${scene.sceneNumber} Merge`,
+          audioType: "voiceover",
+          voiceoverVolume: 100,
+          backgroundVolume: 30,
+          fieldMappings: {},
+        },
+      } as WorkflowNode)
+
+      // Edges: Text Prompt → TTS
+      newEdges.push({
+        id: `edge_${Date.now()}_${i}_txt_tts`,
+        source: textNodeId,
+        sourceHandle: "prompt",
+        target: ttsNodeId,
+        targetHandle: "in",
+      } as WorkflowEdge)
+
+      // Edges: Generate Image → Image to Video
       newEdges.push({
         id: `edge_${Date.now()}_${i}_img_vid`,
         source: imageNodeId,
@@ -1011,16 +1097,61 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         target: videoNodeId,
         targetHandle: "in",
       } as WorkflowEdge)
+
+      // Edges: Image to Video → Merge (video)
+      newEdges.push({
+        id: `edge_${Date.now()}_${i}_vid_merge`,
+        source: videoNodeId,
+        sourceHandle: "video",
+        target: mergeNodeId,
+        targetHandle: "in",
+      } as WorkflowEdge)
+
+      // Edges: TTS → Merge (audio)
+      newEdges.push({
+        id: `edge_${Date.now()}_${i}_tts_merge`,
+        source: ttsNodeId,
+        sourceHandle: "audio",
+        target: mergeNodeId,
+        targetHandle: "in",
+      } as WorkflowEdge)
     }
 
+    // Reference chain: connect Generate Image nodes for same characters
+    const charSceneMap: Record<string, number[]> = {}
+    for (let i = 0; i < scenes.length; i++) {
+      for (const char of scenes[i].characters ?? []) {
+        const arr = charSceneMap[char] ?? []
+        arr.push(i)
+        charSceneMap[char] = arr
+      }
+    }
+    const connectedPairs = new Set<string>()
+    for (const indices of Object.values(charSceneMap)) {
+      for (let j = 1; j < indices.length; j++) {
+        const pairKey = `${indices[j - 1]}_${indices[j]}`
+        if (!connectedPairs.has(pairKey)) {
+          connectedPairs.add(pairKey)
+          newEdges.push({
+            id: `edge_${Date.now()}_ref_${indices[j - 1]}_${indices[j]}`,
+            source: imageNodeIds[indices[j - 1]],
+            sourceHandle: "image",
+            target: imageNodeIds[indices[j]],
+            targetHandle: "in",
+          } as WorkflowEdge)
+        }
+      }
+    }
+
+    // Combine Videos: connect from Merge nodes
     if (options.includeCombine && scenes.length > 1) {
       const combineNodeId = nextId()
       const combineX = isHorizontal
-        ? startX + scenes.length * sceneSpacingX + 100
-        : startX + videoOffsetX + 300
+        ? startX + scenes.length * 350 + 100
+        : startX + 900
       const combineY = isHorizontal
-        ? startY + videoOffsetY
-        : startY + ((scenes.length - 1) * sceneSpacingY) / 2
+        ? startY + 450
+        : startY + ((scenes.length - 1) * 450) / 2
 
       newNodes.push({
         id: combineNodeId,
@@ -1034,10 +1165,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         },
       } as WorkflowNode)
 
-      for (let i = 0; i < videoNodeIds.length; i++) {
+      for (let i = 0; i < mergeNodeIds.length; i++) {
         newEdges.push({
-          id: `edge_${Date.now()}_${i}_vid_comb`,
-          source: videoNodeIds[i],
+          id: `edge_${Date.now()}_${i}_merge_comb`,
+          source: mergeNodeIds[i],
           sourceHandle: "video",
           target: combineNodeId,
           targetHandle: "in",
@@ -1047,18 +1178,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     store.batchAddNodesAndEdges(newNodes, newEdges)
 
-    const imageNodeCount = scenes.length
-    const videoNodeCount = scenes.length
-    const combineCount = options.includeCombine && scenes.length > 1 ? 1 : 0
-    const totalNodes = imageNodeCount + videoNodeCount + combineCount
+    const totalNodes = scenes.length * 5 + (options.includeCombine && scenes.length > 1 ? 1 : 0)
     toast.success(`Created ${totalNodes} nodes for ${scenes.length} scenes`)
 
+    // Auto-run: generate images for scenes without existing images
     if (options.autoRun) {
       for (let i = 0; i < scenes.length; i++) {
-        const scene = scenes[i]
-        const hasImage = (scene.generatedImages ?? []).length > 0
+        const hasImage = (scenes[i].generatedImages ?? []).length > 0
         if (!hasImage) {
-          const imageNode = newNodes[i * 2]
+          // Each scene produces 5 nodes; Generate Image is the 2nd node (index 1) in each group
+          const imageNode = newNodes[i * 5 + 1]
           if (imageNode) {
             store.runSingleNode?.(imageNode.id)
           }

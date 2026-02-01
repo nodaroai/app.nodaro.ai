@@ -8,6 +8,7 @@ import type { VideoProvider } from "./replicate.js"
 const VIDEO_MODELS: Record<string, string> = {
   minimax: "minimax/video-01",
   veo: "google/veo-2",
+  veo3: "google/veo-3",
   kling: "kwaivgi/kling-v1.6-pro",
   runway: "runway/gen3a-turbo",
   pika: "pika-labs/pika",

@@ -129,6 +129,7 @@ export interface ScriptScene {
   readonly generatedImages?: readonly SceneImageVersion[]
   readonly activeImageIndex?: number
   readonly imageStatus?: "idle" | "running" | "completed" | "failed"
+  readonly characters?: readonly string[]
 }
 
 export interface GeneratedScript {
@@ -179,7 +180,7 @@ export type GenerateImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "veo" | "kling" | "runway" | "pika"
+  provider: "minimax" | "veo" | "veo3" | "kling" | "runway" | "pika"
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
@@ -211,7 +212,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "runway" | "pika" | "sora" | "veo" | "kling"
+  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "kling"
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"
@@ -227,7 +228,7 @@ export type VideoToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "veo" | "kling" | "runway" | "pika"
+  provider: "minimax" | "veo" | "veo3" | "kling" | "runway" | "pika"
   model: string
   duration: number
   fieldMappings: FieldMappings
@@ -632,7 +633,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 20,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Image to Video", provider: "veo", model: "veo-3.1", duration: 5, motion: "moderate", cameraMotion: "static", fieldMappings: {} },
+    defaultData: { label: "Image to Video", provider: "veo3", model: "veo-3", duration: 5, motion: "moderate", cameraMotion: "static", fieldMappings: {} },
   },
   {
     type: "video-to-video",
