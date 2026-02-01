@@ -190,7 +190,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => n !== undefined)
 
-    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; referenceImageUrl?: string } = {}
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; referenceImageUrl?: string; audioPrompt?: string } = {}
 
     for (const src of sourceNodes) {
       const output = extractNodeOutput(src)
@@ -221,7 +221,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           inputs.videoUrl = output
         }
       } else if (src.type === "reference-audio") {
-        if (node.type === "generate-music") {
+        if (node.type === "image-to-video") {
+          const srcData = src.data as Record<string, unknown>
+          inputs.audioPrompt = (srcData.label as string) ?? ""
+        } else if (node.type === "generate-music") {
           inputs.audioUrl = output
         } else if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
@@ -229,7 +232,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           inputs.audioUrl = output
         }
       } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "extract-audio" || src.type === "adjust-volume" || src.type === "mix-audio") {
-        if (node.type === "mix-audio") {
+        if (node.type === "image-to-video") {
+          const srcData = src.data as Record<string, unknown>
+          inputs.audioPrompt = (srcData.prompt as string) ?? ""
+        } else if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
         } else {
           inputs.audioUrl = output
@@ -289,12 +295,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runVideoGeneration(nodeId: string, imageUrl: string, provider?: string): Promise<void> {
+  function runVideoGeneration(nodeId: string, imageUrl: string, provider?: string, audioPrompt?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      generateVideo(imageUrl, undefined, provider).then(({ jobId }) => {
+      generateVideo(imageUrl, undefined, provider, audioPrompt).then(({ jobId }) => {
         toast.info("Video generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -645,7 +651,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as ImageToVideoData).label}": no image found`)
         return Promise.reject(new Error("No image"))
       }
-      return runVideoGeneration(node.id, imageUrl, (node.data as ImageToVideoData).provider || undefined)
+      return runVideoGeneration(node.id, imageUrl, (node.data as ImageToVideoData).provider || undefined, inputs.audioPrompt)
     }
 
     if (node.type === "video-to-video") {

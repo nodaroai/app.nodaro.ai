@@ -18,8 +18,9 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
     extraInput: { prompt_optimizer: true },
   },
   veo: {
-    model: "google/veo-2",
+    model: "google/veo-3",
     imageParam: "image",
+    extraInput: { generate_audio: true },
   },
   kling: {
     model: "kwaivgi/kling-v1.6-pro",
@@ -43,18 +44,23 @@ export async function imageToVideo(
   imageUrl: string,
   prompt?: string,
   provider?: VideoProvider,
+  audioPrompt?: string,
 ): Promise<string> {
   const resolvedProvider = provider ?? "minimax"
   const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
+  const basePrompt = prompt ?? "smooth cinematic motion"
+  const finalPrompt = audioPrompt
+    ? `${basePrompt}. Audio: ${audioPrompt}`
+    : basePrompt
   console.log(`[imageToVideo] Provider: ${resolvedProvider}, Model: ${cfg.model}`)
   console.log(`[imageToVideo] Input image param: "${cfg.imageParam}" = "${imageUrl}"`)
-  console.log(`[imageToVideo] Motion prompt: "${prompt ?? "smooth cinematic motion"}"`)
+  console.log(`[imageToVideo] Motion prompt: "${finalPrompt}"`)
 
   const output = await replicate.run(
     cfg.model as `${string}/${string}`,
     {
       input: {
-        prompt: prompt ?? "smooth cinematic motion",
+        prompt: finalPrompt,
         [cfg.imageParam]: imageUrl,
         ...cfg.extraInput,
       },

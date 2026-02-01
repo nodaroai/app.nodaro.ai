@@ -1149,13 +1149,16 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="veo">VEO</SelectItem>
+            <SelectItem value="veo">VEO 3</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
             <SelectItem value="pika">Pika</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
+      {data.provider === "veo" && (
+        <p className="text-xs text-muted-foreground px-1">VEO 3 generates audio from the prompt. Connect an audio node to the Audio handle to guide the sound.</p>
+      )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           type="number"

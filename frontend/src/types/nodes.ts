@@ -184,6 +184,7 @@ export type ImageToVideoData = {
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
   cameraMotion: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
+  audioPrompt?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   generatedVideoUrl?: string
