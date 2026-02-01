@@ -1,10 +1,11 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, X, Play } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { GenerateImageData } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -16,6 +17,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedImageUrl
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -61,7 +63,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               className="w-full h-28 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()
-                window.open(activeUrl, "_blank")
+                setPreviewOpen(true)
               }}
             />
             {results.length > 0 && (
@@ -146,6 +148,14 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           Run
         </button>
       </div>
+    )}
+    {activeUrl && (
+      <MediaPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        type="image"
+        url={activeUrl}
+      />
     )}
     </div>
   )

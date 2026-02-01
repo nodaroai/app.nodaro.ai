@@ -1,10 +1,11 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X, Play } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToVideoData } from "@/types/nodes"
 
 function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -17,6 +18,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -58,12 +60,19 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
           <div className="relative group">
             <video
               src={activeUrl}
-              className="w-full h-28 object-cover rounded-md"
+              className="w-full h-28 object-cover rounded-md cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation()
+                setPreviewOpen(true)
+              }}
               autoPlay={videoAutoplay}
-              loop
               muted
+              loop={videoAutoplay}
               playsInline
             />
+            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
+              Video
+            </div>
             {results.length > 0 && (
               <button
                 type="button"
@@ -104,11 +113,12 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
                       ? "opacity-100 ring-2 ring-primary"
                       : "opacity-50 hover:opacity-80"
                   }`}
-                  muted
                   onClick={(e) => {
                     e.stopPropagation()
                     updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
                   }}
+                  muted
+                  playsInline
                 />
                 <button
                   type="button"
@@ -125,9 +135,10 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        <p className="text-muted-foreground truncate">
-          {nodeData.prompt || `${nodeData.provider}/${nodeData.model}`}
-        </p>
+        <div className="flex justify-between text-muted-foreground">
+          <span>{nodeData.provider}</span>
+          <span>{nodeData.duration}s</span>
+        </div>
       </div>
     </BaseNode>
     {status !== "running" && (
@@ -145,6 +156,14 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
           Run
         </button>
       </div>
+    )}
+    {activeUrl && (
+      <MediaPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        type="video"
+        url={activeUrl}
+      />
     )}
     </div>
   )

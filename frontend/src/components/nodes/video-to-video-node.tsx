@@ -1,10 +1,11 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X, Play } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { VideoToVideoData } from "@/types/nodes"
 
 function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -17,6 +18,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -61,7 +63,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               className="w-full h-28 object-cover rounded-md cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation()
-                window.open(activeUrl, "_blank")
+                setPreviewOpen(true)
               }}
               autoPlay={videoAutoplay}
               muted
@@ -154,6 +156,14 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
           Run
         </button>
       </div>
+    )}
+    {activeUrl && (
+      <MediaPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        type="video"
+        url={activeUrl}
+      />
     )}
     </div>
   )
