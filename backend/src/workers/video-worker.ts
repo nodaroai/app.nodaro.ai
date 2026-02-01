@@ -8,7 +8,10 @@ import { videoToVideo } from "../providers/video/video-to-video.js"
 import { textToVideo } from "../providers/video/text-to-video.js"
 import { textToSpeech } from "../providers/voice/text-to-speech.js"
 import { generateScript } from "../providers/script/script-generator.js"
-import { uploadToR2 } from "../lib/storage.js"
+import { uploadToR2, uploadFileToR2 } from "../lib/storage.js"
+import { combineVideos } from "../providers/video/combine-videos.js"
+import { promises as fs } from "node:fs"
+import { dirname } from "node:path"
 
 export function createVideoWorker() {
   const connection = new IORedis(config.REDIS_URL, {
@@ -170,6 +173,35 @@ export function createVideoWorker() {
             .eq("id", jobId)
 
           console.log(`[worker] Job ${jobId} completed: "${script.title}" (${script.scenes.length} scenes)`)
+        } else if (job.name === "combine-videos") {
+          const { videoUrls, transition, transitionDuration } = job.data as {
+            jobId: string
+            videoUrls: string[]
+            transition: "cut" | "fade" | "dissolve"
+            transitionDuration: number
+          }
+          console.log(`[worker] combine-videos ${jobId}: ${videoUrls.length} videos, transition=${transition}`)
+
+          const outputPath = await combineVideos({ videoUrls, transition, transitionDuration })
+          await job.updateProgress(80)
+
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          await job.updateProgress(100)
+
+          // Cleanup temp files
+          await fs.rm(dirname(outputPath), { recursive: true, force: true }).catch(() => {})
+
+          await supabase
+            .from("jobs")
+            .update({
+              status: "completed",
+              progress: 100,
+              output_data: { videoUrl: r2Url },
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", jobId)
+
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else {
           throw new Error(`Unknown job type: ${job.name}`)
         }

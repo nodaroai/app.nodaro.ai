@@ -130,6 +130,23 @@ export async function generateScriptApi(prompt: string, sceneCount?: number, ton
   return res.json()
 }
 
+export async function combineVideos(
+  videoUrls: string[],
+  transition: "cut" | "fade" | "dissolve" = "cut",
+  transitionDuration: number = 0.5,
+): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/combine-videos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoUrls, transition, transitionDuration }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start video combination")
+  }
+  return res.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<{
   id: string
   status: string

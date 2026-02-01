@@ -11,6 +11,7 @@ import { videoToVideoRoutes } from "./routes/video-to-video.js"
 import { textToVideoRoutes } from "./routes/text-to-video.js"
 import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 import { generateScriptRoutes } from "./routes/generate-script.js"
+import { combineVideosRoutes } from "./routes/combine-videos.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -28,6 +29,7 @@ export async function buildApp() {
   await app.register(textToVideoRoutes)
   await app.register(textToSpeechRoutes)
   await app.register(generateScriptRoutes)
+  await app.register(combineVideosRoutes)
 
   return app
 }

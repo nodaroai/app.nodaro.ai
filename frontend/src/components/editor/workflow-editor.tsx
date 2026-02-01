@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, CombineVideosData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -78,7 +78,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "combine-videos"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -145,6 +145,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
     }
+    if (type === "combine-videos") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
+    }
     if (type === "image-to-video" || type === "video-to-video" || type === "text-to-video") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
@@ -172,7 +177,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => n !== undefined)
 
-    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; referenceImageUrl?: string } = {}
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; referenceImageUrl?: string } = {}
 
     for (const src of sourceNodes) {
       const output = extractNodeOutput(src)
@@ -183,15 +188,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "upload-image") {
         inputs.imageUrl = output
       } else if (src.type === "upload-video") {
-        inputs.videoUrl = output
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+        } else {
+          inputs.videoUrl = output
+        }
       } else if (src.type === "generate-image") {
         if (node.type === "generate-image") {
           inputs.referenceImageUrl = output
         } else {
           inputs.imageUrl = output
         }
-      } else if (src.type === "image-to-video" || src.type === "video-to-video") {
-        inputs.videoUrl = output
+      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "combine-videos") {
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+        } else {
+          inputs.videoUrl = output
+        }
       }
     }
 
@@ -482,6 +495,53 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  function runCombineVideos(nodeId: string, videoUrls: string[], transition: "cut" | "fade" | "dissolve", transitionDuration: number): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
+
+    return new Promise((resolve, reject) => {
+      combineVideos(videoUrls, transition, transitionDuration).then(({ jobId }) => {
+        toast.info("Combine videos started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const videoUrl = job.output_data?.videoUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as CombineVideosData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedVideoUrl: videoUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Videos combined")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Combine videos failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Combine videos failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check combine videos status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start combine videos", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
   function executeNode(node: WorkflowNode): Promise<void> {
     const { nodes, edges } = useWorkflowStore.getState()
     const inputs = resolveNodeInputs(node, nodes, edges)
@@ -541,6 +601,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
       const voice = (node.data as TextToSpeechData).voiceId
       return runTextToSpeechGeneration(node.id, text, voice || undefined)
+    }
+
+    if (node.type === "combine-videos") {
+      const videoUrls = inputs.videoUrls ?? []
+      if (videoUrls.length < 2) {
+        toast.error(`Node "${(node.data as CombineVideosData).label}": need at least 2 video inputs`)
+        return Promise.reject(new Error("Need at least 2 videos"))
+      }
+      const combineData = node.data as CombineVideosData
+      return runCombineVideos(node.id, videoUrls, combineData.transition ?? "cut", combineData.transitionDuration ?? 0.5)
     }
 
     return Promise.resolve()

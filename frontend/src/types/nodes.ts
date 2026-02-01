@@ -239,6 +239,10 @@ export type CombineVideosData = {
   transition: "cut" | "fade" | "dissolve"
   transitionDuration: number
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type AddAudioData = {

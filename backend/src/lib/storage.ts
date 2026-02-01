@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
+import { promises as fs } from "node:fs"
 import { config } from "./config.js"
 
 const s3 = new S3Client({
@@ -21,6 +22,28 @@ export async function uploadToR2(
   }
 
   const buffer = Buffer.from(await response.arrayBuffer())
+  const ext = type === "video" ? "mp4" : type === "audio" ? "wav" : "png"
+  const contentType = type === "video" ? "video/mp4" : type === "audio" ? "audio/wav" : "image/png"
+  const key = `${type}s/${jobId}.${ext}`
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: config.R2_BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }),
+  )
+
+  return `${config.R2_PUBLIC_URL}/${key}`
+}
+
+export async function uploadFileToR2(
+  filePath: string,
+  jobId: string,
+  type: "image" | "video" | "audio" = "video",
+): Promise<string> {
+  const buffer = await fs.readFile(filePath)
   const ext = type === "video" ? "mp4" : type === "audio" ? "wav" : "png"
   const contentType = type === "video" ? "video/mp4" : type === "audio" ? "audio/wav" : "image/png"
   const key = `${type}s/${jobId}.${ext}`
