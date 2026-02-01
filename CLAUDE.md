@@ -3393,6 +3393,24 @@ Maintain a CHANGELOG.md:
 | Image Generation Model | google/nano-banana via Replicate | Good quality, supports reference images, internally uses flux-schnell |
 | Video Generation Model | minimax/video-01 via Replicate | Accepts first_frame_image for image-to-video conversion |
 | Asset Storage | Cloudflare R2 | S3-compatible, no egress fees, serves generated images and videos |
+| Execution Model | Frontend DAG Engine | Topological sort, parallel execution per level, sequential between levels |
+| Translation | google/gemini-2.5-flash via Replicate | Creative prompt translation (Hebrew, etc. to English) |
+
+### Workflow Execution Engine
+
+The workflow executor uses a DAG-based approach:
+
+1. **Topological Sort** (`buildExecutionLevels`): Kahn's algorithm groups nodes into levels based on dependency depth. Level 0 = nodes with no incoming edges (Text Prompt, Upload Image). Level 1 = nodes depending only on Level 0 (Generate Image). Level 2+ = deeper dependencies.
+
+2. **Parallel Execution**: All executable nodes within the same level run simultaneously via `Promise.allSettled()`. This means two Generate Image nodes at the same level start at the same time.
+
+3. **Sequential Between Levels**: The engine waits for all nodes in a level to complete before starting the next level. If any node fails, execution stops.
+
+4. **Input Resolution** (`resolveNodeInputs`): Before executing a node, the engine walks incoming edges to collect outputs from upstream nodes (prompt text, image URLs, video URLs, reference images).
+
+5. **Reference Image Chaining**: When a Generate Image node connects to another Generate Image node, the output is passed as `referenceImageUrl` (not `imageUrl`), enabling character consistency across scenes.
+
+6. **Executable Node Types**: Only `generate-image`, `image-to-video`, and `video-to-video` are executable. All other node types (input, parameter, processing) are data-only and read by downstream nodes.
 
 ### Implementation Notes
 
@@ -3479,6 +3497,11 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Global video autoplay toggle in editor toolbar
 - [x] Single-node execution (Run button per node, hanging tab style)
 - [x] Floating Execute/Stop workflow buttons (bottom center)
+- [x] Video to Video node (continuation/style reference via minimax/video-01)
+- [x] DAG Execution Engine (topological sort with Kahn's algorithm)
+- [x] Parallel execution at each level (Promise.allSettled)
+- [x] Sequential execution with dependency waiting between levels
+- [x] Reference image support (Image → Image chains via nano-banana)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
@@ -3532,5 +3555,5 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 
 ---
 
-*Last updated: 2026-02-01*
-*Version: 1.5.0*
+*Last updated: 2026-02-02*
+*Version: 1.6.0*

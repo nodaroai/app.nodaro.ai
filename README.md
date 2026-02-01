@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Image generation (google/nano-banana via Replicate) and video generation (minimax/video-01 via Replicate) are working end-to-end with R2 storage. Chain workflows (Text -> Image -> Video) execute automatically. Single-node execution with per-node Run buttons. Results display in nodes with version history and deletion support.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. Image generation (google/nano-banana), video generation (minimax/video-01), and video-to-video all working end-to-end. Reference image chaining for character consistency. Single-node and full workflow execution with version history.
 
 ## Features
 
@@ -23,7 +23,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 |----------|-------|
 | **Input** | Text Prompt, Upload Image, Upload Video, RSS Feed |
 | **Parameter** | Provider, Duration, Aspect Ratio, Tone, Style Guide, Scene Count, Motion, Camera Motion |
-| **AI** | Generate Script, Generate Image, Image to Video, Text to Video, Text to Speech, QA Check |
+| **AI** | Generate Script, Generate Image, Image to Video, Video to Video, Text to Video, Text to Speech, QA Check |
 | **Processing** | Combine Videos, Add Audio, Extract Audio, Mix Audio, Add Captions, Resize Video, Trim Video, Adjust Volume |
 | **Output** | Save to Storage, Webhook Output |
 
@@ -186,9 +186,13 @@ The backend exposes a REST API at `http://localhost:8000`:
 Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 
 ### Execution Engine
-- Image generation via google/nano-banana (Replicate)
+- **DAG-based execution**: Topological sort (Kahn's algorithm) determines execution order
+- **Parallel execution**: Nodes at the same dependency level run simultaneously via Promise.allSettled
+- **Sequential dependencies**: Levels execute one after another, waiting for completion
+- **Reference image chaining**: Generate Image → Generate Image passes output as reference for character consistency
+- Image generation via google/nano-banana (Replicate) with smart translation (Hebrew, etc.)
 - Video generation via minimax/video-01 (Replicate)
-- Chain workflows: Text -> Image -> Video runs automatically
+- Video-to-video continuation/style reference
 - Generated results display directly in nodes with version history
 - Delete individual results from version history
 - Global video autoplay toggle in editor toolbar
