@@ -190,8 +190,8 @@ function MappableField({
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-1">
-        <Label className="text-xs">{label}</Label>
+      <div className="flex items-center gap-2 mb-1.5">
+        <Label className="text-xs text-muted-foreground">{label}</Label>
         {compatible.length > 0 && (
           <Select
             value={mapping?.sourceNodeId ?? "__manual__"}
@@ -275,14 +275,15 @@ export function ConfigPanel() {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 px-4 py-3">
-        <div className="flex flex-col gap-4">
+      <ScrollArea className="flex-1">
+        <div className="flex flex-col gap-4 px-4 py-4">
           <div>
-            <Label htmlFor="node-label">Label</Label>
+            <Label htmlFor="node-label" className="text-xs text-muted-foreground">Label</Label>
             <Input
               id="node-label"
               value={(selectedNode.data as { label: string }).label}
               onChange={(e) => update({ label: e.target.value })}
+              className="mt-1"
             />
           </div>
 
@@ -390,25 +391,23 @@ export function ConfigPanel() {
             <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
-          {(selectedNode.type === "generate-image" || selectedNode.type === "image-to-video") && (
-            <>
-              <Separator />
+          <Separator />
+
+          <div className="flex flex-col gap-2 pt-2">
+            {(selectedNode.type === "generate-image" || selectedNode.type === "image-to-video") && (
               <Button
-                size="sm"
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white"
                 onClick={() => runSingleNode?.(selectedNode.id)}
               >
-                <Play className="w-4 h-4 mr-1.5" />
+                <Play className="w-4 h-4 mr-2" />
                 Run This Node
               </Button>
-            </>
-          )}
+            )}
 
-          <Separator />
-
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            Delete Node
-          </Button>
+            <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={handleDelete}>
+              Delete Node
+            </Button>
+          </div>
         </div>
       </ScrollArea>
     </div>
