@@ -18,6 +18,7 @@ import { adjustVolume } from "../providers/video/adjust-volume.js"
 import { addCaptions } from "../providers/video/add-captions.js"
 import { mixAudio } from "../providers/video/mix-audio.js"
 import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
+import { generateMusic } from "../providers/audio/generate-music.js"
 import { promises as fs } from "node:fs"
 import { dirname } from "node:path"
 
@@ -300,6 +301,16 @@ export function createVideoWorker() {
           await job.updateProgress(80)
           const r2Url = await uploadFileToR2(outputPath, jobId, "audio")
           await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "generate-music") {
+          const { prompt, duration, modelVersion } = job.data as { jobId: string; prompt: string; duration?: number; modelVersion?: string }
+          console.log(`[worker] generate-music ${jobId}`)
+          const replicateUrl = await generateMusic(prompt, duration, modelVersion)
+          await job.updateProgress(50)
+          const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
           await job.updateProgress(100)
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)

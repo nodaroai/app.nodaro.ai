@@ -238,6 +238,24 @@ export async function mixAudioApi(audioUrls: string[]): Promise<{ jobId: string 
   return res.json()
 }
 
+export async function generateMusicApi(prompt: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt }
+  if (duration !== undefined) body.duration = duration
+  if (genre) body.genre = genre
+  if (mood) body.mood = mood
+  if (instrumental !== undefined) body.instrumental = instrumental
+  const res = await fetch(`${API_BASE_URL}/v1/generate-music`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start music generation")
+  }
+  return res.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<{
   id: string
   status: string

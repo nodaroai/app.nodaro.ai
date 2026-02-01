@@ -231,6 +231,22 @@ export type QACheckData = {
   fieldMappings: FieldMappings
 }
 
+export type GenerateMusicData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  duration: number
+  genre: string
+  mood: string
+  instrumental: boolean
+  modelVersion: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+}
+
 // --- Processing Node Data ---
 
 export type CombineVideosData = {
@@ -376,6 +392,7 @@ export type SceneNodeData =
   | TextToVideoData
   | TextToSpeechData
   | QACheckData
+  | GenerateMusicData
   | CombineVideosData
   | AddAudioData
   | AddCaptionsData
@@ -407,6 +424,7 @@ export type SceneNodeType =
   | "text-to-video"
   | "text-to-speech"
   | "qa-check"
+  | "generate-music"
   | "combine-videos"
   | "add-audio"
   | "add-captions"
@@ -605,6 +623,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["approved", "rejected"],
     defaultData: { label: "QA Check", provider: "claude", checkType: "quality", threshold: 0.8, fieldMappings: {} },
+  },
+  {
+    type: "generate-music",
+    label: "Generate Music",
+    category: "ai",
+    creditCost: 5,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: { label: "Generate Music", prompt: "", duration: 8, genre: "", mood: "", instrumental: true, modelVersion: "stereo-large", fieldMappings: {} },
   },
   // Processing
   {

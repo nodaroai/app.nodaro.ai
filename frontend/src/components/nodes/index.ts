@@ -17,6 +17,7 @@ import { VideoToVideoNode } from "./video-to-video-node"
 import { TextToVideoNode } from "./text-to-video-node"
 import { TextToSpeechNode } from "./text-to-speech-node"
 import { QACheckNode } from "./qa-check-node"
+import { GenerateMusicNode } from "./generate-music-node"
 import { CombineVideosNode } from "./combine-videos-node"
 import { AddAudioNode } from "./add-audio-node"
 import { AddCaptionsNode } from "./add-captions-node"
@@ -52,6 +53,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "text-to-video": TextToVideoNode,
   "text-to-speech": TextToSpeechNode,
   "qa-check": QACheckNode,
+  "generate-music": GenerateMusicNode,
   // Processing
   "combine-videos": CombineVideosNode,
   "add-audio": AddAudioNode,
