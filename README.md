@@ -54,7 +54,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | Visual Editor | React Flow | Built |
 | State Management | Zustand | Built |
 | Database + Auth | Supabase (PostgreSQL) | Built |
-| Backend | FastAPI (Python) | Planned |
+| Backend | Fastify (Node.js/TypeScript) | Built |
 | Queue | Redis + BullMQ | Planned |
 | Storage | Cloudflare R2 | Planned |
 | Payments | Paddle | Planned |
@@ -85,6 +85,14 @@ scenenode/
 │   │   └── types/
 │   │       └── nodes.ts              # All node types + definitions
 │   └── package.json
+├── backend/                      # Fastify (Node.js/TypeScript)
+│   ├── src/
+│   │   ├── routes/               # API endpoints
+│   │   ├── services/             # Business logic
+│   │   ├── workers/              # BullMQ job workers
+│   │   └── lib/                  # Config, Supabase, Redis
+│   ├── package.json
+│   └── tsconfig.json
 ├── supabase/
 │   └── migrations/               # Database schema
 ├── CLAUDE.md                     # Full project specification
@@ -128,7 +136,7 @@ NEXT_PUBLIC_EDITION=cloud  # or "self-hosted" (default)
 
 ## Planned Features
 
-- Backend execution engine (FastAPI + Redis + BullMQ)
+- Backend execution engine (Fastify + Redis + BullMQ)
 - AI provider integrations (Nano Banana, VEO, ElevenLabs via Replicate)
 - Job queue with progress tracking
 - Asset storage (Cloudflare R2)
@@ -146,9 +154,16 @@ Sustainable Use License - See [LICENSE](./LICENSE)
 ## Development
 
 ```bash
+# Frontend
 cd frontend
 npm install
 npm run dev      # Development server
 npm run build    # Production build
 npm run lint     # ESLint
+
+# Backend
+cd backend
+npm install
+npm run dev      # Development server
+npm run worker   # BullMQ worker
 ```

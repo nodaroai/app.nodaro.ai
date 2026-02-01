@@ -225,12 +225,20 @@ Pre-configured visual style templates for quick-start workflows.
 |-------|------------|--------|
 | **Frontend** | Next.js 14 (App Router) | SSR, Vercel deploy, React ecosystem |
 | **Visual Editor** | React Flow | Industry standard for node-based UIs |
-| **Backend** | FastAPI (Python) | Async, auto-docs, AI library ecosystem |
+| **Backend** | Fastify (Node.js/TypeScript) | Fast, TypeScript-native, same language as frontend |
 | **Database** | Supabase (PostgreSQL) | RLS, Auth, Realtime, managed |
 | **Queue** | Redis + BullMQ | Proven at scale, job flows, priorities |
 | **Storage** | Cloudflare R2 | S3-compatible, no egress fees |
 | **Auth** | Supabase Auth (Google OAuth) + API Keys | Gmail login for UI, API keys for automation |
 | **Payments** | Paddle | Subscriptions + usage-based, handles VAT/tax globally |
+
+### Why Node.js for Backend?
+
+SceneNode does **API orchestration**, not ML inference. All AI work is HTTP calls to external providers (Replicate, ElevenLabs, etc.). This means:
+- No need for Python's ML ecosystem (PyTorch, transformers, etc.)
+- TypeScript end-to-end = shared types, single toolchain, faster development
+- BullMQ works natively (no cross-language glue code)
+- Simpler deployment and debugging
 
 ### AI Providers (Abstracted)
 
@@ -267,7 +275,7 @@ Pre-configured visual style templates for quick-start workflows.
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                          API LAYER                               │
-│                    FastAPI (Railway)                             │
+│                    Fastify (Railway)                             │
 │                                                                  │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
 │  │  /projects  │  │  /workflows │  │    /jobs    │              │
@@ -2406,8 +2414,8 @@ ENABLE_WATERMARK=true  # Set false for self-hosted
 
 ```
 Frontend:  Vercel
-Backend:   Railway (FastAPI)
-Workers:   Railway (Python workers)
+Backend:   Railway (Fastify)
+Workers:   Railway (Node.js workers)
 Redis:     Railway (Redis)
 Database:  Supabase (managed)
 Storage:   Cloudflare R2
@@ -2443,7 +2451,7 @@ services:
 
   worker:
     build: ./backend
-    command: python -m scenenode.worker
+    command: npm run worker
     environment:
       - REDIS_URL=redis://redis:6379
       # ... same as backend
@@ -2684,7 +2692,7 @@ For commercial hosting licenses, contact: license@scenenode.ai
 ```
 scenenode.ai              → Marketing website (landing page, pricing, about)
 app.scenenode.ai          → The application (dashboard, editor, settings)
-api.scenenode.ai          → The API (FastAPI backend)
+api.scenenode.ai          → The API (Fastify backend)
 docs.scenenode.ai         → Documentation (Docusaurus/GitBook)
 license.scenenode.ai      → License validation server (for n8n Node)
 ```
@@ -2696,7 +2704,7 @@ github.com/scenenode/scenenode
 
 scenenode/
 ├── frontend/              # Next.js 14 - The App
-├── backend/               # FastAPI - The API
+├── backend/               # Fastify - The API
 ├── docker-compose.yml
 ├── README.md
 └── CLAUDE.md
@@ -2790,47 +2798,37 @@ scenenode/
 │   │   └── utils.ts
 │   └── package.json
 │
-├── backend/                     # FastAPI
-│   ├── scenenode/
-│   │   ├── __init__.py
-│   │   ├── main.py             # FastAPI app
-│   │   ├── config.py           # Settings from env
-│   │   ├── api/
-│   │   │   ├── routes/
-│   │   │   │   ├── projects.py
-│   │   │   │   ├── workflows.py
-│   │   │   │   ├── jobs.py
-│   │   │   │   ├── render.py
-│   │   │   │   └── webhooks.py
-│   │   │   ├── deps.py         # Dependencies
-│   │   │   └── auth.py         # API key auth
-│   │   ├── models/             # Pydantic models
+├── backend/                           # Fastify (Node.js/TypeScript)
+│   ├── src/
+│   │   ├── server.ts                 # Entry point
+│   │   ├── app.ts                    # Fastify app builder
+│   │   ├── worker.ts                 # Worker entry point
+│   │   ├── lib/
+│   │   │   ├── config.ts            # Zod-validated env config
+│   │   │   ├── supabase.ts          # Supabase client
+│   │   │   └── queue.ts             # BullMQ queues + Redis
+│   │   ├── routes/
+│   │   │   ├── health.ts
+│   │   │   ├── projects.ts
+│   │   │   ├── workflows.ts
+│   │   │   ├── jobs.ts
+│   │   │   ├── render.ts
+│   │   │   └── webhooks.ts
 │   │   ├── services/
-│   │   │   ├── workflow_engine.py
-│   │   │   ├── job_manager.py
-│   │   │   └── credit_manager.py
-│   │   ├── providers/          # AI provider abstraction
-│   │   │   ├── base.py
+│   │   │   ├── workflow-engine.ts
+│   │   │   └── credit-manager.ts
+│   │   ├── providers/                # AI provider abstraction
+│   │   │   ├── base.ts
 │   │   │   ├── image/
-│   │   │   │   ├── nano_banana.py
-│   │   │   │   ├── flux.py
-│   │   │   │   └── dalle.py
 │   │   │   ├── video/
-│   │   │   │   ├── veo.py
-│   │   │   │   └── kling.py
 │   │   │   └── voice/
-│   │   │       └── elevenlabs.py
 │   │   ├── workers/
-│   │   │   ├── __init__.py
-│   │   │   ├── image_worker.py
-│   │   │   ├── video_worker.py
-│   │   │   ├── voice_worker.py
-│   │   │   └── webhook_worker.py
+│   │   │   └── video-worker.ts
 │   │   └── utils/
-│   │       ├── storage.py      # R2 client
-│   │       └── security.py
+│   │       └── security.ts
 │   ├── tests/
-│   ├── requirements.txt
+│   ├── package.json
+│   ├── tsconfig.json
 │   └── Dockerfile
 │
 ├── docker-compose.yml          # Self-hosted deployment
@@ -2904,11 +2902,11 @@ npm run dev
 
 # Backend
 cd backend
-pip install -r requirements.txt
-uvicorn scenenode.main:app --reload
+npm install
+npm run dev
 
-# Workers
-python -m scenenode.workers
+# Workers (in separate terminal)
+npm run worker
 ```
 
 ### Testing
@@ -2916,7 +2914,7 @@ python -m scenenode.workers
 ```bash
 # Backend tests
 cd backend
-pytest
+npm test
 
 # Frontend tests
 cd frontend
@@ -2934,15 +2932,15 @@ npm run test:e2e
 
 **Every piece of code must have tests.** No exceptions.
 
-#### Backend (Python/FastAPI)
+#### Backend (Node.js/Fastify)
 
 ```bash
 # Run tests
 cd backend
-pytest
+npm test
 
 # Run with coverage
-pytest --cov=scenenode --cov-report=html
+npm test -- --coverage
 ```
 
 **Test structure:**
@@ -2950,19 +2948,18 @@ pytest --cov=scenenode --cov-report=html
 backend/
 ├── tests/
 │   ├── unit/
-│   │   ├── test_workflow_engine.py
-│   │   ├── test_credit_manager.py
-│   │   ├── test_job_manager.py
+│   │   ├── workflow-engine.test.ts
+│   │   ├── credit-manager.test.ts
 │   │   └── providers/
-│   │       ├── test_nano_banana.py
-│   │       ├── test_veo.py
-│   │       └── test_elevenlabs.py
+│   │       ├── nano-banana.test.ts
+│   │       ├── veo.test.ts
+│   │       └── elevenlabs.test.ts
 │   ├── integration/
-│   │   ├── test_api_projects.py
-│   │   ├── test_api_workflows.py
-│   │   ├── test_api_jobs.py
-│   │   └── test_api_render.py
-│   └── conftest.py          # Fixtures
+│   │   ├── api-projects.test.ts
+│   │   ├── api-workflows.test.ts
+│   │   ├── api-jobs.test.ts
+│   │   └── api-render.test.ts
+│   └── setup.ts              # Test fixtures
 ```
 
 **What to test:**
@@ -2975,41 +2972,29 @@ backend/
 | Job queue | Integration | Job creation, status updates, retries |
 
 **Example test:**
-```python
-# tests/unit/test_credit_manager.py
-import pytest
-from scenenode.services.credit_manager import CreditManager
+```typescript
+// tests/unit/credit-manager.test.ts
+import { describe, it, expect } from "vitest"
+import { estimateWorkflowCredits } from "../../src/services/credit-manager"
 
-class TestCreditManager:
-    def test_deduct_credits_success(self, db_session, user_with_credits):
-        """Should deduct credits when user has sufficient balance."""
-        manager = CreditManager(db_session)
-        result = manager.deduct(user_with_credits.id, amount=50)
-        
-        assert result.success == True
-        assert result.new_balance == 150  # Started with 200
-    
-    def test_deduct_credits_insufficient(self, db_session, user_with_credits):
-        """Should fail when user has insufficient credits."""
-        manager = CreditManager(db_session)
-        result = manager.deduct(user_with_credits.id, amount=500)
-        
-        assert result.success == False
-        assert result.error == "insufficient_credits"
-    
-    def test_estimate_workflow_cost(self, db_session):
-        """Should calculate correct cost for workflow."""
-        manager = CreditManager(db_session)
-        workflow = {
-            "nodes": [
-                {"type": "generate-script"},      # 2 credits
-                {"type": "generate-image"},       # 5 credits × 8 scenes
-                {"type": "image-to-video"},       # 20 credits × 8 scenes
-            ]
-        }
-        cost = manager.estimate(workflow, scene_count=8)
-        
-        assert cost == 202  # 2 + 40 + 160
+describe("estimateWorkflowCredits", () => {
+  it("should calculate correct cost for workflow", () => {
+    const nodes = [
+      { type: "generate-script" },      // 2 credits
+      { type: "generate-image" },        // 5 credits
+      { type: "image-to-video" },        // 20 credits
+    ]
+    expect(estimateWorkflowCredits(nodes)).toBe(27)
+  })
+
+  it("should return 0 for free processing nodes", () => {
+    const nodes = [
+      { type: "adjust-volume" },
+      { type: "trim-video" },
+    ]
+    expect(estimateWorkflowCredits(nodes)).toBe(0)
+  })
+})
 ```
 
 #### Frontend (Next.js/React)
@@ -3400,6 +3385,9 @@ Maintain a CHANGELOG.md:
 |----------|----------|--------|
 | UI Framework | shadcn/ui | Consistent design, good React Flow integration |
 | State Management | React Query (server) + Zustand (UI) | Clear separation of concerns |
+| Backend Language | TypeScript (Node.js) | Same language as frontend, BullMQ native support |
+| Backend Framework | Fastify | Fast, TypeScript-first, great plugin system |
+| Job Queue | BullMQ | Best-in-class for Node.js, excellent dashboard |
 | Video Processing | FFmpeg in dedicated worker | Required for self-hosted edition |
 | Realtime Updates | Polling (MVP) → SSE (Phase 2) | No additional infrastructure needed |
 
@@ -3462,18 +3450,18 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 ## Phase 1 MVP Scope (Detailed Breakdown)
 
 ### Phase 1.1 - Foundation (3-4 days)
-- [ ] Database schema in Supabase (users, projects, workflows, jobs)
-- [ ] Auth with Supabase (Google OAuth / Gmail login)
-- [ ] FastAPI boilerplate with basic endpoints
-- [ ] Next.js boilerplate with shadcn/ui
-- [ ] Project structure for both repos (scenenode, scenenode-website)
+- [x] Database schema in Supabase (users, projects, workflows, jobs)
+- [x] Auth with Supabase (Google OAuth / Gmail login)
+- [x] Fastify boilerplate with basic endpoints
+- [x] Next.js boilerplate with shadcn/ui
+- [x] Project structure for both repos (scenenode, scenenode-website)
 
 ### Phase 1.2 - Editor (4-5 days)
-- [ ] React Flow canvas setup
-- [ ] Node types: Text Prompt, Generate Image, Image to Video, Combine
-- [ ] Save/Load workflow to database
-- [ ] Workflow validation (warnings & errors before execution)
-- [ ] Node configuration panels
+- [x] React Flow canvas setup
+- [x] Node types: All 28 node types implemented
+- [x] Save/Load workflow to database
+- [x] Workflow validation (warnings & errors before execution)
+- [x] Node configuration panels with field mapping
 
 ### Phase 1.3 - Execution (5-7 days)
 - [ ] Redis + BullMQ setup
@@ -3535,5 +3523,5 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 
 ---
 
-*Last updated: 2026-01-30*
-*Version: 1.3.0*
+*Last updated: 2026-02-01*
+*Version: 1.4.0*
