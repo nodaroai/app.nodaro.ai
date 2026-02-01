@@ -6,23 +6,27 @@ const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 export async function translateToEnglish(text: string): Promise<string> {
   const nonAsciiRatio = (text.match(/[^\x00-\x7F]/g) || []).length / text.length
   if (nonAsciiRatio < 0.1) {
-    console.log("[translate] Already English, skipping")
     return text
   }
 
-  console.log(`[translate] Translating: "${text}"`)
+  console.log(`[translate] Input: "${text}"`)
 
-  const output = await replicate.run("meta/meta-llama-3.1-8b-instruct", {
+  const output = await replicate.run("google/gemini-2.5-flash", {
     input: {
-      system_prompt: "You are a translator. Output ONLY the English translation. No explanations, no notes, no quotes.",
-      prompt: `Translate to English:\n${text}`,
+      prompt: `You are a creative translator for AI image generation prompts.
+
+Translate the following text to English. Make it descriptive and suitable for image generation.
+Keep the meaning but enhance it with visual details that will help an AI create a better image.
+
+Text to translate:
+${text}
+
+Output only the English translation, nothing else.`,
       max_tokens: 500,
-      temperature: 0.1,
     },
   })
 
-  const translated = Array.isArray(output) ? output.join("") : String(output)
-  const result = translated.trim()
-  console.log(`[translate] Result: "${result}"`)
-  return result
+  const result = Array.isArray(output) ? output.join("") : String(output)
+  console.log(`[translate] Output: "${result}"`)
+  return result.trim()
 }
