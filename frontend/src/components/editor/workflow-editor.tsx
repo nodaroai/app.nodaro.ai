@@ -8,9 +8,12 @@ import { NodeToolbar } from "./node-toolbar"
 import { ConfigPanel } from "./config-panel"
 import { EditorToolbar } from "./editor-toolbar"
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog"
+import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
+import { generateImage, getJobStatus } from "@/lib/api"
+import type { TextPromptData } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -40,8 +43,45 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }, [projectId, save])
 
-  function handleRun() {
-    // TODO: Execute workflow via API
+  async function handleRun() {
+    const { nodes } = useWorkflowStore.getState()
+    const textNode = nodes.find((n) => n.type === "text-prompt")
+    const prompt = (textNode?.data as TextPromptData | undefined)?.text?.trim()
+
+    if (!prompt) {
+      toast.error("No prompt found. Add a Text Prompt node with text.")
+      return
+    }
+
+    try {
+      const { jobId } = await generateImage(prompt)
+      toast.info("Job started", { description: `Job ID: ${jobId}` })
+
+      const poll = setInterval(async () => {
+        try {
+          const job = await getJobStatus(jobId)
+          if (job.status === "completed") {
+            clearInterval(poll)
+            const imageUrl = job.output_data?.imageUrl
+            toast.success("Image generated", {
+              description: imageUrl ? "Click to open" : "Done",
+              action: imageUrl ? { label: "Open", onClick: () => window.open(imageUrl, "_blank") } : undefined,
+              duration: 10000,
+            })
+          } else if (job.status === "failed") {
+            clearInterval(poll)
+            toast.error("Job failed", { description: job.error_message ?? "Unknown error" })
+          }
+        } catch {
+          clearInterval(poll)
+          toast.error("Failed to check job status")
+        }
+      }, 2000)
+    } catch (err) {
+      toast.error("Failed to start job", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    }
   }
 
   // Ctrl+S keyboard shortcut

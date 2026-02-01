@@ -42,6 +42,35 @@ async function request<T>(
   }
 }
 
+// --- Generate Image (E2E spike) ---
+
+export async function generateImage(prompt: string): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start image generation")
+  }
+  return res.json()
+}
+
+export async function getJobStatus(jobId: string): Promise<{
+  id: string
+  status: string
+  output_data?: { imageUrl?: string }
+  error_message?: string
+}> {
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`)
+  if (!res.ok) throw new Error("Failed to get job status")
+  const body = await res.json()
+  return body.data
+}
+
+// --- Generic helpers ---
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),
