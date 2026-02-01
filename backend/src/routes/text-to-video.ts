@@ -5,6 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 
 const textToVideoBody = z.object({
   prompt: z.string().min(1).max(2000),
+  provider: z.enum(["veo", "kling", "runway", "pika", "sora", "minimax"]).optional(),
 })
 
 export async function textToVideoRoutes(app: FastifyInstance) {
@@ -19,7 +20,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt } = parsed.data
+    const { prompt, provider } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -27,7 +28,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
         status: "pending",
-        input_data: { prompt, type: "text-to-video" },
+        input_data: { prompt, provider, type: "text-to-video" },
       })
       .select("id")
       .single()
@@ -41,6 +42,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     await videoQueue.add("text-to-video", {
       jobId: job.id,
       prompt,
+      provider,
     })
 
     return { jobId: job.id }

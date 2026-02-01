@@ -2,12 +2,12 @@ import { Worker } from "bullmq"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { generateImage } from "../providers/image/replicate.js"
-import { imageToVideo } from "../providers/video/replicate.js"
+import { generateImage, type ImageProvider } from "../providers/image/replicate.js"
+import { imageToVideo, type VideoProvider } from "../providers/video/replicate.js"
 import { videoToVideo } from "../providers/video/video-to-video.js"
 import { textToVideo } from "../providers/video/text-to-video.js"
-import { textToSpeech } from "../providers/voice/text-to-speech.js"
-import { generateScript } from "../providers/script/script-generator.js"
+import { textToSpeech, type VoiceProvider } from "../providers/voice/text-to-speech.js"
+import { generateScript, type ScriptProvider } from "../providers/script/script-generator.js"
 import { uploadToR2, uploadFileToR2 } from "../lib/storage.js"
 import { combineVideos } from "../providers/video/combine-videos.js"
 import { addAudio } from "../providers/video/add-audio.js"
@@ -40,10 +40,10 @@ export function createVideoWorker() {
           .eq("id", jobId)
 
         if (job.name === "generate-image") {
-          const { prompt, referenceImageUrl } = job.data as { jobId: string; prompt: string; referenceImageUrl?: string }
-          console.log(`[worker] generate-image ${jobId}: "${prompt}"`)
+          const { prompt, referenceImageUrl, provider } = job.data as { jobId: string; prompt: string; referenceImageUrl?: string; provider?: ImageProvider }
+          console.log(`[worker] generate-image ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
 
-          const replicateUrl = await generateImage(prompt, referenceImageUrl)
+          const replicateUrl = await generateImage(prompt, referenceImageUrl, provider)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "image")
@@ -61,14 +61,15 @@ export function createVideoWorker() {
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "image-to-video") {
-          const { imageUrl, prompt } = job.data as {
+          const { imageUrl, prompt, provider } = job.data as {
             jobId: string
             imageUrl: string
             prompt?: string
+            provider?: VideoProvider
           }
-          console.log(`[worker] image-to-video ${jobId}`)
+          console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const replicateUrl = await imageToVideo(imageUrl, prompt)
+          const replicateUrl = await imageToVideo(imageUrl, prompt, provider)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "video")
@@ -86,14 +87,15 @@ export function createVideoWorker() {
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "video-to-video") {
-          const { videoUrl, prompt } = job.data as {
+          const { videoUrl, prompt, provider } = job.data as {
             jobId: string
             videoUrl: string
             prompt?: string
+            provider?: VideoProvider
           }
-          console.log(`[worker] video-to-video ${jobId}`)
+          console.log(`[worker] video-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const replicateUrl = await videoToVideo(videoUrl, prompt)
+          const replicateUrl = await videoToVideo(videoUrl, prompt, provider)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "video")
@@ -111,13 +113,14 @@ export function createVideoWorker() {
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "text-to-video") {
-          const { prompt } = job.data as {
+          const { prompt, provider } = job.data as {
             jobId: string
             prompt: string
+            provider?: VideoProvider
           }
-          console.log(`[worker] text-to-video ${jobId}`)
+          console.log(`[worker] text-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const replicateUrl = await textToVideo(prompt)
+          const replicateUrl = await textToVideo(prompt, provider)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "video")
@@ -135,14 +138,15 @@ export function createVideoWorker() {
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "text-to-speech") {
-          const { text, voice } = job.data as {
+          const { text, voice, provider } = job.data as {
             jobId: string
             text: string
             voice?: string
+            provider?: VoiceProvider
           }
-          console.log(`[worker] text-to-speech ${jobId}`)
+          console.log(`[worker] text-to-speech ${jobId} (provider: ${provider ?? "elevenlabs"})`)
 
-          const replicateUrl = await textToSpeech(text, voice)
+          const replicateUrl = await textToSpeech(text, voice, provider)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
@@ -160,16 +164,17 @@ export function createVideoWorker() {
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "generate-script") {
-          const { prompt, sceneCount, tone, targetDuration } = job.data as {
+          const { prompt, sceneCount, tone, targetDuration, provider } = job.data as {
             jobId: string
             prompt: string
             sceneCount?: number
             tone?: string
             targetDuration?: number
+            provider?: ScriptProvider
           }
-          console.log(`[worker] generate-script ${jobId}`)
+          console.log(`[worker] generate-script ${jobId} (provider: ${provider ?? "gemini"})`)
 
-          const script = await generateScript(prompt, sceneCount, tone, targetDuration)
+          const script = await generateScript(prompt, sceneCount, tone, targetDuration, provider)
           await job.updateProgress(100)
 
           await supabase

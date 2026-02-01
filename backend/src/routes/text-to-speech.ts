@@ -6,6 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 const textToSpeechBody = z.object({
   text: z.string().min(1).max(5000),
   voice: z.string().optional(),
+  provider: z.enum(["elevenlabs", "playht", "azure"]).optional(),
 })
 
 export async function textToSpeechRoutes(app: FastifyInstance) {
@@ -20,7 +21,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    const { text, voice } = parsed.data
+    const { text, voice, provider } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -28,7 +29,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
         status: "pending",
-        input_data: { text, voice, type: "text-to-speech" },
+        input_data: { text, voice, provider, type: "text-to-speech" },
       })
       .select("id")
       .single()
@@ -43,6 +44,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       jobId: job.id,
       text,
       voice,
+      provider,
     })
 
     return { jobId: job.id }

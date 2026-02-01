@@ -44,12 +44,23 @@ RULES:
 - Each scene should flow naturally into the next
 - Respond with ONLY the JSON object, nothing else`
 
+export type ScriptProvider = "gemini" | "claude" | "gpt"
+
+const SCRIPT_MODELS: Record<ScriptProvider, string> = {
+  gemini: "google/gemini-2.5-flash",
+  claude: "anthropic/claude-3.5-sonnet",
+  gpt: "openai/gpt-4o",
+}
+
 export async function generateScript(
   prompt: string,
   sceneCount: number = 5,
   tone?: string,
   targetDuration?: number,
+  provider?: ScriptProvider,
 ): Promise<GeneratedScript> {
+  const resolvedProvider = provider ?? "gemini"
+  const model = SCRIPT_MODELS[resolvedProvider] ?? SCRIPT_MODELS.gemini
   const duration = targetDuration ?? 60
 
   let userPrompt = `Create a ${sceneCount}-scene cinematic script for the following concept:\n\n${prompt}\n\nTarget duration: ${duration} seconds.`
@@ -57,9 +68,10 @@ export async function generateScript(
     userPrompt += `\nTone: ${tone}`
   }
 
+  console.log(`[generateScript] Provider: ${resolvedProvider}, Model: ${model}`)
   console.log(`[generateScript] Prompt: "${prompt}", scenes: ${sceneCount}, tone: "${tone ?? "none"}"`)
 
-  const output = await replicate.run("google/gemini-2.5-flash", {
+  const output = await replicate.run(model as `${string}/${string}`, {
     input: {
       prompt: `${SYSTEM_PROMPT}\n\n${userPrompt}`,
       max_tokens: 4096,

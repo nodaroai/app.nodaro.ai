@@ -44,10 +44,13 @@ async function request<T>(
 
 // --- Generate Image (E2E spike) ---
 
-export async function generateImage(prompt: string, referenceImageUrl?: string): Promise<{ jobId: string }> {
-  const body: Record<string, string> = { prompt }
+export async function generateImage(prompt: string, referenceImageUrl?: string, provider?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt }
   if (referenceImageUrl) {
     body.referenceImageUrl = referenceImageUrl
+  }
+  if (provider) {
+    body.provider = provider
   }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",
@@ -61,11 +64,11 @@ export async function generateImage(prompt: string, referenceImageUrl?: string):
   return res.json()
 }
 
-export async function generateVideo(imageUrl: string, prompt?: string): Promise<{ jobId: string }> {
+export async function generateVideo(imageUrl: string, prompt?: string, provider?: string): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageUrl, prompt }),
+    body: JSON.stringify({ imageUrl, prompt, provider }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -74,11 +77,11 @@ export async function generateVideo(imageUrl: string, prompt?: string): Promise<
   return res.json()
 }
 
-export async function videoToVideo(videoUrl: string, prompt?: string): Promise<{ jobId: string }> {
+export async function videoToVideo(videoUrl: string, prompt?: string, provider?: string): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/video-to-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ videoUrl, prompt }),
+    body: JSON.stringify({ videoUrl, prompt, provider }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -87,11 +90,11 @@ export async function videoToVideo(videoUrl: string, prompt?: string): Promise<{
   return res.json()
 }
 
-export async function textToVideo(prompt: string): Promise<{ jobId: string }> {
+export async function textToVideo(prompt: string, provider?: string): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/text-to-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, provider }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -100,11 +103,11 @@ export async function textToVideo(prompt: string): Promise<{ jobId: string }> {
   return res.json()
 }
 
-export async function textToSpeech(text: string, voice?: string): Promise<{ jobId: string }> {
+export async function textToSpeech(text: string, voice?: string, provider?: string): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/text-to-speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, voice }),
+    body: JSON.stringify({ text, voice, provider }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -113,11 +116,12 @@ export async function textToSpeech(text: string, voice?: string): Promise<{ jobI
   return res.json()
 }
 
-export async function generateScriptApi(prompt: string, sceneCount?: number, tone?: string, targetDuration?: number): Promise<{ jobId: string }> {
+export async function generateScriptApi(prompt: string, sceneCount?: number, tone?: string, targetDuration?: number, provider?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (sceneCount !== undefined) body.sceneCount = sceneCount
   if (tone) body.tone = tone
   if (targetDuration !== undefined) body.targetDuration = targetDuration
+  if (provider) body.provider = provider
   const res = await fetch(`${API_BASE_URL}/v1/generate-script`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

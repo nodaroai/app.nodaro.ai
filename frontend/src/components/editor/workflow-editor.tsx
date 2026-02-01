@@ -240,12 +240,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Promise-based node execution ---
 
-  function runImageGeneration(nodeId: string, prompt: string, referenceImageUrl?: string): Promise<void> {
+  function runImageGeneration(nodeId: string, prompt: string, referenceImageUrl?: string, provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedImageUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      generateImage(prompt, referenceImageUrl).then(({ jobId }) => {
+      generateImage(prompt, referenceImageUrl, provider).then(({ jobId }) => {
         toast.info("Image generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -287,12 +287,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runVideoGeneration(nodeId: string, imageUrl: string): Promise<void> {
+  function runVideoGeneration(nodeId: string, imageUrl: string, provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      generateVideo(imageUrl).then(({ jobId }) => {
+      generateVideo(imageUrl, undefined, provider).then(({ jobId }) => {
         toast.info("Video generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -334,12 +334,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runVideoToVideoGeneration(nodeId: string, sourceVideoUrl: string, prompt?: string): Promise<void> {
+  function runVideoToVideoGeneration(nodeId: string, sourceVideoUrl: string, prompt?: string, provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      videoToVideo(sourceVideoUrl, prompt).then(({ jobId }) => {
+      videoToVideo(sourceVideoUrl, prompt, provider).then(({ jobId }) => {
         toast.info("Video-to-video generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -381,12 +381,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runTextToVideoGeneration(nodeId: string, prompt: string): Promise<void> {
+  function runTextToVideoGeneration(nodeId: string, prompt: string, provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      textToVideo(prompt).then(({ jobId }) => {
+      textToVideo(prompt, provider).then(({ jobId }) => {
         toast.info("Text-to-video generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -428,12 +428,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runTextToSpeechGeneration(nodeId: string, text: string, voice?: string): Promise<void> {
+  function runTextToSpeechGeneration(nodeId: string, text: string, voice?: string, provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running" })
 
     return new Promise((resolve, reject) => {
-      textToSpeech(text, voice).then(({ jobId }) => {
+      textToSpeech(text, voice, provider).then(({ jobId }) => {
         toast.info("Text-to-speech generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -475,12 +475,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runScriptGeneration(nodeId: string, prompt: string, sceneCount?: number, tone?: string, targetDuration?: number): Promise<void> {
+  function runScriptGeneration(nodeId: string, prompt: string, sceneCount?: number, tone?: string, targetDuration?: number, provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running" })
 
     return new Promise((resolve, reject) => {
-      generateScriptApi(prompt, sceneCount, tone, targetDuration).then(({ jobId }) => {
+      generateScriptApi(prompt, sceneCount, tone, targetDuration, provider).then(({ jobId }) => {
         toast.info("Script generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -625,7 +625,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No prompt"))
       }
       const scriptData = node.data as GenerateScriptData
-      return runScriptGeneration(node.id, prompt, scriptData.sceneCount, scriptData.tone || undefined, scriptData.targetLength || undefined)
+      return runScriptGeneration(node.id, prompt, scriptData.sceneCount, scriptData.tone || undefined, scriptData.targetLength || undefined, scriptData.provider || undefined)
     }
 
     if (node.type === "generate-image") {
@@ -634,7 +634,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as GenerateImageData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
       }
-      return runImageGeneration(node.id, prompt, inputs.referenceImageUrl ?? inputs.imageUrl)
+      return runImageGeneration(node.id, prompt, inputs.referenceImageUrl ?? inputs.imageUrl, (node.data as GenerateImageData).provider || undefined)
     }
 
     if (node.type === "image-to-video") {
@@ -643,7 +643,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as ImageToVideoData).label}": no image found`)
         return Promise.reject(new Error("No image"))
       }
-      return runVideoGeneration(node.id, imageUrl)
+      return runVideoGeneration(node.id, imageUrl, (node.data as ImageToVideoData).provider || undefined)
     }
 
     if (node.type === "video-to-video") {
@@ -652,8 +652,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as VideoToVideoData).label}": no source video found`)
         return Promise.reject(new Error("No source video"))
       }
-      const prompt = (node.data as VideoToVideoData).prompt?.trim()
-      return runVideoToVideoGeneration(node.id, sourceVideoUrl, prompt)
+      const v2vData = node.data as VideoToVideoData
+      const prompt = v2vData.prompt?.trim()
+      return runVideoToVideoGeneration(node.id, sourceVideoUrl, prompt, v2vData.provider || undefined)
     }
 
     if (node.type === "text-to-video") {
@@ -662,7 +663,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as TextToVideoData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
       }
-      return runTextToVideoGeneration(node.id, prompt)
+      return runTextToVideoGeneration(node.id, prompt, (node.data as TextToVideoData).provider || undefined)
     }
 
     if (node.type === "text-to-speech") {
@@ -671,8 +672,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as TextToSpeechData).label}": no text found`)
         return Promise.reject(new Error("No text"))
       }
-      const voice = (node.data as TextToSpeechData).voiceId
-      return runTextToSpeechGeneration(node.id, text, voice || undefined)
+      const ttsData = node.data as TextToSpeechData
+      const voice = ttsData.voiceId
+      return runTextToSpeechGeneration(node.id, text, voice || undefined, ttsData.provider || undefined)
     }
 
     if (node.type === "generate-music") {
