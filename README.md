@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. Image generation (google/nano-banana), video generation (minimax/video-01), video-to-video, and text-to-speech (ElevenLabs via Replicate) all working end-to-end. Reference image chaining for character consistency. Single-node and full workflow execution with version history. Generate Script node with storyboard preview, fullscreen modal, per-scene image generation, and one-click expand to full video pipeline.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), and combine videos (FFmpeg). Reference image chaining for character consistency. Single-node and full workflow execution with version history. Generate Script node with storyboard preview, fullscreen modal, per-scene image generation, and one-click expand to full video pipeline. Delete confirmation dialog for all version deletions.
 
 ## Features
 
@@ -52,6 +52,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | AI (Video) | minimax/video-01 via Replicate | Built |
 | AI (Script) | google/gemini-2.5-flash via Replicate | Built |
 | AI (TTS) | elevenlabs/turbo-v2.5 via Replicate | Built |
+| Video Processing | FFmpeg (combine videos, transitions) | Built |
 
 ## Quick Start
 
@@ -128,9 +129,10 @@ scenenode/
 ├── backend/                      # Fastify (Node.js/TypeScript)
 │   ├── src/
 │   │   ├── routes/               # API endpoints
+│   │   ├── providers/            # AI providers + FFmpeg video processing
 │   │   ├── services/             # Business logic
 │   │   ├── workers/              # BullMQ job workers
-│   │   └── lib/                  # Config, Supabase, Redis
+│   │   └── lib/                  # Config, Supabase, Redis, R2 storage
 │   ├── package.json
 │   └── tsconfig.json
 ├── supabase/
@@ -183,6 +185,7 @@ The backend exposes a REST API at `http://localhost:8000`:
 | `/v1/jobs` | GET | List jobs |
 | `/v1/jobs/:id` | GET | Job status |
 | `/v1/text-to-speech` | POST | Generate audio from text |
+| `/v1/combine-videos` | POST | Combine videos with FFmpeg transitions |
 | `/v1/render` | POST | Quick render (one-shot) |
 
 Full API documentation: see [CLAUDE.md](./CLAUDE.md)
@@ -203,7 +206,9 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - **Storyboard Preview**: Inline scene strip in Generate Script node showing thumbnails, scene numbers, and durations
 - **Storyboard Modal**: Full-screen view with per-scene image generation, "Generate All Images" batch, and version history per scene
 - **Expand to Nodes**: One-click expansion of storyboard into Generate Image + Image to Video nodes per scene, optional Combine Videos node, horizontal/vertical layout, auto-run support, intelligent credit estimation accounting for existing images
+- **Combine Videos**: FFmpeg-based video concatenation with Cut/Fade/Dissolve transitions, xfade filter for 2-video transitions, version history, Run button
 - Per-node Run button (hover to reveal, hanging tab below node)
+- **Delete Confirmation Dialog**: Reusable component for all version history deletions across all node types
 - Asset upload to Cloudflare R2
 - Redis + BullMQ job queue with progress tracking
 
