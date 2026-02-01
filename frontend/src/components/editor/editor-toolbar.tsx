@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowLeft, ChevronRight, Save, Play, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -14,12 +14,11 @@ interface EditorToolbarProps {
   readonly projectId?: string
   readonly workflowId?: string
   readonly onSave: () => void
-  readonly onRun: () => void
   readonly saving: boolean
   readonly onNavigate?: (href: string) => void
 }
 
-export function EditorToolbar({ projectId, onSave, onRun, saving, onNavigate }: EditorToolbarProps) {
+export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName)
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -37,14 +36,6 @@ export function EditorToolbar({ projectId, onSave, onRun, saving, onNavigate }: 
   function handleValidate() {
     const result = validateWorkflow(nodes, edges)
     setValidation(result)
-  }
-
-  function handleRun() {
-    const result = validateWorkflow(nodes, edges)
-    setValidation(result)
-    if (result.valid) {
-      onRun()
-    }
   }
 
   return (
@@ -165,11 +156,6 @@ export function EditorToolbar({ projectId, onSave, onRun, saving, onNavigate }: 
           {isDirty && !saving && (
             <span className="ml-0.5 h-2 w-2 rounded-full bg-red-500 shrink-0" />
           )}
-        </Button>
-
-        <Button size="sm" onClick={handleRun}>
-          <Play className="h-4 w-4 sm:mr-1" />
-          <span className="hidden sm:inline">Run</span>
         </Button>
 
         <Button

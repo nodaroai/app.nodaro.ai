@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ReactFlowProvider } from "@xyflow/react"
+import { Play, Loader2, Square } from "lucide-react"
 import { WorkflowCanvas } from "./workflow-canvas"
 import { NodeToolbar } from "./node-toolbar"
 import { ConfigPanel } from "./config-panel"
 import { EditorToolbar } from "./editor-toolbar"
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog"
+import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -25,7 +27,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const fetchProjects = useProjectsStore((s) => s.fetchProjects)
   const router = useRouter()
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const [isRunning, setIsRunning] = useState(false)
   const pendingNavRef = useRef<string | null>(null)
+  const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(new Set())
 
   useEffect(() => {
     if (workflowId) {
@@ -43,6 +47,35 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }, [projectId, save])
 
+  function trackInterval(interval: ReturnType<typeof setInterval>) {
+    pollIntervalsRef.current.add(interval)
+    return interval
+  }
+
+  function untrackInterval(interval: ReturnType<typeof setInterval>) {
+    clearInterval(interval)
+    pollIntervalsRef.current.delete(interval)
+    if (pollIntervalsRef.current.size === 0) {
+      setIsRunning(false)
+    }
+  }
+
+  function handleStop() {
+    for (const interval of pollIntervalsRef.current) {
+      clearInterval(interval)
+    }
+    pollIntervalsRef.current.clear()
+    setIsRunning(false)
+
+    const { nodes, updateNodeData } = useWorkflowStore.getState()
+    for (const node of nodes) {
+      if ((node.data as Record<string, unknown>).executionStatus === "running") {
+        updateNodeData(node.id, { executionStatus: "idle" })
+      }
+    }
+    toast.info("Execution stopped")
+  }
+
   async function handleRun() {
     const { nodes, edges, updateNodeData } = useWorkflowStore.getState()
     const textNode = nodes.find((n) => n.type === "text-prompt")
@@ -58,6 +91,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return
       }
 
+      setIsRunning(true)
+
       const hasVideoChain = videoNode && edges.some(
         (e) => e.source === imageNode.id && e.target === videoNode.id
       )
@@ -71,11 +106,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const { jobId } = await generateImage(prompt)
         toast.info("Image generation started", { description: `Job ID: ${jobId}` })
 
-        const poll = setInterval(async () => {
+        const poll = trackInterval(setInterval(async () => {
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
-              clearInterval(poll)
+              untrackInterval(poll)
               const imageUrl = job.output_data?.imageUrl
               const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === imageNode.id)?.data) as GenerateImageData | undefined)?.generatedResults ?? []
               const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
@@ -94,17 +129,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 startVideoGeneration(videoNode.id, imageUrl)
               }
             } else if (job.status === "failed") {
-              clearInterval(poll)
+              untrackInterval(poll)
               updateNodeData(imageNode.id, { executionStatus: "failed" })
               toast.error("Image generation failed", { description: job.error_message ?? "Unknown error" })
             }
           } catch {
-            clearInterval(poll)
+            untrackInterval(poll)
             updateNodeData(imageNode.id, { executionStatus: "failed" })
             toast.error("Failed to check job status")
           }
-        }, 2000)
+        }, 2000))
       } catch (err) {
+        setIsRunning(false)
         updateNodeData(imageNode.id, { executionStatus: "failed" })
         toast.error("Failed to start image generation", {
           description: err instanceof Error ? err.message : "Unknown error",
@@ -119,6 +155,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error("No image found. Upload an image first.")
         return
       }
+      setIsRunning(true)
       startVideoGeneration(videoNode.id, imageUrl)
     }
 
@@ -135,11 +172,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const { jobId } = await generateVideo(imageUrl)
       toast.info("Video generation started", { description: `Job ID: ${jobId}` })
 
-      const poll = setInterval(async () => {
+      const poll = trackInterval(setInterval(async () => {
         try {
           const job = await getJobStatus(jobId)
           if (job.status === "completed") {
-            clearInterval(poll)
+            untrackInterval(poll)
             const videoUrl = job.output_data?.videoUrl
             const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === videoNodeId)?.data) as ImageToVideoData | undefined)?.generatedResults ?? []
             const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
@@ -155,17 +192,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               duration: 10000,
             })
           } else if (job.status === "failed") {
-            clearInterval(poll)
+            untrackInterval(poll)
             updateNodeData(videoNodeId, { executionStatus: "failed" })
             toast.error("Video generation failed", { description: job.error_message ?? "Unknown error" })
           }
         } catch {
-          clearInterval(poll)
+          untrackInterval(poll)
           updateNodeData(videoNodeId, { executionStatus: "failed" })
           toast.error("Failed to check video job status")
         }
-      }, 2000)
+      }, 2000))
     } catch (err) {
+      setIsRunning(false)
       updateNodeData(videoNodeId, { executionStatus: "failed" })
       toast.error("Failed to start video generation", {
         description: err instanceof Error ? err.message : "Unknown error",
@@ -242,7 +280,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         projectId={projectId}
         workflowId={workflowId}
         onSave={handleSave}
-        onRun={handleRun}
         saving={saving}
         onNavigate={navigateWithGuard}
       />
@@ -252,6 +289,38 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           <NodeToolbar />
           <ConfigPanel />
         </ReactFlowProvider>
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+          {isRunning ? (
+            <>
+              <Button
+                size="lg"
+                onClick={handleStop}
+                className="rounded-full px-6 bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Executing workflow
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleStop}
+                title="Stop current execution"
+                className="rounded-lg bg-background"
+              >
+                <Square className="w-4 h-4" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="lg"
+              onClick={handleRun}
+              className="rounded-full px-6 bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              <Play className="w-4 h-4 mr-2" />
+              Execute workflow
+            </Button>
+          )}
+        </div>
       </div>
       <UnsavedChangesDialog
         open={showUnsavedDialog}
