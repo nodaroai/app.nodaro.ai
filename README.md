@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. Image generation (google/nano-banana), video generation (minimax/video-01), video-to-video, and text-to-speech (ElevenLabs via Replicate) all working end-to-end. Reference image chaining for character consistency. Single-node and full workflow execution with version history.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. Image generation (google/nano-banana), video generation (minimax/video-01), video-to-video, and text-to-speech (ElevenLabs via Replicate) all working end-to-end. Reference image chaining for character consistency. Single-node and full workflow execution with version history. Generate Script node with storyboard preview, fullscreen modal, per-scene image generation, and one-click expand to full video pipeline.
 
 ## Features
 
@@ -50,6 +50,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | Storage | Cloudflare R2 | Built |
 | AI (Image) | google/nano-banana via Replicate | Built |
 | AI (Video) | minimax/video-01 via Replicate | Built |
+| AI (Script) | google/gemini-2.5-flash via Replicate | Built |
 | AI (TTS) | elevenlabs/turbo-v2.5 via Replicate | Built |
 
 ## Quick Start
@@ -110,9 +111,9 @@ scenenode/
 │   │   │   ├── (auth)/           # Login, signup
 │   │   │   └── (main)/           # Dashboard, projects, editor
 │   │   ├── components/
-│   │   │   ├── editor/           # Workflow canvas, config panel, toolbar
+│   │   │   ├── editor/           # Workflow canvas, config panel, toolbar, script-preview-modal, expand-storyboard-dialog
 │   │   │   ├── nodes/            # 28 node components + base-node
-│   │   │   └── ui/               # shadcn/ui components
+│   │   │   └── ui/               # shadcn/ui components (incl. delete-confirmation-dialog)
 │   │   ├── hooks/
 │   │   │   ├── use-workflow-store.ts  # Zustand workflow state
 │   │   │   ├── use-auth.ts           # Auth hook
@@ -196,8 +197,12 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - Video-to-video continuation/style reference
 - Text-to-speech via elevenlabs/turbo-v2.5 (Replicate) with 26 voice options
 - Generated results display directly in nodes with version history
-- Delete individual results from version history
+- Delete individual results with confirmation dialog
 - Global video autoplay toggle in editor toolbar
+- **Generate Script**: AI script generation via Gemini 2.5 Flash, outputs scenes with visual descriptions, actions, moods, and durations
+- **Storyboard Preview**: Inline scene strip in Generate Script node showing thumbnails, scene numbers, and durations
+- **Storyboard Modal**: Full-screen view with per-scene image generation, "Generate All Images" batch, and version history per scene
+- **Expand to Nodes**: One-click expansion of storyboard into Generate Image + Image to Video nodes per scene, optional Combine Videos node, horizontal/vertical layout, auto-run support, intelligent credit estimation accounting for existing images
 - Per-node Run button (hover to reveal, hanging tab below node)
 - Asset upload to Cloudflare R2
 - Redis + BullMQ job queue with progress tracking
