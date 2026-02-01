@@ -116,6 +116,8 @@ export type GenerateImageData = {
   aspectRatio: "1:1" | "16:9" | "9:16" | "4:3"
   negativePrompt: string
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedImageUrl?: string
 }
 
 export type ImageToVideoData = {

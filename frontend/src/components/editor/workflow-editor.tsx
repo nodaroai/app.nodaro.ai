@@ -44,13 +44,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }, [projectId, save])
 
   async function handleRun() {
-    const { nodes } = useWorkflowStore.getState()
+    const { nodes, updateNodeData } = useWorkflowStore.getState()
     const textNode = nodes.find((n) => n.type === "text-prompt")
     const prompt = (textNode?.data as TextPromptData | undefined)?.text?.trim()
+    const imageNode = nodes.find((n) => n.type === "generate-image")
 
     if (!prompt) {
       toast.error("No prompt found. Add a Text Prompt node with text.")
       return
+    }
+
+    if (imageNode) {
+      updateNodeData(imageNode.id, { executionStatus: "running", generatedImageUrl: undefined })
     }
 
     try {
@@ -63,6 +68,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           if (job.status === "completed") {
             clearInterval(poll)
             const imageUrl = job.output_data?.imageUrl
+            if (imageNode) {
+              updateNodeData(imageNode.id, { executionStatus: "completed", generatedImageUrl: imageUrl })
+            }
             toast.success("Image generated", {
               description: imageUrl ? "Click to open" : "Done",
               action: imageUrl ? { label: "Open", onClick: () => window.open(imageUrl, "_blank") } : undefined,
@@ -70,14 +78,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             })
           } else if (job.status === "failed") {
             clearInterval(poll)
+            if (imageNode) {
+              updateNodeData(imageNode.id, { executionStatus: "failed" })
+            }
             toast.error("Job failed", { description: job.error_message ?? "Unknown error" })
           }
         } catch {
           clearInterval(poll)
+          if (imageNode) {
+            updateNodeData(imageNode.id, { executionStatus: "failed" })
+          }
           toast.error("Failed to check job status")
         }
       }, 2000)
     } catch (err) {
+      if (imageNode) {
+        updateNodeData(imageNode.id, { executionStatus: "failed" })
+      }
       toast.error("Failed to start job", {
         description: err instanceof Error ? err.message : "Unknown error",
       })
