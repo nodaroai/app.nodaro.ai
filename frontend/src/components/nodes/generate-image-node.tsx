@@ -36,7 +36,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {status === "completed" && activeUrl && (
+        {status !== "running" && activeUrl && (
           <img
             src={activeUrl}
             alt="Generated"
@@ -48,14 +48,14 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           />
         )}
 
-        {status === "failed" && (
+        {status === "failed" && !activeUrl && (
           <div className="flex items-center justify-center gap-1.5 h-28 rounded-md bg-red-500/5 text-red-500">
             <AlertCircle className="w-5 h-5" />
             <span>Failed</span>
           </div>
         )}
 
-        {status === "idle" && (
+        {status !== "running" && !activeUrl && status !== "failed" && (
           <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
             <ImageIcon className="w-6 h-6" />
           </div>
