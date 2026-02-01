@@ -87,6 +87,19 @@ export async function videoToVideo(videoUrl: string, prompt?: string): Promise<{
   return res.json()
 }
 
+export async function textToVideo(prompt: string): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/text-to-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start text-to-video generation")
+  }
+  return res.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<{
   id: string
   status: string

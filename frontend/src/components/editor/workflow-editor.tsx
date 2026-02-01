@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, ImageToVideoData, VideoToVideoData, GeneratedResult } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, ImageToVideoData, VideoToVideoData, TextToVideoData, GeneratedResult } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -78,7 +78,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-image", "image-to-video", "video-to-video"])
+  const EXECUTABLE_TYPES = new Set(["generate-image", "image-to-video", "video-to-video", "text-to-video"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -328,6 +328,53 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  function runTextToVideoGeneration(nodeId: string, prompt: string): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
+
+    return new Promise((resolve, reject) => {
+      textToVideo(prompt).then(({ jobId }) => {
+        toast.info("Text-to-video generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const videoUrl = job.output_data?.videoUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as TextToVideoData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: videoUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedVideoUrl: videoUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Text-to-video generated")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Text-to-video generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Text-to-video generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check text-to-video job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start text-to-video generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
   function executeNode(node: WorkflowNode): Promise<void> {
     const { nodes, edges } = useWorkflowStore.getState()
     const inputs = resolveNodeInputs(node, nodes, edges)
@@ -358,6 +405,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
       const prompt = (node.data as VideoToVideoData).prompt?.trim()
       return runVideoToVideoGeneration(node.id, sourceVideoUrl, prompt)
+    }
+
+    if (node.type === "text-to-video") {
+      const prompt = inputs.prompt ?? (node.data as TextToVideoData).prompt?.trim()
+      if (!prompt) {
+        toast.error(`Node "${(node.data as TextToVideoData).label}": no prompt found`)
+        return Promise.reject(new Error("No prompt"))
+      }
+      return runTextToVideoGeneration(node.id, prompt)
     }
 
     return Promise.resolve()

@@ -164,6 +164,10 @@ export type TextToVideoData = {
   aspectRatio: "16:9" | "9:16" | "1:1"
   negativePrompt: string
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type VideoToVideoData = {

@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { generateImage } from "../providers/image/replicate.js"
 import { imageToVideo } from "../providers/video/replicate.js"
 import { videoToVideo } from "../providers/video/video-to-video.js"
+import { textToVideo } from "../providers/video/text-to-video.js"
 import { uploadToR2 } from "../lib/storage.js"
 
 export function createVideoWorker() {
@@ -78,6 +79,30 @@ export function createVideoWorker() {
           console.log(`[worker] video-to-video ${jobId}`)
 
           const replicateUrl = await videoToVideo(videoUrl, prompt)
+          await job.updateProgress(50)
+
+          const r2Url = await uploadToR2(replicateUrl, jobId, "video")
+          await job.updateProgress(100)
+
+          await supabase
+            .from("jobs")
+            .update({
+              status: "completed",
+              progress: 100,
+              output_data: { videoUrl: r2Url },
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", jobId)
+
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+        } else if (job.name === "text-to-video") {
+          const { prompt } = job.data as {
+            jobId: string
+            prompt: string
+          }
+          console.log(`[worker] text-to-video ${jobId}`)
+
+          const replicateUrl = await textToVideo(prompt)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "video")
