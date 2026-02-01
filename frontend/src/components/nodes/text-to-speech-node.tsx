@@ -2,7 +2,7 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Mic, Loader2, AlertCircle, X, Play } from "lucide-react"
+import { Mic, Loader2, AlertCircle, X, Play, Volume2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getVoiceName } from "@/lib/tts-voices"
@@ -97,7 +97,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
               <div key={r.jobId} className="relative group/thumb shrink-0">
                 <button
                   type="button"
-                  className={`w-10 h-6 flex items-center justify-center rounded text-[9px] font-medium cursor-pointer transition-opacity ${
+                  className={`w-8 h-8 flex items-center justify-center rounded cursor-pointer transition-opacity ${
                     i === activeIndex
                       ? "opacity-100 ring-2 ring-primary bg-primary/20"
                       : "opacity-50 hover:opacity-80 bg-muted"
@@ -107,7 +107,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
                     updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url })
                   }}
                 >
-                  {i + 1}
+                  <Volume2 className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
