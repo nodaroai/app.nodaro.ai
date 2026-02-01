@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, ImageToVideoData, VideoToVideoData, TextToVideoData, GeneratedResult } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GeneratedResult } from "@/types/nodes"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -78,7 +78,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-image", "image-to-video", "video-to-video", "text-to-video"])
+  const EXECUTABLE_TYPES = new Set(["generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -149,6 +149,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
+    }
+    if (type === "text-to-speech") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined)
     }
     return undefined
   }
@@ -375,6 +380,53 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  function runTextToSpeechGeneration(nodeId: string, text: string, voice?: string): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", generatedAudioUrl: undefined })
+
+    return new Promise((resolve, reject) => {
+      textToSpeech(text, voice).then(({ jobId }) => {
+        toast.info("Text-to-speech generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const audioUrl = job.output_data?.audioUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as TextToSpeechData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: audioUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedAudioUrl: audioUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Audio generated")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Text-to-speech generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Text-to-speech generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check text-to-speech job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start text-to-speech generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
   function executeNode(node: WorkflowNode): Promise<void> {
     const { nodes, edges } = useWorkflowStore.getState()
     const inputs = resolveNodeInputs(node, nodes, edges)
@@ -414,6 +466,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No prompt"))
       }
       return runTextToVideoGeneration(node.id, prompt)
+    }
+
+    if (node.type === "text-to-speech") {
+      const text = inputs.prompt ?? ""
+      if (!text) {
+        toast.error(`Node "${(node.data as TextToSpeechData).label}": no text found`)
+        return Promise.reject(new Error("No text"))
+      }
+      const voice = (node.data as TextToSpeechData).voiceId
+      return runTextToSpeechGeneration(node.id, text, voice || undefined)
     }
 
     return Promise.resolve()

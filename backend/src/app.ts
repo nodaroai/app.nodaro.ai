@@ -9,6 +9,7 @@ import { generateImageRoutes } from "./routes/generate-image.js"
 import { generateVideoRoutes } from "./routes/generate-video.js"
 import { videoToVideoRoutes } from "./routes/video-to-video.js"
 import { textToVideoRoutes } from "./routes/text-to-video.js"
+import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -24,6 +25,7 @@ export async function buildApp() {
   await app.register(generateVideoRoutes)
   await app.register(videoToVideoRoutes)
   await app.register(textToVideoRoutes)
+  await app.register(textToSpeechRoutes)
 
   return app
 }

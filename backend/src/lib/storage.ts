@@ -13,7 +13,7 @@ const s3 = new S3Client({
 export async function uploadToR2(
   sourceUrl: string,
   jobId: string,
-  type: "image" | "video" = "image",
+  type: "image" | "video" | "audio" = "image",
 ): Promise<string> {
   const response = await fetch(sourceUrl)
   if (!response.ok) {
@@ -21,8 +21,8 @@ export async function uploadToR2(
   }
 
   const buffer = Buffer.from(await response.arrayBuffer())
-  const ext = type === "video" ? "mp4" : "png"
-  const contentType = type === "video" ? "video/mp4" : "image/png"
+  const ext = type === "video" ? "mp4" : type === "audio" ? "wav" : "png"
+  const contentType = type === "video" ? "video/mp4" : type === "audio" ? "audio/wav" : "image/png"
   const key = `${type}s/${jobId}.${ext}`
 
   await s3.send(

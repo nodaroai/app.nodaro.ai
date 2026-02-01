@@ -100,10 +100,23 @@ export async function textToVideo(prompt: string): Promise<{ jobId: string }> {
   return res.json()
 }
 
+export async function textToSpeech(text: string, voice?: string): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/text-to-speech`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voice }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start text-to-speech generation")
+  }
+  return res.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<{
   id: string
   status: string
-  output_data?: { imageUrl?: string; videoUrl?: string }
+  output_data?: { imageUrl?: string; videoUrl?: string; audioUrl?: string }
   error_message?: string
 }> {
   const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`)

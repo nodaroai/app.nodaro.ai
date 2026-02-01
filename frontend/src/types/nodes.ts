@@ -152,6 +152,10 @@ export type TextToSpeechData = {
   speed: number
   pitch: number
   fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type TextToVideoData = {
