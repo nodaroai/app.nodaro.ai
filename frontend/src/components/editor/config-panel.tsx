@@ -51,6 +51,7 @@ import type {
   TextToVideoData,
   TextToSpeechData,
   QACheckData,
+  GenerateMusicData,
   CombineVideosData,
   AddAudioData,
   AddCaptionsData,
@@ -369,6 +370,9 @@ export function ConfigPanel() {
           {selectedNode.type === "qa-check" && (
             <QACheckConfig data={selectedNode.data as QACheckData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "generate-music" && (
+            <GenerateMusicConfig data={selectedNode.data as GenerateMusicData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
 
           {/* Processing Nodes */}
           {selectedNode.type === "combine-videos" && (
@@ -407,7 +411,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "generate-music") && (
               <Button
                 className="w-full bg-orange-500 hover:bg-orange-600 text-white"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -1250,6 +1254,91 @@ function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
           value={data.threshold}
           onChange={(e) => onUpdate({ threshold: parseFloat(e.target.value) || 0.8 })}
         />
+      </div>
+    </div>
+  )
+}
+
+function GenerateMusicConfig({ data, onUpdate }: ConfigProps<GenerateMusicData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Provider</Label>
+        <Select
+          value={data.provider || "musicgen"}
+          onValueChange={(v) => onUpdate({ provider: v as GenerateMusicData["provider"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="musicgen">MusicGen (Meta) - instrumental</SelectItem>
+            <SelectItem value="minimax">MiniMax Music - vocals & lyrics</SelectItem>
+            <SelectItem value="lyria">Lyria 2 (Google) - high quality</SelectItem>
+            <SelectItem value="bark">Bark (Suno) - speech & music</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="music-prompt">Prompt</Label>
+        <Textarea
+          id="music-prompt"
+          value={data.prompt}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe the music you want..."
+          rows={3}
+        />
+      </div>
+      {(data.provider === "musicgen" || !data.provider) && (
+        <div>
+          <Label htmlFor="music-duration">Duration (seconds)</Label>
+          <Input
+            id="music-duration"
+            type="number"
+            min={1}
+            max={30}
+            value={data.duration}
+            onChange={(e) => onUpdate({ duration: parseInt(e.target.value) || 8 })}
+          />
+        </div>
+      )}
+      {data.provider === "minimax" && (
+        <div>
+          <Label htmlFor="music-lyrics">Lyrics</Label>
+          <Textarea
+            id="music-lyrics"
+            value={data.lyrics || ""}
+            onChange={(e) => onUpdate({ lyrics: e.target.value })}
+            placeholder="Write lyrics for the song..."
+            rows={4}
+          />
+        </div>
+      )}
+      <div>
+        <Label htmlFor="music-genre">Genre</Label>
+        <Input
+          id="music-genre"
+          value={data.genre}
+          onChange={(e) => onUpdate({ genre: e.target.value })}
+          placeholder="e.g. rock, jazz, electronic"
+        />
+      </div>
+      <div>
+        <Label htmlFor="music-mood">Mood</Label>
+        <Input
+          id="music-mood"
+          value={data.mood}
+          onChange={(e) => onUpdate({ mood: e.target.value })}
+          placeholder="e.g. upbeat, melancholic, epic"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="music-instrumental"
+          checked={data.instrumental}
+          onChange={(e) => onUpdate({ instrumental: e.target.checked })}
+          className="h-4 w-4"
+        />
+        <Label htmlFor="music-instrumental">Instrumental (no vocals)</Label>
       </div>
     </div>
   )

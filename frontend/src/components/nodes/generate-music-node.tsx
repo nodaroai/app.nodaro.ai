@@ -65,7 +65,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
             ))}
           </div>
         )}
-        <p className="text-muted-foreground">{nodeData.duration}s{nodeData.genre ? ` - ${nodeData.genre}` : ""}{nodeData.instrumental ? " (instrumental)" : ""}</p>
+        <p className="text-muted-foreground">{nodeData.provider || "musicgen"} - {nodeData.duration}s{nodeData.genre ? ` - ${nodeData.genre}` : ""}{nodeData.instrumental ? " (instrumental)" : ""}</p>
       </div>
     </BaseNode>
     {status !== "running" && (
