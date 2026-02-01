@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { X } from "lucide-react"
+import { X, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -229,6 +229,7 @@ export function ConfigPanel() {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
@@ -387,6 +388,20 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "webhook-output" && (
             <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+
+          {(selectedNode.type === "generate-image" || selectedNode.type === "image-to-video") && (
+            <>
+              <Separator />
+              <Button
+                size="sm"
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                onClick={() => runSingleNode?.(selectedNode.id)}
+              >
+                <Play className="w-4 h-4 mr-1.5" />
+                Run This Node
+              </Button>
+            </>
           )}
 
           <Separator />
