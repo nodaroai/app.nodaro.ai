@@ -49,6 +49,7 @@ export async function imageToVideo(
   prompt?: string,
   provider?: VideoProvider,
   generateAudio?: boolean,
+  duration?: number,
 ): Promise<string> {
   const resolvedProvider = provider ?? "minimax"
   const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
@@ -60,6 +61,9 @@ export async function imageToVideo(
   const extraInput = { ...cfg.extraInput }
   if (resolvedProvider === "veo3") {
     extraInput.generate_audio = generateAudio !== false
+  }
+  if (duration && duration > 0) {
+    extraInput.length = duration
   }
 
   const output = await replicate.run(

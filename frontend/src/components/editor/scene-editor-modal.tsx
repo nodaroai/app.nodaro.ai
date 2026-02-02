@@ -3,10 +3,11 @@
 import { useEffect, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, Play, Loader2, AlertCircle, Eye, Scissors, BookOpen, Palette, Mic, Clapperboard, Check, ChevronLeft, ChevronRight, Video } from "lucide-react"
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { SceneConfig } from "./scene-config"
-import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
-import { textToSpeech, getJobStatus } from "@/lib/api"
+import { buildScenePrompt, buildVideoPrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
+import { textToSpeech, generateVideo, getJobStatus } from "@/lib/api"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
@@ -42,6 +43,10 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
   const [generatingAllAudio, setGeneratingAllAudio] = useState(false)
   const [audioProgress, setAudioProgress] = useState({ current: 0, total: 0 })
+  const [generatingVideo, setGeneratingVideo] = useState(false)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const [mediaTab, setMediaTab] = useState<"image" | "video">("image")
+
 
   const node = nodes.find((n) => n.id === nodeId)
   const data = node?.data as SceneNodeDataType | undefined
@@ -87,7 +92,12 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
   const activeIndex = data.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? data.generatedImageUrl
+  const videoResults = data.generatedVideoResults ?? []
+  const activeVideoIndex = data.activeVideoResultIndex ?? 0
+  const activeVideoResult = videoResults[activeVideoIndex]
+  const activeVideoUrl = activeVideoResult?.url ?? data.generatedVideoUrl
   const generatedPrompt = buildScenePrompt(data, allAssets)
+  const displayPrompt = buildScenePrompt(data, allAssets, { forDisplay: true })
 
   function handleUpdate(updates: Record<string, unknown>) {
     updateNodeData(nodeId, updates)
@@ -160,6 +170,72 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
     setGeneratingAllAudio(false)
   }
 
+  async function handleGenerateVideo() {
+    if (!activeUrl || generatingVideo) return
+    setGeneratingVideo(true)
+    setVideoError(null)
+    updateNodeData(nodeId, { videoExecutionStatus: "running" })
+    try {
+      const provider = data?.videoProvider ?? "minimax"
+      const generateAudio = provider === "veo3" ? true : undefined
+      const videoPrompt = data ? buildVideoPrompt(data) : "smooth cinematic motion"
+      console.log(`[SceneEditor] Generate Video - provider: ${provider}, prompt: "${videoPrompt.slice(0, 100)}..."`)
+      const duration = data?.duration ?? 5
+      const { jobId } = await generateVideo(activeUrl, videoPrompt, provider, generateAudio, duration)
+      await new Promise<void>((resolve, reject) => {
+        const poll = setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              clearInterval(poll)
+              const currentData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as SceneNodeDataType | undefined
+              const videoUrl = job.output_data?.videoUrl ?? ""
+              const newResult = { url: videoUrl, timestamp: new Date().toISOString(), jobId }
+              const existing = currentData?.generatedVideoResults ?? []
+              const updated = [...existing, newResult]
+              updateNodeData(nodeId, {
+                generatedVideoResults: updated,
+                activeVideoResultIndex: updated.length - 1,
+                generatedVideoUrl: videoUrl,
+                videoExecutionStatus: "completed",
+              })
+              setMediaTab("video")
+              resolve()
+            } else if (job.status === "failed") {
+              clearInterval(poll)
+              updateNodeData(nodeId, { videoExecutionStatus: "failed" })
+              reject(new Error(job.error_message ?? "Video generation failed"))
+            }
+          } catch (err) {
+            clearInterval(poll)
+            updateNodeData(nodeId, { videoExecutionStatus: "failed" })
+            reject(err)
+          }
+        }, 2000)
+      })
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "Video generation failed")
+      updateNodeData(nodeId, { videoExecutionStatus: "failed" })
+    } finally {
+      setGeneratingVideo(false)
+    }
+  }
+
+  function handleDeleteVideoResult(indexToDelete: number) {
+    const newResults = videoResults.filter((_, i) => i !== indexToDelete)
+    let newIndex = activeVideoIndex
+    if (indexToDelete === activeVideoIndex) {
+      newIndex = 0
+    } else if (indexToDelete < activeVideoIndex) {
+      newIndex = activeVideoIndex - 1
+    }
+    updateNodeData(nodeId, {
+      generatedVideoResults: newResults,
+      activeVideoResultIndex: newIndex,
+      generatedVideoUrl: newResults[newIndex]?.url ?? "",
+    })
+  }
+
   function isStepComplete(s: WizardStep): boolean {
     if (!data) return false
     if (s === 1) return !!data.summary.trim() || (data.dialogue ?? []).length > 0
@@ -202,111 +278,207 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
 
         {/* Body - side by side */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left: Image + Prompt Preview */}
+          {/* Left: Image/Video + Prompt Preview */}
           <div className="w-1/2 flex flex-col border-r overflow-y-auto">
-            {/* Image area */}
+            {/* Tab toggle when videos exist */}
+            {videoResults.length > 0 && (
+              <div className="px-4 pt-3 pb-0 shrink-0">
+                <div className="flex gap-1 bg-muted/40 rounded-md p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setMediaTab("image")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                      mediaTab === "image" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Palette className="w-3.5 h-3.5" /> Image
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMediaTab("video")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                      mediaTab === "video" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Video className="w-3.5 h-3.5" /> Video
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Media area */}
             <div className="p-4 flex flex-col gap-3">
-              {status === "running" && (
-                <div className="flex items-center justify-center h-64 rounded-lg bg-muted/30">
-                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                </div>
-              )}
-
-              {status !== "running" && activeUrl && (
-                <div className="relative group">
-                  <img
-                    src={activeUrl}
-                    alt="Scene"
-                    className="w-full rounded-lg object-contain max-h-[50vh] cursor-pointer hover:opacity-90 transition-opacity bg-muted/20"
-                    onClick={() => setPreviewOpen(true)}
-                  />
-                  <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-md"
-                      onClick={() => setPreviewOpen(true)}
-                      title="Full preview"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="p-1.5 bg-purple-500/80 hover:bg-purple-500 text-white rounded-md"
-                      onClick={() => setExtractOpen(true)}
-                      title="Extract references"
-                    >
-                      <Scissors className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-md"
-                      onClick={() => setDeleteConfirm(activeIndex)}
-                      title="Delete this result"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {status === "failed" && !activeUrl && (
-                <div className="flex items-center justify-center gap-2 h-48 rounded-lg bg-red-500/5 text-red-500">
-                  <AlertCircle className="w-6 h-6" />
-                  <span className="text-sm">Generation failed</span>
-                </div>
-              )}
-
-              {status !== "running" && !activeUrl && status !== "failed" && (
-                <div className="flex items-center justify-center h-48 rounded-lg border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
-                  <span className="text-sm">No image generated yet</span>
-                </div>
-              )}
-
-              {/* Version history */}
-              {results.length > 1 && (
-                <div className="flex gap-1.5 overflow-x-auto pb-1">
-                  {results.map((r, i) => (
-                    <div key={r.jobId} className="relative group/thumb shrink-0">
-                      <img
-                        src={r.url}
-                        alt={`Result ${i + 1}`}
-                        className={`w-14 h-14 object-cover rounded-md cursor-pointer transition-opacity ${
-                          i === activeIndex
-                            ? "opacity-100 ring-2 ring-primary"
-                            : "opacity-50 hover:opacity-80"
-                        }`}
-                        onClick={() => updateNodeData(nodeId, { activeResultIndex: i, generatedImageUrl: r.url })}
-                      />
-                      <button
-                        type="button"
-                        className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                        onClick={() => setDeleteConfirm(i)}
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
+              {mediaTab === "image" && (
+                <>
+                  {status === "running" && (
+                    <div className="flex items-center justify-center h-64 rounded-lg bg-muted/30">
+                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                     </div>
-                  ))}
-                </div>
+                  )}
+
+                  {status !== "running" && activeUrl && (
+                    <div className="relative group">
+                      <img
+                        src={activeUrl}
+                        alt="Scene"
+                        className="w-full rounded-lg object-contain max-h-[50vh] cursor-pointer hover:opacity-90 transition-opacity bg-muted/20"
+                        onClick={() => setPreviewOpen(true)}
+                      />
+                      <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-md"
+                          onClick={() => setPreviewOpen(true)}
+                          title="Full preview"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 bg-purple-500/80 hover:bg-purple-500 text-white rounded-md"
+                          onClick={() => setExtractOpen(true)}
+                          title="Extract references"
+                        >
+                          <Scissors className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-md"
+                          onClick={() => setDeleteConfirm(activeIndex)}
+                          title="Delete this result"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {status === "failed" && !activeUrl && (
+                    <div className="flex items-center justify-center gap-2 h-48 rounded-lg bg-red-500/5 text-red-500">
+                      <AlertCircle className="w-6 h-6" />
+                      <span className="text-sm">Generation failed</span>
+                    </div>
+                  )}
+
+                  {status !== "running" && !activeUrl && status !== "failed" && (
+                    <div className="flex items-center justify-center h-48 rounded-lg border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+                      <span className="text-sm">No image generated yet</span>
+                    </div>
+                  )}
+
+                  {/* Image version history */}
+                  {results.length > 1 && (
+                    <div className="flex gap-1.5 overflow-x-auto pb-1">
+                      {results.map((r, i) => (
+                        <div key={r.jobId} className="relative group/thumb shrink-0">
+                          <img
+                            src={r.url}
+                            alt={`Result ${i + 1}`}
+                            className={`w-14 h-14 object-cover rounded-md cursor-pointer transition-opacity ${
+                              i === activeIndex
+                                ? "opacity-100 ring-2 ring-primary"
+                                : "opacity-50 hover:opacity-80"
+                            }`}
+                            onClick={() => updateNodeData(nodeId, { activeResultIndex: i, generatedImageUrl: r.url })}
+                          />
+                          <button
+                            type="button"
+                            className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                            onClick={() => setDeleteConfirm(i)}
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {mediaTab === "video" && (
+                <>
+                  {generatingVideo && (
+                    <div className="flex items-center justify-center h-64 rounded-lg bg-muted/30">
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Generating video...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!generatingVideo && activeVideoUrl && (
+                    <div className="relative">
+                      <video
+                        key={activeVideoUrl}
+                        src={activeVideoUrl}
+                        controls
+                        className="w-full rounded-lg max-h-[50vh] bg-black"
+                      />
+                    </div>
+                  )}
+
+                  {!generatingVideo && !activeVideoUrl && (
+                    <div className="flex items-center justify-center h-48 rounded-lg border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+                      <span className="text-sm">No video generated yet</span>
+                    </div>
+                  )}
+
+                  {/* Video version history */}
+                  {videoResults.length > 1 && (
+                    <div className="flex gap-1.5 overflow-x-auto pb-1">
+                      {videoResults.map((r, i) => (
+                        <div key={r.jobId} className="relative group/thumb shrink-0">
+                          <div
+                            className={`w-14 h-14 rounded-md cursor-pointer transition-opacity flex items-center justify-center bg-muted ${
+                              i === activeVideoIndex
+                                ? "opacity-100 ring-2 ring-primary"
+                                : "opacity-50 hover:opacity-80"
+                            }`}
+                            onClick={() => updateNodeData(nodeId, { activeVideoResultIndex: i, generatedVideoUrl: r.url })}
+                          >
+                            <Video className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-[9px] text-muted-foreground ml-0.5">{i + 1}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                            onClick={() => handleDeleteVideoResult(i)}
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
             {/* Prompt Preview */}
             <div className="px-4 pb-4">
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <h3 className="text-xs font-medium text-muted-foreground">Generated Prompt</h3>
-                  <span className={`text-[10px] ${
-                    generatedPrompt.length > PROMPT_MAX_LENGTH
-                      ? "text-red-500 font-medium"
-                      : generatedPrompt.length > PROMPT_MAX_LENGTH * 0.9
-                        ? "text-amber-500"
-                        : "text-muted-foreground"
-                  }`}>
-                    {generatedPrompt.length}/{PROMPT_MAX_LENGTH}
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed whitespace-pre-wrap">{generatedPrompt || "Configure scene settings to generate a prompt..."}</p>
-              </div>
+              <Accordion type="single" collapsible>
+                <AccordionItem value="prompt" className="border rounded-lg bg-muted/20">
+                  <AccordionTrigger className="px-3 py-2 text-xs hover:no-underline">
+                    <span className="flex items-center gap-2">
+                      <span className="font-medium text-muted-foreground">Generated Prompt</span>
+                      <span className={`text-[10px] ${
+                        generatedPrompt.length > PROMPT_MAX_LENGTH
+                          ? "text-red-500 font-medium"
+                          : generatedPrompt.length > PROMPT_MAX_LENGTH * 0.9
+                            ? "text-amber-500"
+                            : "text-muted-foreground"
+                      }`}>
+                        ({generatedPrompt.length}/{PROMPT_MAX_LENGTH})
+                      </span>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-3 pb-3 pt-0">
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap break-words">
+                      {displayPrompt || "Configure scene settings to generate a prompt..."}
+                    </p>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </div>
           </div>
 
@@ -387,14 +559,26 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                 </button>
               )}
               {currentStep === 4 && (
-                <button
-                  type="button"
-                  disabled={!activeUrl}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white rounded-md transition-colors cursor-not-allowed disabled:cursor-not-allowed"
-                  title={activeUrl ? "Coming soon" : "Generate an image first (Step 2)"}
-                >
-                  <Video className="w-3.5 h-3.5" /> Generate Video (coming soon)
-                </button>
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    disabled={!activeUrl || generatingVideo}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white rounded-md transition-colors"
+                    onClick={handleGenerateVideo}
+                    title={activeUrl ? "Generate video from scene image" : "Generate an image first (Step 2)"}
+                  >
+                    {generatingVideo ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating Video...</>
+                    ) : activeVideoUrl ? (
+                      <><Video className="w-3.5 h-3.5" /> Regenerate Video</>
+                    ) : (
+                      <><Video className="w-3.5 h-3.5" /> Generate Video</>
+                    )}
+                  </button>
+                  {videoError && (
+                    <p className="text-[10px] text-red-500 text-center">{videoError}</p>
+                  )}
+                </div>
               )}
 
               {/* Navigation */}

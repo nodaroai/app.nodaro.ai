@@ -8,6 +8,7 @@ const generateVideoBody = z.object({
   prompt: z.string().max(2000).optional(),
   provider: z.enum(["veo", "veo3", "kling", "runway", "pika", "sora", "minimax"]).optional(),
   generateAudio: z.boolean().optional(),
+  duration: z.number().int().min(1).max(60).optional(),
 })
 
 export async function generateVideoRoutes(app: FastifyInstance) {
@@ -22,7 +23,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, generateAudio } = parsed.data
+    const { imageUrl, prompt, provider, generateAudio, duration } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -30,7 +31,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
         status: "pending",
-        input_data: { imageUrl, prompt, provider, generateAudio, type: "image-to-video" },
+        input_data: { imageUrl, prompt, provider, generateAudio, duration, type: "image-to-video" },
       })
       .select("id")
       .single()
@@ -47,6 +48,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       prompt,
       provider,
       generateAudio,
+      duration,
     })
 
     return { jobId: job.id }

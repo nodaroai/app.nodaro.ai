@@ -666,6 +666,11 @@ export type SceneNodeDataType = {
   sourceSceneIndex: number
   autoSyncWithScript: boolean
   audioAssignments: AudioAssignment[]
+  videoProvider: "minimax" | "veo" | "veo3" | "kling" | "runway" | "pika"
+  generatedVideoResults: GeneratedResult[]
+  activeVideoResultIndex: number
+  generatedVideoUrl: string
+  videoExecutionStatus: "idle" | "running" | "completed" | "failed"
 }
 
 // --- Union Types ---
@@ -1094,6 +1099,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       sourceSceneIndex: -1,
       autoSyncWithScript: false,
       audioAssignments: [],
+      videoProvider: "minimax",
+      generatedVideoResults: [],
+      activeVideoResultIndex: 0,
+      generatedVideoUrl: "",
+      videoExecutionStatus: "idle",
     } as SceneNodeDataType,
   },
 ]

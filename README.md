@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 32 node types across 5 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Asset management system with characters, locations, and objects -- import across projects/workflows, extract references from generated images. Reference image chaining for visual consistency. Single-node and full workflow execution with version history.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 32 node types across 5 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Asset management system with characters, locations, and objects -- import across projects/workflows, extract references from generated images. Reference image chaining for visual consistency. Single-node and full workflow execution with version history. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
 
 ## Features
 
@@ -230,6 +230,7 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - **FFmpeg Processing Nodes (8)**: Merge Video & Audio (multi-track mixer with volume control), Extract Audio, Trim Video, Resize Video, Adjust Volume, Add Captions, Mix Audio -- all use FFmpeg, not AI providers
 - Per-node Run button (hover to reveal, hanging tab below node)
 - **Delete Confirmation Dialog**: Reusable component for all version history deletions across all node types
+- **Scene Node**: Cinematic control center with 4-step wizard (Story, Image, Audio, Video), smart prompt builder with priority-based truncation, Script Connection with auto-sync, per-dialogue TTS with 26 voices, video generation with provider selection (minimax/veo/veo3/kling/runway/pika), Image/Video tab toggle with version history
 - Asset upload to Cloudflare R2
 - Redis + BullMQ job queue with progress tracking
 

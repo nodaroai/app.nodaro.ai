@@ -1412,11 +1412,13 @@ Opened via the Expand button on the node. Two-panel layout with a 4-step wizard:
 | 1 | Story | BookOpen | Basic Info, Dialogue | -- |
 | 2 | Image | Palette | Characters, Locations, Objects, Cinematography, Mood & Style | Generate Scene Image |
 | 3 | Audio | Mic | Dialogue (with voice/generate), Audio settings | Generate All Audio |
-| 4 | Video | Video | Duration, Transitions, Director Notes | Generate Video (coming soon) |
+| 4 | Video | Video | Video Provider, Duration, Transitions, Director Notes | Generate Video |
 
 Step indicators show completion state (checkmark when complete). Navigation via Previous/Next buttons.
 
 **Generate All Audio:** Iterates all dialogue lines without audio, generates TTS sequentially with progress display ("Generating 2/5..."). Uses `textToSpeech()` API + `getJobStatus()` polling.
+
+**Generate Video (Step 4):** Takes the scene's generated image and sends it to the Image to Video API with the selected video provider, duration, and a video-optimized prompt built by `buildVideoPrompt()`. Polls `getJobStatus()` every 2s. On completion, appends to `generatedVideoResults` with version history. Video player with controls appears in the left panel via an Image/Video tab toggle. Supports version history (thumbnails, delete, switch active). Disabled when no image exists.
 
 **Implementation:** `frontend/src/components/editor/scene-editor-modal.tsx`
 
@@ -1441,11 +1443,12 @@ Step indicators show completion state (checkmark when complete). Navigation via 
 - **Audio settings**: Narration textarea, music mood, sound effects tags
 
 **Step 4 (Video):**
+- **Video Provider**: Select dropdown (minimax, veo, veo3, kling, runway, pika)
 - **Duration**: Duration input (1-60s)
 - **Transitions**: Transition in/out dropdowns (cut, fade, dissolve, wipe, etc.)
 - **Director Notes**: Textarea for free-form direction
 
-**Prompt Preview:** Only shown when not in wizard mode (`{!step && ...}`). The modal has its own prompt preview in the left panel.
+**Prompt Preview:** In scene-config.tsx, only shown when not in wizard mode (`{!step && ...}`). The modal uses a Radix UI Accordion in the left panel showing "Generated Prompt (N/2000)" as a collapsible section with full untruncated text via `buildScenePrompt(data, assets, { forDisplay: true })`.
 
 #### Dialogue Audio Generation
 
@@ -1475,6 +1478,8 @@ Pure function that converts all scene parameters into an optimized image generat
 2. Drop low-priority parts one by one from the end
 3. Drop medium-priority parts one by one from the end
 4. Hard truncation at 2000 characters as safety net
+
+**Display mode:** `buildScenePrompt(data, assets, { forDisplay: true })` skips all truncation and progressive dropping, returning the full untruncated prompt for UI display. The truncated version is used for API calls and character count, while the display version shows in the accordion.
 
 **Character count display:** Both scene-config.tsx and scene-editor-modal.tsx show `{length}/{PROMPT_MAX_LENGTH}` with color coding:
 - Green: under 90% of limit
@@ -4008,6 +4013,10 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Scene Node: AudioAssignment data model mapping connected audio to dialogue lines
 - [x] Scene Node: Connected Audio section in Step 3 with source node labels, assignment dropdowns, audio players
 - [x] Scene Node: "Connected" badge on dialogue lines with assigned audio (connected audio priority over generated)
+- [x] Scene Editor: Video generation in Step 4 with provider selection (minimax/veo/veo3/kling/runway/pika), duration, video prompt via buildVideoPrompt()
+- [x] Scene Editor: Video player with controls in left panel, Image/Video tab toggle, video version history (thumbnails, delete, switch active)
+- [x] Scene Editor: Generated Prompt accordion (Radix UI) with full untruncated display via buildScenePrompt({ forDisplay: true })
+- [x] Scene Node: videoProvider, generatedVideoResults, activeVideoResultIndex, generatedVideoUrl, videoExecutionStatus fields
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
