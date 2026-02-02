@@ -1187,10 +1187,13 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
                 <div className="flex items-center gap-1">
                   <span className="text-xs font-medium truncate">{char.name}</span>
                   <span className={`text-[9px] px-1 py-0.5 rounded ${
-                    char.type === "reference" ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"
+                    char.type === "reference" || char.referenceImageUrl ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"
                   }`}>
-                    {char.type === "reference" ? "ref" : "desc"}
+                    {char.type === "reference" || char.referenceImageUrl ? "ref" : "desc"}
                   </span>
+                  {char.type === "description" && !char.referenceImageUrl && (
+                    <span className="text-[8px] text-orange-500" title="Needs reference image for reuse">needs ref</span>
+                  )}
                 </div>
                 {char.type === "description" && char.description && (
                   <p className="text-[10px] text-muted-foreground truncate mt-0.5">{char.description}</p>

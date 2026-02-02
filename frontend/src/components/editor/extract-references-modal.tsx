@@ -33,6 +33,7 @@ interface ExtractReferencesModalProps {
   readonly sceneCharacters: readonly string[]
   readonly existingReferences: readonly ExtractedReference[]
   readonly onSave: (references: readonly ExtractedReference[]) => void
+  readonly suggestedMessage?: string
 }
 
 export function ExtractReferencesModal({
@@ -43,6 +44,7 @@ export function ExtractReferencesModal({
   sceneCharacters,
   existingReferences,
   onSave,
+  suggestedMessage,
 }: ExtractReferencesModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgElRef = useRef<HTMLImageElement>(null)
@@ -406,6 +408,9 @@ export function ExtractReferencesModal({
             <Scissors className="w-4 h-4 text-purple-500" />
             <h2 className="text-sm font-semibold">Extract References from Scene {sceneIndex + 1}</h2>
           </div>
+          {suggestedMessage && (
+            <p className="text-xs text-orange-500 font-medium">{suggestedMessage}</p>
+          )}
           <div className="flex items-center gap-2">
             {/* Selection mode toggle */}
             <div className="flex rounded-md border overflow-hidden">

@@ -3551,15 +3551,36 @@ interface CharacterDefinition {
 - Import section lazy-loaded on button click, queries Supabase for other workflows
 - Multi-select grid for import, skips duplicate names, adds `importedFrom` metadata
 
+**Character States:**
+| State | What it has | Can reuse? |
+|-------|-------------|------------|
+| Description only | Text only | Can add to any scene, but generation blocked until earlier scene generates + saves reference |
+| Reference only | Image only | Yes - available everywhere |
+| Description + Reference | Text + Image | Yes - available everywhere |
+
+**Character Flow:**
+1. User defines description-only character, adds to scenes 1, 3, 5 (allowed with warning)
+2. User tries to generate Scene 3 → BLOCKED: "Generate Scene 1 first and save reference for [name]"
+3. User generates Scene 1 → Extract References modal auto-opens with message: "Save character references for consistent look in other scenes"
+4. User selects/crops character → saves reference → character now has reference image
+5. Scenes 3 and 5 can now generate
+
 **Execution:**
 - Reference characters: `referenceImageUrl` added to `image_input` array alongside chain and extracted refs
 - Description characters: text appended to prompt before sending to backend
 - Both storyboard path (`handleGenerateSceneImage`) and expanded node path (`executeNode`) support character definitions
-- Auto-upgrade: after image generation (both node and storyboard paths), description characters are automatically upgraded to reference type with the generated image URL and a toast notification is shown
+- Generation blocking: if a description-only char appears in an earlier scene, generation is blocked with error toast directing user to generate the earlier scene first
+- After storyboard generation with description-only chars, ExtractReferencesModal auto-opens with suggested message
 - Backend also accepts `characterDescriptions[]` in the generate-image route for direct API usage
+
+**Visual Indicators:**
+- Storyboard character tags: orange background + FileText icon for description-only, purple background + ImageIcon for reference
+- Config panel character cards: "needs ref" label for description-only chars
+- Dropdown suggestions: FileText (orange) for description-only, ImageIcon (blue) for reference
 
 **Validation:**
 - DefineCharacterModal disables Save button until name + type-specific content is provided
+- DefineCharacterModal shows tip for description type: reference image needed for reuse
 - Cannot create empty character tags in storyboard (must select from defined characters)
 
 **Planned: Workflow Sharing (Hosted Version Only):**

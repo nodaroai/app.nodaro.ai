@@ -265,20 +265,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 activeResultIndex: 0,
               })
               toast.success("Image generated")
-
-              // Auto-upgrade description characters to reference with generated image
-              if (imageUrl) {
-                const nodeData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as GenerateImageData | undefined
-                const charIds = nodeData?.characterDefinitionIds ?? []
-                const { characterDefinitions, updateCharacterDefinition: upgradeChar } = useWorkflowStore.getState()
-                for (const charDef of characterDefinitions) {
-                  if (charDef.type === "description" && charIds.includes(charDef.id)) {
-                    upgradeChar(charDef.id, { type: "reference", referenceImageUrl: imageUrl })
-                    toast.info(`Character "${charDef.name}" upgraded to reference`, { description: "Description replaced with generated image" })
-                  }
-                }
-              }
-
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
@@ -890,6 +876,25 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     const scene = script.scenes[sceneIndex]
 
+    // Block generation if description-only characters need references from earlier scenes
+    const allCharDefs0 = useWorkflowStore.getState().characterDefinitions
+    const sceneCharNames0 = scene.characters ?? []
+    for (const charName of sceneCharNames0) {
+      const charDef = allCharDefs0.find((c) => c.name === charName)
+      if (charDef && charDef.type === "description" && !charDef.referenceImageUrl) {
+        // Find earliest scene using this character
+        const earliestScene = script.scenes.findIndex((s, idx) =>
+          idx !== sceneIndex && (s.characters ?? []).includes(charName)
+        )
+        if (earliestScene !== -1 && earliestScene < sceneIndex) {
+          toast.error(`Generate Scene ${earliestScene + 1} first`, {
+            description: `Save a reference for "${charName}" before generating this scene`,
+          })
+          return
+        }
+      }
+    }
+
     // Collect extracted reference images for this scene
     const extractedRefs = script.extractedReferences ?? []
     const sceneChars = new Set(scene.characters ?? [])
@@ -937,19 +942,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 generatedImages: newImages,
                 activeImageIndex: 0,
               })
-
-              // Auto-upgrade description characters to reference with generated image
-              if (imageUrl) {
-                const { characterDefinitions, updateCharacterDefinition } = useWorkflowStore.getState()
-                const latestScript = (useWorkflowStore.getState().nodes.find((n) => n.id === scriptNodeId)?.data as GenerateScriptData | undefined)?.generatedScript
-                const sceneCharNames = new Set(latestScript?.scenes[sceneIndex]?.characters ?? [])
-                for (const charDef of characterDefinitions) {
-                  if (charDef.type === "description" && sceneCharNames.has(charDef.name)) {
-                    updateCharacterDefinition(charDef.id, { type: "reference", referenceImageUrl: imageUrl })
-                    toast.info(`Character "${charDef.name}" upgraded to reference`, { description: "Description replaced with generated image" })
-                  }
-                }
-              }
 
               resolve()
             } else if (job.status === "failed") {

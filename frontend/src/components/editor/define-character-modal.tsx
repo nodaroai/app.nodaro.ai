@@ -220,6 +220,9 @@ export function DefineCharacterModal({
               <p className="text-[10px] text-muted-foreground mt-1">
                 This description will be appended to the image prompt.
               </p>
+              <p className="text-[10px] text-orange-500/80 mt-1">
+                Tip: Without a reference image, you'll need to save one after generating the first image for reuse in other scenes.
+              </p>
             </div>
           )}
 

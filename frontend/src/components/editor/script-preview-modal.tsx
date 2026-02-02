@@ -37,6 +37,7 @@ export function ScriptPreviewModal({
 }: ScriptPreviewModalProps) {
   const [generatingAll, setGeneratingAll] = useState(false)
   const [extractModalScene, setExtractModalScene] = useState<number | null>(null)
+  const [extractAutoOpened, setExtractAutoOpened] = useState(false)
   const [characterInput, setCharacterInput] = useState<Record<number, string>>({})
   const [allProgress, setAllProgress] = useState({ current: 0, total: 0 })
   const [deleteConfirm, setDeleteConfirm] = useState<{ sceneIndex: number; imageIndex: number } | null>(null)
@@ -91,6 +92,25 @@ export function ScriptPreviewModal({
   }
   const allCharacters = Object.keys(charSceneMap)
 
+  function hasDescriptionOnlyChars(sceneIndex: number): boolean {
+    const scene = script.scenes[sceneIndex]
+    const chars = scene?.characters ?? []
+    const currentDefs = useWorkflowStore.getState().characterDefinitions
+    return chars.some((name) => {
+      const def = currentDefs.find((c) => c.name === name)
+      return def && def.type === "description" && !def.referenceImageUrl
+    })
+  }
+
+  async function handleGenerateScene(sceneIndex: number) {
+    await onGenerateScene(sceneIndex)
+    // After successful generation, auto-open Extract modal if description-only chars exist
+    if (hasDescriptionOnlyChars(sceneIndex)) {
+      setExtractAutoOpened(true)
+      setExtractModalScene(sceneIndex)
+    }
+  }
+
   async function handleGenerateAll() {
     setGeneratingAll(true)
     setAllProgress({ current: 0, total: pendingCount })
@@ -102,7 +122,7 @@ export function ScriptPreviewModal({
       if (images.length > 0 || scene.imageStatus === "running") continue
 
       try {
-        await onGenerateScene(i)
+        await handleGenerateScene(i)
       } catch {
         // Continue to next scene on failure
       }
@@ -236,7 +256,7 @@ export function ScriptPreviewModal({
                           className="flex items-center gap-1.5 h-7 px-3 text-xs font-medium rounded-md bg-white/90 text-black hover:bg-white transition-colors"
                           onClick={(e) => {
                             e.stopPropagation()
-                            onGenerateScene(i)
+                            handleGenerateScene(i)
                           }}
                         >
                           {status === "failed" && !activeImage ? (
@@ -320,17 +340,20 @@ export function ScriptPreviewModal({
                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                       {(scene.characters ?? []).map((char) => {
                         const otherScenes = (charSceneMap[char] ?? []).filter((n) => n !== scene.sceneNumber)
+                        const matchingDef = allCharDefs.find((d) => d.name === char)
+                        const isDescOnly = matchingDef?.type === "description" && !matchingDef.referenceImageUrl
+                        const hasRef = matchingDef?.type === "reference" || !!matchingDef?.referenceImageUrl
                         return (
                           <span
                             key={char}
-                            className="inline-flex items-center gap-1 h-6 px-2.5 text-xs font-medium rounded-full bg-purple-600 text-white"
+                            className={`inline-flex items-center gap-1 h-6 px-2.5 text-xs font-medium rounded-full text-white ${isDescOnly ? "bg-orange-600" : "bg-purple-600"}`}
+                            title={isDescOnly ? "Description only - needs reference image" : hasRef ? "Has reference image" : undefined}
                           >
-                            {(() => {
-                              const matchingDef = allCharDefs.find((d) => d.name === char)
-                              return matchingDef ? (
-                                <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); setEditingCharDef(matchingDef); setShowDefineCharModal(true) }}>{char}</button>
-                              ) : char
-                            })()}
+                            {isDescOnly && <FileText className="w-3 h-3 text-orange-200" />}
+                            {hasRef && <ImageIcon className="w-3 h-3 text-blue-200" />}
+                            {matchingDef ? (
+                              <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); setEditingCharDef(matchingDef); setShowDefineCharModal(true) }}>{char}</button>
+                            ) : char}
                             {otherScenes.length > 0 && (
                               <span className="inline-flex items-center gap-0.5 text-purple-200" title={`Also in scene${otherScenes.length > 1 ? "s" : ""} ${otherScenes.join(", ")}`}>
                                 <Link className="w-2.5 h-2.5" />
@@ -404,12 +427,16 @@ export function ScriptPreviewModal({
                                     {extractedReferences.some((r) => r.name === char) && (
                                       <Scissors className="w-2.5 h-2.5 text-primary" />
                                     )}
-                                    {allCharDefs.some((d) => d.name === char && d.type === "description") && (
-                                      <FileText className="w-2.5 h-2.5 text-orange-500" />
-                                    )}
-                                    {allCharDefs.some((d) => d.name === char && d.type === "reference") && (
-                                      <ImageIcon className="w-2.5 h-2.5 text-blue-500" />
-                                    )}
+                                    {(() => {
+                                      const def = allCharDefs.find((d) => d.name === char)
+                                      if (def?.type === "description" && !def.referenceImageUrl) {
+                                        return <span title="Description only - needs reference"><FileText className="w-2.5 h-2.5 text-orange-500" /></span>
+                                      }
+                                      if (def?.type === "reference" || def?.referenceImageUrl) {
+                                        return <span title="Has reference image"><ImageIcon className="w-2.5 h-2.5 text-blue-500" /></span>
+                                      }
+                                      return null
+                                    })()}
                                     {char}
                                   </span>
                                   <span className="text-[9px] text-muted-foreground">
@@ -481,12 +508,13 @@ export function ScriptPreviewModal({
         return (
           <ExtractReferencesModal
             isOpen
-            onClose={() => setExtractModalScene(null)}
+            onClose={() => { setExtractModalScene(null); setExtractAutoOpened(false) }}
             imageUrl={activeImg.url}
             sceneIndex={extractModalScene}
             sceneCharacters={scene.characters ?? []}
             existingReferences={extractedReferences}
             onSave={onSaveReferences}
+            suggestedMessage={extractAutoOpened ? "Save character references for consistent look in other scenes" : undefined}
           />
         )
       })()}
