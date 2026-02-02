@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Sparkles, Layers, ArrowRight, ArrowDown, Check, Circle } from "lucide-react"
+import { Sparkles, Layers, ArrowRight, ArrowDown, Check, Circle, Clapperboard, GitBranch } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -19,11 +19,14 @@ import type { GeneratedScript } from "@/types/nodes"
 
 export type NarrationSource = "visualDescription" | "action" | "imagePrompt"
 
+export type ExpandNodeType = "pipeline" | "scene"
+
 export interface ExpandOptions {
   readonly layout: "horizontal" | "vertical"
   readonly autoRun: boolean
   readonly includeCombine: boolean
   readonly narrationSource: NarrationSource
+  readonly nodeType: ExpandNodeType
 }
 
 interface ExpandStoryboardDialogProps {
@@ -43,6 +46,7 @@ export function ExpandStoryboardDialog({
   const [autoRun, setAutoRun] = useState(true)
   const [includeCombine, setIncludeCombine] = useState(true)
   const [narrationSource, setNarrationSource] = useState<NarrationSource>("visualDescription")
+  const [nodeType, setNodeType] = useState<ExpandNodeType>("scene")
 
   const scenes = script.scenes
   const sceneCount = scenes.length
@@ -53,11 +57,13 @@ export function ExpandStoryboardDialog({
   const imageCost = scenesNeedingImages * 5
   const videoCost = sceneCount * 20
   const ttsCost = sceneCount * 3
-  const combineCost = includeCombine ? 2 : 0
-  const totalCost = imageCost + videoCost + ttsCost + combineCost
+  const combineCost = includeCombine && nodeType === "pipeline" ? 2 : 0
+  const sceneTotalCost = imageCost
+  const pipelineTotalCost = imageCost + videoCost + ttsCost + combineCost
+  const totalCost = nodeType === "scene" ? sceneTotalCost : pipelineTotalCost
 
   function handleConfirm() {
-    onConfirm({ layout, autoRun, includeCombine, narrationSource })
+    onConfirm({ layout, autoRun, includeCombine, narrationSource, nodeType })
     onClose()
   }
 
@@ -125,29 +131,32 @@ export function ExpandStoryboardDialog({
               </div>
             </div>
 
-            <Separator />
-
-            <div className="flex justify-between">
-              <span>{sceneCount}x Image to Video nodes</span>
-              <span className="text-muted-foreground">{sceneCount} x 20 = {videoCost} credits</span>
-            </div>
-            <div className="flex justify-between">
-              <span>{sceneCount}x Text to Speech nodes</span>
-              <span className="text-muted-foreground">{sceneCount} x 3 = {ttsCost} credits</span>
-            </div>
-            <div className="flex justify-between">
-              <span>{sceneCount}x Merge Video & Audio</span>
-              <span className="text-muted-foreground/60">0 credits</span>
-            </div>
-            <div className="flex justify-between">
-              <span>{sceneCount}x Text Prompt nodes</span>
-              <span className="text-muted-foreground/60">0 credits</span>
-            </div>
-            {includeCombine && (
-              <div className="flex justify-between">
-                <span>1x Combine Videos node</span>
-                <span className="text-muted-foreground">1 x 2 = {combineCost} credits</span>
-              </div>
+            {nodeType === "pipeline" && (
+              <>
+                <Separator />
+                <div className="flex justify-between">
+                  <span>{sceneCount}x Image to Video nodes</span>
+                  <span className="text-muted-foreground">{sceneCount} x 20 = {videoCost} credits</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>{sceneCount}x Text to Speech nodes</span>
+                  <span className="text-muted-foreground">{sceneCount} x 3 = {ttsCost} credits</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>{sceneCount}x Merge Video & Audio</span>
+                  <span className="text-muted-foreground/60">0 credits</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>{sceneCount}x Text Prompt nodes</span>
+                  <span className="text-muted-foreground/60">0 credits</span>
+                </div>
+                {includeCombine && (
+                  <div className="flex justify-between">
+                    <span>1x Combine Videos node</span>
+                    <span className="text-muted-foreground">1 x 2 = {combineCost} credits</span>
+                  </div>
+                )}
+              </>
             )}
             <Separator />
             <div className="flex justify-between font-medium">
@@ -157,6 +166,37 @@ export function ExpandStoryboardDialog({
               </span>
               <span>{totalCost} credits</span>
             </div>
+          </div>
+
+          {/* Node type option */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Node Type</Label>
+            <RadioGroup
+              value={nodeType}
+              onValueChange={(v) => setNodeType(v as ExpandNodeType)}
+              className="flex gap-4"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="scene" id="type-scene" />
+                <Label htmlFor="type-scene" className="flex items-center gap-1 text-sm cursor-pointer">
+                  <Clapperboard className="w-3.5 h-3.5" />
+                  Scene Nodes
+                  <span className="text-muted-foreground text-xs">(recommended)</span>
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="pipeline" id="type-pipeline" />
+                <Label htmlFor="type-pipeline" className="flex items-center gap-1 text-sm cursor-pointer">
+                  <GitBranch className="w-3.5 h-3.5" />
+                  Pipeline Nodes
+                </Label>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              {nodeType === "scene"
+                ? "Creates one Scene Node per scene with full editing capabilities"
+                : "Creates separate Image, Video, TTS, and Merge nodes per scene"}
+            </p>
           </div>
 
           {/* Layout option */}
@@ -185,22 +225,24 @@ export function ExpandStoryboardDialog({
             </RadioGroup>
           </div>
 
-          {/* Narration source */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Narration Text Source</Label>
-            <select
-              value={narrationSource}
-              onChange={(e) => setNarrationSource(e.target.value as NarrationSource)}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="visualDescription">Visual Description (default)</option>
-              <option value="action">Action</option>
-              <option value="imagePrompt">Image Prompt</option>
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Text used for Text to Speech narration per scene
-            </p>
-          </div>
+          {/* Narration source - pipeline only */}
+          {nodeType === "pipeline" && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Narration Text Source</Label>
+              <select
+                value={narrationSource}
+                onChange={(e) => setNarrationSource(e.target.value as NarrationSource)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="visualDescription">Visual Description (default)</option>
+                <option value="action">Action</option>
+                <option value="imagePrompt">Image Prompt</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Text used for Text to Speech narration per scene
+              </p>
+            </div>
+          )}
 
           {/* Checkboxes */}
           <div className="space-y-3">
@@ -214,16 +256,18 @@ export function ExpandStoryboardDialog({
                 Auto-run image generation after creating nodes
               </Label>
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="include-combine"
-                checked={includeCombine}
-                onCheckedChange={(checked) => setIncludeCombine(checked === true)}
-              />
-              <Label htmlFor="include-combine" className="text-sm cursor-pointer">
-                Include Combine Videos node at the end
-              </Label>
-            </div>
+            {nodeType === "pipeline" && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="include-combine"
+                  checked={includeCombine}
+                  onCheckedChange={(checked) => setIncludeCombine(checked === true)}
+                />
+                <Label htmlFor="include-combine" className="text-sm cursor-pointer">
+                  Include Combine Videos node at the end
+                </Label>
+              </div>
+            )}
           </div>
         </div>
 

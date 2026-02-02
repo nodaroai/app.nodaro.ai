@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Play, Maximize2, Scissors } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -17,6 +17,8 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
+  const autoOpenEditorNodeId = useWorkflowStore((s) => s.autoOpenEditorNodeId)
+  const setAutoOpenEditorNodeId = useWorkflowStore((s) => s.setAutoOpenEditorNodeId)
 
   const charCount = nodeData.characters.length
   const objCount = nodeData.objects.length
@@ -37,6 +39,14 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [extractOpen, setExtractOpen] = useState(false)
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
+
+  // Auto-open editor when this node was just created from script
+  useEffect(() => {
+    if (autoOpenEditorNodeId === id) {
+      setEditorOpen(true)
+      setAutoOpenEditorNodeId(null)
+    }
+  }, [autoOpenEditorNodeId, id, setAutoOpenEditorNodeId])
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

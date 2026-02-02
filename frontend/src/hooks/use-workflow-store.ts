@@ -48,8 +48,12 @@ interface WorkflowState {
   readonly updateCharacterDefinition: (id: string, updates: Partial<Omit<CharacterDefinition, "id">>) => void
   readonly removeCharacterDefinition: (id: string) => void
   readonly batchAddNodesAndEdges: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
-  readonly expandStoryboard: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt" }) => void) | null
-  readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt" }) => void) | null) => void
+  readonly expandStoryboard: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null
+  readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null) => void
+  readonly autoOpenEditorNodeId: string | null
+  readonly setAutoOpenEditorNodeId: (id: string | null) => void
+  readonly createSceneNodeFromScript: ((scriptNodeId: string, sceneIndex: number) => void) | null
+  readonly setCreateSceneNodeFromScript: (fn: ((scriptNodeId: string, sceneIndex: number) => void) | null) => void
 }
 
 let nextNodeId = 1
@@ -301,4 +305,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   expandStoryboard: null,
   setExpandStoryboard: (fn) => set({ expandStoryboard: fn }),
+  autoOpenEditorNodeId: null,
+  setAutoOpenEditorNodeId: (id) => set({ autoOpenEditorNodeId: id }),
+  createSceneNodeFromScript: null,
+  setCreateSceneNodeFromScript: (fn) => set({ createSceneNodeFromScript: fn }),
 }))

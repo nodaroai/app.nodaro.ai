@@ -16,6 +16,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const generateSceneImage = useWorkflowStore((s) => s.generateSceneImage)
   const expandStoryboard = useWorkflowStore((s) => s.expandStoryboard)
+  const createSceneNodeFromScript = useWorkflowStore((s) => s.createSceneNodeFromScript)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -245,6 +246,37 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         onExpandToNodes={() => {
           setShowFullscreen(false)
           setShowExpandDialog(true)
+        }}
+        onCreateSceneNode={(sceneIndex) => {
+          setShowFullscreen(false)
+          createSceneNodeFromScript?.(id, sceneIndex)
+        }}
+        onUpdateScenes={(scenes) => {
+          if (!activeScript) return
+          const updatedScript = { ...activeScript, scenes }
+          updateNodeData(id, {
+            generatedScript: updatedScript,
+            ...(activeResult ? {
+              generatedResults: results.map((r, i) =>
+                i === activeIndex ? { ...r, script: updatedScript } : r
+              ),
+            } : {}),
+          })
+        }}
+        onUpdateSceneField={(sceneIndex, field, value) => {
+          if (!activeScript) return
+          const updatedScenes = activeScript.scenes.map((s, i) =>
+            i === sceneIndex ? { ...s, [field]: value } : s
+          )
+          const updatedScript = { ...activeScript, scenes: updatedScenes }
+          updateNodeData(id, {
+            generatedScript: updatedScript,
+            ...(activeResult ? {
+              generatedResults: results.map((r, i) =>
+                i === activeIndex ? { ...r, script: updatedScript } : r
+              ),
+            } : {}),
+          })
         }}
         onUpdateSceneCharacters={(sceneIndex, characters) => {
           if (!activeScript) return

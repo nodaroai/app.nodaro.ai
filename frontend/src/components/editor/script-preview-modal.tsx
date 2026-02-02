@@ -1,14 +1,17 @@
 "use client"
 
-import { useEffect, useCallback, useState } from "react"
+import { useEffect, useCallback, useState, useMemo, createContext, useContext } from "react"
 import { createPortal } from "react-dom"
-import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors, UserPlus, FileText, Download } from "lucide-react"
+import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors, UserPlus, FileText, Download, Plus, Trash2, Clapperboard, Eye, MessageSquare, Users, Pen, GripVertical } from "lucide-react"
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
 import { DefineCharacterModal } from "./define-character-modal"
 import { ImportAssetsModal } from "./manage-characters-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { GeneratedScript, ExtractedReference, CharacterDefinition } from "@/types/nodes"
+import type { GeneratedScript, ExtractedReference, CharacterDefinition, ScriptScene } from "@/types/nodes"
 import { getSceneCharacterNames, getSceneMoodDisplay } from "@/types/nodes"
 
 interface ScriptPreviewModalProps {
@@ -20,6 +23,9 @@ interface ScriptPreviewModalProps {
   readonly onDeleteImage: (sceneIndex: number, imageIndex: number) => void
   readonly onExpandToNodes: () => void
   readonly onUpdateSceneCharacters: (sceneIndex: number, characters: string[]) => void
+  readonly onUpdateSceneField: (sceneIndex: number, field: string, value: unknown) => void
+  readonly onCreateSceneNode: (sceneIndex: number) => void
+  readonly onUpdateScenes: (scenes: readonly ScriptScene[]) => void
   readonly extractedReferences: readonly ExtractedReference[]
   readonly onSaveReferences: (references: readonly ExtractedReference[]) => void
 }
@@ -33,6 +39,9 @@ export function ScriptPreviewModal({
   onDeleteImage,
   onExpandToNodes,
   onUpdateSceneCharacters,
+  onUpdateSceneField,
+  onCreateSceneNode,
+  onUpdateScenes,
   extractedReferences,
   onSaveReferences,
 }: ScriptPreviewModalProps) {
@@ -43,6 +52,7 @@ export function ScriptPreviewModal({
   const [allProgress, setAllProgress] = useState({ current: 0, total: 0 })
   const [deleteConfirm, setDeleteConfirm] = useState<{ sceneIndex: number; imageIndex: number } | null>(null)
   const [focusedCharInput, setFocusedCharInput] = useState<number | null>(null)
+  const [confirmingDeleteScene, setConfirmingDeleteScene] = useState<number | null>(null)
   const [showDefineCharModal, setShowDefineCharModal] = useState(false)
   const [showManageCharModal, setShowManageCharModal] = useState(false)
   const [editingCharDef, setEditingCharDef] = useState<CharacterDefinition | null>(null)
@@ -59,6 +69,13 @@ export function ScriptPreviewModal({
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [isOpen, handleKeyDown])
+
+  const sceneIds = useMemo(() => script.scenes.map((s) => `scene-${s.sceneNumber}`), [script.scenes])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   if (!isOpen) return null
 
@@ -134,13 +151,54 @@ export function ScriptPreviewModal({
     setGeneratingAll(false)
   }
 
+  function renumberScenes(scenes: readonly ScriptScene[]): readonly ScriptScene[] {
+    return scenes.map((s, idx) => ({ ...s, sceneNumber: idx + 1 }))
+  }
+
+  function handleDeleteScene(sceneIndex: number) {
+    if (script.scenes.length <= 1) return
+    const updated = script.scenes.filter((_, idx) => idx !== sceneIndex)
+    setConfirmingDeleteScene(null)
+    onUpdateScenes(renumberScenes(updated))
+  }
+
+  function handleAddScene(insertAfterIndex?: number) {
+    const insertIdx = insertAfterIndex !== undefined ? insertAfterIndex + 1 : script.scenes.length
+    const newScene: ScriptScene = {
+      sceneNumber: insertIdx + 1,
+      visualDescription: "",
+      action: "",
+      mood: "",
+      durationHint: 5,
+      imagePrompt: "",
+    }
+    const updated = [
+      ...script.scenes.slice(0, insertIdx),
+      newScene,
+      ...script.scenes.slice(insertIdx),
+    ]
+    onUpdateScenes(renumberScenes(updated))
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = sceneIds.indexOf(String(active.id))
+    const newIndex = sceneIds.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    const updated = [...script.scenes]
+    const [moved] = updated.splice(oldIndex, 1)
+    updated.splice(newIndex, 0, moved)
+    onUpdateScenes(renumberScenes(updated))
+  }
+
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="relative bg-card rounded-xl shadow-2xl max-w-[90vw] max-h-[85vh] flex flex-col overflow-hidden"
+        className="relative bg-card rounded-xl shadow-2xl w-[95vw] max-w-[1400px] max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -199,7 +257,9 @@ export function ScriptPreviewModal({
 
         {/* Storyboard grid */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sceneIds} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {script.scenes.map((scene, i) => {
               const status = scene.imageStatus ?? "idle"
               const images = scene.generatedImages ?? []
@@ -208,19 +268,60 @@ export function ScriptPreviewModal({
               const charNames = getSceneCharacterNames(scene.characters)
 
               return (
+                <SortableSceneCard key={scene.sceneNumber} id={`scene-${scene.sceneNumber}`} disabled={generatingAll}>
                 <div
-                  key={scene.sceneNumber}
-                  className={`rounded-lg border p-3 flex flex-col gap-2 group/scene ${
+                  className={`rounded-lg border p-3 flex flex-col gap-2 min-w-0 group/scene ${
                     status === "failed"
                       ? "border-red-500/50 bg-red-500/5"
                       : "bg-muted/20"
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground">
+                    <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                      <DragHandle />
                       Scene {scene.sceneNumber}
                     </span>
-                    <span className="text-xs text-muted-foreground">{scene.durationHint}s</span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={scene.durationHint}
+                        onChange={(e) => onUpdateSceneField(i, "durationHint", Math.max(1, Math.min(60, parseInt(e.target.value) || 1)))}
+                        className="w-12 h-5 text-xs text-right text-muted-foreground bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1"
+                        title="Duration (seconds)"
+                      />
+                      {script.scenes.length > 1 && (
+                        confirmingDeleteScene === i ? (
+                          <span className="flex items-center gap-1 text-[10px]">
+                            <span className="text-red-500 font-medium">Delete?</span>
+                            <button
+                              type="button"
+                              className="px-1.5 py-0.5 rounded text-[10px] bg-muted hover:bg-muted/80 text-muted-foreground"
+                              onClick={(e) => { e.stopPropagation(); setConfirmingDeleteScene(null) }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="px-1.5 py-0.5 rounded text-[10px] bg-red-500 hover:bg-red-600 text-white"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteScene(i) }}
+                            >
+                              Delete
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-red-500 transition-colors opacity-0 group-hover/scene:opacity-100"
+                            onClick={(e) => { e.stopPropagation(); setConfirmingDeleteScene(i) }}
+                            title="Delete scene"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )
+                      )}
+                    </div>
                   </div>
 
                   {/* Image area */}
@@ -324,22 +425,142 @@ export function ScriptPreviewModal({
                     </button>
                   )}
 
-                  <p className="text-xs font-medium line-clamp-2">{scene.action}</p>
-                  <p className="text-[10px] text-muted-foreground italic">{getSceneMoodDisplay(scene.mood)}</p>
-                  <p className="text-[10px] text-muted-foreground/70 line-clamp-3">{scene.visualDescription}</p>
+                  {/* Create Scene Node button */}
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 w-full h-6 px-2 text-[10px] font-medium rounded border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); onCreateSceneNode(i) }}
+                  >
+                    <Clapperboard className="w-3 h-3" />
+                    Create Scene Node
+                  </button>
 
-                  {/* Character tags */}
-                  <div className="mt-2 pt-2 border-t border-border/20">
-                    <div className="flex items-center gap-1 group/charhelp">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Characters</span>
-                      <div className="relative">
-                        <Info className="w-3 h-3 text-muted-foreground/40 cursor-help" />
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-48 p-2 rounded-md bg-popover border text-[10px] text-popover-foreground shadow-md opacity-0 pointer-events-none group-hover/charhelp:opacity-100 transition-opacity z-20">
-                          Tag characters in this scene. Using the same name across scenes keeps their appearance consistent.
-                        </div>
-                      </div>
+                  {/* Mood - editable (always visible, compact) */}
+                  <input
+                    type="text"
+                    value={getSceneMoodDisplay(scene.mood)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      onUpdateSceneField(i, "mood", val.includes(",") ? val.split(",").map((s) => s.trim()).filter(Boolean) : val)
+                    }}
+                    className="w-full text-[10px] italic text-muted-foreground bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1.5 py-0.5"
+                    placeholder="Mood (comma-separated)..."
+                  />
+
+                  {/* Section: Action */}
+                  <div className="border-t border-border/20 pt-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                      <Pen className="w-3 h-3" />Action
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <textarea
+                      value={scene.action}
+                      onChange={(e) => onUpdateSceneField(i, "action", e.target.value)}
+                      rows={2}
+                      className="w-full text-xs font-medium bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1.5 py-1 resize-y"
+                      placeholder="Action..."
+                    />
+                  </div>
+
+                  {/* Section: Visual Description */}
+                  <div className="border-t border-border/20 pt-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                      <Eye className="w-3 h-3" />Visual Description
+                    </div>
+                    <textarea
+                      value={scene.visualDescription}
+                      onChange={(e) => onUpdateSceneField(i, "visualDescription", e.target.value)}
+                      rows={3}
+                      className="w-full text-[10px] text-muted-foreground/70 bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1.5 py-1 resize-y"
+                      placeholder="Visual description..."
+                    />
+                  </div>
+
+                  {/* Section: Dialogue */}
+                  <div className="border-t border-border/20 pt-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                      <MessageSquare className="w-3 h-3" />
+                      Dialogue
+                      {(scene.dialogue ?? []).length > 0 && (
+                        <span className="text-[9px] font-normal normal-case tracking-normal text-muted-foreground/60">
+                          ({(scene.dialogue ?? []).length})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {(scene.dialogue ?? []).map((d, di) => (
+                        <div key={di} className="flex flex-col gap-0.5 pl-1 border-l-2 border-purple-500/30">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={d.speaker}
+                              onChange={(e) => {
+                                const newDialogue = [...(scene.dialogue ?? [])]
+                                newDialogue[di] = { ...newDialogue[di], speaker: e.target.value }
+                                onUpdateSceneField(i, "dialogue", newDialogue)
+                              }}
+                              className="flex-1 text-[10px] font-medium bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1 py-0.5"
+                              placeholder="Speaker"
+                            />
+                            <input
+                              type="text"
+                              value={d.emotion ?? ""}
+                              onChange={(e) => {
+                                const newDialogue = [...(scene.dialogue ?? [])]
+                                newDialogue[di] = { ...newDialogue[di], emotion: e.target.value || undefined }
+                                onUpdateSceneField(i, "dialogue", newDialogue)
+                              }}
+                              className="w-16 text-[10px] italic text-muted-foreground bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1 py-0.5"
+                              placeholder="emotion"
+                            />
+                            <button
+                              type="button"
+                              className="text-muted-foreground/40 hover:text-red-500 transition-colors"
+                              onClick={() => {
+                                const newDialogue = (scene.dialogue ?? []).filter((_, j) => j !== di)
+                                onUpdateSceneField(i, "dialogue", newDialogue)
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={d.text}
+                            onChange={(e) => {
+                              const newDialogue = [...(scene.dialogue ?? [])]
+                              newDialogue[di] = { ...newDialogue[di], text: e.target.value }
+                              onUpdateSceneField(i, "dialogue", newDialogue)
+                            }}
+                            className="w-full text-[10px] text-muted-foreground bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1 py-0.5"
+                            placeholder="Line..."
+                          />
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newDialogue = [...(scene.dialogue ?? []), { speaker: "", text: "", emotion: "" }]
+                          onUpdateSceneField(i, "dialogue", newDialogue)
+                        }}
+                        className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground transition-colors self-start px-1"
+                      >
+                        <Plus className="w-2.5 h-2.5" /> Add line
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Section: Characters */}
+                  <div className="border-t border-border/20 pt-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                      <Users className="w-3 h-3" />
+                      Characters
+                      {charNames.length > 0 && (
+                        <span className="text-[9px] font-normal normal-case tracking-normal text-muted-foreground/60">
+                          ({charNames.length})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {charNames.map((char) => {
                         const otherScenes = (charSceneMap[char] ?? []).filter((n) => n !== scene.sceneNumber)
                         const matchingDef = allCharDefs.find((d) => d.name === char)
@@ -496,9 +717,21 @@ export function ScriptPreviewModal({
                     <span className="flex items-center gap-0.5">3cr</span>
                   </div>
                 </div>
+                </SortableSceneCard>
               )
             })}
+            {/* Add Scene card */}
+            <button
+              type="button"
+              onClick={() => handleAddScene()}
+              className="rounded-lg border-2 border-dashed border-muted-foreground/20 p-3 flex flex-col items-center justify-center gap-2 min-h-[200px] hover:border-primary/40 hover:bg-muted/10 transition-colors cursor-pointer"
+            >
+              <Plus className="w-6 h-6 text-muted-foreground/40" />
+              <span className="text-xs text-muted-foreground/60">Add Scene</span>
+            </button>
           </div>
+          </SortableContext>
+          </DndContext>
         </div>
       </div>
       {extractModalScene !== null && (() => {
@@ -575,5 +808,36 @@ export function ScriptPreviewModal({
       />
     </div>,
     document.body
+  )
+}
+
+function SortableSceneCard({ id, disabled, children }: { readonly id: string; readonly disabled?: boolean; readonly children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  }
+  return (
+    <SortableDragContext.Provider value={{ listeners: listeners ?? {}, activatorRef: setActivatorNodeRef }}>
+      <div ref={setNodeRef} style={style} {...attributes}>
+        {children}
+      </div>
+    </SortableDragContext.Provider>
+  )
+}
+
+const SortableDragContext = createContext<{
+  listeners: Record<string, unknown>
+  activatorRef: (node: HTMLElement | null) => void
+}>({ listeners: {}, activatorRef: () => {} })
+
+function DragHandle() {
+  const { listeners, activatorRef } = useContext(SortableDragContext)
+  return (
+    <span ref={activatorRef} {...listeners} className="cursor-grab active:cursor-grabbing">
+      <GripVertical className="w-3 h-3 text-muted-foreground/30" />
+    </span>
   )
 }

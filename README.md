@@ -221,8 +221,8 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - Global video autoplay toggle in editor toolbar
 - **Generate Script**: AI script generation via Gemini 2.5 Flash, outputs scenes with visual descriptions, actions, moods, and durations
 - **Storyboard Preview**: Inline scene strip in Generate Script node showing thumbnails, scene numbers, and durations
-- **Storyboard Modal**: Full-screen view with per-scene image generation, "Generate All Images" batch, and version history per scene
-- **Expand to Nodes**: One-click expansion of storyboard into Generate Image + Image to Video nodes per scene, optional Combine Videos node, horizontal/vertical layout, auto-run support, intelligent credit estimation accounting for existing images
+- **Storyboard Modal**: Full-screen view with per-scene image generation, "Generate All Images" batch, version history per scene, fully editable scene fields (resizable textareas), scene management (add/delete/reorder via drag-and-drop), Create Scene Node per scene
+- **Expand to Nodes**: One-click expansion of storyboard into Scene Nodes (recommended) or Pipeline Nodes per scene, optional Combine Videos node, horizontal/vertical layout, auto-run support, intelligent credit estimation accounting for existing images
 - **Combine Videos**: FFmpeg-based video concatenation with Cut/Fade/Dissolve transitions, xfade filter for 2-video transitions, version history, Run button
 - **Generate Music**: AI music generation with 4 providers (MusicGen, MiniMax, Lyria, Bark), genre/mood selection, instrumental mode, lyrics support
 - **Text to Audio**: Sound effects generation via TangoFlux (default), Tango, AudioLDM, Bark; for ambient sounds, SFX, background audio

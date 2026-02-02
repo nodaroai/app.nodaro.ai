@@ -3825,6 +3825,9 @@ interface CharacterDefinition {
 - Assets can be edited by clicking on them (opens DefineCharacterModal in edit mode)
 
 **Storyboard Modal:**
+- All scene fields editable inline: action, visual description, dialogue, characters, mood, duration, image prompt (resizable textareas)
+- Scene management: delete (inline confirmation), add new scene (+ card), drag-and-drop reorder (@dnd-kit with activator handle)
+- Create Scene Node button per scene card
 - Character input only allows selecting defined characters (no free-text tags)
 - Typing filters dropdown; unmatched input shows "No character found. Define new" link
 - "Define character" and "Manage" buttons on every scene card
@@ -4017,6 +4020,10 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Scene Editor: Video player with controls in left panel, Image/Video tab toggle, video version history (thumbnails, delete, switch active)
 - [x] Scene Editor: Generated Prompt accordion (Radix UI) with full untruncated display via buildScenePrompt({ forDisplay: true })
 - [x] Scene Node: videoProvider, generatedVideoResults, activeVideoResultIndex, generatedVideoUrl, videoExecutionStatus fields
+- [x] Generate Script: Editable storyboard preview (all scene fields are resizable textareas: action, visual description, dialogue, characters, mood, duration, image prompt)
+- [x] Generate Script: Scene management - delete scene with inline confirmation (no dialog), add new scene (+ card at end of grid), drag-and-drop reorder via @dnd-kit
+- [x] Generate Script: Create Scene Node from individual scene in storyboard modal
+- [x] Generate Script: Expand to Nodes creates Scene Nodes (recommended) or Pipeline Nodes per scene
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

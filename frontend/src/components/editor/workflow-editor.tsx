@@ -16,7 +16,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, getJobStatus } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
-import { getSceneCharacterNames } from "@/types/nodes"
+import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
 interface WorkflowEditorProps {
@@ -1041,10 +1041,106 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
+  function handleExpandToSceneNodes(
+    scriptNodeId: string,
+    options: { layout: "horizontal" | "vertical"; autoRun: boolean },
+  ) {
+    const store = useWorkflowStore.getState()
+    const scriptNode = store.nodes.find((n) => n.id === scriptNodeId)
+    if (!scriptNode) return
+
+    const scriptData = scriptNode.data as GenerateScriptData
+    const activeIdx = scriptData.activeResultIndex ?? 0
+    const results = scriptData.generatedResults ?? []
+    const script = results[activeIdx]?.script ?? scriptData.generatedScript
+    if (!script) return
+
+    const scenes = script.scenes
+    const startX = scriptNode.position.x + 400
+    const startY = scriptNode.position.y
+    const isHorizontal = options.layout === "horizontal"
+
+    const newNodes: WorkflowNode[] = []
+    const newEdges: WorkflowEdge[] = []
+
+    let idCounter = store.nodes.reduce((max, n) => {
+      const num = parseInt(n.id.replace("node_", ""), 10)
+      return isNaN(num) ? max : Math.max(max, num)
+    }, 0) + 1
+
+    const sceneDefaults = NODE_DEFINITIONS.find((d) => d.type === "scene")?.defaultData as SceneNodeDataType | undefined
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i]
+      const mapped = mapScriptSceneToNodeData(scene)
+      const images = scene.generatedImages ?? []
+
+      const nodeId = `node_${idCounter}`
+      idCounter += 1
+
+      const posX = isHorizontal ? startX + i * 350 : startX
+      const posY = isHorizontal ? startY : startY + i * 300
+
+      const nodeData: SceneNodeDataType = {
+        ...(sceneDefaults ?? {} as SceneNodeDataType),
+        ...mapped,
+        label: `Scene ${scene.sceneNumber}`,
+        sceneNumber: scene.sceneNumber,
+        sourceScriptNodeId: scriptNodeId,
+        sourceSceneIndex: i,
+        autoSyncWithScript: true,
+        fieldMappings: {},
+      }
+
+      if (images.length > 0) {
+        nodeData.executionStatus = "completed"
+        nodeData.generatedImageUrl = images[scene.activeImageIndex ?? 0]?.url ?? ""
+        nodeData.generatedResults = images.map((img) => ({
+          url: img.url,
+          timestamp: img.timestamp,
+          jobId: img.jobId,
+        }))
+        nodeData.activeResultIndex = scene.activeImageIndex ?? 0
+      }
+
+      newNodes.push({
+        id: nodeId,
+        type: "scene",
+        position: { x: posX, y: posY },
+        data: nodeData,
+      } as WorkflowNode)
+
+      newEdges.push({
+        id: `edge_${Date.now()}_script_scene_${i}`,
+        source: scriptNodeId,
+        sourceHandle: "scenes",
+        target: nodeId,
+        targetHandle: "in",
+      } as WorkflowEdge)
+    }
+
+    store.batchAddNodesAndEdges(newNodes, newEdges)
+    toast.success(`Created ${scenes.length} Scene Nodes`)
+
+    // Auto-run: generate images for scenes without existing images
+    if (options.autoRun) {
+      for (let i = 0; i < scenes.length; i++) {
+        const hasImage = (scenes[i].generatedImages ?? []).length > 0
+        if (!hasImage) {
+          store.runSingleNode?.(newNodes[i].id)
+        }
+      }
+    }
+  }
+
   function handleExpandStoryboard(
     scriptNodeId: string,
-    options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt" },
+    options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" },
   ) {
+    if (options.nodeType === "scene") {
+      handleExpandToSceneNodes(scriptNodeId, options)
+      return
+    }
     const store = useWorkflowStore.getState()
     const scriptNode = store.nodes.find((n) => n.id === scriptNodeId)
     if (!scriptNode) return
@@ -1346,6 +1442,77 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
+  function handleCreateSceneNode(scriptNodeId: string, sceneIndex: number) {
+    const store = useWorkflowStore.getState()
+    const scriptNode = store.nodes.find((n) => n.id === scriptNodeId)
+    if (!scriptNode) return
+
+    const scriptData = scriptNode.data as GenerateScriptData
+    const activeIdx = scriptData.activeResultIndex ?? 0
+    const results = scriptData.generatedResults ?? []
+    const script = results[activeIdx]?.script ?? scriptData.generatedScript
+    if (!script || !script.scenes[sceneIndex]) return
+
+    const scene = script.scenes[sceneIndex]
+    const sceneDefaults = NODE_DEFINITIONS.find((d) => d.type === "scene")?.defaultData as SceneNodeDataType | undefined
+    const mapped = mapScriptSceneToNodeData(scene)
+
+    // Build node data
+    const nodeData: SceneNodeDataType = {
+      ...(sceneDefaults ?? {} as SceneNodeDataType),
+      ...mapped,
+      label: `Scene ${scene.sceneNumber}`,
+      sceneNumber: scene.sceneNumber,
+      sourceScriptNodeId: scriptNodeId,
+      sourceSceneIndex: sceneIndex,
+      autoSyncWithScript: true,
+      fieldMappings: {},
+    }
+
+    // Copy generated image if available
+    const images = scene.generatedImages ?? []
+    if (images.length > 0) {
+      nodeData.executionStatus = "completed"
+      nodeData.generatedImageUrl = images[scene.activeImageIndex ?? 0]?.url ?? ""
+      nodeData.generatedResults = images.map((img) => ({
+        url: img.url,
+        timestamp: img.timestamp,
+        jobId: img.jobId,
+      }))
+      nodeData.activeResultIndex = scene.activeImageIndex ?? 0
+    }
+
+    // Position to the right of the script node
+    const posX = scriptNode.position.x + 400
+    const posY = scriptNode.position.y + sceneIndex * 300
+
+    let idCounter = store.nodes.reduce((max, n) => {
+      const num = parseInt(n.id.replace("node_", ""), 10)
+      return isNaN(num) ? max : Math.max(max, num)
+    }, 0) + 1
+    const newNodeId = `node_${idCounter}`
+
+    const newNode: WorkflowNode = {
+      id: newNodeId,
+      type: "scene",
+      position: { x: posX, y: posY },
+      data: nodeData,
+    } as WorkflowNode
+
+    const newEdge: WorkflowEdge = {
+      id: `edge_${Date.now()}_script_scene_${sceneIndex}`,
+      source: scriptNodeId,
+      sourceHandle: "scenes",
+      target: newNodeId,
+      targetHandle: "in",
+    } as WorkflowEdge
+
+    store.batchAddNodesAndEdges([newNode], [newEdge])
+    store.selectNode(newNodeId)
+    store.setAutoOpenEditorNodeId(newNodeId)
+    toast.success(`Created Scene Node for Scene ${scene.sceneNumber}`)
+  }
+
   // Register single-node runner
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(handleRunSingleNode)
@@ -1362,6 +1529,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setExpandStoryboard(handleExpandStoryboard)
     return () => useWorkflowStore.getState().setExpandStoryboard(null)
+  })
+
+  // Register create scene node from script
+  useEffect(() => {
+    useWorkflowStore.getState().setCreateSceneNodeFromScript(handleCreateSceneNode)
+    return () => useWorkflowStore.getState().setCreateSceneNodeFromScript(null)
   })
 
   // Ctrl+S keyboard shortcut

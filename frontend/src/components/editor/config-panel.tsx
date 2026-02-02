@@ -302,7 +302,7 @@ export function ConfigPanel() {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 overflow-hidden">
         <div className="flex flex-col gap-5 p-4">
           <div className="rounded-md border border-border/50 bg-muted/20 p-3">
             <Label htmlFor="node-label" className="text-xs font-medium">Label</Label>
