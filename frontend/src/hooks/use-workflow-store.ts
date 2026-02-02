@@ -7,7 +7,7 @@ import {
   type EdgeChange,
   type Connection,
 } from "@xyflow/react"
-import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition } from "@/types/nodes"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
@@ -22,6 +22,7 @@ interface WorkflowState {
   readonly saveStatus: SaveStatus
   readonly saveError: string | null
   readonly videoAutoplay: boolean
+  readonly characterDefinitions: CharacterDefinition[]
 
   readonly setWorkflowId: (id: string | null) => void
   readonly setWorkflowName: (name: string) => void
@@ -43,6 +44,9 @@ interface WorkflowState {
   readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
   readonly generateSceneImage: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null
   readonly setGenerateSceneImage: (fn: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null) => void
+  readonly addCharacterDefinition: (char: CharacterDefinition) => void
+  readonly updateCharacterDefinition: (id: string, updates: Partial<Omit<CharacterDefinition, "id">>) => void
+  readonly removeCharacterDefinition: (id: string) => void
   readonly batchAddNodesAndEdges: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
   readonly expandStoryboard: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt" }) => void) | null
   readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt" }) => void) | null) => void
@@ -66,6 +70,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   saveStatus: "idle" as SaveStatus,
   saveError: null,
   videoAutoplay: true,
+  characterDefinitions: [],
 
   setWorkflowId: (id) => set({ workflowId: id }),
 
@@ -229,6 +234,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       isDirty: false,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
+      characterDefinitions: [],
     })
   },
 
@@ -243,6 +249,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       isDirty: false,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
+      characterDefinitions: [],
     })
   },
 
@@ -256,6 +263,26 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setRunSingleNode: (fn) => set({ runSingleNode: fn }),
   generateSceneImage: null,
   setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
+
+  addCharacterDefinition: (char) =>
+    set((state) => ({
+      characterDefinitions: [...state.characterDefinitions, char],
+      isDirty: true,
+    })),
+
+  updateCharacterDefinition: (id, updates) =>
+    set((state) => ({
+      characterDefinitions: state.characterDefinitions.map((c) =>
+        c.id === id ? { ...c, ...updates } : c
+      ),
+      isDirty: true,
+    })),
+
+  removeCharacterDefinition: (id) =>
+    set((state) => ({
+      characterDefinitions: state.characterDefinitions.filter((c) => c.id !== id),
+      isDirty: true,
+    })),
 
   batchAddNodesAndEdges: (newNodes, newEdges) => {
     // Update nextNodeId to avoid collisions

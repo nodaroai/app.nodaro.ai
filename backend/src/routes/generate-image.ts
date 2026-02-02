@@ -6,6 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 const generateImageBody = z.object({
   prompt: z.string().min(1).max(2000),
   referenceImageUrls: z.array(z.string().url()).max(14).optional(),
+  characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
   provider: z.enum(["nano-banana", "flux", "dalle", "midjourney"]).optional(),
 })
 
@@ -21,7 +22,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, referenceImageUrls, provider } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider } = parsed.data
+
+    // Append character descriptions to prompt
+    const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")
+    const prompt = descSuffix ? `${rawPrompt}\n${descSuffix}` : rawPrompt
 
     const { data: job, error } = await supabase
       .from("jobs")

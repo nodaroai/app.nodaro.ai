@@ -2,10 +2,12 @@
 
 import { useEffect, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors } from "lucide-react"
+import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors, UserPlus, FileText } from "lucide-react"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
-import type { GeneratedScript, ExtractedReference } from "@/types/nodes"
+import { DefineCharacterModal } from "./define-character-modal"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import type { GeneratedScript, ExtractedReference, CharacterDefinition } from "@/types/nodes"
 
 interface ScriptPreviewModalProps {
   readonly isOpen: boolean
@@ -38,6 +40,11 @@ export function ScriptPreviewModal({
   const [allProgress, setAllProgress] = useState({ current: 0, total: 0 })
   const [deleteConfirm, setDeleteConfirm] = useState<{ sceneIndex: number; imageIndex: number } | null>(null)
   const [focusedCharInput, setFocusedCharInput] = useState<number | null>(null)
+  const [showDefineCharModal, setShowDefineCharModal] = useState(false)
+  const [editingCharDef, setEditingCharDef] = useState<CharacterDefinition | null>(null)
+  const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
+  const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
+  const updateCharacterDefinition = useWorkflowStore((s) => s.updateCharacterDefinition)
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose()
@@ -72,6 +79,12 @@ export function ScriptPreviewModal({
   for (const ref of extractedReferences) {
     if (ref.type === "character" && !charSceneMap[ref.name]) {
       charSceneMap[ref.name] = [ref.sourceSceneIndex + 1]
+    }
+  }
+  // Include names from workflow-level character definitions
+  for (const def of allCharDefs) {
+    if (!charSceneMap[def.name]) {
+      charSceneMap[def.name] = []
     }
   }
   const allCharacters = Object.keys(charSceneMap)
@@ -310,7 +323,12 @@ export function ScriptPreviewModal({
                             key={char}
                             className="inline-flex items-center gap-1 h-6 px-2.5 text-xs font-medium rounded-full bg-purple-600 text-white"
                           >
-                            {char}
+                            {(() => {
+                              const matchingDef = allCharDefs.find((d) => d.name === char)
+                              return matchingDef ? (
+                                <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); setEditingCharDef(matchingDef); setShowDefineCharModal(true) }}>{char}</button>
+                              ) : char
+                            })()}
                             {otherScenes.length > 0 && (
                               <span className="inline-flex items-center gap-0.5 text-purple-200" title={`Also in scene${otherScenes.length > 1 ? "s" : ""} ${otherScenes.join(", ")}`}>
                                 <Link className="w-2.5 h-2.5" />
@@ -383,6 +401,9 @@ export function ScriptPreviewModal({
                                     {extractedReferences.some((r) => r.name === char) && (
                                       <Scissors className="w-2.5 h-2.5 text-primary" />
                                     )}
+                                    {allCharDefs.some((d) => d.name === char && d.type === "description") && (
+                                      <FileText className="w-2.5 h-2.5 text-orange-500" />
+                                    )}
                                     {char}
                                   </span>
                                   <span className="text-[9px] text-muted-foreground">
@@ -395,11 +416,20 @@ export function ScriptPreviewModal({
                         })()}
                       </div>
                     </div>
-                    {i === 0 && (
-                      <p className="text-[9px] text-muted-foreground/60 mt-1.5">
-                        Tip: Use the same name across scenes for a consistent look
-                      </p>
-                    )}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {i === 0 && (
+                        <p className="text-[9px] text-muted-foreground/60">
+                          Tip: Use the same name across scenes for a consistent look
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShowDefineCharModal(true) }}
+                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed hover:bg-muted transition-colors text-muted-foreground whitespace-nowrap"
+                        >
+                          <UserPlus className="w-2.5 h-2.5" /> Define character
+                        </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 mt-auto pt-1 border-t border-border/30">
@@ -431,6 +461,20 @@ export function ScriptPreviewModal({
           />
         )
       })()}
+      <DefineCharacterModal
+        isOpen={showDefineCharModal}
+        onClose={() => { setShowDefineCharModal(false); setEditingCharDef(null) }}
+        onSave={(char) => {
+          if (editingCharDef) {
+            updateCharacterDefinition(char.id, { name: char.name, type: char.type, referenceImageUrl: char.referenceImageUrl, description: char.description })
+            setEditingCharDef(null)
+          } else {
+            addCharacterDefinition(char)
+          }
+        }}
+        existingNames={allCharDefs.map((c) => c.name)}
+        editingCharacter={editingCharDef}
+      />
       <DeleteConfirmationDialog
         isOpen={deleteConfirm !== null}
         onClose={() => setDeleteConfirm(null)}

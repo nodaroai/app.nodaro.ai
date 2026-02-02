@@ -146,6 +146,15 @@ export interface ExtractedReference {
   }
 }
 
+export interface CharacterDefinition {
+  readonly id: string
+  readonly name: string
+  readonly type: "reference" | "description"
+  readonly referenceImageUrl?: string
+  readonly description?: string
+  readonly sourceSceneIndex?: number
+}
+
 export interface GeneratedScript {
   readonly title: string
   readonly totalDuration: number
@@ -190,6 +199,7 @@ export type GenerateImageData = {
   generatedImageUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  characterDefinitionIds?: readonly string[]
 }
 
 export type ImageToVideoData = {

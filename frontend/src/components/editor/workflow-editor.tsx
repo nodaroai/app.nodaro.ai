@@ -638,8 +638,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
       const chainRefs = inputs.referenceImageUrls ?? (inputs.imageUrl ? [inputs.imageUrl] : undefined)
       const extractedRefs = (node.data as Record<string, unknown>).extractedReferenceUrls as string[] | undefined
-      const refImages = [...(chainRefs ?? []), ...(extractedRefs ?? [])]
-      return runImageGeneration(node.id, prompt, refImages.length > 0 ? refImages : undefined, (node.data as GenerateImageData).provider || undefined)
+
+      // Look up character definitions attached to this node
+      const charIds = (node.data as GenerateImageData).characterDefinitionIds ?? []
+      const allCharDefs = useWorkflowStore.getState().characterDefinitions
+      const charDefs = allCharDefs.filter((c) => charIds.includes(c.id))
+      const charRefUrls = charDefs.filter((c) => c.type === "reference" && c.referenceImageUrl).map((c) => c.referenceImageUrl as string)
+      const charDescs = charDefs.filter((c) => c.type === "description" && c.description).map((c) => `Include character '${c.name}': ${c.description}.`)
+
+      const refImages = [...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
+      const finalPrompt = charDescs.length > 0 ? `${prompt}\n${charDescs.join(" ")}` : prompt
+      return runImageGeneration(node.id, finalPrompt, refImages.length > 0 ? refImages : undefined, (node.data as GenerateImageData).provider || undefined)
     }
 
     if (node.type === "image-to-video") {
@@ -874,10 +883,25 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .filter((r) => r.sourceSceneIndex !== sceneIndex && sceneChars.has(r.name))
       .map((r) => r.imageUrl)
 
+    // Collect workflow-level character definitions matching scene characters
+    const allCharDefs = useWorkflowStore.getState().characterDefinitions
+    const sceneCharDefs = allCharDefs.filter((c) => sceneChars.has(c.name))
+    const charRefUrls = sceneCharDefs
+      .filter((c) => c.type === "reference" && c.referenceImageUrl)
+      .map((c) => c.referenceImageUrl as string)
+    const charDescs = sceneCharDefs
+      .filter((c) => c.type === "description" && c.description)
+      .map((c) => `Include character '${c.name}': ${c.description}.`)
+
+    const allRefImages = [...refUrls, ...charRefUrls]
+    const finalPrompt = charDescs.length > 0
+      ? `${scene.imagePrompt}\n${charDescs.join(" ")}`
+      : scene.imagePrompt
+
     updateSceneInScript(scriptNodeId, sceneIndex, { imageStatus: "running" })
 
     try {
-      const { jobId } = await generateImage(scene.imagePrompt, refUrls.length > 0 ? refUrls : undefined)
+      const { jobId } = await generateImage(finalPrompt, allRefImages.length > 0 ? allRefImages : undefined)
 
       await new Promise<void>((resolve, reject) => {
         const poll = trackInterval(setInterval(async () => {
@@ -899,6 +923,19 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 generatedImages: newImages,
                 activeImageIndex: 0,
               })
+
+              // Auto-upgrade description characters to reference with generated image
+              if (imageUrl) {
+                const { characterDefinitions, updateCharacterDefinition } = useWorkflowStore.getState()
+                const latestScript = (useWorkflowStore.getState().nodes.find((n) => n.id === scriptNodeId)?.data as GenerateScriptData | undefined)?.generatedScript
+                const sceneCharNames = new Set(latestScript?.scenes[sceneIndex]?.characters ?? [])
+                for (const charDef of characterDefinitions) {
+                  if (charDef.type === "description" && sceneCharNames.has(charDef.name)) {
+                    updateCharacterDefinition(charDef.id, { type: "reference", referenceImageUrl: imageUrl })
+                  }
+                }
+              }
+
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)

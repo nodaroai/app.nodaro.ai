@@ -3508,6 +3508,38 @@ Stored on `GeneratedScript.extractedReferences`.
 
 Both are combined into the `referenceImageUrls` array passed to Nano Banana as `image_input`.
 
+### Character Definitions
+
+Characters can be defined in two ways for visual consistency in Generate Image nodes:
+
+**Definition Types:**
+- **Reference Image** (`type: "reference"`) - uploaded image passed as `image_input` to provider
+- **Text Description** (`type: "description"`) - appended to prompt: `"Include character '[name]': [description]."`
+
+**Data Structure:**
+```typescript
+interface CharacterDefinition {
+  id: string
+  name: string
+  type: 'reference' | 'description'
+  referenceImageUrl?: string  // if type = 'reference'
+  description?: string         // if type = 'description'
+  sourceSceneIndex?: number    // if extracted from scene
+}
+```
+
+**Storage:** Workflow-level in Zustand store (`useWorkflowStore.characterDefinitions`). Generate Image nodes store only `characterDefinitionIds: string[]` referencing definitions by ID.
+
+**Config Panel:** Generate Image nodes have a CHARACTERS section with:
+- List of attached characters (thumbnail for reference, truncated text for description)
+- "Add existing" dropdown for workflow-level characters not yet attached
+- "Define new" button opens modal for creating reference or description characters
+
+**Execution:**
+- Reference characters: `referenceImageUrl` added to `image_input` array alongside chain and extracted refs
+- Description characters: text appended to prompt before sending to backend
+- Backend also accepts `characterDescriptions[]` in the generate-image route for direct API usage
+
 ### Implementation Notes
 
 **State Management:**

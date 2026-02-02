@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback } from "react"
-import { X, Play, Copy, Check } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -68,8 +68,10 @@ import type {
   FieldMappings,
   GeneratedScript,
   ScriptScene,
+  CharacterDefinition,
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import { DefineCharacterModal } from "./define-character-modal"
 
 interface SourceNodeInfo {
   readonly id: string
@@ -1082,6 +1084,36 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 }
 
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
+  const [showDefineModal, setShowDefineModal] = useState(false)
+  const [showAddDropdown, setShowAddDropdown] = useState(false)
+  const [editingChar, setEditingChar] = useState<CharacterDefinition | null>(null)
+  const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
+  const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
+  const updateCharacterDefinition = useWorkflowStore((s) => s.updateCharacterDefinition)
+
+  const attachedIds = data.characterDefinitionIds ?? []
+  const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
+  const unattachedChars = allCharDefs.filter((c) => !attachedIds.includes(c.id))
+
+  function attachCharacter(id: string) {
+    onUpdate({ characterDefinitionIds: [...attachedIds, id] })
+    setShowAddDropdown(false)
+  }
+
+  function detachCharacter(id: string) {
+    onUpdate({ characterDefinitionIds: attachedIds.filter((cid) => cid !== id) })
+  }
+
+  function handleDefineAndAttach(char: CharacterDefinition) {
+    if (editingChar) {
+      updateCharacterDefinition(char.id, { name: char.name, type: char.type, referenceImageUrl: char.referenceImageUrl, description: char.description })
+      setEditingChar(null)
+    } else {
+      addCharacterDefinition(char)
+      onUpdate({ characterDefinitionIds: [...attachedIds, char.id] })
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1134,6 +1166,96 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           placeholder="Things to avoid..."
         />
       </MappableField>
+
+      {/* Characters section */}
+      <div className="pt-1">
+        <Separator className="mb-3" />
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Characters</label>
+        <div className="flex flex-col gap-1.5 mt-2">
+          {attachedChars.map((char) => (
+            <div key={char.id} className="flex items-start gap-2 p-2 rounded-md border bg-muted/30 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setEditingChar(char); setShowDefineModal(true) }}>
+              {char.type === "reference" && char.referenceImageUrl ? (
+                <img src={char.referenceImageUrl} alt={char.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-medium truncate">{char.name}</span>
+                  <span className={`text-[9px] px-1 py-0.5 rounded ${
+                    char.type === "reference" ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"
+                  }`}>
+                    {char.type === "reference" ? "ref" : "desc"}
+                  </span>
+                </div>
+                {char.type === "description" && char.description && (
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">{char.description}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => detachCharacter(char.id)}
+                className="p-0.5 rounded hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          {attachedChars.length === 0 && (
+            <p className="text-[10px] text-muted-foreground/60">No characters attached. Add characters for visual consistency.</p>
+          )}
+        </div>
+
+        {/* Add buttons */}
+        <div className="flex gap-1.5 mt-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowAddDropdown(!showAddDropdown)}
+              disabled={unattachedChars.length === 0}
+              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-3 h-3" /> Add existing
+            </button>
+            {showAddDropdown && unattachedChars.length > 0 && (
+              <div className="absolute top-full left-0 mt-1 w-44 max-h-32 overflow-y-auto rounded-md border bg-popover shadow-md z-30">
+                {unattachedChars.map((char) => (
+                  <button
+                    key={char.id}
+                    type="button"
+                    className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-1.5"
+                    onClick={() => attachCharacter(char.id)}
+                  >
+                    {char.type === "reference" ? (
+                      <ImageIcon className="w-3 h-3 text-blue-500" />
+                    ) : (
+                      <FileText className="w-3 h-3 text-orange-500" />
+                    )}
+                    <span className="truncate">{char.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDefineModal(true)}
+            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+          >
+            <UserPlus className="w-3 h-3" /> Define new
+          </button>
+        </div>
+      </div>
+
+      <DefineCharacterModal
+        isOpen={showDefineModal}
+        onClose={() => { setShowDefineModal(false); setEditingChar(null) }}
+        onSave={handleDefineAndAttach}
+        existingNames={allCharDefs.map((c) => c.name)}
+        editingCharacter={editingChar}
+      />
     </div>
   )
 }
