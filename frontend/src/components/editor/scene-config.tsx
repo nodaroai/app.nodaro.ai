@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare, Check, RatioIcon, AlertCircle } from "lucide-react"
+import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare, Check, RatioIcon, AlertCircle, Loader2, Play } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -16,11 +16,16 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ImportAssetsModal } from "@/components/editor/manage-characters-modal"
 import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
+import { TTS_VOICES } from "@/lib/tts-voices"
+import { textToSpeech, getJobStatus } from "@/lib/api"
 import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry } from "@/types/nodes"
+
+type WizardStep = 1 | 2 | 3 | 4
 
 interface SceneConfigProps {
   readonly data: SceneNodeDataType
   readonly onUpdate: (d: Record<string, unknown>) => void
+  readonly step?: WizardStep
 }
 
 function CollapsibleSection({
@@ -163,7 +168,7 @@ function QuickAddInput({
   )
 }
 
-export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
+export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const [showPromptPreview, setShowPromptPreview] = useState(false)
@@ -172,6 +177,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
   const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set())
   const [recentDialogueIndex, setRecentDialogueIndex] = useState<number | null>(null)
   const [expandQuickAdd, setExpandQuickAdd] = useState<"character" | "location" | "object" | null>(null)
+  const [generatingAudio, setGeneratingAudio] = useState<Set<number>>(new Set())
 
   const characterAssets = allAssets.filter((a) => !a.category || a.category === "character")
   const locationAssets = allAssets.filter((a) => a.category === "location")
@@ -210,6 +216,71 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
   function openImportModal(target: "character" | "location" | "object") {
     setImportTarget(target)
     setImportModalOpen(true)
+  }
+
+  async function generateDialogueAudio(dialogueIndex: number) {
+    const entry = (data.dialogue ?? [])[dialogueIndex]
+    if (!entry?.text.trim()) return
+
+    const voiceId = entry.voiceId ?? "Rachel"
+    setGeneratingAudio((prev) => new Set([...prev, dialogueIndex]))
+    try {
+      const { jobId } = await textToSpeech(entry.text, voiceId)
+
+      const poll = setInterval(async () => {
+        try {
+          const job = await getJobStatus(jobId)
+          if (job.status === "completed") {
+            clearInterval(poll)
+            const audioUrl = job.output_data?.audioUrl ?? ""
+            const newResult = { url: audioUrl, jobId, voiceId, createdAt: new Date().toISOString() }
+            const currentDialogue = data.dialogue ?? []
+            const currentEntry = currentDialogue[dialogueIndex]
+            const existingResults = currentEntry?.generatedAudioResults ?? []
+            const updatedResults = [...existingResults, newResult]
+            const updated = currentDialogue.map((d, di) =>
+              di === dialogueIndex ? { ...d, generatedAudioResults: updatedResults, activeAudioIndex: updatedResults.length - 1 } : d
+            )
+            onUpdate({ dialogue: updated })
+            setGeneratingAudio((prev) => { const next = new Set(prev); next.delete(dialogueIndex); return next })
+          } else if (job.status === "failed") {
+            clearInterval(poll)
+            setGeneratingAudio((prev) => { const next = new Set(prev); next.delete(dialogueIndex); return next })
+          }
+        } catch {
+          clearInterval(poll)
+          setGeneratingAudio((prev) => { const next = new Set(prev); next.delete(dialogueIndex); return next })
+        }
+      }, 2000)
+    } catch {
+      setGeneratingAudio((prev) => { const next = new Set(prev); next.delete(dialogueIndex); return next })
+    }
+  }
+
+  function deleteDialogueAudioVersion(dialogueIndex: number, versionIndex: number) {
+    const currentDialogue = data.dialogue ?? []
+    const entry = currentDialogue[dialogueIndex]
+    if (!entry?.generatedAudioResults) return
+    const newResults = entry.generatedAudioResults.filter((_, i) => i !== versionIndex)
+    const currentActive = entry.activeAudioIndex ?? 0
+    let newActive = currentActive
+    if (versionIndex === currentActive) {
+      newActive = 0
+    } else if (versionIndex < currentActive) {
+      newActive = currentActive - 1
+    }
+    const updated = currentDialogue.map((d, di) =>
+      di === dialogueIndex ? { ...d, generatedAudioResults: newResults.length > 0 ? newResults : undefined, activeAudioIndex: newResults.length > 0 ? newActive : undefined } : d
+    )
+    onUpdate({ dialogue: updated })
+  }
+
+  function setActiveAudioVersion(dialogueIndex: number, versionIndex: number) {
+    const currentDialogue = data.dialogue ?? []
+    const updated = currentDialogue.map((d, di) =>
+      di === dialogueIndex ? { ...d, activeAudioIndex: versionIndex } : d
+    )
+    onUpdate({ dialogue: updated })
   }
 
   function markRecentlyAdded(id: string) {
@@ -264,54 +335,46 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
   const usedObjIds = new Set(data.objects.map((o) => o.assetId))
   const availableObjs = objectAssets.filter((a) => !usedObjIds.has(a.id))
 
+  const showStep = (s: number) => !step || step === s
+
   return (
     <div className="flex flex-col gap-3">
-      {/* Basic Info - always visible */}
-      <div className="flex flex-col gap-2.5">
-        <div>
-          <Label className="text-xs">Scene Name</Label>
-          <Input
-            value={data.sceneName}
-            onChange={(e) => onUpdate({ sceneName: e.target.value })}
-            placeholder="e.g. The Confrontation"
-            className="h-8 text-xs mt-1"
-          />
-        </div>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <Label className="text-xs">Scene #</Label>
+      {/* Step 1: STORY */}
+      {showStep(1) && (
+      <>
+        <div className="flex flex-col gap-2.5">
+          <div>
+            <Label className="text-xs">Scene Name</Label>
             <Input
-              type="number"
-              min={1}
-              value={data.sceneNumber}
-              onChange={(e) => onUpdate({ sceneNumber: parseInt(e.target.value, 10) || 1 })}
+              value={data.sceneName}
+              onChange={(e) => onUpdate({ sceneName: e.target.value })}
+              placeholder="e.g. The Confrontation"
               className="h-8 text-xs mt-1"
             />
           </div>
-          <div className="flex-1">
-            <Label className="text-xs">Duration (s)</Label>
-            <Input
-              type="number"
-              min={1}
-              max={60}
-              value={data.duration}
-              onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
-              className="h-8 text-xs mt-1"
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Label className="text-xs">Scene #</Label>
+              <Input
+                type="number"
+                min={1}
+                value={data.sceneNumber}
+                onChange={(e) => onUpdate({ sceneNumber: parseInt(e.target.value, 10) || 1 })}
+                className="h-8 text-xs mt-1"
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Summary</Label>
+            <Textarea
+              value={data.summary}
+              onChange={(e) => onUpdate({ summary: e.target.value })}
+              placeholder="Brief description of what happens in this scene..."
+              rows={2}
+              className="text-xs mt-1 resize-none"
             />
           </div>
         </div>
-        <div>
-          <Label className="text-xs">Summary</Label>
-          <Textarea
-            value={data.summary}
-            onChange={(e) => onUpdate({ summary: e.target.value })}
-            placeholder="Brief description of what happens in this scene..."
-            rows={2}
-            className="text-xs mt-1 resize-none"
-          />
-        </div>
-      </div>
-
       {/* Characters */}
       <CollapsibleSection title={`Characters (${data.characters.length})`} icon={<Users className="w-3.5 h-3.5" />} defaultOpen={data.characters.length > 0}>
         {data.characters.map((entry, i) => {
@@ -396,7 +459,12 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           <Download className="w-3 h-3" /> Import from other projects
         </button>
       </CollapsibleSection>
+      </>
+      )}
 
+      {/* Step 3: AUDIO - Dialogue */}
+      {showStep(3) && (
+      <>
       {/* Dialogue */}
       <CollapsibleSection title={`Dialogue (${data.dialogue?.length ?? 0})`} icon={<MessageSquare className="w-3.5 h-3.5" />} defaultOpen={(data.dialogue?.length ?? 0) > 0}>
         {(data.dialogue ?? []).map((entry, i) => (
@@ -452,6 +520,78 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               rows={2}
               className="text-[10px] resize-none"
             />
+            {/* Voice + Generate */}
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={entry.voiceId ?? "__auto__"}
+                onValueChange={(v) => {
+                  const newDialogue = (data.dialogue ?? []).map((d, di) =>
+                    di === i ? { ...d, voiceId: v === "__auto__" ? undefined : v } : d
+                  )
+                  onUpdate({ dialogue: newDialogue })
+                }}
+              >
+                <SelectTrigger className="h-6 text-[10px] flex-1"><SelectValue placeholder="Voice" /></SelectTrigger>
+                <SelectContent position="popper" className="z-[9999] max-h-48">
+                  <SelectItem value="__auto__">Auto (Rachel)</SelectItem>
+                  {TTS_VOICES.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                disabled={!entry.text.trim() || generatingAudio.has(i)}
+                onClick={() => generateDialogueAudio(i)}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white transition-colors shrink-0"
+              >
+                {generatingAudio.has(i) ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Play className="w-3 h-3" />
+                )}
+                {generatingAudio.has(i) ? "Generating..." : (entry.generatedAudioResults?.length ?? 0) > 0 ? "New Version" : "Generate"}
+              </button>
+            </div>
+            {/* Audio version strip + player */}
+            {(entry.generatedAudioResults?.length ?? 0) > 0 && (() => {
+              const results = entry.generatedAudioResults ?? []
+              const activeIdx = entry.activeAudioIndex ?? 0
+              const activeAudio = results[activeIdx]
+              return (
+                <div className="flex flex-col gap-1">
+                  {results.length > 1 && (
+                    <div className="flex gap-1 overflow-x-auto">
+                      {results.map((r, vi) => (
+                        <div key={r.jobId} className="relative group/aver shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setActiveAudioVersion(i, vi)}
+                            className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${vi === activeIdx ? "bg-violet-500 text-white" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
+                          >
+                            {r.voiceId} #{vi + 1}
+                          </button>
+                          <button
+                            type="button"
+                            className="absolute -top-1 -right-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/aver:opacity-100 transition-opacity text-[8px]"
+                            onClick={(e) => { e.stopPropagation(); deleteDialogueAudioVersion(i, vi) }}
+                          >
+                            <X className="w-2 h-2" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {activeAudio && (
+                    <audio
+                      src={activeAudio.url}
+                      controls
+                      className="w-full h-7 [&::-webkit-media-controls-panel]:h-7"
+                    />
+                  )}
+                </div>
+              )
+            })()}
           </div>
         ))}
         <button
@@ -469,7 +609,12 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           <Plus className="w-3 h-3" /> Add dialogue line
         </button>
       </CollapsibleSection>
+      </>
+      )}
 
+      {/* Step 1: STORY - Locations */}
+      {showStep(1) && (
+      <>
       {/* Locations */}
       <CollapsibleSection title={`Locations (${(data.locations ?? []).length})`} icon={<MapPin className="w-3.5 h-3.5" />} defaultOpen={(data.locations ?? []).length > 0}>
         {(data.locations ?? []).map((loc, i) => {
@@ -707,7 +852,12 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           <Download className="w-3 h-3" /> Import from other projects
         </button>
       </CollapsibleSection>
+      </>
+      )}
 
+      {/* Step 2: IMAGE - Cinematography */}
+      {showStep(2) && (
+      <>
       {/* Cinematography */}
       <CollapsibleSection title="Cinematography" icon={<Camera className="w-3.5 h-3.5" />}>
         <div>
@@ -825,7 +975,12 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           />
         </div>
       </CollapsibleSection>
+      </>
+      )}
 
+      {/* Step 3: AUDIO - Audio settings */}
+      {showStep(3) && (
+      <>
       {/* Audio */}
       <CollapsibleSection title="Audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
         <div>
@@ -856,7 +1011,24 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           />
         </div>
       </CollapsibleSection>
+      </>
+      )}
 
+      {/* Step 4: VIDEO - Transitions */}
+      {showStep(4) && (
+      <>
+      {/* Duration */}
+      <div>
+        <Label className="text-xs">Duration (s)</Label>
+        <Input
+          type="number"
+          min={1}
+          max={60}
+          value={data.duration}
+          onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
+          className="h-8 text-xs mt-1"
+        />
+      </div>
       {/* Transitions */}
       <CollapsibleSection title="Transitions" icon={<ArrowRightLeft className="w-3.5 h-3.5" />}>
         <div className="grid grid-cols-2 gap-1.5">
@@ -895,9 +1067,11 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           className="text-xs resize-none"
         />
       </CollapsibleSection>
+      </>
+      )}
 
-      {/* Prompt Preview */}
-      <div className="border rounded-md">
+      {/* Prompt Preview - only when not in wizard mode (modal has its own) */}
+      {!step && <div className="border rounded-md">
         <button
           type="button"
           onClick={() => setShowPromptPreview(!showPromptPreview)}
@@ -929,7 +1103,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Import Assets Modal */}
       <ImportAssetsModal

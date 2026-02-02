@@ -1381,29 +1381,63 @@ The Scene Node is a rich data node that combines characters, locations, objects,
 | `duration` | Right (85%) | Scene duration in seconds |
 | `in` | Left | Optional input from upstream nodes |
 
-#### Scene Editor Modal (Full-Screen)
+#### Scene Editor Modal (Full-Screen Wizard)
 
-Opened via the Expand button on the node. Two-panel layout:
+Opened via the Expand button on the node. Two-panel layout with a 4-step wizard:
 - **Left panel:** Generated image preview with version history, full-size preview, extract references, delete. Prompt preview with character count indicator.
-- **Right panel:** All configuration sections via `SceneConfig` component.
+- **Right panel:** Wizard stepper with 4 steps, each showing filtered `SceneConfig` sections.
+
+**Wizard Steps:**
+
+| Step | Label | Icon | Sections | Action Button |
+|------|-------|------|----------|---------------|
+| 1 | Story | BookOpen | Basic Info, Characters, Locations, Objects | -- |
+| 2 | Image | Palette | Cinematography, Mood & Style | Generate Scene Image |
+| 3 | Audio | Mic | Dialogue (with voice/generate), Audio settings | Generate All Audio |
+| 4 | Video | Video | Duration, Transitions, Director Notes | Generate Video (coming soon) |
+
+Step indicators show completion state (checkmark when complete). Navigation via Previous/Next buttons.
+
+**Generate All Audio:** Iterates all dialogue lines without audio, generates TTS sequentially with progress display ("Generating 2/5..."). Uses `textToSpeech()` API + `getJobStatus()` polling.
 
 **Implementation:** `frontend/src/components/editor/scene-editor-modal.tsx`
 
 #### Configuration Sections (`scene-config.tsx`)
 
-All sections use collapsible `<details>` elements:
+`SceneConfig` accepts an optional `step` prop (1-4) to filter which sections render. When `step` is omitted (e.g. in the node's inline config panel), all sections show. The `showStep(s)` helper controls visibility: `const showStep = (s: number) => !step || step === s`.
 
-1. **Basic Info** (always open): Scene name, scene number, duration slider (1-30s), summary textarea
-2. **Characters**: Add from workflow assets dropdown (always shows "Create new character..." option), per-character mood/action/position fields, import from Manage Characters modal, quick add by description
-3. **Dialogue**: Per-character dialogue lines with emotion tags, add/remove lines dynamically
-4. **Locations**: Add from workflow assets dropdown with "Create new location..." option, per-location time of day/weather/lighting overrides, primary location toggle, import and quick add support
-5. **Objects**: Add from workflow assets dropdown with "Create new object..." option, per-object description, import and quick add support
-6. **Cinematography**: Shot type, camera angle, camera movement, depth of field, lens type dropdowns
-7. **Mood & Style**: Mood tags (multi-select), color palette tags, visual style dropdown
-8. **Audio**: Narration textarea, music mood, sound effects tags
-9. **Transitions**: Transition in/out dropdowns (cut, fade, dissolve, wipe, etc.)
-10. **Aspect Ratio**: Dropdown (16:9, 9:16, 1:1, 4:3, 21:9, 4:5) - affects prompt composition hints
-11. **Director Notes**: Textarea for free-form direction, reference URLs list
+**Step 1 (Story):**
+- **Basic Info** (always open): Scene name, scene number, summary textarea
+- **Characters**: Add from workflow assets dropdown (always shows "Create new character..." option), per-character mood/action/position fields, import from Manage Characters modal, quick add by description
+- **Locations**: Add from workflow assets dropdown with "Create new location..." option, per-location time of day/weather/lighting overrides, primary location toggle, import and quick add support
+- **Objects**: Add from workflow assets dropdown with "Create new object..." option, per-object description, import and quick add support
+
+**Step 2 (Image):**
+- **Cinematography**: Shot type, camera angle, camera movement, depth of field, lens type, aspect ratio
+- **Mood & Style**: Mood tags (multi-select), color palette tags, visual style dropdown
+
+**Step 3 (Audio):**
+- **Dialogue**: Per-character dialogue lines with emotion tags, voice selection dropdown (26 ElevenLabs voices from `tts-voices.ts`), per-line Generate/New Version button, audio version history strip, inline audio player
+- **Audio settings**: Narration textarea, music mood, sound effects tags
+
+**Step 4 (Video):**
+- **Duration**: Duration input (1-60s)
+- **Transitions**: Transition in/out dropdowns (cut, fade, dissolve, wipe, etc.)
+- **Director Notes**: Textarea for free-form direction
+
+**Prompt Preview:** Only shown when not in wizard mode (`{!step && ...}`). The modal has its own prompt preview in the left panel.
+
+#### Dialogue Audio Generation
+
+Each dialogue line supports per-line TTS audio generation with version history:
+
+- **Voice dropdown**: 26 ElevenLabs voices via `TTS_VOICES` from `frontend/src/lib/tts-voices.ts`, default "Auto (Rachel)"
+- **Generate button**: Calls `textToSpeech(text, voiceId)` from `frontend/src/lib/api.ts`, polls `getJobStatus()` every 2s
+- **Version history**: Each generation appends a `DialogueAudioResult` to `generatedAudioResults` array (not replacing previous). Each result stores `url`, `jobId`, `voiceId`, `createdAt`.
+- **Version strip UI**: Pill buttons showing `{voiceId} #{n}`, active version highlighted in violet, hover-reveal delete button per version
+- **Active selection**: Click a version pill to switch the active audio player
+- **Delete**: Hover a version pill to reveal X button, removes that version and adjusts `activeAudioIndex`
+- **"New Version" button**: When results exist, the Generate button label changes to "New Version"
 
 **Implementation:** `frontend/src/components/editor/scene-config.tsx`
 
@@ -1464,6 +1498,14 @@ interface SceneNodeDataType {
     characterName: string
     text: string
     emotion?: string
+    voiceId?: string
+    generatedAudioResults?: Array<{
+      url: string
+      jobId: string
+      voiceId: string
+      createdAt: string
+    }>
+    activeAudioIndex?: number
   }>
   locations: Array<{
     assetId: string
@@ -3885,6 +3927,10 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Scene Node: quick add by description, import from Manage Characters modal
 - [x] Scene Node: 6 output handles (prompt, imageRefs, narration, dialogue, duration, input)
 - [x] Scene Node: extract references from generated images, character count warning in prompt preview
+- [x] Scene Editor: 4-step wizard (Story, Image, Audio, Video) with step indicators and navigation
+- [x] Scene Editor: per-dialogue voice selection (26 ElevenLabs voices) with per-line TTS generation
+- [x] Scene Editor: audio version history per dialogue line (append new versions, switch active, delete individual)
+- [x] Scene Editor: "Generate All Audio" button processes all dialogue lines without audio sequentially
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

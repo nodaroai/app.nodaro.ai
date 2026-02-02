@@ -448,11 +448,21 @@ export interface SceneObjectEntry {
   readonly description?: string
 }
 
+export interface DialogueAudioResult {
+  readonly url: string
+  readonly jobId: string
+  readonly voiceId: string
+  readonly createdAt: string
+}
+
 export interface SceneDialogueEntry {
   readonly characterId?: string
   readonly characterName: string
   readonly text: string
   readonly emotion?: string
+  readonly voiceId?: string
+  readonly generatedAudioResults?: readonly DialogueAudioResult[]
+  readonly activeAudioIndex?: number
 }
 
 export interface SceneLocationEntry {
