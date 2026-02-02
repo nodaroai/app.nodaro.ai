@@ -1391,8 +1391,8 @@ Opened via the Expand button on the node. Two-panel layout with a 4-step wizard:
 
 | Step | Label | Icon | Sections | Action Button |
 |------|-------|------|----------|---------------|
-| 1 | Story | BookOpen | Basic Info, Characters, Locations, Objects | -- |
-| 2 | Image | Palette | Cinematography, Mood & Style | Generate Scene Image |
+| 1 | Story | BookOpen | Basic Info, Dialogue | -- |
+| 2 | Image | Palette | Characters, Locations, Objects, Cinematography, Mood & Style | Generate Scene Image |
 | 3 | Audio | Mic | Dialogue (with voice/generate), Audio settings | Generate All Audio |
 | 4 | Video | Video | Duration, Transitions, Director Notes | Generate Video (coming soon) |
 
@@ -1407,12 +1407,14 @@ Step indicators show completion state (checkmark when complete). Navigation via 
 `SceneConfig` accepts an optional `step` prop (1-4) to filter which sections render. When `step` is omitted (e.g. in the node's inline config panel), all sections show. The `showStep(s)` helper controls visibility: `const showStep = (s: number) => !step || step === s`.
 
 **Step 1 (Story):**
+- **Script Connection** (always visible, outside step filter): Link to Generate Script node, select scene, preview, import, auto-sync
 - **Basic Info** (always open): Scene name, scene number, summary textarea
+- **Dialogue**: Per-character dialogue lines with speaker dropdown, emotion tag, text area, add/remove lines
+
+**Step 2 (Image):**
 - **Characters**: Add from workflow assets dropdown (always shows "Create new character..." option), per-character mood/action/position fields, import from Manage Characters modal, quick add by description
 - **Locations**: Add from workflow assets dropdown with "Create new location..." option, per-location time of day/weather/lighting overrides, primary location toggle, import and quick add support
 - **Objects**: Add from workflow assets dropdown with "Create new object..." option, per-object description, import and quick add support
-
-**Step 2 (Image):**
 - **Cinematography**: Shot type, camera angle, camera movement, depth of field, lens type, aspect ratio
 - **Mood & Style**: Mood tags (multi-select), color palette tags, visual style dropdown
 
@@ -1479,6 +1481,49 @@ The Scene Node supports image generation via the Run button (hover tab). When ru
 
 From generated images, users can extract character/object references via the Scissors button. Opens `ExtractReferencesModal` which allows cropping regions and saving them as new `CharacterDefinition` assets for reuse across scenes.
 
+#### Script Connection (Scene inherits from Generate Script)
+
+Scene Nodes can link to a Generate Script node and import scene data (characters, dialogue, locations, cinematography, mood, images, prompts) from a specific scene in the generated script.
+
+**Fields on SceneNodeDataType:**
+- `sourceScriptNodeId: string` - ID of the linked Generate Script node (empty = not linked)
+- `sourceSceneIndex: number` - Index of the scene within the script (-1 = none selected)
+- `autoSyncWithScript: boolean` - When true, changing scene index auto-imports data
+
+**UI (in SceneConfig, always visible when script nodes with results exist):**
+- **Script dropdown**: Shows generated script titles (not node labels), resolves active result from `generatedResults[activeResultIndex].script ?? generatedScript`
+- **Scene dropdown**: Shows scene names from the linked script (e.g. "1. The Awakening")
+- **Scene preview**: Shows `visualDescription` snippet when a scene is selected
+- **Import Now button**: Triggers `mapScriptSceneToNodeData()` to copy all fields
+- **Auto-sync checkbox**: When enabled, importing happens automatically on scene change
+- **Unlink button**: Clears link and resets fields
+- **Import feedback**: Green bar showing what was imported (e.g. "Imported 3. The Battle -- 2 characters -- 3 dialogue lines")
+
+**Field mapping (`mapScriptSceneToNodeData` in `types/nodes.ts`):**
+
+| Script Scene Field | Scene Node Field |
+|-------------------|-----------------|
+| `sceneName` | `sceneName` |
+| `visualDescription` | `summary` |
+| `duration` / `durationHint` | `duration` |
+| `mood` (array or string) | `mood` (normalized to array) |
+| `musicMood` | `musicMood` |
+| `soundEffects` | `soundEffects` |
+| `characters` (string[] or ScriptSceneCharacter[]) | `characters` (mapped to SceneCharacterEntry[]) |
+| `dialogue` (ScriptSceneDialogue[]) | `dialogue` (mapped to SceneDialogueEntry[]) |
+| `location` (ScriptSceneLocation) | `locations` (single SceneLocationEntry) |
+| `cinematography.shotType/cameraAngle/cameraMovement` | `shotType`, `cameraAngle`, `cameraMovement` |
+| `location.timeOfDay/weather/lighting` | `timeOfDay`, `weather`, `lighting` |
+| `imagePrompt` | `generatedPrompt` |
+| `action` | `narration` |
+| `generatedImages` | `generatedResults`, `activeResultIndex`, `generatedImageUrl` |
+
+**Modal header badge:** When linked, shows "Linked: {script title} / {scene name}" with a Sync button to re-import.
+
+**z-index requirement:** All `SelectContent` components inside SceneConfig must use `position="popper" className="z-[9999]"` to render above the Scene Editor Modal (z-[9998]).
+
+**Implementation:** `frontend/src/components/editor/scene-config.tsx`, `frontend/src/types/nodes.ts`
+
 #### Data Type
 
 ```typescript
@@ -1538,6 +1583,10 @@ interface SceneNodeDataType {
   timeOfDay: string
   weather: string
   lighting: string
+  // Script connection
+  sourceScriptNodeId: string     // linked Generate Script node ID
+  sourceSceneIndex: number       // scene index within script (-1 = none)
+  autoSyncWithScript: boolean    // auto-import on scene change
   // Execution state
   executionStatus?: string
   generatedResults?: Array<{ jobId: string; url: string }>
@@ -3931,6 +3980,12 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Scene Editor: per-dialogue voice selection (26 ElevenLabs voices) with per-line TTS generation
 - [x] Scene Editor: audio version history per dialogue line (append new versions, switch active, delete individual)
 - [x] Scene Editor: "Generate All Audio" button processes all dialogue lines without audio sequentially
+- [x] Scene Node: Script Connection - link to Generate Script node, select scene, import data (characters, dialogue, locations, cinematography, mood, images, prompts)
+- [x] Scene Node: mapScriptSceneToNodeData() field mapping utility with full coverage (17 fields mapped)
+- [x] Scene Node: Auto-sync toggle for automatic re-import when scene selection changes
+- [x] Scene Node: Script title display (not node label) in dropdowns and modal header
+- [x] Scene Node: Script Connection always visible regardless of wizard step (outside step filter)
+- [x] Scene Node: SelectContent z-index fix (position=popper, z-[9999]) for modal rendering
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
