@@ -440,7 +440,7 @@ export interface SceneCharacterEntry {
   readonly assetId: string
   readonly mood: string
   readonly action: string
-  readonly positionInFrame?: "left" | "center" | "right" | "background"
+  readonly positionInFrame?: "left" | "center" | "right" | "foreground" | "background"
 }
 
 export interface SceneObjectEntry {
@@ -478,6 +478,7 @@ export type SceneNodeDataType = {
   weather: "clear" | "cloudy" | "rainy" | "stormy" | "foggy" | "snowy"
   lighting: "natural" | "artificial" | "dramatic" | "soft" | "harsh" | "backlit"
   objects: SceneObjectEntry[]
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "21:9" | "4:5"
   shotType: "extreme-wide" | "wide" | "medium-wide" | "medium" | "medium-close" | "close-up" | "extreme-close-up"
   cameraAngle: "eye-level" | "low-angle" | "high-angle" | "birds-eye" | "worms-eye" | "dutch"
   cameraMovement: "static" | "pan" | "tilt" | "dolly" | "tracking" | "crane" | "handheld" | "zoom"
@@ -901,6 +902,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       weather: "clear",
       lighting: "natural",
       objects: [],
+      aspectRatio: "16:9",
       shotType: "medium",
       cameraAngle: "eye-level",
       cameraMovement: "static",

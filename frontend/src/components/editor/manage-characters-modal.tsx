@@ -34,12 +34,14 @@ interface ImportAssetsModalProps {
   readonly isOpen: boolean
   readonly onClose: () => void
   readonly onImported?: (ids: string[]) => void
+  readonly defaultFilter?: FilterType
 }
 
 export function ImportAssetsModal({
   isOpen,
   onClose,
   onImported,
+  defaultFilter,
 }: ImportAssetsModalProps) {
   const charDefs = useWorkflowStore((s) => s.characterDefinitions)
   const workflowId = useWorkflowStore((s) => s.workflowId)
@@ -72,8 +74,10 @@ export function ImportAssetsModal({
   const [loadingAll, setLoadingAll] = useState(false)
 
   useEffect(() => {
-    if (!isOpen) {
-      setFilter("all")
+    if (isOpen) {
+      setFilter(defaultFilter ?? "all")
+    } else {
+      setFilter(defaultFilter ?? "all")
       setShowImportSection(false)
       setSelectedProjectId("")
       setSelectedWorkflowId("")
@@ -82,9 +86,8 @@ export function ImportAssetsModal({
       setProjects([])
       setProjectWorkflows([])
       setAllGrouped([])
-      return
     }
-  }, [isOpen])
+  }, [isOpen, defaultFilter])
 
   async function loadProjects() {
     setImportLoading(true)

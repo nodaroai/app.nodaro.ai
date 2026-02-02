@@ -158,6 +158,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importTarget, setImportTarget] = useState<"character" | "location" | "object">("character")
   const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set())
+  const [recentDialogueIndex, setRecentDialogueIndex] = useState<number | null>(null)
 
   const characterAssets = allAssets.filter((a) => !a.category || a.category === "character")
   const locationAssets = allAssets.filter((a) => a.category === "location")
@@ -331,14 +332,16 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
                 />
               </div>
               <Select
-                value={entry.positionInFrame ?? ""}
-                onValueChange={(v) => updateCharacter(i, { positionInFrame: v as SceneCharacterEntry["positionInFrame"] || undefined })}
+                value={entry.positionInFrame ?? "__none__"}
+                onValueChange={(v) => updateCharacter(i, { positionInFrame: v === "__none__" ? undefined : v as SceneCharacterEntry["positionInFrame"] })}
               >
                 <SelectTrigger className="h-6 text-[10px]"><SelectValue placeholder="Position" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">No position</SelectItem>
                   <SelectItem value="left">Left</SelectItem>
                   <SelectItem value="center">Center</SelectItem>
                   <SelectItem value="right">Right</SelectItem>
+                  <SelectItem value="foreground">Foreground</SelectItem>
                   <SelectItem value="background">Background</SelectItem>
                 </SelectContent>
               </Select>
@@ -380,7 +383,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
       {/* Dialogue */}
       <CollapsibleSection title={`Dialogue (${data.dialogue?.length ?? 0})`} icon={<MessageSquare className="w-3.5 h-3.5" />} defaultOpen={(data.dialogue?.length ?? 0) > 0}>
         {(data.dialogue ?? []).map((entry, i) => (
-          <div key={i} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
+          <div key={i} className={`flex flex-col gap-1.5 p-2 rounded-md border transition-colors duration-500 ${recentDialogueIndex === i ? "bg-green-500/10 border-green-500/30" : "bg-muted/20"}`}>
             <div className="flex items-center justify-between gap-1.5">
               <Select
                 value={entry.characterId ?? "__narrator__"}
@@ -438,7 +441,11 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           type="button"
           onClick={() => {
             const newEntry: SceneDialogueEntry = { characterName: "Narrator", text: "" }
-            onUpdate({ dialogue: [...(data.dialogue ?? []), newEntry] })
+            const newDialogue = [...(data.dialogue ?? []), newEntry]
+            onUpdate({ dialogue: newDialogue })
+            const newIdx = newDialogue.length - 1
+            setRecentDialogueIndex(newIdx)
+            setTimeout(() => setRecentDialogueIndex(null), 2000)
           }}
           className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
         >
@@ -499,7 +506,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
                     }}
                   >
                     <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" className="z-[9999]">
                       {["dawn", "morning", "noon", "afternoon", "sunset", "evening", "night"].map((t) => (
                         <SelectItem key={t} value={t}>{t}</SelectItem>
                       ))}
@@ -516,7 +523,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
                     }}
                   >
                     <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" className="z-[9999]">
                       {["clear", "cloudy", "rainy", "stormy", "foggy", "snowy"].map((w) => (
                         <SelectItem key={w} value={w}>{w}</SelectItem>
                       ))}
@@ -533,7 +540,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
                     }}
                   >
                     <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" className="z-[9999]">
                       {["natural", "artificial", "dramatic", "soft", "harsh", "backlit"].map((l) => (
                         <SelectItem key={l} value={l}>{l}</SelectItem>
                       ))}
@@ -891,6 +898,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
         isOpen={importModalOpen}
         onClose={() => setImportModalOpen(false)}
         onImported={handleImported}
+        defaultFilter={importTarget}
       />
     </div>
   )
