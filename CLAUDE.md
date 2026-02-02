@@ -3465,13 +3465,28 @@ Users can extract visual references from generated scene images to maintain cons
 - **Characters** - people, creatures, objects (e.g., Cucumber, Tomato, Hero)
 - **Locations** - backgrounds, environments (e.g., Market, Beach, Castle)
 
+**Selection Modes:**
+- **Lasso** (default) - freeform drawing around irregular shapes, polygon crop with transparent background
+- **Rectangle** - click+drag bounding box selection
+
 **Workflow:**
 1. Generate Script with characters tagged per scene
 2. Generate Image for a scene
 3. Click "Extract References" (Scissors icon) on the scene card
-4. Draw rectangles around characters/locations on the image, name them
-5. Cropped images are uploaded to R2 storage for persistence
-6. Generate remaining scenes - extracted references are automatically injected as reference images
+4. Toggle Lasso/Rect mode, draw selection around character/location
+5. Name the extraction, set type (character/location), click Add
+6. Cropped image is uploaded to R2 storage via `POST /v1/upload/image`
+7. Character names from extractions appear in other scenes' character dropdown (with scissors icon)
+8. Generate remaining scenes - extracted references are automatically passed as `image_input` to nano-banana
+
+**Image Proxy (CORS):**
+- Extract modal loads images via `GET /v1/image-proxy?url=<r2-url>` to avoid tainted canvas errors
+- Proxy only allows URLs from the configured R2 bucket (security check)
+- Image element uses `crossOrigin="anonymous"` with the proxied URL
+
+**Reference Injection (two paths):**
+1. **Storyboard modal** - `handleGenerateSceneImage` collects extracted refs matching scene's tagged characters and passes them as `referenceImageUrls` to the `generateImage` API call
+2. **Expand to Nodes** - `handleExpandStoryboard` attaches `extractedReferenceUrls` to Generate Image node data, which `executeNode` reads and combines with chain references
 
 **Data Structure:**
 ```typescript
@@ -3488,10 +3503,10 @@ interface ExtractedReference {
 Stored on `GeneratedScript.extractedReferences`.
 
 **Reference Priority in Expand to Nodes:**
-1. Extracted references (cropped from specific scenes) - matched by character name
-2. Chain references (previous scene's full image via character-based edges)
+1. Chain references (previous scene's full image via character-based edges)
+2. Extracted references (cropped from specific scenes) - matched by character name
 
-Both are combined into the `referenceImageUrls` array passed to Nano Banana.
+Both are combined into the `referenceImageUrls` array passed to Nano Banana as `image_input`.
 
 ### Implementation Notes
 

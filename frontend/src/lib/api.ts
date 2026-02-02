@@ -242,6 +242,10 @@ export async function mixAudioApi(audioUrls: string[]): Promise<{ jobId: string 
   return res.json()
 }
 
+export function getImageProxyUrl(url: string): string {
+  return `${API_BASE_URL}/v1/image-proxy?url=${encodeURIComponent(url)}`
+}
+
 export async function uploadImage(file: File | Blob): Promise<{ url: string }> {
   const formData = new FormData()
   formData.append("file", file, file instanceof File ? file.name : "crop.png")

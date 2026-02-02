@@ -24,6 +24,7 @@ import { uploadRoutes } from "./routes/upload.js"
 import { youtubeAudioRoutes } from "./routes/youtube-audio.js"
 import { extractYouTubeAudioRoutes } from "./routes/extract-youtube-audio.js"
 import { textToAudioRoutes } from "./routes/text-to-audio.js"
+import { imageProxyRoutes } from "./routes/image-proxy.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -54,6 +55,7 @@ export async function buildApp() {
   await app.register(youtubeAudioRoutes)
   await app.register(extractYouTubeAudioRoutes)
   await app.register(textToAudioRoutes)
+  await app.register(imageProxyRoutes)
 
   return app
 }

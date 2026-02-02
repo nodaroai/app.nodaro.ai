@@ -68,6 +68,12 @@ export function ScriptPreviewModal({
       charSceneMap[char] = arr
     }
   }
+  // Include names from extracted references so they appear as suggestions in all scenes
+  for (const ref of extractedReferences) {
+    if (ref.type === "character" && !charSceneMap[ref.name]) {
+      charSceneMap[ref.name] = [ref.sourceSceneIndex + 1]
+    }
+  }
   const allCharacters = Object.keys(charSceneMap)
 
   async function handleGenerateAll() {
@@ -95,7 +101,7 @@ export function ScriptPreviewModal({
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8"
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
         className="relative bg-card rounded-xl shadow-2xl max-w-[90vw] max-h-[85vh] flex flex-col overflow-hidden"
@@ -373,7 +379,12 @@ export function ScriptPreviewModal({
                                     setCharacterInput({ ...characterInput, [i]: "" })
                                   }}
                                 >
-                                  <span>{char}</span>
+                                  <span className="flex items-center gap-1">
+                                    {extractedReferences.some((r) => r.name === char) && (
+                                      <Scissors className="w-2.5 h-2.5 text-primary" />
+                                    )}
+                                    {char}
+                                  </span>
                                   <span className="text-[9px] text-muted-foreground">
                                     {(charSceneMap[char] ?? []).length} scene{(charSceneMap[char] ?? []).length !== 1 ? "s" : ""}
                                   </span>

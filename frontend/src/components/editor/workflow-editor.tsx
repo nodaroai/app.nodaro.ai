@@ -867,10 +867,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     const scene = script.scenes[sceneIndex]
 
+    // Collect extracted reference images for this scene
+    const extractedRefs = script.extractedReferences ?? []
+    const sceneChars = new Set(scene.characters ?? [])
+    const refUrls = extractedRefs
+      .filter((r) => r.sourceSceneIndex !== sceneIndex && sceneChars.has(r.name))
+      .map((r) => r.imageUrl)
+
     updateSceneInScript(scriptNodeId, sceneIndex, { imageStatus: "running" })
 
     try {
-      const { jobId } = await generateImage(scene.imagePrompt)
+      const { jobId } = await generateImage(scene.imagePrompt, refUrls.length > 0 ? refUrls : undefined)
 
       await new Promise<void>((resolve, reject) => {
         const poll = trackInterval(setInterval(async () => {
