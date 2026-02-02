@@ -345,6 +345,28 @@ export function createVideoWorker() {
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
+        } else if (job.name === "generate-character") {
+          const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: ImageProvider }
+          console.log(`[worker] generate-character ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
+          const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
+          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          await job.updateProgress(50)
+          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { imageUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "generate-character-asset") {
+          const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: ImageProvider }
+          console.log(`[worker] generate-character-asset ${jobId} (type: ${assetType}, provider: ${provider ?? "nano-banana"})`)
+          const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
+          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          await job.updateProgress(50)
+          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          await job.updateProgress(100)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { imageUrl: r2Url, assetType }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
         } else {
           throw new Error(`Unknown job type: ${job.name}`)
         }

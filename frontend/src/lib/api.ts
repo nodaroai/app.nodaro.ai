@@ -70,6 +70,66 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   return res.json()
 }
 
+export async function generateCharacter(data: {
+  name: string
+  description?: string
+  gender?: string
+  style?: string
+  baseOutfit?: string
+  sourceImageUrl?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start character generation")
+  }
+  return res.json()
+}
+
+export async function generateCharacterAsset(data: {
+  assetType: "expressions" | "poses" | "lighting" | "angles"
+  variant: string
+  name: string
+  description?: string
+  gender?: string
+  style?: string
+  baseOutfit?: string
+  sourceImageUrl?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start character asset generation")
+  }
+  return res.json()
+}
+
+export async function splitImage(data: {
+  imageUrl: string
+  gridCols: number
+  gridRows: number
+  names: string[]
+}): Promise<{ images: { name: string; url: string }[] }> {
+  const res = await fetch(`${API_BASE_URL}/v1/split-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to split image")
+  }
+  return res.json()
+}
+
 export async function generateVideo(imageUrl: string, prompt?: string, provider?: string, generateAudio?: boolean, duration?: number): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",

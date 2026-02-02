@@ -6,12 +6,13 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
+import { CharacterGalleryButton } from "./character-gallery"
 import type { SceneNodeType } from "@/types/nodes"
 
 interface NodeOption {
@@ -56,6 +57,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing" },
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing" },
   { type: "trim-video", label: "Trim Video", icon: <Scissors className="h-4 w-4" />, category: "Processing" },
+  // Character
+  { type: "character", label: "Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
   // Scene
   { type: "scene", label: "Scene", icon: <Clapperboard className="h-4 w-4" />, category: "Scene" },
   // Output
@@ -85,6 +88,7 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
               {node.label}
             </Button>
           ))}
+          {cat === "Character" && <CharacterGalleryButton />}
         </div>
       ))}
     </>

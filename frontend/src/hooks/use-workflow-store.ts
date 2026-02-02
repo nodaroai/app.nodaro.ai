@@ -54,6 +54,8 @@ interface WorkflowState {
   readonly setAutoOpenEditorNodeId: (id: string | null) => void
   readonly createSceneNodeFromScript: ((scriptNodeId: string, sceneIndex: number) => void) | null
   readonly setCreateSceneNodeFromScript: (fn: ((scriptNodeId: string, sceneIndex: number) => void) | null) => void
+  readonly generateCharacterAssetFn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null
+  readonly setGenerateCharacterAssetFn: (fn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null) => void
 }
 
 let nextNodeId = 1
@@ -309,4 +311,6 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setAutoOpenEditorNodeId: (id) => set({ autoOpenEditorNodeId: id }),
   createSceneNodeFromScript: null,
   setCreateSceneNodeFromScript: (fn) => set({ createSceneNodeFromScript: fn }),
+  generateCharacterAssetFn: null,
+  setGenerateCharacterAssetFn: (fn) => set({ generateCharacterAssetFn: fn }),
 }))

@@ -1,6 +1,6 @@
 import type { Node, Edge } from "@xyflow/react"
 
-export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene"
+export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character"
 
 export interface FieldMapping {
   readonly sourceNodeId: string
@@ -579,6 +579,55 @@ export type WebhookOutputData = {
   fieldMappings: FieldMappings
 }
 
+// --- Character Node Data ---
+
+export interface CharacterSheet {
+  readonly frontView: string
+  readonly sideView: string
+  readonly backView: string
+  readonly combinedSheet: string
+}
+
+export interface CharacterAssetItem {
+  readonly name: string
+  readonly url: string
+}
+
+export type CharacterAssetType = "expressions" | "poses" | "lighting" | "angles"
+
+export type CharacterNodeData = {
+  [key: string]: unknown
+  label: string
+  characterName: string
+  description: string
+  sourceImageUrl: string
+  gender: "male" | "female" | "other"
+  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  baseOutfit: string
+  characterSheet: CharacterSheet | null
+  projectId: string
+  createdAt: string
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  generatedResults: GeneratedResult[]
+  activeResultIndex: number
+  fieldMappings: FieldMappings
+  // Asset sheets (combined grid images)
+  expressionSheet: string
+  poseSheet: string
+  lightingSheet: string
+  anglesSheet: string
+  // Individual cropped images
+  expressions: CharacterAssetItem[]
+  poses: CharacterAssetItem[]
+  lightingVariations: CharacterAssetItem[]
+  angles: CharacterAssetItem[]
+  // Asset generation status
+  expressionStatus: "idle" | "running" | "completed" | "failed"
+  poseStatus: "idle" | "running" | "completed" | "failed"
+  lightingStatus: "idle" | "running" | "completed" | "failed"
+  anglesStatus: "idle" | "running" | "completed" | "failed"
+}
+
 // --- Scene Node Data ---
 
 export interface SceneCharacterEntry {
@@ -709,6 +758,7 @@ export type SceneNodeData =
   | SaveToStorageData
   | WebhookOutputData
   | SceneNodeDataType
+  | CharacterNodeData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -744,6 +794,7 @@ export type SceneNodeType =
   | "save-to-storage"
   | "webhook-output"
   | "scene"
+  | "character"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -1051,6 +1102,43 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: [],
     defaultData: { label: "Webhook Output", webhookId: "", includeAssetUrl: true, fieldMappings: {} },
+  },
+  // Character
+  {
+    type: "character",
+    label: "Character",
+    category: "character",
+    creditCost: 5,
+    inputs: ["in"],
+    outputs: ["characterRef"],
+    defaultData: {
+      label: "Character",
+      characterName: "",
+      description: "",
+      sourceImageUrl: "",
+      gender: "other",
+      style: "realistic",
+      baseOutfit: "",
+      characterSheet: null,
+      projectId: "",
+      createdAt: "",
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+      fieldMappings: {},
+      expressionSheet: "",
+      poseSheet: "",
+      lightingSheet: "",
+      anglesSheet: "",
+      expressions: [],
+      poses: [],
+      lightingVariations: [],
+      angles: [],
+      expressionStatus: "idle",
+      poseStatus: "idle",
+      lightingStatus: "idle",
+      anglesStatus: "idle",
+    } as CharacterNodeData,
   },
   // Scene
   {

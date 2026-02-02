@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -80,7 +80,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -327,6 +327,150 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         reject(err)
       })
     })
+  }
+
+  function runCharacterGeneration(nodeId: string, data: CharacterNodeData): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running" })
+
+    return new Promise((resolve, reject) => {
+      generateCharacter({
+        name: data.characterName,
+        description: data.description || undefined,
+        gender: data.gender || undefined,
+        style: data.style || undefined,
+        baseOutfit: data.baseOutfit || undefined,
+        sourceImageUrl: data.sourceImageUrl || undefined,
+      }).then(({ jobId }) => {
+        toast.info("Character generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const imageUrl = job.output_data?.imageUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as CharacterNodeData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                sourceImageUrl: imageUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Character portrait generated")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Character generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Character generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start character generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
+  const ASSET_VARIANTS: Record<string, { variants: string[]; names: string[] }> = {
+    expressions: { variants: ["neutral", "smile", "angry", "surprised", "sad", "talking"], names: ["Neutral", "Smile", "Angry", "Surprised", "Sad", "Talking"] },
+    poses: { variants: ["standing", "walking", "sitting", "running"], names: ["Standing", "Walking", "Sitting", "Running"] },
+    lighting: { variants: ["daylight", "night", "dramatic"], names: ["Daylight", "Night", "Dramatic"] },
+    angles: { variants: ["front", "side", "back"], names: ["Front View", "Side View", "Back View"] },
+  }
+
+  function pollJobToCompletion(jobId: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const poll = trackInterval(setInterval(async () => {
+        try {
+          const job = await getJobStatus(jobId)
+          if (job.status === "completed") {
+            untrackInterval(poll)
+            resolve(job.output_data?.imageUrl ?? "")
+          } else if (job.status === "failed") {
+            untrackInterval(poll)
+            reject(new Error(job.error_message ?? "Failed"))
+          }
+        } catch (err) {
+          untrackInterval(poll)
+          reject(err)
+        }
+      }, 2000))
+    })
+  }
+
+  async function handleGenerateCharacterAsset(nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles"): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+    if (!node) return
+    const data = node.data as CharacterNodeData
+    if (!data.characterName) {
+      toast.error("Set a character name first")
+      return
+    }
+    const activeResult = (data.generatedResults ?? [])[data.activeResultIndex ?? 0]
+    const portraitUrl = activeResult?.url ?? data.sourceImageUrl
+    if (!portraitUrl) {
+      toast.error("Generate or upload a main portrait first")
+      return
+    }
+
+    const statusKeyMap: Record<string, string> = { expressions: "expressionStatus", poses: "poseStatus", lighting: "lightingStatus", angles: "anglesStatus" }
+    const itemsKeyMap: Record<string, string> = { expressions: "expressions", poses: "poses", lighting: "lightingVariations", angles: "angles" }
+    const statusKey = statusKeyMap[assetType]
+    const itemsKey = itemsKeyMap[assetType]
+
+    const config = ASSET_VARIANTS[assetType]
+    if (!config) return
+
+    updateNodeData(nodeId, { [statusKey]: "running" })
+
+    const results: Array<{ name: string; url: string }> = []
+
+    try {
+      for (let i = 0; i < config.variants.length; i++) {
+        const variant = config.variants[i]
+        const variantName = config.names[i]
+        toast.info(`Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`)
+
+        const { jobId } = await generateCharacterAsset({
+          assetType,
+          variant,
+          name: data.characterName,
+          description: data.description || undefined,
+          gender: data.gender || undefined,
+          style: data.style || undefined,
+          baseOutfit: data.baseOutfit || undefined,
+          sourceImageUrl: portraitUrl,
+        })
+
+        const imageUrl = await pollJobToCompletion(jobId)
+        results.push({ name: variantName, url: imageUrl })
+
+        // Update node data progressively so user sees images appear
+        updateNodeData(nodeId, { [itemsKey]: [...results] })
+      }
+
+      updateNodeData(nodeId, { [statusKey]: "completed" })
+      toast.success(`${assetType} generated: ${results.length} images`)
+    } catch (err) {
+      // Keep any results generated so far
+      updateNodeData(nodeId, { [statusKey]: "failed" })
+      toast.error(`Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`, {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    }
   }
 
   function runVideoGeneration(nodeId: string, imageUrl: string, provider?: string, generateAudio?: boolean): Promise<void> {
@@ -817,6 +961,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const audioUrls = inputs.audioUrls ?? []
       if (audioUrls.length < 2) { toast.error(`Node "${(node.data as MixAudioData).label}": need at least 2 audio inputs`); return Promise.reject(new Error("Need at least 2 audio tracks")) }
       return runProcessingNode(node.id, () => mixAudioApi(audioUrls), "generatedAudioUrl", "Mix Audio")
+    }
+
+    if (node.type === "character") {
+      const charData = node.data as CharacterNodeData
+      if (!charData.characterName) {
+        toast.error(`Node "${charData.label}": no character name set`)
+        return Promise.reject(new Error("No character name"))
+      }
+      return runCharacterGeneration(node.id, charData)
     }
 
     if (node.type === "scene") {
@@ -1535,6 +1688,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setCreateSceneNodeFromScript(handleCreateSceneNode)
     return () => useWorkflowStore.getState().setCreateSceneNodeFromScript(null)
+  })
+
+  // Register character asset generator
+  useEffect(() => {
+    useWorkflowStore.getState().setGenerateCharacterAssetFn(handleGenerateCharacterAsset)
+    return () => useWorkflowStore.getState().setGenerateCharacterAssetFn(null)
   })
 
   // Ctrl+S keyboard shortcut

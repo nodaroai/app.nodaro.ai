@@ -38,6 +38,22 @@ export async function uploadToR2(
   return `${config.R2_PUBLIC_URL}/${key}`
 }
 
+export async function uploadBufferToR2(
+  buffer: Buffer,
+  key: string,
+  contentType: string,
+): Promise<string> {
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: config.R2_BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }),
+  )
+  return `${config.R2_PUBLIC_URL}/${key}`
+}
+
 export async function uploadFileToR2(
   filePath: string,
   jobId: string,

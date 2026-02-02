@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo, useState, useCallback } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2 } from "lucide-react"
+import { useMemo, useState, useCallback, useRef } from "react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Loader2, Sparkles, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,7 +22,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { uploadAudio, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus } from "@/lib/api"
+import { ImageLightbox } from "@/components/ui/image-lightbox"
+import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus } from "@/lib/api"
 import {
   getProviders,
   getProviderLabel,
@@ -69,6 +70,7 @@ import type {
   GeneratedScript,
   ScriptScene,
   CharacterDefinition,
+  CharacterNodeData,
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/nodes"
 import { SceneConfig } from "./scene-config"
@@ -428,6 +430,11 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "webhook-output" && (
             <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+
+          {/* Character Node */}
+          {selectedNode.type === "character" && (
+            <CharacterConfig data={selectedNode.data as CharacterNodeData} onUpdate={update} />
           )}
 
           {/* Scene Node */}
@@ -2273,6 +2280,373 @@ function SaveToStorageConfig({ data, onUpdate }: ConfigProps<SaveToStorageData>)
             <SelectItem value="4k">4K</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+    </div>
+  )
+}
+
+function CharacterAssetButton({
+  label,
+  status,
+  itemCount,
+  onClick,
+  disabled,
+}: {
+  readonly label: string
+  readonly status: "idle" | "running" | "completed" | "failed"
+  readonly itemCount: number
+  readonly onClick: () => void
+  readonly disabled?: boolean
+}) {
+  const isRunning = status === "running"
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="w-full justify-between text-xs h-8"
+      disabled={isRunning || disabled}
+      onClick={onClick}
+    >
+      <span className="flex items-center gap-1.5">
+        {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+        {label}
+      </span>
+      {itemCount > 0 && (
+        <span className="text-muted-foreground">{itemCount} images</span>
+      )}
+    </Button>
+  )
+}
+
+function CharacterAssetGrid({ items }: { readonly items: readonly { name: string; url: string }[] }) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+
+  if (items.length === 0) return null
+  return (
+    <>
+      <div className="grid grid-cols-3 gap-1">
+        {items.map((item) => (
+          <button
+            key={item.name}
+            type="button"
+            className="flex flex-col items-center gap-0.5 cursor-pointer"
+            onClick={() => setLightboxSrc(item.url)}
+            title={`${item.name} - click to enlarge`}
+          >
+            <div className="w-full aspect-square rounded overflow-hidden bg-muted/30 hover:ring-2 hover:ring-primary/50 transition-shadow">
+              <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+            </div>
+            <span className="text-[9px] text-muted-foreground truncate w-full text-center">{item.name}</span>
+          </button>
+        ))}
+      </div>
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
+    </>
+  )
+}
+
+function CharacterConfig({ data, onUpdate }: { readonly data: CharacterNodeData; readonly onUpdate: (updates: Partial<CharacterNodeData>) => void }) {
+  const generateAsset = useWorkflowStore((s) => s.generateCharacterAssetFn)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const hasPortrait = Boolean(
+    ((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl,
+  )
+  const isRunning = data.executionStatus === "running"
+
+  // Check for duplicate character names across all character nodes
+  const existingNames = useMemo(() => {
+    const names: string[] = []
+    for (const n of nodes) {
+      if (n.type === "character" && n.id !== selectedNodeId) {
+        const nd = n.data as CharacterNodeData
+        if (nd.characterName) names.push(nd.characterName)
+      }
+    }
+    return names
+  }, [nodes, selectedNodeId])
+
+  function handleNameChange(newName: string) {
+    if (!newName) {
+      onUpdate({ characterName: newName })
+      return
+    }
+    // Auto-version duplicate names
+    const baseName = newName
+    let finalName = baseName
+    let version = 2
+    const wasVersioned = existingNames.includes(baseName)
+    while (existingNames.includes(finalName)) {
+      finalName = `${baseName} (${version})`
+      version++
+    }
+    if (wasVersioned) {
+      // Clear reference data so the new version starts fresh
+      onUpdate({
+        characterName: finalName,
+        sourceImageUrl: "",
+        generatedResults: [],
+        activeResultIndex: 0,
+        executionStatus: "idle",
+      })
+    } else {
+      onUpdate({ characterName: finalName })
+    }
+  }
+
+  const duplicateWarning = useMemo(() => {
+    if (!data.characterName) return null
+    // Check if user typed a name that matches but hasn't been auto-versioned yet
+    const exactMatch = existingNames.includes(data.characterName)
+    if (exactMatch) return `A character named "${data.characterName}" already exists. It will be auto-versioned on blur.`
+    return null
+  }, [data.characterName, existingNames])
+
+  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const { url } = await uploadImage(file)
+      onUpdate({ sourceImageUrl: url })
+    } catch (err) {
+      // error already thrown by uploadImage
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  function handleGenerateAsset(assetType: "expressions" | "poses" | "lighting" | "angles") {
+    if (!selectedNodeId || !generateAsset) return
+    generateAsset(selectedNodeId, assetType)
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="char-name">Character Name</Label>
+        <Input
+          id="char-name"
+          value={data.characterName}
+          onChange={(e) => onUpdate({ characterName: e.target.value })}
+          onBlur={(e) => handleNameChange(e.target.value)}
+          placeholder="e.g. Sir Aldric"
+        />
+        {duplicateWarning && (
+          <p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>
+        )}
+      </div>
+      <div>
+        <Label htmlFor="char-desc">Description</Label>
+        <Textarea
+          id="char-desc"
+          value={data.description}
+          onChange={(e) => onUpdate({ description: e.target.value })}
+          placeholder="A brave knight in his 30s with blonde hair..."
+          rows={3}
+        />
+      </div>
+      <div>
+        <Label htmlFor="char-gender">Gender</Label>
+        <Select value={data.gender} onValueChange={(v) => onUpdate({ gender: v as CharacterNodeData["gender"] })}>
+          <SelectTrigger id="char-gender">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="char-style">Style</Label>
+        <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as CharacterNodeData["style"] })}>
+          <SelectTrigger id="char-style">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="realistic">Realistic</SelectItem>
+            <SelectItem value="anime">Anime</SelectItem>
+            <SelectItem value="3d-pixar">3D Pixar</SelectItem>
+            <SelectItem value="illustration">Illustration</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="char-outfit">Base Outfit</Label>
+        <Textarea
+          id="char-outfit"
+          value={data.baseOutfit}
+          onChange={(e) => onUpdate({ baseOutfit: e.target.value })}
+          placeholder="Steel plate armor with blue cape..."
+          rows={2}
+        />
+      </div>
+
+      {/* Source image: URL input + Upload button */}
+      <div>
+        <Label htmlFor="char-image">Reference Image</Label>
+        <div className="flex gap-1.5">
+          <Input
+            id="char-image"
+            value={data.sourceImageUrl}
+            onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })}
+            placeholder="https://... or upload"
+            className="flex-1"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleUploadImage}
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0 h-9 w-9"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload image from computer"
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Generate Portrait button */}
+      <Button
+        size="sm"
+        className="w-full text-xs h-8 bg-orange-500 hover:bg-orange-600 text-white"
+        disabled={isRunning || !data.characterName}
+        onClick={() => {
+          if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId)
+        }}
+      >
+        {isRunning ? (
+          <>
+            <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Play className="w-3 h-3 mr-1.5" />
+            Generate Portrait
+          </>
+        )}
+      </Button>
+
+      <Separator />
+
+      {/* Asset Generation - requires portrait first */}
+      <div className="flex flex-col gap-2">
+        <Label className="text-xs font-semibold uppercase text-muted-foreground">
+          Character Assets
+        </Label>
+        {!hasPortrait && (
+          <p className="text-[10px] text-muted-foreground">
+            Generate or upload a main portrait first, then generate assets below.
+          </p>
+        )}
+
+        <Accordion type="multiple" className="w-full">
+          <AccordionItem value="angles">
+            <AccordionTrigger className="text-xs py-1.5">
+              Angles ({(data.angles ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <CharacterAssetButton
+                label="Generate Angles"
+                status={data.anglesStatus ?? "idle"}
+                itemCount={(data.angles ?? []).length}
+                onClick={() => handleGenerateAsset("angles")}
+                disabled={!hasPortrait}
+              />
+              <CharacterAssetGrid items={data.angles ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="expressions">
+            <AccordionTrigger className="text-xs py-1.5">
+              Expressions ({(data.expressions ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <CharacterAssetButton
+                label="Generate Expressions"
+                status={data.expressionStatus ?? "idle"}
+                itemCount={(data.expressions ?? []).length}
+                onClick={() => handleGenerateAsset("expressions")}
+                disabled={!hasPortrait}
+              />
+              <CharacterAssetGrid items={data.expressions ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="poses">
+            <AccordionTrigger className="text-xs py-1.5">
+              Poses ({(data.poses ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <CharacterAssetButton
+                label="Generate Poses"
+                status={data.poseStatus ?? "idle"}
+                itemCount={(data.poses ?? []).length}
+                onClick={() => handleGenerateAsset("poses")}
+                disabled={!hasPortrait}
+              />
+              <CharacterAssetGrid items={data.poses ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="lighting">
+            <AccordionTrigger className="text-xs py-1.5">
+              Lighting ({(data.lightingVariations ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <CharacterAssetButton
+                label="Generate Lighting"
+                status={data.lightingStatus ?? "idle"}
+                itemCount={(data.lightingVariations ?? []).length}
+                onClick={() => handleGenerateAsset("lighting")}
+                disabled={!hasPortrait}
+              />
+              <CharacterAssetGrid items={data.lightingVariations ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs h-8 mt-1"
+          disabled={
+            !hasPortrait ||
+            data.expressionStatus === "running" ||
+            data.poseStatus === "running" ||
+            data.lightingStatus === "running" ||
+            data.anglesStatus === "running" ||
+            !data.characterName
+          }
+          onClick={() => {
+            handleGenerateAsset("angles")
+            setTimeout(() => handleGenerateAsset("expressions"), 500)
+            setTimeout(() => handleGenerateAsset("poses"), 1000)
+            setTimeout(() => handleGenerateAsset("lighting"), 1500)
+          }}
+        >
+          <Sparkles className="w-3 h-3 mr-1.5" />
+          Generate All Assets
+        </Button>
       </div>
     </div>
   )

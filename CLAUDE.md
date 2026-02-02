@@ -4024,6 +4024,15 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Generate Script: Scene management - delete scene with inline confirmation (no dialog), add new scene (+ card at end of grid), drag-and-drop reorder via @dnd-kit
 - [x] Generate Script: Create Scene Node from individual scene in storyboard modal
 - [x] Generate Script: Expand to Nodes creates Scene Nodes (recommended) or Pipeline Nodes per scene
+- [x] Character Node: generate main portrait (single front view) or upload from computer
+- [x] Character Node: individual asset generation -- Angles (3: front/side/back), Expressions (6: neutral/smile/angry/surprised/sad/talking), Poses (4: standing/walking/sitting/running), Lighting (3: daylight/night/dramatic)
+- [x] Character Node: sequential per-variant API calls with progressive UI updates (replaces sheet+split approach)
+- [x] Character Node: collapsible asset sections with accordion UI, click-to-enlarge lightbox for all images
+- [x] Character Node: version handling for duplicate names (auto-versioning on blur with data clearing)
+- [x] Character Node: delete node button with confirmation dialog
+- [x] Character Gallery: popup modal in node toolbar sidebar, shows all character nodes with thumbnails, click to select/enlarge
+- [x] Image Lightbox: portal-based fullscreen image viewer (createPortal to document.body), Escape/click/X to close
+- [x] Image upload: reuses POST /v1/upload/image endpoint for character reference images
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
