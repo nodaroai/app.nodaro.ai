@@ -336,7 +336,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
                 onValueChange={(v) => updateCharacter(i, { positionInFrame: v === "__none__" ? undefined : v as SceneCharacterEntry["positionInFrame"] })}
               >
                 <SelectTrigger className="h-6 text-[10px]"><SelectValue placeholder="Position" /></SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="z-[9999]">
                   <SelectItem value="__none__">No position</SelectItem>
                   <SelectItem value="left">Left</SelectItem>
                   <SelectItem value="center">Center</SelectItem>
