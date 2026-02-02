@@ -28,15 +28,17 @@ interface GroupedProjectChars {
   })[]
 }
 
-interface ManageCharactersModalProps {
+type FilterType = "all" | "character" | "location" | "object"
+
+interface ImportAssetsModalProps {
   readonly isOpen: boolean
   readonly onClose: () => void
 }
 
-export function ManageCharactersModal({
+export function ImportAssetsModal({
   isOpen,
   onClose,
-}: ManageCharactersModalProps) {
+}: ImportAssetsModalProps) {
   const charDefs = useWorkflowStore((s) => s.characterDefinitions)
   const workflowId = useWorkflowStore((s) => s.workflowId)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
@@ -46,6 +48,8 @@ export function ManageCharactersModal({
   const [showDefineModal, setShowDefineModal] = useState(false)
   const [editingChar, setEditingChar] = useState<CharacterDefinition | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  const [filter, setFilter] = useState<FilterType>("all")
 
   // Import section state
   const [showImportSection, setShowImportSection] = useState(false)
@@ -67,6 +71,7 @@ export function ManageCharactersModal({
 
   useEffect(() => {
     if (!isOpen) {
+      setFilter("all")
       setShowImportSection(false)
       setSelectedProjectId("")
       setSelectedWorkflowId("")
@@ -309,19 +314,35 @@ export function ManageCharactersModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="text-sm font-semibold">Manage References</h3>
+          <h3 className="text-sm font-semibold">Import Assets</h3>
           <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
         </div>
 
+        {/* Filter buttons */}
+        <div className="flex gap-1 px-4 pt-3">
+          {(["all", "character", "location", "object"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`px-2.5 py-1 text-[10px] font-medium rounded-full border transition-colors ${
+                filter === f ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
+              }`}
+            >
+              {f === "all" ? "All" : f === "character" ? "Characters" : f === "location" ? "Locations" : "Objects"}
+            </button>
+          ))}
+        </div>
+
         {/* Body */}
         <div className="p-4 flex flex-col gap-4 max-h-[550px] overflow-y-auto">
-          {/* Current workflow references */}
+          {/* Current workflow assets */}
           {(() => {
-            const characters = charDefs.filter((c) => !c.category || c.category === "character")
-            const locations = charDefs.filter((c) => c.category === "location")
-            const objectDefs = charDefs.filter((c) => c.category === "object")
+            const filtered = filter === "all"
+              ? charDefs
+              : charDefs.filter((c) => (c.category ?? "character") === filter)
 
             function renderRefGrid(items: readonly CharacterDefinition[]) {
               if (items.length === 0) return <p className="text-xs text-muted-foreground mt-1">None defined yet.</p>
@@ -389,41 +410,47 @@ export function ManageCharactersModal({
               )
             }
 
+            // Group by category for display
+            const characters = filtered.filter((c) => !c.category || c.category === "character")
+            const locations = filtered.filter((c) => c.category === "location")
+            const objectDefs = filtered.filter((c) => c.category === "object")
+
             return (
               <div className="flex flex-col gap-3">
-                {/* Characters */}
-                <div>
-                  <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                    <UserPlus className="w-3 h-3" /> Characters
-                  </label>
-                  {renderRefGrid(characters)}
-                  <button
-                    type="button"
-                    onClick={() => { setEditingChar(null); setShowDefineModal(true) }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-dashed hover:bg-muted transition-colors mt-2"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" /> Define new character
-                  </button>
-                </div>
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Assets in this workflow
+                </label>
 
-                {/* Locations */}
-                {locations.length > 0 && (
+                {filter === "all" || filter === "character" ? (
                   <div>
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> Locations
-                    </label>
+                    {filter === "all" && <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1"><UserPlus className="w-3 h-3" /> Characters</label>}
+                    {renderRefGrid(characters)}
+                    <button
+                      type="button"
+                      onClick={() => { setEditingChar(null); setShowDefineModal(true) }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-dashed hover:bg-muted transition-colors mt-2"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" /> Define new character
+                    </button>
+                  </div>
+                ) : null}
+
+                {(filter === "all" || filter === "location") && locations.length > 0 && (
+                  <div>
+                    {filter === "all" && <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1"><MapPin className="w-3 h-3" /> Locations</label>}
                     {renderRefGrid(locations)}
                   </div>
                 )}
 
-                {/* Objects */}
-                {objectDefs.length > 0 && (
+                {(filter === "all" || filter === "object") && objectDefs.length > 0 && (
                   <div>
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                      <Box className="w-3 h-3" /> Objects
-                    </label>
+                    {filter === "all" && <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Box className="w-3 h-3" /> Objects</label>}
                     {renderRefGrid(objectDefs)}
                   </div>
+                )}
+
+                {filter !== "all" && filter !== "character" && filtered.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No {filter}s defined yet. Extract them from generated images.</p>
                 )}
               </div>
             )
@@ -440,12 +467,12 @@ export function ManageCharactersModal({
                 onClick={() => { setShowImportSection(true); loadProjects() }}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border hover:bg-muted transition-colors"
               >
-                <Download className="w-3.5 h-3.5" /> Import from another project
+                <Download className="w-3.5 h-3.5" /> Import from another project/workflow
               </button>
             ) : (
               <div className="flex flex-col gap-3">
                 <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                  Import from another project
+                  Import from another project/workflow
                 </label>
 
                 {importLoading && (
@@ -471,7 +498,7 @@ export function ManageCharactersModal({
                           showAllMode ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
                         }`}
                       >
-                        <Users className="w-3 h-3" /> Show all my characters
+                        <Users className="w-3 h-3" /> Show all my assets
                       </button>
                       <button
                         type="button"
@@ -496,7 +523,7 @@ export function ManageCharactersModal({
                           </div>
                         )}
                         {!loadingAll && allGrouped.length === 0 && (
-                          <p className="text-xs text-muted-foreground">No characters found in other workflows.</p>
+                          <p className="text-xs text-muted-foreground">No assets found in other workflows.</p>
                         )}
                         {!loadingAll && allGrouped.map((group) => (
                           <div key={group.projectId}>
@@ -517,7 +544,7 @@ export function ManageCharactersModal({
                             className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                           >
                             <Download className="w-3 h-3" />
-                            Import {selectedCharIds.size} character{selectedCharIds.size !== 1 ? "s" : ""}
+                            Import selected ({selectedCharIds.size})
                           </button>
                         )}
                       </div>
@@ -562,7 +589,7 @@ export function ManageCharactersModal({
                                     <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                                   </div>
                                 ) : projectWorkflows.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground">No workflows with characters in this project.</p>
+                                  <p className="text-xs text-muted-foreground">No workflows with assets in this project.</p>
                                 ) : (
                                   <select
                                     value={selectedWorkflowId}
@@ -587,7 +614,7 @@ export function ManageCharactersModal({
                             {selectedWorkflow && (
                               <div>
                                 {browseImportable.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground">All characters already exist in current workflow.</p>
+                                  <p className="text-xs text-muted-foreground">All assets already exist in current workflow.</p>
                                 ) : (
                                   <>
                                     <div className="grid grid-cols-4 gap-2">
@@ -600,7 +627,7 @@ export function ManageCharactersModal({
                                         className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors mt-2"
                                       >
                                         <Download className="w-3 h-3" />
-                                        Import {selectedCharIds.size} character{selectedCharIds.size !== 1 ? "s" : ""}
+                                        Import selected ({selectedCharIds.size})
                                       </button>
                                     )}
                                   </>

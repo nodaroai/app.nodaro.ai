@@ -6,7 +6,7 @@ import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, La
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
 import { DefineCharacterModal } from "./define-character-modal"
-import { ManageCharactersModal } from "./manage-characters-modal"
+import { ImportAssetsModal } from "./manage-characters-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GeneratedScript, ExtractedReference, CharacterDefinition } from "@/types/nodes"
 
@@ -483,7 +483,7 @@ export function ScriptPreviewModal({
                         onClick={(e) => { e.stopPropagation(); setShowManageCharModal(true) }}
                         className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed hover:bg-muted transition-colors text-muted-foreground whitespace-nowrap"
                       >
-                        <Download className="w-2.5 h-2.5" /> Import Characters
+                        <Download className="w-2.5 h-2.5" /> Import Assets
                       </button>
                     </div>
                   </div>
@@ -558,7 +558,7 @@ export function ScriptPreviewModal({
         existingNames={allCharDefs.map((c) => c.name)}
         editingCharacter={editingCharDef}
       />
-      <ManageCharactersModal
+      <ImportAssetsModal
         isOpen={showManageCharModal}
         onClose={() => setShowManageCharModal(false)}
       />

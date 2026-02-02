@@ -72,7 +72,7 @@ import type {
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { DefineCharacterModal } from "./define-character-modal"
-import { ManageCharactersModal } from "./manage-characters-modal"
+import { ImportAssetsModal } from "./manage-characters-modal"
 
 interface SourceNodeInfo {
   readonly id: string
@@ -1256,7 +1256,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
             onClick={() => setShowManageModal(true)}
             className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
           >
-            <Download className="w-3 h-3" /> Import Characters
+            <Download className="w-3 h-3" /> Import Assets
           </button>
         </div>
       </div>
@@ -1268,7 +1268,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         existingNames={allCharDefs.map((c) => c.name)}
         editingCharacter={editingChar}
       />
-      <ManageCharactersModal
+      <ImportAssetsModal
         isOpen={showManageModal}
         onClose={() => setShowManageModal(false)}
       />
