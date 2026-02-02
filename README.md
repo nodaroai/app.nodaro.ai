@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 31 node types across 5 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Reference image chaining for character consistency. Single-node and full workflow execution with version history. Generate Script with storyboard preview, fullscreen modal, per-scene image generation, and one-click expand to full video pipeline. Reference Audio node for YouTube audio extraction. Delete confirmation dialog for all version deletions.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 32 node types across 5 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Asset management system with characters, locations, and objects -- import across projects/workflows, extract references from generated images. Reference image chaining for visual consistency. Single-node and full workflow execution with version history.
 
 ## Features
 
@@ -26,6 +26,15 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | **AI (9)** | Generate Script, Generate Image, Image to Video, Video to Video, Text to Video, Text to Speech, Generate Music, Text to Audio, QA Check |
 | **Processing (8)** | Combine Videos, Merge Video & Audio, Extract Audio, Mix Audio, Add Captions, Resize Video, Trim Video, Adjust Volume |
 | **Output (2)** | Save to Storage, Webhook Output |
+
+### Asset Management
+- Define characters, locations, and objects with reference images or text descriptions
+- Import assets across projects and workflows (browse by project or "Show all assets")
+- Filter by category: All | Characters | Locations | Objects
+- Extract references directly from generated images (scissors tool on Generate Image output)
+- Auto-attach imported assets to Generate Image nodes
+- Category-aware execution: reference images sent to AI provider, descriptions appended to prompts
+- Visual indicators: category badges (cyan=location, emerald=object), asset count on nodes
 
 ### Dashboard
 - Projects with folders
@@ -200,7 +209,8 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - **DAG-based execution**: Topological sort (Kahn's algorithm) determines execution order
 - **Parallel execution**: Nodes at the same dependency level run simultaneously via Promise.allSettled
 - **Sequential dependencies**: Levels execute one after another, waiting for completion
-- **Reference image chaining**: Generate Image → Generate Image passes output as reference for character consistency
+- **Reference image chaining**: Generate Image → Generate Image passes output as reference for visual consistency
+- **Asset management**: Characters, locations, objects attached to nodes; reference images and descriptions sent to AI providers
 - Image generation via google/nano-banana (Replicate) with smart translation (Hebrew, etc.)
 - Video generation via minimax/video-01, google/veo-3 (Replicate)
 - **VEO 3 native audio**: `generate_audio` toggle generates AI audio from prompt; disable for custom audio via Merge Video & Audio node
@@ -225,7 +235,6 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 
 ## Planned Features
 
-- Project-level characters for visual consistency
 - Style presets library
 - Build from Prompt (auto-generate workflow from text description)
 - Workflow export/import as JSON

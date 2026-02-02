@@ -8,7 +8,7 @@
 - **Visual Workflow Editor**: Drag-and-drop interface using React Flow
 - **Build from Prompt**: Describe a video in plain text, get a complete workflow auto-generated (nodes + connections). Edit the generated flow as needed.
 - **Graph-Based Workflows**: Not linear pipelines - support branching, merging, loops
-- **Character Consistency**: Define characters per project with name, description, reference image, and visual traits. Characters are automatically injected into Generate Image nodes to maintain visual consistency across scenes.
+- **Asset Management**: Define characters, locations, and objects with reference images or text descriptions. Assets are automatically injected into Generate Image nodes to maintain visual consistency across scenes. Import assets across projects and workflows, or extract references directly from generated images.
 - **Style Presets**: Library of visual styles (system presets + user-created) for quick-start workflows. Each preset stores generation settings, aspect ratios, and style prompts.
 - **Model Agnostic**: Swap AI providers without changing workflows
 - **API First**: Full API access for n8n/Make.com integration
@@ -183,21 +183,47 @@ Generated workflow:
 
 The generated workflow is fully editable - users can change providers, adjust prompts, add/remove nodes, or restructure the graph.
 
-### Character Consistency
+### Asset Management (Characters, Locations, Objects)
 
-Characters are defined at the **project level** and can be reused across all workflows in that project.
+Assets are visual references defined at the **workflow level** and importable across projects/workflows. Three categories:
 
-**Character definition includes:**
-- **Name**: e.g. "Sir Aldric"
-- **Description**: e.g. "A brave knight in his 30s"
-- **Reference image**: An uploaded or generated image that defines the character's appearance
-- **Visual traits** (JSONB): Structured attributes like `{ hair: "blonde", build: "athletic", clothing: "steel plate armor with blue cape", distinguishing: "scar on left cheek" }`
+| Category | Example | Purpose |
+|----------|---------|---------|
+| **Character** | "Sir Aldric" | Maintain character appearance across scenes |
+| **Location** | "The Pyramids" | Consistent background/setting |
+| **Object** | "Magic Sword" | Consistent prop appearance |
+
+**Asset definition includes:**
+- **Name**: e.g. "Sir Aldric", "The Pyramids"
+- **Category**: character (default), location, or object
+- **Type**: reference (image) or description (text)
+- **Reference image**: An uploaded or generated image
+- **Description**: Text description appended to prompts
 
 **Usage in workflows:**
-- Generate Image nodes have a "Characters" section in their config panel
-- Users select which project characters should appear in that scene
-- The node automatically appends character descriptions and passes reference images to the AI provider
+- Generate Image nodes have an "Assets" section in their config panel
+- Users attach assets (characters, locations, objects) to each scene
+- Category badges: blue=character ref, orange=character desc, cyan=location, emerald=object
+- The node automatically appends descriptions and passes reference images to the AI provider
 - This maintains visual consistency across all scenes in a workflow
+
+**Import Assets Modal (`manage-characters-modal.tsx` / `ImportAssetsModal`):**
+- Filter tabs: All | Characters | Locations | Objects
+- Two sections: current workflow assets (edit/delete) + import from other projects
+- Browse by project: Project dropdown -> Workflow dropdown -> Character grid with thumbnails
+- "Show all my assets" mode: flat list grouped by project, single Supabase query with relation join
+- Multi-select grid, skips duplicates, adds `importedFrom` metadata
+- `onImported` callback auto-attaches imported asset IDs to the current Generate Image node
+
+**Extract References (Generate Image node):**
+- Scissors button always visible on generated images (top-right)
+- Opens ExtractReferencesModal for cropping/selecting character regions
+- Extracted references saved as new asset definitions with `referenceImageUrl`
+
+**Execution:**
+- All asset types (character, location, object) with `referenceImageUrl` are sent in the `image_input` array to Replicate
+- Description labels are category-aware: "Include character 'X': ...", "Include location 'Y': ...", "Include object 'Z': ..."
+- Both storyboard path and standalone node path support all asset categories
 
 ### Style Presets
 
@@ -3522,6 +3548,7 @@ interface CharacterDefinition {
   id: string
   name: string
   type: 'reference' | 'description'
+  category?: 'character' | 'location' | 'object'  // defaults to 'character' if undefined
   referenceImageUrl?: string
   description?: string
   sourceSceneIndex?: number
@@ -3531,25 +3558,30 @@ interface CharacterDefinition {
 
 **Storage:** Workflow-level in Zustand store (`useWorkflowStore.characterDefinitions`). Persisted in `workflows.settings.characterDefinitions` JSONB. Generate Image nodes store only `characterDefinitionIds: string[]` referencing definitions by ID.
 
-**Config Panel:** Generate Image nodes have a CHARACTERS section with:
-- List of attached characters (click to edit, thumbnail for reference, truncated text for description)
-- "Add existing" dropdown for workflow-level characters not yet attached
-- "Define new" button opens DefineCharacterModal for creating reference or description characters
-- "Manage" button opens ManageCharactersModal (edit/delete current chars + import from other workflows)
-- Characters can be edited by clicking on them (opens DefineCharacterModal in edit mode)
+**Config Panel:** Generate Image nodes have an ASSETS section with:
+- List of attached assets with category badges (blue=character ref, orange=character desc, cyan=location, emerald=object)
+- Thumbnails shown for any asset with `referenceImageUrl` (not restricted to `type === "reference"`)
+- "Add existing" dropdown for workflow-level assets not yet attached
+- "Define new" button opens DefineCharacterModal for creating reference or description assets
+- "Import Assets" button opens ImportAssetsModal (edit/delete current assets + import from other projects/workflows)
+- `onImported` callback: when user imports assets via modal, IDs are auto-attached to the current node's `characterDefinitionIds`
+- Assets can be edited by clicking on them (opens DefineCharacterModal in edit mode)
 
 **Storyboard Modal:**
 - Character input only allows selecting defined characters (no free-text tags)
 - Typing filters dropdown; unmatched input shows "No character found. Define new" link
 - "Define character" and "Manage" buttons on every scene card
 
-**Manage Characters Modal (`manage-characters-modal.tsx`):**
-- Two sections: current workflow characters (edit/delete) + import from another workflow
-- Current chars shown as grid with thumbnails, type badges (blue=reference, orange=description)
+**Import Assets Modal (`manage-characters-modal.tsx` / exported as `ImportAssetsModal`):**
+- Filter tabs: All | Characters | Locations | Objects (filters both current assets and import candidates)
+- Two sections: current workflow assets (edit/delete) + import from other projects/workflows
+- Current assets shown as grid with thumbnails, category-aware type badges
 - Edit button opens DefineCharacterModal in edit mode
 - Delete button with inline confirmation
-- Import section lazy-loaded on button click, queries Supabase for other workflows
-- Multi-select grid for import, skips duplicate names, adds `importedFrom` metadata
+- Import via "Browse by project" (Project dropdown -> Workflow dropdown -> asset grid)
+- Import via "Show all my assets" (flat list grouped by project, Supabase query with `projects(id, name)` join)
+- Multi-select grid for import, skips duplicate names, preserves `category` field, adds `importedFrom` metadata
+- `onImported` callback notifies parent component of newly imported asset IDs
 
 **Character States:**
 | State | What it has | Can reuse? |
@@ -3566,16 +3598,17 @@ interface CharacterDefinition {
 5. Scenes 3 and 5 can now generate
 
 **Execution:**
-- Reference characters: `referenceImageUrl` added to `image_input` array alongside chain and extracted refs
-- Description characters: text appended to prompt before sending to backend
-- Both storyboard path (`handleGenerateSceneImage`) and expanded node path (`executeNode`) support character definitions
+- All asset types with `referenceImageUrl` added to `image_input` array (characters, locations, objects)
+- Description assets: category-aware text appended to prompt ("Include character 'X': ...", "Include location 'Y': ...", "Include object 'Z': ...")
+- Both storyboard path (`handleGenerateSceneImage`) and expanded node path (`executeNode`) support all asset categories
 - Generation blocking: if a description-only char appears in an earlier scene, generation is blocked with error toast directing user to generate the earlier scene first
 - After storyboard generation with description-only chars, ExtractReferencesModal auto-opens with suggested message
 - Backend also accepts `characterDescriptions[]` in the generate-image route for direct API usage
 
 **Visual Indicators:**
+- Generate Image node: asset count badge ("N refs") when assets attached, always-visible scissors/delete buttons on generated images
 - Storyboard character tags: orange background + FileText icon for description-only, purple background + ImageIcon for reference
-- Config panel character cards: "needs ref" label for description-only chars
+- Config panel asset cards: category badges (cyan=location, emerald=object, blue=character ref, orange=character desc), "needs ref" label for description-only chars
 - Dropdown suggestions: FileText (orange) for description-only, ImageIcon (blue) for reference
 
 **Validation:**
@@ -3585,7 +3618,7 @@ interface CharacterDefinition {
 
 **Planned: Workflow Sharing (Hosted Version Only):**
 - NOT available in self-hosted/open-source edition (Fair Code license model)
-- Hosted version will add a "SHARED WITH ME" section in ManageCharactersModal import view
+- Hosted version will add a "SHARED WITH ME" section in ImportAssetsModal import view
 - Requires: `workflow_shares` table (sharer_id, recipient_id, workflow_id, permissions), sharing UI, license/version gating
 - For now: users only see their own projects/workflows in import dropdown
 - Self-hosted users: free, no sharing; Hosted users: collaboration features included in subscription
@@ -3696,6 +3729,11 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Generate Audio checkbox only shown when VEO 3 is selected (not VEO 2)
 - [x] 32 node types total (Input: 5, Parameter: 8, AI: 9, Processing: 8, Output: 2)
 - [x] Character & Location extraction from scene images (crop + upload to R2, used as references in Expand to Nodes)
+- [x] Asset management system: characters, locations, objects with category-aware execution
+- [x] Import Assets modal with project hierarchy, "Show all assets" mode, filter tabs (All/Characters/Locations/Objects)
+- [x] Auto-attach imported assets to Generate Image nodes via onImported callback
+- [x] Extract References (scissors) button always visible on generated images
+- [x] Asset count badge on Generate Image nodes showing attached reference count
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
@@ -3749,5 +3787,5 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 
 ---
 
-*Last updated: 2026-02-01*
-*Version: 1.8.0*
+*Last updated: 2026-02-02*
+*Version: 1.9.0*
