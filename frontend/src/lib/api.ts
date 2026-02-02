@@ -242,6 +242,20 @@ export async function mixAudioApi(audioUrls: string[]): Promise<{ jobId: string 
   return res.json()
 }
 
+export async function uploadImage(file: File | Blob): Promise<{ url: string }> {
+  const formData = new FormData()
+  formData.append("file", file, file instanceof File ? file.name : "crop.png")
+  const res = await fetch(`${API_BASE_URL}/v1/upload/image`, {
+    method: "POST",
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to upload image")
+  }
+  return res.json()
+}
+
 export async function uploadAudio(file: File): Promise<{ url: string }> {
   const formData = new FormData()
   formData.append("file", file)

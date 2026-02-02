@@ -261,6 +261,19 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
             } : {}),
           })
         }}
+        extractedReferences={activeScript.extractedReferences ?? []}
+        onSaveReferences={(references) => {
+          if (!activeScript) return
+          const updatedScript = { ...activeScript, extractedReferences: references }
+          updateNodeData(id, {
+            generatedScript: updatedScript,
+            ...(activeResult ? {
+              generatedResults: results.map((r, i) =>
+                i === activeIndex ? { ...r, script: updatedScript } : r
+              ),
+            } : {}),
+          })
+        }}
         onDeleteImage={(sceneIndex, imageIndex) => {
           if (!activeScript) return
           const scene = activeScript.scenes[sceneIndex]

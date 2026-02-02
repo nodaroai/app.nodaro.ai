@@ -636,8 +636,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as GenerateImageData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
       }
-      const refImages = inputs.referenceImageUrls ?? (inputs.imageUrl ? [inputs.imageUrl] : undefined)
-      return runImageGeneration(node.id, prompt, refImages, (node.data as GenerateImageData).provider || undefined)
+      const chainRefs = inputs.referenceImageUrls ?? (inputs.imageUrl ? [inputs.imageUrl] : undefined)
+      const extractedRefs = (node.data as Record<string, unknown>).extractedReferenceUrls as string[] | undefined
+      const refImages = [...(chainRefs ?? []), ...(extractedRefs ?? [])]
+      return runImageGeneration(node.id, prompt, refImages.length > 0 ? refImages : undefined, (node.data as GenerateImageData).provider || undefined)
     }
 
     if (node.type === "image-to-video") {
@@ -1140,6 +1142,27 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             target: imageNodeIds[indices[j]],
             targetHandle: "in",
           } as WorkflowEdge)
+        }
+      }
+    }
+
+    // Inject extracted reference images into Generate Image nodes
+    const extractedRefs = script.extractedReferences ?? []
+    if (extractedRefs.length > 0) {
+      for (let i = 0; i < scenes.length; i++) {
+        const sceneChars = new Set(scenes[i].characters ?? [])
+        const matchingRefs = extractedRefs.filter(
+          (r) => r.sourceSceneIndex !== i && sceneChars.has(r.name),
+        )
+        if (matchingRefs.length > 0) {
+          const imgNode = newNodes.find((n) => n.id === imageNodeIds[i])
+          if (imgNode) {
+            const existingUrls: string[] = (imgNode.data as Record<string, unknown>).extractedReferenceUrls as string[] ?? []
+            ;(imgNode.data as Record<string, unknown>).extractedReferenceUrls = [
+              ...existingUrls,
+              ...matchingRefs.map((r) => r.imageUrl),
+            ]
+          }
         }
       }
     }

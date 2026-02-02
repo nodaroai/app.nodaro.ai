@@ -2,9 +2,10 @@
 
 import { useEffect, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers } from "lucide-react"
+import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors } from "lucide-react"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import type { GeneratedScript } from "@/types/nodes"
+import { ExtractReferencesModal } from "./extract-references-modal"
+import type { GeneratedScript, ExtractedReference } from "@/types/nodes"
 
 interface ScriptPreviewModalProps {
   readonly isOpen: boolean
@@ -15,6 +16,8 @@ interface ScriptPreviewModalProps {
   readonly onDeleteImage: (sceneIndex: number, imageIndex: number) => void
   readonly onExpandToNodes: () => void
   readonly onUpdateSceneCharacters: (sceneIndex: number, characters: string[]) => void
+  readonly extractedReferences: readonly ExtractedReference[]
+  readonly onSaveReferences: (references: readonly ExtractedReference[]) => void
 }
 
 export function ScriptPreviewModal({
@@ -26,11 +29,15 @@ export function ScriptPreviewModal({
   onDeleteImage,
   onExpandToNodes,
   onUpdateSceneCharacters,
+  extractedReferences,
+  onSaveReferences,
 }: ScriptPreviewModalProps) {
   const [generatingAll, setGeneratingAll] = useState(false)
+  const [extractModalScene, setExtractModalScene] = useState<number | null>(null)
   const [characterInput, setCharacterInput] = useState<Record<number, string>>({})
   const [allProgress, setAllProgress] = useState({ current: 0, total: 0 })
   const [deleteConfirm, setDeleteConfirm] = useState<{ sceneIndex: number; imageIndex: number } | null>(null)
+  const [focusedCharInput, setFocusedCharInput] = useState<number | null>(null)
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose()
@@ -51,6 +58,17 @@ export function ScriptPreviewModal({
     return images.length === 0 && s.imageStatus !== "running"
   }).length
   const hasAnyRunning = script.scenes.some((s) => s.imageStatus === "running")
+
+  // Build map of character name -> list of scene numbers they appear in
+  const charSceneMap: Record<string, number[]> = {}
+  for (const scene of script.scenes) {
+    for (const char of scene.characters ?? []) {
+      const arr = charSceneMap[char] ?? []
+      arr.push(scene.sceneNumber)
+      charSceneMap[char] = arr
+    }
+  }
+  const allCharacters = Object.keys(charSceneMap)
 
   async function handleGenerateAll() {
     setGeneratingAll(true)
@@ -246,48 +264,131 @@ export function ScriptPreviewModal({
                     </div>
                   )}
 
+                  {/* Extract references button */}
+                  {activeImage && (
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 w-full h-6 px-2 text-[10px] font-medium rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setExtractModalScene(i) }}
+                    >
+                      <Scissors className="w-3 h-3" />
+                      Extract References
+                      {extractedReferences.filter((r) => r.sourceSceneIndex === i).length > 0 && (
+                        <span className="ml-auto text-[9px] bg-purple-600 text-white rounded-full px-1.5">
+                          {extractedReferences.filter((r) => r.sourceSceneIndex === i).length}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
                   <p className="text-xs font-medium line-clamp-2">{scene.action}</p>
                   <p className="text-[10px] text-muted-foreground italic">{scene.mood}</p>
                   <p className="text-[10px] text-muted-foreground/70 line-clamp-3">{scene.visualDescription}</p>
 
                   {/* Character tags */}
-                  <div className="flex flex-wrap items-center gap-1 mt-1">
-                    {(scene.characters ?? []).map((char) => (
-                      <span
-                        key={char}
-                        className="inline-flex items-center gap-0.5 h-5 px-1.5 text-[10px] font-medium rounded bg-purple-500/15 text-purple-600 dark:text-purple-400"
-                      >
-                        {char}
-                        <button
-                          type="button"
-                          className="hover:text-red-500 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onUpdateSceneCharacters(i, (scene.characters ?? []).filter((c) => c !== char))
+                  <div className="mt-2 pt-2 border-t border-border/20">
+                    <div className="flex items-center gap-1 group/charhelp">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Characters</span>
+                      <div className="relative">
+                        <Info className="w-3 h-3 text-muted-foreground/40 cursor-help" />
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-48 p-2 rounded-md bg-popover border text-[10px] text-popover-foreground shadow-md opacity-0 pointer-events-none group-hover/charhelp:opacity-100 transition-opacity z-20">
+                          Tag characters in this scene. Using the same name across scenes keeps their appearance consistent.
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      {(scene.characters ?? []).map((char) => {
+                        const otherScenes = (charSceneMap[char] ?? []).filter((n) => n !== scene.sceneNumber)
+                        return (
+                          <span
+                            key={char}
+                            className="inline-flex items-center gap-1 h-6 px-2.5 text-xs font-medium rounded-full bg-purple-600 text-white"
+                          >
+                            {char}
+                            {otherScenes.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-purple-200" title={`Also in scene${otherScenes.length > 1 ? "s" : ""} ${otherScenes.join(", ")}`}>
+                                <Link className="w-2.5 h-2.5" />
+                                <span className="text-[9px]">{otherScenes.length}</span>
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              className="hover:text-red-300 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onUpdateSceneCharacters(i, (scene.characters ?? []).filter((c) => c !== char))
+                              }}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        )
+                      })}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="e.g. Hero, Dragon"
+                          className="h-6 w-28 px-2 text-xs rounded-full border border-muted-foreground/30 bg-muted/40 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 placeholder:text-muted-foreground/50"
+                          value={characterInput[i] ?? ""}
+                          onChange={(e) => setCharacterInput({ ...characterInput, [i]: e.target.value })}
+                          onFocus={() => setFocusedCharInput(i)}
+                          onBlur={() => setTimeout(() => setFocusedCharInput(null), 150)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              e.preventDefault()
+                              setFocusedCharInput(null)
+                              ;(e.target as HTMLInputElement).blur()
+                            } else if (e.key === "Enter") {
+                              e.preventDefault()
+                              const val = (characterInput[i] ?? "").trim()
+                              if (val && !(scene.characters ?? []).includes(val)) {
+                                onUpdateSceneCharacters(i, [...(scene.characters ?? []), val])
+                              }
+                              setCharacterInput({ ...characterInput, [i]: "" })
+                              if (val === "") {
+                                setFocusedCharInput(null)
+                                ;(e.target as HTMLInputElement).blur()
+                              }
+                            }
                           }}
-                        >
-                          <X className="w-2.5 h-2.5" />
-                        </button>
-                      </span>
-                    ))}
-                    <input
-                      type="text"
-                      placeholder="+ char"
-                      className="h-5 w-16 px-1 text-[10px] rounded border border-dashed border-muted-foreground/30 bg-transparent outline-none focus:border-purple-500 placeholder:text-muted-foreground/40"
-                      value={characterInput[i] ?? ""}
-                      onChange={(e) => setCharacterInput({ ...characterInput, [i]: e.target.value })}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          const val = (characterInput[i] ?? "").trim()
-                          if (val && !(scene.characters ?? []).includes(val)) {
-                            onUpdateSceneCharacters(i, [...(scene.characters ?? []), val])
-                          }
-                          setCharacterInput({ ...characterInput, [i]: "" })
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    />
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        {focusedCharInput === i && (() => {
+                          const sceneChars = new Set(scene.characters ?? [])
+                          const inputVal = (characterInput[i] ?? "").toLowerCase()
+                          const suggestions = allCharacters.filter(
+                            (c) => !sceneChars.has(c) && (inputVal === "" || c.toLowerCase().includes(inputVal))
+                          )
+                          if (suggestions.length === 0) return null
+                          return (
+                            <div className="absolute top-full left-0 mt-1 w-36 max-h-28 overflow-y-auto rounded-md border bg-popover shadow-md z-30">
+                              {suggestions.map((char) => (
+                                <button
+                                  key={char}
+                                  type="button"
+                                  className="w-full text-left px-2 py-1 text-xs hover:bg-muted transition-colors flex items-center justify-between"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault()
+                                    onUpdateSceneCharacters(i, [...(scene.characters ?? []), char])
+                                    setCharacterInput({ ...characterInput, [i]: "" })
+                                  }}
+                                >
+                                  <span>{char}</span>
+                                  <span className="text-[9px] text-muted-foreground">
+                                    {(charSceneMap[char] ?? []).length} scene{(charSceneMap[char] ?? []).length !== 1 ? "s" : ""}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    </div>
+                    {i === 0 && (
+                      <p className="text-[9px] text-muted-foreground/60 mt-1.5">
+                        Tip: Use the same name across scenes for a consistent look
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 mt-auto pt-1 border-t border-border/30">
@@ -301,6 +402,24 @@ export function ScriptPreviewModal({
           </div>
         </div>
       </div>
+      {extractModalScene !== null && (() => {
+        const scene = script.scenes[extractModalScene]
+        const images = scene?.generatedImages ?? []
+        const activeIdx = scene?.activeImageIndex ?? 0
+        const activeImg = images[activeIdx]
+        if (!activeImg) return null
+        return (
+          <ExtractReferencesModal
+            isOpen
+            onClose={() => setExtractModalScene(null)}
+            imageUrl={activeImg.url}
+            sceneIndex={extractModalScene}
+            sceneCharacters={scene.characters ?? []}
+            existingReferences={extractedReferences}
+            onSave={onSaveReferences}
+          />
+        )
+      })()}
       <DeleteConfirmationDialog
         isOpen={deleteConfirm !== null}
         onClose={() => setDeleteConfirm(null)}

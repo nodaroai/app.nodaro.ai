@@ -3457,6 +3457,42 @@ The workflow executor uses a DAG-based approach:
 
 6. **Executable Node Types**: Only `generate-image`, `image-to-video`, and `video-to-video` are executable. All other node types (input, parameter, processing) are data-only and read by downstream nodes.
 
+### Character & Location Extraction
+
+Users can extract visual references from generated scene images to maintain consistency across scenes.
+
+**Types of References:**
+- **Characters** - people, creatures, objects (e.g., Cucumber, Tomato, Hero)
+- **Locations** - backgrounds, environments (e.g., Market, Beach, Castle)
+
+**Workflow:**
+1. Generate Script with characters tagged per scene
+2. Generate Image for a scene
+3. Click "Extract References" (Scissors icon) on the scene card
+4. Draw rectangles around characters/locations on the image, name them
+5. Cropped images are uploaded to R2 storage for persistence
+6. Generate remaining scenes - extracted references are automatically injected as reference images
+
+**Data Structure:**
+```typescript
+interface ExtractedReference {
+  id: string
+  name: string
+  type: 'character' | 'location'
+  imageUrl: string       // R2 URL of cropped image
+  sourceSceneIndex: number
+  boundingBox: { x: number; y: number; width: number; height: number }
+}
+```
+
+Stored on `GeneratedScript.extractedReferences`.
+
+**Reference Priority in Expand to Nodes:**
+1. Extracted references (cropped from specific scenes) - matched by character name
+2. Chain references (previous scene's full image via character-based edges)
+
+Both are combined into the `referenceImageUrls` array passed to Nano Banana.
+
 ### Implementation Notes
 
 **State Management:**
@@ -3562,6 +3598,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] VEO 2 and VEO 3 as separate providers in Image to Video and Video to Video nodes
 - [x] Generate Audio checkbox only shown when VEO 3 is selected (not VEO 2)
 - [x] 32 node types total (Input: 5, Parameter: 8, AI: 9, Processing: 8, Output: 2)
+- [x] Character & Location extraction from scene images (crop + upload to R2, used as references in Expand to Nodes)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

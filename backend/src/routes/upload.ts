@@ -23,6 +23,12 @@ const ALLOWED_AUDIO_TYPES = new Set([
   "audio/aac",
 ])
 
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+])
+
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 export async function uploadRoutes(app: FastifyInstance) {
@@ -61,6 +67,39 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
     console.log(`[upload] Audio uploaded: ${publicUrl}`)
+
+    return { url: publicUrl }
+  })
+
+  app.post("/v1/upload/image", async (req, reply) => {
+    const file = await req.file()
+    if (!file) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "No file provided" },
+      })
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.has(file.mimetype)) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: `Unsupported image type: ${file.mimetype}. Accepted: png, jpeg, webp` },
+      })
+    }
+
+    const buffer = await file.toBuffer()
+    const ext = file.mimetype === "image/png" ? "png" : file.mimetype === "image/webp" ? "webp" : "jpg"
+    const key = `uploads/${randomUUID()}.${ext}`
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: config.R2_BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: file.mimetype,
+      }),
+    )
+
+    const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
+    console.log(`[upload] Image uploaded: ${publicUrl}`)
 
     return { url: publicUrl }
   })

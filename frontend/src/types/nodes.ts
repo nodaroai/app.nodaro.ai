@@ -132,10 +132,25 @@ export interface ScriptScene {
   readonly characters?: readonly string[]
 }
 
+export interface ExtractedReference {
+  readonly id: string
+  readonly name: string
+  readonly type: "character" | "location"
+  readonly imageUrl: string
+  readonly sourceSceneIndex: number
+  readonly boundingBox: {
+    readonly x: number
+    readonly y: number
+    readonly width: number
+    readonly height: number
+  }
+}
+
 export interface GeneratedScript {
   readonly title: string
   readonly totalDuration: number
   readonly scenes: readonly ScriptScene[]
+  readonly extractedReferences?: readonly ExtractedReference[]
 }
 
 export interface GeneratedScriptResult {
