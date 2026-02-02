@@ -9,6 +9,7 @@ import { DefineCharacterModal } from "./define-character-modal"
 import { ImportAssetsModal } from "./manage-characters-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GeneratedScript, ExtractedReference, CharacterDefinition } from "@/types/nodes"
+import { getSceneCharacterNames, getSceneMoodDisplay } from "@/types/nodes"
 
 interface ScriptPreviewModalProps {
   readonly isOpen: boolean
@@ -72,7 +73,7 @@ export function ScriptPreviewModal({
   // Build map of character name -> list of scene numbers they appear in
   const charSceneMap: Record<string, number[]> = {}
   for (const scene of script.scenes) {
-    for (const char of scene.characters ?? []) {
+    for (const char of getSceneCharacterNames(scene.characters)) {
       const arr = charSceneMap[char] ?? []
       arr.push(scene.sceneNumber)
       charSceneMap[char] = arr
@@ -94,7 +95,7 @@ export function ScriptPreviewModal({
 
   function hasDescriptionOnlyChars(sceneIndex: number): boolean {
     const scene = script.scenes[sceneIndex]
-    const chars = scene?.characters ?? []
+    const chars = getSceneCharacterNames(scene?.characters)
     const currentDefs = useWorkflowStore.getState().characterDefinitions
     return chars.some((name) => {
       const def = currentDefs.find((c) => c.name === name)
@@ -204,6 +205,7 @@ export function ScriptPreviewModal({
               const images = scene.generatedImages ?? []
               const activeIdx = scene.activeImageIndex ?? 0
               const activeImage = images[activeIdx]
+              const charNames = getSceneCharacterNames(scene.characters)
 
               return (
                 <div
@@ -323,7 +325,7 @@ export function ScriptPreviewModal({
                   )}
 
                   <p className="text-xs font-medium line-clamp-2">{scene.action}</p>
-                  <p className="text-[10px] text-muted-foreground italic">{scene.mood}</p>
+                  <p className="text-[10px] text-muted-foreground italic">{getSceneMoodDisplay(scene.mood)}</p>
                   <p className="text-[10px] text-muted-foreground/70 line-clamp-3">{scene.visualDescription}</p>
 
                   {/* Character tags */}
@@ -338,7 +340,7 @@ export function ScriptPreviewModal({
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                      {(scene.characters ?? []).map((char) => {
+                      {charNames.map((char) => {
                         const otherScenes = (charSceneMap[char] ?? []).filter((n) => n !== scene.sceneNumber)
                         const matchingDef = allCharDefs.find((d) => d.name === char)
                         const isDescOnly = matchingDef?.type === "description" && !matchingDef.referenceImageUrl
@@ -365,7 +367,7 @@ export function ScriptPreviewModal({
                               className="hover:text-red-300 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                onUpdateSceneCharacters(i, (scene.characters ?? []).filter((c) => c !== char))
+                                onUpdateSceneCharacters(i, charNames.filter((c) => c !== char))
                               }}
                             >
                               <X className="w-3 h-3" />
@@ -391,8 +393,8 @@ export function ScriptPreviewModal({
                               e.preventDefault()
                               const val = (characterInput[i] ?? "").trim()
                               const isDefined = allCharDefs.some((d) => d.name === val) || extractedReferences.some((r) => r.name === val)
-                              if (val && isDefined && !(scene.characters ?? []).includes(val)) {
-                                onUpdateSceneCharacters(i, [...(scene.characters ?? []), val])
+                              if (val && isDefined && !charNames.includes(val)) {
+                                onUpdateSceneCharacters(i, [...charNames, val])
                               }
                               setCharacterInput({ ...characterInput, [i]: "" })
                               if (val === "" || !isDefined) {
@@ -404,7 +406,7 @@ export function ScriptPreviewModal({
                           onClick={(e) => e.stopPropagation()}
                         />
                         {focusedCharInput === i && (() => {
-                          const sceneChars = new Set(scene.characters ?? [])
+                          const sceneChars = new Set(charNames)
                           const inputVal = (characterInput[i] ?? "").toLowerCase()
                           const suggestions = allCharacters.filter(
                             (c) => !sceneChars.has(c) && (inputVal === "" || c.toLowerCase().includes(inputVal))
@@ -419,7 +421,7 @@ export function ScriptPreviewModal({
                                   className="w-full text-left px-2 py-1 text-xs hover:bg-muted transition-colors flex items-center justify-between"
                                   onMouseDown={(e) => {
                                     e.preventDefault()
-                                    onUpdateSceneCharacters(i, [...(scene.characters ?? []), char])
+                                    onUpdateSceneCharacters(i, [...charNames, char])
                                     setCharacterInput({ ...characterInput, [i]: "" })
                                   }}
                                 >
@@ -511,7 +513,7 @@ export function ScriptPreviewModal({
             onClose={() => { setExtractModalScene(null); setExtractAutoOpened(false) }}
             imageUrl={activeImg.url}
             sceneIndex={extractModalScene}
-            sceneCharacters={scene.characters ?? []}
+            sceneCharacters={getSceneCharacterNames(scene?.characters)}
             existingReferences={extractedReferences}
             onSave={(refs) => {
               onSaveReferences(refs)

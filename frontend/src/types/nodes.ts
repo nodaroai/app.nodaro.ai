@@ -119,17 +119,68 @@ export interface SceneImageVersion {
   readonly jobId: string
 }
 
+export interface ScriptSceneCharacter {
+  readonly name: string
+  readonly description: string
+  readonly mood: string
+  readonly action: string
+  readonly position?: string
+}
+
+export interface ScriptSceneDialogue {
+  readonly speaker: string
+  readonly text: string
+  readonly emotion?: string
+}
+
+export interface ScriptSceneLocation {
+  readonly name: string
+  readonly description: string
+  readonly timeOfDay: string
+  readonly weather?: string
+  readonly lighting?: string
+}
+
+export interface ScriptSceneCinematography {
+  readonly shotType: string
+  readonly cameraAngle: string
+  readonly cameraMovement?: string
+}
+
 export interface ScriptScene {
   readonly sceneNumber: number
+  readonly sceneName?: string
   readonly visualDescription: string
   readonly action: string
-  readonly mood: string
+  readonly mood: string | readonly string[]
   readonly durationHint: number
+  readonly duration?: number
   readonly imagePrompt: string
+  // Structured characters (new) - falls back to string[] for old scripts
+  readonly characters?: readonly string[] | readonly ScriptSceneCharacter[]
+  // New fields
+  readonly dialogue?: readonly ScriptSceneDialogue[]
+  readonly location?: ScriptSceneLocation
+  readonly cinematography?: ScriptSceneCinematography
+  readonly musicMood?: string
+  readonly soundEffects?: readonly string[]
+  // UI state (unchanged)
   readonly generatedImages?: readonly SceneImageVersion[]
   readonly activeImageIndex?: number
   readonly imageStatus?: "idle" | "running" | "completed" | "failed"
-  readonly characters?: readonly string[]
+}
+
+/** Extract character names from either string[] or ScriptSceneCharacter[] */
+export function getSceneCharacterNames(characters: ScriptScene["characters"]): readonly string[] {
+  if (!characters || characters.length === 0) return []
+  if (typeof characters[0] === "string") return characters as readonly string[]
+  return (characters as readonly ScriptSceneCharacter[]).map((c) => c.name)
+}
+
+/** Get mood as a display string regardless of format */
+export function getSceneMoodDisplay(mood: ScriptScene["mood"]): string {
+  if (Array.isArray(mood)) return mood.join(", ")
+  return (mood as string) ?? ""
 }
 
 export interface ExtractedReference {

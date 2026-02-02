@@ -3,13 +3,49 @@ import { config } from "../../lib/config.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
+export interface ScriptSceneCharacter {
+  readonly name: string
+  readonly description: string
+  readonly mood: string
+  readonly action: string
+  readonly position?: string
+}
+
+export interface ScriptSceneDialogue {
+  readonly speaker: string
+  readonly text: string
+  readonly emotion?: string
+}
+
+export interface ScriptSceneLocation {
+  readonly name: string
+  readonly description: string
+  readonly timeOfDay: string
+  readonly weather?: string
+  readonly lighting?: string
+}
+
+export interface ScriptSceneCinematography {
+  readonly shotType: string
+  readonly cameraAngle: string
+  readonly cameraMovement?: string
+}
+
 export interface ScriptScene {
   readonly sceneNumber: number
+  readonly sceneName?: string
   readonly visualDescription: string
   readonly action: string
-  readonly mood: string
+  readonly mood: string | readonly string[]
   readonly durationHint: number
+  readonly duration?: number
   readonly imagePrompt: string
+  readonly characters?: readonly string[] | readonly ScriptSceneCharacter[]
+  readonly dialogue?: readonly ScriptSceneDialogue[]
+  readonly location?: ScriptSceneLocation
+  readonly cinematography?: ScriptSceneCinematography
+  readonly musicMood?: string
+  readonly soundEffects?: readonly string[]
 }
 
 export interface GeneratedScript {
@@ -18,7 +54,7 @@ export interface GeneratedScript {
   readonly scenes: readonly ScriptScene[]
 }
 
-const SYSTEM_PROMPT = `You are a cinematic script writer for AI video generation. You create structured scripts that will be used to generate images and videos.
+const SYSTEM_PROMPT = `You are a cinematic script writer for AI video generation. You create structured scripts that will be used to generate images, videos, and audio.
 
 OUTPUT FORMAT: You MUST respond with ONLY valid JSON, no markdown, no code fences, no explanation. The JSON must match this exact structure:
 
@@ -28,19 +64,60 @@ OUTPUT FORMAT: You MUST respond with ONLY valid JSON, no markdown, no code fence
   "scenes": [
     {
       "sceneNumber": 1,
+      "sceneName": "The Awakening",
       "visualDescription": "WIDE SHOT - Detailed cinematic description with camera angles, lighting, atmosphere",
       "action": "What happens in this scene",
-      "mood": "emotional tone keywords",
+      "characters": [
+        {
+          "name": "Character Name",
+          "description": "Brief visual description",
+          "mood": "emotional state",
+          "action": "what they are doing",
+          "position": "center"
+        }
+      ],
+      "dialogue": [
+        {
+          "speaker": "Character Name",
+          "text": "What they say",
+          "emotion": "how they say it"
+        }
+      ],
+      "location": {
+        "name": "Location Name",
+        "description": "Visual details of the setting",
+        "timeOfDay": "dawn",
+        "weather": "clear",
+        "lighting": "natural"
+      },
+      "cinematography": {
+        "shotType": "wide",
+        "cameraAngle": "eye-level",
+        "cameraMovement": "static"
+      },
+      "mood": ["tense", "mysterious"],
+      "musicMood": "epic orchestral",
+      "soundEffects": ["wind howling", "distant thunder"],
       "durationHint": 8,
-      "imagePrompt": "Concise, optimized prompt for AI image generation - focus on visual details, composition, lighting"
+      "duration": 8,
+      "imagePrompt": "Concise prompt optimized for AI image generation"
     }
   ]
 }
 
 RULES:
+- sceneName: Short evocative name for the scene (2-4 words)
 - visualDescription: Write cinematic descriptions with camera movements (WIDE SHOT, CLOSE-UP, TRACKING), lighting details, atmosphere, textures
+- characters: Array of objects with name, visual description, mood, action, and position (left/center/right/background). Include ALL characters visible in the scene
+- dialogue: Array of spoken lines. Use "Narrator" as speaker for voiceover. Include emotion hints. Only include if the scene has speech
+- location: Describe the setting with time of day (dawn/morning/noon/afternoon/evening/night), weather (clear/cloudy/rainy/stormy/snowy/foggy), and lighting (natural/dramatic/soft/harsh/backlit/neon)
+- cinematography: Suggest shot type (extreme-wide/wide/medium-wide/medium/medium-close/close-up/extreme-close-up), camera angle (eye-level/low-angle/high-angle/birds-eye/worms-eye/dutch), and camera movement (static/pan/tilt/dolly/tracking/crane/handheld/zoom)
+- mood: Array of 1-3 mood keywords (e.g. ["tense", "mysterious"])
+- musicMood: Background music feel (e.g. "epic orchestral", "gentle piano", "dark ambient")
+- soundEffects: Array of ambient/SFX sounds for the scene
+- duration: Scene duration in seconds (integer). All durations should sum to totalDuration
+- durationHint: Same as duration (for backward compatibility)
 - imagePrompt: Write concise prompts optimized for AI image generation - include style, composition, colors, lighting
-- durationHint: Estimated seconds for this scene (all hints should sum to totalDuration)
 - Each scene should flow naturally into the next
 - Respond with ONLY the JSON object, nothing else`
 
@@ -74,7 +151,7 @@ export async function generateScript(
   const output = await replicate.run(model as `${string}/${string}`, {
     input: {
       prompt: `${SYSTEM_PROMPT}\n\n${userPrompt}`,
-      max_tokens: 4096,
+      max_tokens: 8192,
     },
   })
 
@@ -88,8 +165,16 @@ export async function generateScript(
     if (!parsed.title || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
       throw new Error("Invalid script structure: missing title or scenes")
     }
-    console.log(`[generateScript] Generated "${parsed.title}" with ${parsed.scenes.length} scenes`)
-    return parsed
+    // Normalize: ensure duration and durationHint are both set
+    const normalizedScenes = parsed.scenes.map((scene) => ({
+      ...scene,
+      duration: scene.duration ?? scene.durationHint,
+      durationHint: scene.durationHint ?? scene.duration ?? 5,
+      mood: Array.isArray(scene.mood) ? scene.mood : scene.mood ? [scene.mood] : [],
+    }))
+    const result: GeneratedScript = { ...parsed, scenes: normalizedScenes }
+    console.log(`[generateScript] Generated "${result.title}" with ${result.scenes.length} scenes`)
+    return result
   } catch (err) {
     console.error(`[generateScript] Failed to parse output:`, cleaned.slice(0, 200))
     throw new Error(`Failed to parse script output: ${err instanceof Error ? err.message : "Unknown error"}`)

@@ -16,6 +16,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, getJobStatus } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { getSceneCharacterNames } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
 interface WorkflowEditorProps {
@@ -952,13 +953,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     // Block generation if description-only characters need references from earlier scenes
     const allCharDefs0 = useWorkflowStore.getState().characterDefinitions
-    const sceneCharNames0 = scene.characters ?? []
+    const sceneCharNames0 = getSceneCharacterNames(scene.characters)
     for (const charName of sceneCharNames0) {
       const charDef = allCharDefs0.find((c) => c.name === charName)
       if (charDef && charDef.type === "description" && !charDef.referenceImageUrl) {
         // Find earliest scene using this character
         const earliestScene = script.scenes.findIndex((s, idx) =>
-          idx !== sceneIndex && (s.characters ?? []).includes(charName)
+          idx !== sceneIndex && getSceneCharacterNames(s.characters).includes(charName)
         )
         if (earliestScene !== -1 && earliestScene < sceneIndex) {
           toast.error(`Generate Scene ${earliestScene + 1} first`, {
@@ -971,7 +972,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     // Collect extracted reference images for this scene
     const extractedRefs = script.extractedReferences ?? []
-    const sceneChars = new Set(scene.characters ?? [])
+    const sceneChars = new Set(getSceneCharacterNames(scene.characters))
     const refUrls = extractedRefs
       .filter((r) => r.sourceSceneIndex !== sceneIndex && sceneChars.has(r.name))
       .map((r) => r.imageUrl)
@@ -1248,7 +1249,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     // Reference chain: connect Generate Image nodes for same characters
     const charSceneMap: Record<string, number[]> = {}
     for (let i = 0; i < scenes.length; i++) {
-      for (const char of scenes[i].characters ?? []) {
+      for (const char of getSceneCharacterNames(scenes[i].characters)) {
         const arr = charSceneMap[char] ?? []
         arr.push(i)
         charSceneMap[char] = arr
@@ -1275,7 +1276,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const extractedRefs = script.extractedReferences ?? []
     if (extractedRefs.length > 0) {
       for (let i = 0; i < scenes.length; i++) {
-        const sceneChars = new Set(scenes[i].characters ?? [])
+        const sceneChars = new Set(getSceneCharacterNames(scenes[i].characters))
         const matchingRefs = extractedRefs.filter(
           (r) => r.sourceSceneIndex !== i && sceneChars.has(r.name),
         )

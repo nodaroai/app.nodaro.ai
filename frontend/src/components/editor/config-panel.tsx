@@ -1073,7 +1073,7 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
                           <Label className="text-[10px] text-muted-foreground">Mood</Label>
                           <Input
                             className="text-xs h-7"
-                            value={scene.mood}
+                            value={Array.isArray(scene.mood) ? scene.mood.join(", ") : scene.mood}
                             onChange={(e) => updateScene(i, "mood", e.target.value)}
                           />
                         </div>
