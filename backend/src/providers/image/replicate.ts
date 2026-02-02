@@ -41,20 +41,20 @@ const IMAGE_MODELS: Record<ImageProvider, string> = {
   midjourney: "black-forest-labs/flux-1.1-pro",
 }
 
-export async function generateImage(prompt: string, referenceImageUrl?: string, provider?: ImageProvider): Promise<string> {
+export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: ImageProvider): Promise<string> {
   const resolvedProvider = provider ?? "nano-banana"
   const model = IMAGE_MODELS[resolvedProvider] ?? IMAGE_MODELS["nano-banana"]
   console.log(`[generateImage] Provider: ${resolvedProvider}, Model: ${model}`)
   console.log(`[generateImage] Original prompt: "${prompt}"`)
-  if (referenceImageUrl) {
-    console.log(`[generateImage] Reference image: "${referenceImageUrl}"`)
+  if (referenceImageUrls?.length) {
+    console.log(`[generateImage] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
   }
   const englishPrompt = await translateToEnglish(prompt)
   console.log(`[generateImage] Sending to ${resolvedProvider}: "${englishPrompt}"`)
 
   const input: Record<string, unknown> = { prompt: englishPrompt }
-  if (referenceImageUrl) {
-    input.image = referenceImageUrl
+  if (referenceImageUrls?.length) {
+    input.image_input = referenceImageUrls
   }
 
   const output = await replicate.run(model as `${string}/${string}`, { input })

@@ -246,7 +246,7 @@ SceneNode does **API orchestration**, not ML inference. All AI work is HTTP call
 | Category | Model |
 |----------|-------|
 | **Image Generation** | google/nano-banana-pro |
-| **Video Generation** | google/veo-3 |
+| **Video Generation** | google/veo-2 (VEO), google/veo-3 (VEO 3) |
 | **Script/QA** | google/gemini-2.5-flash |
 
 **Phase 2+ (additional providers):**
@@ -730,7 +730,7 @@ Example: Image node output → connects to both Video node AND next Image node a
 | Node Type | Default Provider | Alternatives |
 |-----------|------------------|--------------|
 | Generate Image | Nano Banana | Flux, DALL-E, Midjourney |
-| Image to Video | VEO 3.1 | Kling, Runway, Pika |
+| Image to Video | MiniMax | VEO, VEO 3, Kling, Runway, Pika |
 | Text to Speech | ElevenLabs | PlayHT, Azure TTS |
 | Generate Script | Claude | GPT-4, Gemini |
 
@@ -754,7 +754,7 @@ Example: Image node output → connects to both Video node AND next Image node a
 | Node | Type | Values | Output Handle | Connects To |
 |------|------|--------|---------------|-------------|
 | ImageProviderNode | `image-provider` | nano-banana, flux, dalle, midjourney | `image_provider` | Generate Image |
-| VideoProviderNode | `video-provider` | veo, kling, runway, pika | `video_provider` | Image to Video |
+| VideoProviderNode | `video-provider` | minimax, veo, veo3, kling, runway, pika | `video_provider` | Image to Video, Video to Video |
 | VoiceProviderNode | `voice-provider` | elevenlabs, playht, azure | `voice_provider` | Text to Speech |
 | ScriptProviderNode | `script-provider` | claude, gpt, gemini | `script_provider` | Generate Script |
 
@@ -864,7 +864,7 @@ interface ImageProviderNode {
 interface VideoProviderNode {
   type: 'video-provider';
   data: {
-    provider: 'veo' | 'kling' | 'runway' | 'pika';
+    provider: 'minimax' | 'veo' | 'veo3' | 'kling' | 'runway' | 'pika';
   };
   inputs: [];
   outputs: ['video_provider'];
@@ -1042,7 +1042,7 @@ interface GenerateImageNode {
 interface ImageToVideoNode {
   type: 'image-to-video';
   data: {
-    provider: 'veo' | 'kling' | 'runway' | 'pika';
+    provider: 'minimax' | 'veo' | 'veo3' | 'kling' | 'runway' | 'pika';
     model?: string;
     duration?: number;       // seconds
     motion?: 'subtle' | 'moderate' | 'dynamic';
@@ -1056,7 +1056,7 @@ interface ImageToVideoNode {
   creditCost: 20;
 
   // VEO 3 AUDIO:
-  // VEO 3 has a `generate_audio` toggle (default: true when VEO selected).
+  // VEO 3 has a `generate_audio` toggle (default: true when VEO 3 selected).
   // When enabled, VEO generates AI audio from the prompt (ambient sounds, etc.).
   // VEO does NOT accept external audio files - it only generates audio from prompt.
   // If user wants custom audio instead:
@@ -1405,7 +1405,7 @@ function validateWorkflow(workflow: Workflow): ValidationResult {
     if (node.type === 'merge-video-audio') {
       const inputNode = getInputNode(workflow, node, 'video');
       if (inputNode?.type === 'image-to-video' && 
-          inputNode.data.provider === 'veo') {
+          (inputNode.data.provider === 'veo' || inputNode.data.provider === 'veo3')) {
         // Check if there's an Extract Audio between them
         if (!hasExtractAudioBetween(workflow, inputNode, node)) {
           warnings.push({
@@ -3432,7 +3432,7 @@ Maintain a CHANGELOG.md:
 | Video Processing | FFmpeg in dedicated worker | Required for self-hosted edition |
 | Realtime Updates | Polling (MVP) → SSE (Phase 2) | No additional infrastructure needed |
 | Image Generation Model | google/nano-banana via Replicate | Good quality, supports reference images, internally uses flux-schnell |
-| Video Generation Model | minimax/video-01 via Replicate | Accepts first_frame_image for image-to-video conversion |
+| Video Generation Model | minimax/video-01 (default), google/veo-2 (VEO), google/veo-3 (VEO 3) via Replicate | MiniMax accepts first_frame_image; VEO 3 supports generate_audio toggle |
 | Asset Storage | Cloudflare R2 | S3-compatible, no egress fees, serves generated images and videos |
 | Execution Model | Frontend DAG Engine | Topological sort, parallel execution per level, sequential between levels |
 | Translation | google/gemini-2.5-flash via Replicate | Creative prompt translation (Hebrew, etc. to English) |
@@ -3453,7 +3453,7 @@ The workflow executor uses a DAG-based approach:
 
 4. **Input Resolution** (`resolveNodeInputs`): Before executing a node, the engine walks incoming edges to collect outputs from upstream nodes (prompt text, image URLs, video URLs, reference images).
 
-5. **Reference Image Chaining**: When a Generate Image node connects to another Generate Image node, the output is passed as `referenceImageUrl` (not `imageUrl`), enabling character consistency across scenes.
+5. **Reference Image Chaining**: When Generate Image nodes connect to another Generate Image node, all outputs are collected into a `referenceImageUrls` array (not a single URL). This array is passed to the Replicate API as `image_input`, which Nano Banana supports for up to 14 reference images. This enables character consistency when multiple characters from different scenes converge on a single scene (e.g., Knight from Scene 4 + Horse from Scene 3 both referenced in Scene 5).
 
 6. **Executable Node Types**: Only `generate-image`, `image-to-video`, and `video-to-video` are executable. All other node types (input, parameter, processing) are data-only and read by downstream nodes.
 
@@ -3559,6 +3559,8 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Text to Audio node (TangoFlux/Tango/AudioLDM/Bark) for sound effects generation
 - [x] VEO 3 integration with generate_audio toggle for native AI audio
 - [x] Renamed Add Audio to Merge Video & Audio for clarity
+- [x] VEO 2 and VEO 3 as separate providers in Image to Video and Video to Video nodes
+- [x] Generate Audio checkbox only shown when VEO 3 is selected (not VEO 2)
 - [x] 32 node types total (Input: 5, Parameter: 8, AI: 9, Processing: 8, Output: 2)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
@@ -3614,4 +3616,4 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 ---
 
 *Last updated: 2026-02-01*
-*Version: 1.7.0*
+*Version: 1.8.0*

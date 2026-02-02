@@ -44,10 +44,10 @@ async function request<T>(
 
 // --- Generate Image (E2E spike) ---
 
-export async function generateImage(prompt: string, referenceImageUrl?: string, provider?: string): Promise<{ jobId: string }> {
+export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
-  if (referenceImageUrl) {
-    body.referenceImageUrl = referenceImageUrl
+  if (referenceImageUrls && referenceImageUrls.length > 0) {
+    body.referenceImageUrls = referenceImageUrls
   }
   if (provider) {
     body.provider = provider

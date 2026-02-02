@@ -41,10 +41,13 @@ export function createVideoWorker() {
           .eq("id", jobId)
 
         if (job.name === "generate-image") {
-          const { prompt, referenceImageUrl, provider } = job.data as { jobId: string; prompt: string; referenceImageUrl?: string; provider?: ImageProvider }
+          const { prompt, referenceImageUrls, provider } = job.data as { jobId: string; prompt: string; referenceImageUrls?: string[]; provider?: ImageProvider }
           console.log(`[worker] generate-image ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
+          if (referenceImageUrls?.length) {
+            console.log(`[worker] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
+          }
 
-          const replicateUrl = await generateImage(prompt, referenceImageUrl, provider)
+          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(replicateUrl, jobId, "image")

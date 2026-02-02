@@ -190,7 +190,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => n !== undefined)
 
-    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; referenceImageUrl?: string } = {}
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; referenceImageUrls?: string[] } = {}
 
     for (const src of sourceNodes) {
       const output = extractNodeOutput(src)
@@ -208,7 +208,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }
       } else if (src.type === "generate-image") {
         if (node.type === "generate-image") {
-          inputs.referenceImageUrl = output
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
         } else if (node.type === "text-to-audio") {
           inputs.prompt = (src.data as GenerateImageData).prompt ?? ""
         } else {
@@ -242,12 +242,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Promise-based node execution ---
 
-  function runImageGeneration(nodeId: string, prompt: string, referenceImageUrl?: string, provider?: string): Promise<void> {
+  function runImageGeneration(nodeId: string, prompt: string, referenceImageUrls?: string[], provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedImageUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      generateImage(prompt, referenceImageUrl, provider).then(({ jobId }) => {
+      generateImage(prompt, referenceImageUrls, provider).then(({ jobId }) => {
         toast.info("Image generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -636,7 +636,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as GenerateImageData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
       }
-      return runImageGeneration(node.id, prompt, inputs.referenceImageUrl ?? inputs.imageUrl, (node.data as GenerateImageData).provider || undefined)
+      const refImages = inputs.referenceImageUrls ?? (inputs.imageUrl ? [inputs.imageUrl] : undefined)
+      return runImageGeneration(node.id, prompt, refImages, (node.data as GenerateImageData).provider || undefined)
     }
 
     if (node.type === "image-to-video") {

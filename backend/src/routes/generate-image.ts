@@ -5,7 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 
 const generateImageBody = z.object({
   prompt: z.string().min(1).max(2000),
-  referenceImageUrl: z.string().url().optional(),
+  referenceImageUrls: z.array(z.string().url()).max(14).optional(),
   provider: z.enum(["nano-banana", "flux", "dalle", "midjourney"]).optional(),
 })
 
@@ -21,7 +21,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, referenceImageUrl, provider } = parsed.data
+    const { prompt, referenceImageUrls, provider } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -29,7 +29,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
         status: "pending",
-        input_data: { prompt, referenceImageUrl, provider, type: "generate-image" },
+        input_data: { prompt, referenceImageUrls, provider, type: "generate-image" },
       })
       .select("id")
       .single()
@@ -43,7 +43,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
     await videoQueue.add("generate-image", {
       jobId: job.id,
       prompt,
-      referenceImageUrl,
+      referenceImageUrls,
       provider,
     })
 
