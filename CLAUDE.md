@@ -1370,6 +1370,17 @@ The Scene Node is a rich data node that combines characters, locations, objects,
 **Credit Cost:** 0 (data-only, not executable by itself)
 **Implementation:** `frontend/src/components/nodes/scene-node.tsx`
 
+#### Input Handles
+
+| Handle | Position | Description |
+|--------|----------|-------------|
+| `in` | Left (top) | Optional input from upstream nodes |
+| `audio1` | Left (25%) | Audio input from TTS/audio nodes |
+| `audio2` | Left (37%) | Audio input from TTS/audio nodes |
+| `audio3` | Left (49%) | Audio input from TTS/audio nodes |
+| `audio4` | Left (61%) | Audio input from TTS/audio nodes |
+| `audio5` | Left (73%) | Audio input from TTS/audio nodes |
+
 #### Output Handles
 
 | Handle | Position | Description |
@@ -1379,7 +1390,14 @@ The Scene Node is a rich data node that combines characters, locations, objects,
 | `narration` | Right (55%) | Narration text for TTS nodes |
 | `dialogue` | Right (70%) | Dialogue lines for subtitle/caption nodes |
 | `duration` | Right (85%) | Scene duration in seconds |
-| `in` | Left | Optional input from upstream nodes |
+
+#### Audio Assignments (Connected Audio)
+
+Scene Nodes accept up to 5 audio connections from Text to Speech, Generate Music, Text to Audio, or other audio-producing nodes. Each connected audio can be assigned to a specific dialogue line via the "Connected Audio" section in Step 3 (Audio).
+
+**Data model:** `audioAssignments: AudioAssignment[]` on `SceneNodeDataType`. Each `AudioAssignment` has `handleId`, `sourceNodeId`, `dialogueIndex`, and `role` ("dialogue" | "narration" | "background" | "sfx").
+
+**Priority:** Connected audio (via handles) takes priority over per-line generated audio (via Generate button). A "Connected" badge appears on dialogue lines that have assigned audio. Users can disconnect the edge to revert to generated audio.
 
 #### Scene Editor Modal (Full-Screen Wizard)
 
@@ -3986,6 +4004,10 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Scene Node: Script title display (not node label) in dropdowns and modal header
 - [x] Scene Node: Script Connection always visible regardless of wizard step (outside step filter)
 - [x] Scene Node: SelectContent z-index fix (position=popper, z-[9999]) for modal rendering
+- [x] Scene Node: 5 audio input handles (audio1-audio5) for connecting TTS/audio nodes
+- [x] Scene Node: AudioAssignment data model mapping connected audio to dialogue lines
+- [x] Scene Node: Connected Audio section in Step 3 with source node labels, assignment dropdowns, audio players
+- [x] Scene Node: "Connected" badge on dialogue lines with assigned audio (connected audio priority over generated)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
