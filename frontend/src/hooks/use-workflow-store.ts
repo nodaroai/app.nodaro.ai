@@ -29,7 +29,7 @@ interface WorkflowState {
   readonly onNodesChange: (changes: NodeChange<WorkflowNode>[]) => void
   readonly onEdgesChange: (changes: EdgeChange<WorkflowEdge>[]) => void
   readonly onConnect: (connection: Connection) => void
-  readonly addNode: (type: SceneNodeType, position: { x: number; y: number }) => void
+  readonly addNode: (type: SceneNodeType, position: { x: number; y: number }) => string | undefined
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   readonly deleteNode: (nodeId: string) => void
   readonly deleteEdge: (edgeId: string) => void
@@ -137,10 +137,11 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   addNode: (type, position) => {
     const definition = NODE_DEFINITIONS.find((d) => d.type === type)
-    if (!definition) return
+    if (!definition) return undefined
 
+    const id = generateNodeId()
     const newNode: WorkflowNode = {
-      id: generateNodeId(),
+      id,
       type,
       position,
       data: { ...definition.defaultData },
@@ -150,6 +151,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       nodes: [...state.nodes, newNode],
       isDirty: true,
     }))
+
+    return id
   },
 
   updateNodeData: (nodeId, data) =>

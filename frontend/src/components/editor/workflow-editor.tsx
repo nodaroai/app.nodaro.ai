@@ -14,7 +14,7 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, getJobStatus } from "@/lib/api"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, getJobStatus } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
@@ -350,7 +350,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             if (job.status === "completed") {
               untrackInterval(poll)
               const imageUrl = job.output_data?.imageUrl
-              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as CharacterNodeData | undefined)?.generatedResults ?? []
+              const currentNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+              const currentData = currentNode?.data as CharacterNodeData | undefined
+              const existingResults = currentData?.generatedResults ?? []
               const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
               updateNodeData(nodeId, {
                 executionStatus: "completed",
@@ -359,6 +361,31 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 activeResultIndex: 0,
               })
               toast.success("Character portrait generated")
+
+              // Save/update character in database
+              console.log("🟢🟢🟢 ATTEMPTING TO SAVE CHARACTER TO DB 🟢🟢🟢", { characterDbId: currentData?.characterDbId, nodeId, projectId, name: data.characterName })
+              saveCharacter({
+                id: currentData?.characterDbId || undefined,
+                nodeId,
+                projectId: projectId || undefined,
+                name: data.characterName,
+                description: data.description || undefined,
+                gender: data.gender || undefined,
+                style: data.style || undefined,
+                baseOutfit: data.baseOutfit || undefined,
+                sourceImageUrl: imageUrl || undefined,
+                expressions: currentData?.expressions ?? [],
+                poses: currentData?.poses ?? [],
+                lightingVariations: currentData?.lightingVariations ?? [],
+              }).then(({ id: dbId }) => {
+                console.log("🟢🟢🟢 CHARACTER SAVED SUCCESSFULLY, dbId:", dbId, "🟢🟢🟢")
+                if (!currentData?.characterDbId) {
+                  updateNodeData(nodeId, { characterDbId: dbId })
+                }
+              }).catch((err) => {
+                console.log("🔴🔴🔴 SAVE CHARACTER FAILED:", err, "🔴🔴🔴")
+              })
+
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
@@ -464,6 +491,22 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       updateNodeData(nodeId, { [statusKey]: "completed" })
       toast.success(`${assetType} generated: ${results.length} images`)
+
+      // Sync updated assets to database
+      const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+      const latestData = latestNode?.data as CharacterNodeData | undefined
+      if (latestData?.characterDbId) {
+        saveCharacter({
+          id: latestData.characterDbId,
+          nodeId,
+          projectId: projectId || undefined,
+          name: latestData.characterName,
+          sourceImageUrl: latestData.sourceImageUrl || undefined,
+          expressions: latestData.expressions ?? [],
+          poses: latestData.poses ?? [],
+          lightingVariations: latestData.lightingVariations ?? [],
+        }).catch(() => { /* best-effort */ })
+      }
     } catch (err) {
       // Keep any results generated so far
       updateNodeData(nodeId, { [statusKey]: "failed" })

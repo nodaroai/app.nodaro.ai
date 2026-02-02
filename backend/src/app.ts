@@ -28,6 +28,7 @@ import { imageProxyRoutes } from "./routes/image-proxy.js"
 import { generateCharacterRoutes } from "./routes/generate-character.js"
 import { generateCharacterAssetRoutes } from "./routes/generate-character-asset.js"
 import { splitImageRoutes } from "./routes/split-image.js"
+import { characterRoutes } from "./routes/characters.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -62,6 +63,7 @@ export async function buildApp() {
   await app.register(generateCharacterRoutes)
   await app.register(generateCharacterAssetRoutes)
   await app.register(splitImageRoutes)
+  await app.register(characterRoutes)
 
   return app
 }

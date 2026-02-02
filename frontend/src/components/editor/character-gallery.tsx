@@ -1,10 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { UserCircle, Users, X } from "lucide-react"
+import { UserCircle, Users, X, Target } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { ImageLightbox } from "@/components/ui/image-lightbox"
+import { CharacterPageModal } from "./character-page-modal"
 import type { CharacterNodeData } from "@/types/nodes"
 
 export function CharacterGalleryButton() {
@@ -12,7 +12,7 @@ export function CharacterGalleryButton() {
   const nodes = useWorkflowStore((s) => s.nodes)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const workflowName = useWorkflowStore((s) => s.workflowName)
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [characterPageId, setCharacterPageId] = useState<string | null>(null)
 
   const characters = useMemo(() => {
     const result: { id: string; name: string; imageUrl: string | undefined }[] = []
@@ -71,40 +71,42 @@ export function CharacterGalleryButton() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {/* Current workflow group */}
                   <div>
                     <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-2 px-1">
                       {workflowName || "Untitled Workflow"}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {characters.map((c) => (
-                        <button
+                        <div
                           key={c.id}
-                          type="button"
-                          className="flex flex-col items-center gap-1.5 p-2 rounded-lg border border-transparent hover:border-border hover:bg-muted/30 transition-colors group"
-                          onClick={() => {
-                            selectNode(c.id)
-                            setOpen(false)
-                          }}
-                          title={`Select ${c.name}`}
+                          role="button"
+                          tabIndex={0}
+                          className="relative flex flex-col items-center gap-1.5 p-2 rounded-lg border border-transparent hover:border-border hover:bg-muted/30 transition-colors group cursor-pointer"
+                          onClick={() => setCharacterPageId(c.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setCharacterPageId(c.id) }}
+                          title={`Open ${c.name}`}
                         >
+                          {/* Select node button */}
+                          <button
+                            type="button"
+                            className="absolute top-1 right-1 p-1 rounded bg-background/80 hover:bg-background border border-border/50 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              selectNode(c.id)
+                              setOpen(false)
+                            }}
+                            title="Select node on canvas"
+                          >
+                            <Target className="w-3 h-3" />
+                          </button>
+
                           {c.imageUrl ? (
-                            <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted/30">
+                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted/30">
                               <img
                                 src={c.imageUrl}
                                 alt={c.name}
                                 className="w-full h-full object-cover"
                               />
-                              <button
-                                type="button"
-                                className="absolute inset-0 bg-black/0 hover:bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  if (c.imageUrl) setLightboxSrc(c.imageUrl)
-                                }}
-                              >
-                                <span className="text-white text-[10px]">Enlarge</span>
-                              </button>
                             </div>
                           ) : (
                             <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
@@ -112,7 +114,7 @@ export function CharacterGalleryButton() {
                             </div>
                           )}
                           <span className="text-xs truncate w-full text-center">{c.name}</span>
-                        </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -123,11 +125,12 @@ export function CharacterGalleryButton() {
         </div>
       )}
 
-      <ImageLightbox
-        src={lightboxSrc}
-        alt="Character"
-        onClose={() => setLightboxSrc(null)}
-      />
+      {characterPageId && (
+        <CharacterPageModal
+          characterNodeId={characterPageId}
+          onClose={() => setCharacterPageId(null)}
+        />
+      )}
     </>
   )
 }

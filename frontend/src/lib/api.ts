@@ -91,7 +91,7 @@ export async function generateCharacter(data: {
 }
 
 export async function generateCharacterAsset(data: {
-  assetType: "expressions" | "poses" | "lighting" | "angles"
+  assetType: "expressions" | "poses" | "lighting" | "angles" | "custom"
   variant: string
   name: string
   description?: string
@@ -108,6 +108,45 @@ export async function generateCharacterAsset(data: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throw new Error(err?.error?.message ?? "Failed to start character asset generation")
+  }
+  return res.json()
+}
+
+export async function saveCharacter(data: {
+  id?: string
+  nodeId: string
+  workflowId?: string
+  projectId?: string
+  name: string
+  description?: string
+  gender?: string
+  style?: string
+  baseOutfit?: string
+  sourceImageUrl?: string
+  expressions?: { name: string; url: string }[]
+  poses?: { name: string; url: string }[]
+  lightingVariations?: { name: string; url: string }[]
+}): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/characters`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to save character")
+  }
+  return res.json()
+}
+
+export async function deleteCharacter(characterId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to delete character")
   }
   return res.json()
 }

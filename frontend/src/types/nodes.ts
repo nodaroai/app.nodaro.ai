@@ -593,11 +593,12 @@ export interface CharacterAssetItem {
   readonly url: string
 }
 
-export type CharacterAssetType = "expressions" | "poses" | "lighting" | "angles"
+export type CharacterAssetType = "expressions" | "poses" | "lighting" | "angles" | "custom"
 
 export type CharacterNodeData = {
   [key: string]: unknown
   label: string
+  characterDbId: string
   characterName: string
   description: string
   sourceImageUrl: string
@@ -626,6 +627,8 @@ export type CharacterNodeData = {
   poseStatus: "idle" | "running" | "completed" | "failed"
   lightingStatus: "idle" | "running" | "completed" | "failed"
   anglesStatus: "idle" | "running" | "completed" | "failed"
+  // Custom variations
+  customVariations: Array<{ prompt: string; url: string; createdAt: string }>
 }
 
 // --- Scene Node Data ---
@@ -1113,6 +1116,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["characterRef"],
     defaultData: {
       label: "Character",
+      characterDbId: "",
       characterName: "",
       description: "",
       sourceImageUrl: "",
@@ -1138,6 +1142,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       poseStatus: "idle",
       lightingStatus: "idle",
       anglesStatus: "idle",
+      customVariations: [],
     } as CharacterNodeData,
   },
   // Scene

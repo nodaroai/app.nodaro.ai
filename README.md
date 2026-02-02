@@ -46,8 +46,14 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Sequential per-variant API calls with progressive UI updates
 - Collapsible asset sections with accordion UI
 - Click-to-enlarge lightbox for all character images (portal-based, Escape/click/X to close)
-- Character Gallery popup in sidebar: view all characters in project, click to select or enlarge
+- Character Gallery popup in sidebar: view all characters in project, click to open Character Page
 - Version handling: auto-versioning for duplicate character names with data clearing
+- **Database persistence**: characters saved to Supabase `characters` table, persist across sessions
+- **Character Page modal**: full-page view with tabs (Main, Expressions, Poses, Lighting, Angles, Custom)
+- **Custom variations**: generate custom character images with free-form text prompts
+- **Delete assets**: inline confirmation per image, delete individual assets from any tab
+- **Delete character permanently**: removes from database and canvas with confirmation
+- Drag and drop character images to canvas to create Upload Image nodes (in progress)
 
 ### Dashboard
 - Projects with folders

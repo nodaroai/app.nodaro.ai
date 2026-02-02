@@ -4033,6 +4033,13 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Character Gallery: popup modal in node toolbar sidebar, shows all character nodes with thumbnails, click to select/enlarge
 - [x] Image Lightbox: portal-based fullscreen image viewer (createPortal to document.body), Escape/click/X to close
 - [x] Image upload: reuses POST /v1/upload/image endpoint for character reference images
+- [x] Character DB persistence: characters saved to Supabase `characters` table on portrait generation, `characterDbId` stored in node data
+- [x] Character Page modal: full-page modal with tabs (Main, Expressions, Poses, Lighting, Angles, Custom), opened from Character Gallery
+- [x] Custom variation generation: free-form text prompt generates custom character images via `generate-character-asset` endpoint with `assetType: "custom"`
+- [x] Delete individual assets: inline confirmation per image in Character Page modal
+- [x] Delete character permanently: "Delete Forever" button in Character Page header, deletes from Supabase DB + removes node from canvas
+- [x] Backend: POST /v1/characters (upsert) and DELETE /v1/characters/:id endpoints
+- [ ] Drag and drop character images to canvas (partially implemented, needs debugging)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
@@ -4086,5 +4093,5 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 
 ---
 
-*Last updated: 2026-02-02*
-*Version: 1.9.0*
+*Last updated: 2026-02-03*
+*Version: 1.10.0*

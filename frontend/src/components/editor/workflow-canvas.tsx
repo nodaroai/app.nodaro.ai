@@ -8,6 +8,7 @@ import {
   Background,
   BackgroundVariant,
   ConnectionMode,
+  useReactFlow,
   type NodeMouseHandler,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
@@ -46,6 +47,9 @@ export function WorkflowCanvas() {
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
+  const addNode = useWorkflowStore((s) => s.addNode)
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const { screenToFlowPosition } = useReactFlow()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
   const isMobile = useIsMobile()
 
@@ -84,8 +88,35 @@ export function WorkflowCanvas() {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [selectedNodeId, duplicateNode, deleteNode])
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    console.log("[DEBUG] handleDragOver, types:", Array.from(e.dataTransfer.types))
+    if (e.dataTransfer.types.includes("application/scenenode-image")) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = "copy"
+    }
+  }, [])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      const imageUrl = e.dataTransfer.getData("application/scenenode-image")
+      console.log("[DEBUG] handleDrop, imageUrl:", imageUrl)
+      if (!imageUrl) return
+      e.preventDefault()
+
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      console.log("[DEBUG] Creating upload-image node at:", position)
+      const nodeId = addNode("upload-image", position)
+      console.log("[DEBUG] Created node:", nodeId)
+      if (nodeId) {
+        updateNodeData(nodeId, { url: imageUrl })
+      }
+    },
+    [screenToFlowPosition, addNode, updateNodeData],
+  )
+
   return (
     <>
+    <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -120,15 +151,16 @@ export function WorkflowCanvas() {
           className="!bg-background"
         />
       </ReactFlow>
+    </div>
 
-      {nodeContextMenu && (
-        <NodeContextMenu
-          nodeId={nodeContextMenu.nodeId}
-          x={nodeContextMenu.x}
-          y={nodeContextMenu.y}
-          onClose={() => setNodeContextMenu(null)}
-        />
-      )}
+    {nodeContextMenu && (
+      <NodeContextMenu
+        nodeId={nodeContextMenu.nodeId}
+        x={nodeContextMenu.x}
+        y={nodeContextMenu.y}
+        onClose={() => setNodeContextMenu(null)}
+      />
+    )}
     </>
   )
 }

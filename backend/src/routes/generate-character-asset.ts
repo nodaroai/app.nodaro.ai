@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 
-const assetTypeEnum = z.enum(["expressions", "poses", "lighting", "angles"])
+const assetTypeEnum = z.enum(["expressions", "poses", "lighting", "angles", "custom"])
 
 const VARIANTS: Record<string, readonly string[]> = {
   expressions: ["neutral", "smile", "angry", "surprised", "sad", "talking"],
@@ -38,6 +38,10 @@ function buildVariantPrompt(
   const styleDesc = style ?? "realistic"
 
   const base = `Single ${genderDesc} character ${name}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, white/plain background, no text, no labels, no watermarks.`
+
+  if (assetType === "custom") {
+    return `${variant}. ${base}`
+  }
 
   if (assetType === "expressions") {
     const expressionMap: Record<string, string> = {
@@ -97,14 +101,16 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
 
     const { assetType, variant, name, description, gender, style, baseOutfit, sourceImageUrl } = parsed.data
 
-    const validVariants = VARIANTS[assetType]
-    if (validVariants && !validVariants.includes(variant)) {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: `Invalid variant "${variant}" for asset type "${assetType}". Valid: ${validVariants.join(", ")}`,
-        },
-      })
+    if (assetType !== "custom") {
+      const validVariants = VARIANTS[assetType]
+      if (validVariants && !validVariants.includes(variant)) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: `Invalid variant "${variant}" for asset type "${assetType}". Valid: ${validVariants.join(", ")}`,
+          },
+        })
+      }
     }
 
     const prompt = buildVariantPrompt(assetType, variant, name, description, gender, style, baseOutfit)
