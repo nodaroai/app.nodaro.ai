@@ -644,7 +644,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const allCharDefs = useWorkflowStore.getState().characterDefinitions
       const charDefs = allCharDefs.filter((c) => charIds.includes(c.id))
       const charRefUrls = charDefs.filter((c) => c.type === "reference" && c.referenceImageUrl).map((c) => c.referenceImageUrl as string)
-      const charDescs = charDefs.filter((c) => c.type === "description" && c.description).map((c) => `Include character '${c.name}': ${c.description}.`)
+      const charDescs = charDefs.filter((c) => c.type === "description" && c.description).map((c) => {
+        const label = c.category === "location" ? "location" : c.category === "object" ? "object" : "character"
+        return `Include ${label} '${c.name}': ${c.description}.`
+      })
 
       const refImages = [...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
       const finalPrompt = charDescs.length > 0 ? `${prompt}\n${charDescs.join(" ")}` : prompt

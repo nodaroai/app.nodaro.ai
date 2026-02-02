@@ -1169,14 +1169,14 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         />
       </MappableField>
 
-      {/* Characters section */}
+      {/* Assets section (characters, locations, objects) */}
       <div className="pt-1">
         <Separator className="mb-3" />
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Characters</label>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Assets</label>
         <div className="flex flex-col gap-1.5 mt-2">
           {attachedChars.map((char) => (
             <div key={char.id} className="flex items-start gap-2 p-2 rounded-md border bg-muted/30 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setEditingChar(char); setShowDefineModal(true) }}>
-              {char.type === "reference" && char.referenceImageUrl ? (
+              {char.referenceImageUrl ? (
                 <img src={char.referenceImageUrl} alt={char.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
               ) : (
                 <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
@@ -1187,9 +1187,12 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
                 <div className="flex items-center gap-1">
                   <span className="text-xs font-medium truncate">{char.name}</span>
                   <span className={`text-[9px] px-1 py-0.5 rounded ${
-                    char.type === "reference" || char.referenceImageUrl ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"
+                    char.category === "location" ? "bg-cyan-500/10 text-cyan-500"
+                    : char.category === "object" ? "bg-emerald-500/10 text-emerald-500"
+                    : char.referenceImageUrl ? "bg-blue-500/10 text-blue-500"
+                    : "bg-orange-500/10 text-orange-500"
                   }`}>
-                    {char.type === "reference" || char.referenceImageUrl ? "ref" : "desc"}
+                    {char.category === "location" ? "location" : char.category === "object" ? "object" : char.referenceImageUrl ? "ref" : "desc"}
                   </span>
                   {char.type === "description" && !char.referenceImageUrl && (
                     <span className="text-[8px] text-orange-500" title="Needs reference image for reuse">needs ref</span>
@@ -1209,7 +1212,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
             </div>
           ))}
           {attachedChars.length === 0 && (
-            <p className="text-[10px] text-muted-foreground/60">No characters attached. Add characters for visual consistency.</p>
+            <p className="text-[10px] text-muted-foreground/60">No assets attached. Add characters, locations, or objects for visual consistency.</p>
           )}
         </div>
 
@@ -1233,12 +1236,19 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
                     className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-1.5"
                     onClick={() => attachCharacter(char.id)}
                   >
-                    {char.type === "reference" ? (
-                      <ImageIcon className="w-3 h-3 text-blue-500" />
+                    {char.referenceImageUrl ? (
+                      <img src={char.referenceImageUrl} alt="" className="w-4 h-4 rounded object-cover" />
                     ) : (
                       <FileText className="w-3 h-3 text-orange-500" />
                     )}
                     <span className="truncate">{char.name}</span>
+                    <span className={`text-[8px] px-1 rounded ${
+                      char.category === "location" ? "bg-cyan-500/10 text-cyan-500"
+                      : char.category === "object" ? "bg-emerald-500/10 text-emerald-500"
+                      : "bg-muted text-muted-foreground"
+                    }`}>
+                      {char.category === "location" ? "loc" : char.category === "object" ? "obj" : ""}
+                    </span>
                   </button>
                 ))}
               </div>

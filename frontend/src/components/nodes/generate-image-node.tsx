@@ -20,6 +20,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedImageUrl
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
+  const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
+  const attachedIds = nodeData.characterDefinitionIds ?? []
+  const attachedCount = allCharDefs.filter((c) => attachedIds.includes(c.id)).length
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [extractOpen, setExtractOpen] = useState(false)
@@ -148,7 +151,14 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         <div className="flex justify-between text-muted-foreground">
           <span>{nodeData.provider}</span>
-          <span>{nodeData.aspectRatio}</span>
+          <div className="flex items-center gap-1.5">
+            {attachedCount > 0 && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-500" title={`${attachedCount} asset${attachedCount !== 1 ? "s" : ""} attached`}>
+                {attachedCount} ref{attachedCount !== 1 ? "s" : ""}
+              </span>
+            )}
+            <span>{nodeData.aspectRatio}</span>
+          </div>
         </div>
       </div>
     </BaseNode>
