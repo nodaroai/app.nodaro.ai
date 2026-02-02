@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare } from "lucide-react"
+import { useState, useCallback } from "react"
+import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare, Check, RatioIcon } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -92,11 +92,72 @@ function TagInput({
   )
 }
 
+function QuickAddInput({
+  category,
+  placeholder,
+  onAdd,
+}: {
+  readonly category: "character" | "location" | "object"
+  readonly placeholder: string
+  readonly onAdd: (name: string, description: string) => void
+}) {
+  const [name, setName] = useState("")
+  const [desc, setDesc] = useState("")
+  const [expanded, setExpanded] = useState(false)
+
+  function handleAdd() {
+    const trimmedName = name.trim()
+    if (!trimmedName) return
+    onAdd(trimmedName, desc.trim())
+    setName("")
+    setDesc("")
+    setExpanded(false)
+  }
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors text-muted-foreground"
+      >
+        <Plus className="w-3 h-3" /> Quick add {category} by description
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-1 p-2 rounded-md border border-dashed bg-muted/10">
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={`${category.charAt(0).toUpperCase() + category.slice(1)} name`}
+        className="h-6 text-[10px]"
+        autoFocus
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd() } if (e.key === "Escape") setExpanded(false) }}
+      />
+      <Input
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder={placeholder}
+        className="h-6 text-[10px]"
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd() } if (e.key === "Escape") setExpanded(false) }}
+      />
+      <div className="flex gap-1 justify-end">
+        <button type="button" onClick={() => setExpanded(false)} className="text-[10px] px-2 py-0.5 rounded hover:bg-muted">Cancel</button>
+        <button type="button" onClick={handleAdd} disabled={!name.trim()} className="text-[10px] px-2 py-0.5 rounded bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50">Add</button>
+      </div>
+    </div>
+  )
+}
+
 export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
+  const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const [showPromptPreview, setShowPromptPreview] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importTarget, setImportTarget] = useState<"character" | "location" | "object">("character")
+  const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set())
 
   const characterAssets = allAssets.filter((a) => !a.category || a.category === "character")
   const locationAssets = allAssets.filter((a) => a.category === "location")
@@ -137,8 +198,12 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
     setImportModalOpen(true)
   }
 
+  function markRecentlyAdded(id: string) {
+    setRecentlyAdded((prev) => new Set([...prev, id]))
+    setTimeout(() => setRecentlyAdded((prev) => { const next = new Set(prev); next.delete(id); return next }), 2000)
+  }
+
   function handleImported(ids: string[]) {
-    // After importing, auto-add imported assets to the scene based on their category
     const { characterDefinitions } = useWorkflowStore.getState()
     for (const id of ids) {
       const asset = characterDefinitions.find((a) => a.id === id)
@@ -148,15 +213,35 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
       if (cat === "character" && !data.characters.some((c) => c.assetId === id)) {
         const entry: SceneCharacterEntry = { assetId: id, mood: "", action: "" }
         onUpdate({ characters: [...data.characters, entry] })
+        markRecentlyAdded(id)
       } else if (cat === "location" && !locs.some((l) => l.assetId === id)) {
         const entry: SceneLocationEntry = { assetId: id, isPrimary: locs.length === 0 }
         onUpdate({ locations: [...locs, entry] })
+        markRecentlyAdded(id)
       } else if (cat === "object" && !data.objects.some((o) => o.assetId === id)) {
         const entry: SceneObjectEntry = { assetId: id }
         onUpdate({ objects: [...data.objects, entry] })
+        markRecentlyAdded(id)
       }
     }
   }
+
+  const handleQuickAdd = useCallback((category: "character" | "location" | "object", name: string, description: string) => {
+    const id = crypto.randomUUID()
+    addCharacterDefinition({ id, name, type: "description", category, description: description || undefined })
+    if (category === "character") {
+      const entry: SceneCharacterEntry = { assetId: id, mood: "", action: "" }
+      onUpdate({ characters: [...data.characters, entry] })
+    } else if (category === "location") {
+      const locs = data.locations ?? []
+      const entry: SceneLocationEntry = { assetId: id, isPrimary: locs.length === 0 }
+      onUpdate({ locations: [...locs, entry] })
+    } else {
+      const entry: SceneObjectEntry = { assetId: id, description: description || undefined }
+      onUpdate({ objects: [...data.objects, entry] })
+    }
+    markRecentlyAdded(id)
+  }, [addCharacterDefinition, data.characters, data.locations, data.objects, onUpdate])
 
   const usedCharIds = new Set(data.characters.map((c) => c.assetId))
   const availableChars = characterAssets.filter((a) => !usedCharIds.has(a.id))
@@ -218,9 +303,10 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
         {data.characters.map((entry, i) => {
           const asset = allAssets.find((a) => a.id === entry.assetId)
           return (
-            <div key={`${entry.assetId}-${i}`} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
+            <div key={`${entry.assetId}-${i}`} className={`flex flex-col gap-1.5 p-2 rounded-md border transition-colors duration-500 ${recentlyAdded.has(entry.assetId) ? "bg-green-500/10 border-green-500/30" : "bg-muted/20"}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
+                  {recentlyAdded.has(entry.assetId) && <Check className="w-3 h-3 text-green-500" />}
                   {asset?.referenceImageUrl && (
                     <img src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" />
                   )}
@@ -277,16 +363,18 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </SelectContent>
           </Select>
         )}
+        <QuickAddInput
+          category="character"
+          placeholder="e.g. tall knight with blonde hair and blue cape"
+          onAdd={(name, desc) => handleQuickAdd("character", name, desc)}
+        />
         <button
           type="button"
           onClick={() => openImportModal("character")}
           className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
         >
-          <Download className="w-3 h-3" /> Import characters from other projects
+          <Download className="w-3 h-3" /> Import from other projects
         </button>
-        {availableChars.length === 0 && data.characters.length === 0 && (
-          <p className="text-[10px] text-muted-foreground">No character assets defined. Import or extract them from generated images.</p>
-        )}
       </CollapsibleSection>
 
       {/* Dialogue */}
@@ -363,9 +451,10 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
         {(data.locations ?? []).map((loc, i) => {
           const asset = allAssets.find((a) => a.id === loc.assetId)
           return (
-            <div key={`${loc.assetId}-${i}`} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
+            <div key={`${loc.assetId}-${i}`} className={`flex flex-col gap-1.5 p-2 rounded-md border transition-colors duration-500 ${recentlyAdded.has(loc.assetId) ? "bg-green-500/10 border-green-500/30" : "bg-muted/20"}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
+                  {recentlyAdded.has(loc.assetId) && <Check className="w-3 h-3 text-green-500" />}
                   {asset?.referenceImageUrl && (
                     <img src={asset.referenceImageUrl} alt={asset?.name} className="w-6 h-6 rounded object-cover" />
                   )}
@@ -477,12 +566,17 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </SelectContent>
           </Select>
         )}
+        <QuickAddInput
+          category="location"
+          placeholder="e.g. dark medieval castle courtyard at dusk"
+          onAdd={(name, desc) => handleQuickAdd("location", name, desc)}
+        />
         <button
           type="button"
           onClick={() => openImportModal("location")}
           className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
         >
-          <Download className="w-3 h-3" /> Import locations from other projects
+          <Download className="w-3 h-3" /> Import from other projects
         </button>
 
         {/* Default environment (when no locations or as fallback) */}
@@ -531,7 +625,8 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
         {data.objects.map((entry, i) => {
           const asset = allAssets.find((a) => a.id === entry.assetId)
           return (
-            <div key={`${entry.assetId}-${i}`} className="flex items-center gap-1.5 p-2 rounded-md border bg-muted/20">
+            <div key={`${entry.assetId}-${i}`} className={`flex items-center gap-1.5 p-2 rounded-md border transition-colors duration-500 ${recentlyAdded.has(entry.assetId) ? "bg-green-500/10 border-green-500/30" : "bg-muted/20"}`}>
+              {recentlyAdded.has(entry.assetId) && <Check className="w-3 h-3 text-green-500" />}
               {asset?.referenceImageUrl && (
                 <img src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" />
               )}
@@ -566,17 +661,48 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </SelectContent>
           </Select>
         )}
+        <QuickAddInput
+          category="object"
+          placeholder="e.g. glowing enchanted sword with runes"
+          onAdd={(name, desc) => handleQuickAdd("object", name, desc)}
+        />
         <button
           type="button"
           onClick={() => openImportModal("object")}
           className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
         >
-          <Download className="w-3 h-3" /> Import objects from other projects
+          <Download className="w-3 h-3" /> Import from other projects
         </button>
       </CollapsibleSection>
 
       {/* Cinematography */}
       <CollapsibleSection title="Cinematography" icon={<Camera className="w-3.5 h-3.5" />}>
+        <div>
+          <Label className="text-[10px]">Aspect Ratio</Label>
+          <div className="flex gap-1 mt-0.5">
+            {(["16:9", "9:16", "1:1", "4:3", "21:9", "4:5"] as const).map((ratio) => (
+              <button
+                key={ratio}
+                type="button"
+                onClick={() => onUpdate({ aspectRatio: ratio })}
+                className={`flex flex-col items-center gap-0.5 px-1.5 py-1 rounded text-[9px] border transition-colors ${
+                  data.aspectRatio === ratio
+                    ? "border-violet-500 bg-violet-500/10 text-violet-500"
+                    : "border-muted hover:bg-muted/50 text-muted-foreground"
+                }`}
+              >
+                <div
+                  className={`border rounded-sm ${data.aspectRatio === ratio ? "border-violet-500" : "border-muted-foreground/40"}`}
+                  style={{
+                    width: ratio === "9:16" ? 10 : ratio === "1:1" ? 14 : ratio === "4:5" ? 12 : 20,
+                    height: ratio === "9:16" ? 18 : ratio === "1:1" ? 14 : ratio === "4:3" ? 15 : ratio === "4:5" ? 15 : ratio === "21:9" ? 9 : 12,
+                  }}
+                />
+                <span>{ratio}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-1.5">
           <div>
             <Label className="text-[10px]">Shot Type</Label>

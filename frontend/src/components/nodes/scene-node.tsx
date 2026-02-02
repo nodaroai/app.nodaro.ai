@@ -170,6 +170,11 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
           <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500">
             {nodeData.shotType}
           </span>
+          {nodeData.aspectRatio && nodeData.aspectRatio !== "16:9" && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500">
+              {nodeData.aspectRatio}
+            </span>
+          )}
           <span className="text-[9px]">{nodeData.duration}s</span>
           {charCount > 0 && (
             <span className="flex items-center gap-0.5 text-[9px]" title={`${charCount} character${charCount !== 1 ? "s" : ""}`}>

@@ -281,12 +281,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Promise-based node execution ---
 
-  function runImageGeneration(nodeId: string, prompt: string, referenceImageUrls?: string[], provider?: string): Promise<void> {
+  function runImageGeneration(nodeId: string, prompt: string, referenceImageUrls?: string[], provider?: string, aspectRatio?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedImageUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      generateImage(prompt, referenceImageUrls, provider).then(({ jobId }) => {
+      generateImage(prompt, referenceImageUrls, provider, undefined, aspectRatio).then(({ jobId }) => {
         toast.info("Image generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -842,7 +842,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }
       }
       const finalPrompt = charDescs.length > 0 ? `${prompt}\n${charDescs.join(" ")}` : prompt
-      return runImageGeneration(node.id, finalPrompt, refUrls.length > 0 ? refUrls : undefined)
+      const sceneAspectRatio = (sceneData as Record<string, unknown>).aspectRatio as string | undefined
+      return runImageGeneration(node.id, finalPrompt, refUrls.length > 0 ? refUrls : undefined, undefined, sceneAspectRatio)
     }
 
     return Promise.resolve()
