@@ -142,7 +142,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
 
   function isStepComplete(s: WizardStep): boolean {
     if (!data) return false
-    if (s === 1) return data.characters.length > 0 || (data.locations ?? []).length > 0
+    if (s === 1) return !!data.summary.trim() || (data.dialogue ?? []).length > 0
     if (s === 2) return !!activeUrl
     return true
   }

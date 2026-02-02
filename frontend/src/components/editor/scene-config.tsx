@@ -375,6 +375,84 @@ export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
             />
           </div>
         </div>
+      {/* Dialogue (text editing) */}
+      <CollapsibleSection title={`Dialogue (${data.dialogue?.length ?? 0})`} icon={<MessageSquare className="w-3.5 h-3.5" />} defaultOpen={(data.dialogue?.length ?? 0) > 0}>
+        {(data.dialogue ?? []).map((entry, i) => (
+          <div key={i} className={`flex flex-col gap-1.5 p-2 rounded-md border transition-colors duration-500 ${recentDialogueIndex === i ? "bg-green-500/10 border-green-500/30" : "bg-muted/20"}`}>
+            <div className="flex items-center justify-between gap-1.5">
+              <Select
+                value={entry.characterId ?? "__narrator__"}
+                onValueChange={(v) => {
+                  const charAsset = v === "__narrator__" ? undefined : allAssets.find((a) => a.id === v)
+                  const newDialogue = (data.dialogue ?? []).map((d, di) =>
+                    di === i ? { ...d, characterId: v === "__narrator__" ? undefined : v, characterName: v === "__narrator__" ? "Narrator" : charAsset?.name ?? d.characterName } : d
+                  )
+                  onUpdate({ dialogue: newDialogue })
+                }}
+              >
+                <SelectTrigger className="h-6 text-[10px] flex-1"><SelectValue placeholder="Speaker" /></SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  <SelectItem value="__narrator__">Narrator</SelectItem>
+                  {characterAssets.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      <span className="flex items-center gap-1.5">
+                        {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                        {a.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                value={entry.emotion ?? ""}
+                onChange={(e) => {
+                  const newDialogue = (data.dialogue ?? []).map((d, di) => di === i ? { ...d, emotion: e.target.value } : d)
+                  onUpdate({ dialogue: newDialogue })
+                }}
+                placeholder="Emotion"
+                className="h-6 text-[10px] w-20"
+              />
+              <button
+                type="button"
+                onClick={() => onUpdate({ dialogue: (data.dialogue ?? []).filter((_, di) => di !== i) })}
+                className="p-0.5 hover:text-destructive"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <Textarea
+              value={entry.text}
+              onChange={(e) => {
+                const newDialogue = (data.dialogue ?? []).map((d, di) => di === i ? { ...d, text: e.target.value } : d)
+                onUpdate({ dialogue: newDialogue })
+              }}
+              placeholder="Dialogue line..."
+              rows={2}
+              className="text-[10px] resize-none"
+            />
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            const newEntry: SceneDialogueEntry = { characterName: "Narrator", text: "" }
+            const newDialogue = [...(data.dialogue ?? []), newEntry]
+            onUpdate({ dialogue: newDialogue })
+            const newIdx = newDialogue.length - 1
+            setRecentDialogueIndex(newIdx)
+            setTimeout(() => setRecentDialogueIndex(null), 2000)
+          }}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
+        >
+          <Plus className="w-3 h-3" /> Add dialogue line
+        </button>
+      </CollapsibleSection>
+      </>
+      )}
+
+      {/* Step 2: IMAGE - Characters, Locations, Objects */}
+      {showStep(2) && (
+      <>
       {/* Characters */}
       <CollapsibleSection title={`Characters (${data.characters.length})`} icon={<Users className="w-3.5 h-3.5" />} defaultOpen={data.characters.length > 0}>
         {data.characters.map((entry, i) => {
@@ -459,162 +537,6 @@ export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
           <Download className="w-3 h-3" /> Import from other projects
         </button>
       </CollapsibleSection>
-      </>
-      )}
-
-      {/* Step 3: AUDIO - Dialogue */}
-      {showStep(3) && (
-      <>
-      {/* Dialogue */}
-      <CollapsibleSection title={`Dialogue (${data.dialogue?.length ?? 0})`} icon={<MessageSquare className="w-3.5 h-3.5" />} defaultOpen={(data.dialogue?.length ?? 0) > 0}>
-        {(data.dialogue ?? []).map((entry, i) => (
-          <div key={i} className={`flex flex-col gap-1.5 p-2 rounded-md border transition-colors duration-500 ${recentDialogueIndex === i ? "bg-green-500/10 border-green-500/30" : "bg-muted/20"}`}>
-            <div className="flex items-center justify-between gap-1.5">
-              <Select
-                value={entry.characterId ?? "__narrator__"}
-                onValueChange={(v) => {
-                  const charAsset = v === "__narrator__" ? undefined : allAssets.find((a) => a.id === v)
-                  const newDialogue = (data.dialogue ?? []).map((d, di) =>
-                    di === i ? { ...d, characterId: v === "__narrator__" ? undefined : v, characterName: v === "__narrator__" ? "Narrator" : charAsset?.name ?? d.characterName } : d
-                  )
-                  onUpdate({ dialogue: newDialogue })
-                }}
-              >
-                <SelectTrigger className="h-6 text-[10px] flex-1"><SelectValue placeholder="Speaker" /></SelectTrigger>
-                <SelectContent position="popper" className="z-[9999]">
-                  <SelectItem value="__narrator__">Narrator</SelectItem>
-                  {characterAssets.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      <span className="flex items-center gap-1.5">
-                        {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
-                        {a.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                value={entry.emotion ?? ""}
-                onChange={(e) => {
-                  const newDialogue = (data.dialogue ?? []).map((d, di) => di === i ? { ...d, emotion: e.target.value } : d)
-                  onUpdate({ dialogue: newDialogue })
-                }}
-                placeholder="Emotion"
-                className="h-6 text-[10px] w-20"
-              />
-              <button
-                type="button"
-                onClick={() => onUpdate({ dialogue: (data.dialogue ?? []).filter((_, di) => di !== i) })}
-                className="p-0.5 hover:text-destructive"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            <Textarea
-              value={entry.text}
-              onChange={(e) => {
-                const newDialogue = (data.dialogue ?? []).map((d, di) => di === i ? { ...d, text: e.target.value } : d)
-                onUpdate({ dialogue: newDialogue })
-              }}
-              placeholder="Dialogue line..."
-              rows={2}
-              className="text-[10px] resize-none"
-            />
-            {/* Voice + Generate */}
-            <div className="flex items-center gap-1.5">
-              <Select
-                value={entry.voiceId ?? "__auto__"}
-                onValueChange={(v) => {
-                  const newDialogue = (data.dialogue ?? []).map((d, di) =>
-                    di === i ? { ...d, voiceId: v === "__auto__" ? undefined : v } : d
-                  )
-                  onUpdate({ dialogue: newDialogue })
-                }}
-              >
-                <SelectTrigger className="h-6 text-[10px] flex-1"><SelectValue placeholder="Voice" /></SelectTrigger>
-                <SelectContent position="popper" className="z-[9999] max-h-48">
-                  <SelectItem value="__auto__">Auto (Rachel)</SelectItem>
-                  {TTS_VOICES.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <button
-                type="button"
-                disabled={!entry.text.trim() || generatingAudio.has(i)}
-                onClick={() => generateDialogueAudio(i)}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white transition-colors shrink-0"
-              >
-                {generatingAudio.has(i) ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Play className="w-3 h-3" />
-                )}
-                {generatingAudio.has(i) ? "Generating..." : (entry.generatedAudioResults?.length ?? 0) > 0 ? "New Version" : "Generate"}
-              </button>
-            </div>
-            {/* Audio version strip + player */}
-            {(entry.generatedAudioResults?.length ?? 0) > 0 && (() => {
-              const results = entry.generatedAudioResults ?? []
-              const activeIdx = entry.activeAudioIndex ?? 0
-              const activeAudio = results[activeIdx]
-              return (
-                <div className="flex flex-col gap-1">
-                  {results.length > 1 && (
-                    <div className="flex gap-1 overflow-x-auto">
-                      {results.map((r, vi) => (
-                        <div key={r.jobId} className="relative group/aver shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setActiveAudioVersion(i, vi)}
-                            className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${vi === activeIdx ? "bg-violet-500 text-white" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
-                          >
-                            {r.voiceId} #{vi + 1}
-                          </button>
-                          <button
-                            type="button"
-                            className="absolute -top-1 -right-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/aver:opacity-100 transition-opacity text-[8px]"
-                            onClick={(e) => { e.stopPropagation(); deleteDialogueAudioVersion(i, vi) }}
-                          >
-                            <X className="w-2 h-2" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {activeAudio && (
-                    <audio
-                      src={activeAudio.url}
-                      controls
-                      className="w-full h-7 [&::-webkit-media-controls-panel]:h-7"
-                    />
-                  )}
-                </div>
-              )
-            })()}
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => {
-            const newEntry: SceneDialogueEntry = { characterName: "Narrator", text: "" }
-            const newDialogue = [...(data.dialogue ?? []), newEntry]
-            onUpdate({ dialogue: newDialogue })
-            const newIdx = newDialogue.length - 1
-            setRecentDialogueIndex(newIdx)
-            setTimeout(() => setRecentDialogueIndex(null), 2000)
-          }}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
-        >
-          <Plus className="w-3 h-3" /> Add dialogue line
-        </button>
-      </CollapsibleSection>
-      </>
-      )}
-
-      {/* Step 1: STORY - Locations */}
-      {showStep(1) && (
-      <>
       {/* Locations */}
       <CollapsibleSection title={`Locations (${(data.locations ?? []).length})`} icon={<MapPin className="w-3.5 h-3.5" />} defaultOpen={(data.locations ?? []).length > 0}>
         {(data.locations ?? []).map((loc, i) => {
@@ -852,12 +774,6 @@ export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
           <Download className="w-3 h-3" /> Import from other projects
         </button>
       </CollapsibleSection>
-      </>
-      )}
-
-      {/* Step 2: IMAGE - Cinematography */}
-      {showStep(2) && (
-      <>
       {/* Cinematography */}
       <CollapsibleSection title="Cinematography" icon={<Camera className="w-3.5 h-3.5" />}>
         <div>
@@ -978,9 +894,95 @@ export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
       </>
       )}
 
-      {/* Step 3: AUDIO - Audio settings */}
+      {/* Step 3: AUDIO - Voice & Generation */}
       {showStep(3) && (
       <>
+      {/* Dialogue voice selection + audio generation */}
+      {(data.dialogue ?? []).length > 0 && (
+      <CollapsibleSection title={`Voice & Audio (${data.dialogue?.length ?? 0} lines)`} icon={<MessageSquare className="w-3.5 h-3.5" />} defaultOpen>
+        {(data.dialogue ?? []).map((entry, i) => (
+          <div key={i} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span className="font-medium text-foreground">{entry.characterName}</span>
+              {entry.emotion && <span>({entry.emotion})</span>}
+            </div>
+            <p className="text-[10px] text-muted-foreground line-clamp-2">{entry.text || "(empty)"}</p>
+            {/* Voice + Generate */}
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={entry.voiceId ?? "__auto__"}
+                onValueChange={(v) => {
+                  const newDialogue = (data.dialogue ?? []).map((d, di) =>
+                    di === i ? { ...d, voiceId: v === "__auto__" ? undefined : v } : d
+                  )
+                  onUpdate({ dialogue: newDialogue })
+                }}
+              >
+                <SelectTrigger className="h-6 text-[10px] flex-1"><SelectValue placeholder="Voice" /></SelectTrigger>
+                <SelectContent position="popper" className="z-[9999] max-h-48">
+                  <SelectItem value="__auto__">Auto (Rachel)</SelectItem>
+                  {TTS_VOICES.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                disabled={!entry.text.trim() || generatingAudio.has(i)}
+                onClick={() => generateDialogueAudio(i)}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white transition-colors shrink-0"
+              >
+                {generatingAudio.has(i) ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Play className="w-3 h-3" />
+                )}
+                {generatingAudio.has(i) ? "Generating..." : (entry.generatedAudioResults?.length ?? 0) > 0 ? "New Version" : "Generate"}
+              </button>
+            </div>
+            {/* Audio version strip + player */}
+            {(entry.generatedAudioResults?.length ?? 0) > 0 && (() => {
+              const results = entry.generatedAudioResults ?? []
+              const activeIdx = entry.activeAudioIndex ?? 0
+              const activeAudio = results[activeIdx]
+              return (
+                <div className="flex flex-col gap-1">
+                  {results.length > 1 && (
+                    <div className="flex gap-1 overflow-x-auto">
+                      {results.map((r, vi) => (
+                        <div key={r.jobId} className="relative group/aver shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setActiveAudioVersion(i, vi)}
+                            className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${vi === activeIdx ? "bg-violet-500 text-white" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
+                          >
+                            {r.voiceId} #{vi + 1}
+                          </button>
+                          <button
+                            type="button"
+                            className="absolute -top-1 -right-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/aver:opacity-100 transition-opacity text-[8px]"
+                            onClick={(e) => { e.stopPropagation(); deleteDialogueAudioVersion(i, vi) }}
+                          >
+                            <X className="w-2 h-2" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {activeAudio && (
+                    <audio
+                      src={activeAudio.url}
+                      controls
+                      className="w-full h-7 [&::-webkit-media-controls-panel]:h-7"
+                    />
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+        ))}
+      </CollapsibleSection>
+      )}
       {/* Audio */}
       <CollapsibleSection title="Audio" icon={<Volume2 className="w-3.5 h-3.5" />}>
         <div>
