@@ -10,7 +10,8 @@ import { textToSpeech, getJobStatus } from "@/lib/api"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
-import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
+import type { SceneNodeDataType, ExtractedReference, GenerateScriptData } from "@/types/nodes"
+import { mapScriptSceneToNodeData } from "@/types/nodes"
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -44,6 +45,25 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
 
   const node = nodes.find((n) => n.id === nodeId)
   const data = node?.data as SceneNodeDataType | undefined
+
+  const linkedScriptNode = data?.sourceScriptNodeId
+    ? nodes.find((n) => n.id === data.sourceScriptNodeId)
+    : undefined
+  const linkedScriptData = linkedScriptNode?.data as GenerateScriptData | undefined
+  const linkedActiveScript = linkedScriptData
+    ? (linkedScriptData.generatedResults?.[linkedScriptData.activeResultIndex ?? 0]?.script ?? linkedScriptData.generatedScript)
+    : undefined
+  const linkedSceneName = data && linkedActiveScript && data.sourceSceneIndex >= 0
+    ? linkedActiveScript.scenes[data.sourceSceneIndex]?.sceneName
+    : undefined
+
+  function handleSyncFromScript() {
+    if (!data || !linkedActiveScript || data.sourceSceneIndex < 0) return
+    const scene = linkedActiveScript.scenes[data.sourceSceneIndex]
+    if (!scene) return
+    const mapped = mapScriptSceneToNodeData(scene)
+    updateNodeData(nodeId, { ...mapped, sceneNumber: data.sourceSceneIndex + 1 })
+  }
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose()
@@ -158,9 +178,19 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-          <h2 className="text-sm font-semibold">
-            {data.sceneName ? `Scene: ${data.sceneName}` : "Scene Editor"}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold">
+              {data.sceneName ? `Scene: ${data.sceneName}` : "Scene Editor"}
+            </h2>
+            {linkedActiveScript && data.sourceSceneIndex >= 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                  Linked: {linkedActiveScript?.title ?? linkedScriptData?.label ?? "Script"} / {linkedSceneName ? `${data.sourceSceneIndex + 1}. ${linkedSceneName}` : `Scene ${data.sourceSceneIndex + 1}`}
+                </span>
+                <button type="button" onClick={handleSyncFromScript} className="text-[10px] text-primary hover:underline">Sync</button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className="p-1.5 hover:bg-muted rounded-md transition-colors"

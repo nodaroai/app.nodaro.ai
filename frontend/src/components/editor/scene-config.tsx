@@ -18,7 +18,8 @@ import { ImportAssetsModal } from "@/components/editor/manage-characters-modal"
 import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import { TTS_VOICES } from "@/lib/tts-voices"
 import { textToSpeech, getJobStatus } from "@/lib/api"
-import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry } from "@/types/nodes"
+import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry, GenerateScriptData, WorkflowNode } from "@/types/nodes"
+import { mapScriptSceneToNodeData, getSceneCharacterNames } from "@/types/nodes"
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -171,6 +172,7 @@ function QuickAddInput({
 export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
+  const workflowNodes = useWorkflowStore((s) => s.nodes)
   const [showPromptPreview, setShowPromptPreview] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importTarget, setImportTarget] = useState<"character" | "location" | "object">("character")
@@ -178,6 +180,7 @@ export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
   const [recentDialogueIndex, setRecentDialogueIndex] = useState<number | null>(null)
   const [expandQuickAdd, setExpandQuickAdd] = useState<"character" | "location" | "object" | null>(null)
   const [generatingAudio, setGeneratingAudio] = useState<Set<number>>(new Set())
+  const [importFeedback, setImportFeedback] = useState<string | null>(null)
 
   const characterAssets = allAssets.filter((a) => !a.category || a.category === "character")
   const locationAssets = allAssets.filter((a) => a.category === "location")
@@ -335,10 +338,152 @@ export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
   const usedObjIds = new Set(data.objects.map((o) => o.assetId))
   const availableObjs = objectAssets.filter((a) => !usedObjIds.has(a.id))
 
+  // Script connection
+  const scriptNodes = workflowNodes.filter((n) => {
+    if (n.type !== "generate-script") return false
+    const sd = n.data as GenerateScriptData
+    return sd.generatedScript || (sd.generatedResults && sd.generatedResults.length > 0)
+  })
+  const linkedScript = data.sourceScriptNodeId
+    ? scriptNodes.find((n) => n.id === data.sourceScriptNodeId)
+    : undefined
+  const linkedScriptData = linkedScript?.data as GenerateScriptData | undefined
+  const linkedActiveScript = linkedScriptData
+    ? (linkedScriptData.generatedResults?.[linkedScriptData.activeResultIndex ?? 0]?.script ?? linkedScriptData.generatedScript)
+    : undefined
+  const linkedScriptScenes = linkedActiveScript?.scenes ?? []
+
+  function doImportFromScript(sceneIndex?: number) {
+    const idx = sceneIndex ?? data.sourceSceneIndex
+    if (!linkedActiveScript || idx < 0) return
+    const scene = linkedActiveScript.scenes[idx]
+    if (!scene) return
+    const mapped = mapScriptSceneToNodeData(scene)
+    const charNames = getSceneCharacterNames(scene.characters)
+    const dialogueCount = scene.dialogue?.length ?? 0
+    onUpdate({ ...mapped, sceneNumber: idx + 1 })
+    const label = scene.sceneName ? `${idx + 1}. ${scene.sceneName}` : `Scene ${idx + 1}`
+    const parts: string[] = [`Imported ${label}`]
+    if (charNames.length > 0) parts.push(`${charNames.length} character${charNames.length > 1 ? "s" : ""}`)
+    if (dialogueCount > 0) parts.push(`${dialogueCount} dialogue line${dialogueCount > 1 ? "s" : ""}`)
+    setImportFeedback(parts.join(" -- "))
+    setTimeout(() => setImportFeedback(null), 3000)
+  }
+
+  function handleImportFromScript() {
+    doImportFromScript()
+  }
+
+  function handleSceneIndexChange(newIndex: number) {
+    onUpdate({ sourceSceneIndex: newIndex })
+    if (data.autoSyncWithScript && newIndex >= 0) {
+      // Defer import to next tick so data.sourceSceneIndex is updated
+      setTimeout(() => doImportFromScript(newIndex), 0)
+    }
+  }
+
+  function handleUnlinkScript() {
+    onUpdate({ sourceScriptNodeId: "", sourceSceneIndex: -1, autoSyncWithScript: false })
+    setImportFeedback(null)
+  }
+
+  function handleAutoSyncToggle(checked: boolean) {
+    onUpdate({ autoSyncWithScript: checked })
+    if (checked && data.sourceSceneIndex >= 0) {
+      doImportFromScript()
+    }
+  }
+
   const showStep = (s: number) => !step || step === s
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Script Connection - always visible when scripts exist */}
+      {scriptNodes.length > 0 && (
+          <div className="border rounded-md p-3 bg-muted/30 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Download className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium">Script Connection</span>
+              {data.sourceScriptNodeId && (
+                <button type="button" onClick={handleUnlinkScript} className="ml-auto text-[10px] text-muted-foreground hover:text-destructive">
+                  Unlink
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={data.sourceScriptNodeId || "__none__"}
+                onValueChange={(v) => onUpdate({ sourceScriptNodeId: v === "__none__" ? "" : v, sourceSceneIndex: -1 })}
+              >
+                <SelectTrigger className="h-7 text-[10px] flex-1">
+                  <SelectValue placeholder="Select script..." />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  <SelectItem value="__none__">No script</SelectItem>
+                  {scriptNodes.map((n) => {
+                    const sd = n.data as GenerateScriptData
+                    const activeScript = sd.generatedResults?.[sd.activeResultIndex ?? 0]?.script ?? sd.generatedScript
+                    const title = activeScript?.title ?? sd.label ?? n.id
+                    return (
+                      <SelectItem key={n.id} value={n.id}>{title}</SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+              {linkedScriptScenes.length > 0 && (
+                <Select
+                  value={data.sourceSceneIndex >= 0 ? String(data.sourceSceneIndex) : "__none__"}
+                  onValueChange={(v) => handleSceneIndexChange(v === "__none__" ? -1 : Number(v))}
+                >
+                  <SelectTrigger className="h-7 text-[10px] flex-1">
+                    <SelectValue placeholder="Select scene..." />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="z-[9999]">
+                    <SelectItem value="__none__">Select scene</SelectItem>
+                    {linkedScriptScenes.map((s, i) => (
+                      <SelectItem key={i} value={String(i)}>
+                        {s.sceneName ? `${i + 1}. ${s.sceneName}` : `Scene ${i + 1}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            {/* Scene preview */}
+            {data.sourceScriptNodeId && data.sourceSceneIndex >= 0 && linkedScriptScenes[data.sourceSceneIndex] && (
+              <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1.5 line-clamp-2">
+                {linkedScriptScenes[data.sourceSceneIndex].visualDescription || linkedScriptScenes[data.sourceSceneIndex].action || "No description"}
+              </div>
+            )}
+            {data.sourceScriptNodeId && data.sourceSceneIndex >= 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleImportFromScript}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  <Download className="w-3 h-3" /> Import Now
+                </button>
+                <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={data.autoSyncWithScript ?? false}
+                    onChange={(e) => handleAutoSyncToggle(e.target.checked)}
+                    className="w-3 h-3"
+                  />
+                  Auto-sync
+                </label>
+              </div>
+            )}
+            {/* Import feedback */}
+            {importFeedback && (
+              <div className="flex items-center gap-1.5 text-[10px] text-green-600 dark:text-green-400 bg-green-500/10 rounded px-2 py-1">
+                <Check className="w-3 h-3 shrink-0" />
+                <span>{importFeedback}</span>
+              </div>
+            )}
+          </div>
+        )}
       {/* Step 1: STORY */}
       {showStep(1) && (
       <>

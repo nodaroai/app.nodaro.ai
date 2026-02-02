@@ -183,6 +183,98 @@ export function getSceneMoodDisplay(mood: ScriptScene["mood"]): string {
   return (mood as string) ?? ""
 }
 
+/** Map a ScriptScene to partial SceneNodeDataType fields for import/sync */
+export function mapScriptSceneToNodeData(
+  scene: ScriptScene,
+): Partial<SceneNodeDataType> {
+  const characters: SceneCharacterEntry[] = scene.characters
+    ? (typeof scene.characters[0] === "string"
+        ? (scene.characters as readonly string[]).map(() => ({
+            assetId: "",
+            mood: "",
+            action: "",
+          }))
+        : (scene.characters as readonly ScriptSceneCharacter[]).map((c) => ({
+            assetId: "",
+            mood: c.mood ?? "",
+            action: c.action ?? "",
+            positionInFrame: (c.position as SceneCharacterEntry["positionInFrame"]) ?? undefined,
+          })))
+    : []
+
+  const dialogue: SceneDialogueEntry[] = scene.dialogue
+    ? scene.dialogue.map((d) => ({
+        characterId: undefined,
+        characterName: d.speaker ?? "",
+        text: d.text ?? "",
+        emotion: d.emotion ?? undefined,
+      }))
+    : []
+
+  const locations: SceneLocationEntry[] = scene.location
+    ? [{
+        assetId: "",
+        name: scene.location.name ?? "",
+        isPrimary: true,
+        timeOfDay: (scene.location.timeOfDay as SceneLocationEntry["timeOfDay"]) ?? undefined,
+        weather: (scene.location.weather as SceneLocationEntry["weather"]) ?? undefined,
+        lighting: (scene.location.lighting as SceneLocationEntry["lighting"]) ?? undefined,
+      }]
+    : []
+
+  const mood: string[] = Array.isArray(scene.mood)
+    ? [...scene.mood]
+    : scene.mood ? [scene.mood as string] : []
+
+  const result: Partial<SceneNodeDataType> = {
+    sceneName: scene.sceneName ?? "",
+    summary: scene.visualDescription ?? "",
+    duration: scene.duration ?? scene.durationHint ?? 5,
+    mood,
+    musicMood: scene.musicMood ?? "",
+    soundEffects: scene.soundEffects ? [...scene.soundEffects] : [],
+    characters,
+    dialogue,
+    locations,
+    generatedPrompt: scene.imagePrompt ?? "",
+    narration: scene.action ?? "",
+  }
+
+  if (scene.cinematography) {
+    const c = scene.cinematography
+    if (c.shotType) result.shotType = c.shotType as SceneNodeDataType["shotType"]
+    if (c.cameraAngle) result.cameraAngle = c.cameraAngle as SceneNodeDataType["cameraAngle"]
+    if (c.cameraMovement) result.cameraMovement = c.cameraMovement as SceneNodeDataType["cameraMovement"]
+  }
+
+  if (scene.location?.timeOfDay) {
+    result.timeOfDay = scene.location.timeOfDay as SceneNodeDataType["timeOfDay"]
+  }
+  if (scene.location?.weather) {
+    result.weather = scene.location.weather as SceneNodeDataType["weather"]
+  }
+  if (scene.location?.lighting) {
+    result.lighting = scene.location.lighting as SceneNodeDataType["lighting"]
+  }
+
+  // Carry over generated images if present
+  if (scene.generatedImages && scene.generatedImages.length > 0) {
+    const activeIdx = scene.activeImageIndex ?? 0
+    const activeImg = scene.generatedImages[activeIdx]
+    if (activeImg?.url) {
+      result.generatedResults = scene.generatedImages.map((img) => ({
+        url: img.url,
+        timestamp: img.timestamp,
+        jobId: img.jobId ?? "",
+      }))
+      result.activeResultIndex = activeIdx
+      result.generatedImageUrl = activeImg.url
+    }
+  }
+
+  return result
+}
+
 export interface ExtractedReference {
   readonly id: string
   readonly name: string
@@ -563,6 +655,9 @@ export type SceneNodeDataType = {
   activeResultIndex: number
   generatedImageUrl: string
   fieldMappings: FieldMappings
+  sourceScriptNodeId: string
+  sourceSceneIndex: number
+  autoSyncWithScript: boolean
 }
 
 // --- Union Types ---
@@ -987,6 +1082,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       activeResultIndex: 0,
       generatedImageUrl: "",
       fieldMappings: {},
+      sourceScriptNodeId: "",
+      sourceSceneIndex: -1,
+      autoSyncWithScript: false,
     } as SceneNodeDataType,
   },
 ]
