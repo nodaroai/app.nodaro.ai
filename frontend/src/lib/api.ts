@@ -44,7 +44,7 @@ async function request<T>(
 
 // --- Generate Image (E2E spike) ---
 
-export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[]): Promise<{ jobId: string }> {
+export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[], aspectRatio?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     body.referenceImageUrls = referenceImageUrls
@@ -54,6 +54,9 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   }
   if (provider) {
     body.provider = provider
+  }
+  if (aspectRatio) {
+    body.aspectRatio = aspectRatio
   }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",

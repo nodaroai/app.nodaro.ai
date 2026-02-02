@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare, Check, RatioIcon } from "lucide-react"
+import { useState, useCallback, useEffect } from "react"
+import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare, Check, RatioIcon, AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -9,12 +9,13 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ImportAssetsModal } from "@/components/editor/manage-characters-modal"
-import { buildScenePrompt } from "@/lib/prompt-builder"
+import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry } from "@/types/nodes"
 
 interface SceneConfigProps {
@@ -96,14 +97,25 @@ function QuickAddInput({
   category,
   placeholder,
   onAdd,
+  autoExpand,
+  onAutoExpandHandled,
 }: {
   readonly category: "character" | "location" | "object"
   readonly placeholder: string
   readonly onAdd: (name: string, description: string) => void
+  readonly autoExpand?: boolean
+  readonly onAutoExpandHandled?: () => void
 }) {
   const [name, setName] = useState("")
   const [desc, setDesc] = useState("")
   const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    if (autoExpand && !expanded) {
+      setExpanded(true)
+      onAutoExpandHandled?.()
+    }
+  }, [autoExpand, expanded, onAutoExpandHandled])
 
   function handleAdd() {
     const trimmedName = name.trim()
@@ -159,6 +171,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
   const [importTarget, setImportTarget] = useState<"character" | "location" | "object">("character")
   const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set())
   const [recentDialogueIndex, setRecentDialogueIndex] = useState<number | null>(null)
+  const [expandQuickAdd, setExpandQuickAdd] = useState<"character" | "location" | "object" | null>(null)
 
   const characterAssets = allAssets.filter((a) => !a.category || a.category === "character")
   const locationAssets = allAssets.filter((a) => a.category === "location")
@@ -348,28 +361,32 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </div>
           )
         })}
-        {availableChars.length > 0 && (
-          <Select onValueChange={(v) => addCharacter(v)}>
-            <SelectTrigger className="h-7 text-[10px]">
-              <Plus className="w-3 h-3 mr-1" />
-              <SelectValue placeholder="Add character..." />
-            </SelectTrigger>
-            <SelectContent position="popper" className="z-[9999]">
-              {availableChars.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  <span className="flex items-center gap-1.5">
-                    {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
-                    {a.name}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select onValueChange={(v) => { if (v === "__create_new__") { setExpandQuickAdd("character") } else { addCharacter(v) } }}>
+          <SelectTrigger className="h-7 text-[10px]">
+            <Plus className="w-3 h-3 mr-1" />
+            <SelectValue placeholder="Add character..." />
+          </SelectTrigger>
+          <SelectContent position="popper" className="z-[9999]">
+            {availableChars.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                <span className="flex items-center gap-1.5">
+                  {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                  {a.name}
+                </span>
+              </SelectItem>
+            ))}
+            {availableChars.length > 0 && <SelectSeparator />}
+            <SelectItem value="__create_new__">
+              <span className="flex items-center gap-1.5 text-violet-500"><Plus className="w-3 h-3" /> Create new character...</span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
         <QuickAddInput
           category="character"
           placeholder="e.g. tall knight with blonde hair and blue cape"
           onAdd={(name, desc) => handleQuickAdd("character", name, desc)}
+          autoExpand={expandQuickAdd === "character"}
+          onAutoExpandHandled={() => setExpandQuickAdd(null)}
         />
         <button
           type="button"
@@ -551,32 +568,37 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </div>
           )
         })}
-        {availableLocs.length > 0 && (
-          <Select onValueChange={(v) => {
-            const locs = data.locations ?? []
-            const entry: SceneLocationEntry = { assetId: v, isPrimary: locs.length === 0 }
-            onUpdate({ locations: [...locs, entry] })
-          }}>
-            <SelectTrigger className="h-7 text-[10px]">
-              <Plus className="w-3 h-3 mr-1" />
-              <SelectValue placeholder="Add location..." />
-            </SelectTrigger>
-            <SelectContent position="popper" className="z-[9999]">
-              {availableLocs.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  <span className="flex items-center gap-1.5">
-                    {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
-                    {a.name}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select onValueChange={(v) => {
+          if (v === "__create_new__") { setExpandQuickAdd("location"); return }
+          const locs = data.locations ?? []
+          const entry: SceneLocationEntry = { assetId: v, isPrimary: locs.length === 0 }
+          onUpdate({ locations: [...locs, entry] })
+        }}>
+          <SelectTrigger className="h-7 text-[10px]">
+            <Plus className="w-3 h-3 mr-1" />
+            <SelectValue placeholder="Add location..." />
+          </SelectTrigger>
+          <SelectContent position="popper" className="z-[9999]">
+            {availableLocs.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                <span className="flex items-center gap-1.5">
+                  {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                  {a.name}
+                </span>
+              </SelectItem>
+            ))}
+            {availableLocs.length > 0 && <SelectSeparator />}
+            <SelectItem value="__create_new__">
+              <span className="flex items-center gap-1.5 text-violet-500"><Plus className="w-3 h-3" /> Create new location...</span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
         <QuickAddInput
           category="location"
           placeholder="e.g. dark medieval castle courtyard at dusk"
           onAdd={(name, desc) => handleQuickAdd("location", name, desc)}
+          autoExpand={expandQuickAdd === "location"}
+          onAutoExpandHandled={() => setExpandQuickAdd(null)}
         />
         <button
           type="button"
@@ -650,28 +672,32 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </div>
           )
         })}
-        {availableObjs.length > 0 && (
-          <Select onValueChange={(v) => addObject(v)}>
-            <SelectTrigger className="h-7 text-[10px]">
-              <Plus className="w-3 h-3 mr-1" />
-              <SelectValue placeholder="Add object..." />
-            </SelectTrigger>
-            <SelectContent position="popper" className="z-[9999]">
-              {availableObjs.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  <span className="flex items-center gap-1.5">
-                    {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
-                    {a.name}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select onValueChange={(v) => { if (v === "__create_new__") { setExpandQuickAdd("object") } else { addObject(v) } }}>
+          <SelectTrigger className="h-7 text-[10px]">
+            <Plus className="w-3 h-3 mr-1" />
+            <SelectValue placeholder="Add object..." />
+          </SelectTrigger>
+          <SelectContent position="popper" className="z-[9999]">
+            {availableObjs.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                <span className="flex items-center gap-1.5">
+                  {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                  {a.name}
+                </span>
+              </SelectItem>
+            ))}
+            {availableObjs.length > 0 && <SelectSeparator />}
+            <SelectItem value="__create_new__">
+              <span className="flex items-center gap-1.5 text-violet-500"><Plus className="w-3 h-3" /> Create new object...</span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
         <QuickAddInput
           category="object"
           placeholder="e.g. glowing enchanted sword with runes"
           onAdd={(name, desc) => handleQuickAdd("object", name, desc)}
+          autoExpand={expandQuickAdd === "object"}
+          onAutoExpandHandled={() => setExpandQuickAdd(null)}
         />
         <button
           type="button"
@@ -889,6 +915,18 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               rows={4}
               className="text-xs resize-none bg-muted/30"
             />
+            <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
+              generatedPrompt.length > PROMPT_MAX_LENGTH
+                ? "text-red-500 font-medium"
+                : generatedPrompt.length > PROMPT_MAX_LENGTH * 0.9
+                  ? "text-amber-500"
+                  : "text-muted-foreground"
+            }`}>
+              {generatedPrompt.length > PROMPT_MAX_LENGTH && (
+                <AlertCircle className="w-3 h-3" />
+              )}
+              <span>{generatedPrompt.length}/{PROMPT_MAX_LENGTH}</span>
+            </div>
           </div>
         )}
       </div>

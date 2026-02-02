@@ -1,5 +1,8 @@
 import type { SceneNodeDataType, CharacterDefinition } from "@/types/nodes"
 
+export const PROMPT_MAX_LENGTH = 2000
+const PROMPT_SAFE_LENGTH = 1800
+
 const SHOT_LABELS: Record<string, string> = {
   "extreme-wide": "EXTREME WIDE SHOT",
   "wide": "WIDE SHOT",
@@ -39,42 +42,54 @@ const MOVEMENT_LABELS: Record<string, string> = {
   zoom: "zoom",
 }
 
+function truncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text
+  return text.slice(0, maxLen - 3) + "..."
+}
+
 export function buildScenePrompt(
   data: SceneNodeDataType,
   assets: readonly CharacterDefinition[]
 ): string {
-  const parts: string[] = []
+  // High priority parts (always included)
+  const highParts: string[] = []
+  // Medium priority parts (dropped if over limit)
+  const medParts: string[] = []
+  // Low priority parts (dropped first if over limit)
+  const lowParts: string[] = []
 
-  // Shot type and angle
+  // Shot type and angle (high)
   const shot = SHOT_LABELS[data.shotType] ?? "MEDIUM SHOT"
   const angle = ANGLE_LABELS[data.cameraAngle] ?? "eye level"
-  parts.push(`${shot}, ${angle}`)
+  highParts.push(`${shot}, ${angle}`)
 
-  // Aspect ratio composition hint
+  // Aspect ratio composition hint (medium)
   if (data.aspectRatio && data.aspectRatio !== "16:9") {
     const ratioLabel = ASPECT_RATIO_LABELS[data.aspectRatio]
-    if (ratioLabel) parts.push(ratioLabel)
+    if (ratioLabel) medParts.push(ratioLabel)
   }
 
-  // Characters with mood and action
+  // Characters with mood and action (high, but truncate descriptions)
   if (data.characters.length > 0) {
+    const maxDescLen = data.characters.length > 2 ? 80 : 150
     const charDescs = data.characters.map((entry) => {
       const asset = assets.find((a) => a.id === entry.assetId)
       const name = asset?.name ?? "a figure"
-      const desc = asset?.description ? `, ${asset.description}` : ""
+      const desc = asset?.description ? `, ${truncate(asset.description, maxDescLen)}` : ""
       const mood = entry.mood ? `, ${entry.mood}` : ""
       const action = entry.action ? ` ${entry.action}` : ""
       const pos = entry.positionInFrame ? ` (${entry.positionInFrame})` : ""
       return `${name}${desc}${mood}${action}${pos}`
     })
-    parts.push(`of ${charDescs.join(" and ")}`)
+    highParts.push(`of ${charDescs.join(" and ")}`)
   }
 
-  // Locations
+  // Locations (high, but truncate names)
   if (data.locations?.length > 0) {
     const locDescs = data.locations.map((loc) => {
       const asset = assets.find((a) => a.id === loc.assetId)
-      const name = loc.name ?? asset?.description ?? asset?.name ?? "location"
+      const rawName = loc.name ?? asset?.description ?? asset?.name ?? "location"
+      const name = truncate(rawName, 120)
       const envParts: string[] = []
       const tod = loc.timeOfDay ?? data.timeOfDay
       const wth = loc.weather ?? data.weather
@@ -84,73 +99,99 @@ export function buildScenePrompt(
       if (lit !== "natural") envParts.push(`${lit} lighting`)
       return envParts.length > 0 ? `${name} (${envParts.join(", ")})` : name
     })
-    parts.push(`in ${locDescs.join(" and ")}`)
+    highParts.push(`in ${locDescs.join(" and ")}`)
   } else {
-    // Fallback: use top-level time/weather/lighting without a location asset
     const envParts: string[] = []
     if (data.timeOfDay !== "noon") envParts.push(`${data.timeOfDay} light`)
     if (data.weather !== "clear") envParts.push(data.weather)
     if (data.lighting !== "natural") envParts.push(`${data.lighting} lighting`)
-    if (envParts.length > 0) parts.push(envParts.join(", "))
+    if (envParts.length > 0) highParts.push(envParts.join(", "))
   }
 
-  // Objects
+  // Objects (medium)
   if (data.objects.length > 0) {
     const objDescs = data.objects.map((o) => {
       const asset = assets.find((a) => a.id === o.assetId)
       return o.description ?? asset?.name ?? "object"
     })
-    parts.push(`with ${objDescs.join(", ")}`)
+    medParts.push(`with ${objDescs.join(", ")}`)
   }
 
-  // Mood
+  // Mood (medium)
   if (data.mood.length > 0) {
-    parts.push(`${data.mood.join(", ")} atmosphere`)
+    medParts.push(`${data.mood.join(", ")} atmosphere`)
   }
 
-  // Visual style
+  // Visual style (medium)
   if (data.visualStyle) {
-    parts.push(`${data.visualStyle} style`)
+    medParts.push(`${data.visualStyle} style`)
   }
 
-  // Depth of field
+  // Depth of field (low)
   if (data.depthOfField !== "medium") {
-    parts.push(`${data.depthOfField} depth of field`)
+    lowParts.push(`${data.depthOfField} depth of field`)
   }
 
-  // Lens
+  // Lens (low)
   if (data.lensType !== "normal") {
-    parts.push(`${data.lensType} lens`)
+    lowParts.push(`${data.lensType} lens`)
   }
 
-  // Camera movement
+  // Camera movement (medium)
   if (data.cameraMovement !== "static") {
-    parts.push(MOVEMENT_LABELS[data.cameraMovement] ?? data.cameraMovement)
+    medParts.push(MOVEMENT_LABELS[data.cameraMovement] ?? data.cameraMovement)
   }
 
-  // Color palette
+  // Color palette (low)
   if (data.colorPalette.length > 0) {
-    parts.push(`${data.colorPalette.join(", ")} color palette`)
+    lowParts.push(`${data.colorPalette.join(", ")} color palette`)
   }
 
-  // Summary as additional context
+  // Summary as additional context (medium, truncated)
   if (data.summary.trim()) {
-    parts.push(data.summary.trim())
+    medParts.push(truncate(data.summary.trim(), 300))
   }
 
-  // Dialogue context
+  // Dialogue context (low, truncated)
   if (data.dialogue?.length > 0) {
     const dialogueDesc = data.dialogue
       .filter((d) => d.text.trim())
-      .map((d) => `${d.characterName}${d.emotion ? ` (${d.emotion})` : ""}: "${d.text.trim()}"`)
+      .map((d) => `${d.characterName}${d.emotion ? ` (${d.emotion})` : ""}: "${truncate(d.text.trim(), 80)}"`)
       .join("; ")
-    if (dialogueDesc) parts.push(`dialogue: ${dialogueDesc}`)
+    if (dialogueDesc) lowParts.push(`dialogue: ${truncate(dialogueDesc, 250)}`)
   }
 
-  // Director notes
+  // Director notes (low, truncated)
   if (data.directorNotes?.trim()) {
-    parts.push(data.directorNotes.trim())
+    lowParts.push(truncate(data.directorNotes.trim(), 200))
   }
 
-  return parts.join(", ")
+  // Assemble with progressive dropping
+  let result = [...highParts, ...medParts, ...lowParts].join(", ")
+
+  if (result.length > PROMPT_SAFE_LENGTH) {
+    // Drop low priority parts one by one from the end
+    const allParts = [...highParts, ...medParts, ...lowParts]
+    let dropCount = 0
+    while (dropCount < lowParts.length && result.length > PROMPT_SAFE_LENGTH) {
+      dropCount++
+      result = [...highParts, ...medParts, ...lowParts.slice(0, lowParts.length - dropCount)].join(", ")
+    }
+  }
+
+  if (result.length > PROMPT_SAFE_LENGTH) {
+    // Drop medium priority parts one by one from the end
+    const medRemaining = [...medParts]
+    while (medRemaining.length > 0 && result.length > PROMPT_SAFE_LENGTH) {
+      medRemaining.pop()
+      result = [...highParts, ...medRemaining].join(", ")
+    }
+  }
+
+  // Final hard truncation as safety net
+  if (result.length > PROMPT_MAX_LENGTH) {
+    result = result.slice(0, PROMPT_MAX_LENGTH - 3) + "..."
+  }
+
+  return result
 }

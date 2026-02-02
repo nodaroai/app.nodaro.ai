@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 import { X, Play, Loader2, AlertCircle, Eye, Scissors } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { SceneConfig } from "./scene-config"
-import { buildScenePrompt } from "@/lib/prompt-builder"
+import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
@@ -198,7 +198,18 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
             {/* Prompt Preview */}
             <div className="px-4 pb-4">
               <div className="rounded-lg border bg-muted/20 p-3">
-                <h3 className="text-xs font-medium mb-1.5 text-muted-foreground">Generated Prompt</h3>
+                <div className="flex items-center justify-between mb-1.5">
+                  <h3 className="text-xs font-medium text-muted-foreground">Generated Prompt</h3>
+                  <span className={`text-[10px] ${
+                    generatedPrompt.length > PROMPT_MAX_LENGTH
+                      ? "text-red-500 font-medium"
+                      : generatedPrompt.length > PROMPT_MAX_LENGTH * 0.9
+                        ? "text-amber-500"
+                        : "text-muted-foreground"
+                  }`}>
+                    {generatedPrompt.length}/{PROMPT_MAX_LENGTH}
+                  </span>
+                </div>
                 <p className="text-xs leading-relaxed whitespace-pre-wrap">{generatedPrompt || "Configure scene settings to generate a prompt..."}</p>
               </div>
             </div>
