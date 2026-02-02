@@ -354,7 +354,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               <Plus className="w-3 h-3 mr-1" />
               <SelectValue placeholder="Add character..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" className="z-[9999]">
               {availableChars.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
                   <span className="flex items-center gap-1.5">
@@ -396,7 +396,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
                 }}
               >
                 <SelectTrigger className="h-6 text-[10px] flex-1"><SelectValue placeholder="Speaker" /></SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="z-[9999]">
                   <SelectItem value="__narrator__">Narrator</SelectItem>
                   {characterAssets.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
@@ -561,7 +561,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               <Plus className="w-3 h-3 mr-1" />
               <SelectValue placeholder="Add location..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" className="z-[9999]">
               {availableLocs.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
                   <span className="flex items-center gap-1.5">
@@ -594,7 +594,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               <Label className="text-[10px]">Time</Label>
               <Select value={data.timeOfDay} onValueChange={(v) => onUpdate({ timeOfDay: v })}>
                 <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="z-[9999]">
                   {["dawn", "morning", "noon", "afternoon", "sunset", "evening", "night"].map((t) => (
                     <SelectItem key={t} value={t}>{t}</SelectItem>
                   ))}
@@ -605,7 +605,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               <Label className="text-[10px]">Weather</Label>
               <Select value={data.weather} onValueChange={(v) => onUpdate({ weather: v })}>
                 <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="z-[9999]">
                   {["clear", "cloudy", "rainy", "stormy", "foggy", "snowy"].map((w) => (
                     <SelectItem key={w} value={w}>{w}</SelectItem>
                   ))}
@@ -616,7 +616,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               <Label className="text-[10px]">Lighting</Label>
               <Select value={data.lighting} onValueChange={(v) => onUpdate({ lighting: v })}>
                 <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="z-[9999]">
                   {["natural", "artificial", "dramatic", "soft", "harsh", "backlit"].map((l) => (
                     <SelectItem key={l} value={l}>{l}</SelectItem>
                   ))}
@@ -656,7 +656,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               <Plus className="w-3 h-3 mr-1" />
               <SelectValue placeholder="Add object..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" className="z-[9999]">
               {availableObjs.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
                   <span className="flex items-center gap-1.5">
@@ -715,7 +715,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             <Label className="text-[10px]">Shot Type</Label>
             <Select value={data.shotType} onValueChange={(v) => onUpdate({ shotType: v })}>
               <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[9999]">
                 {["extreme-wide", "wide", "medium-wide", "medium", "medium-close", "close-up", "extreme-close-up"].map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
@@ -726,7 +726,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             <Label className="text-[10px]">Camera Angle</Label>
             <Select value={data.cameraAngle} onValueChange={(v) => onUpdate({ cameraAngle: v })}>
               <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[9999]">
                 {["eye-level", "low-angle", "high-angle", "birds-eye", "worms-eye", "dutch"].map((a) => (
                   <SelectItem key={a} value={a}>{a}</SelectItem>
                 ))}
@@ -737,7 +737,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             <Label className="text-[10px]">Movement</Label>
             <Select value={data.cameraMovement} onValueChange={(v) => onUpdate({ cameraMovement: v })}>
               <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[9999]">
                 {["static", "pan", "tilt", "dolly", "tracking", "crane", "handheld", "zoom"].map((m) => (
                   <SelectItem key={m} value={m}>{m}</SelectItem>
                 ))}
@@ -748,7 +748,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             <Label className="text-[10px]">Depth of Field</Label>
             <Select value={data.depthOfField} onValueChange={(v) => onUpdate({ depthOfField: v })}>
               <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[9999]">
                 {["deep", "medium", "shallow"].map((d) => (
                   <SelectItem key={d} value={d}>{d}</SelectItem>
                 ))}
@@ -759,7 +759,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             <Label className="text-[10px]">Lens</Label>
             <Select value={data.lensType} onValueChange={(v) => onUpdate({ lensType: v })}>
               <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[9999]">
                 {["wide", "normal", "telephoto"].map((l) => (
                   <SelectItem key={l} value={l}>{l}</SelectItem>
                 ))}
@@ -775,7 +775,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           <Label className="text-[10px]">Visual Style</Label>
           <Select value={data.visualStyle} onValueChange={(v) => onUpdate({ visualStyle: v })}>
             <SelectTrigger className="h-7 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" className="z-[9999]">
               {["realistic", "cinematic", "anime", "cartoon", "noir", "vintage", "fantasy", "sci-fi"].map((s) => (
                 <SelectItem key={s} value={s}>{s}</SelectItem>
               ))}
@@ -838,7 +838,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             <Label className="text-[10px]">Transition In</Label>
             <Select value={data.transitionIn} onValueChange={(v) => onUpdate({ transitionIn: v })}>
               <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[9999]">
                 {["cut", "fade", "dissolve", "wipe"].map((t) => (
                   <SelectItem key={t} value={t}>{t}</SelectItem>
                 ))}
@@ -849,7 +849,7 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             <Label className="text-[10px]">Transition Out</Label>
             <Select value={data.transitionOut} onValueChange={(v) => onUpdate({ transitionOut: v })}>
               <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="z-[9999]">
                 {["cut", "fade", "dissolve", "wipe"].map((t) => (
                   <SelectItem key={t} value={t}>{t}</SelectItem>
                 ))}
