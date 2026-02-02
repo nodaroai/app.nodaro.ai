@@ -1361,6 +1361,149 @@ interface WebhookOutputNode {
 }
 ```
 
+### Scene Node (Cinematic Control Center)
+
+The Scene Node is a rich data node that combines characters, locations, objects, cinematography, mood, and dialogue into a structured scene definition. It outputs a smart prompt to connected Generate Image / Image to Video nodes.
+
+**Category:** `scene` (purple/violet)
+**Icon:** Clapperboard
+**Credit Cost:** 0 (data-only, not executable by itself)
+**Implementation:** `frontend/src/components/nodes/scene-node.tsx`
+
+#### Output Handles
+
+| Handle | Position | Description |
+|--------|----------|-------------|
+| `prompt` | Right (15%) | Generated text prompt from all scene parameters |
+| `imageRefs` | Right (30%) | Reference image URLs from characters/locations |
+| `narration` | Right (55%) | Narration text for TTS nodes |
+| `dialogue` | Right (70%) | Dialogue lines for subtitle/caption nodes |
+| `duration` | Right (85%) | Scene duration in seconds |
+| `in` | Left | Optional input from upstream nodes |
+
+#### Scene Editor Modal (Full-Screen)
+
+Opened via the Expand button on the node. Two-panel layout:
+- **Left panel:** Generated image preview with version history, full-size preview, extract references, delete. Prompt preview with character count indicator.
+- **Right panel:** All configuration sections via `SceneConfig` component.
+
+**Implementation:** `frontend/src/components/editor/scene-editor-modal.tsx`
+
+#### Configuration Sections (`scene-config.tsx`)
+
+All sections use collapsible `<details>` elements:
+
+1. **Basic Info** (always open): Scene name, scene number, duration slider (1-30s), summary textarea
+2. **Characters**: Add from workflow assets dropdown (always shows "Create new character..." option), per-character mood/action/position fields, import from Manage Characters modal, quick add by description
+3. **Dialogue**: Per-character dialogue lines with emotion tags, add/remove lines dynamically
+4. **Locations**: Add from workflow assets dropdown with "Create new location..." option, per-location time of day/weather/lighting overrides, primary location toggle, import and quick add support
+5. **Objects**: Add from workflow assets dropdown with "Create new object..." option, per-object description, import and quick add support
+6. **Cinematography**: Shot type, camera angle, camera movement, depth of field, lens type dropdowns
+7. **Mood & Style**: Mood tags (multi-select), color palette tags, visual style dropdown
+8. **Audio**: Narration textarea, music mood, sound effects tags
+9. **Transitions**: Transition in/out dropdowns (cut, fade, dissolve, wipe, etc.)
+10. **Aspect Ratio**: Dropdown (16:9, 9:16, 1:1, 4:3, 21:9, 4:5) - affects prompt composition hints
+11. **Director Notes**: Textarea for free-form direction, reference URLs list
+
+**Implementation:** `frontend/src/components/editor/scene-config.tsx`
+
+#### Smart Prompt Builder (`prompt-builder.ts`)
+
+Pure function that converts all scene parameters into an optimized image generation prompt.
+
+**Priority tiers for length management:**
+- **High** (always kept): Shot type + camera angle, character descriptions (truncated), location descriptions
+- **Medium** (dropped second): Aspect ratio hint, objects, mood, visual style, camera movement, summary
+- **Low** (dropped first): Depth of field, lens type, color palette, dialogue context, director notes
+
+**Truncation strategy:**
+1. Target safe length: 1800 characters
+2. Drop low-priority parts one by one from the end
+3. Drop medium-priority parts one by one from the end
+4. Hard truncation at 2000 characters as safety net
+
+**Character count display:** Both scene-config.tsx and scene-editor-modal.tsx show `{length}/{PROMPT_MAX_LENGTH}` with color coding:
+- Green: under 90% of limit
+- Amber: 90-100% of limit
+- Red: over limit
+
+**Implementation:** `frontend/src/lib/prompt-builder.ts`
+
+#### Asset Integration
+
+All three entity sections (Characters, Locations, Objects) support:
+- **Dropdown selection** from existing workflow assets (filtered by category)
+- **"Create new..." option** in dropdown that auto-expands the inline quick-add form
+- **Import from Manage Characters modal** for bulk asset management
+- **Quick add by description** - inline form that creates a new asset with name + description
+
+#### Generate Scene Image
+
+The Scene Node supports image generation via the Run button (hover tab). When run, it uses `runSingleNode` which sends the generated prompt to the configured image provider. Results appear in the node with version history thumbnails.
+
+#### Extract References
+
+From generated images, users can extract character/object references via the Scissors button. Opens `ExtractReferencesModal` which allows cropping regions and saving them as new `CharacterDefinition` assets for reuse across scenes.
+
+#### Data Type
+
+```typescript
+interface SceneNodeDataType {
+  label: string
+  sceneName: string
+  sceneNumber: number
+  duration: number
+  summary: string
+  characters: Array<{
+    assetId: string
+    mood?: string
+    action?: string
+    positionInFrame?: string
+  }>
+  dialogue: Array<{
+    characterName: string
+    text: string
+    emotion?: string
+  }>
+  locations: Array<{
+    assetId: string
+    name?: string
+    isPrimary?: boolean
+    timeOfDay?: string
+    weather?: string
+    lighting?: string
+  }>
+  objects: Array<{
+    assetId: string
+    description?: string
+  }>
+  shotType: string
+  cameraAngle: string
+  cameraMovement: string
+  depthOfField: string
+  lensType: string
+  aspectRatio: string
+  mood: string[]
+  colorPalette: string[]
+  visualStyle: string
+  narration: string
+  musicMood: string
+  soundEffects: string[]
+  transitionIn: string
+  transitionOut: string
+  directorNotes: string
+  referenceUrls: string[]
+  timeOfDay: string
+  weather: string
+  lighting: string
+  // Execution state
+  executionStatus?: string
+  generatedResults?: Array<{ jobId: string; url: string }>
+  activeResultIndex?: number
+  generatedImageUrl?: string
+}
+```
+
 ### Workflow Validation
 
 Before running a workflow, the system validates it and shows warnings/errors.
@@ -3727,13 +3870,21 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Renamed Add Audio to Merge Video & Audio for clarity
 - [x] VEO 2 and VEO 3 as separate providers in Image to Video and Video to Video nodes
 - [x] Generate Audio checkbox only shown when VEO 3 is selected (not VEO 2)
-- [x] 32 node types total (Input: 5, Parameter: 8, AI: 9, Processing: 8, Output: 2)
+- [x] 33 node types total (Input: 5, Parameter: 8, AI: 9, Scene: 1, Processing: 8, Output: 2)
 - [x] Character & Location extraction from scene images (crop + upload to R2, used as references in Expand to Nodes)
 - [x] Asset management system: characters, locations, objects with category-aware execution
 - [x] Import Assets modal with project hierarchy, "Show all assets" mode, filter tabs (All/Characters/Locations/Objects)
 - [x] Auto-attach imported assets to Generate Image nodes via onImported callback
 - [x] Extract References (scissors) button always visible on generated images
 - [x] Asset count badge on Generate Image nodes showing attached reference count
+- [x] Scene Node: cinematic control center combining characters, locations, objects, cinematography, mood, dialogue into smart prompt
+- [x] Scene Node: full-screen editor modal with two-panel layout (image preview + config)
+- [x] Scene Node: 11 collapsible config sections (Basic Info, Characters, Dialogue, Locations, Objects, Cinematography, Mood & Style, Audio, Transitions, Aspect Ratio, Director Notes)
+- [x] Scene Node: smart prompt builder with priority-based truncation (high/medium/low tiers, 2000 char limit)
+- [x] Scene Node: "Create new..." option in all asset dropdowns (never disabled)
+- [x] Scene Node: quick add by description, import from Manage Characters modal
+- [x] Scene Node: 6 output handles (prompt, imageRefs, narration, dialogue, duration, input)
+- [x] Scene Node: extract references from generated images, character count warning in prompt preview
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
