@@ -2,13 +2,14 @@
 
 import { useEffect, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, Play, Loader2, AlertCircle, Eye } from "lucide-react"
+import { X, Play, Loader2, AlertCircle, Eye, Scissors } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { SceneConfig } from "./scene-config"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import type { SceneNodeDataType } from "@/types/nodes"
+import { ExtractReferencesModal } from "./extract-references-modal"
+import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
 
 interface SceneEditorModalProps {
   readonly isOpen: boolean
@@ -21,9 +22,12 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [extractOpen, setExtractOpen] = useState(false)
+  const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
 
   const node = nodes.find((n) => n.id === nodeId)
   const data = node?.data as SceneNodeDataType | undefined
@@ -132,6 +136,14 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     </button>
                     <button
                       type="button"
+                      className="p-1.5 bg-purple-500/80 hover:bg-purple-500 text-white rounded-md"
+                      onClick={() => setExtractOpen(true)}
+                      title="Extract references"
+                    >
+                      <Scissors className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
                       className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-md"
                       onClick={() => setDeleteConfirm(activeIndex)}
                       title="Delete this result"
@@ -214,6 +226,29 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
           if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
         }}
       />
+      {activeUrl && (
+        <ExtractReferencesModal
+          isOpen={extractOpen}
+          onClose={() => setExtractOpen(false)}
+          imageUrl={activeUrl}
+          sceneIndex={0}
+          sceneCharacters={[]}
+          existingReferences={extractedRefs}
+          onSave={(refs) => {
+            setExtractedRefs(refs)
+            for (const ref of refs) {
+              if (!ref.imageUrl) continue
+              addCharacterDefinition({
+                id: crypto.randomUUID(),
+                name: ref.name,
+                type: "reference",
+                category: ref.type,
+                referenceImageUrl: ref.imageUrl,
+              })
+            }
+          }}
+        />
+      )}
     </div>,
     document.body
   )

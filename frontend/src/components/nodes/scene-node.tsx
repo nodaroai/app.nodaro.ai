@@ -2,19 +2,21 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Play, Maximize2 } from "lucide-react"
+import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Play, Maximize2, Scissors } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SceneEditorModal } from "@/components/editor/scene-editor-modal"
-import type { SceneNodeDataType } from "@/types/nodes"
+import { ExtractReferencesModal } from "@/components/editor/extract-references-modal"
+import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
 
 function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SceneNodeDataType
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
 
   const charCount = nodeData.characters.length
   const objCount = nodeData.objects.length
@@ -33,6 +35,8 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [extractOpen, setExtractOpen] = useState(false)
+  const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -87,6 +91,17 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
               }}
             />
             <div className="absolute top-1 right-1 flex gap-1">
+              <button
+                type="button"
+                className="w-5 h-5 flex items-center justify-center bg-purple-500/80 hover:bg-purple-500 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExtractOpen(true)
+                }}
+                title="Extract references"
+              >
+                <Scissors className="w-3 h-3" />
+              </button>
               {results.length > 0 && (
                 <button
                   type="button"
@@ -244,6 +259,29 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       onClose={() => setEditorOpen(false)}
       nodeId={id}
     />
+    {activeUrl && (
+      <ExtractReferencesModal
+        isOpen={extractOpen}
+        onClose={() => setExtractOpen(false)}
+        imageUrl={activeUrl}
+        sceneIndex={0}
+        sceneCharacters={[]}
+        existingReferences={extractedRefs}
+        onSave={(refs) => {
+          setExtractedRefs(refs)
+          for (const ref of refs) {
+            if (!ref.imageUrl) continue
+            addCharacterDefinition({
+              id: crypto.randomUUID(),
+              name: ref.name,
+              type: "reference",
+              category: ref.type,
+              referenceImageUrl: ref.imageUrl,
+            })
+          }
+        }}
+      />
+    )}
     </div>
   )
 }
