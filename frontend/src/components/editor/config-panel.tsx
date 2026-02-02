@@ -72,7 +72,7 @@ import type {
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { DefineCharacterModal } from "./define-character-modal"
-import { ImportCharacterModal } from "./import-character-modal"
+import { ManageCharactersModal } from "./manage-characters-modal"
 
 interface SourceNodeInfo {
   readonly id: string
@@ -1086,11 +1086,10 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   const [showDefineModal, setShowDefineModal] = useState(false)
-  const [showImportModal, setShowImportModal] = useState(false)
+  const [showManageModal, setShowManageModal] = useState(false)
   const [showAddDropdown, setShowAddDropdown] = useState(false)
   const [editingChar, setEditingChar] = useState<CharacterDefinition | null>(null)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
-  const workflowId = useWorkflowStore((s) => s.workflowId)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const updateCharacterDefinition = useWorkflowStore((s) => s.updateCharacterDefinition)
 
@@ -1251,10 +1250,10 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           </button>
           <button
             type="button"
-            onClick={() => setShowImportModal(true)}
+            onClick={() => setShowManageModal(true)}
             className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
           >
-            <Download className="w-3 h-3" /> Import
+            <Download className="w-3 h-3" /> Manage
           </button>
         </div>
       </div>
@@ -1266,17 +1265,9 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         existingNames={allCharDefs.map((c) => c.name)}
         editingCharacter={editingChar}
       />
-      <ImportCharacterModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        onImport={(chars) => {
-          for (const c of chars) {
-            addCharacterDefinition(c)
-            onUpdate({ characterDefinitionIds: [...(data.characterDefinitionIds ?? []), c.id] })
-          }
-        }}
-        currentWorkflowId={workflowId}
-        existingNames={allCharDefs.map((c) => c.name)}
+      <ManageCharactersModal
+        isOpen={showManageModal}
+        onClose={() => setShowManageModal(false)}
       />
     </div>
   )

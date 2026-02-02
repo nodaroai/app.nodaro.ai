@@ -6,7 +6,7 @@ import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, La
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
 import { DefineCharacterModal } from "./define-character-modal"
-import { ImportCharacterModal } from "./import-character-modal"
+import { ManageCharactersModal } from "./manage-characters-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GeneratedScript, ExtractedReference, CharacterDefinition } from "@/types/nodes"
 
@@ -42,10 +42,9 @@ export function ScriptPreviewModal({
   const [deleteConfirm, setDeleteConfirm] = useState<{ sceneIndex: number; imageIndex: number } | null>(null)
   const [focusedCharInput, setFocusedCharInput] = useState<number | null>(null)
   const [showDefineCharModal, setShowDefineCharModal] = useState(false)
-  const [showImportCharModal, setShowImportCharModal] = useState(false)
+  const [showManageCharModal, setShowManageCharModal] = useState(false)
   const [editingCharDef, setEditingCharDef] = useState<CharacterDefinition | null>(null)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
-  const workflowId = useWorkflowStore((s) => s.workflowId)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const updateCharacterDefinition = useWorkflowStore((s) => s.updateCharacterDefinition)
 
@@ -454,10 +453,10 @@ export function ScriptPreviewModal({
                       </button>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowImportCharModal(true) }}
+                        onClick={(e) => { e.stopPropagation(); setShowManageCharModal(true) }}
                         className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed hover:bg-muted transition-colors text-muted-foreground whitespace-nowrap"
                       >
-                        <Download className="w-2.5 h-2.5" /> Import
+                        <Download className="w-2.5 h-2.5" /> Manage
                       </button>
                     </div>
                   </div>
@@ -505,16 +504,9 @@ export function ScriptPreviewModal({
         existingNames={allCharDefs.map((c) => c.name)}
         editingCharacter={editingCharDef}
       />
-      <ImportCharacterModal
-        isOpen={showImportCharModal}
-        onClose={() => setShowImportCharModal(false)}
-        onImport={(chars) => {
-          for (const c of chars) {
-            addCharacterDefinition(c)
-          }
-        }}
-        currentWorkflowId={workflowId}
-        existingNames={allCharDefs.map((c) => c.name)}
+      <ManageCharactersModal
+        isOpen={showManageCharModal}
+        onClose={() => setShowManageCharModal(false)}
       />
       <DeleteConfirmationDialog
         isOpen={deleteConfirm !== null}

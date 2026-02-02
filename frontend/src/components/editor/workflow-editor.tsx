@@ -265,6 +265,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 activeResultIndex: 0,
               })
               toast.success("Image generated")
+
+              // Auto-upgrade description characters to reference with generated image
+              if (imageUrl) {
+                const nodeData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as GenerateImageData | undefined
+                const charIds = nodeData?.characterDefinitionIds ?? []
+                const { characterDefinitions, updateCharacterDefinition: upgradeChar } = useWorkflowStore.getState()
+                for (const charDef of characterDefinitions) {
+                  if (charDef.type === "description" && charIds.includes(charDef.id)) {
+                    upgradeChar(charDef.id, { type: "reference", referenceImageUrl: imageUrl })
+                    toast.info(`Character "${charDef.name}" upgraded to reference`, { description: "Description replaced with generated image" })
+                  }
+                }
+              }
+
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
@@ -932,6 +946,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 for (const charDef of characterDefinitions) {
                   if (charDef.type === "description" && sceneCharNames.has(charDef.name)) {
                     updateCharacterDefinition(charDef.id, { type: "reference", referenceImageUrl: imageUrl })
+                    toast.info(`Character "${charDef.name}" upgraded to reference`, { description: "Description replaced with generated image" })
                   }
                 }
               }

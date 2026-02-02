@@ -3522,18 +3522,6 @@ interface CharacterDefinition {
   id: string
   name: string
   type: 'reference' | 'description'
-  referenceImageUrl?: string  // if type = 'reference'
-  description?: string         // if type = 'description'
-  sourceSceneIndex?: number    // if extracted from scene
-}
-```
-
-**Data Structure (with import):**
-```typescript
-interface CharacterDefinition {
-  id: string
-  name: string
-  type: 'reference' | 'description'
   referenceImageUrl?: string
   description?: string
   sourceSceneIndex?: number
@@ -3546,26 +3534,28 @@ interface CharacterDefinition {
 **Config Panel:** Generate Image nodes have a CHARACTERS section with:
 - List of attached characters (click to edit, thumbnail for reference, truncated text for description)
 - "Add existing" dropdown for workflow-level characters not yet attached
-- "Define new" button opens modal for creating reference or description characters
-- "Import" button opens modal for importing characters from other workflows
+- "Define new" button opens DefineCharacterModal for creating reference or description characters
+- "Manage" button opens ManageCharactersModal (edit/delete current chars + import from other workflows)
 - Characters can be edited by clicking on them (opens DefineCharacterModal in edit mode)
 
 **Storyboard Modal:**
 - Character input only allows selecting defined characters (no free-text tags)
 - Typing filters dropdown; unmatched input shows "No character found. Define new" link
-- "Define character" and "Import" buttons on every scene card
+- "Define character" and "Manage" buttons on every scene card
 
-**Import from Workflow:**
-- Queries Supabase for other workflows in project with character definitions
-- Shows grid of characters with thumbnails, multi-select
-- Skips characters with duplicate names
-- Imported characters get new IDs + `importedFrom` metadata
+**Manage Characters Modal (`manage-characters-modal.tsx`):**
+- Two sections: current workflow characters (edit/delete) + import from another workflow
+- Current chars shown as grid with thumbnails, type badges (blue=reference, orange=description)
+- Edit button opens DefineCharacterModal in edit mode
+- Delete button with inline confirmation
+- Import section lazy-loaded on button click, queries Supabase for other workflows
+- Multi-select grid for import, skips duplicate names, adds `importedFrom` metadata
 
 **Execution:**
 - Reference characters: `referenceImageUrl` added to `image_input` array alongside chain and extracted refs
 - Description characters: text appended to prompt before sending to backend
 - Both storyboard path (`handleGenerateSceneImage`) and expanded node path (`executeNode`) support character definitions
-- Auto-upgrade: after storyboard image generation, description characters in the scene are automatically upgraded to reference type with the generated image URL
+- Auto-upgrade: after image generation (both node and storyboard paths), description characters are automatically upgraded to reference type with the generated image URL and a toast notification is shown
 - Backend also accepts `characterDescriptions[]` in the generate-image route for direct API usage
 
 **Validation:**
