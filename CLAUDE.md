@@ -3562,6 +3562,13 @@ interface CharacterDefinition {
 - DefineCharacterModal disables Save button until name + type-specific content is provided
 - Cannot create empty character tags in storyboard (must select from defined characters)
 
+**Planned: Workflow Sharing (Hosted Version Only):**
+- NOT available in self-hosted/open-source edition (Fair Code license model)
+- Hosted version will add a "SHARED WITH ME" section in ManageCharactersModal import view
+- Requires: `workflow_shares` table (sharer_id, recipient_id, workflow_id, permissions), sharing UI, license/version gating
+- For now: users only see their own projects/workflows in import dropdown
+- Self-hosted users: free, no sharing; Hosted users: collaboration features included in subscription
+
 ### Implementation Notes
 
 **State Management:**
