@@ -19,6 +19,15 @@ const ANGLE_LABELS: Record<string, string> = {
   "dutch": "dutch angle",
 }
 
+const ASPECT_RATIO_LABELS: Record<string, string> = {
+  "16:9": "wide landscape composition",
+  "9:16": "vertical portrait composition",
+  "1:1": "square composition",
+  "4:3": "classic frame composition",
+  "21:9": "ultrawide cinematic composition",
+  "4:5": "tall portrait composition",
+}
+
 const MOVEMENT_LABELS: Record<string, string> = {
   static: "static camera",
   pan: "camera panning",
@@ -40,6 +49,12 @@ export function buildScenePrompt(
   const shot = SHOT_LABELS[data.shotType] ?? "MEDIUM SHOT"
   const angle = ANGLE_LABELS[data.cameraAngle] ?? "eye level"
   parts.push(`${shot}, ${angle}`)
+
+  // Aspect ratio composition hint
+  if (data.aspectRatio && data.aspectRatio !== "16:9") {
+    const ratioLabel = ASPECT_RATIO_LABELS[data.aspectRatio]
+    if (ratioLabel) parts.push(ratioLabel)
+  }
 
   // Characters with mood and action
   if (data.characters.length > 0) {
