@@ -1256,7 +1256,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
             onClick={() => setShowManageModal(true)}
             className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
           >
-            <Download className="w-3 h-3" /> Manage
+            <Download className="w-3 h-3" /> Import Characters
           </button>
         </div>
       </div>

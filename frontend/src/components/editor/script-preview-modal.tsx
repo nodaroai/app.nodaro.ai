@@ -346,10 +346,10 @@ export function ScriptPreviewModal({
                         return (
                           <span
                             key={char}
-                            className={`inline-flex items-center gap-1 h-6 px-2.5 text-xs font-medium rounded-full text-white ${isDescOnly ? "bg-orange-600" : "bg-purple-600"}`}
+                            className="inline-flex items-center gap-1 h-6 px-2.5 text-xs font-medium rounded-full bg-purple-600 text-white"
                             title={isDescOnly ? "Description only - needs reference image" : hasRef ? "Has reference image" : undefined}
                           >
-                            {isDescOnly && <FileText className="w-3 h-3 text-orange-200" />}
+                            {isDescOnly && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />}
                             {hasRef && <ImageIcon className="w-3 h-3 text-blue-200" />}
                             {matchingDef ? (
                               <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); setEditingCharDef(matchingDef); setShowDefineCharModal(true) }}>{char}</button>
@@ -483,7 +483,7 @@ export function ScriptPreviewModal({
                         onClick={(e) => { e.stopPropagation(); setShowManageCharModal(true) }}
                         className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed hover:bg-muted transition-colors text-muted-foreground whitespace-nowrap"
                       >
-                        <Download className="w-2.5 h-2.5" /> Manage
+                        <Download className="w-2.5 h-2.5" /> Import Characters
                       </button>
                     </div>
                   </div>
@@ -513,7 +513,19 @@ export function ScriptPreviewModal({
             sceneIndex={extractModalScene}
             sceneCharacters={scene.characters ?? []}
             existingReferences={extractedReferences}
-            onSave={onSaveReferences}
+            onSave={(refs) => {
+              onSaveReferences(refs)
+              // Update matching character definitions with extracted reference images
+              const currentDefs = useWorkflowStore.getState().characterDefinitions
+              const { updateCharacterDefinition: upgradeChar } = useWorkflowStore.getState()
+              for (const ref of refs) {
+                if (ref.type !== "character" || !ref.imageUrl) continue
+                const matchingDef = currentDefs.find((c) => c.name === ref.name && c.type === "description" && !c.referenceImageUrl)
+                if (matchingDef) {
+                  upgradeChar(matchingDef.id, { referenceImageUrl: ref.imageUrl })
+                }
+              }
+            }}
             suggestedMessage={extractAutoOpened ? "Save character references for consistent look in other scenes" : undefined}
           />
         )
