@@ -64,6 +64,11 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
+        { id: "audio1", type: "target", position: Position.Left, label: "Audio 1", top: "25%" },
+        { id: "audio2", type: "target", position: Position.Left, label: "Audio 2", top: "37%" },
+        { id: "audio3", type: "target", position: Position.Left, label: "Audio 3", top: "49%" },
+        { id: "audio4", type: "target", position: Position.Left, label: "Audio 4", top: "61%" },
+        { id: "audio5", type: "target", position: Position.Left, label: "Audio 5", top: "73%" },
         { id: "prompt", type: "source", position: Position.Right, label: "Prompt", top: "15%" },
         { id: "imageRefs", type: "source", position: Position.Right, label: "Refs", top: "30%" },
         { id: "narration", type: "source", position: Position.Right, label: "Narration", top: "55%" },

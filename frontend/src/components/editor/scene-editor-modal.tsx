@@ -350,7 +350,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
 
             {/* Step Content */}
             <div className="flex-1 overflow-y-auto px-4 pb-2">
-              <SceneConfig key={currentStep} data={data} onUpdate={handleUpdate} step={currentStep} />
+              <SceneConfig key={currentStep} data={data} onUpdate={handleUpdate} step={currentStep} nodeId={nodeId} />
             </div>
 
             {/* Step Action Button + Navigation */}

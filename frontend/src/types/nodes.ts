@@ -610,6 +610,13 @@ export interface SceneDialogueEntry {
   readonly activeAudioIndex?: number
 }
 
+export interface AudioAssignment {
+  readonly handleId: string
+  readonly sourceNodeId?: string
+  readonly dialogueIndex?: number
+  readonly role?: "dialogue" | "narration" | "background" | "sfx"
+}
+
 export interface SceneLocationEntry {
   readonly assetId: string
   readonly name?: string
@@ -658,6 +665,7 @@ export type SceneNodeDataType = {
   sourceScriptNodeId: string
   sourceSceneIndex: number
   autoSyncWithScript: boolean
+  audioAssignments: AudioAssignment[]
 }
 
 // --- Union Types ---
@@ -1045,7 +1053,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Scene",
     category: "scene",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["in", "audio1", "audio2", "audio3", "audio4", "audio5"],
     outputs: ["prompt", "imageRefs", "narration", "dialogue", "duration"],
     defaultData: {
       label: "Scene",
@@ -1085,6 +1093,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       sourceScriptNodeId: "",
       sourceSceneIndex: -1,
       autoSyncWithScript: false,
+      audioAssignments: [],
     } as SceneNodeDataType,
   },
 ]

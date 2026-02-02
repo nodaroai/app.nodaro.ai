@@ -433,7 +433,7 @@ export function ConfigPanel() {
           {/* Scene Node */}
           {selectedNode.type === "scene" && (
             <>
-              <SceneConfig data={selectedNode.data as SceneNodeDataType} onUpdate={update} />
+              <SceneConfig data={selectedNode.data as SceneNodeDataType} onUpdate={update} nodeId={selectedNodeId ?? undefined} />
               <Button
                 variant="outline"
                 className="w-full mt-2"

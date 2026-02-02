@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare, Check, RatioIcon, AlertCircle, Loader2, Play } from "lucide-react"
+import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare, Check, RatioIcon, AlertCircle, Loader2, Play, Link2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,7 +18,7 @@ import { ImportAssetsModal } from "@/components/editor/manage-characters-modal"
 import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import { TTS_VOICES } from "@/lib/tts-voices"
 import { textToSpeech, getJobStatus } from "@/lib/api"
-import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry, GenerateScriptData, WorkflowNode } from "@/types/nodes"
+import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry, GenerateScriptData, WorkflowNode, AudioAssignment } from "@/types/nodes"
 import { mapScriptSceneToNodeData, getSceneCharacterNames } from "@/types/nodes"
 
 type WizardStep = 1 | 2 | 3 | 4
@@ -27,6 +27,7 @@ interface SceneConfigProps {
   readonly data: SceneNodeDataType
   readonly onUpdate: (d: Record<string, unknown>) => void
   readonly step?: WizardStep
+  readonly nodeId?: string
 }
 
 function CollapsibleSection({
@@ -169,10 +170,11 @@ function QuickAddInput({
   )
 }
 
-export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
+export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) {
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const workflowNodes = useWorkflowStore((s) => s.nodes)
+  const workflowEdges = useWorkflowStore((s) => s.edges)
   const [showPromptPreview, setShowPromptPreview] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importTarget, setImportTarget] = useState<"character" | "location" | "object">("character")
@@ -1050,6 +1052,9 @@ export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <span className="font-medium text-foreground">{entry.characterName}</span>
               {entry.emotion && <span>({entry.emotion})</span>}
+              {(data.audioAssignments ?? []).some((a) => a.dialogueIndex === i) && (
+                <span className="px-1 py-0.5 rounded bg-violet-500/20 text-violet-500 text-[8px] font-medium">Connected</span>
+              )}
             </div>
             <p className="text-[10px] text-muted-foreground line-clamp-2">{entry.text || "(empty)"}</p>
             {/* Voice + Generate */}
@@ -1158,6 +1163,91 @@ export function SceneConfig({ data, onUpdate, step }: SceneConfigProps) {
           />
         </div>
       </CollapsibleSection>
+
+      {/* Connected Audio (from TTS nodes connected to audio handles) */}
+      {nodeId && (() => {
+        const AUDIO_HANDLES = ["audio1", "audio2", "audio3", "audio4", "audio5"] as const
+        const audioEdges = workflowEdges.filter(
+          (e) => e.target === nodeId && AUDIO_HANDLES.includes(e.targetHandle as typeof AUDIO_HANDLES[number])
+        )
+        if (audioEdges.length === 0) return null
+
+        const connectedAudio = audioEdges.map((edge) => {
+          const srcNode = workflowNodes.find((n) => n.id === edge.source)
+          const srcData = srcNode?.data as Record<string, unknown> | undefined
+          const results = (srcData?.generatedResults as readonly { url: string; jobId: string }[] | undefined) ?? []
+          const activeIdx = (srcData?.activeResultIndex as number | undefined) ?? 0
+          const audioUrl = results[activeIdx]?.url ?? (srcData?.generatedAudioUrl as string | undefined)
+          return {
+            handleId: edge.targetHandle ?? "",
+            sourceNodeId: edge.source,
+            label: (srcData?.label as string | undefined) ?? srcNode?.type ?? "Audio",
+            url: audioUrl,
+          }
+        })
+
+        const assignments = data.audioAssignments ?? []
+        const dialogueLines = data.dialogue ?? []
+
+        return (
+          <CollapsibleSection title={`Connected Audio (${connectedAudio.length})`} icon={<Link2 className="w-3.5 h-3.5" />} defaultOpen>
+            {connectedAudio.map((ca) => {
+              const assignment = assignments.find((a) => a.handleId === ca.handleId)
+              return (
+                <div key={ca.handleId} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
+                      {ca.handleId.replace("audio", "Audio ")}
+                    </span>
+                    <span className="text-muted-foreground truncate">{ca.label}</span>
+                  </div>
+                  {/* Assign to dialogue line */}
+                  <div className="flex items-center gap-1.5">
+                    <Select
+                      value={assignment?.dialogueIndex !== undefined ? String(assignment.dialogueIndex) : "__none__"}
+                      onValueChange={(v) => {
+                        const newAssignments = assignments.filter((a) => a.handleId !== ca.handleId)
+                        if (v !== "__none__") {
+                          newAssignments.push({
+                            handleId: ca.handleId,
+                            sourceNodeId: ca.sourceNodeId,
+                            dialogueIndex: parseInt(v, 10),
+                            role: "dialogue",
+                          })
+                        }
+                        onUpdate({ audioAssignments: newAssignments })
+                      }}
+                    >
+                      <SelectTrigger className="h-6 text-[10px] flex-1"><SelectValue placeholder="Assign to..." /></SelectTrigger>
+                      <SelectContent position="popper" className="z-[9999]">
+                        <SelectItem value="__none__">Unassigned</SelectItem>
+                        <SelectItem value="__narration__">Narration</SelectItem>
+                        {dialogueLines.map((d, di) => (
+                          <SelectItem key={di} value={String(di)}>
+                            Line {di + 1}: {d.characterName} - {d.text.slice(0, 30)}{d.text.length > 30 ? "..." : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Audio player */}
+                  {ca.url && (
+                    <audio
+                      src={ca.url}
+                      controls
+                      className="w-full h-7 [&::-webkit-media-controls-panel]:h-7"
+                    />
+                  )}
+                  {!ca.url && (
+                    <p className="text-[9px] text-muted-foreground italic">No audio generated yet</p>
+                  )}
+                </div>
+              )
+            })}
+          </CollapsibleSection>
+        )
+      })()}
+
       </>
       )}
 
