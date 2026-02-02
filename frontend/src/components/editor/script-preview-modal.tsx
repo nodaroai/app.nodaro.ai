@@ -515,14 +515,28 @@ export function ScriptPreviewModal({
             existingReferences={extractedReferences}
             onSave={(refs) => {
               onSaveReferences(refs)
-              // Update matching character definitions with extracted reference images
               const currentDefs = useWorkflowStore.getState().characterDefinitions
-              const { updateCharacterDefinition: upgradeChar } = useWorkflowStore.getState()
+              const { updateCharacterDefinition: upgradeChar, addCharacterDefinition: addDef } = useWorkflowStore.getState()
               for (const ref of refs) {
-                if (ref.type !== "character" || !ref.imageUrl) continue
-                const matchingDef = currentDefs.find((c) => c.name === ref.name && c.type === "description" && !c.referenceImageUrl)
-                if (matchingDef) {
-                  upgradeChar(matchingDef.id, { referenceImageUrl: ref.imageUrl })
+                if (!ref.imageUrl) continue
+                if (ref.type === "character") {
+                  // Upgrade matching description-only character definitions
+                  const matchingDef = currentDefs.find((c) => c.name === ref.name && c.type === "description" && !c.referenceImageUrl)
+                  if (matchingDef) {
+                    upgradeChar(matchingDef.id, { referenceImageUrl: ref.imageUrl })
+                  }
+                } else {
+                  // Add locations and objects to workflow store if not already present
+                  const exists = currentDefs.some((c) => c.name === ref.name && c.category === ref.type)
+                  if (!exists) {
+                    addDef({
+                      id: crypto.randomUUID(),
+                      name: ref.name,
+                      type: "reference",
+                      category: ref.type,
+                      referenceImageUrl: ref.imageUrl,
+                    })
+                  }
                 }
               }
             }}

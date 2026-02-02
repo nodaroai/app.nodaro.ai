@@ -2,12 +2,13 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, X, Play } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, X, Play, Scissors } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import type { GenerateImageData } from "@/types/nodes"
+import { ExtractReferencesModal } from "@/components/editor/extract-references-modal"
+import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateImageData
@@ -18,8 +19,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedImageUrl
+  const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [extractOpen, setExtractOpen] = useState(false)
+  const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -68,19 +72,32 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 setPreviewOpen(true)
               }}
             />
-            {results.length > 0 && (
+            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 type="button"
-                className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                className="w-5 h-5 flex items-center justify-center bg-purple-500/80 hover:bg-purple-500 text-white rounded-full"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setDeleteConfirm(activeIndex)
+                  setExtractOpen(true)
                 }}
-                title="Delete this result"
+                title="Extract references"
               >
-                <X className="w-3 h-3" />
+                <Scissors className="w-3 h-3" />
               </button>
-            )}
+              {results.length > 0 && (
+                <button
+                  type="button"
+                  className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteConfirm(activeIndex)
+                  }}
+                  title="Delete this result"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -166,6 +183,29 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
       }}
     />
+    {activeUrl && (
+      <ExtractReferencesModal
+        isOpen={extractOpen}
+        onClose={() => setExtractOpen(false)}
+        imageUrl={activeUrl}
+        sceneIndex={0}
+        sceneCharacters={[]}
+        existingReferences={extractedRefs}
+        onSave={(refs) => {
+          setExtractedRefs(refs)
+          for (const ref of refs) {
+            if (!ref.imageUrl) continue
+            addCharacterDefinition({
+              id: crypto.randomUUID(),
+              name: ref.name,
+              type: "reference",
+              category: ref.type,
+              referenceImageUrl: ref.imageUrl,
+            })
+          }
+        }}
+      />
+    )}
     </div>
   )
 }

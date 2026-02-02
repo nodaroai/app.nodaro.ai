@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useState, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, Scissors, User, MapPin, Loader2, AlertTriangle, Square, Pen } from "lucide-react"
+import { X, Scissors, User, MapPin, Box, Loader2, AlertTriangle, Square, Pen } from "lucide-react"
 import { cropImageElementToBlob, cropPolygonToBlob, polygonBoundingBox } from "@/lib/image-utils"
 import type { Point } from "@/lib/image-utils"
 import { uploadImage, getImageProxyUrl } from "@/lib/api"
@@ -22,7 +22,7 @@ interface PendingExtraction {
   rect?: DrawRect
   lassoPoints?: Point[]
   name: string
-  type: "character" | "location"
+  type: "character" | "location" | "object"
 }
 
 interface ExtractReferencesModalProps {
@@ -60,7 +60,7 @@ export function ExtractReferencesModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nameInput, setNameInput] = useState("")
-  const [typeInput, setTypeInput] = useState<"character" | "location">("character")
+  const [typeInput, setTypeInput] = useState<"character" | "location" | "object">("character")
 
   // Reset state when modal opens
   useEffect(() => {
@@ -392,6 +392,7 @@ export function ExtractReferencesModal({
 
   const characters = references.filter((r) => r.type === "character")
   const locations = references.filter((r) => r.type === "location")
+  const objects = references.filter((r) => r.type === "object")
 
   return createPortal(
     <div
@@ -512,6 +513,15 @@ export function ExtractReferencesModal({
                   >
                     <MapPin className="w-3 h-3" /> Location
                   </button>
+                  <button
+                    type="button"
+                    className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      typeInput === "object" ? "bg-emerald-600 text-white" : "bg-muted hover:bg-muted/80"
+                    }`}
+                    onClick={() => setTypeInput("object")}
+                  >
+                    <Box className="w-3 h-3" /> Object
+                  </button>
                 </div>
                 <button
                   type="button"
@@ -564,6 +574,27 @@ export function ExtractReferencesModal({
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Locations</span>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {locations.map((ref) => (
+                  <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
+                    <img src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
+                    <span className="text-xs font-medium">{ref.name}</span>
+                    <button
+                      type="button"
+                      className="p-0.5 rounded hover:bg-muted"
+                      onClick={() => handleDeleteReference(ref.id)}
+                    >
+                      <X className="w-3 h-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {objects.length > 0 && (
+            <div className="mt-3">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Objects</span>
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {objects.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
                     <img src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
                     <span className="text-xs font-medium">{ref.name}</span>

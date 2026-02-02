@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { X, FileText, Loader2, Download, UserPlus, Pencil, Trash2, Users, FolderOpen } from "lucide-react"
+import { X, FileText, Loader2, Download, UserPlus, Pencil, Trash2, Users, FolderOpen, MapPin, Box } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DefineCharacterModal } from "./define-character-modal"
@@ -309,7 +309,7 @@ export function ManageCharactersModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="text-sm font-semibold">Manage Characters</h3>
+          <h3 className="text-sm font-semibold">Manage References</h3>
           <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-muted">
             <X className="w-4 h-4" />
           </button>
@@ -317,89 +317,117 @@ export function ManageCharactersModal({
 
         {/* Body */}
         <div className="p-4 flex flex-col gap-4 max-h-[550px] overflow-y-auto">
-          {/* Current workflow characters */}
-          <div>
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-              Characters in this workflow
-            </label>
-            {charDefs.length === 0 ? (
-              <p className="text-xs text-muted-foreground mt-2">No characters defined yet.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                {charDefs.map((char) => (
-                  <div
-                    key={char.id}
-                    className="flex flex-col items-center gap-1.5 p-3 rounded-md border bg-muted/20 relative group"
-                  >
-                    {char.referenceImageUrl ? (
-                      <img src={char.referenceImageUrl} alt={char.name} className="w-14 h-14 rounded object-cover" />
-                    ) : (
-                      <div className="w-14 h-14 rounded bg-muted flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-orange-500" />
-                      </div>
-                    )}
-                    <span className="text-xs font-medium truncate w-full text-center">{char.name}</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${
-                      char.referenceImageUrl ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"
-                    }`}>
-                      {char.referenceImageUrl ? "reference" : "description"}
-                    </span>
-                    {!char.referenceImageUrl && char.description && (
-                      <p className="text-[9px] text-muted-foreground text-center line-clamp-2 w-full">{char.description}</p>
-                    )}
-                    {char.importedFrom && (
-                      <p className="text-[8px] text-muted-foreground/60 text-center">from: {char.importedFrom.workflowName}</p>
-                    )}
-                    {/* Action buttons */}
-                    <div className="flex gap-1 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => { setEditingChar(char); setShowDefineModal(true) }}
-                        className="p-1 rounded hover:bg-muted transition-colors"
-                        title="Edit"
-                      >
-                        <Pencil className="w-3 h-3 text-muted-foreground" />
-                      </button>
-                      {deleteConfirmId === char.id ? (
-                        <div className="flex gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => { removeCharacterDefinition(char.id); setDeleteConfirmId(null) }}
-                            className="px-1.5 py-0.5 text-[9px] rounded bg-destructive text-destructive-foreground"
-                          >
-                            Delete
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmId(null)}
-                            className="px-1.5 py-0.5 text-[9px] rounded border"
-                          >
-                            No
-                          </button>
-                        </div>
+          {/* Current workflow references */}
+          {(() => {
+            const characters = charDefs.filter((c) => !c.category || c.category === "character")
+            const locations = charDefs.filter((c) => c.category === "location")
+            const objectDefs = charDefs.filter((c) => c.category === "object")
+
+            function renderRefGrid(items: readonly CharacterDefinition[]) {
+              if (items.length === 0) return <p className="text-xs text-muted-foreground mt-1">None defined yet.</p>
+              return (
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  {items.map((char) => (
+                    <div
+                      key={char.id}
+                      className="flex flex-col items-center gap-1.5 p-3 rounded-md border bg-muted/20 relative group"
+                    >
+                      {char.referenceImageUrl ? (
+                        <img src={char.referenceImageUrl} alt={char.name} className="w-14 h-14 rounded object-cover" />
                       ) : (
+                        <div className="w-14 h-14 rounded bg-muted flex items-center justify-center">
+                          <FileText className="w-6 h-6 text-orange-500" />
+                        </div>
+                      )}
+                      <span className="text-xs font-medium truncate w-full text-center">{char.name}</span>
+                      {!char.referenceImageUrl && char.description && (
+                        <p className="text-[9px] text-muted-foreground text-center line-clamp-2 w-full">{char.description}</p>
+                      )}
+                      {char.importedFrom && (
+                        <p className="text-[8px] text-muted-foreground/60 text-center">from: {char.importedFrom.workflowName}</p>
+                      )}
+                      <div className="flex gap-1 mt-1">
                         <button
                           type="button"
-                          onClick={() => setDeleteConfirmId(char.id)}
-                          className="p-1 rounded hover:bg-destructive/10 transition-colors"
-                          title="Delete"
+                          onClick={() => { setEditingChar(char); setShowDefineModal(true) }}
+                          className="p-1 rounded hover:bg-muted transition-colors"
+                          title="Edit"
                         >
-                          <Trash2 className="w-3 h-3 text-muted-foreground" />
+                          <Pencil className="w-3 h-3 text-muted-foreground" />
                         </button>
-                      )}
+                        {deleteConfirmId === char.id ? (
+                          <div className="flex gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => { removeCharacterDefinition(char.id); setDeleteConfirmId(null) }}
+                              className="px-1.5 py-0.5 text-[9px] rounded bg-destructive text-destructive-foreground"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmId(null)}
+                              className="px-1.5 py-0.5 text-[9px] rounded border"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(char.id)}
+                            className="p-1 rounded hover:bg-destructive/10 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3 text-muted-foreground" />
+                          </button>
+                        )}
+                      </div>
                     </div>
+                  ))}
+                </div>
+              )
+            }
+
+            return (
+              <div className="flex flex-col gap-3">
+                {/* Characters */}
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                    <UserPlus className="w-3 h-3" /> Characters
+                  </label>
+                  {renderRefGrid(characters)}
+                  <button
+                    type="button"
+                    onClick={() => { setEditingChar(null); setShowDefineModal(true) }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-dashed hover:bg-muted transition-colors mt-2"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Define new character
+                  </button>
+                </div>
+
+                {/* Locations */}
+                {locations.length > 0 && (
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> Locations
+                    </label>
+                    {renderRefGrid(locations)}
                   </div>
-                ))}
+                )}
+
+                {/* Objects */}
+                {objectDefs.length > 0 && (
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                      <Box className="w-3 h-3" /> Objects
+                    </label>
+                    {renderRefGrid(objectDefs)}
+                  </div>
+                )}
               </div>
-            )}
-            <button
-              type="button"
-              onClick={() => { setEditingChar(null); setShowDefineModal(true) }}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-dashed hover:bg-muted transition-colors mt-2"
-            >
-              <UserPlus className="w-3.5 h-3.5" /> Define new character
-            </button>
-          </div>
+            )
+          })()}
 
           {/* Separator */}
           <div className="border-t" />

@@ -135,7 +135,7 @@ export interface ScriptScene {
 export interface ExtractedReference {
   readonly id: string
   readonly name: string
-  readonly type: "character" | "location"
+  readonly type: "character" | "location" | "object"
   readonly imageUrl: string
   readonly sourceSceneIndex: number
   readonly boundingBox: {
@@ -150,6 +150,7 @@ export interface CharacterDefinition {
   readonly id: string
   readonly name: string
   readonly type: "reference" | "description"
+  readonly category?: "character" | "location" | "object"
   readonly referenceImageUrl?: string
   readonly description?: string
   readonly sourceSceneIndex?: number
