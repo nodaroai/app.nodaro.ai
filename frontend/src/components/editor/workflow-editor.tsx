@@ -723,12 +723,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "text-to-speech") {
-      const text = inputs.prompt ?? ""
+      const ttsData = node.data as TextToSpeechData
+      const text = (ttsData.textSource === "direct" && ttsData.directText?.trim())
+        ? ttsData.directText.trim()
+        : (inputs.prompt ?? "")
       if (!text) {
-        toast.error(`Node "${(node.data as TextToSpeechData).label}": no text found`)
+        toast.error(`Node "${ttsData.label}": no text found`)
         return Promise.reject(new Error("No text"))
       }
-      const ttsData = node.data as TextToSpeechData
       const voice = ttsData.voiceId
       return runTextToSpeechGeneration(node.id, text, voice || undefined, ttsData.provider || undefined)
     }

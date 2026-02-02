@@ -1532,8 +1532,39 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
 }
 
 function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToSpeechData>) {
+  const textSource = data.textSource || "connected"
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <Label>Text Source</Label>
+        <div className="flex gap-2 mt-1">
+          <button
+            type="button"
+            onClick={() => onUpdate({ textSource: "connected" })}
+            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${textSource === "connected" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}
+          >
+            From connected node
+          </button>
+          <button
+            type="button"
+            onClick={() => onUpdate({ textSource: "direct" })}
+            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${textSource === "direct" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}
+          >
+            Write directly
+          </button>
+        </div>
+      </div>
+      {textSource === "direct" && (
+        <div>
+          <Label>Text</Label>
+          <Textarea
+            rows={4}
+            value={data.directText || ""}
+            onChange={(e) => onUpdate({ directText: e.target.value })}
+            placeholder="Enter text to convert to speech..."
+          />
+        </div>
+      )}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
         <Select
           value={data.provider || "elevenlabs"}
