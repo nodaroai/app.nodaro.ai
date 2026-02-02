@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -72,6 +72,7 @@ import type {
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/nodes"
 import { SceneConfig } from "./scene-config"
+import { SceneEditorModal } from "./scene-editor-modal"
 import { DefineCharacterModal } from "./define-character-modal"
 import { ImportAssetsModal } from "./manage-characters-modal"
 
@@ -268,6 +269,8 @@ export function ConfigPanel() {
     return (d.fieldMappings as FieldMappings) ?? {}
   }, [selectedNode])
 
+  const [expandSceneOpen, setExpandSceneOpen] = useState(false)
+
   if (!selectedNode) return null
 
   function update(data: Record<string, unknown>) {
@@ -429,7 +432,17 @@ export function ConfigPanel() {
 
           {/* Scene Node */}
           {selectedNode.type === "scene" && (
-            <SceneConfig data={selectedNode.data as SceneNodeDataType} onUpdate={update} />
+            <>
+              <SceneConfig data={selectedNode.data as SceneNodeDataType} onUpdate={update} />
+              <Button
+                variant="outline"
+                className="w-full mt-2"
+                onClick={() => setExpandSceneOpen(true)}
+              >
+                <Maximize2 className="w-4 h-4 mr-2" />
+                Expand Scene Editor
+              </Button>
+            </>
           )}
 
           <Separator />
@@ -451,6 +464,13 @@ export function ConfigPanel() {
           </div>
         </div>
       </ScrollArea>
+      {selectedNode.type === "scene" && (
+        <SceneEditorModal
+          isOpen={expandSceneOpen}
+          onClose={() => setExpandSceneOpen(false)}
+          nodeId={selectedNode.id}
+        />
+      )}
     </div>
   )
 }

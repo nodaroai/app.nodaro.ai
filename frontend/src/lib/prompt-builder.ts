@@ -115,6 +115,15 @@ export function buildScenePrompt(
     parts.push(data.summary.trim())
   }
 
+  // Dialogue context
+  if (data.dialogue?.length > 0) {
+    const dialogueDesc = data.dialogue
+      .filter((d) => d.text.trim())
+      .map((d) => `${d.characterName}${d.emotion ? ` (${d.emotion})` : ""}: "${d.text.trim()}"`)
+      .join("; ")
+    if (dialogueDesc) parts.push(`dialogue: ${dialogueDesc}`)
+  }
+
   // Director notes
   if (data.directorNotes?.trim()) {
     parts.push(data.directorNotes.trim())

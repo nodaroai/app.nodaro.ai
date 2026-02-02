@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download } from "lucide-react"
+import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -15,7 +15,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ImportAssetsModal } from "@/components/editor/manage-characters-modal"
 import { buildScenePrompt } from "@/lib/prompt-builder"
-import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry } from "@/types/nodes"
+import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry } from "@/types/nodes"
 
 interface SceneConfigProps {
   readonly data: SceneNodeDataType
@@ -283,6 +283,75 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
         {availableChars.length === 0 && data.characters.length === 0 && (
           <p className="text-[10px] text-muted-foreground">No character assets defined. Import or extract them from generated images.</p>
         )}
+      </CollapsibleSection>
+
+      {/* Dialogue */}
+      <CollapsibleSection title={`Dialogue (${data.dialogue?.length ?? 0})`} icon={<MessageSquare className="w-3.5 h-3.5" />} defaultOpen={(data.dialogue?.length ?? 0) > 0}>
+        {(data.dialogue ?? []).map((entry, i) => (
+          <div key={i} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
+            <div className="flex items-center justify-between gap-1.5">
+              <Select
+                value={entry.characterId ?? "__narrator__"}
+                onValueChange={(v) => {
+                  const charAsset = v === "__narrator__" ? undefined : allAssets.find((a) => a.id === v)
+                  const newDialogue = (data.dialogue ?? []).map((d, di) =>
+                    di === i ? { ...d, characterId: v === "__narrator__" ? undefined : v, characterName: v === "__narrator__" ? "Narrator" : charAsset?.name ?? d.characterName } : d
+                  )
+                  onUpdate({ dialogue: newDialogue })
+                }}
+              >
+                <SelectTrigger className="h-6 text-[10px] flex-1"><SelectValue placeholder="Speaker" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__narrator__">Narrator</SelectItem>
+                  {characterAssets.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      <span className="flex items-center gap-1.5">
+                        {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                        {a.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                value={entry.emotion ?? ""}
+                onChange={(e) => {
+                  const newDialogue = (data.dialogue ?? []).map((d, di) => di === i ? { ...d, emotion: e.target.value } : d)
+                  onUpdate({ dialogue: newDialogue })
+                }}
+                placeholder="Emotion"
+                className="h-6 text-[10px] w-20"
+              />
+              <button
+                type="button"
+                onClick={() => onUpdate({ dialogue: (data.dialogue ?? []).filter((_, di) => di !== i) })}
+                className="p-0.5 hover:text-destructive"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <Textarea
+              value={entry.text}
+              onChange={(e) => {
+                const newDialogue = (data.dialogue ?? []).map((d, di) => di === i ? { ...d, text: e.target.value } : d)
+                onUpdate({ dialogue: newDialogue })
+              }}
+              placeholder="Dialogue line..."
+              rows={2}
+              className="text-[10px] resize-none"
+            />
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            const newEntry: SceneDialogueEntry = { characterName: "Narrator", text: "" }
+            onUpdate({ dialogue: [...(data.dialogue ?? []), newEntry] })
+          }}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
+        >
+          <Plus className="w-3 h-3" /> Add dialogue line
+        </button>
       </CollapsibleSection>
 
       {/* Location */}

@@ -2,11 +2,12 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Play } from "lucide-react"
+import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Play, Maximize2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { SceneEditorModal } from "@/components/editor/scene-editor-modal"
 import type { SceneNodeDataType } from "@/types/nodes"
 
 function SceneNodeComponent({ id, data, selected }: NodeProps) {
@@ -29,6 +30,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -56,9 +58,10 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "prompt", type: "source", position: Position.Right, label: "Prompt", top: "25%" },
-        { id: "imageRefs", type: "source", position: Position.Right, label: "Refs", top: "45%" },
-        { id: "narration", type: "source", position: Position.Right, label: "Narration", top: "65%" },
+        { id: "prompt", type: "source", position: Position.Right, label: "Prompt", top: "15%" },
+        { id: "imageRefs", type: "source", position: Position.Right, label: "Refs", top: "30%" },
+        { id: "narration", type: "source", position: Position.Right, label: "Narration", top: "55%" },
+        { id: "dialogue", type: "source", position: Position.Right, label: "Dialogue", top: "70%" },
         { id: "duration", type: "source", position: Position.Right, label: "Duration", top: "85%" },
       ]}
     >
@@ -185,12 +188,12 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Run button (hover tab) */}
+    {/* Run + Expand buttons (hover tab) */}
     {status !== "running" && (
-      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity">
+      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity flex gap-0.5">
         <button
           type="button"
-          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-violet-500 hover:bg-violet-600 text-white rounded-b-md shadow-md transition-colors"
+          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-violet-500 hover:bg-violet-600 text-white rounded-bl-md shadow-md transition-colors"
           onClick={(e) => {
             e.stopPropagation()
             runSingleNode?.(id)
@@ -199,6 +202,17 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
         >
           <Play className="w-3 h-3" />
           Run
+        </button>
+        <button
+          type="button"
+          className="flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium bg-violet-500/80 hover:bg-violet-600 text-white rounded-br-md shadow-md transition-colors"
+          onClick={(e) => {
+            e.stopPropagation()
+            setEditorOpen(true)
+          }}
+          title="Expand scene editor"
+        >
+          <Maximize2 className="w-3 h-3" />
         </button>
       </div>
     )}
@@ -217,6 +231,11 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       onConfirm={() => {
         if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
       }}
+    />
+    <SceneEditorModal
+      isOpen={editorOpen}
+      onClose={() => setEditorOpen(false)}
+      nodeId={id}
     />
     </div>
   )
