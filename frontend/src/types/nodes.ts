@@ -477,6 +477,10 @@ export type SceneNodeDataType = {
   directorNotes: string
   referenceUrls: string[]
   generatedPrompt: string
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  generatedResults: GeneratedResult[]
+  activeResultIndex: number
+  generatedImageUrl: string
   fieldMappings: FieldMappings
 }
 
@@ -895,6 +899,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       directorNotes: "",
       referenceUrls: [],
       generatedPrompt: "",
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+      generatedImageUrl: "",
       fieldMappings: {},
     } as SceneNodeDataType,
   },

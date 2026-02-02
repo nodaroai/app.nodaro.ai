@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote } from "lucide-react"
+import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { ImportAssetsModal } from "@/components/editor/manage-characters-modal"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry } from "@/types/nodes"
 
@@ -94,6 +95,8 @@ function TagInput({
 export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
   const [showPromptPreview, setShowPromptPreview] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importTarget, setImportTarget] = useState<"character" | "location" | "object">("character")
 
   const characterAssets = allAssets.filter((a) => !a.category || a.category === "character")
   const locationAssets = allAssets.filter((a) => a.category === "location")
@@ -127,6 +130,30 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
   function addObject(assetId: string) {
     const entry: SceneObjectEntry = { assetId }
     onUpdate({ objects: [...data.objects, entry] })
+  }
+
+  function openImportModal(target: "character" | "location" | "object") {
+    setImportTarget(target)
+    setImportModalOpen(true)
+  }
+
+  function handleImported(ids: string[]) {
+    // After importing, auto-add imported assets to the scene based on their category
+    const { characterDefinitions } = useWorkflowStore.getState()
+    for (const id of ids) {
+      const asset = characterDefinitions.find((a) => a.id === id)
+      if (!asset) continue
+      const cat = asset.category ?? "character"
+      if (cat === "character" && !data.characters.some((c) => c.assetId === id)) {
+        const entry: SceneCharacterEntry = { assetId: id, mood: "", action: "" }
+        onUpdate({ characters: [...data.characters, entry] })
+      } else if (cat === "location" && data.locationAssetId !== id) {
+        onUpdate({ locationAssetId: id })
+      } else if (cat === "object" && !data.objects.some((o) => o.assetId === id)) {
+        const entry: SceneObjectEntry = { assetId: id }
+        onUpdate({ objects: [...data.objects, entry] })
+      }
+    }
   }
 
   const usedCharIds = new Set(data.characters.map((c) => c.assetId))
@@ -189,7 +216,12 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           return (
             <div key={`${entry.assetId}-${i}`} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium">{asset?.name ?? "Unknown"}</span>
+                <div className="flex items-center gap-1.5">
+                  {asset?.referenceImageUrl && (
+                    <img src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" />
+                  )}
+                  <span className="text-xs font-medium">{asset?.name ?? "Unknown"}</span>
+                </div>
                 <button type="button" onClick={() => removeCharacter(i)} className="p-0.5 hover:text-destructive">
                   <X className="w-3 h-3" />
                 </button>
@@ -231,13 +263,25 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </SelectTrigger>
             <SelectContent>
               {availableChars.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                <SelectItem key={a.id} value={a.id}>
+                  <span className="flex items-center gap-1.5">
+                    {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                    {a.name}
+                  </span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         )}
+        <button
+          type="button"
+          onClick={() => openImportModal("character")}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
+        >
+          <Download className="w-3 h-3" /> Import characters from other projects
+        </button>
         {availableChars.length === 0 && data.characters.length === 0 && (
-          <p className="text-[10px] text-muted-foreground">No character assets defined. Create them in Import Assets.</p>
+          <p className="text-[10px] text-muted-foreground">No character assets defined. Import or extract them from generated images.</p>
         )}
       </CollapsibleSection>
 
@@ -253,10 +297,22 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             <SelectContent>
               <SelectItem value="__none__">None</SelectItem>
               {locationAssets.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                <SelectItem key={a.id} value={a.id}>
+                  <span className="flex items-center gap-1.5">
+                    {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                    {a.name}
+                  </span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <button
+            type="button"
+            onClick={() => openImportModal("location")}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors mt-1.5"
+          >
+            <Download className="w-3 h-3" /> Import locations from other projects
+          </button>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
           <div>
@@ -301,6 +357,9 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           const asset = allAssets.find((a) => a.id === entry.assetId)
           return (
             <div key={`${entry.assetId}-${i}`} className="flex items-center gap-1.5 p-2 rounded-md border bg-muted/20">
+              {asset?.referenceImageUrl && (
+                <img src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" />
+              )}
               <span className="text-xs font-medium flex-1">{asset?.name ?? "Unknown"}</span>
               <Input
                 value={entry.description ?? ""}
@@ -322,11 +381,23 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
             </SelectTrigger>
             <SelectContent>
               {availableObjs.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                <SelectItem key={a.id} value={a.id}>
+                  <span className="flex items-center gap-1.5">
+                    {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                    {a.name}
+                  </span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         )}
+        <button
+          type="button"
+          onClick={() => openImportModal("object")}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
+        >
+          <Download className="w-3 h-3" /> Import objects from other projects
+        </button>
       </CollapsibleSection>
 
       {/* Cinematography */}
@@ -513,6 +584,13 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
           </div>
         )}
       </div>
+
+      {/* Import Assets Modal */}
+      <ImportAssetsModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImported={handleImported}
+      />
     </div>
   )
 }

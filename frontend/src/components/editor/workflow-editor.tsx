@@ -79,7 +79,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -183,6 +183,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return (data.extractedAudioUrl as string | undefined)?.trim()
     }
     if (type === "scene") {
+      // If scene has a generated image, return that; otherwise return built prompt
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      const imageUrl = results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
+      if (imageUrl) return imageUrl
       const sceneData = data as unknown as SceneNodeDataType
       const { characterDefinitions } = useWorkflowStore.getState()
       return buildScenePrompt(sceneData, characterDefinitions)
@@ -239,6 +244,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const sceneData = src.data as unknown as SceneNodeDataType
         const { characterDefinitions } = useWorkflowStore.getState()
         inputs.prompt = buildScenePrompt(sceneData, characterDefinitions)
+        // If scene has a generated image, provide it as imageUrl
+        const sceneResults = (sceneData.generatedResults as GeneratedResult[] | undefined) ?? []
+        const sceneActiveIdx = (sceneData.activeResultIndex as number | undefined) ?? 0
+        const sceneImageUrl = sceneResults[sceneActiveIdx]?.url ?? sceneData.generatedImageUrl
+        if (sceneImageUrl) {
+          if (node.type === "generate-image") {
+            inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), sceneImageUrl]
+          } else {
+            inputs.imageUrl = sceneImageUrl
+          }
+        }
         // Collect reference images from all attached assets (characters, location, objects)
         const allAssetIds = [
           ...sceneData.characters.map((c) => c.assetId),
@@ -798,6 +814,35 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const audioUrls = inputs.audioUrls ?? []
       if (audioUrls.length < 2) { toast.error(`Node "${(node.data as MixAudioData).label}": need at least 2 audio inputs`); return Promise.reject(new Error("Need at least 2 audio tracks")) }
       return runProcessingNode(node.id, () => mixAudioApi(audioUrls), "generatedAudioUrl", "Mix Audio")
+    }
+
+    if (node.type === "scene") {
+      const sceneData = node.data as unknown as SceneNodeDataType
+      const { characterDefinitions } = useWorkflowStore.getState()
+      const prompt = buildScenePrompt(sceneData, characterDefinitions)
+      if (!prompt.trim()) {
+        toast.error(`Scene "${sceneData.sceneName || sceneData.label}": no scene data to generate prompt`)
+        return Promise.reject(new Error("Empty scene prompt"))
+      }
+
+      // Collect reference images from all attached assets
+      const allAssetIds = [
+        ...sceneData.characters.map((c) => c.assetId),
+        ...(sceneData.locationAssetId ? [sceneData.locationAssetId] : []),
+        ...sceneData.objects.map((o) => o.assetId),
+      ]
+      const refUrls: string[] = []
+      const charDescs: string[] = []
+      for (const assetId of allAssetIds) {
+        const asset = characterDefinitions.find((a) => a.id === assetId)
+        if (asset?.referenceImageUrl) refUrls.push(asset.referenceImageUrl)
+        if (asset?.type === "description" && asset.description) {
+          const label = asset.category === "location" ? "location" : asset.category === "object" ? "object" : "character"
+          charDescs.push(`Include ${label} '${asset.name}': ${asset.description}.`)
+        }
+      }
+      const finalPrompt = charDescs.length > 0 ? `${prompt}\n${charDescs.join(" ")}` : prompt
+      return runImageGeneration(node.id, finalPrompt, refUrls.length > 0 ? refUrls : undefined)
     }
 
     return Promise.resolve()
