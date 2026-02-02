@@ -33,11 +33,13 @@ type FilterType = "all" | "character" | "location" | "object"
 interface ImportAssetsModalProps {
   readonly isOpen: boolean
   readonly onClose: () => void
+  readonly onImported?: (ids: string[]) => void
 }
 
 export function ImportAssetsModal({
   isOpen,
   onClose,
+  onImported,
 }: ImportAssetsModalProps) {
   const charDefs = useWorkflowStore((s) => s.characterDefinitions)
   const workflowId = useWorkflowStore((s) => s.workflowId)
@@ -207,6 +209,7 @@ export function ImportAssetsModal({
 
   function handleImportFromBrowse() {
     if (!selectedWorkflow) return
+    const importedIds: string[] = []
     const charsToImport = browseImportable
       .filter((c) => selectedCharIds.has(c.id))
       .map((c) => ({
@@ -219,7 +222,9 @@ export function ImportAssetsModal({
       }))
     for (const c of charsToImport) {
       addCharacterDefinition(c)
+      importedIds.push(c.id)
     }
+    onImported?.(importedIds)
     setSelectedCharIds(new Set())
     setSelectedWorkflowId("")
   }
@@ -227,11 +232,14 @@ export function ImportAssetsModal({
   function handleImportFromAll() {
     const allChars = allGrouped.flatMap((g) => g.characters)
     const selected = allChars.filter((c) => selectedCharIds.has(c.id) && !existingNames.includes(c.name))
+    const importedIds: string[] = []
     for (const c of selected) {
+      const newId = crypto.randomUUID()
       const charData: CharacterDefinition = {
-        id: crypto.randomUUID(),
+        id: newId,
         name: c.name,
         type: c.type,
+        category: c.category,
         ...(c.referenceImageUrl ? { referenceImageUrl: c.referenceImageUrl } : {}),
         ...(c.description ? { description: c.description } : {}),
         importedFrom: {
@@ -240,7 +248,9 @@ export function ImportAssetsModal({
         },
       }
       addCharacterDefinition(charData)
+      importedIds.push(newId)
     }
+    onImported?.(importedIds)
     setSelectedCharIds(new Set())
   }
 

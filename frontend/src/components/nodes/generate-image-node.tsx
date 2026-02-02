@@ -75,10 +75,10 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 setPreviewOpen(true)
               }}
             />
-            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-1 right-1 flex gap-1">
               <button
                 type="button"
-                className="w-5 h-5 flex items-center justify-center bg-purple-500/80 hover:bg-purple-500 text-white rounded-full"
+                className="w-5 h-5 flex items-center justify-center bg-purple-500/80 hover:bg-purple-500 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   setExtractOpen(true)
@@ -90,7 +90,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               {results.length > 0 && (
                 <button
                   type="button"
-                  className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full"
+                  className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)

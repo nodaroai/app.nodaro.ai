@@ -1281,6 +1281,9 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
       <ImportAssetsModal
         isOpen={showManageModal}
         onClose={() => setShowManageModal(false)}
+        onImported={(ids) => {
+          onUpdate({ characterDefinitionIds: [...attachedIds, ...ids] })
+        }}
       />
     </div>
   )
