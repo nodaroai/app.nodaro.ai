@@ -70,7 +70,8 @@ import type {
   ScriptScene,
   CharacterDefinition,
 } from "@/types/nodes"
-import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/nodes"
+import { SceneConfig } from "./scene-config"
 import { DefineCharacterModal } from "./define-character-modal"
 import { ImportAssetsModal } from "./manage-characters-modal"
 
@@ -424,6 +425,11 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "webhook-output" && (
             <WebhookOutputConfig data={selectedNode.data as WebhookOutputData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+
+          {/* Scene Node */}
+          {selectedNode.type === "scene" && (
+            <SceneConfig data={selectedNode.data as SceneNodeDataType} onUpdate={update} />
           )}
 
           <Separator />

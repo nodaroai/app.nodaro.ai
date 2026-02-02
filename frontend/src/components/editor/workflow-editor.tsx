@@ -15,7 +15,8 @@ import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { buildScenePrompt } from "@/lib/prompt-builder"
 
 interface WorkflowEditorProps {
   readonly projectId?: string
@@ -181,6 +182,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (type === "reference-audio") {
       return (data.extractedAudioUrl as string | undefined)?.trim()
     }
+    if (type === "scene") {
+      const sceneData = data as unknown as SceneNodeDataType
+      const { characterDefinitions } = useWorkflowStore.getState()
+      return buildScenePrompt(sceneData, characterDefinitions)
+    }
     return undefined
   }
 
@@ -227,6 +233,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
         } else {
           inputs.audioUrl = output
+        }
+      } else if (src.type === "scene") {
+        // Scene node provides prompt text + reference images from attached assets
+        const sceneData = src.data as unknown as SceneNodeDataType
+        const { characterDefinitions } = useWorkflowStore.getState()
+        inputs.prompt = buildScenePrompt(sceneData, characterDefinitions)
+        // Collect reference images from all attached assets (characters, location, objects)
+        const allAssetIds = [
+          ...sceneData.characters.map((c) => c.assetId),
+          ...(sceneData.locationAssetId ? [sceneData.locationAssetId] : []),
+          ...sceneData.objects.map((o) => o.assetId),
+        ]
+        for (const assetId of allAssetIds) {
+          const asset = characterDefinitions.find((a) => a.id === assetId)
+          if (asset?.referenceImageUrl) {
+            inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), asset.referenceImageUrl]
+          }
         }
       } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "extract-audio" || src.type === "adjust-volume" || src.type === "mix-audio") {
         if (node.type === "mix-audio") {

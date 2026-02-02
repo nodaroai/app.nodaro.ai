@@ -30,6 +30,7 @@ import { AdjustVolumeNode } from "./adjust-volume-node"
 import { TrimVideoNode } from "./trim-video-node"
 import { SaveToStorageNode } from "./save-to-storage-node"
 import { WebhookOutputNode } from "./webhook-output-node"
+import { SceneNode } from "./scene-node"
 import type { SceneNodeType } from "@/types/nodes"
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -70,4 +71,6 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Output
   "save-to-storage": SaveToStorageNode,
   "webhook-output": WebhookOutputNode,
+  // Scene
+  "scene": SceneNode,
 }

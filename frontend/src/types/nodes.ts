@@ -1,6 +1,6 @@
 import type { Node, Edge } from "@xyflow/react"
 
-export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output"
+export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene"
 
 export interface FieldMapping {
   readonly sourceNodeId: string
@@ -434,6 +434,52 @@ export type WebhookOutputData = {
   fieldMappings: FieldMappings
 }
 
+// --- Scene Node Data ---
+
+export interface SceneCharacterEntry {
+  readonly assetId: string
+  readonly mood: string
+  readonly action: string
+  readonly positionInFrame?: "left" | "center" | "right" | "background"
+}
+
+export interface SceneObjectEntry {
+  readonly assetId: string
+  readonly description?: string
+}
+
+export type SceneNodeDataType = {
+  [key: string]: unknown
+  label: string
+  sceneName: string
+  sceneNumber: number
+  duration: number
+  summary: string
+  characters: SceneCharacterEntry[]
+  locationAssetId: string
+  timeOfDay: "dawn" | "morning" | "noon" | "afternoon" | "sunset" | "evening" | "night"
+  weather: "clear" | "cloudy" | "rainy" | "stormy" | "foggy" | "snowy"
+  lighting: "natural" | "artificial" | "dramatic" | "soft" | "harsh" | "backlit"
+  objects: SceneObjectEntry[]
+  shotType: "extreme-wide" | "wide" | "medium-wide" | "medium" | "medium-close" | "close-up" | "extreme-close-up"
+  cameraAngle: "eye-level" | "low-angle" | "high-angle" | "birds-eye" | "worms-eye" | "dutch"
+  cameraMovement: "static" | "pan" | "tilt" | "dolly" | "tracking" | "crane" | "handheld" | "zoom"
+  depthOfField: "deep" | "medium" | "shallow"
+  lensType: "wide" | "normal" | "telephoto"
+  mood: string[]
+  colorPalette: string[]
+  visualStyle: "realistic" | "cinematic" | "anime" | "cartoon" | "noir" | "vintage" | "fantasy" | "sci-fi"
+  narration: string
+  musicMood: string
+  soundEffects: string[]
+  transitionIn: "cut" | "fade" | "dissolve" | "wipe"
+  transitionOut: "cut" | "fade" | "dissolve" | "wipe"
+  directorNotes: string
+  referenceUrls: string[]
+  generatedPrompt: string
+  fieldMappings: FieldMappings
+}
+
 // --- Union Types ---
 
 export type SceneNodeData =
@@ -469,6 +515,7 @@ export type SceneNodeData =
   | TrimVideoData
   | SaveToStorageData
   | WebhookOutputData
+  | SceneNodeDataType
 
 export type SceneNodeType =
   | "text-prompt"
@@ -503,6 +550,7 @@ export type SceneNodeType =
   | "trim-video"
   | "save-to-storage"
   | "webhook-output"
+  | "scene"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -810,5 +858,44 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: [],
     defaultData: { label: "Webhook Output", webhookId: "", includeAssetUrl: true, fieldMappings: {} },
+  },
+  // Scene
+  {
+    type: "scene",
+    label: "Scene",
+    category: "scene",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["prompt", "imageRefs", "narration", "duration"],
+    defaultData: {
+      label: "Scene",
+      sceneName: "",
+      sceneNumber: 1,
+      duration: 5,
+      summary: "",
+      characters: [],
+      locationAssetId: "",
+      timeOfDay: "noon",
+      weather: "clear",
+      lighting: "natural",
+      objects: [],
+      shotType: "medium",
+      cameraAngle: "eye-level",
+      cameraMovement: "static",
+      depthOfField: "medium",
+      lensType: "normal",
+      mood: [],
+      colorPalette: [],
+      visualStyle: "cinematic",
+      narration: "",
+      musicMood: "",
+      soundEffects: [],
+      transitionIn: "cut",
+      transitionOut: "cut",
+      directorNotes: "",
+      referenceUrls: [],
+      generatedPrompt: "",
+      fieldMappings: {},
+    } as SceneNodeDataType,
   },
 ]
