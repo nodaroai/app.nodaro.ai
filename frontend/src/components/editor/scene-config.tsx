@@ -15,7 +15,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ImportAssetsModal } from "@/components/editor/manage-characters-modal"
 import { buildScenePrompt } from "@/lib/prompt-builder"
-import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry } from "@/types/nodes"
+import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry } from "@/types/nodes"
 
 interface SceneConfigProps {
   readonly data: SceneNodeDataType
@@ -144,11 +144,13 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
       const asset = characterDefinitions.find((a) => a.id === id)
       if (!asset) continue
       const cat = asset.category ?? "character"
+      const locs = data.locations ?? []
       if (cat === "character" && !data.characters.some((c) => c.assetId === id)) {
         const entry: SceneCharacterEntry = { assetId: id, mood: "", action: "" }
         onUpdate({ characters: [...data.characters, entry] })
-      } else if (cat === "location" && data.locationAssetId !== id) {
-        onUpdate({ locationAssetId: id })
+      } else if (cat === "location" && !locs.some((l) => l.assetId === id)) {
+        const entry: SceneLocationEntry = { assetId: id, isPrimary: locs.length === 0 }
+        onUpdate({ locations: [...locs, entry] })
       } else if (cat === "object" && !data.objects.some((o) => o.assetId === id)) {
         const entry: SceneObjectEntry = { assetId: id }
         onUpdate({ objects: [...data.objects, entry] })
@@ -158,6 +160,8 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
 
   const usedCharIds = new Set(data.characters.map((c) => c.assetId))
   const availableChars = characterAssets.filter((a) => !usedCharIds.has(a.id))
+  const usedLocIds = new Set((data.locations ?? []).map((l) => l.assetId))
+  const availableLocs = locationAssets.filter((a) => !usedLocIds.has(a.id))
   const usedObjIds = new Set(data.objects.map((o) => o.assetId))
   const availableObjs = objectAssets.filter((a) => !usedObjIds.has(a.id))
 
@@ -354,18 +358,115 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
         </button>
       </CollapsibleSection>
 
-      {/* Location */}
-      <CollapsibleSection title="Location" icon={<MapPin className="w-3.5 h-3.5" />} defaultOpen={!!data.locationAssetId}>
-        <div>
-          <Label className="text-[10px]">Location Asset</Label>
-          <Select
-            value={data.locationAssetId || ""}
-            onValueChange={(v) => onUpdate({ locationAssetId: v === "__none__" ? "" : v })}
-          >
-            <SelectTrigger className="h-7 text-[10px] mt-0.5"><SelectValue placeholder="Select location..." /></SelectTrigger>
+      {/* Locations */}
+      <CollapsibleSection title={`Locations (${(data.locations ?? []).length})`} icon={<MapPin className="w-3.5 h-3.5" />} defaultOpen={(data.locations ?? []).length > 0}>
+        {(data.locations ?? []).map((loc, i) => {
+          const asset = allAssets.find((a) => a.id === loc.assetId)
+          return (
+            <div key={`${loc.assetId}-${i}`} className="flex flex-col gap-1.5 p-2 rounded-md border bg-muted/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  {asset?.referenceImageUrl && (
+                    <img src={asset.referenceImageUrl} alt={asset?.name} className="w-6 h-6 rounded object-cover" />
+                  )}
+                  <span className="text-xs font-medium">{loc.name ?? asset?.name ?? "Unknown"}</span>
+                  {loc.isPrimary && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-500">Primary</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  {!loc.isPrimary && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newLocs = (data.locations ?? []).map((l, li) => ({ ...l, isPrimary: li === i }))
+                        onUpdate({ locations: newLocs })
+                      }}
+                      className="text-[9px] px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                      title="Set as primary"
+                    >
+                      Primary
+                    </button>
+                  )}
+                  <button type="button" onClick={() => {
+                    const newLocs = (data.locations ?? []).filter((_, li) => li !== i)
+                    if (loc.isPrimary && newLocs.length > 0) {
+                      newLocs[0] = { ...newLocs[0], isPrimary: true }
+                    }
+                    onUpdate({ locations: newLocs })
+                  }} className="p-0.5 hover:text-destructive">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <div>
+                  <Label className="text-[10px]">Time</Label>
+                  <Select
+                    value={loc.timeOfDay ?? data.timeOfDay}
+                    onValueChange={(v) => {
+                      const newLocs = (data.locations ?? []).map((l, li) => li === i ? { ...l, timeOfDay: v as SceneLocationEntry["timeOfDay"] } : l)
+                      onUpdate({ locations: newLocs })
+                    }}
+                  >
+                    <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["dawn", "morning", "noon", "afternoon", "sunset", "evening", "night"].map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px]">Weather</Label>
+                  <Select
+                    value={loc.weather ?? data.weather}
+                    onValueChange={(v) => {
+                      const newLocs = (data.locations ?? []).map((l, li) => li === i ? { ...l, weather: v as SceneLocationEntry["weather"] } : l)
+                      onUpdate({ locations: newLocs })
+                    }}
+                  >
+                    <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["clear", "cloudy", "rainy", "stormy", "foggy", "snowy"].map((w) => (
+                        <SelectItem key={w} value={w}>{w}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px]">Lighting</Label>
+                  <Select
+                    value={loc.lighting ?? data.lighting}
+                    onValueChange={(v) => {
+                      const newLocs = (data.locations ?? []).map((l, li) => li === i ? { ...l, lighting: v as SceneLocationEntry["lighting"] } : l)
+                      onUpdate({ locations: newLocs })
+                    }}
+                  >
+                    <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["natural", "artificial", "dramatic", "soft", "harsh", "backlit"].map((l) => (
+                        <SelectItem key={l} value={l}>{l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        {availableLocs.length > 0 && (
+          <Select onValueChange={(v) => {
+            const locs = data.locations ?? []
+            const entry: SceneLocationEntry = { assetId: v, isPrimary: locs.length === 0 }
+            onUpdate({ locations: [...locs, entry] })
+          }}>
+            <SelectTrigger className="h-7 text-[10px]">
+              <Plus className="w-3 h-3 mr-1" />
+              <SelectValue placeholder="Add location..." />
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none__">None</SelectItem>
-              {locationAssets.map((a) => (
+              {availableLocs.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
                   <span className="flex items-center gap-1.5">
                     {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
@@ -375,47 +476,52 @@ export function SceneConfig({ data, onUpdate }: SceneConfigProps) {
               ))}
             </SelectContent>
           </Select>
-          <button
-            type="button"
-            onClick={() => openImportModal("location")}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors mt-1.5"
-          >
-            <Download className="w-3 h-3" /> Import locations from other projects
-          </button>
-        </div>
-        <div className="grid grid-cols-3 gap-1.5">
-          <div>
-            <Label className="text-[10px]">Time</Label>
-            <Select value={data.timeOfDay} onValueChange={(v) => onUpdate({ timeOfDay: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {["dawn", "morning", "noon", "afternoon", "sunset", "evening", "night"].map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-[10px]">Weather</Label>
-            <Select value={data.weather} onValueChange={(v) => onUpdate({ weather: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {["clear", "cloudy", "rainy", "stormy", "foggy", "snowy"].map((w) => (
-                  <SelectItem key={w} value={w}>{w}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-[10px]">Lighting</Label>
-            <Select value={data.lighting} onValueChange={(v) => onUpdate({ lighting: v })}>
-              <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {["natural", "artificial", "dramatic", "soft", "harsh", "backlit"].map((l) => (
-                  <SelectItem key={l} value={l}>{l}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        )}
+        <button
+          type="button"
+          onClick={() => openImportModal("location")}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
+        >
+          <Download className="w-3 h-3" /> Import locations from other projects
+        </button>
+
+        {/* Default environment (when no locations or as fallback) */}
+        <div className="mt-1">
+          <Label className="text-[10px] text-muted-foreground">Default Environment</Label>
+          <div className="grid grid-cols-3 gap-1.5 mt-0.5">
+            <div>
+              <Label className="text-[10px]">Time</Label>
+              <Select value={data.timeOfDay} onValueChange={(v) => onUpdate({ timeOfDay: v })}>
+                <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["dawn", "morning", "noon", "afternoon", "sunset", "evening", "night"].map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[10px]">Weather</Label>
+              <Select value={data.weather} onValueChange={(v) => onUpdate({ weather: v })}>
+                <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["clear", "cloudy", "rainy", "stormy", "foggy", "snowy"].map((w) => (
+                    <SelectItem key={w} value={w}>{w}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[10px]">Lighting</Label>
+              <Select value={data.lighting} onValueChange={(v) => onUpdate({ lighting: v })}>
+                <SelectTrigger className="h-6 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["natural", "artificial", "dramatic", "soft", "harsh", "backlit"].map((l) => (
+                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </CollapsibleSection>

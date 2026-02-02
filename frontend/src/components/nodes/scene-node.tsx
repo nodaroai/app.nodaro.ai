@@ -18,8 +18,10 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
 
   const charCount = nodeData.characters.length
   const objCount = nodeData.objects.length
-  const locationAsset = nodeData.locationAssetId
-    ? allCharDefs.find((c) => c.id === nodeData.locationAssetId)
+  const locCount = nodeData.locations?.length ?? 0
+  const primaryLoc = nodeData.locations?.find((l) => l.isPrimary) ?? nodeData.locations?.[0]
+  const locationAsset = primaryLoc
+    ? allCharDefs.find((c) => c.id === primaryLoc.assetId)
     : undefined
 
   const status = nodeData.executionStatus ?? "idle"
@@ -174,9 +176,9 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
               <Users className="w-2.5 h-2.5" /> {charCount}
             </span>
           )}
-          {locationAsset && (
-            <span className="flex items-center gap-0.5 text-[9px]" title={locationAsset.name}>
-              <MapPin className="w-2.5 h-2.5" />
+          {locCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[9px]" title={locationAsset?.name ?? `${locCount} location${locCount !== 1 ? "s" : ""}`}>
+              <MapPin className="w-2.5 h-2.5" /> {locCount > 1 ? locCount : ""}
             </span>
           )}
           {objCount > 0 && (

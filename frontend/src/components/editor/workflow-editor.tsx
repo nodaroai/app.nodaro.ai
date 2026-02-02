@@ -258,7 +258,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Collect reference images from all attached assets (characters, location, objects)
         const allAssetIds = [
           ...sceneData.characters.map((c) => c.assetId),
-          ...(sceneData.locationAssetId ? [sceneData.locationAssetId] : []),
+          ...(sceneData.locations ?? []).map((l) => l.assetId),
           ...sceneData.objects.map((o) => o.assetId),
         ]
         for (const assetId of allAssetIds) {
@@ -828,7 +828,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       // Collect reference images from all attached assets
       const allAssetIds = [
         ...sceneData.characters.map((c) => c.assetId),
-        ...(sceneData.locationAssetId ? [sceneData.locationAssetId] : []),
+        ...(sceneData.locations ?? []).map((l) => l.assetId),
         ...sceneData.objects.map((o) => o.assetId),
       ]
       const refUrls: string[] = []

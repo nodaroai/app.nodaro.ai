@@ -55,21 +55,29 @@ export function buildScenePrompt(
     parts.push(`of ${charDescs.join(" and ")}`)
   }
 
-  // Location
-  const locationAsset = data.locationAssetId
-    ? assets.find((a) => a.id === data.locationAssetId)
-    : undefined
-  if (locationAsset) {
-    const locDesc = locationAsset.description ?? locationAsset.name
-    parts.push(`in ${locDesc}`)
+  // Locations
+  if (data.locations?.length > 0) {
+    const locDescs = data.locations.map((loc) => {
+      const asset = assets.find((a) => a.id === loc.assetId)
+      const name = loc.name ?? asset?.description ?? asset?.name ?? "location"
+      const envParts: string[] = []
+      const tod = loc.timeOfDay ?? data.timeOfDay
+      const wth = loc.weather ?? data.weather
+      const lit = loc.lighting ?? data.lighting
+      if (tod !== "noon") envParts.push(`${tod} light`)
+      if (wth !== "clear") envParts.push(wth)
+      if (lit !== "natural") envParts.push(`${lit} lighting`)
+      return envParts.length > 0 ? `${name} (${envParts.join(", ")})` : name
+    })
+    parts.push(`in ${locDescs.join(" and ")}`)
+  } else {
+    // Fallback: use top-level time/weather/lighting without a location asset
+    const envParts: string[] = []
+    if (data.timeOfDay !== "noon") envParts.push(`${data.timeOfDay} light`)
+    if (data.weather !== "clear") envParts.push(data.weather)
+    if (data.lighting !== "natural") envParts.push(`${data.lighting} lighting`)
+    if (envParts.length > 0) parts.push(envParts.join(", "))
   }
-
-  // Time, weather, lighting
-  const envParts: string[] = []
-  if (data.timeOfDay !== "noon") envParts.push(`${data.timeOfDay} light`)
-  if (data.weather !== "clear") envParts.push(data.weather)
-  if (data.lighting !== "natural") envParts.push(`${data.lighting} lighting`)
-  if (envParts.length > 0) parts.push(envParts.join(", "))
 
   // Objects
   if (data.objects.length > 0) {

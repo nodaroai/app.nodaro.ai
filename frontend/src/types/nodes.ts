@@ -455,6 +455,15 @@ export interface SceneDialogueEntry {
   readonly emotion?: string
 }
 
+export interface SceneLocationEntry {
+  readonly assetId: string
+  readonly name?: string
+  readonly isPrimary?: boolean
+  readonly timeOfDay?: "dawn" | "morning" | "noon" | "afternoon" | "sunset" | "evening" | "night"
+  readonly weather?: "clear" | "cloudy" | "rainy" | "stormy" | "foggy" | "snowy"
+  readonly lighting?: "natural" | "artificial" | "dramatic" | "soft" | "harsh" | "backlit"
+}
+
 export type SceneNodeDataType = {
   [key: string]: unknown
   label: string
@@ -464,7 +473,7 @@ export type SceneNodeDataType = {
   summary: string
   characters: SceneCharacterEntry[]
   dialogue: SceneDialogueEntry[]
-  locationAssetId: string
+  locations: SceneLocationEntry[]
   timeOfDay: "dawn" | "morning" | "noon" | "afternoon" | "sunset" | "evening" | "night"
   weather: "clear" | "cloudy" | "rainy" | "stormy" | "foggy" | "snowy"
   lighting: "natural" | "artificial" | "dramatic" | "soft" | "harsh" | "backlit"
@@ -887,7 +896,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       summary: "",
       characters: [],
       dialogue: [],
-      locationAssetId: "",
+      locations: [],
       timeOfDay: "noon",
       weather: "clear",
       lighting: "natural",
