@@ -35,7 +35,7 @@ interface WorkflowState {
   readonly deleteEdge: (edgeId: string) => void
   readonly duplicateNode: (nodeId: string) => void
   readonly selectNode: (nodeId: string | null) => void
-  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
+  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[]) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
@@ -218,7 +218,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
 
-  loadWorkflow: (id, name, nodes, edges) => {
+  loadWorkflow: (id, name, nodes, edges, characterDefinitions) => {
     nextNodeId =
       nodes.reduce((max, n) => {
         const num = parseInt(n.id.replace("node_", ""), 10)
@@ -234,7 +234,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       isDirty: false,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
-      characterDefinitions: [],
+      characterDefinitions: characterDefinitions ?? [],
     })
   },
 

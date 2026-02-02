@@ -241,7 +241,7 @@ export function DefineCharacterModal({
           <button
             type="button"
             onClick={handleSave}
-            disabled={uploading}
+            disabled={uploading || !name.trim() || (type === "description" && !description.trim()) || (type === "reference" && !referenceImageUrl)}
             className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {editingCharacter ? "Update" : "Save Character"}

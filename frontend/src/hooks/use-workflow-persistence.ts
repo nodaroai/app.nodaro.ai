@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, CharacterDefinition } from "@/types/nodes"
 
 interface SaveResult {
   readonly success: boolean
@@ -27,7 +27,7 @@ export function useWorkflowPersistence(projectId?: string) {
       const resolvedProjectId = pid ?? projectId
       if (!resolvedProjectId) return { success: false, error: "No project ID" }
 
-      const { workflowId, workflowName, nodes, edges } =
+      const { workflowId, workflowName, nodes, edges, characterDefinitions } =
         useWorkflowStore.getState()
 
       // Don't save empty workflows
@@ -43,6 +43,7 @@ export function useWorkflowPersistence(projectId?: string) {
           name: workflowName,
           nodes: JSON.parse(JSON.stringify(nodes)),
           edges: JSON.parse(JSON.stringify(edges)),
+          settings: { characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)) },
         }
 
         if (workflowId) {
@@ -116,11 +117,14 @@ export function useWorkflowPersistence(projectId?: string) {
 
         if (error) return { success: false, error: error.message }
 
+        const settings = (data.settings ?? {}) as Record<string, unknown>
+        const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
         loadWorkflow(
           data.id,
           data.name,
           data.nodes as WorkflowNode[],
           data.edges as WorkflowEdge[],
+          charDefs,
         )
         return { success: true }
       } catch (err) {

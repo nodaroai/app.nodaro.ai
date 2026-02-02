@@ -153,6 +153,10 @@ export interface CharacterDefinition {
   readonly referenceImageUrl?: string
   readonly description?: string
   readonly sourceSceneIndex?: number
+  readonly importedFrom?: {
+    readonly workflowId: string
+    readonly workflowName: string
+  }
 }
 
 export interface GeneratedScript {

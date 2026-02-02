@@ -3528,17 +3528,49 @@ interface CharacterDefinition {
 }
 ```
 
-**Storage:** Workflow-level in Zustand store (`useWorkflowStore.characterDefinitions`). Generate Image nodes store only `characterDefinitionIds: string[]` referencing definitions by ID.
+**Data Structure (with import):**
+```typescript
+interface CharacterDefinition {
+  id: string
+  name: string
+  type: 'reference' | 'description'
+  referenceImageUrl?: string
+  description?: string
+  sourceSceneIndex?: number
+  importedFrom?: { workflowId: string; workflowName: string }
+}
+```
+
+**Storage:** Workflow-level in Zustand store (`useWorkflowStore.characterDefinitions`). Persisted in `workflows.settings.characterDefinitions` JSONB. Generate Image nodes store only `characterDefinitionIds: string[]` referencing definitions by ID.
 
 **Config Panel:** Generate Image nodes have a CHARACTERS section with:
-- List of attached characters (thumbnail for reference, truncated text for description)
+- List of attached characters (click to edit, thumbnail for reference, truncated text for description)
 - "Add existing" dropdown for workflow-level characters not yet attached
 - "Define new" button opens modal for creating reference or description characters
+- "Import" button opens modal for importing characters from other workflows
+- Characters can be edited by clicking on them (opens DefineCharacterModal in edit mode)
+
+**Storyboard Modal:**
+- Character input only allows selecting defined characters (no free-text tags)
+- Typing filters dropdown; unmatched input shows "No character found. Define new" link
+- "Define character" and "Import" buttons on every scene card
+
+**Import from Workflow:**
+- Queries Supabase for other workflows in project with character definitions
+- Shows grid of characters with thumbnails, multi-select
+- Skips characters with duplicate names
+- Imported characters get new IDs + `importedFrom` metadata
 
 **Execution:**
 - Reference characters: `referenceImageUrl` added to `image_input` array alongside chain and extracted refs
 - Description characters: text appended to prompt before sending to backend
+- Both storyboard path (`handleGenerateSceneImage`) and expanded node path (`executeNode`) support character definitions
+- Auto-upgrade: after storyboard image generation, description characters in the scene are automatically upgraded to reference type with the generated image URL
 - Backend also accepts `characterDescriptions[]` in the generate-image route for direct API usage
+
+**Validation:**
+- DefineCharacterModal disables Save button until name + type-specific content is provided
+- Cannot create empty character tags in storyboard (must select from defined characters)
 
 ### Implementation Notes
 

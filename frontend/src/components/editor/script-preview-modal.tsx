@@ -2,10 +2,11 @@
 
 import { useEffect, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors, UserPlus, FileText } from "lucide-react"
+import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors, UserPlus, FileText, Download } from "lucide-react"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
 import { DefineCharacterModal } from "./define-character-modal"
+import { ImportCharacterModal } from "./import-character-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GeneratedScript, ExtractedReference, CharacterDefinition } from "@/types/nodes"
 
@@ -41,8 +42,10 @@ export function ScriptPreviewModal({
   const [deleteConfirm, setDeleteConfirm] = useState<{ sceneIndex: number; imageIndex: number } | null>(null)
   const [focusedCharInput, setFocusedCharInput] = useState<number | null>(null)
   const [showDefineCharModal, setShowDefineCharModal] = useState(false)
+  const [showImportCharModal, setShowImportCharModal] = useState(false)
   const [editingCharDef, setEditingCharDef] = useState<CharacterDefinition | null>(null)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
+  const workflowId = useWorkflowStore((s) => s.workflowId)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const updateCharacterDefinition = useWorkflowStore((s) => s.updateCharacterDefinition)
 
@@ -351,7 +354,7 @@ export function ScriptPreviewModal({
                       <div className="relative">
                         <input
                           type="text"
-                          placeholder="e.g. Hero, Dragon"
+                          placeholder="Search characters..."
                           className="h-6 w-28 px-2 text-xs rounded-full border border-muted-foreground/30 bg-muted/40 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 placeholder:text-muted-foreground/50"
                           value={characterInput[i] ?? ""}
                           onChange={(e) => setCharacterInput({ ...characterInput, [i]: e.target.value })}
@@ -365,11 +368,12 @@ export function ScriptPreviewModal({
                             } else if (e.key === "Enter") {
                               e.preventDefault()
                               const val = (characterInput[i] ?? "").trim()
-                              if (val && !(scene.characters ?? []).includes(val)) {
+                              const isDefined = allCharDefs.some((d) => d.name === val) || extractedReferences.some((r) => r.name === val)
+                              if (val && isDefined && !(scene.characters ?? []).includes(val)) {
                                 onUpdateSceneCharacters(i, [...(scene.characters ?? []), val])
                               }
                               setCharacterInput({ ...characterInput, [i]: "" })
-                              if (val === "") {
+                              if (val === "" || !isDefined) {
                                 setFocusedCharInput(null)
                                 ;(e.target as HTMLInputElement).blur()
                               }
@@ -383,9 +387,9 @@ export function ScriptPreviewModal({
                           const suggestions = allCharacters.filter(
                             (c) => !sceneChars.has(c) && (inputVal === "" || c.toLowerCase().includes(inputVal))
                           )
-                          if (suggestions.length === 0) return null
+                          if (suggestions.length === 0 && !inputVal) return null
                           return (
-                            <div className="absolute top-full left-0 mt-1 w-36 max-h-28 overflow-y-auto rounded-md border bg-popover shadow-md z-30">
+                            <div className="absolute top-full left-0 mt-1 w-44 max-h-28 overflow-y-auto rounded-md border bg-popover shadow-md z-30">
                               {suggestions.map((char) => (
                                 <button
                                   key={char}
@@ -404,6 +408,9 @@ export function ScriptPreviewModal({
                                     {allCharDefs.some((d) => d.name === char && d.type === "description") && (
                                       <FileText className="w-2.5 h-2.5 text-orange-500" />
                                     )}
+                                    {allCharDefs.some((d) => d.name === char && d.type === "reference") && (
+                                      <ImageIcon className="w-2.5 h-2.5 text-blue-500" />
+                                    )}
                                     {char}
                                   </span>
                                   <span className="text-[9px] text-muted-foreground">
@@ -411,6 +418,22 @@ export function ScriptPreviewModal({
                                   </span>
                                 </button>
                               ))}
+                              {suggestions.length === 0 && inputVal && (
+                                <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                                  No character found.{" "}
+                                  <button
+                                    type="button"
+                                    className="text-primary hover:underline"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault()
+                                      setCharacterInput({ ...characterInput, [i]: "" })
+                                      setShowDefineCharModal(true)
+                                    }}
+                                  >
+                                    Define new
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )
                         })()}
@@ -426,9 +449,16 @@ export function ScriptPreviewModal({
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setShowDefineCharModal(true) }}
                         className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed hover:bg-muted transition-colors text-muted-foreground whitespace-nowrap"
-                        >
-                          <UserPlus className="w-2.5 h-2.5" /> Define character
-                        </button>
+                      >
+                        <UserPlus className="w-2.5 h-2.5" /> Define character
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShowImportCharModal(true) }}
+                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed hover:bg-muted transition-colors text-muted-foreground whitespace-nowrap"
+                      >
+                        <Download className="w-2.5 h-2.5" /> Import
+                      </button>
                     </div>
                   </div>
 
@@ -474,6 +504,17 @@ export function ScriptPreviewModal({
         }}
         existingNames={allCharDefs.map((c) => c.name)}
         editingCharacter={editingCharDef}
+      />
+      <ImportCharacterModal
+        isOpen={showImportCharModal}
+        onClose={() => setShowImportCharModal(false)}
+        onImport={(chars) => {
+          for (const c of chars) {
+            addCharacterDefinition(c)
+          }
+        }}
+        currentWorkflowId={workflowId}
+        existingNames={allCharDefs.map((c) => c.name)}
       />
       <DeleteConfirmationDialog
         isOpen={deleteConfirm !== null}

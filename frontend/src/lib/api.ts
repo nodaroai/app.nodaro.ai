@@ -366,6 +366,20 @@ export async function getJobStatus(jobId: string): Promise<{
 
 // --- Generic helpers ---
 
+export interface WorkflowCharacterInfo {
+  readonly workflowId: string
+  readonly workflowName: string
+  readonly characters: readonly CharacterDefinitionRaw[]
+}
+
+export interface CharacterDefinitionRaw {
+  readonly id: string
+  readonly name: string
+  readonly type: "reference" | "description"
+  readonly referenceImageUrl?: string
+  readonly description?: string
+}
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),

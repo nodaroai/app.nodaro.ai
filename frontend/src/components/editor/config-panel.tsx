@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -72,6 +72,7 @@ import type {
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { DefineCharacterModal } from "./define-character-modal"
+import { ImportCharacterModal } from "./import-character-modal"
 
 interface SourceNodeInfo {
   readonly id: string
@@ -1085,9 +1086,11 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   const [showDefineModal, setShowDefineModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [showAddDropdown, setShowAddDropdown] = useState(false)
   const [editingChar, setEditingChar] = useState<CharacterDefinition | null>(null)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
+  const workflowId = useWorkflowStore((s) => s.workflowId)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const updateCharacterDefinition = useWorkflowStore((s) => s.updateCharacterDefinition)
 
@@ -1246,6 +1249,13 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           >
             <UserPlus className="w-3 h-3" /> Define new
           </button>
+          <button
+            type="button"
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+          >
+            <Download className="w-3 h-3" /> Import
+          </button>
         </div>
       </div>
 
@@ -1255,6 +1265,18 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         onSave={handleDefineAndAttach}
         existingNames={allCharDefs.map((c) => c.name)}
         editingCharacter={editingChar}
+      />
+      <ImportCharacterModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={(chars) => {
+          for (const c of chars) {
+            addCharacterDefinition(c)
+            onUpdate({ characterDefinitionIds: [...(data.characterDefinitionIds ?? []), c.id] })
+          }
+        }}
+        currentWorkflowId={workflowId}
+        existingNames={allCharDefs.map((c) => c.name)}
       />
     </div>
   )
