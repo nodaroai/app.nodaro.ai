@@ -85,6 +85,57 @@ export async function characterRoutes(app: FastifyInstance) {
     return { characters }
   })
 
+  // Get single character by ID
+  app.get("/v1/characters/:id", async (req, reply) => {
+    const parsed = deleteCharacterParams.safeParse(req.params)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid character ID",
+        },
+      })
+    }
+
+    const { id } = parsed.data
+
+    const { data, error } = await supabase
+      .from("characters")
+      .select("id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, created_at, updated_at")
+      .eq("id", id)
+      .single()
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Character not found" },
+        })
+      }
+      return reply.status(500).send({
+        error: { code: "internal_error", message: error.message },
+      })
+    }
+
+    // Transform snake_case to camelCase for frontend
+    return {
+      id: data.id,
+      userId: data.user_id,
+      nodeId: data.node_id,
+      projectId: data.project_id,
+      name: data.name,
+      description: data.description,
+      gender: data.gender,
+      style: data.style,
+      baseOutfit: data.base_outfit,
+      sourceImageUrl: data.source_image_url,
+      expressions: data.expressions,
+      poses: data.poses,
+      lightingVariations: data.lighting_variations,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    }
+  })
+
   // Upsert character (create or update)
   app.post("/v1/characters", async (req, reply) => {
     const parsed = upsertCharacterBody.safeParse(req.body)

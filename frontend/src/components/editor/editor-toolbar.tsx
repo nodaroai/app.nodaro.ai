@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff, FileJson } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { validateWorkflow, type ValidationResult } from "@/lib/workflow-validation"
+import { ExportImportModal } from "./export-import-modal"
 
 interface EditorToolbarProps {
   readonly projectId?: string
@@ -32,6 +33,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const setVideoAutoplay = useWorkflowStore((s) => s.setVideoAutoplay)
   const [validation, setValidation] = useState<ValidationResult | null>(null)
+  const [showExportImport, setShowExportImport] = useState(false)
 
   function handleValidate() {
     const result = validateWorkflow(nodes, edges)
@@ -146,6 +148,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
         </Button>
 
         <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowExportImport(true)}
+          title="Export / Import workflow"
+        >
+          <FileJson className="h-4 w-4 sm:mr-1" />
+          <span className="hidden sm:inline">Export</span>
+        </Button>
+
+        <Button
           variant={isDirty ? "default" : "outline"}
           size="sm"
           onClick={onSave}
@@ -169,6 +181,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
 
         <ThemeToggle />
       </div>
+
+      <ExportImportModal
+        isOpen={showExportImport}
+        onClose={() => setShowExportImport(false)}
+        projectId={projectId}
+      />
     </div>
   )
 }

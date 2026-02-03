@@ -188,6 +188,21 @@ export async function getCharacters(projectId?: string, userId?: string): Promis
   return res.json()
 }
 
+export async function getCharacterById(characterId: string): Promise<DbCharacter | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (res.status === 404) {
+    return null
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch character")
+  }
+  return res.json()
+}
+
 // Object API functions
 export async function generateObject(data: {
   name: string
@@ -302,6 +317,21 @@ export async function getObjects(projectId?: string, userId?: string): Promise<{
   return res.json()
 }
 
+export async function getObjectById(objectId: string): Promise<DbObject | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (res.status === 404) {
+    return null
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch object")
+  }
+  return res.json()
+}
+
 // Location API functions
 export async function generateLocation(data: {
   name: string
@@ -412,6 +442,21 @@ export async function getLocations(projectId?: string, userId?: string): Promise
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throw new Error(err?.error?.message ?? "Failed to fetch locations")
+  }
+  return res.json()
+}
+
+export async function getLocationById(locationId: string): Promise<DbLocation | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (res.status === 404) {
+    return null
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch location")
   }
   return res.json()
 }

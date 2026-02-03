@@ -83,6 +83,56 @@ export async function objectRoutes(app: FastifyInstance) {
     return { objects }
   })
 
+  // Get single object by ID
+  app.get("/v1/objects/:id", async (req, reply) => {
+    const parsed = deleteObjectParams.safeParse(req.params)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid object ID",
+        },
+      })
+    }
+
+    const { id } = parsed.data
+
+    const { data, error } = await supabase
+      .from("objects")
+      .select("id, user_id, node_id, project_id, name, description, category, style, source_image_url, angles, materials, variations, created_at, updated_at")
+      .eq("id", id)
+      .single()
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Object not found" },
+        })
+      }
+      return reply.status(500).send({
+        error: { code: "internal_error", message: error.message },
+      })
+    }
+
+    // Transform snake_case to camelCase for frontend
+    return {
+      id: data.id,
+      userId: data.user_id,
+      nodeId: data.node_id,
+      projectId: data.project_id,
+      name: data.name,
+      description: data.description,
+      category: data.category,
+      style: data.style,
+      sourceImageUrl: data.source_image_url,
+      angles: data.angles,
+      materials: data.materials,
+      variations: data.variations,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    }
+  })
+
   // Upsert object (create or update)
   app.post("/v1/objects", async (req, reply) => {
     const parsed = upsertObjectBody.safeParse(req.body)
