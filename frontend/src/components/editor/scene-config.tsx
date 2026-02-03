@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, Download, MessageSquare, Check, RatioIcon, AlertCircle, Loader2, Play, Link2 } from "lucide-react"
+import { ChevronDown, Plus, X, Eye, Users, MapPin, Box, Camera, Palette, Volume2, ArrowRightLeft, StickyNote, MessageSquare, Check, RatioIcon, AlertCircle, Loader2, Play, Link2, Download } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { ImportAssetsModal } from "@/components/editor/manage-characters-modal"
 import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import { TTS_VOICES } from "@/lib/tts-voices"
 import { textToSpeech, getJobStatus } from "@/lib/api"
@@ -176,8 +175,6 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
   const workflowNodes = useWorkflowStore((s) => s.nodes)
   const workflowEdges = useWorkflowStore((s) => s.edges)
   const [showPromptPreview, setShowPromptPreview] = useState(false)
-  const [importModalOpen, setImportModalOpen] = useState(false)
-  const [importTarget, setImportTarget] = useState<"character" | "location" | "object">("character")
   const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set())
   const [recentDialogueIndex, setRecentDialogueIndex] = useState<number | null>(null)
   const [expandQuickAdd, setExpandQuickAdd] = useState<"character" | "location" | "object" | null>(null)
@@ -216,11 +213,6 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
   function addObject(assetId: string) {
     const entry: SceneObjectEntry = { assetId }
     onUpdate({ objects: [...data.objects, entry] })
-  }
-
-  function openImportModal(target: "character" | "location" | "object") {
-    setImportTarget(target)
-    setImportModalOpen(true)
   }
 
   async function generateDialogueAudio(dialogueIndex: number) {
@@ -291,29 +283,6 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
   function markRecentlyAdded(id: string) {
     setRecentlyAdded((prev) => new Set([...prev, id]))
     setTimeout(() => setRecentlyAdded((prev) => { const next = new Set(prev); next.delete(id); return next }), 2000)
-  }
-
-  function handleImported(ids: string[]) {
-    const { characterDefinitions } = useWorkflowStore.getState()
-    for (const id of ids) {
-      const asset = characterDefinitions.find((a) => a.id === id)
-      if (!asset) continue
-      const cat = asset.category ?? "character"
-      const locs = data.locations ?? []
-      if (cat === "character" && !data.characters.some((c) => c.assetId === id)) {
-        const entry: SceneCharacterEntry = { assetId: id, mood: "", action: "" }
-        onUpdate({ characters: [...data.characters, entry] })
-        markRecentlyAdded(id)
-      } else if (cat === "location" && !locs.some((l) => l.assetId === id)) {
-        const entry: SceneLocationEntry = { assetId: id, isPrimary: locs.length === 0 }
-        onUpdate({ locations: [...locs, entry] })
-        markRecentlyAdded(id)
-      } else if (cat === "object" && !data.objects.some((o) => o.assetId === id)) {
-        const entry: SceneObjectEntry = { assetId: id }
-        onUpdate({ objects: [...data.objects, entry] })
-        markRecentlyAdded(id)
-      }
-    }
   }
 
   const handleQuickAdd = useCallback((category: "character" | "location" | "object", name: string, description: string) => {
@@ -404,7 +373,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
       {scriptNodes.length > 0 && (
           <div className="border rounded-md p-3 bg-muted/30 flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <Download className="w-3.5 h-3.5 text-muted-foreground" />
+              <Link2 className="w-3.5 h-3.5 text-muted-foreground" />
               <span className="text-xs font-medium">Script Connection</span>
               {data.sourceScriptNodeId && (
                 <button type="button" onClick={handleUnlinkScript} className="ml-auto text-[10px] text-muted-foreground hover:text-destructive">
@@ -676,13 +645,6 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           autoExpand={expandQuickAdd === "character"}
           onAutoExpandHandled={() => setExpandQuickAdd(null)}
         />
-        <button
-          type="button"
-          onClick={() => openImportModal("character")}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
-        >
-          <Download className="w-3 h-3" /> Import from other projects
-        </button>
       </CollapsibleSection>
       {/* Locations */}
       <CollapsibleSection title={`Locations (${(data.locations ?? []).length})`} icon={<MapPin className="w-3.5 h-3.5" />} defaultOpen={(data.locations ?? []).length > 0}>
@@ -814,13 +776,6 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           autoExpand={expandQuickAdd === "location"}
           onAutoExpandHandled={() => setExpandQuickAdd(null)}
         />
-        <button
-          type="button"
-          onClick={() => openImportModal("location")}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
-        >
-          <Download className="w-3 h-3" /> Import from other projects
-        </button>
 
         {/* Default environment (when no locations or as fallback) */}
         <div className="mt-1">
@@ -913,13 +868,6 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
           autoExpand={expandQuickAdd === "object"}
           onAutoExpandHandled={() => setExpandQuickAdd(null)}
         />
-        <button
-          type="button"
-          onClick={() => openImportModal("object")}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] rounded-md border border-dashed hover:bg-muted transition-colors"
-        >
-          <Download className="w-3 h-3" /> Import from other projects
-        </button>
       </CollapsibleSection>
       {/* Cinematography */}
       <CollapsibleSection title="Cinematography" icon={<Camera className="w-3.5 h-3.5" />}>
@@ -1354,13 +1302,6 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
         )}
       </div>}
 
-      {/* Import Assets Modal */}
-      <ImportAssetsModal
-        isOpen={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
-        onImported={handleImported}
-        defaultFilter={importTarget}
-      />
     </div>
   )
 }

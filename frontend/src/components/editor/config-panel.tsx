@@ -78,7 +78,6 @@ import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/node
 import { SceneConfig } from "./scene-config"
 import { SceneEditorModal } from "./scene-editor-modal"
 import { DefineCharacterModal } from "./define-character-modal"
-import { ImportAssetsModal } from "./manage-characters-modal"
 
 interface SourceNodeInfo {
   readonly id: string
@@ -1131,7 +1130,6 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   const [showDefineModal, setShowDefineModal] = useState(false)
-  const [showManageModal, setShowManageModal] = useState(false)
   const [showAddDropdown, setShowAddDropdown] = useState(false)
   const [editingChar, setEditingChar] = useState<CharacterDefinition | null>(null)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
@@ -1306,13 +1304,6 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           >
             <UserPlus className="w-3 h-3" /> Define new
           </button>
-          <button
-            type="button"
-            onClick={() => setShowManageModal(true)}
-            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
-          >
-            <Download className="w-3 h-3" /> Import Assets
-          </button>
         </div>
       </div>
 
@@ -1322,13 +1313,6 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         onSave={handleDefineAndAttach}
         existingNames={allCharDefs.map((c) => c.name)}
         editingCharacter={editingChar}
-      />
-      <ImportAssetsModal
-        isOpen={showManageModal}
-        onClose={() => setShowManageModal(false)}
-        onImported={(ids) => {
-          onUpdate({ characterDefinitionIds: [...attachedIds, ...ids] })
-        }}
       />
     </div>
   )

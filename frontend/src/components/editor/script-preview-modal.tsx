@@ -2,14 +2,13 @@
 
 import { useEffect, useCallback, useState, useMemo, createContext, useContext } from "react"
 import { createPortal } from "react-dom"
-import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors, UserPlus, FileText, Download, Plus, Trash2, Clapperboard, Eye, MessageSquare, Users, Pen, GripVertical } from "lucide-react"
+import { X, ImageIcon, Film, Sparkles, Play, Loader2, AlertCircle, RotateCcw, Layers, Info, Link, Scissors, UserPlus, FileText, Plus, Trash2, Clapperboard, Eye, MessageSquare, Users, Pen, GripVertical } from "lucide-react"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
 import { DefineCharacterModal } from "./define-character-modal"
-import { ImportAssetsModal } from "./manage-characters-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GeneratedScript, ExtractedReference, CharacterDefinition, ScriptScene } from "@/types/nodes"
 import { getSceneCharacterNames, getSceneMoodDisplay } from "@/types/nodes"
@@ -54,7 +53,6 @@ export function ScriptPreviewModal({
   const [focusedCharInput, setFocusedCharInput] = useState<number | null>(null)
   const [confirmingDeleteScene, setConfirmingDeleteScene] = useState<number | null>(null)
   const [showDefineCharModal, setShowDefineCharModal] = useState(false)
-  const [showManageCharModal, setShowManageCharModal] = useState(false)
   const [editingCharDef, setEditingCharDef] = useState<CharacterDefinition | null>(null)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
@@ -701,13 +699,6 @@ export function ScriptPreviewModal({
                       >
                         <UserPlus className="w-2.5 h-2.5" /> Define character
                       </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowManageCharModal(true) }}
-                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed hover:bg-muted transition-colors text-muted-foreground whitespace-nowrap"
-                      >
-                        <Download className="w-2.5 h-2.5" /> Import Assets
-                      </button>
                     </div>
                   </div>
 
@@ -792,10 +783,6 @@ export function ScriptPreviewModal({
         }}
         existingNames={allCharDefs.map((c) => c.name)}
         editingCharacter={editingCharDef}
-      />
-      <ImportAssetsModal
-        isOpen={showManageCharModal}
-        onClose={() => setShowManageCharModal(false)}
       />
       <DeleteConfirmationDialog
         isOpen={deleteConfirm !== null}

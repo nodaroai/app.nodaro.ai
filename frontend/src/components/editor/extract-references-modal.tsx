@@ -2,10 +2,12 @@
 
 import { useEffect, useCallback, useState, useRef } from "react"
 import { createPortal } from "react-dom"
-import { X, Scissors, User, MapPin, Box, Loader2, AlertTriangle, Square, Pen } from "lucide-react"
+import { X, Scissors, User, MapPin, Box, Loader2, AlertTriangle, Square, Pen, Check } from "lucide-react"
 import { cropImageElementToBlob, cropPolygonToBlob, polygonBoundingBox } from "@/lib/image-utils"
 import type { Point } from "@/lib/image-utils"
-import { uploadImage, getImageProxyUrl } from "@/lib/api"
+import { uploadImage, getImageProxyUrl, saveCharacter, saveObject, saveLocation } from "@/lib/api"
+import { createClient } from "@/lib/supabase"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ExtractedReference } from "@/types/nodes"
 
 type SelectionMode = "rectangle" | "lasso"
@@ -49,7 +51,11 @@ export function ExtractReferencesModal({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgElRef = useRef<HTMLImageElement>(null)
 
+  // Get projectId for saving to database
+  const projectId = useWorkflowStore((s) => s.projectId)
+
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [savedToDb, setSavedToDb] = useState<Set<string>>(new Set()) // Track which refs are saved to DB
   const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null)
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("lasso")
   const [drawing, setDrawing] = useState(false)
@@ -72,6 +78,7 @@ export function ExtractReferencesModal({
       setError(null)
       setImageLoaded(false)
       setImgSize(null)
+      setSavedToDb(new Set())
     }
   }, [isOpen, existingReferences])
 
@@ -346,9 +353,59 @@ export function ExtractReferencesModal({
 
       const { url } = await uploadImage(blob)
 
+      // Get user ID for database save
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const userId = user?.id
+
+      const refId = crypto.randomUUID()
+      const assetName = nameInput.trim()
+
+      // Save to database based on type
+      if (projectId) {
+        const nodeId = `extracted-${refId}` // Generate a nodeId for the database
+
+        if (typeInput === "character") {
+          await saveCharacter({
+            userId,
+            nodeId,
+            projectId,
+            name: assetName,
+            sourceImageUrl: url,
+            description: `Extracted from scene ${sceneIndex + 1}`,
+            style: "realistic",
+          })
+        } else if (typeInput === "object") {
+          await saveObject({
+            userId,
+            nodeId,
+            projectId,
+            name: assetName,
+            sourceImageUrl: url,
+            description: `Extracted from scene ${sceneIndex + 1}`,
+            category: "other",
+            style: "realistic",
+          })
+        } else if (typeInput === "location") {
+          await saveLocation({
+            userId,
+            nodeId,
+            projectId,
+            name: assetName,
+            sourceImageUrl: url,
+            description: `Extracted from scene ${sceneIndex + 1}`,
+            category: "other",
+            style: "realistic",
+          })
+        }
+
+        // Track that this ref was saved to DB
+        setSavedToDb(prev => new Set([...prev, refId]))
+      }
+
       const newRef: ExtractedReference = {
-        id: crypto.randomUUID(),
-        name: nameInput.trim(),
+        id: refId,
+        name: assetName,
         type: typeInput,
         imageUrl: url,
         sourceSceneIndex: sceneIndex,
@@ -555,7 +612,14 @@ export function ExtractReferencesModal({
                 {characters.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
                     <img src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
-                    <span className="text-xs font-medium">{ref.name}</span>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium">{ref.name}</span>
+                      {savedToDb.has(ref.id) && (
+                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" /> Saved to Library
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
@@ -576,7 +640,14 @@ export function ExtractReferencesModal({
                 {locations.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
                     <img src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
-                    <span className="text-xs font-medium">{ref.name}</span>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium">{ref.name}</span>
+                      {savedToDb.has(ref.id) && (
+                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" /> Saved to Library
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
@@ -597,7 +668,14 @@ export function ExtractReferencesModal({
                 {objects.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
                     <img src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
-                    <span className="text-xs font-medium">{ref.name}</span>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium">{ref.name}</span>
+                      {savedToDb.has(ref.id) && (
+                        <span className="text-[9px] text-emerald-600 flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" /> Saved to Library
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       className="p-0.5 rounded hover:bg-muted"
