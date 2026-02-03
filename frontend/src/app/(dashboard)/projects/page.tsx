@@ -14,6 +14,11 @@ export default function ProjectsPage() {
   const fetchProjects = useProjectsStore((s) => s.fetchProjects)
   const createProject = useProjectsStore((s) => s.createProject)
   const deleteProject = useProjectsStore((s) => s.deleteProject)
+  const updateProject = useProjectsStore((s) => s.updateProject)
+
+  const handleRenameProject = async (id: string, newName: string) => {
+    await updateProject(id, { name: newName })
+  }
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -67,6 +72,7 @@ export default function ProjectsPage() {
               key={project.id}
               project={project}
               onDelete={deleteProject}
+              onRename={handleRenameProject}
             />
           ))}
         </div>

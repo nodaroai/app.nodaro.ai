@@ -1,10 +1,26 @@
 "use client"
 
-import { use, useEffect } from "react"
+import { use, useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Settings, Loader2 } from "lucide-react"
+import { ArrowLeft, Settings, Loader2, MoreVertical, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { WorkflowsTab } from "@/components/dashboard/workflows-tab"
 import { AssetsTab } from "@/components/dashboard/assets-tab"
@@ -20,11 +36,35 @@ export default function ProjectPage({
   const loading = useProjectsStore((s) => s.loading)
   const fetchProjects = useProjectsStore((s) => s.fetchProjects)
   const fetchProjectData = useProjectsStore((s) => s.fetchProjectData)
+  const updateProject = useProjectsStore((s) => s.updateProject)
+
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [newName, setNewName] = useState("")
+  const [renaming, setRenaming] = useState(false)
 
   useEffect(() => {
     fetchProjects()
     fetchProjectData(id)
   }, [id, fetchProjects, fetchProjectData])
+
+  const handleRename = async () => {
+    if (!newName.trim() || newName === project?.name) {
+      setRenameOpen(false)
+      return
+    }
+    setRenaming(true)
+    try {
+      await updateProject(id, { name: newName.trim() })
+      setRenameOpen(false)
+    } finally {
+      setRenaming(false)
+    }
+  }
+
+  const openRenameDialog = () => {
+    setNewName(project?.name || "")
+    setRenameOpen(true)
+  }
 
   if (loading && !project) {
     return (
@@ -59,10 +99,23 @@ export default function ProjectPage({
             <p className="text-xs sm:text-sm text-muted-foreground truncate sm:whitespace-normal">{project.description}</p>
           )}
         </div>
-        <Button variant="outline" size="sm" disabled className="hidden sm:flex">
-          <Settings className="h-4 w-4 mr-1" />
-          Settings
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={openRenameDialog}>
+              <Pencil className="h-3.5 w-3.5 mr-2" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled>
+              <Settings className="h-3.5 w-3.5 mr-2" />
+              Settings
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Tabs defaultValue="workflows">
@@ -81,6 +134,42 @@ export default function ProjectPage({
           <JobsTab />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Rename Project</DialogTitle>
+            <DialogDescription>
+              Enter a new name for this project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="project-name" className="sr-only">
+              Project name
+            </Label>
+            <Input
+              id="project-name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Project name"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !renaming) {
+                  handleRename()
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameOpen(false)} disabled={renaming}>
+              Cancel
+            </Button>
+            <Button onClick={handleRename} disabled={renaming || !newName.trim()}>
+              {renaming ? "Renaming..." : "Rename"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
