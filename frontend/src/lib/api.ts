@@ -294,6 +294,116 @@ export async function getObjects(projectId?: string): Promise<{ objects: DbObjec
   return res.json()
 }
 
+// Location API functions
+export async function generateLocation(data: {
+  name: string
+  description?: string
+  category?: string
+  style?: string
+  sourceImageUrl?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-location`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start location generation")
+  }
+  return res.json()
+}
+
+export async function generateLocationAsset(data: {
+  assetType: "timeOfDay" | "weather" | "angles" | "custom"
+  variant: string
+  name: string
+  description?: string
+  category?: string
+  style?: string
+  sourceImageUrl: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-location-asset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start location asset generation")
+  }
+  return res.json()
+}
+
+export async function saveLocation(data: {
+  id?: string
+  nodeId: string
+  projectId: string
+  name: string
+  description?: string
+  category?: string
+  style?: string
+  sourceImageUrl?: string
+  timeOfDay?: { name: string; url: string }[]
+  weather?: { name: string; url: string }[]
+  angles?: { name: string; url: string }[]
+}): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/locations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to save location")
+  }
+  return res.json()
+}
+
+export async function deleteLocation(locationId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to delete location")
+  }
+  return res.json()
+}
+
+export interface DbLocation {
+  id: string
+  nodeId: string
+  projectId: string | null
+  name: string
+  description: string | null
+  category: string | null
+  style: string | null
+  sourceImageUrl: string | null
+  timeOfDay: { name: string; url: string }[]
+  weather: { name: string; url: string }[]
+  angles: { name: string; url: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export async function getLocations(projectId?: string): Promise<{ locations: DbLocation[] }> {
+  const url = new URL(`${API_BASE_URL}/v1/locations`)
+  if (projectId) {
+    url.searchParams.set("projectId", projectId)
+  }
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch locations")
+  }
+  return res.json()
+}
+
 export async function splitImage(data: {
   imageUrl: string
   gridCols: number

@@ -3987,7 +3987,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Renamed Add Audio to Merge Video & Audio for clarity
 - [x] VEO 2 and VEO 3 as separate providers in Image to Video and Video to Video nodes
 - [x] Generate Audio checkbox only shown when VEO 3 is selected (not VEO 2)
-- [x] 33 node types total (Input: 5, Parameter: 8, AI: 9, Scene: 1, Processing: 8, Output: 2)
+- [x] 36 node types total (Input: 5, Parameter: 8, AI: 9, Scene: 1, Character: 1, Object: 1, Location: 1, Processing: 8, Output: 2)
 - [x] Character & Location extraction from scene images (crop + upload to R2, used as references in Expand to Nodes)
 - [x] Asset management system: characters, locations, objects with category-aware execution
 - [x] Import Assets modal with project hierarchy, "Show all assets" mode, filter tabs (All/Characters/Locations/Objects)
@@ -4064,6 +4064,23 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Object categories: furniture, vehicle, weapon, food, clothing, electronics, nature, tool, other
 - [x] Object node as reference image: when Object node connected to Generate Image, the main image is used as reference
 - [x] Multiple object references: connecting multiple Object nodes passes ALL main images as reference images
+- [x] Location Node: generate main location image (single establishing shot) or upload from computer
+- [x] Location Node: individual asset generation -- Time of Day (6: dawn/morning/noon/afternoon/dusk/night), Weather (6: clear/cloudy/rain/storm/snow/fog), Angles (5: wide/medium/closeup/aerial/low-angle)
+- [x] Location Node: sequential per-variant API calls with progressive UI updates
+- [x] Location Node: collapsible asset sections with accordion UI, click-to-enlarge lightbox for all images
+- [x] Location Node: Run button on hover (delete only via Location Page modal)
+- [x] Location Gallery: shows DB locations only, click thumbnail opens Location Page, "+" button adds to canvas
+- [x] Location Page modal: full-page modal with tabs (Main, Time of Day, Weather, Angles, Custom)
+- [x] Location Page modal: "+" button on any image adds it to canvas as generate-image node with result pre-set
+- [x] Custom variation generation: free-form text prompt generates custom location images via `generate-location-asset` endpoint with `assetType: "custom"`
+- [x] Delete individual assets: inline confirmation per image in Location Page modal
+- [x] Delete location permanently: "Delete Forever" button in Location Page header, deletes from Supabase DB + removes node from canvas
+- [x] Backend: GET /v1/locations (list by projectId), POST /v1/locations (upsert), DELETE /v1/locations/:id endpoints
+- [x] Backend: POST /v1/generate-location (main image), POST /v1/generate-location-asset (variants)
+- [x] Location categories: indoor, outdoor, urban, nature, fantasy, sci-fi, historical, futuristic
+- [x] Location node as reference image: when Location node connected to Generate Image, the main image is used as reference
+- [x] Multiple location references: connecting multiple Location nodes passes ALL main images as reference images
+- [x] Cyan color theme for Location nodes (distinct from Character=pink, Object=emerald)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

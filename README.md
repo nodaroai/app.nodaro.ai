@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 35 node types across 7 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Asset management system with characters, locations, and objects -- import across projects/workflows, extract references from generated images. Reference image chaining for visual consistency. Single-node and full workflow execution with version history. Character Node with portrait generation/upload, individual asset generation (expressions, poses, angles, lighting), and character gallery. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 36 node types across 9 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Asset management system with characters, locations, and objects -- import across projects/workflows, extract references from generated images. Reference image chaining for visual consistency. Single-node and full workflow execution with version history. Character Node with portrait generation/upload, individual asset generation (expressions, poses, angles, lighting), and character gallery. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
 
 ## Features
 
@@ -17,7 +17,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Graph-based workflows: branching, merging, multiple inputs/outputs
 - Manual save with unsaved changes indicator and exit confirmation
 
-### 35 Node Types
+### 36 Node Types
 
 | Category | Nodes |
 |----------|-------|
@@ -28,6 +28,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | **Scene (1)** | Scene |
 | **Character (1)** | Character |
 | **Object (1)** | Object |
+| **Location (1)** | Location |
 | **Output (2)** | Save to Storage, Webhook Output |
 
 ### Asset Management
@@ -93,6 +94,32 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Delete object permanently**: "Delete Forever" removes from database and canvas
 - **Object as reference**: Connect Object node to Generate Image to use main image as reference
 - **Multiple objects**: Connect multiple Object nodes to pass ALL main images as references
+
+### Location Node
+- Generate main location image (single establishing shot) or upload image from computer
+- Generate location assets individually for better quality and consistency:
+  - **Time of Day** (6): dawn, morning, noon, afternoon, dusk, night
+  - **Weather** (6): clear, cloudy, rain, storm, snow, fog
+  - **Angles** (5): wide, medium, closeup, aerial, low-angle
+- Sequential per-variant API calls with progressive UI updates
+- Collapsible asset sections with accordion UI
+- Click-to-enlarge lightbox for all location images
+- Run button on hover (delete only available via Location Page modal)
+- **Location categories**: indoor, outdoor, urban, nature, fantasy, sci-fi, historical, futuristic
+
+### Location Library & Persistence
+- **Database persistence**: locations saved to Supabase `locations` table, persist across sessions
+- **Location Library (Gallery)**: popup modal showing only database locations (not canvas nodes)
+- Click location thumbnail to open Location Page modal
+- "+" button adds location to canvas (can add same location multiple times)
+- **Location Page modal**: full-page view with tabs (Main, Time of Day, Weather, Angles, Custom)
+- "+" button on any image adds it to canvas as Generate Image node with result pre-set
+- **Custom variations**: generate custom location images with free-form text prompts
+- **Delete assets**: inline confirmation per image, delete individual assets from any tab
+- **Delete location permanently**: "Delete Forever" removes from database and canvas
+- **Location as reference**: Connect Location node to Generate Image to use main image as reference
+- **Multiple locations**: Connect multiple Location nodes to pass ALL main images as references
+- **Cyan color theme** for Location nodes (distinct from Character=pink, Object=emerald)
 
 ### Dashboard
 - Projects with folders
@@ -270,6 +297,11 @@ The backend exposes a REST API at `http://localhost:8000`:
 | `/v1/objects/:id` | DELETE | Delete object permanently |
 | `/v1/generate-object` | POST | Generate main object image |
 | `/v1/generate-object-asset` | POST | Generate object asset variant |
+| `/v1/locations` | GET | List locations by projectId |
+| `/v1/locations` | POST | Create or update location |
+| `/v1/locations/:id` | DELETE | Delete location permanently |
+| `/v1/generate-location` | POST | Generate main location image |
+| `/v1/generate-location-asset` | POST | Generate location asset variant |
 
 Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 

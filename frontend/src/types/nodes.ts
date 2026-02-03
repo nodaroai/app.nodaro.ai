@@ -1,6 +1,6 @@
 import type { Node, Edge } from "@xyflow/react"
 
-export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "object"
+export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "object" | "location"
 
 export interface FieldMapping {
   readonly sourceNodeId: string
@@ -667,6 +667,42 @@ export type ObjectNodeData = {
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
 }
 
+// --- Location Node Data ---
+
+export interface LocationAssetItem {
+  readonly name: string
+  readonly url: string
+}
+
+export type LocationAssetType = "timeOfDay" | "weather" | "angles" | "custom"
+
+export type LocationNodeData = {
+  [key: string]: unknown
+  label: string
+  locationDbId: string
+  locationName: string
+  description: string
+  category: "indoor" | "outdoor" | "urban" | "nature" | "fantasy" | "sci-fi" | "historical" | "futuristic" | "other"
+  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  sourceImageUrl: string
+  projectId: string
+  createdAt: string
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  generatedResults: GeneratedResult[]
+  activeResultIndex: number
+  fieldMappings: FieldMappings
+  // Individual asset images
+  timeOfDay: LocationAssetItem[]
+  weather: LocationAssetItem[]
+  angles: LocationAssetItem[]
+  // Asset generation status
+  timeOfDayStatus: "idle" | "running" | "completed" | "failed"
+  weatherStatus: "idle" | "running" | "completed" | "failed"
+  anglesStatus: "idle" | "running" | "completed" | "failed"
+  // Custom variations
+  customVariations: Array<{ prompt: string; url: string; createdAt: string }>
+}
+
 // --- Scene Node Data ---
 
 export interface SceneCharacterEntry {
@@ -799,6 +835,7 @@ export type SceneNodeData =
   | SceneNodeDataType
   | CharacterNodeData
   | ObjectNodeData
+  | LocationNodeData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -836,6 +873,7 @@ export type SceneNodeType =
   | "scene"
   | "character"
   | "object"
+  | "location"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -1213,6 +1251,37 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       variationsStatus: "idle",
       customVariations: [],
     } as ObjectNodeData,
+  },
+  // Location
+  {
+    type: "location",
+    label: "Location",
+    category: "location",
+    creditCost: 5,
+    inputs: ["in"],
+    outputs: ["locationRef"],
+    defaultData: {
+      label: "Location",
+      locationDbId: "",
+      locationName: "",
+      description: "",
+      category: "other",
+      style: "realistic",
+      sourceImageUrl: "",
+      projectId: "",
+      createdAt: "",
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+      fieldMappings: {},
+      timeOfDay: [],
+      weather: [],
+      angles: [],
+      timeOfDayStatus: "idle",
+      weatherStatus: "idle",
+      anglesStatus: "idle",
+      customVariations: [],
+    } as LocationNodeData,
   },
   // Scene
   {

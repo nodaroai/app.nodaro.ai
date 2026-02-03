@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -85,7 +85,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -510,6 +510,81 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  function runLocationGeneration(nodeId: string, data: LocationNodeData): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running" })
+
+    return new Promise((resolve, reject) => {
+      generateLocation({
+        name: data.locationName,
+        description: data.description || undefined,
+        category: data.category || undefined,
+        style: data.style || undefined,
+        sourceImageUrl: data.sourceImageUrl || undefined,
+      }).then(({ jobId }) => {
+        toast.info("Location generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const imageUrl = job.output_data?.imageUrl
+              const currentNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+              const currentData = currentNode?.data as LocationNodeData | undefined
+              const existingResults = currentData?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                sourceImageUrl: imageUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Location image generated")
+
+              // Save/update location in database
+              saveLocation({
+                id: currentData?.locationDbId || undefined,
+                nodeId,
+                projectId: projectId || "",
+                name: data.locationName,
+                description: data.description || undefined,
+                category: data.category || undefined,
+                style: data.style || undefined,
+                sourceImageUrl: imageUrl || undefined,
+                timeOfDay: currentData?.timeOfDay ?? [],
+                weather: currentData?.weather ?? [],
+                angles: currentData?.angles ?? [],
+              }).then(({ id: dbId }) => {
+                if (!currentData?.locationDbId) {
+                  updateNodeData(nodeId, { locationDbId: dbId })
+                }
+              }).catch(() => { /* best-effort */ })
+
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Location generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Location generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start location generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
   const ASSET_VARIANTS: Record<string, { variants: string[]; names: string[] }> = {
     expressions: { variants: ["neutral", "smile", "angry", "surprised", "sad", "talking"], names: ["Neutral", "Smile", "Angry", "Surprised", "Sad", "Talking"] },
     poses: { variants: ["standing", "walking", "sitting", "running"], names: ["Standing", "Walking", "Sitting", "Running"] },
@@ -521,6 +596,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     angles: { variants: ["front", "side", "top", "back", "three-quarter"], names: ["Front", "Side", "Top", "Back", "Three-Quarter"] },
     materials: { variants: ["wood", "metal", "glass", "plastic", "fabric", "stone"], names: ["Wood", "Metal", "Glass", "Plastic", "Fabric", "Stone"] },
     variations: { variants: ["clean", "weathered", "damaged", "ornate", "minimal"], names: ["Clean", "Weathered", "Damaged", "Ornate", "Minimal"] },
+  }
+
+  const LOCATION_ASSET_VARIANTS: Record<string, { variants: string[]; names: string[] }> = {
+    timeOfDay: { variants: ["dawn", "morning", "noon", "afternoon", "dusk", "night"], names: ["Dawn", "Morning", "Noon", "Afternoon", "Dusk", "Night"] },
+    weather: { variants: ["clear", "cloudy", "rain", "storm", "snow", "fog"], names: ["Clear", "Cloudy", "Rain", "Storm", "Snow", "Fog"] },
+    angles: { variants: ["wide", "medium", "closeup", "aerial", "low-angle"], names: ["Wide", "Medium", "Close-up", "Aerial", "Low Angle"] },
   }
 
   function pollJobToCompletion(jobId: string): Promise<string> {
@@ -689,6 +770,84 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           angles: latestData.angles ?? [],
           materials: latestData.materials ?? [],
           variations: latestData.variations ?? [],
+        }).catch(() => { /* best-effort */ })
+      }
+    } catch (err) {
+      // Keep any results generated so far
+      updateNodeData(nodeId, { [statusKey]: "failed" })
+      toast.error(`Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`, {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    }
+  }
+
+  async function handleGenerateLocationAsset(nodeId: string, assetType: "timeOfDay" | "weather" | "angles"): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+    if (!node) return
+    const data = node.data as LocationNodeData
+    if (!data.locationName) {
+      toast.error("Set a location name first")
+      return
+    }
+    const activeResult = (data.generatedResults ?? [])[data.activeResultIndex ?? 0]
+    const imageUrl = activeResult?.url ?? data.sourceImageUrl
+    if (!imageUrl) {
+      toast.error("Generate or upload a main image first")
+      return
+    }
+
+    const statusKeyMap: Record<string, string> = { timeOfDay: "timeOfDayStatus", weather: "weatherStatus", angles: "anglesStatus" }
+    const itemsKeyMap: Record<string, string> = { timeOfDay: "timeOfDay", weather: "weather", angles: "angles" }
+    const statusKey = statusKeyMap[assetType]
+    const itemsKey = itemsKeyMap[assetType]
+
+    const config = LOCATION_ASSET_VARIANTS[assetType]
+    if (!config) return
+
+    updateNodeData(nodeId, { [statusKey]: "running" })
+
+    const results: Array<{ name: string; url: string }> = []
+
+    try {
+      for (let i = 0; i < config.variants.length; i++) {
+        const variant = config.variants[i]
+        const variantName = config.names[i]
+        toast.info(`Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`)
+
+        const { jobId } = await generateLocationAsset({
+          assetType,
+          variant,
+          name: data.locationName,
+          description: data.description || undefined,
+          category: data.category || undefined,
+          style: data.style || undefined,
+          sourceImageUrl: imageUrl,
+        })
+
+        const resultUrl = await pollJobToCompletion(jobId)
+        results.push({ name: variantName, url: resultUrl })
+
+        // Update node data progressively so user sees images appear
+        updateNodeData(nodeId, { [itemsKey]: [...results] })
+      }
+
+      updateNodeData(nodeId, { [statusKey]: "completed" })
+      toast.success(`${assetType} generated: ${results.length} images`)
+
+      // Sync updated assets to database
+      const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+      const latestData = latestNode?.data as LocationNodeData | undefined
+      if (latestData?.locationDbId) {
+        saveLocation({
+          id: latestData.locationDbId,
+          nodeId,
+          projectId: projectId || "",
+          name: latestData.locationName,
+          sourceImageUrl: latestData.sourceImageUrl || undefined,
+          timeOfDay: latestData.timeOfDay ?? [],
+          weather: latestData.weather ?? [],
+          angles: latestData.angles ?? [],
         }).catch(() => { /* best-effort */ })
       }
     } catch (err) {
@@ -1206,6 +1365,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No object name"))
       }
       return runObjectGeneration(node.id, objData)
+    }
+
+    if (node.type === "location") {
+      const locData = node.data as LocationNodeData
+      if (!locData.locationName) {
+        toast.error(`Node "${locData.label}": no location name set`)
+        return Promise.reject(new Error("No location name"))
+      }
+      return runLocationGeneration(node.id, locData)
     }
 
     if (node.type === "scene") {
@@ -1936,6 +2104,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setGenerateObjectAssetFn(handleGenerateObjectAsset)
     return () => useWorkflowStore.getState().setGenerateObjectAssetFn(null)
+  })
+
+  // Register location asset generator
+  useEffect(() => {
+    useWorkflowStore.getState().setGenerateLocationAssetFn(handleGenerateLocationAsset)
+    return () => useWorkflowStore.getState().setGenerateLocationAssetFn(null)
   })
 
   // Ctrl+S keyboard shortcut

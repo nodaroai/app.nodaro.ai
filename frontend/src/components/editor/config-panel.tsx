@@ -72,6 +72,7 @@ import type {
   CharacterDefinition,
   CharacterNodeData,
   ObjectNodeData,
+  LocationNodeData,
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/nodes"
 import { SceneConfig } from "./scene-config"
@@ -441,6 +442,11 @@ export function ConfigPanel() {
           {/* Object Node */}
           {selectedNode.type === "object" && (
             <ObjectConfig data={selectedNode.data as ObjectNodeData} onUpdate={update} />
+          )}
+
+          {/* Location Node */}
+          {selectedNode.type === "location" && (
+            <LocationConfig data={selectedNode.data as LocationNodeData} onUpdate={update} />
           )}
 
           {/* Scene Node */}
@@ -3041,5 +3047,364 @@ function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutputData>)
         <Label htmlFor="include-asset">Include asset URL</Label>
       </div>
     </div>
+  )
+}
+
+function LocationConfig({ data, onUpdate }: { readonly data: LocationNodeData; readonly onUpdate: (updates: Partial<LocationNodeData>) => void }) {
+  const generateAsset = useWorkflowStore((s) => s.generateLocationAssetFn)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const hasImage = Boolean(
+    ((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl,
+  )
+  const isRunning = data.executionStatus === "running"
+
+  // Check for duplicate location names across all location nodes
+  const existingNames = useMemo(() => {
+    const names: string[] = []
+    for (const n of nodes) {
+      if (n.type === "location" && n.id !== selectedNodeId) {
+        const nd = n.data as LocationNodeData
+        if (nd.locationName) names.push(nd.locationName)
+      }
+    }
+    return names
+  }, [nodes, selectedNodeId])
+
+  function handleNameChange(newName: string) {
+    if (!newName) {
+      onUpdate({ locationName: newName })
+      return
+    }
+    // Auto-version duplicate names
+    const baseName = newName
+    let finalName = baseName
+    let version = 2
+    const wasVersioned = existingNames.includes(baseName)
+    while (existingNames.includes(finalName)) {
+      finalName = `${baseName} (${version})`
+      version++
+    }
+    if (wasVersioned) {
+      // Clear reference data so the new version starts fresh
+      onUpdate({
+        locationName: finalName,
+        sourceImageUrl: "",
+        generatedResults: [],
+        activeResultIndex: 0,
+        executionStatus: "idle",
+      })
+    } else {
+      onUpdate({ locationName: finalName })
+    }
+  }
+
+  const duplicateWarning = useMemo(() => {
+    if (!data.locationName) return null
+    // Skip duplicate check if location is already saved to DB - it's already established
+    if (data.locationDbId) return null
+    // Check if user typed a name that matches but hasn't been auto-versioned yet
+    const exactMatch = existingNames.includes(data.locationName)
+    if (exactMatch) return `A location named "${data.locationName}" already exists. It will be auto-versioned on blur.`
+    return null
+  }, [data.locationName, data.locationDbId, existingNames])
+
+  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const { url } = await uploadImage(file)
+      onUpdate({ sourceImageUrl: url })
+    } catch {
+      // error already thrown by uploadImage
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  function handleGenerateAsset(assetType: "timeOfDay" | "weather" | "angles") {
+    if (!selectedNodeId || !generateAsset) return
+    generateAsset(selectedNodeId, assetType)
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="loc-name">Location Name</Label>
+        <Input
+          id="loc-name"
+          value={data.locationName}
+          onChange={(e) => onUpdate({ locationName: e.target.value })}
+          onBlur={(e) => handleNameChange(e.target.value)}
+          placeholder="e.g. Ancient Forest"
+        />
+        {duplicateWarning && (
+          <p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>
+        )}
+      </div>
+      <div>
+        <Label htmlFor="loc-desc">Description</Label>
+        <Textarea
+          id="loc-desc"
+          value={data.description}
+          onChange={(e) => onUpdate({ description: e.target.value })}
+          placeholder="A mystical forest with ancient trees..."
+          rows={3}
+        />
+      </div>
+      <div>
+        <Label htmlFor="loc-category">Category</Label>
+        <Select value={data.category} onValueChange={(v) => onUpdate({ category: v as LocationNodeData["category"] })}>
+          <SelectTrigger id="loc-category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="indoor">Indoor</SelectItem>
+            <SelectItem value="outdoor">Outdoor</SelectItem>
+            <SelectItem value="urban">Urban</SelectItem>
+            <SelectItem value="nature">Nature</SelectItem>
+            <SelectItem value="fantasy">Fantasy</SelectItem>
+            <SelectItem value="sci-fi">Sci-Fi</SelectItem>
+            <SelectItem value="historical">Historical</SelectItem>
+            <SelectItem value="futuristic">Futuristic</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="loc-style">Style</Label>
+        <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as LocationNodeData["style"] })}>
+          <SelectTrigger id="loc-style">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="realistic">Realistic</SelectItem>
+            <SelectItem value="anime">Anime</SelectItem>
+            <SelectItem value="3d-pixar">3D Pixar</SelectItem>
+            <SelectItem value="illustration">Illustration</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Source image: URL input + Upload button */}
+      <div>
+        <Label htmlFor="loc-image">Reference Image</Label>
+        <div className="flex gap-1.5">
+          <Input
+            id="loc-image"
+            value={data.sourceImageUrl}
+            onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })}
+            placeholder="https://... or upload"
+            className="flex-1"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleUploadImage}
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0 h-9 w-9"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload image from computer"
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Generate Image button */}
+      <Button
+        size="sm"
+        className="w-full text-xs h-8 bg-cyan-500 hover:bg-cyan-600 text-white"
+        disabled={isRunning || !data.locationName}
+        onClick={() => {
+          if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId)
+        }}
+      >
+        {isRunning ? (
+          <>
+            <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Play className="w-3 h-3 mr-1.5" />
+            Generate Image
+          </>
+        )}
+      </Button>
+
+      <Separator />
+
+      {/* Asset Generation - requires main image first */}
+      <div className="flex flex-col gap-2">
+        <Label className="text-xs font-semibold uppercase text-muted-foreground">
+          Location Assets
+        </Label>
+        {!hasImage && (
+          <p className="text-[10px] text-muted-foreground">
+            Generate or upload a main image first, then generate assets below.
+          </p>
+        )}
+
+        <Accordion type="multiple" className="w-full">
+          <AccordionItem value="timeOfDay">
+            <AccordionTrigger className="text-xs py-1.5">
+              Time of Day ({(data.timeOfDay ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <LocationAssetButton
+                label="Generate Time of Day"
+                status={data.timeOfDayStatus ?? "idle"}
+                itemCount={(data.timeOfDay ?? []).length}
+                onClick={() => handleGenerateAsset("timeOfDay")}
+                disabled={!hasImage}
+              />
+              <LocationAssetGrid items={data.timeOfDay ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="weather">
+            <AccordionTrigger className="text-xs py-1.5">
+              Weather ({(data.weather ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <LocationAssetButton
+                label="Generate Weather"
+                status={data.weatherStatus ?? "idle"}
+                itemCount={(data.weather ?? []).length}
+                onClick={() => handleGenerateAsset("weather")}
+                disabled={!hasImage}
+              />
+              <LocationAssetGrid items={data.weather ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="angles">
+            <AccordionTrigger className="text-xs py-1.5">
+              Angles ({(data.angles ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <LocationAssetButton
+                label="Generate Angles"
+                status={data.anglesStatus ?? "idle"}
+                itemCount={(data.angles ?? []).length}
+                onClick={() => handleGenerateAsset("angles")}
+                disabled={!hasImage}
+              />
+              <LocationAssetGrid items={data.angles ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs h-8 mt-1"
+          disabled={
+            !hasImage ||
+            data.timeOfDayStatus === "running" ||
+            data.weatherStatus === "running" ||
+            data.anglesStatus === "running" ||
+            !data.locationName
+          }
+          onClick={() => {
+            handleGenerateAsset("timeOfDay")
+            setTimeout(() => handleGenerateAsset("weather"), 500)
+            setTimeout(() => handleGenerateAsset("angles"), 1000)
+          }}
+        >
+          <Sparkles className="w-3 h-3 mr-1.5" />
+          Generate All Assets
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function LocationAssetButton({
+  label,
+  status,
+  itemCount,
+  onClick,
+  disabled,
+}: {
+  readonly label: string
+  readonly status: string
+  readonly itemCount: number
+  readonly onClick: () => void
+  readonly disabled: boolean
+}) {
+  const isRunning = status === "running"
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="w-full text-xs h-7 justify-start"
+      disabled={disabled || isRunning}
+      onClick={onClick}
+    >
+      {isRunning ? (
+        <>
+          <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+          Generating...
+        </>
+      ) : itemCount > 0 ? (
+        <>
+          <Check className="w-3 h-3 mr-1.5 text-cyan-500" />
+          {label} ({itemCount})
+        </>
+      ) : (
+        <>
+          <Play className="w-3 h-3 mr-1.5" />
+          {label}
+        </>
+      )}
+    </Button>
+  )
+}
+
+function LocationAssetGrid({ items }: { readonly items: Array<{ name: string; url: string }> }) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+
+  if (items.length === 0) return null
+  return (
+    <>
+      <div className="grid grid-cols-3 gap-1">
+        {items.map((item) => (
+          <button
+            key={item.url}
+            type="button"
+            className="relative aspect-square rounded overflow-hidden bg-muted/30 group cursor-pointer"
+            onClick={() => setLightboxSrc(item.url)}
+            title={item.name}
+          >
+            <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Maximize2 className="w-4 h-4 text-white" />
+            </div>
+            <span className="absolute bottom-0 left-0 right-0 text-[8px] bg-black/60 text-white text-center truncate px-0.5">
+              {item.name}
+            </span>
+          </button>
+        ))}
+      </div>
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
+    </>
   )
 }

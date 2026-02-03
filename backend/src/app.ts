@@ -32,6 +32,9 @@ import { characterRoutes } from "./routes/characters.js"
 import { objectRoutes } from "./routes/objects.js"
 import { generateObjectAssetRoutes } from "./routes/generate-object-asset.js"
 import { generateObjectRoutes } from "./routes/generate-object.js"
+import { locationRoutes } from "./routes/locations.js"
+import { generateLocationRoutes } from "./routes/generate-location.js"
+import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -70,6 +73,9 @@ export async function buildApp() {
   await app.register(objectRoutes)
   await app.register(generateObjectAssetRoutes)
   await app.register(generateObjectRoutes)
+  await app.register(locationRoutes)
+  await app.register(generateLocationRoutes)
+  await app.register(generateLocationAssetRoutes)
 
   return app
 }
