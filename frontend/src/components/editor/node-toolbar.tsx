@@ -12,9 +12,6 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
-import { CharacterGalleryButton } from "./character-gallery"
-import { ObjectGalleryButton } from "./object-gallery"
-import { LocationGalleryButton } from "./location-gallery"
 import { UnifiedAssetLibraryButton } from "./unified-asset-library"
 import type { SceneNodeType } from "@/types/nodes"
 
@@ -61,11 +58,11 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing" },
   { type: "trim-video", label: "Trim Video", icon: <Scissors className="h-4 w-4" />, category: "Processing" },
   // Character
-  { type: "character", label: "Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
+  { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
   // Object
-  { type: "object", label: "Object", icon: <Package className="h-4 w-4" />, category: "Object" },
+  { type: "object", label: "Create Object", icon: <Package className="h-4 w-4" />, category: "Object" },
   // Location
-  { type: "location", label: "Location", icon: <MapPin className="h-4 w-4" />, category: "Location" },
+  { type: "location", label: "Create Location", icon: <MapPin className="h-4 w-4" />, category: "Location" },
   // Scene
   { type: "scene", label: "Scene", icon: <Clapperboard className="h-4 w-4" />, category: "Scene" },
   // Output
@@ -102,9 +99,6 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
               {node.label}
             </Button>
           ))}
-          {cat === "Character" && <CharacterGalleryButton />}
-          {cat === "Object" && <ObjectGalleryButton />}
-          {cat === "Location" && <LocationGalleryButton />}
         </div>
       ))}
     </>
