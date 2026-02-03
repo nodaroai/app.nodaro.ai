@@ -142,7 +142,6 @@ export async function saveCharacter(data: {
 export async function deleteCharacter(characterId: string): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -253,7 +252,6 @@ export async function saveObject(data: {
 export async function deleteObject(objectId: string): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -363,7 +361,6 @@ export async function saveLocation(data: {
 export async function deleteLocation(locationId: string): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
