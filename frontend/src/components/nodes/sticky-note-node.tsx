@@ -3,7 +3,19 @@
 import { memo, useState, useCallback, useRef, useEffect } from "react"
 import { type NodeProps, NodeResizer } from "@xyflow/react"
 import ReactMarkdown from "react-markdown"
-import { Bold, Italic, Heading1, List } from "lucide-react"
+import remarkGfm from "remark-gfm"
+import {
+  Bold,
+  Italic,
+  Heading1,
+  List,
+  Link as LinkIcon,
+  Table,
+  Image as ImageIcon,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { StickyNoteData } from "@/types/nodes"
@@ -32,16 +44,27 @@ function isLightColor(hex: string): boolean {
   return luminance > 0.5
 }
 
+// Font size classes
+const fontSizeClasses: Record<string, string> = {
+  sm: "text-xs",
+  base: "text-sm",
+  lg: "text-base",
+  xl: "text-lg",
+}
+
 function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as StickyNoteData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(nodeData.text)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const bgColor = nodeData.color || "#fef3c7"
   const borderColor = adjustColor(bgColor, -40)
   const textColor = isLightColor(bgColor) ? "#1f2937" : "#f9fafb"
+  const fontSize = nodeData.fontSize || "base"
+  const alignment = nodeData.alignment || "left"
 
   const handleDoubleClick = useCallback(() => {
     setEditText(nodeData.text)
@@ -95,6 +118,20 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
     [id, updateNodeData]
   )
 
+  const handleFontSizeChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      updateNodeData(id, { fontSize: e.target.value })
+    },
+    [id, updateNodeData]
+  )
+
+  const handleAlignmentChange = useCallback(
+    (newAlignment: "left" | "center" | "right") => {
+      updateNodeData(id, { alignment: newAlignment })
+    },
+    [id, updateNodeData]
+  )
+
   const handleResize = useCallback(
     (_: unknown, params: { width: number; height: number }) => {
       updateNodeData(id, { width: params.width, height: params.height })
@@ -134,6 +171,71 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
     }, 0)
   }, [editText])
 
+  const insertText = useCallback((text: string) => {
+    if (!textareaRef.current) return
+    const textarea = textareaRef.current
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const newText = editText.substring(0, start) + text + editText.substring(end)
+    setEditText(newText)
+    setTimeout(() => {
+      textarea.focus()
+      textarea.selectionStart = start + text.length
+      textarea.selectionEnd = start + text.length
+    }, 0)
+  }, [editText])
+
+  const insertLink = useCallback(() => {
+    const url = prompt("Enter URL:")
+    if (!url) return
+    const text = prompt("Enter link text:") || url
+    insertText(`[${text}](${url})`)
+  }, [insertText])
+
+  const insertTable = useCallback(() => {
+    const tableTemplate = `
+| Header 1 | Header 2 | Header 3 |
+|----------|----------|----------|
+| Cell 1   | Cell 2   | Cell 3   |
+| Cell 4   | Cell 5   | Cell 6   |
+`
+    insertText(tableTemplate)
+  }, [insertText])
+
+  const handleImageUpload = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const response = await fetch("/api/upload/image", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error("Upload failed")
+      }
+
+      const { url } = await response.json()
+      insertText(`![${file.name}](${url})`)
+    } catch (error) {
+      console.error("Failed to upload image:", error)
+      alert("Failed to upload image. Please try again.")
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }, [insertText])
+
   return (
     <>
       <NodeResizer
@@ -144,6 +246,16 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         handleClassName="!w-2.5 !h-2.5 !bg-violet-500 !border-violet-600"
         onResize={handleResize}
       />
+
+      {/* Hidden file input for image upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       <div
         className={cn(
           "rounded-lg border-2 shadow-lg transition-shadow",
@@ -158,17 +270,66 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         }}
         onDoubleClick={handleDoubleClick}
       >
-        {/* Color picker - shown when selected */}
+        {/* Color picker + font size - shown when selected but NOT editing */}
         {selected && !isEditing && (
-          <div className="absolute -top-9 left-0 flex items-center gap-2 bg-card rounded-md shadow-md px-2 py-1 border z-10">
-            <span className="text-xs text-muted-foreground">Color:</span>
-            <input
-              type="color"
-              value={bgColor}
-              onChange={handleColorChange}
-              className="w-7 h-7 rounded cursor-pointer border-0 p-0"
-              title="Choose color"
-            />
+          <div className="absolute -top-10 left-0 flex items-center gap-3 bg-card rounded-lg shadow-lg px-3 py-2 border z-10">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Color:</span>
+              <input
+                type="color"
+                value={bgColor}
+                onChange={handleColorChange}
+                className="w-7 h-7 rounded cursor-pointer border-2 border-muted hover:border-muted-foreground p-0"
+                title="Choose color"
+              />
+            </div>
+            <div className="w-px h-5 bg-border" />
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Size:</span>
+              <select
+                value={fontSize}
+                onChange={handleFontSizeChange}
+                className="text-xs bg-transparent border border-muted rounded px-1 py-0.5 cursor-pointer hover:border-muted-foreground"
+              >
+                <option value="sm">Small</option>
+                <option value="base">Normal</option>
+                <option value="lg">Large</option>
+                <option value="xl">X-Large</option>
+              </select>
+            </div>
+            <div className="w-px h-5 bg-border" />
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleAlignmentChange("left")}
+                className={cn(
+                  "p-1 rounded transition-colors",
+                  alignment === "left" ? "bg-accent" : "hover:bg-accent/50"
+                )}
+                title="Align Left"
+              >
+                <AlignLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => handleAlignmentChange("center")}
+                className={cn(
+                  "p-1 rounded transition-colors",
+                  alignment === "center" ? "bg-accent" : "hover:bg-accent/50"
+                )}
+                title="Align Center"
+              >
+                <AlignCenter className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => handleAlignmentChange("right")}
+                className={cn(
+                  "p-1 rounded transition-colors",
+                  alignment === "right" ? "bg-accent" : "hover:bg-accent/50"
+                )}
+                title="Align Right"
+              >
+                <AlignRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -176,8 +337,8 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         <div className="w-full h-full p-3 overflow-hidden flex flex-col">
           {isEditing ? (
             <>
-              {/* Formatting toolbar */}
-              <div className="flex gap-1 mb-2 pb-2 border-b" style={{ borderColor: borderColor }}>
+              {/* Formatting toolbar - shown only when editing */}
+              <div className="flex flex-wrap gap-1 mb-2 pb-2 border-b" style={{ borderColor: borderColor }}>
                 <button
                   onClick={() => wrapSelection("**", "**")}
                   className="p-1 rounded hover:bg-black/10 transition-colors"
@@ -206,6 +367,28 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
                 >
                   <List className="w-4 h-4" />
                 </button>
+                <div className="w-px h-6 bg-current opacity-20 mx-1" />
+                <button
+                  onClick={insertLink}
+                  className="p-1 rounded hover:bg-black/10 transition-colors"
+                  title="Insert Link"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={insertTable}
+                  className="p-1 rounded hover:bg-black/10 transition-colors"
+                  title="Insert Table"
+                >
+                  <Table className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleImageUpload}
+                  className="p-1 rounded hover:bg-black/10 transition-colors"
+                  title="Insert Image"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                </button>
               </div>
               <textarea
                 ref={textareaRef}
@@ -213,21 +396,30 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
                 onChange={(e) => setEditText(e.target.value)}
                 onBlur={handleSave}
                 onKeyDown={handleKeyDown}
-                className="flex-1 w-full resize-none bg-transparent border-none outline-none text-sm font-mono"
-                style={{ color: textColor }}
+                className={cn(
+                  "flex-1 w-full resize-none bg-transparent border-none outline-none font-mono",
+                  fontSizeClasses[fontSize]
+                )}
+                style={{ color: textColor, textAlign: alignment }}
                 placeholder="Write notes here... (Markdown supported)"
               />
             </>
           ) : (
             <div
               className={cn(
-                "w-full h-full text-sm overflow-auto cursor-text",
+                "w-full h-full overflow-auto cursor-text",
+                fontSizeClasses[fontSize],
                 !nodeData.text && "opacity-50 italic"
               )}
+              style={{ textAlign: alignment }}
             >
               {nodeData.text ? (
-                <div className="prose prose-sm max-w-none [&_*]:!text-inherit [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0 [&_a]:underline">
+                <div
+                  className="prose prose-sm max-w-none [&_*]:!text-inherit [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0 [&_a]:underline [&_table]:border-collapse [&_th]:border [&_th]:p-1 [&_td]:border [&_td]:p-1 [&_img]:max-w-full [&_img]:h-auto"
+                  style={{ textAlign: alignment }}
+                >
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     components={{
                       // Ensure links don't interfere with double-click editing
                       a: ({ children, href }) => (
@@ -239,6 +431,31 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
                         >
                           {children}
                         </a>
+                      ),
+                      // Style images to fit the note
+                      img: ({ src, alt }) => (
+                        <img
+                          src={src}
+                          alt={alt || ""}
+                          className="max-w-full h-auto rounded"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ),
+                      // Style tables
+                      table: ({ children }) => (
+                        <table className="w-full border-collapse text-xs my-2" style={{ borderColor }}>
+                          {children}
+                        </table>
+                      ),
+                      th: ({ children }) => (
+                        <th className="border p-1 font-semibold" style={{ borderColor }}>
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td className="border p-1" style={{ borderColor }}>
+                          {children}
+                        </td>
                       ),
                     }}
                   >

@@ -1456,11 +1456,19 @@ A canvas-level organizational node for adding notes, documentation, and visual g
 **Implementation:** `frontend/src/components/nodes/sticky-note-node.tsx`
 
 **Features:**
-- **Markdown Support:** Full Markdown rendering with headings, lists, bold, italic, and links
-- **Formatting Toolbar:** Bold (Ctrl+B), Italic (Ctrl+I), Heading, and List buttons when editing
+- **Markdown Support:** Full Markdown rendering with headings, lists, bold, italic, links, and tables (via remark-gfm)
+- **Formatting Toolbar:** Bold (Ctrl+B), Italic (Ctrl+I), Heading, List, Link, Table, and Image buttons when editing
 - **Full Color Picker:** Any hex color via native color input (border and text auto-adjust)
+- **Font Size Control:** Small, Normal, Large, X-Large options in toolbar
+- **Text Alignment:** Left, Center, Right alignment buttons
+- **Image Upload:** Insert images that get uploaded to storage
+- **Table Support:** Insert markdown tables with proper rendering
 - **Resizable:** Drag corners/edges via NodeResizer
 - **Always Behind:** CSS forces z-index -1 even during drag/selection
+
+**Toolbars (Separated):**
+1. **Style Toolbar** (shown when selected, not editing): Color picker, Font size dropdown, Alignment buttons
+2. **Formatting Toolbar** (shown when editing): Bold, Italic, Heading, List, Link, Table, Image
 
 **How to Add:**
 1. Right-click on canvas -> "Add Sticky Note"
@@ -1468,17 +1476,20 @@ A canvas-level organizational node for adding notes, documentation, and visual g
 
 **How to Edit:**
 - Double-click to enter edit mode
-- Use formatting toolbar or keyboard shortcuts
+- Use formatting toolbar or keyboard shortcuts (Ctrl+B, Ctrl+I)
 - Click outside or blur to save
+- Press Escape to cancel
 
 **Data Type:**
 ```typescript
 interface StickyNoteData {
   label: string
-  text: string        // Markdown content
-  color: string       // Hex color (e.g., "#fef3c7")
-  width: number       // Default: 200
-  height: number      // Default: 150
+  text: string                              // Markdown content
+  color: string                             // Hex color (e.g., "#fef3c7")
+  width: number                             // Default: 200
+  height: number                            // Default: 150
+  fontSize: "sm" | "base" | "lg" | "xl"     // Default: "base"
+  alignment: "left" | "center" | "right"    // Default: "left"
 }
 ```
 
@@ -1487,6 +1498,8 @@ interface StickyNoteData {
 - Add explanations or documentation to workflow areas
 - Annotate complex node chains
 - Leave TODO notes or reminders
+- Create data tables for reference
+- Embed reference images with annotations
 
 **CSS Implementation (globals.css):**
 ```css

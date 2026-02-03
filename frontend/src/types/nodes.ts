@@ -731,6 +731,8 @@ export type StickyNoteData = {
   color: string // Hex color (e.g., "#fef3c7")
   width: number
   height: number
+  fontSize: "sm" | "base" | "lg" | "xl"
+  alignment: "left" | "center" | "right"
 }
 
 // --- Scene Node Data ---
@@ -1384,6 +1386,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       color: "#fef3c7", // Default yellow
       width: 200,
       height: 150,
+      fontSize: "base",
+      alignment: "left",
     } as StickyNoteData,
   },
 ]
