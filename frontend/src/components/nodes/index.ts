@@ -34,6 +34,7 @@ import { SceneNode } from "./scene-node"
 import { CharacterNode } from "./character-node"
 import { ObjectNode } from "./object-node"
 import { LocationNode } from "./location-node"
+import { StickyNoteNode } from "./sticky-note-node"
 import type { SceneNodeType } from "@/types/nodes"
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -82,4 +83,6 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "object": ObjectNode,
   // Location
   "location": LocationNode,
+  // Utility
+  "sticky-note": StickyNoteNode,
 }

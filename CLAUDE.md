@@ -1444,6 +1444,63 @@ interface WebhookOutputNode {
 }
 ```
 
+### Utility Nodes
+
+#### Sticky Note Node
+
+A canvas-level organizational node for adding notes, documentation, and visual grouping to workflows. Sticky notes stay behind all other nodes for non-intrusive annotation.
+
+**Category:** `utility` (yellow/amber)
+**Type:** `sticky-note`
+**Credit Cost:** 0 (non-executable, canvas-only)
+**Implementation:** `frontend/src/components/nodes/sticky-note-node.tsx`
+
+**Features:**
+- **Markdown Support:** Full Markdown rendering with headings, lists, bold, italic, and links
+- **Formatting Toolbar:** Bold (Ctrl+B), Italic (Ctrl+I), Heading, and List buttons when editing
+- **Full Color Picker:** Any hex color via native color input (border and text auto-adjust)
+- **Resizable:** Drag corners/edges via NodeResizer
+- **Always Behind:** CSS forces z-index -1 even during drag/selection
+
+**How to Add:**
+1. Right-click on canvas -> "Add Sticky Note"
+2. Or press Shift+S anywhere on canvas
+
+**How to Edit:**
+- Double-click to enter edit mode
+- Use formatting toolbar or keyboard shortcuts
+- Click outside or blur to save
+
+**Data Type:**
+```typescript
+interface StickyNoteData {
+  label: string
+  text: string        // Markdown content
+  color: string       // Hex color (e.g., "#fef3c7")
+  width: number       // Default: 200
+  height: number      // Default: 150
+}
+```
+
+**Use Cases:**
+- Group related nodes with visual sections
+- Add explanations or documentation to workflow areas
+- Annotate complex node chains
+- Leave TODO notes or reminders
+
+**CSS Implementation (globals.css):**
+```css
+.react-flow__node-sticky-note {
+  z-index: -1 !important;
+}
+.react-flow__node-sticky-note.dragging {
+  z-index: -1 !important;
+}
+.react-flow__node-sticky-note.selected {
+  z-index: -1 !important;
+}
+```
+
 ### Scene Node (Cinematic Control Center)
 
 The Scene Node is a rich data node that combines characters, locations, objects, cinematography, mood, and dialogue into a structured scene definition. It outputs a smart prompt to connected Generate Image / Image to Video nodes.
@@ -4070,7 +4127,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Renamed Add Audio to Merge Video & Audio for clarity
 - [x] VEO 2 and VEO 3 as separate providers in Image to Video and Video to Video nodes
 - [x] Generate Audio checkbox only shown when VEO 3 is selected (not VEO 2)
-- [x] 36 node types total (Input: 5, Parameter: 8, AI: 9, Scene: 1, Character: 1, Object: 1, Location: 1, Processing: 8, Output: 2)
+- [x] 37 node types total (Input: 5, Parameter: 8, AI: 9, Scene: 1, Character: 1, Object: 1, Location: 1, Processing: 8, Output: 2, Utility: 1)
 - [x] Character & Location extraction from scene images (crop + upload to R2, used as references in Expand to Nodes)
 - [x] Asset management system: characters, locations, objects with category-aware execution
 - [x] Import Assets modal with project hierarchy, "Show all assets" mode, filter tabs (All/Characters/Locations/Objects)

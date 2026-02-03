@@ -276,6 +276,9 @@ export function ConfigPanel() {
 
   if (!selectedNode) return null
 
+  // Sticky notes are edited directly on the canvas, not in the config panel
+  if (selectedNode.type === "sticky-note") return null
+
   function update(data: Record<string, unknown>) {
     if (!selectedNodeId) return
     updateNodeData(selectedNodeId, data)

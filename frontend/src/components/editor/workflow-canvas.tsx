@@ -15,12 +15,20 @@ import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
 import { NodeContextMenu } from "./node-context-menu"
+import { PaneContextMenu } from "./pane-context-menu"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 interface NodeContextMenuState {
   readonly nodeId: string
   readonly x: number
   readonly y: number
+}
+
+interface PaneContextMenuState {
+  readonly x: number
+  readonly y: number
+  readonly flowX: number
+  readonly flowY: number
 }
 
 function useIsMobile() {
@@ -51,6 +59,7 @@ export function WorkflowCanvas() {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const { screenToFlowPosition } = useReactFlow()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
+  const [paneContextMenu, setPaneContextMenu] = useState<PaneContextMenuState | null>(null)
   const isMobile = useIsMobile()
 
   const handleNodeClick: NodeMouseHandler = useCallback(
@@ -63,12 +72,38 @@ export function WorkflowCanvas() {
   const handlePaneClick = useCallback(() => {
     selectNode(null)
     setNodeContextMenu(null)
+    setPaneContextMenu(null)
   }, [selectNode])
+
+  const handlePaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      event.preventDefault()
+      setNodeContextMenu(null)
+      const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      setPaneContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        flowX: flowPosition.x,
+        flowY: flowPosition.y,
+      })
+    },
+    [screenToFlowPosition]
+  )
+
+  const handleAddStickyNote = useCallback(
+    (position?: { x: number; y: number }) => {
+      const flowPosition = position || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+      addNode("sticky-note", flowPosition)
+      setPaneContextMenu(null)
+    },
+    [addNode, screenToFlowPosition]
+  )
 
   const handleNodeContextMenu: NodeMouseHandler = useCallback(
     (event, node) => {
       event.preventDefault()
       selectNode(node.id)
+      setPaneContextMenu(null)
       setNodeContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
     },
     [selectNode],
@@ -76,6 +111,12 @@ export function WorkflowCanvas() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      // Don't trigger shortcuts when typing in inputs/textareas
+      const target = e.target as HTMLElement
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return
+      }
+
       if ((e.ctrlKey || e.metaKey) && e.key === "d" && selectedNodeId) {
         e.preventDefault()
         duplicateNode(selectedNodeId)
@@ -83,10 +124,15 @@ export function WorkflowCanvas() {
       if (e.key === "Delete" && selectedNodeId) {
         deleteNode(selectedNodeId)
       }
+      // Shift+S to add sticky note
+      if (e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault()
+        handleAddStickyNote()
+      }
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [selectedNodeId, duplicateNode, deleteNode])
+  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     console.log("[DEBUG] handleDragOver, types:", Array.from(e.dataTransfer.types))
@@ -133,6 +179,7 @@ export function WorkflowCanvas() {
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
         onNodeContextMenu={handleNodeContextMenu}
+        onPaneContextMenu={handlePaneContextMenu}
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
         fitView
@@ -166,6 +213,15 @@ export function WorkflowCanvas() {
         x={nodeContextMenu.x}
         y={nodeContextMenu.y}
         onClose={() => setNodeContextMenu(null)}
+      />
+    )}
+
+    {paneContextMenu && (
+      <PaneContextMenu
+        x={paneContextMenu.x}
+        y={paneContextMenu.y}
+        onClose={() => setPaneContextMenu(null)}
+        onAddStickyNote={() => handleAddStickyNote({ x: paneContextMenu.flowX, y: paneContextMenu.flowY })}
       />
     )}
     </>

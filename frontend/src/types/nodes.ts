@@ -1,6 +1,6 @@
 import type { Node, Edge } from "@xyflow/react"
 
-export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "object" | "location"
+export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "object" | "location" | "utility"
 
 export interface FieldMapping {
   readonly sourceNodeId: string
@@ -722,6 +722,17 @@ export type LocationNodeData = {
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
 }
 
+// --- Sticky Note Node Data ---
+
+export type StickyNoteData = {
+  [key: string]: unknown
+  label: string
+  text: string
+  color: string // Hex color (e.g., "#fef3c7")
+  width: number
+  height: number
+}
+
 // --- Scene Node Data ---
 
 export interface SceneCharacterEntry {
@@ -856,6 +867,7 @@ export type SceneNodeData =
   | CharacterNodeData
   | ObjectNodeData
   | LocationNodeData
+  | StickyNoteData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -894,6 +906,7 @@ export type SceneNodeType =
   | "character"
   | "object"
   | "location"
+  | "sticky-note"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -1356,5 +1369,21 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedVideoUrl: "",
       videoExecutionStatus: "idle",
     } as SceneNodeDataType,
+  },
+  // Utility
+  {
+    type: "sticky-note",
+    label: "Sticky Note",
+    category: "utility",
+    creditCost: 0,
+    inputs: [],
+    outputs: [],
+    defaultData: {
+      label: "Sticky Note",
+      text: "",
+      color: "#fef3c7", // Default yellow
+      width: 200,
+      height: 150,
+    } as StickyNoteData,
   },
 ]

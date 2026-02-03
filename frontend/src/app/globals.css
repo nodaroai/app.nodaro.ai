@@ -123,3 +123,16 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Sticky notes should always be behind other nodes, even while dragging */
+.react-flow__node-sticky-note {
+  z-index: -1 !important;
+}
+
+.react-flow__node-sticky-note.dragging {
+  z-index: -1 !important;
+}
+
+.react-flow__node-sticky-note.selected {
+  z-index: -1 !important;
+}
