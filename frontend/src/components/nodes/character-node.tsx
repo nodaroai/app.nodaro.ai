@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { UserCircle, Loader2, AlertCircle, X, Play, ImageIcon, Trash2, Maximize2, ChevronDown, ChevronRight } from "lucide-react"
+import { UserCircle, Loader2, AlertCircle, X, Play, ImageIcon, Maximize2, ChevronDown, ChevronRight } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -19,7 +19,6 @@ const STYLE_LABELS: Record<string, string> = {
 function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CharacterNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -27,7 +26,6 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.sourceImageUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const [deleteNodeConfirm, setDeleteNodeConfirm] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [assetsExpanded, setAssetsExpanded] = useState(false)
 
@@ -206,9 +204,9 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Run button */}
+    {/* Run button - Delete is only available via Character Page modal */}
     {status !== "running" && (
-      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity flex gap-1">
+      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity">
         <button
           type="button"
           className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-b-md shadow-md transition-colors"
@@ -221,17 +219,6 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
           <Play className="w-3 h-3" />
           Run
         </button>
-        <button
-          type="button"
-          className="flex items-center gap-1 h-6 px-2 text-[11px] font-medium bg-red-500/80 hover:bg-red-500 text-white rounded-b-md shadow-md transition-colors"
-          onClick={(e) => {
-            e.stopPropagation()
-            setDeleteNodeConfirm(true)
-          }}
-          title="Delete character node"
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
       </div>
     )}
 
@@ -243,13 +230,6 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       }}
     />
 
-    <DeleteConfirmationDialog
-      isOpen={deleteNodeConfirm}
-      onClose={() => setDeleteNodeConfirm(false)}
-      onConfirm={() => {
-        deleteNode(id)
-      }}
-    />
 
     <ImageLightbox
       src={lightboxSrc}

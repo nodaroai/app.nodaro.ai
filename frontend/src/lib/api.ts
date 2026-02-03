@@ -151,6 +151,39 @@ export async function deleteCharacter(characterId: string): Promise<{ success: b
   return res.json()
 }
 
+export interface DbCharacter {
+  id: string
+  nodeId: string
+  projectId: string | null
+  name: string
+  description: string | null
+  gender: string | null
+  style: string | null
+  baseOutfit: string | null
+  sourceImageUrl: string | null
+  expressions: { name: string; url: string }[]
+  poses: { name: string; url: string }[]
+  lightingVariations: { name: string; url: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export async function getCharacters(projectId?: string): Promise<{ characters: DbCharacter[] }> {
+  const url = new URL(`${API_BASE_URL}/v1/characters`)
+  if (projectId) {
+    url.searchParams.set("projectId", projectId)
+  }
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch characters")
+  }
+  return res.json()
+}
+
 export async function splitImage(data: {
   imageUrl: string
   gridCols: number

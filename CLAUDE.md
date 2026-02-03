@@ -4029,17 +4029,23 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Character Node: sequential per-variant API calls with progressive UI updates (replaces sheet+split approach)
 - [x] Character Node: collapsible asset sections with accordion UI, click-to-enlarge lightbox for all images
 - [x] Character Node: version handling for duplicate names (auto-versioning on blur with data clearing)
-- [x] Character Node: delete node button with confirmation dialog
-- [x] Character Gallery: popup modal in node toolbar sidebar, shows all character nodes with thumbnails, click to select/enlarge
+- [x] Character Node: Run button on hover (delete only via Character Page modal)
+- [x] Character Gallery: shows DB characters only, click thumbnail opens Character Page, "+" button adds to canvas
+- [x] Character Gallery: "+" button always visible (can add same character multiple times)
+- [x] Character Page modal: full-page modal with tabs (Main, Expressions, Poses, Lighting, Angles, Custom)
+- [x] Character Page modal: "+" button on any image adds it to canvas as generate-image node with result pre-set
+- [x] Character Page modal: dialogs close automatically after adding image to canvas
 - [x] Image Lightbox: portal-based fullscreen image viewer (createPortal to document.body), Escape/click/X to close
 - [x] Image upload: reuses POST /v1/upload/image endpoint for character reference images
+- [x] Upload Image node: displays image thumbnail with enlarge button
 - [x] Character DB persistence: characters saved to Supabase `characters` table on portrait generation, `characterDbId` stored in node data
-- [x] Character Page modal: full-page modal with tabs (Main, Expressions, Poses, Lighting, Angles, Custom), opened from Character Gallery
+- [x] Character DB persistence: duplicate node clears `characterDbId` (fresh unpersisted character)
+- [x] Character DB persistence: delete node from canvas does NOT delete from database
 - [x] Custom variation generation: free-form text prompt generates custom character images via `generate-character-asset` endpoint with `assetType: "custom"`
 - [x] Delete individual assets: inline confirmation per image in Character Page modal
 - [x] Delete character permanently: "Delete Forever" button in Character Page header, deletes from Supabase DB + removes node from canvas
-- [x] Backend: POST /v1/characters (upsert) and DELETE /v1/characters/:id endpoints
-- [ ] Drag and drop character images to canvas (partially implemented, needs debugging)
+- [x] Backend: GET /v1/characters (list by projectId), POST /v1/characters (upsert), DELETE /v1/characters/:id endpoints
+- [x] Drag and drop character images to canvas: creates generate-image node at drop position with image as result
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

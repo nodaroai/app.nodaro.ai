@@ -14,6 +14,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
 interface WorkflowState {
   readonly workflowId: string | null
+  readonly projectId: string | null
   readonly workflowName: string
   readonly nodes: WorkflowNode[]
   readonly edges: WorkflowEdge[]
@@ -25,11 +26,12 @@ interface WorkflowState {
   readonly characterDefinitions: CharacterDefinition[]
 
   readonly setWorkflowId: (id: string | null) => void
+  readonly setProjectId: (id: string | null) => void
   readonly setWorkflowName: (name: string) => void
   readonly onNodesChange: (changes: NodeChange<WorkflowNode>[]) => void
   readonly onEdgesChange: (changes: EdgeChange<WorkflowEdge>[]) => void
   readonly onConnect: (connection: Connection) => void
-  readonly addNode: (type: SceneNodeType, position: { x: number; y: number }) => string | undefined
+  readonly addNode: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   readonly deleteNode: (nodeId: string) => void
   readonly deleteEdge: (edgeId: string) => void
@@ -68,6 +70,7 @@ function generateNodeId(): string {
 
 export const useWorkflowStore = create<WorkflowState>((set) => ({
   workflowId: null,
+  projectId: null,
   workflowName: "Untitled Workflow",
   nodes: [],
   edges: [],
@@ -79,6 +82,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   characterDefinitions: [],
 
   setWorkflowId: (id) => set({ workflowId: id }),
+
+  setProjectId: (id) => set({ projectId: id }),
 
   setWorkflowName: (name) => set({ workflowName: name, isDirty: true }),
 
@@ -135,7 +140,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       isDirty: true,
     })),
 
-  addNode: (type, position) => {
+  addNode: (type, position, initialData) => {
     const definition = NODE_DEFINITIONS.find((d) => d.type === type)
     if (!definition) return undefined
 
@@ -144,7 +149,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       id,
       type,
       position,
-      data: { ...definition.defaultData },
+      data: { ...definition.defaultData, ...initialData },
     }
 
     set((state) => ({
@@ -170,6 +175,13 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       const source = state.nodes.find((n) => n.id === nodeId)
       if (!source) return state
 
+      // Clone data, but clear characterDbId for character nodes
+      // so the duplicate is treated as a new, unpersisted character
+      const clonedData = { ...source.data } as SceneNodeData
+      if (source.type === "character" && "characterDbId" in clonedData) {
+        (clonedData as Record<string, unknown>).characterDbId = ""
+      }
+
       const newNode: WorkflowNode = {
         id: generateNodeId(),
         type: source.type,
@@ -177,7 +189,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
           x: source.position.x + 50,
           y: source.position.y + 50,
         },
-        data: { ...source.data } as SceneNodeData,
+        data: clonedData,
       }
 
       return {

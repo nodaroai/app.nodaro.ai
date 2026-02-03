@@ -46,14 +46,23 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Sequential per-variant API calls with progressive UI updates
 - Collapsible asset sections with accordion UI
 - Click-to-enlarge lightbox for all character images (portal-based, Escape/click/X to close)
-- Character Gallery popup in sidebar: view all characters in project, click to open Character Page
+- Run button on hover (delete only available via Character Page modal)
 - Version handling: auto-versioning for duplicate character names with data clearing
+
+### Character Library & Persistence
 - **Database persistence**: characters saved to Supabase `characters` table, persist across sessions
+- **Character Library (Gallery)**: popup modal showing only database characters (not canvas nodes)
+- Click character thumbnail to open Character Page modal
+- "+" button adds character to canvas (can add same character multiple times)
+- Duplicate node on canvas clears `characterDbId` (creates fresh unpersisted character)
+- Delete node from canvas does NOT delete from database (safe to remove and re-add)
 - **Character Page modal**: full-page view with tabs (Main, Expressions, Poses, Lighting, Angles, Custom)
+- "+" button on any image adds it to canvas as Generate Image node with result pre-set
+- Dialogs close automatically after adding image to canvas
 - **Custom variations**: generate custom character images with free-form text prompts
 - **Delete assets**: inline confirmation per image, delete individual assets from any tab
-- **Delete character permanently**: removes from database and canvas with confirmation
-- Drag and drop character images to canvas to create Upload Image nodes (in progress)
+- **Delete character permanently**: "Delete Forever" removes from database and canvas
+- Drag and drop character images to canvas creates Generate Image node at drop position
 
 ### Dashboard
 - Projects with folders
@@ -221,6 +230,9 @@ The backend exposes a REST API at `http://localhost:8000`:
 | `/v1/merge-video-audio` | POST | Merge video and audio tracks with volume control |
 | `/v1/extract-youtube-audio` | POST | Extract audio from YouTube URL |
 | `/v1/render` | POST | Quick render (one-shot) |
+| `/v1/characters` | GET | List characters by projectId |
+| `/v1/characters` | POST | Create or update character |
+| `/v1/characters/:id` | DELETE | Delete character permanently |
 
 Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 

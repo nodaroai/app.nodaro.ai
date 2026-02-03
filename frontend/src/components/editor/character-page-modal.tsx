@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { X, Loader2, GripVertical, Trash2 } from "lucide-react"
+import { X, Loader2, Trash2, Plus, Maximize2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
@@ -29,11 +29,9 @@ interface CharacterPageModalProps {
 }
 
 function startDrag(e: React.DragEvent, imageUrl: string, onDragStart?: () => void) {
-  console.log("[DEBUG] startDrag called, imageUrl:", imageUrl)
   e.dataTransfer.setData("application/scenenode-image", imageUrl)
   e.dataTransfer.effectAllowed = "copy"
   onDragStart?.()
-  console.log("[DEBUG] isDragging should now be true")
 }
 
 function InlineDeleteConfirm({
@@ -68,6 +66,7 @@ function DraggableImage({
   src,
   label,
   onEnlarge,
+  onAddToCanvas,
   onDragStarted,
   onDragEnded,
   confirmingDelete,
@@ -78,6 +77,7 @@ function DraggableImage({
   readonly src: string
   readonly label?: string
   readonly onEnlarge: (url: string) => void
+  readonly onAddToCanvas?: (url: string) => void
   readonly onDragStarted?: () => void
   readonly onDragEnded?: () => void
   readonly confirmingDelete?: boolean
@@ -95,11 +95,28 @@ function DraggableImage({
           onDragStart={(e) => startDrag(e, src, onDragStarted)}
           onDragEnd={() => onDragEnded?.()}
           onClick={() => onEnlarge(src)}
-          className="w-full aspect-square object-cover rounded-lg cursor-grab active:cursor-grabbing border border-border hover:border-primary/50 transition-colors"
+          className="w-full aspect-square object-cover rounded-lg cursor-pointer border border-border hover:border-primary/50 transition-colors"
         />
-        <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <GripVertical className="w-4 h-4 text-white drop-shadow-md" />
-        </div>
+        {/* Add to canvas button */}
+        {onAddToCanvas && (
+          <button
+            type="button"
+            className="absolute bottom-1 right-1 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-primary/90"
+            onClick={(e) => { e.stopPropagation(); onAddToCanvas(src) }}
+            title="Add to canvas"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+        {/* Enlarge button */}
+        <button
+          type="button"
+          className="absolute bottom-1 left-1 p-1 rounded bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => { e.stopPropagation(); onEnlarge(src) }}
+          title="Enlarge"
+        >
+          <Maximize2 className="w-3 h-3" />
+        </button>
         {onRequestDelete && !confirmingDelete && (
           <button
             type="button"
@@ -110,11 +127,6 @@ function DraggableImage({
             <Trash2 className="w-3 h-3" />
           </button>
         )}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg pointer-events-none">
-          <span className="text-xs text-white bg-black/60 px-2 py-1 rounded">
-            Drag to canvas
-          </span>
-        </div>
       </div>
       {confirmingDelete ? (
         <InlineDeleteConfirm onCancel={onCancelDelete!} onConfirm={onConfirmDelete!} />
@@ -128,6 +140,7 @@ function DraggableImage({
 function AssetGrid({
   items,
   onEnlarge,
+  onAddToCanvas,
   onDragStarted,
   onDragEnded,
   emptyMessage,
@@ -138,6 +151,7 @@ function AssetGrid({
 }: {
   readonly items: readonly CharacterAssetItem[]
   readonly onEnlarge: (url: string) => void
+  readonly onAddToCanvas?: (url: string) => void
   readonly onDragStarted?: () => void
   readonly onDragEnded?: () => void
   readonly emptyMessage: string
@@ -161,6 +175,7 @@ function AssetGrid({
           src={item.url}
           label={item.name}
           onEnlarge={onEnlarge}
+          onAddToCanvas={onAddToCanvas}
           onDragStarted={onDragStarted}
           onDragEnded={onDragEnded}
           confirmingDelete={confirmingIndex === i}
@@ -186,6 +201,8 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
+  const addNode = useWorkflowStore((s) => s.addNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
 
   const node = nodes.find((n) => n.id === characterNodeId)
   if (!node || node.type !== "character") return null
@@ -193,6 +210,34 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   const data = node.data as CharacterNodeData
   const activeResult = (data.generatedResults ?? [])[data.activeResultIndex ?? 0]
   const mainImageUrl = activeResult?.url ?? data.sourceImageUrl
+
+  // Add image to canvas as generate-image node with result already set
+  const handleAddImageToCanvas = useCallback((imageUrl: string) => {
+    // Position to the right of existing nodes
+    const maxX = nodes.length > 0
+      ? Math.max(...nodes.map((n) => n.position.x)) + 300
+      : 200
+    const avgY = nodes.length > 0
+      ? nodes.reduce((sum, n) => sum + n.position.y, 0) / nodes.length
+      : 200
+
+    // Create generate-image node with the image already set as a result
+    const nodeId = addNode("generate-image", { x: maxX, y: avgY }, {
+      generatedResults: [{
+        url: imageUrl,
+        timestamp: new Date().toISOString(),
+        jobId: `imported-${Date.now()}`,
+      }],
+      activeResultIndex: 0,
+      executionStatus: "completed",
+      generatedImageUrl: imageUrl,
+    })
+    if (nodeId) {
+      selectNode(nodeId)
+      toast.success("Image added to canvas")
+      onClose()
+    }
+  }, [nodes, addNode, selectNode, onClose])
 
   // Map tab to data key for asset deletion
   const ASSET_DATA_KEYS: Record<string, string> = {
@@ -423,6 +468,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
                     <DraggableImage
                       src={mainImageUrl}
                       onEnlarge={setLightboxSrc}
+                      onAddToCanvas={handleAddImageToCanvas}
                       onDragStarted={() => setIsDragging(true)}
                       onDragEnded={() => setIsDragging(false)}
                     />
@@ -443,6 +489,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
                           src={r.url}
                           label={`v${i + 1}`}
                           onEnlarge={setLightboxSrc}
+                          onAddToCanvas={handleAddImageToCanvas}
                           onDragStarted={() => setIsDragging(true)}
                         />
                       ))}
@@ -457,6 +504,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
               <AssetGrid
                 items={data.expressions}
                 onEnlarge={setLightboxSrc}
+                onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
                 emptyMessage="No expressions generated yet. Generate them from the config panel."
@@ -472,6 +520,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
               <AssetGrid
                 items={data.poses}
                 onEnlarge={setLightboxSrc}
+                onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
                 emptyMessage="No poses generated yet. Generate them from the config panel."
@@ -487,6 +536,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
               <AssetGrid
                 items={data.lightingVariations}
                 onEnlarge={setLightboxSrc}
+                onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
                 emptyMessage="No lighting variations generated yet. Generate them from the config panel."
@@ -502,6 +552,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
               <AssetGrid
                 items={data.angles}
                 onEnlarge={setLightboxSrc}
+                onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
                 emptyMessage="No angle views generated yet. Generate them from the config panel."
@@ -557,6 +608,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
                         src={v.url}
                         label={v.prompt}
                         onEnlarge={setLightboxSrc}
+                        onAddToCanvas={handleAddImageToCanvas}
                         onDragStarted={() => setIsDragging(true)}
                         onDragEnded={() => setIsDragging(false)}
                         confirmingDelete={confirmingAssetDelete === i}

@@ -104,14 +104,21 @@ export function WorkflowCanvas() {
       e.preventDefault()
 
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      console.log("[DEBUG] Creating upload-image node at:", position)
-      const nodeId = addNode("upload-image", position)
+      console.log("[DEBUG] Creating generate-image node at:", position)
+      // Create generate-image node with the image already set as a result
+      const nodeId = addNode("generate-image", position, {
+        generatedResults: [{
+          url: imageUrl,
+          timestamp: new Date().toISOString(),
+          jobId: `imported-${Date.now()}`,
+        }],
+        activeResultIndex: 0,
+        executionStatus: "completed",
+        generatedImageUrl: imageUrl,
+      })
       console.log("[DEBUG] Created node:", nodeId)
-      if (nodeId) {
-        updateNodeData(nodeId, { url: imageUrl })
-      }
     },
-    [screenToFlowPosition, addNode, updateNodeData],
+    [screenToFlowPosition, addNode],
   )
 
   return (

@@ -2402,11 +2402,13 @@ function CharacterConfig({ data, onUpdate }: { readonly data: CharacterNodeData;
 
   const duplicateWarning = useMemo(() => {
     if (!data.characterName) return null
+    // Skip duplicate check if character is already saved to DB - it's already established
+    if (data.characterDbId) return null
     // Check if user typed a name that matches but hasn't been auto-versioned yet
     const exactMatch = existingNames.includes(data.characterName)
     if (exactMatch) return `A character named "${data.characterName}" already exists. It will be auto-versioned on blur.`
     return null
-  }, [data.characterName, existingNames])
+  }, [data.characterName, data.characterDbId, existingNames])
 
   async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

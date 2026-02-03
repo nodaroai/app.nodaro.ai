@@ -43,6 +43,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     fetchProjects()
   }, [fetchProjects])
 
+  // Store projectId in workflow store for components that need it
+  useEffect(() => {
+    useWorkflowStore.getState().setProjectId(projectId ?? null)
+  }, [projectId])
+
   const handleSave = useCallback(async () => {
     if (projectId) {
       await save(projectId)
