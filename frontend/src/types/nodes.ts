@@ -728,10 +728,14 @@ export type StickyNoteData = {
   [key: string]: unknown
   label: string
   text: string
-  color: string // Hex color (e.g., "#fef3c7")
+  color: string // Background hex color (e.g., "#fef3c7")
+  textColor: string // Text hex color (e.g., "#000000")
   width: number
   height: number
   fontSize: "sm" | "base" | "lg" | "xl"
+  bold: boolean
+  italic: boolean
+  alignment: "left" | "center" | "right"
 }
 
 // --- Scene Node Data ---
@@ -1383,9 +1387,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Sticky Note",
       text: "",
       color: "#fef3c7", // Default yellow
+      textColor: "#000000", // Default black
       width: 200,
       height: 150,
       fontSize: "base",
+      bold: false,
+      italic: false,
+      alignment: "left",
     } as StickyNoteData,
   },
 ]
