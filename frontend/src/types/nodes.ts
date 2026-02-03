@@ -1385,9 +1385,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: [],
     defaultData: {
       label: "Sticky Note",
-      text: "",
-      color: "#fef3c7", // Default yellow
-      textColor: "#000000", // Default black
+      text: "I'm a note\nDouble click to customize",
+      color: "#2d2d44", // Dark background
+      textColor: "#ffffff", // White text
       width: 280,
       height: 180,
       fontSize: "base",

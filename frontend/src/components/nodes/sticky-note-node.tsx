@@ -37,12 +37,23 @@ function getFontSize(size?: string): string {
   }
 }
 
+// Adjust color brightness for border
+function adjustColor(hex: string, amount: number): string {
+  const color = hex.replace("#", "")
+  if (color.length !== 6) return hex
+  const num = parseInt(color, 16)
+  const r = Math.min(255, Math.max(0, (num >> 16) + amount))
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amount))
+  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amount))
+  return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`
+}
+
 function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as StickyNoteData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const bgColor = nodeData.color || "#fef3c7"
+  const bgColor = nodeData.color || "#2d2d44"
   const textColor = nodeData.textColor || (isLightColor(bgColor) ? "#1f2937" : "#f9fafb")
   const fontSize = getFontSize(nodeData.fontSize)
   const isBold = nodeData.bold || false
@@ -167,6 +178,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         className="w-full h-full rounded-lg shadow-md overflow-hidden flex flex-col"
         style={{
           backgroundColor: bgColor,
+          border: `1px solid ${adjustColor(bgColor, isLightColor(bgColor) ? -20 : 20)}`,
           width: nodeData.width || 280,
           height: nodeData.height || 180,
         }}
