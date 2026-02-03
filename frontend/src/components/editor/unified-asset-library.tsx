@@ -1,9 +1,16 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin } from "lucide-react"
+import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, FolderOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CharacterPageModal } from "./character-page-modal"
 import { ObjectPageModal } from "./object-page-modal"
@@ -34,6 +41,11 @@ export function UnifiedAssetLibraryButton() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<AssetType>("all")
+  const [filterByProject, setFilterByProject] = useState<string>("all")
+
+  // Projects for filtering (workflow filtering requires data model changes - assets don't have workflowId)
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([])
+  const [loadingProjects, setLoadingProjects] = useState(false)
 
   // Page modals
   const [characterPageNodeId, setCharacterPageNodeId] = useState<string | null>(null)
@@ -113,17 +125,45 @@ export function UnifiedAssetLibraryButton() {
     }
   }, [])
 
+  // Fetch projects on mount
+  const fetchProjects = useCallback(async () => {
+    setLoadingProjects(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .order("name")
+
+      if (error) throw error
+      setProjects(data ?? [])
+    } catch (err) {
+      console.error("[AssetLibrary] Error fetching projects:", err)
+    } finally {
+      setLoadingProjects(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (open) {
       fetchAllAssets()
+      fetchProjects()
     }
-  }, [open, fetchAllAssets])
+  }, [open, fetchAllAssets, fetchProjects])
 
-  // Filter assets based on search and type
+  // Filter assets based on search, type, and project
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
       // Type filter
       if (typeFilter !== "all" && asset.type !== typeFilter) {
+        return false
+      }
+      // Project filter
+      if (filterByProject !== "all" && asset.projectId !== filterByProject) {
         return false
       }
       // Search filter
@@ -135,7 +175,7 @@ export function UnifiedAssetLibraryButton() {
       }
       return true
     })
-  }, [assets, typeFilter, searchQuery])
+  }, [assets, typeFilter, searchQuery, filterByProject])
 
   // Count by type for badges
   const counts = useMemo(() => {
@@ -313,6 +353,16 @@ export function UnifiedAssetLibraryButton() {
     }
   }
 
+  // Get project name by ID
+  const getProjectName = useCallback(
+    (projectId?: string) => {
+      if (!projectId) return null
+      const project = projects.find((p) => p.id === projectId)
+      return project?.name ?? null
+    },
+    [projects]
+  )
+
   const totalCount = counts.all
 
   return (
@@ -344,8 +394,8 @@ export function UnifiedAssetLibraryButton() {
               </Button>
             </div>
 
-            {/* Search */}
-            <div className="px-4 py-3 border-b">
+            {/* Search and Filters */}
+            <div className="px-4 py-3 border-b space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -354,6 +404,39 @@ export function UnifiedAssetLibraryButton() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 h-9"
                 />
+              </div>
+              {/* Project Filter */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-[60px]">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  <span>Project:</span>
+                </div>
+                <Select
+                  value={filterByProject}
+                  onValueChange={setFilterByProject}
+                >
+                  <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {filterByProject !== "all" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    onClick={() => setFilterByProject("all")}
+                  >
+                    Clear
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -419,10 +502,12 @@ export function UnifiedAssetLibraryButton() {
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <Grid3X3 className="w-10 h-10 mb-2 opacity-40" />
                   <p className="text-sm">
-                    {searchQuery || typeFilter !== "all" ? "No matching assets" : "No saved assets"}
+                    {searchQuery || typeFilter !== "all" || filterByProject !== "all"
+                      ? "No matching assets"
+                      : "No saved assets"}
                   </p>
                   <p className="text-xs mt-1">
-                    {searchQuery || typeFilter !== "all"
+                    {searchQuery || typeFilter !== "all" || filterByProject !== "all"
                       ? "Try adjusting your filters"
                       : "Generate a character, object, or location to save it here"}
                   </p>
@@ -433,6 +518,7 @@ export function UnifiedAssetLibraryButton() {
                     const isOnCanvas = !!findNodeForAsset(asset)
                     const badge = getTypeBadge(asset.type)
                     const BadgeIcon = badge.icon
+                    const projectName = filterByProject === "all" ? getProjectName(asset.projectId) : null
 
                     return (
                       <div key={asset.id} className="relative group">
@@ -459,6 +545,11 @@ export function UnifiedAssetLibraryButton() {
                           <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${badge.color}`}>
                             {asset.type}
                           </span>
+                          {projectName && (
+                            <span className="text-[9px] text-muted-foreground/70 truncate w-full text-center">
+                              {projectName}
+                            </span>
+                          )}
                           {isOnCanvas && (
                             <span className="text-[9px] text-muted-foreground">On canvas</span>
                           )}
