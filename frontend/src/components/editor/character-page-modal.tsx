@@ -389,6 +389,14 @@ centered composition, high quality, single character`
       { type: "lighting" as const, variants: ["daylight", "night", "dramatic"], names: ["Daylight", "Night", "Dramatic"], dataKey: "lightingVariations" },
     ]
 
+    // Track accumulated assets locally (since data from closure doesn't update between iterations)
+    const accumulatedAssets: Record<string, CharacterAssetItem[]> = {
+      angles: [...(data.angles ?? [])],
+      expressions: [...(data.expressions ?? [])],
+      poses: [...(data.poses ?? [])],
+      lightingVariations: [...(data.lightingVariations ?? [])],
+    }
+
     try {
       for (const assetConfig of ASSET_TYPES) {
         for (let i = 0; i < assetConfig.variants.length; i++) {
@@ -427,11 +435,11 @@ centered composition, high quality, single character`
             })
 
             if (resultUrl) {
-              // Update node data with new asset
-              const currentAssets = (data as Record<string, unknown>)[assetConfig.dataKey] as CharacterAssetItem[] ?? []
+              // Add to local accumulator and update node data
               const newAsset = { name: variantName, url: resultUrl }
+              accumulatedAssets[assetConfig.dataKey].push(newAsset)
               updateNodeData(characterNodeId, {
-                [assetConfig.dataKey]: [...currentAssets, newAsset],
+                [assetConfig.dataKey]: [...accumulatedAssets[assetConfig.dataKey]],
               })
             }
           } catch (err) {

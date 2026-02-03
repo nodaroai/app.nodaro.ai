@@ -400,6 +400,13 @@ no shadows, professional product photography`
       { type: "variations" as const, variants: ["clean", "weathered", "damaged", "ornate", "minimal"], names: ["Clean", "Weathered", "Damaged", "Ornate", "Minimal"], dataKey: "variations" },
     ]
 
+    // Track accumulated assets locally (since data from closure doesn't update between iterations)
+    const accumulatedAssets: Record<string, ObjectAssetItem[]> = {
+      angles: [...(data.angles ?? [])],
+      materials: [...(data.materials ?? [])],
+      variations: [...(data.variations ?? [])],
+    }
+
     try {
       for (const assetConfig of ASSET_TYPES) {
         for (let i = 0; i < assetConfig.variants.length; i++) {
@@ -437,11 +444,11 @@ no shadows, professional product photography`
             })
 
             if (resultUrl) {
-              // Update node data with new asset
-              const currentAssets = (data as Record<string, unknown>)[assetConfig.dataKey] as ObjectAssetItem[] ?? []
+              // Add to local accumulator and update node data
               const newAsset = { name: variantName, url: resultUrl }
+              accumulatedAssets[assetConfig.dataKey].push(newAsset)
               updateNodeData(objectNodeId, {
-                [assetConfig.dataKey]: [...currentAssets, newAsset],
+                [assetConfig.dataKey]: [...accumulatedAssets[assetConfig.dataKey]],
               })
             }
           } catch (err) {

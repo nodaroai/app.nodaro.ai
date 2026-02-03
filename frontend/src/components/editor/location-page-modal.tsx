@@ -400,6 +400,13 @@ high quality, cinematic photography`
       { type: "angles" as const, variants: ["wide", "medium", "closeup", "aerial", "low-angle"], names: ["Wide", "Medium", "Close-up", "Aerial", "Low Angle"], dataKey: "angles" },
     ]
 
+    // Track accumulated assets locally (since data from closure doesn't update between iterations)
+    const accumulatedAssets: Record<string, LocationAssetItem[]> = {
+      timeOfDay: [...(data.timeOfDay ?? [])],
+      weather: [...(data.weather ?? [])],
+      angles: [...(data.angles ?? [])],
+    }
+
     try {
       for (const assetConfig of ASSET_TYPES) {
         for (let i = 0; i < assetConfig.variants.length; i++) {
@@ -437,11 +444,11 @@ high quality, cinematic photography`
             })
 
             if (resultUrl) {
-              // Update node data with new asset
-              const currentAssets = (data as Record<string, unknown>)[assetConfig.dataKey] as LocationAssetItem[] ?? []
+              // Add to local accumulator and update node data
               const newAsset = { name: variantName, url: resultUrl }
+              accumulatedAssets[assetConfig.dataKey].push(newAsset)
               updateNodeData(locationNodeId, {
-                [assetConfig.dataKey]: [...currentAssets, newAsset],
+                [assetConfig.dataKey]: [...accumulatedAssets[assetConfig.dataKey]],
               })
             }
           } catch (err) {
