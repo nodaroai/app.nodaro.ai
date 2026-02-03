@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { CharacterGalleryButton } from "./character-gallery"
 import { ObjectGalleryButton } from "./object-gallery"
 import { LocationGalleryButton } from "./location-gallery"
+import { UnifiedAssetLibraryButton } from "./unified-asset-library"
 import type { SceneNodeType } from "@/types/nodes"
 
 interface NodeOption {
@@ -77,6 +78,13 @@ const CATEGORIES = Array.from(new Set(NODE_OPTIONS.map((n) => n.category)))
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
   return (
     <>
+      {/* Unified Asset Library - quick access to all assets */}
+      <div className="flex flex-col gap-1 pb-2 mb-2 border-b">
+        <span className="text-[10px] font-medium text-muted-foreground uppercase">
+          Library
+        </span>
+        <UnifiedAssetLibraryButton />
+      </div>
       {CATEGORIES.map((cat) => (
         <div key={cat} className="flex flex-col gap-1">
           <span className="text-[10px] font-medium text-muted-foreground uppercase">
