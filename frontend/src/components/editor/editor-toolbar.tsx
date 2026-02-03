@@ -81,12 +81,151 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
     setValidation(result)
   }
 
+  // Strip generated content from nodes for template export
+  const stripGeneratedContent = (nodesToStrip: WorkflowNode[]): WorkflowNode[] => {
+    return nodesToStrip.map(node => {
+      // Use a mutable copy with loose typing for modifications
+      const data = { ...node.data } as Record<string, unknown>
+
+      switch (node.type) {
+        case "character":
+          // Clear character generated content
+          data.sourceImageUrl = undefined
+          data.generatedResults = []
+          data.generatedImageUrl = undefined
+          data.expressions = []
+          data.poses = []
+          data.lightingVariations = []
+          data.angles = []
+          data.customVariations = []
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "object":
+          // Clear object generated content
+          data.sourceImageUrl = undefined
+          data.generatedResults = []
+          data.generatedImageUrl = undefined
+          data.angles = []
+          data.materials = []
+          data.variations = []
+          data.customVariations = []
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "location":
+          // Clear location generated content
+          data.sourceImageUrl = undefined
+          data.generatedResults = []
+          data.generatedImageUrl = undefined
+          data.timeOfDay = []
+          data.weather = []
+          data.angles = []
+          data.customVariations = []
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "generate-image":
+          // Clear generated image results, keep settings
+          data.generatedResults = []
+          data.generatedImageUrl = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "image-to-video":
+        case "video-to-video":
+        case "text-to-video":
+          // Clear generated video results, keep settings
+          data.generatedResults = []
+          data.generatedVideoUrl = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "generate-script":
+          // Clear generated script results, keep settings
+          data.generatedResults = []
+          data.generatedScript = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "text-to-speech":
+          // Clear generated audio results, keep settings
+          data.generatedResults = []
+          data.generatedAudioUrl = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "generate-music":
+        case "text-to-audio":
+          // Clear generated audio results, keep settings
+          data.generatedResults = []
+          data.generatedAudioUrl = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "scene":
+          // Clear scene generated content
+          data.generatedResults = []
+          data.generatedImageUrl = undefined
+          data.generatedVideoResults = []
+          data.generatedVideoUrl = undefined
+          data.activeResultIndex = 0
+          data.activeVideoResultIndex = 0
+          data.executionStatus = undefined
+          data.videoExecutionStatus = undefined
+          // Clear dialogue audio
+          if (Array.isArray(data.dialogue)) {
+            data.dialogue = (data.dialogue as Array<Record<string, unknown>>).map(d => ({
+              ...d,
+              generatedAudioResults: [],
+              activeAudioIndex: 0,
+            }))
+          }
+          break
+
+        case "upload-image":
+        case "upload-video":
+          // Clear uploaded content
+          data.assetId = undefined
+          data.url = undefined
+          data.thumbnailUrl = undefined
+          break
+
+        default:
+          // For any other node type, clear common generated fields
+          if ('generatedResults' in data) {
+            data.generatedResults = []
+          }
+          if ('activeResultIndex' in data) {
+            data.activeResultIndex = 0
+          }
+          if ('executionStatus' in data) {
+            data.executionStatus = undefined
+          }
+          break
+      }
+
+      return { ...node, data } as WorkflowNode
+    })
+  }
+
   const handleExport = useCallback(async (includeAssets: boolean) => {
     setExporting(true)
     try {
+      // For template export, strip all generated content from nodes
+      const exportNodes = includeAssets ? nodes : stripGeneratedContent(nodes)
+
       const workflowData: ExportedWorkflow = {
         name: workflowName || "Untitled Workflow",
-        nodes,
+        nodes: exportNodes,
         edges,
         exportedAt: new Date().toISOString(),
         version: "1.0",
