@@ -1273,7 +1273,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${(node.data as ImageToVideoData).label}": no image found`)
         return Promise.reject(new Error("No image"))
       }
-      return runVideoGeneration(node.id, imageUrl, (node.data as ImageToVideoData).provider || undefined, (node.data as ImageToVideoData).generateAudio)
+      const nodeProvider = (node.data as ImageToVideoData).provider
+      console.log(`[executeNode] image-to-video node provider from data: "${nodeProvider ?? 'undefined'}"`)
+      return runVideoGeneration(node.id, imageUrl, nodeProvider || undefined, (node.data as ImageToVideoData).generateAudio)
     }
 
     if (node.type === "video-to-video") {

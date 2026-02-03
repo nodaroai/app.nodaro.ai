@@ -28,7 +28,7 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   kling: {
     model: "kwaivgi/kling-v1.6-pro",
-    imageParam: "input_image",
+    imageParam: "start_image",
   },
   runway: {
     model: "runway/gen3a-turbo",

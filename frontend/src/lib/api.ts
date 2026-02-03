@@ -435,6 +435,7 @@ export async function splitImage(data: {
 }
 
 export async function generateVideo(imageUrl: string, prompt?: string, provider?: string, generateAudio?: boolean, duration?: number): Promise<{ jobId: string }> {
+  console.log(`[generateVideo] Sending request with provider: "${provider ?? 'undefined (will default to minimax)'}"`)
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
