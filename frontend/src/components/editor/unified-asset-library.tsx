@@ -48,11 +48,7 @@ export function UnifiedAssetLibraryButton() {
 
   // Fetch all assets when modal opens
   const fetchAllAssets = useCallback(async () => {
-    console.log("[AssetLibrary] fetchAllAssets called, projectId:", projectId)
-    if (!projectId) {
-      console.log("[AssetLibrary] No projectId, skipping fetch")
-      return
-    }
+    if (!projectId) return
     setLoading(true)
     setError(null)
 
@@ -60,7 +56,6 @@ export function UnifiedAssetLibraryButton() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       const userId = user?.id
-      console.log("[AssetLibrary] Fetching assets with:", { projectId, userId })
 
       // Fetch all three types in parallel
       const [charactersRes, objectsRes, locationsRes] = await Promise.all([
@@ -68,10 +63,6 @@ export function UnifiedAssetLibraryButton() {
         getObjects(projectId, userId),
         getLocations(projectId, userId),
       ])
-
-      console.log("[AssetLibrary] Characters fetched:", charactersRes.characters.length, charactersRes.characters)
-      console.log("[AssetLibrary] Objects fetched:", objectsRes.objects.length, objectsRes.objects)
-      console.log("[AssetLibrary] Locations fetched:", locationsRes.locations.length, locationsRes.locations)
 
       // Combine into unified array
       const unified: UnifiedAsset[] = [
@@ -104,10 +95,8 @@ export function UnifiedAssetLibraryButton() {
         })),
       ]
 
-      console.log("[AssetLibrary] Total unified assets:", unified.length, unified)
       setAssets(unified)
     } catch (err) {
-      console.error("[AssetLibrary] Error fetching assets:", err)
       setError(err instanceof Error ? err.message : "Failed to load assets")
     } finally {
       setLoading(false)
