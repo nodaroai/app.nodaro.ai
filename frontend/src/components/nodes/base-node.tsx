@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode, MouseEvent } from "react"
-import { Handle, Position } from "@xyflow/react"
+import { Handle, Position, NodeResizer } from "@xyflow/react"
 import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -23,6 +23,8 @@ interface BaseNodeProps {
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode
   readonly selected?: boolean
+  readonly minWidth?: number
+  readonly minHeight?: number
 }
 
 const CATEGORY_STYLES: Record<string, string> = {
@@ -56,6 +58,8 @@ export function BaseNode({
   handles,
   children,
   selected,
+  minWidth = 200,
+  minHeight = 80,
 }: BaseNodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
@@ -66,14 +70,22 @@ export function BaseNode({
   }
 
   return (
-    <div
-      className={cn(
-        "group relative rounded-lg border-2 shadow-sm min-w-[200px] bg-card text-card-foreground",
-        CATEGORY_STYLES[category],
-        selected && "ring-2 ring-primary",
-      )}
-      onClick={() => selectNode(id)}
-    >
+    <>
+      <NodeResizer
+        minWidth={minWidth}
+        minHeight={minHeight}
+        isVisible={selected}
+        lineClassName="!border-blue-400"
+        handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
+      />
+      <div
+        className={cn(
+          "group relative rounded-lg border-2 shadow-sm min-w-[200px] bg-card text-card-foreground h-full",
+          CATEGORY_STYLES[category],
+          selected && "ring-2 ring-primary",
+        )}
+        onClick={() => selectNode(id)}
+      >
       <button
         className="absolute -top-3 -right-3 z-10 hidden group-hover:flex items-center justify-center w-6 h-6 rounded-full bg-card border shadow-sm hover:bg-accent"
         onClick={handleDuplicate}
@@ -119,5 +131,6 @@ export function BaseNode({
         </div>
       ))}
     </div>
+    </>
   )
 }
