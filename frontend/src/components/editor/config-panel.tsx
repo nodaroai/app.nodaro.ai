@@ -78,6 +78,7 @@ import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/node
 import { SceneConfig } from "./scene-config"
 import { SceneEditorModal } from "./scene-editor-modal"
 import { DefineCharacterModal } from "./define-character-modal"
+import { AssetSelectionModal, type SelectedAsset } from "./asset-selection-modal"
 
 interface SourceNodeInfo {
   readonly id: string
@@ -1130,7 +1131,7 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   const [showDefineModal, setShowDefineModal] = useState(false)
-  const [showAddDropdown, setShowAddDropdown] = useState(false)
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [editingChar, setEditingChar] = useState<CharacterDefinition | null>(null)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
@@ -1138,12 +1139,6 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
 
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
-  const unattachedChars = allCharDefs.filter((c) => !attachedIds.includes(c.id))
-
-  function attachCharacter(id: string) {
-    onUpdate({ characterDefinitionIds: [...attachedIds, id] })
-    setShowAddDropdown(false)
-  }
 
   function detachCharacter(id: string) {
     onUpdate({ characterDefinitionIds: attachedIds.filter((cid) => cid !== id) })
@@ -1156,6 +1151,29 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
     } else {
       addCharacterDefinition(char)
       onUpdate({ characterDefinitionIds: [...attachedIds, char.id] })
+    }
+  }
+
+  function handleAssetSelected(asset: SelectedAsset) {
+    // Convert selected database asset to CharacterDefinition format
+    const charDef: CharacterDefinition = {
+      id: asset.id,
+      name: asset.name,
+      type: asset.thumbnailUrl ? "reference" : "description",
+      category: asset.type,
+      referenceImageUrl: asset.thumbnailUrl,
+      description: asset.description,
+    }
+
+    // Add to workflow characterDefinitions if not already there
+    const exists = allCharDefs.some((c) => c.id === asset.id)
+    if (!exists) {
+      addCharacterDefinition(charDef)
+    }
+
+    // Attach to this node
+    if (!attachedIds.includes(asset.id)) {
+      onUpdate({ characterDefinitionIds: [...attachedIds, asset.id] })
     }
   }
 
@@ -1261,42 +1279,13 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
 
         {/* Add buttons */}
         <div className="flex gap-1.5 mt-2">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowAddDropdown(!showAddDropdown)}
-              disabled={unattachedChars.length === 0}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Plus className="w-3 h-3" /> Add existing
-            </button>
-            {showAddDropdown && unattachedChars.length > 0 && (
-              <div className="absolute top-full left-0 mt-1 w-44 max-h-32 overflow-y-auto rounded-md border bg-popover shadow-md z-30">
-                {unattachedChars.map((char) => (
-                  <button
-                    key={char.id}
-                    type="button"
-                    className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-1.5"
-                    onClick={() => attachCharacter(char.id)}
-                  >
-                    {char.referenceImageUrl ? (
-                      <img src={char.referenceImageUrl} alt="" className="w-4 h-4 rounded object-cover" />
-                    ) : (
-                      <FileText className="w-3 h-3 text-orange-500" />
-                    )}
-                    <span className="truncate">{char.name}</span>
-                    <span className={`text-[8px] px-1 rounded ${
-                      char.category === "location" ? "bg-cyan-500/10 text-cyan-500"
-                      : char.category === "object" ? "bg-emerald-500/10 text-emerald-500"
-                      : "bg-muted text-muted-foreground"
-                    }`}>
-                      {char.category === "location" ? "loc" : char.category === "object" ? "obj" : ""}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAssetLibrary(true)}
+            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+          >
+            <Plus className="w-3 h-3" /> Add from Library
+          </button>
           <button
             type="button"
             onClick={() => setShowDefineModal(true)}
@@ -1306,6 +1295,14 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           </button>
         </div>
       </div>
+
+      <AssetSelectionModal
+        isOpen={showAssetLibrary}
+        onClose={() => setShowAssetLibrary(false)}
+        onSelect={handleAssetSelected}
+        title="Select Asset from Library"
+        excludeIds={attachedIds}
+      />
 
       <DefineCharacterModal
         isOpen={showDefineModal}
