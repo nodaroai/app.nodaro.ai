@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 36 node types across 9 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 37 node types across 10 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
 
 ## Features
 
@@ -17,7 +17,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Graph-based workflows: branching, merging, multiple inputs/outputs
 - Manual save with unsaved changes indicator and exit confirmation
 
-### 36 Node Types
+### 37 Node Types
 
 | Category | Nodes |
 |----------|-------|
@@ -29,6 +29,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | **Character (1)** | Character |
 | **Object (1)** | Object |
 | **Location (1)** | Location |
+| **Utility (1)** | Sticky Note |
 | **Output (2)** | Save to Storage, Webhook Output |
 
 ### Asset Management
@@ -164,6 +165,26 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Location as reference**: Connect Location node to Generate Image to use main image as reference
 - **Multiple locations**: Connect multiple Location nodes to pass ALL main images as references
 - **Cyan color theme** for Location nodes (distinct from Character=pink, Object=emerald)
+
+### Sticky Note Node
+Canvas-level organizational node for adding notes and documentation to workflows. Stays behind all other nodes.
+
+**Features:**
+- **Always editable**: Textarea is always visible and editable (no double-click mode)
+- **Background & Text color pickers**: Large 40x40px color pickers with labels
+- **Font size dropdown**: Small, Normal, Large, X-Large options
+- **Bold/Italic buttons**: Toggle formatting with visual active state
+- **Text alignment**: Left, Center, Right buttons
+- **Insert tools**: Link, Image, Table, and Bullet list buttons
+- **Adaptive border**: Border auto-adjusts to contrast with background
+- **Resizable**: Drag corners/edges (min 280x120)
+- **Always behind**: CSS forces z-index -1 during drag/selection
+
+**Default appearance**: Dark background (#2d2d44) with white text, default text "I'm a note"
+
+**How to add:**
+- Right-click on canvas -> "Add Sticky Note"
+- Press Shift+S anywhere on canvas
 
 ### Dashboard
 - Projects with folders

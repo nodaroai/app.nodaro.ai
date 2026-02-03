@@ -1456,33 +1456,54 @@ A canvas-level organizational node for adding notes, documentation, and visual g
 **Implementation:** `frontend/src/components/nodes/sticky-note-node.tsx`
 
 **Features:**
-- **Markdown Support:** Full Markdown rendering with headings, lists, bold, italic, links, and tables (via remark-gfm)
-- **Full Color Picker:** Any hex color via native color input (border and text auto-adjust)
-- **Font Size Control:** Small, Normal, Large, X-Large options
-- **Resizable:** Drag corners/edges via NodeResizer
+- **Always Editable:** Textarea is always visible and editable (no double-click mode)
+- **Background Color Picker:** Large 40x40px color picker with "BG" label
+- **Text Color Picker:** Large 40x40px color picker with "Text" label
+- **Font Size Control:** Dropdown with Small, Normal, Large, X-Large options
+- **Bold/Italic:** Toggle buttons with visual active state
+- **Text Alignment:** Left, Center, Right alignment buttons
+- **Insert Link:** Prompts for URL and text, inserts markdown `[text](url)`
+- **Insert Image:** Prompts for image URL, inserts markdown `![alt](url)`
+- **Insert Table:** Inserts 3-column markdown table template
+- **Insert Bullet List:** Inserts 3-item bullet list template
+- **Resizable:** Drag corners/edges via NodeResizer (min 280x120)
+- **Adaptive Border:** Border auto-adjusts to contrast with background color
 - **Always Behind:** CSS forces z-index -1 even during drag/selection
 
-**Toolbar:** Appears above note when selected (not editing) with Color picker and Font size dropdown.
+**Toolbar:** Appears inside the note at top when selected. Contains:
+- Colors group: BG color picker + Text color picker (with labels)
+- Format group: Font size dropdown + Bold + Italic buttons
+- Alignment group: Left, Center, Right buttons
+- Insert group: Link, Image, Table, Bullet list buttons
+
+**Default Values:**
+- Text: "I'm a note\nDouble click to customize"
+- Background: `#2d2d44` (dark purple/gray)
+- Text color: `#ffffff` (white)
+- Size: 280x180 pixels
 
 **How to Add:**
 1. Right-click on canvas -> "Add Sticky Note"
 2. Or press Shift+S anywhere on canvas
 
 **How to Edit:**
-- Double-click to enter edit mode
-- Type markdown directly (headings, lists, tables, links)
-- Click outside to save
-- Press Escape to cancel
+- Click on the note and start typing (always editable)
+- Use toolbar buttons to format text
+- Insert tools add content at cursor position
 
 **Data Type:**
 ```typescript
 interface StickyNoteData {
   label: string
-  text: string                              // Markdown content
-  color: string                             // Hex color (e.g., "#fef3c7")
-  width: number                             // Default: 200
-  height: number                            // Default: 150
+  text: string                              // Plain text content
+  color: string                             // Background hex color (e.g., "#2d2d44")
+  textColor: string                         // Text hex color (e.g., "#ffffff")
+  width: number                             // Default: 280
+  height: number                            // Default: 180
   fontSize: "sm" | "base" | "lg" | "xl"     // Default: "base"
+  bold: boolean                             // Default: false
+  italic: boolean                           // Default: false
+  alignment: "left" | "center" | "right"    // Default: "left"
 }
 ```
 
@@ -1491,6 +1512,8 @@ interface StickyNoteData {
 - Add explanations or documentation to workflow areas
 - Annotate complex node chains
 - Leave TODO notes or reminders
+- Insert markdown tables for structured data
+- Add links to external resources
 
 **CSS Implementation (globals.css):**
 ```css
