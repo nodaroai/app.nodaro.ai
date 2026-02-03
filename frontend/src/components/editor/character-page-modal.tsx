@@ -73,6 +73,7 @@ function DraggableImage({
   onRequestDelete,
   onCancelDelete,
   onConfirmDelete,
+  isMainImage,
 }: {
   readonly src: string
   readonly label?: string
@@ -84,6 +85,7 @@ function DraggableImage({
   readonly onRequestDelete?: () => void
   readonly onCancelDelete?: () => void
   readonly onConfirmDelete?: () => void
+  readonly isMainImage?: boolean
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -95,7 +97,10 @@ function DraggableImage({
           onDragStart={(e) => startDrag(e, src, onDragStarted)}
           onDragEnd={() => onDragEnded?.()}
           onClick={() => onEnlarge(src)}
-          className="w-full aspect-square object-cover rounded-lg cursor-pointer border border-border hover:border-primary/50 transition-colors"
+          className={cn(
+            "w-full rounded-lg cursor-pointer border border-border hover:border-primary/50 transition-colors",
+            isMainImage ? "max-h-[400px] object-contain" : "aspect-square object-cover"
+          )}
         />
         {/* Add to canvas button */}
         {onAddToCanvas && (
@@ -337,6 +342,7 @@ centered composition, high quality, single character`
     if (data.characterDbId && projectId) {
       try {
         await saveCharacter({
+          id: data.characterDbId, // Pass ID to trigger UPDATE instead of INSERT
           nodeId: characterNodeId,
           projectId,
           name: data.characterName,
@@ -344,6 +350,7 @@ centered composition, high quality, single character`
           description: data.description,
           style: data.style,
         })
+        console.log("[Refine] Saved refined image to database:", imageUrl)
       } catch (err) {
         console.error("Failed to save refined image to database:", err)
       }
@@ -586,6 +593,7 @@ centered composition, high quality, single character`
                       onAddToCanvas={handleAddImageToCanvas}
                       onDragStarted={() => setIsDragging(true)}
                       onDragEnded={() => setIsDragging(false)}
+                      isMainImage
                     />
                     {/* Refine Button */}
                     <Button
