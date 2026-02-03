@@ -18,7 +18,7 @@ const upsertLocationBody = z.object({
 })
 
 const deleteLocationParams = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1),
 })
 
 const listLocationsQuery = z.object({

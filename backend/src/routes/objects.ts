@@ -18,7 +18,7 @@ const upsertObjectBody = z.object({
 })
 
 const deleteObjectParams = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1),
 })
 
 const listObjectsQuery = z.object({
