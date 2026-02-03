@@ -208,6 +208,8 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   const [showRefinePicker, setShowRefinePicker] = useState(false)
   const [selectedRefinedIndex, setSelectedRefinedIndex] = useState<number | null>(null)
   const [refineLightboxSrc, setRefineLightboxSrc] = useState<string | null>(null)
+  const [refinementCompleted, setRefinementCompleted] = useState(false)
+  const [generatingAllAssets, setGeneratingAllAssets] = useState(false)
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -364,8 +366,89 @@ centered composition, high quality, single character`
 
     setShowRefinePicker(false)
     setRefinedResults([])
+    setRefinementCompleted(true)
     toast.success("Refined image selected")
   }, [data, characterNodeId, projectId, updateNodeData])
+
+  // Generate all character assets (expressions, poses, lighting, angles)
+  const handleGenerateAllAssets = useCallback(async () => {
+    const imageUrl = mainImageUrl
+    if (!imageUrl) {
+      toast.error("No portrait available")
+      return
+    }
+
+    setGeneratingAllAssets(true)
+    setRefinementCompleted(false)
+    toast.info("Generating all character assets...")
+
+    const ASSET_TYPES = [
+      { type: "angles" as const, variants: ["front", "side", "back"], names: ["Front View", "Side View", "Back View"], dataKey: "angles" },
+      { type: "expressions" as const, variants: ["neutral", "smile", "angry", "surprised", "sad", "talking"], names: ["Neutral", "Smile", "Angry", "Surprised", "Sad", "Talking"], dataKey: "expressions" },
+      { type: "poses" as const, variants: ["standing", "walking", "sitting", "running"], names: ["Standing", "Walking", "Sitting", "Running"], dataKey: "poses" },
+      { type: "lighting" as const, variants: ["daylight", "night", "dramatic"], names: ["Daylight", "Night", "Dramatic"], dataKey: "lightingVariations" },
+    ]
+
+    try {
+      for (const assetConfig of ASSET_TYPES) {
+        for (let i = 0; i < assetConfig.variants.length; i++) {
+          const variant = assetConfig.variants[i]
+          const variantName = assetConfig.names[i]
+
+          try {
+            const { jobId } = await generateCharacterAsset({
+              assetType: assetConfig.type,
+              variant,
+              name: data.characterName || "Character",
+              description: data.description,
+              gender: data.gender,
+              style: data.style,
+              baseOutfit: data.baseOutfit,
+              sourceImageUrl: imageUrl,
+            })
+
+            // Poll for result
+            const resultUrl = await new Promise<string>((resolve, reject) => {
+              const interval = setInterval(async () => {
+                try {
+                  const job = await getJobStatus(jobId)
+                  if (job.status === "completed") {
+                    clearInterval(interval)
+                    resolve(job.output_data?.imageUrl ?? "")
+                  } else if (job.status === "failed") {
+                    clearInterval(interval)
+                    reject(new Error(job.error_message ?? "Failed"))
+                  }
+                } catch (err) {
+                  clearInterval(interval)
+                  reject(err)
+                }
+              }, 2000)
+            })
+
+            if (resultUrl) {
+              // Update node data with new asset
+              const currentAssets = (data as Record<string, unknown>)[assetConfig.dataKey] as CharacterAssetItem[] ?? []
+              const newAsset = { name: variantName, url: resultUrl }
+              updateNodeData(characterNodeId, {
+                [assetConfig.dataKey]: [...currentAssets, newAsset],
+              })
+            }
+          } catch (err) {
+            console.error(`Failed to generate ${assetConfig.type} ${variant}:`, err)
+          }
+        }
+      }
+
+      toast.success("All character assets generated!")
+    } catch (err) {
+      toast.error("Failed to generate some assets", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    } finally {
+      setGeneratingAllAssets(false)
+    }
+  }, [mainImageUrl, data, characterNodeId, updateNodeData])
 
   // Map tab to data key for asset deletion
   const ASSET_DATA_KEYS: Record<string, string> = {
@@ -622,6 +705,36 @@ centered composition, high quality, single character`
                     <p className="text-xs text-muted-foreground text-center mt-1.5">
                       Generate a clean portrait with studio lighting
                     </p>
+
+                    {/* Prominent CTA after refinement */}
+                    {refinementCompleted && (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-pink-500/20 to-rose-500/20 rounded-lg border border-pink-500/50">
+                        <div className="flex items-center gap-3">
+                          <Sparkles className="w-6 h-6 text-pink-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-white">Character refined!</p>
+                            <p className="text-sm text-gray-400">Generate expressions, poses, lighting & angles</p>
+                          </div>
+                          <Button
+                            onClick={handleGenerateAllAssets}
+                            disabled={generatingAllAssets}
+                            className="bg-gradient-to-r from-pink-500 to-rose-500 text-white font-medium hover:from-pink-600 hover:to-rose-600 shrink-0"
+                          >
+                            {generatingAllAssets ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                Generate All Assets
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-12">

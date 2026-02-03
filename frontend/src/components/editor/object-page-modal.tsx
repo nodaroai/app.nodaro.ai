@@ -219,6 +219,8 @@ export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps)
   const [showRefinePicker, setShowRefinePicker] = useState(false)
   const [selectedRefinedIndex, setSelectedRefinedIndex] = useState<number | null>(null)
   const [refineLightboxSrc, setRefineLightboxSrc] = useState<string | null>(null)
+  const [refinementCompleted, setRefinementCompleted] = useState(false)
+  const [generatingAllAssets, setGeneratingAllAssets] = useState(false)
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -376,8 +378,87 @@ no shadows, professional product photography`
 
     setShowRefinePicker(false)
     setRefinedResults([])
+    setRefinementCompleted(true)
     toast.success("Refined image selected")
   }, [data, objectNodeId, projectId, updateNodeData])
+
+  // Generate all object assets (angles, materials, variations)
+  const handleGenerateAllAssets = useCallback(async () => {
+    const imageUrl = mainImageUrl
+    if (!imageUrl) {
+      toast.error("No image available")
+      return
+    }
+
+    setGeneratingAllAssets(true)
+    setRefinementCompleted(false)
+    toast.info("Generating all object assets...")
+
+    const ASSET_TYPES = [
+      { type: "angles" as const, variants: ["front", "side", "top", "back", "three-quarter"], names: ["Front", "Side", "Top", "Back", "Three-Quarter"], dataKey: "angles" },
+      { type: "materials" as const, variants: ["wood", "metal", "glass", "plastic", "fabric", "stone"], names: ["Wood", "Metal", "Glass", "Plastic", "Fabric", "Stone"], dataKey: "materials" },
+      { type: "variations" as const, variants: ["clean", "weathered", "damaged", "ornate", "minimal"], names: ["Clean", "Weathered", "Damaged", "Ornate", "Minimal"], dataKey: "variations" },
+    ]
+
+    try {
+      for (const assetConfig of ASSET_TYPES) {
+        for (let i = 0; i < assetConfig.variants.length; i++) {
+          const variant = assetConfig.variants[i]
+          const variantName = assetConfig.names[i]
+
+          try {
+            const { jobId } = await generateObjectAsset({
+              assetType: assetConfig.type,
+              variant,
+              name: data.objectName || "Object",
+              description: data.description,
+              category: data.category,
+              style: data.style,
+              sourceImageUrl: imageUrl,
+            })
+
+            // Poll for result
+            const resultUrl = await new Promise<string>((resolve, reject) => {
+              const interval = setInterval(async () => {
+                try {
+                  const job = await getJobStatus(jobId)
+                  if (job.status === "completed") {
+                    clearInterval(interval)
+                    resolve(job.output_data?.imageUrl ?? "")
+                  } else if (job.status === "failed") {
+                    clearInterval(interval)
+                    reject(new Error(job.error_message ?? "Failed"))
+                  }
+                } catch (err) {
+                  clearInterval(interval)
+                  reject(err)
+                }
+              }, 2000)
+            })
+
+            if (resultUrl) {
+              // Update node data with new asset
+              const currentAssets = (data as Record<string, unknown>)[assetConfig.dataKey] as ObjectAssetItem[] ?? []
+              const newAsset = { name: variantName, url: resultUrl }
+              updateNodeData(objectNodeId, {
+                [assetConfig.dataKey]: [...currentAssets, newAsset],
+              })
+            }
+          } catch (err) {
+            console.error(`Failed to generate ${assetConfig.type} ${variant}:`, err)
+          }
+        }
+      }
+
+      toast.success("All object assets generated!")
+    } catch (err) {
+      toast.error("Failed to generate some assets", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    } finally {
+      setGeneratingAllAssets(false)
+    }
+  }, [mainImageUrl, data, objectNodeId, updateNodeData])
 
   // Map tab to data key for asset deletion
   const ASSET_DATA_KEYS: Record<string, string> = {
@@ -628,6 +709,36 @@ no shadows, professional product photography`
                     <p className="text-xs text-muted-foreground text-center mt-1.5">
                       Generate a clean product photo with studio lighting
                     </p>
+
+                    {/* Prominent CTA after refinement */}
+                    {refinementCompleted && (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-lg border border-emerald-500/50">
+                        <div className="flex items-center gap-3">
+                          <Sparkles className="w-6 h-6 text-emerald-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-white">Object refined!</p>
+                            <p className="text-sm text-gray-400">Generate angles, materials & variations</p>
+                          </div>
+                          <Button
+                            onClick={handleGenerateAllAssets}
+                            disabled={generatingAllAssets}
+                            className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium hover:from-emerald-600 hover:to-teal-600 shrink-0"
+                          >
+                            {generatingAllAssets ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                Generate All Assets
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-12">
