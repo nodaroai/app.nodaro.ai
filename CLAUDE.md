@@ -289,6 +289,25 @@ Three specialized node types for creating reusable visual assets with variant ge
 - **Object**: Product photo, centered, clean white background, studio lighting, front view, professional product photography
 - **Location**: Wide establishing shot, clean composition, balanced lighting, no people, centered perspective, cinematic photography
 
+**Generate All Assets Feature:**
+- After refining an asset, a prominent CTA appears to generate all variations with one click
+- Color-coded CTAs match asset type: pink (Character), emerald (Object), cyan (Location)
+- Assets generated per type:
+  - **Character**: Expressions (6), Poses (4), Lighting (3), Angles (3) = 16 total
+  - **Object**: Angles (5), Materials (6), Variations (5) = 16 total
+  - **Location**: Time of Day (6), Weather (6), Angles (5) = 17 total
+- Sequential generation with progress toast notifications
+- Assets accumulate properly in local state before updating node data (fixed closure bug)
+- Progressive UI updates as each asset completes
+
+**Asset Workflow Summary:**
+1. Create asset: "Create Character/Object/Location" buttons in sidebar
+2. Generate or upload main image
+3. Refine: Click "Refine" to generate 4 cleaned-up variations, select the best
+4. Generate All: Click "Generate All Assets" to create all variant images
+5. Browse: View all assets in the Page modal tabs (Main, Expressions, Poses, etc.)
+6. Use: Add to canvas as Generate Image node, or connect asset node as reference
+
 ### Style Presets
 
 Pre-configured visual style templates for quick-start workflows.

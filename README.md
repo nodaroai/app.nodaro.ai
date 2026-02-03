@@ -60,6 +60,24 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Object**: Product photo, centered, clean white background, studio lighting, front view
 - **Location**: Wide establishing shot, clean composition, balanced lighting, no people, centered perspective
 
+### Generate All Assets
+- **Prominent CTA**: After refining an asset, a color-coded banner appears to generate all variations
+- **One-click generation**: Creates all variant images with sequential API calls
+- **Assets generated per type**:
+  - **Character**: Expressions (6), Poses (4), Lighting (3), Angles (3) = 16 total
+  - **Object**: Angles (5), Materials (6), Variations (5) = 16 total
+  - **Location**: Time of Day (6), Weather (6), Angles (5) = 17 total
+- **Progress feedback**: Toast notifications and loading state during generation
+- **Proper accumulation**: Assets append to existing arrays (fixed closure bug)
+
+**Complete Asset Workflow:**
+1. Create asset via sidebar buttons or "+ Create new" menu
+2. Generate or upload main image
+3. Refine: Generate 4 clean variations, select the best one
+4. Generate All Assets: Create all variant images with one click
+5. Browse variants in Page modal tabs
+6. Add to workflow: Use as reference image or add directly to canvas
+
 ### Character Node
 - Generate main character portrait (single front view) or upload image from computer
 - Generate character assets individually for better quality and consistency:
