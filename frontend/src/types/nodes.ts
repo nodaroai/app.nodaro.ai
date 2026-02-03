@@ -328,6 +328,7 @@ export type GenerateScriptData = {
   targetLength: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedScript?: GeneratedScript
   generatedResults?: GeneratedScriptResult[]
   activeResultIndex?: number
@@ -344,6 +345,7 @@ export type GenerateImageData = {
   negativePrompt: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedImageUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
@@ -361,6 +363,7 @@ export type ImageToVideoData = {
   generateAudio?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
@@ -378,6 +381,7 @@ export type TextToSpeechData = {
   directText: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedAudioUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
@@ -394,6 +398,7 @@ export type TextToVideoData = {
   negativePrompt: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
@@ -408,6 +413,7 @@ export type VideoToVideoData = {
   duration: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
@@ -438,6 +444,7 @@ export type GenerateMusicData = {
   modelVersion: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedAudioUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
@@ -451,6 +458,7 @@ export type TextToAudioData = {
   duration: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedAudioUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
@@ -465,6 +473,7 @@ export type CombineVideosData = {
   transitionDuration: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
@@ -478,6 +487,7 @@ export type MergeVideoAudioData = {
   backgroundVolume: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
@@ -492,6 +502,7 @@ export type AddCaptionsData = {
   color: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
@@ -505,6 +516,7 @@ export type ResizeVideoData = {
   padColor: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
@@ -517,6 +529,7 @@ export type ExtractAudioData = {
   audioFormat: "mp3" | "wav" | "aac"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedAudioUrl?: string
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
@@ -529,6 +542,7 @@ export type MixAudioData = {
   trackCount: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedAudioUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
@@ -543,6 +557,7 @@ export type AdjustVolumeData = {
   fadeOut: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedAudioUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
@@ -555,6 +570,7 @@ export type TrimVideoData = {
   endTime: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
@@ -609,6 +625,7 @@ export type CharacterNodeData = {
   projectId: string
   createdAt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   fieldMappings: FieldMappings
@@ -652,6 +669,7 @@ export type ObjectNodeData = {
   projectId: string
   createdAt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   fieldMappings: FieldMappings
@@ -688,6 +706,7 @@ export type LocationNodeData = {
   projectId: string
   createdAt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   fieldMappings: FieldMappings
@@ -782,6 +801,7 @@ export type SceneNodeDataType = {
   referenceUrls: string[]
   generatedPrompt: string
   executionStatus: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   generatedImageUrl: string

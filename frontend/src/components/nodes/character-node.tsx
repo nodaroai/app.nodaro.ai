@@ -126,9 +126,16 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status === "failed" && !activeUrl && (
-          <div className="flex items-center justify-center gap-1.5 h-16 rounded-md bg-red-500/5 text-red-500">
-            <AlertCircle className="w-4 h-4" />
-            <span className="text-xs">Failed</span>
+          <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="w-3 h-3 shrink-0" />
+              <span className="text-xs font-medium">Failed</span>
+            </div>
+            {nodeData.errorMessage && (
+              <p className="text-[9px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                {nodeData.errorMessage}
+              </p>
+            )}
           </div>
         )}
 

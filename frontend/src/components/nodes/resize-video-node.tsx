@@ -52,7 +52,17 @@ function ResizeVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
         {status === "failed" && !activeUrl && (
-          <div className="flex items-center justify-center gap-1.5 h-16 rounded-md bg-red-500/5 text-red-500"><AlertCircle className="w-5 h-5" /><span>Failed</span></div>
+          <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="font-medium">Failed</span>
+            </div>
+            {nodeData.errorMessage && (
+              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                {nodeData.errorMessage}
+              </p>
+            )}
+          </div>
         )}
         {status !== "running" && !activeUrl && status !== "failed" && (
           <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"><Maximize2 className="w-5 h-5" /></div>

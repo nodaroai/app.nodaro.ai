@@ -135,9 +135,16 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status === "failed" && !activeUrl && (
-          <div className="flex items-center justify-center gap-1.5 h-24 rounded-md bg-red-500/5 text-red-500">
-            <AlertCircle className="w-5 h-5" />
-            <span className="text-xs">Failed</span>
+          <div className="flex flex-col items-center justify-center gap-1 h-24 rounded-md bg-red-500/5 text-red-500 p-2">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="text-xs font-medium">Failed</span>
+            </div>
+            {nodeData.errorMessage && (
+              <p className="text-[9px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                {nodeData.errorMessage}
+              </p>
+            )}
           </div>
         )}
 

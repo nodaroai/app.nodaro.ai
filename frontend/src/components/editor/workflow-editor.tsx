@@ -344,22 +344,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Image generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Image generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Image generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
+            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
             toast.error("Failed to check job status")
             reject(err)
           }
         }, 2000))
       }).catch((err) => {
-        updateNodeData(nodeId, { executionStatus: "failed" })
-        toast.error("Failed to start image generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        const errMsg = err instanceof Error ? err.message : "Unknown error"
+        updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+        toast.error("Failed to start image generation", { description: errMsg })
         reject(err)
       })
     })
@@ -428,22 +429,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Character generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Character generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Character generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
+            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
             toast.error("Failed to check job status")
             reject(err)
           }
         }, 2000))
       }).catch((err) => {
-        updateNodeData(nodeId, { executionStatus: "failed" })
-        toast.error("Failed to start character generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        const errMsg = err instanceof Error ? err.message : "Unknown error"
+        updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+        toast.error("Failed to start character generation", { description: errMsg })
         reject(err)
       })
     })
@@ -506,22 +508,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Object generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Object generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Object generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
+            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
             toast.error("Failed to check job status")
             reject(err)
           }
         }, 2000))
       }).catch((err) => {
-        updateNodeData(nodeId, { executionStatus: "failed" })
-        toast.error("Failed to start object generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        const errMsg = err instanceof Error ? err.message : "Unknown error"
+        updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+        toast.error("Failed to start object generation", { description: errMsg })
         reject(err)
       })
     })
@@ -584,9 +587,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Location generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Location generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Location generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
@@ -917,9 +921,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Video generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Video generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Video generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
@@ -964,9 +969,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Video-to-video generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Video-to-video generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Video-to-video generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
@@ -1011,9 +1017,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Text-to-video generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Text-to-video generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Text-to-video generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
@@ -1058,9 +1065,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Text-to-speech generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Text-to-speech generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Text-to-speech generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
@@ -1105,9 +1113,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Script generation failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Script generation failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Script generation failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
@@ -1152,9 +1161,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error("Combine videos failed", { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? "Combine videos failed"))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Combine videos failed", { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
@@ -1199,9 +1209,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
-              updateNodeData(nodeId, { executionStatus: "failed" })
-              toast.error(`${label} failed`, { description: job.error_message ?? "Unknown error" })
-              reject(new Error(job.error_message ?? `${label} failed`))
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error(`${label} failed`, { description: errMsg })
+              reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
