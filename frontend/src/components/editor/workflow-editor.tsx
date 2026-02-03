@@ -201,6 +201,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
     }
+    if (type === "location") {
+      // Return the location's main image for use as reference
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
+    }
     if (type === "scene") {
       // If scene has a generated image, return that; otherwise return built prompt
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
@@ -237,6 +243,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "object") {
         // Object node provides its main image as a reference image
         // Multiple Object nodes can be connected - all their images become references
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+      } else if (src.type === "location") {
+        // Location node provides its main image as a reference image
+        // Multiple Location nodes can be connected - all their images become references
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else if (src.type === "upload-video") {
         if (node.type === "combine-videos") {
