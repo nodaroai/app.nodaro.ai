@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 
 const upsertLocationBody = z.object({
   id: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
   nodeId: z.string().min(1),
   workflowId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
@@ -23,6 +24,7 @@ const deleteLocationParams = z.object({
 
 const listLocationsQuery = z.object({
   projectId: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function locationRoutes(app: FastifyInstance) {
@@ -38,15 +40,18 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId } = parsed.data
+    const { projectId, userId } = parsed.data
 
     let query = supabase
       .from("locations")
-      .select("id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, created_at, updated_at")
+      .select("id, user_id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, created_at, updated_at")
       .order("created_at", { ascending: false })
 
     if (projectId) {
       query = query.eq("project_id", projectId)
+    }
+    if (userId) {
+      query = query.eq("user_id", userId)
     }
 
     const { data, error } = await query
@@ -60,6 +65,7 @@ export async function locationRoutes(app: FastifyInstance) {
     // Transform snake_case to camelCase for frontend
     const locations = (data ?? []).map((loc) => ({
       id: loc.id,
+      userId: loc.user_id,
       nodeId: loc.node_id,
       projectId: loc.project_id,
       name: loc.name,
@@ -89,9 +95,10 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, category, style, sourceImageUrl, timeOfDay, weather, angles } = parsed.data
+    const { id, userId, nodeId, workflowId, projectId, name, description, category, style, sourceImageUrl, timeOfDay, weather, angles } = parsed.data
 
     const row = {
+      user_id: userId ?? null,
       node_id: nodeId,
       workflow_id: workflowId ?? null,
       project_id: projectId ?? null,

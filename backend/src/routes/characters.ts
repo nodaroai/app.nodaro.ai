@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 
 const upsertCharacterBody = z.object({
   id: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
   nodeId: z.string().min(1),
   workflowId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
@@ -24,6 +25,7 @@ const deleteCharacterParams = z.object({
 
 const listCharactersQuery = z.object({
   projectId: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function characterRoutes(app: FastifyInstance) {
@@ -39,15 +41,18 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId } = parsed.data
+    const { projectId, userId } = parsed.data
 
     let query = supabase
       .from("characters")
-      .select("id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, created_at, updated_at")
+      .select("id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, created_at, updated_at")
       .order("created_at", { ascending: false })
 
     if (projectId) {
       query = query.eq("project_id", projectId)
+    }
+    if (userId) {
+      query = query.eq("user_id", userId)
     }
 
     const { data, error } = await query
@@ -61,6 +66,7 @@ export async function characterRoutes(app: FastifyInstance) {
     // Transform snake_case to camelCase for frontend
     const characters = (data ?? []).map((c) => ({
       id: c.id,
+      userId: c.user_id,
       nodeId: c.node_id,
       projectId: c.project_id,
       name: c.name,
@@ -91,9 +97,10 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations } = parsed.data
+    const { id, userId, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations } = parsed.data
 
     const row = {
+      user_id: userId ?? null,
       node_id: nodeId,
       workflow_id: workflowId ?? null,
       project_id: projectId ?? null,

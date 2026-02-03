@@ -114,6 +114,7 @@ export async function generateCharacterAsset(data: {
 
 export async function saveCharacter(data: {
   id?: string
+  userId?: string
   nodeId: string
   workflowId?: string
   projectId?: string
@@ -152,6 +153,7 @@ export async function deleteCharacter(characterId: string): Promise<{ success: b
 
 export interface DbCharacter {
   id: string
+  userId: string | null
   nodeId: string
   projectId: string | null
   name: string
@@ -167,10 +169,13 @@ export interface DbCharacter {
   updatedAt: string
 }
 
-export async function getCharacters(projectId?: string): Promise<{ characters: DbCharacter[] }> {
+export async function getCharacters(projectId?: string, userId?: string): Promise<{ characters: DbCharacter[] }> {
   const url = new URL(`${API_BASE_URL}/v1/characters`)
   if (projectId) {
     url.searchParams.set("projectId", projectId)
+  }
+  if (userId) {
+    url.searchParams.set("userId", userId)
   }
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -226,8 +231,9 @@ export async function generateObjectAsset(data: {
 
 export async function saveObject(data: {
   id?: string
+  userId?: string
   nodeId: string
-  projectId: string
+  projectId?: string
   name: string
   description?: string
   category?: string
@@ -262,6 +268,7 @@ export async function deleteObject(objectId: string): Promise<{ success: boolean
 
 export interface DbObject {
   id: string
+  userId: string | null
   nodeId: string
   projectId: string | null
   name: string
@@ -276,10 +283,13 @@ export interface DbObject {
   updatedAt: string
 }
 
-export async function getObjects(projectId?: string): Promise<{ objects: DbObject[] }> {
+export async function getObjects(projectId?: string, userId?: string): Promise<{ objects: DbObject[] }> {
   const url = new URL(`${API_BASE_URL}/v1/objects`)
   if (projectId) {
     url.searchParams.set("projectId", projectId)
+  }
+  if (userId) {
+    url.searchParams.set("userId", userId)
   }
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -335,8 +345,9 @@ export async function generateLocationAsset(data: {
 
 export async function saveLocation(data: {
   id?: string
+  userId?: string
   nodeId: string
-  projectId: string
+  projectId?: string
   name: string
   description?: string
   category?: string
@@ -371,6 +382,7 @@ export async function deleteLocation(locationId: string): Promise<{ success: boo
 
 export interface DbLocation {
   id: string
+  userId: string | null
   nodeId: string
   projectId: string | null
   name: string
@@ -385,10 +397,13 @@ export interface DbLocation {
   updatedAt: string
 }
 
-export async function getLocations(projectId?: string): Promise<{ locations: DbLocation[] }> {
+export async function getLocations(projectId?: string, userId?: string): Promise<{ locations: DbLocation[] }> {
   const url = new URL(`${API_BASE_URL}/v1/locations`)
   if (projectId) {
     url.searchParams.set("projectId", projectId)
+  }
+  if (userId) {
+    url.searchParams.set("userId", userId)
   }
   const res = await fetch(url.toString(), {
     method: "GET",

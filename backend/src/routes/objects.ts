@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 
 const upsertObjectBody = z.object({
   id: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
   nodeId: z.string().min(1),
   workflowId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
@@ -23,6 +24,7 @@ const deleteObjectParams = z.object({
 
 const listObjectsQuery = z.object({
   projectId: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function objectRoutes(app: FastifyInstance) {
@@ -38,15 +40,18 @@ export async function objectRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId } = parsed.data
+    const { projectId, userId } = parsed.data
 
     let query = supabase
       .from("objects")
-      .select("id, node_id, project_id, name, description, category, style, source_image_url, angles, materials, variations, created_at, updated_at")
+      .select("id, user_id, node_id, project_id, name, description, category, style, source_image_url, angles, materials, variations, created_at, updated_at")
       .order("created_at", { ascending: false })
 
     if (projectId) {
       query = query.eq("project_id", projectId)
+    }
+    if (userId) {
+      query = query.eq("user_id", userId)
     }
 
     const { data, error } = await query
@@ -60,6 +65,7 @@ export async function objectRoutes(app: FastifyInstance) {
     // Transform snake_case to camelCase for frontend
     const objects = (data ?? []).map((o) => ({
       id: o.id,
+      userId: o.user_id,
       nodeId: o.node_id,
       projectId: o.project_id,
       name: o.name,
@@ -89,9 +95,10 @@ export async function objectRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, category, style, sourceImageUrl, angles, materials, variations } = parsed.data
+    const { id, userId, nodeId, workflowId, projectId, name, description, category, style, sourceImageUrl, angles, materials, variations } = parsed.data
 
     const row = {
+      user_id: userId ?? null,
       node_id: nodeId,
       workflow_id: workflowId ?? null,
       project_id: projectId ?? null,
