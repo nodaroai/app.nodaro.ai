@@ -211,6 +211,7 @@ export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps)
   const [isRefining, setIsRefining] = useState(false)
   const [refinedResults, setRefinedResults] = useState<string[]>([])
   const [showRefinePicker, setShowRefinePicker] = useState(false)
+  const [selectedRefinedIndex, setSelectedRefinedIndex] = useState<number | null>(null)
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -314,6 +315,7 @@ no shadows, professional product photography`
       }
 
       setShowRefinePicker(true)
+      setSelectedRefinedIndex(null)
     } catch (err) {
       toast.error("Failed to refine object", {
         description: err instanceof Error ? err.message : "Unknown error",
@@ -767,30 +769,43 @@ no shadows, professional product photography`
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Choose the best refined version of your object
+              Click to preview, then confirm your choice
             </p>
             <div className="grid grid-cols-2 gap-3">
               {refinedResults.map((url, i) => (
-                <div key={i} className="relative group">
+                <div
+                  key={i}
+                  className={cn(
+                    "relative cursor-pointer rounded-lg border-2 transition-all",
+                    selectedRefinedIndex === i
+                      ? "border-emerald-500 ring-2 ring-emerald-500/30"
+                      : "border-border hover:border-emerald-500/50"
+                  )}
+                  onClick={() => setSelectedRefinedIndex(i)}
+                >
                   <img
                     src={url}
                     alt={`Refined ${i + 1}`}
-                    className="w-full aspect-square object-cover rounded-lg border border-border hover:border-emerald-500 cursor-pointer transition-colors"
-                    onClick={() => handleSelectRefined(url)}
+                    className="w-full aspect-square object-cover rounded-lg"
                   />
-                  <Button
-                    size="sm"
-                    className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-emerald-500 hover:bg-emerald-600"
-                    onClick={() => handleSelectRefined(url)}
-                  >
-                    Select
-                  </Button>
+                  {selectedRefinedIndex === i && (
+                    <div className="absolute top-2 right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">✓</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => setShowRefinePicker(false)}>
                 Cancel
+              </Button>
+              <Button
+                onClick={() => selectedRefinedIndex !== null && handleSelectRefined(refinedResults[selectedRefinedIndex])}
+                disabled={selectedRefinedIndex === null}
+                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+              >
+                Use This Image
               </Button>
             </div>
           </div>

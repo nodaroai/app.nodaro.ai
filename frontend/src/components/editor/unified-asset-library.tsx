@@ -486,19 +486,31 @@ export function UnifiedAssetLibraryButton() {
       {characterPageNodeId && (
         <CharacterPageModal
           characterNodeId={characterPageNodeId}
-          onClose={() => setCharacterPageNodeId(null)}
+          onClose={() => {
+            setCharacterPageNodeId(null)
+            // Refetch assets to update thumbnails after potential changes
+            fetchAllAssets()
+          }}
         />
       )}
       {objectPageNodeId && (
         <ObjectPageModal
           objectNodeId={objectPageNodeId}
-          onClose={() => setObjectPageNodeId(null)}
+          onClose={() => {
+            setObjectPageNodeId(null)
+            // Refetch assets to update thumbnails after potential changes
+            fetchAllAssets()
+          }}
         />
       )}
       {locationPageNodeId && (
         <LocationPageModal
           locationNodeId={locationPageNodeId}
-          onClose={() => setLocationPageNodeId(null)}
+          onClose={() => {
+            setLocationPageNodeId(null)
+            // Refetch assets to update thumbnails after potential changes
+            fetchAllAssets()
+          }}
         />
       )}
     </>
