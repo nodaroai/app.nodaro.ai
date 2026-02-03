@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { X, Loader2, Trash2, Plus, Maximize2, Sparkles } from "lucide-react"
+import { X, Loader2, Trash2, Plus, Maximize2, Sparkles, Expand } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
@@ -201,6 +201,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   const [refinedResults, setRefinedResults] = useState<string[]>([])
   const [showRefinePicker, setShowRefinePicker] = useState(false)
   const [selectedRefinedIndex, setSelectedRefinedIndex] = useState<number | null>(null)
+  const [refineLightboxSrc, setRefineLightboxSrc] = useState<string | null>(null)
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -769,7 +770,7 @@ centered composition, high quality, single character`
           onClick={() => setShowRefinePicker(false)}
         >
           <div
-            className="bg-card rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl border"
+            className="bg-card rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -779,14 +780,14 @@ centered composition, high quality, single character`
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Click to preview, then confirm your choice
+              Click to select, use expand button to preview full size
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto">
               {refinedResults.map((url, i) => (
                 <div
                   key={i}
                   className={cn(
-                    "relative cursor-pointer rounded-lg border-2 transition-all",
+                    "relative cursor-pointer rounded-lg border-2 transition-all group",
                     selectedRefinedIndex === i
                       ? "border-primary ring-2 ring-primary/30"
                       : "border-border hover:border-primary/50"
@@ -796,8 +797,19 @@ centered composition, high quality, single character`
                   <img
                     src={url}
                     alt={`Refined ${i + 1}`}
-                    className="w-full aspect-square object-cover rounded-lg"
+                    className="w-full h-36 object-cover rounded-lg"
                   />
+                  {/* Expand button */}
+                  <button
+                    type="button"
+                    className="absolute bottom-2 left-2 p-1.5 rounded-md bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setRefineLightboxSrc(url)
+                    }}
+                  >
+                    <Expand className="w-4 h-4" />
+                  </button>
                   {selectedRefinedIndex === i && (
                     <div className="absolute top-2 right-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                       <span className="text-primary-foreground text-xs font-bold">✓</span>
@@ -819,6 +831,27 @@ centered composition, high quality, single character`
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Refine Lightbox */}
+      {refineLightboxSrc && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90"
+          onClick={() => setRefineLightboxSrc(null)}
+        >
+          <button
+            type="button"
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
+            onClick={() => setRefineLightboxSrc(null)}
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={refineLightboxSrc}
+            alt="Full size preview"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+          />
         </div>
       )}
     </>,

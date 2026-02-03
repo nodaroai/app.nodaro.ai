@@ -488,8 +488,10 @@ export function UnifiedAssetLibraryButton() {
           characterNodeId={characterPageNodeId}
           onClose={() => {
             setCharacterPageNodeId(null)
-            // Refetch assets to update thumbnails after potential changes
-            fetchAllAssets()
+            // Small delay to ensure database writes have propagated before refetching
+            setTimeout(() => {
+              fetchAllAssets()
+            }, 300)
           }}
         />
       )}
@@ -498,8 +500,10 @@ export function UnifiedAssetLibraryButton() {
           objectNodeId={objectPageNodeId}
           onClose={() => {
             setObjectPageNodeId(null)
-            // Refetch assets to update thumbnails after potential changes
-            fetchAllAssets()
+            // Small delay to ensure database writes have propagated before refetching
+            setTimeout(() => {
+              fetchAllAssets()
+            }, 300)
           }}
         />
       )}
@@ -508,8 +512,10 @@ export function UnifiedAssetLibraryButton() {
           locationNodeId={locationPageNodeId}
           onClose={() => {
             setLocationPageNodeId(null)
-            // Refetch assets to update thumbnails after potential changes
-            fetchAllAssets()
+            // Small delay to ensure database writes have propagated before refetching
+            setTimeout(() => {
+              fetchAllAssets()
+            }, 300)
           }}
         />
       )}
