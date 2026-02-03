@@ -29,7 +29,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative group/run">
-    <BaseNode id={id} label={nodeData.label} icon={<Volume1 className="h-4 w-4" />} category="processing" credits={0} selected={selected}
+    <BaseNode id={id} label={nodeData.label} icon={<Volume1 className="h-4 w-4" />} category="processing" credits={0} selected={selected} isRunning={status === "running"}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "audio-out", type: "source", position: Position.Right, label: "Audio" },
@@ -80,7 +80,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
     {status !== "running" && (
       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity">
-        <button type="button" className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-b-md shadow-md transition-colors" onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}><Play className="w-3 h-3" />Run</button>
+        <button type="button" className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-b-md shadow-md transition-colors" style={{ backgroundColor: '#ff0073' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e60068'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff0073'} onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}><Play className="w-3 h-3" />Run</button>
       </div>
     )}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />

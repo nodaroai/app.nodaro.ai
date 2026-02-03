@@ -70,6 +70,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
       category="object"
       credits={5}
       selected={selected}
+      isRunning={status === "running" || anyAssetRunning}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "objectRef", type: "source", position: Position.Right, label: "Object" },

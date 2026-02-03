@@ -25,6 +25,7 @@ interface BaseNodeProps {
   readonly selected?: boolean
   readonly minWidth?: number
   readonly minHeight?: number
+  readonly isRunning?: boolean
 }
 
 const CATEGORY_STYLES: Record<string, string> = {
@@ -60,6 +61,7 @@ export function BaseNode({
   selected,
   minWidth = 200,
   minHeight = 80,
+  isRunning = false,
 }: BaseNodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
@@ -78,14 +80,15 @@ export function BaseNode({
         lineClassName="!border-blue-400"
         handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
       />
-      <div
-        className={cn(
-          "group relative rounded-lg border-2 shadow-sm min-w-[200px] bg-card text-card-foreground h-full",
-          CATEGORY_STYLES[category],
-          selected && "ring-2 ring-primary",
-        )}
-        onClick={() => selectNode(id)}
-      >
+      <div className={cn(isRunning && "node-running-wrapper")}>
+        <div
+          className={cn(
+            "group relative rounded-lg border-2 shadow-sm min-w-[200px] bg-card text-card-foreground h-full",
+            CATEGORY_STYLES[category],
+            selected && "ring-2 ring-primary",
+          )}
+          onClick={() => selectNode(id)}
+        >
       <button
         className="absolute -top-3 -right-3 z-10 hidden group-hover:flex items-center justify-center w-6 h-6 rounded-full bg-card border shadow-sm hover:bg-accent"
         onClick={handleDuplicate}
@@ -130,6 +133,7 @@ export function BaseNode({
           )}
         </div>
       ))}
+      </div>
     </div>
     </>
   )

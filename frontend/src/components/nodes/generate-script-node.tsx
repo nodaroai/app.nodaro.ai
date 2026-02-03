@@ -54,6 +54,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       category="ai"
       credits={2}
       selected={selected}
+      isRunning={status === "running"}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "scenes", type: "source", position: Position.Right, label: "Scenes" },
@@ -215,7 +216,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity">
         <button
           type="button"
-          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-b-md shadow-md transition-colors"
+          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-b-md shadow-md transition-colors" style={{ backgroundColor: '#ff0073' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e60068'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff0073'}
           onClick={(e) => {
             e.stopPropagation()
             runSingleNode?.(id)

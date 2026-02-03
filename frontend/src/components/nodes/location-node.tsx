@@ -70,6 +70,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
       category="location"
       credits={5}
       selected={selected}
+      isRunning={status === "running" || anyAssetRunning}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "locationRef", type: "source", position: Position.Right, label: "Location" },

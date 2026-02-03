@@ -72,6 +72,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       category="scene"
       credits={0}
       selected={selected}
+      isRunning={status === "running"}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "audio1", type: "target", position: Position.Left, label: "Audio 1", top: "25%" },
