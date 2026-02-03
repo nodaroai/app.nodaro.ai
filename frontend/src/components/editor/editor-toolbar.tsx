@@ -1,15 +1,38 @@
 "use client"
 
-import { useState } from "react"
-import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff, FileJson } from "lucide-react"
+import { useState, useRef, useCallback } from "react"
+import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { ThemeToggle } from "@/components/theme-toggle"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { validateWorkflow, type ValidationResult } from "@/lib/workflow-validation"
-import { ExportImportModal } from "./export-import-modal"
+import {
+  getCharacterById,
+  getObjectById,
+  getLocationById,
+  saveCharacter,
+  saveObject,
+  saveLocation,
+  type DbCharacter,
+  type DbObject,
+  type DbLocation,
+} from "@/lib/api"
+import { createClient } from "@/lib/supabase"
+import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, LocationNodeData } from "@/types/nodes"
 
 interface EditorToolbarProps {
   readonly projectId?: string
@@ -17,6 +40,20 @@ interface EditorToolbarProps {
   readonly onSave: () => void
   readonly saving: boolean
   readonly onNavigate?: (href: string) => void
+}
+
+interface ExportedWorkflow {
+  name: string
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  settings?: Record<string, unknown>
+  exportedAt: string
+  version: string
+  assets?: {
+    characters: DbCharacter[]
+    objects: DbObject[]
+    locations: DbLocation[]
+  }
 }
 
 export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorToolbarProps) {
@@ -27,18 +64,299 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
   const isDirty = useWorkflowStore((s) => s.isDirty)
   const saveStatus = useWorkflowStore((s) => s.saveStatus)
   const saveError = useWorkflowStore((s) => s.saveError)
+  const workflowId = useWorkflowStore((s) => s.workflowId)
+  const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow)
   const project = useProjectsStore((s) =>
     projectId ? s.projects.find((p) => p.id === projectId) : undefined,
   )
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const setVideoAutoplay = useWorkflowStore((s) => s.setVideoAutoplay)
   const [validation, setValidation] = useState<ValidationResult | null>(null)
-  const [showExportImport, setShowExportImport] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleValidate() {
     const result = validateWorkflow(nodes, edges)
     setValidation(result)
   }
+
+  const handleExport = useCallback(async (includeAssets: boolean) => {
+    setExporting(true)
+    try {
+      const workflowData: ExportedWorkflow = {
+        name: workflowName || "Untitled Workflow",
+        nodes,
+        edges,
+        exportedAt: new Date().toISOString(),
+        version: "1.0",
+      }
+
+      if (includeAssets) {
+        // Collect all referenced asset IDs from nodes
+        const characterIds = new Set<string>()
+        const objectIds = new Set<string>()
+        const locationIds = new Set<string>()
+
+        for (const node of nodes) {
+          if (node.type === "character") {
+            const data = node.data as CharacterNodeData
+            if (data.characterDbId) {
+              characterIds.add(data.characterDbId)
+            }
+          } else if (node.type === "object") {
+            const data = node.data as ObjectNodeData
+            if (data.objectDbId) {
+              objectIds.add(data.objectDbId)
+            }
+          } else if (node.type === "location") {
+            const data = node.data as LocationNodeData
+            if (data.locationDbId) {
+              locationIds.add(data.locationDbId)
+            }
+          }
+        }
+
+        // Fetch full asset data from database
+        const characters: DbCharacter[] = []
+        const objects: DbObject[] = []
+        const locations: DbLocation[] = []
+
+        for (const id of characterIds) {
+          try {
+            const char = await getCharacterById(id)
+            if (char) characters.push(char)
+          } catch (err) {
+            console.error(`Failed to fetch character ${id}:`, err)
+          }
+        }
+
+        for (const id of objectIds) {
+          try {
+            const obj = await getObjectById(id)
+            if (obj) objects.push(obj)
+          } catch (err) {
+            console.error(`Failed to fetch object ${id}:`, err)
+          }
+        }
+
+        for (const id of locationIds) {
+          try {
+            const loc = await getLocationById(id)
+            if (loc) locations.push(loc)
+          } catch (err) {
+            console.error(`Failed to fetch location ${id}:`, err)
+          }
+        }
+
+        if (characters.length > 0 || objects.length > 0 || locations.length > 0) {
+          workflowData.assets = { characters, objects, locations }
+        }
+      }
+
+      // Download as JSON file
+      const blob = new Blob([JSON.stringify(workflowData, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      const safeName = (workflowName || "workflow").replace(/[^a-z0-9]/gi, "-").toLowerCase()
+      a.download = `${safeName}-${includeAssets ? "with-assets" : "template"}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      toast.success(includeAssets ? "Exported workflow with assets" : "Exported workflow template")
+    } catch (err) {
+      console.error("Export failed:", err)
+      toast.error("Export failed: " + (err instanceof Error ? err.message : "Unknown error"))
+    } finally {
+      setExporting(false)
+    }
+  }, [nodes, edges, workflowName])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string) as ExportedWorkflow
+
+        // Validate structure
+        if (!data.nodes || !Array.isArray(data.nodes)) {
+          throw new Error("Invalid workflow file: missing nodes array")
+        }
+        if (!data.edges || !Array.isArray(data.edges)) {
+          throw new Error("Invalid workflow file: missing edges array")
+        }
+
+        setImporting(true)
+
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        const userId = user?.id
+
+        let nodesToImport = [...data.nodes]
+        const assetIdMap: Record<string, string> = {} // old ID -> new ID mapping
+
+        // Import assets if they exist
+        if (data.assets) {
+          const { characters, objects, locations } = data.assets
+
+          // Import characters
+          for (const char of characters || []) {
+            try {
+              const result = await saveCharacter({
+                userId: userId,
+                nodeId: char.nodeId,
+                projectId: projectId,
+                name: char.name,
+                description: char.description ?? undefined,
+                gender: char.gender ?? undefined,
+                style: char.style ?? undefined,
+                baseOutfit: char.baseOutfit ?? undefined,
+                sourceImageUrl: char.sourceImageUrl ?? undefined,
+                expressions: char.expressions ?? [],
+                poses: char.poses ?? [],
+                lightingVariations: char.lightingVariations ?? [],
+              })
+              assetIdMap[char.id] = result.id
+            } catch (err) {
+              console.error(`Failed to import character ${char.name}:`, err)
+            }
+          }
+
+          // Import objects
+          for (const obj of objects || []) {
+            try {
+              const result = await saveObject({
+                userId: userId,
+                nodeId: obj.nodeId,
+                projectId: projectId,
+                name: obj.name,
+                description: obj.description ?? undefined,
+                category: obj.category ?? undefined,
+                style: obj.style ?? undefined,
+                sourceImageUrl: obj.sourceImageUrl ?? undefined,
+                angles: obj.angles ?? [],
+                materials: obj.materials ?? [],
+                variations: obj.variations ?? [],
+              })
+              assetIdMap[obj.id] = result.id
+            } catch (err) {
+              console.error(`Failed to import object ${obj.name}:`, err)
+            }
+          }
+
+          // Import locations
+          for (const loc of locations || []) {
+            try {
+              const result = await saveLocation({
+                userId: userId,
+                nodeId: loc.nodeId,
+                projectId: projectId,
+                name: loc.name,
+                description: loc.description ?? undefined,
+                category: loc.category ?? undefined,
+                style: loc.style ?? undefined,
+                sourceImageUrl: loc.sourceImageUrl ?? undefined,
+                timeOfDay: loc.timeOfDay ?? [],
+                weather: loc.weather ?? [],
+                angles: loc.angles ?? [],
+              })
+              assetIdMap[loc.id] = result.id
+            } catch (err) {
+              console.error(`Failed to import location ${loc.name}:`, err)
+            }
+          }
+
+          // Update node references to use new asset IDs
+          nodesToImport = nodesToImport.map(node => {
+            if (node.type === "character") {
+              const nodeData = node.data as CharacterNodeData
+              if (nodeData.characterDbId && assetIdMap[nodeData.characterDbId]) {
+                return {
+                  ...node,
+                  data: {
+                    ...nodeData,
+                    characterDbId: assetIdMap[nodeData.characterDbId],
+                  },
+                }
+              }
+            } else if (node.type === "object") {
+              const nodeData = node.data as ObjectNodeData
+              if (nodeData.objectDbId && assetIdMap[nodeData.objectDbId]) {
+                return {
+                  ...node,
+                  data: {
+                    ...nodeData,
+                    objectDbId: assetIdMap[nodeData.objectDbId],
+                  },
+                }
+              }
+            } else if (node.type === "location") {
+              const nodeData = node.data as LocationNodeData
+              if (nodeData.locationDbId && assetIdMap[nodeData.locationDbId]) {
+                return {
+                  ...node,
+                  data: {
+                    ...nodeData,
+                    locationDbId: assetIdMap[nodeData.locationDbId],
+                  },
+                }
+              }
+            }
+            return node
+          })
+        }
+
+        // Generate new node IDs to avoid conflicts
+        const nodeIdMap: Record<string, string> = {}
+        nodesToImport = nodesToImport.map(node => {
+          const newId = `${node.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+          nodeIdMap[node.id] = newId
+          return { ...node, id: newId }
+        })
+
+        // Update edge references
+        const edgesToImport = data.edges.map(edge => ({
+          ...edge,
+          id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          source: nodeIdMap[edge.source] || edge.source,
+          target: nodeIdMap[edge.target] || edge.target,
+        }))
+
+        // Set the imported workflow using loadWorkflow
+        const importedName = (data.name || "Untitled Workflow") + " (Imported)"
+        loadWorkflow(
+          workflowId || `temp-${Date.now()}`,
+          importedName,
+          nodesToImport,
+          edgesToImport,
+        )
+
+        const assetCount = Object.keys(assetIdMap).length
+        toast.success(
+          assetCount > 0
+            ? `Imported workflow with ${assetCount} assets`
+            : "Imported workflow"
+        )
+      } catch (err) {
+        console.error("Invalid file:", err)
+        toast.error("Invalid file: " + (err instanceof Error ? err.message : "Could not parse JSON"))
+      } finally {
+        setImporting(false)
+      }
+    }
+    reader.readAsText(file)
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }, [projectId, workflowId, loadWorkflow])
 
   return (
     <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b bg-card">
@@ -147,15 +465,48 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
           Validate
         </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowExportImport(true)}
-          title="Export / Import workflow"
-        >
-          <FileJson className="h-4 w-4 sm:mr-1" />
-          <span className="hidden sm:inline">Export</span>
-        </Button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept=".json,application/json"
+          onChange={handleFileSelect}
+        />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" disabled={exporting || importing}>
+              {(exporting || importing) ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MoreVertical className="h-4 w-4" />
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onClick={() => handleExport(true)}>
+                  <Package className="h-4 w-4 mr-2" />
+                  With Assets
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport(false)}>
+                  <FileJson className="h-4 w-4 mr-2" />
+                  Template Only
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import from file...
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Button
           variant={isDirty ? "default" : "outline"}
@@ -181,12 +532,6 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
 
         <ThemeToggle />
       </div>
-
-      <ExportImportModal
-        isOpen={showExportImport}
-        onClose={() => setShowExportImport(false)}
-        projectId={projectId}
-      />
     </div>
   )
 }
