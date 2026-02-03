@@ -1,10 +1,20 @@
 "use client"
 
-import { memo, useCallback } from "react"
+import { memo, useCallback, useRef } from "react"
 import { type NodeProps, NodeResizer } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { StickyNoteData } from "@/types/nodes"
-import { Bold, Italic, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
+import {
+  Bold,
+  Italic,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Link,
+  Image as ImageIcon,
+  Table,
+  List
+} from "lucide-react"
 
 // Helper to check if color is light
 function isLightColor(color: string): boolean {
@@ -30,6 +40,7 @@ function getFontSize(size?: string): string {
 function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as StickyNoteData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const bgColor = nodeData.color || "#fef3c7"
   const textColor = nodeData.textColor || (isLightColor(bgColor) ? "#1f2937" : "#f9fafb")
@@ -88,20 +99,64 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
     [id, updateNodeData]
   )
 
+  // Insert text at cursor position
+  const insertAtCursor = useCallback((textToInsert: string) => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const currentText = nodeData.text || ""
+    const newText = currentText.substring(0, start) + textToInsert + currentText.substring(end)
+
+    updateNodeData(id, { text: newText })
+
+    // Set cursor position after inserted text
+    setTimeout(() => {
+      textarea.focus()
+      textarea.selectionStart = textarea.selectionEnd = start + textToInsert.length
+    }, 0)
+  }, [id, updateNodeData, nodeData.text])
+
+  const handleInsertLink = useCallback(() => {
+    const url = prompt("Enter URL:")
+    if (url) {
+      const linkText = prompt("Enter link text:", url) || url
+      insertAtCursor(`[${linkText}](${url})`)
+    }
+  }, [insertAtCursor])
+
+  const handleImageUpload = useCallback(() => {
+    const url = prompt("Enter image URL:")
+    if (url) {
+      const altText = prompt("Enter image description:", "image") || "image"
+      insertAtCursor(`![${altText}](${url})`)
+    }
+  }, [insertAtCursor])
+
+  const handleInsertTable = useCallback(() => {
+    insertAtCursor(`\n| Header 1 | Header 2 | Header 3 |\n|----------|----------|----------|\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |\n`)
+  }, [insertAtCursor])
+
+  const handleInsertBulletList = useCallback(() => {
+    insertAtCursor(`\n- Item 1\n- Item 2\n- Item 3\n`)
+  }, [insertAtCursor])
+
   // Calculate toolbar button style based on background
   const toolbarBg = isLightColor(bgColor) ? "bg-black/10" : "bg-white/10"
   const toolbarBorder = isLightColor(bgColor) ? "border-black/10" : "border-white/10"
   const buttonBg = isLightColor(bgColor) ? "hover:bg-black/20" : "hover:bg-white/20"
   const activeButtonBg = isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"
   const buttonText = isLightColor(bgColor) ? "text-gray-700" : "text-gray-200"
+  const labelText = isLightColor(bgColor) ? "text-gray-600" : "text-gray-300"
 
   return (
     <>
       {/* Resizer */}
       <NodeResizer
         isVisible={selected}
-        minWidth={150}
-        minHeight={80}
+        minWidth={280}
+        minHeight={120}
         onResize={handleResize}
         lineClassName="!border-violet-400"
         handleClassName="!w-3 !h-3 !bg-violet-500 !border-white !rounded"
@@ -112,110 +167,140 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         className="w-full h-full rounded-lg shadow-md overflow-hidden flex flex-col"
         style={{
           backgroundColor: bgColor,
-          width: nodeData.width || 200,
-          height: nodeData.height || 150,
+          width: nodeData.width || 280,
+          height: nodeData.height || 180,
         }}
       >
         {/* Toolbar - only when selected, INSIDE the note */}
         {selected && (
-          <div className={`flex items-center justify-center gap-1 px-2 py-1 ${toolbarBg} border-b ${toolbarBorder}`}>
-            {/* Background color */}
-            <div className="relative" title="Background color">
-              <input
-                type="color"
-                value={bgColor}
-                onChange={handleBgColorChange}
-                className="w-5 h-5 rounded cursor-pointer border-none bg-transparent opacity-0 absolute inset-0"
-              />
-              <div
-                className={`w-5 h-5 rounded border border-black/20 cursor-pointer`}
-                style={{ backgroundColor: bgColor }}
-              />
-            </div>
+          <div className={`flex items-center justify-center gap-4 px-4 py-3 ${toolbarBg} border-b ${toolbarBorder}`}>
 
-            {/* Text color */}
-            <div className="relative" title="Text color">
-              <input
-                type="color"
-                value={textColor}
-                onChange={handleTextColorChange}
-                className="w-5 h-5 rounded cursor-pointer border-none bg-transparent opacity-0 absolute inset-0"
-              />
-              <div
-                className={`w-5 h-5 rounded border border-black/20 cursor-pointer flex items-center justify-center text-xs font-bold`}
-                style={{ backgroundColor: textColor, color: isLightColor(textColor) ? "#000" : "#fff" }}
-              >
-                A
+            {/* Colors */}
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center">
+                <input
+                  type="color"
+                  value={bgColor}
+                  onChange={handleBgColorChange}
+                  className="w-10 h-10 rounded cursor-pointer border-2 border-white/50"
+                  title="Background color"
+                />
+                <span className={`text-xs ${labelText} opacity-70`}>BG</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <input
+                  type="color"
+                  value={textColor}
+                  onChange={handleTextColorChange}
+                  className="w-10 h-10 rounded cursor-pointer border-2 border-white/50"
+                  title="Text color"
+                />
+                <span className={`text-xs ${labelText} opacity-70`}>Text</span>
               </div>
             </div>
 
             {/* Separator */}
-            <div className={`w-px h-4 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"} mx-0.5`} />
+            <div className={`w-px h-10 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
 
-            {/* Font size */}
-            <select
-              value={nodeData.fontSize || "base"}
-              onChange={handleFontSizeChange}
-              className={`text-xs ${buttonText} rounded px-1 py-0.5 border-none cursor-pointer bg-white/80`}
-              title="Font size"
-            >
-              <option value="sm">S</option>
-              <option value="base">M</option>
-              <option value="lg">L</option>
-              <option value="xl">XL</option>
-            </select>
+            {/* Font & Format */}
+            <div className="flex items-center gap-2">
+              <select
+                value={nodeData.fontSize || "base"}
+                onChange={handleFontSizeChange}
+                className="text-base bg-white/80 text-gray-800 rounded px-3 py-2 border-none cursor-pointer"
+                title="Font size"
+              >
+                <option value="sm">Small</option>
+                <option value="base">Normal</option>
+                <option value="lg">Large</option>
+                <option value="xl">X-Large</option>
+              </select>
 
-            {/* Separator */}
-            <div className={`w-px h-4 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"} mx-0.5`} />
+              <button
+                onClick={toggleBold}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${isBold ? activeButtonBg : ""}`}
+                title="Bold"
+              >
+                <Bold className="w-5 h-5" />
+              </button>
 
-            {/* Bold */}
-            <button
-              onClick={toggleBold}
-              className={`p-1 rounded ${buttonText} ${buttonBg} ${isBold ? activeButtonBg : ""}`}
-              title="Bold"
-            >
-              <Bold className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Italic */}
-            <button
-              onClick={toggleItalic}
-              className={`p-1 rounded ${buttonText} ${buttonBg} ${isItalic ? activeButtonBg : ""}`}
-              title="Italic"
-            >
-              <Italic className="w-3.5 h-3.5" />
-            </button>
+              <button
+                onClick={toggleItalic}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${isItalic ? activeButtonBg : ""}`}
+                title="Italic"
+              >
+                <Italic className="w-5 h-5" />
+              </button>
+            </div>
 
             {/* Separator */}
-            <div className={`w-px h-4 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"} mx-0.5`} />
+            <div className={`w-px h-10 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
 
             {/* Alignment */}
-            <button
-              onClick={() => setAlignment("left")}
-              className={`p-1 rounded ${buttonText} ${buttonBg} ${alignment === "left" ? activeButtonBg : ""}`}
-              title="Align left"
-            >
-              <AlignLeft className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setAlignment("center")}
-              className={`p-1 rounded ${buttonText} ${buttonBg} ${alignment === "center" ? activeButtonBg : ""}`}
-              title="Align center"
-            >
-              <AlignCenter className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setAlignment("right")}
-              className={`p-1 rounded ${buttonText} ${buttonBg} ${alignment === "right" ? activeButtonBg : ""}`}
-              title="Align right"
-            >
-              <AlignRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setAlignment("left")}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${alignment === "left" ? activeButtonBg : ""}`}
+                title="Align left"
+              >
+                <AlignLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setAlignment("center")}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${alignment === "center" ? activeButtonBg : ""}`}
+                title="Align center"
+              >
+                <AlignCenter className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setAlignment("right")}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${alignment === "right" ? activeButtonBg : ""}`}
+                title="Align right"
+              >
+                <AlignRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Separator */}
+            <div className={`w-px h-10 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
+
+            {/* Insert tools */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleInsertLink}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg}`}
+                title="Insert link"
+              >
+                <Link className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleImageUpload}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg}`}
+                title="Insert image"
+              >
+                <ImageIcon className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleInsertTable}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg}`}
+                title="Insert table"
+              >
+                <Table className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleInsertBulletList}
+                className={`p-2.5 rounded ${buttonText} ${buttonBg}`}
+                title="Bullet list"
+              >
+                <List className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         )}
 
         {/* Text area - always visible and editable */}
         <textarea
+          ref={textareaRef}
           value={nodeData.text || ""}
           onChange={handleTextChange}
           placeholder="Write notes here..."

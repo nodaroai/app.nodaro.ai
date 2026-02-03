@@ -1388,8 +1388,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       text: "",
       color: "#fef3c7", // Default yellow
       textColor: "#000000", // Default black
-      width: 200,
-      height: 150,
+      width: 280,
+      height: 180,
       fontSize: "base",
       bold: false,
       italic: false,
