@@ -2241,7 +2241,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               <Button
                 size="lg"
                 onClick={handleStop}
-                className="rounded-full px-6 bg-orange-500 hover:bg-orange-600 text-white"
+                className="rounded-full px-6 text-white"
+                style={{ backgroundColor: '#ff0073' }}
               >
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Executing workflow
@@ -2260,7 +2261,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             <Button
               size="lg"
               onClick={handleRun}
-              className="rounded-full px-6 bg-orange-500 hover:bg-orange-600 text-white"
+              className="rounded-full px-6 text-white hover:opacity-90"
+              style={{ backgroundColor: '#ff0073' }}
             >
               <Play className="w-4 h-4 mr-2" />
               Execute workflow

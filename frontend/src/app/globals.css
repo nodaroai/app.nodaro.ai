@@ -136,3 +136,24 @@
 .react-flow__node-sticky-note.selected {
   z-index: -1 !important;
 }
+
+/* Animated edges during workflow execution */
+.react-flow__edge.animated path {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  from {
+    stroke-dashoffset: 10;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Add glow effect to animated edges */
+.react-flow__edge.animated path[style*="stroke: rgb(255, 0, 115)"],
+.react-flow__edge.animated path[style*="stroke:#ff0073"] {
+  filter: drop-shadow(0 0 4px #ff0073) drop-shadow(0 0 8px #ff0073);
+}

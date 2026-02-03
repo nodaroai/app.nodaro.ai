@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, useMemo } from "react"
 import {
   ReactFlow,
   Controls,
@@ -17,6 +17,7 @@ import { nodeTypes } from "@/components/nodes"
 import { NodeContextMenu } from "./node-context-menu"
 import { PaneContextMenu } from "./pane-context-menu"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import type { WorkflowEdge } from "@/types/nodes"
 
 interface NodeContextMenuState {
   readonly nodeId: string
@@ -61,6 +62,35 @@ export function WorkflowCanvas() {
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
   const [paneContextMenu, setPaneContextMenu] = useState<PaneContextMenuState | null>(null)
   const isMobile = useIsMobile()
+
+  // Transform edges to be animated when source node is running
+  const animatedEdges = useMemo(() => {
+    // Build a set of node IDs that are currently running
+    const runningNodeIds = new Set(
+      nodes
+        .filter((node) => {
+          const data = node.data as Record<string, unknown>
+          return data.executionStatus === "running"
+        })
+        .map((node) => node.id)
+    )
+
+    // Transform edges - animate edges from running nodes
+    return edges.map((edge): WorkflowEdge => {
+      if (runningNodeIds.has(edge.source)) {
+        return {
+          ...edge,
+          animated: true,
+          style: {
+            ...edge.style,
+            stroke: "#ff0073",
+            strokeWidth: 2,
+          },
+        }
+      }
+      return edge
+    })
+  }, [nodes, edges])
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
@@ -172,7 +202,7 @@ export function WorkflowCanvas() {
     <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={animatedEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

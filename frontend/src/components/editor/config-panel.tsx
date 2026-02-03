@@ -471,7 +471,8 @@ export function ConfigPanel() {
           <div className="flex flex-col gap-2 pt-2">
             {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "generate-music") && (
               <Button
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                className="w-full text-white hover:opacity-90"
+                style={{ backgroundColor: '#ff0073' }}
                 onClick={() => runSingleNode?.(selectedNode.id)}
               >
                 <Play className="w-4 h-4 mr-2" />
@@ -2553,7 +2554,8 @@ function CharacterConfig({ data, onUpdate }: { readonly data: CharacterNodeData;
       {/* Generate Portrait button */}
       <Button
         size="sm"
-        className="w-full text-xs h-8 bg-orange-500 hover:bg-orange-600 text-white"
+        className="w-full text-xs h-8 text-white hover:opacity-90"
+        style={{ backgroundColor: '#ff0073' }}
         disabled={isRunning || !data.characterName}
         onClick={() => {
           if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId)
@@ -2856,7 +2858,8 @@ function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData; reado
       {/* Generate Image button */}
       <Button
         size="sm"
-        className="w-full text-xs h-8 bg-emerald-500 hover:bg-emerald-600 text-white"
+        className="w-full text-xs h-8 text-white hover:opacity-90"
+        style={{ backgroundColor: '#ff0073' }}
         disabled={isRunning || !data.objectName}
         onClick={() => {
           if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId)
@@ -3240,7 +3243,8 @@ function LocationConfig({ data, onUpdate }: { readonly data: LocationNodeData; r
       {/* Generate Image button */}
       <Button
         size="sm"
-        className="w-full text-xs h-8 bg-cyan-500 hover:bg-cyan-600 text-white"
+        className="w-full text-xs h-8 text-white hover:opacity-90"
+        style={{ backgroundColor: '#ff0073' }}
         disabled={isRunning || !data.locationName}
         onClick={() => {
           if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId)
