@@ -648,23 +648,27 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
         </DropdownMenu>
 
         <Button
-          variant={isDirty ? "default" : "outline"}
+          variant="outline"
           size="sm"
           onClick={onSave}
           disabled={saving || !isDirty}
+          className={isDirty ? "text-white hover:opacity-90" : ""}
+          style={isDirty ? { backgroundColor: '#ff0073', borderColor: '#ff0073' } : undefined}
         >
           <Save className="h-4 w-4 sm:mr-1" />
           <span className="hidden sm:inline">{saving ? "Saving..." : "Save"}</span>
           {isDirty && !saving && (
-            <span className="ml-0.5 h-2 w-2 rounded-full bg-red-500 shrink-0" />
+            <span className="ml-0.5 h-2 w-2 rounded-full bg-white shrink-0" />
           )}
         </Button>
 
         <Button
-          variant={videoAutoplay ? "default" : "ghost"}
+          variant="outline"
           size="sm"
           onClick={() => setVideoAutoplay(!videoAutoplay)}
           title={videoAutoplay ? "Auto-playing videos" : "Videos paused"}
+          className={videoAutoplay ? "text-white hover:opacity-90" : ""}
+          style={videoAutoplay ? { backgroundColor: '#ff0073', borderColor: '#ff0073' } : undefined}
         >
           {videoAutoplay ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
         </Button>

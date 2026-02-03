@@ -164,54 +164,18 @@
   filter: drop-shadow(0 0 4px #ff0073) drop-shadow(0 0 8px #ff0073);
 }
 
-/* Rotating gradient border for running nodes - Turbo Flow style */
-.node-running-wrapper {
-  position: relative;
-  z-index: 1;
+/* Subtle pulsing border for running nodes */
+.node-running {
+  border: 2px solid #ff0073 !important;
+  animation: border-pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(255, 0, 115, 0.4);
 }
 
-.node-running-wrapper::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 10px;
-  background: conic-gradient(from var(--angle, 0deg), #ff0073, #ff7a00, #ffea00, #00ff88, #00d4ff, #7b00ff, #ff0073);
-  animation: rotate-gradient 2s linear infinite;
-  z-index: -1;
-}
-
-.node-running-wrapper::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: 9px;
-  background: inherit;
-  z-index: -1;
-}
-
-@property --angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-@keyframes rotate-gradient {
-  to {
-    --angle: 360deg;
+@keyframes border-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 0, 115, 0.4);
   }
-}
-
-/* Fallback for browsers that don't support @property */
-@supports not (background: conic-gradient(from 0deg, red, blue)) {
-  .node-running-wrapper::before {
-    background: linear-gradient(90deg, #ff0073, #ff7a00, #ff0073);
-    background-size: 200% 200%;
-    animation: gradient-shift 1s linear infinite;
-  }
-
-  @keyframes gradient-shift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 0, 115, 0.7);
   }
 }
