@@ -39,7 +39,12 @@ import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js
 export async function buildApp() {
   const app = Fastify({ logger: true })
 
-  await app.register(cors, { origin: true })
+  await app.register(cors, {
+    origin: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
 
   await app.register(healthRoutes)
   await app.register(projectRoutes)
