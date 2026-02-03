@@ -188,6 +188,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (type === "reference-audio") {
       return (data.extractedAudioUrl as string | undefined)?.trim()
     }
+    if (type === "character") {
+      // Return the character's main portrait image for use as reference
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
+    }
     if (type === "scene") {
       // If scene has a generated image, return that; otherwise return built prompt
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
@@ -217,6 +223,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         inputs.prompt = output
       } else if (src.type === "upload-image") {
         inputs.imageUrl = output
+      } else if (src.type === "character") {
+        // Character node provides its portrait as a reference image
+        // Multiple Character nodes can be connected - all their portraits become references
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else if (src.type === "upload-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]

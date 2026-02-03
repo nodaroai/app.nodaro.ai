@@ -4046,6 +4046,8 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Delete character permanently: "Delete Forever" button in Character Page header, deletes from Supabase DB + removes node from canvas
 - [x] Backend: GET /v1/characters (list by projectId), POST /v1/characters (upsert), DELETE /v1/characters/:id endpoints
 - [x] Drag and drop character images to canvas: creates generate-image node at drop position with image as result
+- [x] Character node as reference image: when Character node connected to Generate Image/Image to Video, its portrait is used as reference image
+- [x] Multiple character references: connecting multiple Character nodes passes ALL portraits as reference images for consistent multi-character scenes
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

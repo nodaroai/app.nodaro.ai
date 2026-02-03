@@ -63,6 +63,8 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Delete assets**: inline confirmation per image, delete individual assets from any tab
 - **Delete character permanently**: "Delete Forever" removes from database and canvas
 - Drag and drop character images to canvas creates Generate Image node at drop position
+- **Character as reference**: Connect Character node to Generate Image/Image to Video to use portrait as reference
+- **Multiple characters**: Connect multiple Character nodes to pass ALL portraits as references for consistent multi-character scenes
 
 ### Dashboard
 - Projects with folders
