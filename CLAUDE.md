@@ -185,7 +185,7 @@ The generated workflow is fully editable - users can change providers, adjust pr
 
 ### Asset Management (Characters, Locations, Objects)
 
-Assets are visual references defined at the **workflow level** and importable across projects/workflows. Three categories:
+Assets are stored in database tables (`characters`, `objects`, `locations`) with `user_id` isolation. Three categories:
 
 | Category | Example | Purpose |
 |----------|---------|---------|
@@ -195,33 +195,34 @@ Assets are visual references defined at the **workflow level** and importable ac
 
 **Asset definition includes:**
 - **Name**: e.g. "Sir Aldric", "The Pyramids"
-- **Category**: character (default), location, or object
-- **Type**: reference (image) or description (text)
-- **Reference image**: An uploaded or generated image
-- **Description**: Text description appended to prompts
+- **Category**: character, location, or object
+- **Reference image**: Source image URL (uploaded or generated)
+- **Description**: Text description for context
 
-**Usage in workflows:**
-- Generate Image nodes have an "Assets" section in their config panel
-- Users attach assets (characters, locations, objects) to each scene
-- Category badges: blue=character ref, orange=character desc, cyan=location, emerald=object
-- The node automatically appends descriptions and passes reference images to the AI provider
-- This maintains visual consistency across all scenes in a workflow
-
-**Import Assets Modal (`manage-characters-modal.tsx` / `ImportAssetsModal`):**
+**Unified Asset Library (`unified-asset-library.tsx`):**
+- Shows ALL user assets across all projects (not filtered by current project)
 - Filter tabs: All | Characters | Locations | Objects
-- Two sections: current workflow assets (edit/delete) + import from other projects
-- Browse by project: Project dropdown -> Workflow dropdown -> Character grid with thumbnails
-- "Show all my assets" mode: flat list grouped by project, single Supabase query with relation join
-- Multi-select grid, skips duplicates, adds `importedFrom` metadata
-- `onImported` callback auto-attaches imported asset IDs to the current Generate Image node
+- Search by name
+- Click asset thumbnail to open detail modal (Character/Object/Location Page)
+- "+" button adds asset to canvas as appropriate node type
+- Located in sidebar under "Library" section
 
-**Extract References (Generate Image node):**
-- Scissors button always visible on generated images (top-right)
-- Opens ExtractReferencesModal for cropping/selecting character regions
-- Extracted references saved as new asset definitions with `referenceImageUrl`
+**How to use assets:**
+1. **Create new asset**: Use "Create Character/Object/Location" buttons in sidebar
+2. **Browse all assets**: Click "Asset Library" in sidebar (shows all projects)
+3. **Extract from image**: Click scissors button on any generated image -> saves directly to database
+4. **Use in workflow**: Click "+" on asset or drag to canvas
+
+**Extract References (Scissors button):**
+- Always visible on generated images (top-right corner, purple button)
+- Opens ExtractReferencesModal for cropping/selecting regions
+- Supports lasso (freeform) and rectangle selection modes
+- **Saves directly to database** (characters/objects/locations tables) with user_id
+- Shows "Saved to Library" indicator after successful save
+- Extracted assets appear immediately in Asset Library
 
 **Execution:**
-- All asset types (character, location, object) with `referenceImageUrl` are sent in the `image_input` array to Replicate
+- All asset types with `sourceImageUrl` are sent in the `image_input` array to Replicate
 - Description labels are category-aware: "Include character 'X': ...", "Include location 'Y': ...", "Include object 'Z': ..."
 - Both storyboard path and standalone node path support all asset categories
 

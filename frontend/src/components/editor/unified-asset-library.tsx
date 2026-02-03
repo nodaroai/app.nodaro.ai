@@ -47,8 +47,8 @@ export function UnifiedAssetLibraryButton() {
   const projectId = useWorkflowStore((s) => s.projectId)
 
   // Fetch all assets when modal opens
+  // NOTE: We fetch ALL user assets (not filtered by project) for a true unified library
   const fetchAllAssets = useCallback(async () => {
-    if (!projectId) return
     setLoading(true)
     setError(null)
 
@@ -57,12 +57,20 @@ export function UnifiedAssetLibraryButton() {
       const { data: { user } } = await supabase.auth.getUser()
       const userId = user?.id
 
-      // Fetch all three types in parallel
+      console.log("[AssetLibrary] Fetching all assets for userId:", userId)
+
+      // Fetch all three types in parallel - NO projectId filter to get ALL user assets
       const [charactersRes, objectsRes, locationsRes] = await Promise.all([
-        getCharacters(projectId, userId),
-        getObjects(projectId, userId),
-        getLocations(projectId, userId),
+        getCharacters(undefined, userId),
+        getObjects(undefined, userId),
+        getLocations(undefined, userId),
       ])
+
+      console.log("[AssetLibrary] Fetched:", {
+        characters: charactersRes.characters.length,
+        objects: objectsRes.objects.length,
+        locations: locationsRes.locations.length,
+      })
 
       // Combine into unified array
       const unified: UnifiedAsset[] = [
@@ -95,13 +103,15 @@ export function UnifiedAssetLibraryButton() {
         })),
       ]
 
+      console.log("[AssetLibrary] Unified assets:", unified.map(a => `${a.type}:${a.name}`))
       setAssets(unified)
     } catch (err) {
+      console.error("[AssetLibrary] Error:", err)
       setError(err instanceof Error ? err.message : "Failed to load assets")
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [])
 
   useEffect(() => {
     if (open) {

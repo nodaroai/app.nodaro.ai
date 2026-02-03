@@ -32,15 +32,20 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | **Output (2)** | Save to Storage, Webhook Output |
 
 ### Asset Management
-- Define characters, locations, and objects with reference images or text descriptions
+- **Unified Asset Library**: Browse ALL user assets across all projects in one place
 - **User isolation**: Each user sees only their own assets (user_id filtering on all queries)
-- Import assets across projects and workflows (browse by project or "Show all assets")
-- Filter by category: All | Characters | Locations | Objects
-- Extract references directly from generated images (scissors tool on Generate Image output)
-- Auto-attach imported assets to Generate Image nodes
+- **Database persistence**: Assets saved to Supabase tables (characters, objects, locations)
+- Filter by category: All | Characters | Locations | Objects, search by name
+- **Extract from images**: Scissors button on generated images saves directly to database
 - Category-aware execution: reference images sent to AI provider, descriptions appended to prompts
 - Visual indicators: category badges (cyan=location, emerald=object), asset count on nodes
-- **Combined references**: Connect Character + Object + Location nodes together for complex scenes with consistent visuals
+- **Combined references**: Connect Character + Object + Location nodes together for complex scenes
+
+**How to use:**
+1. Create new asset: "Create Character/Object/Location" buttons in sidebar
+2. Browse all assets: "Asset Library" in sidebar (shows all projects)
+3. Extract from image: Scissors button on any generated image -> saves to DB
+4. Use in workflow: Click "+" on asset or drag to canvas
 
 ### Character Node
 - Generate main character portrait (single front view) or upload image from computer
