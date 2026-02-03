@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { generateLocationAsset, getJobStatus, deleteLocation, generateImage, saveLocation } from "@/lib/api"
+import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { LocationNodeData, LocationAssetItem } from "@/types/nodes"
@@ -352,8 +353,13 @@ high quality, cinematic photography`
     // Update in database if persisted
     if (data.locationDbId && projectId) {
       try {
+        // Get user ID to ensure it's preserved in the update
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
         await saveLocation({
           id: data.locationDbId, // Pass ID to trigger UPDATE instead of INSERT
+          userId: user?.id, // CRITICAL: Must pass userId to preserve ownership
           nodeId: locationNodeId,
           projectId,
           name: data.locationName,

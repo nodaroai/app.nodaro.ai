@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 36 node types across 9 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, and galleries showing only the current user's assets. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 36 node types across 9 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
 
 ## Features
 
@@ -40,12 +40,25 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Category-aware execution: reference images sent to AI provider, descriptions appended to prompts
 - Visual indicators: category badges (cyan=location, emerald=object), asset count on nodes
 - **Combined references**: Connect Character + Object + Location nodes together for complex scenes
+- **Thumbnails refresh**: Asset Library thumbnails update automatically when Page modals close
 
 **How to use:**
 1. Create new asset: "Create Character/Object/Location" buttons in sidebar
 2. Browse all assets: "Asset Library" in sidebar (shows all projects)
 3. Extract from image: Scissors button on any generated image -> saves to DB
 4. Use in workflow: Click "+" on asset or drag to canvas
+
+### Refine Feature
+- **Available on**: Character, Object, and Location Page modals
+- **How it works**: Click "Refine" button to generate 4 cleaned-up variations of the main image
+- **Selection UX**: Browse variations, view full-size in lightbox, then select your preferred version
+- **Auto-save**: Selected image becomes the new main image and is saved to database
+- **Library sync**: Asset Library thumbnails update automatically after refinement
+
+**Refine prompts (optimized per asset type):**
+- **Character**: Full body portrait, facing camera, neutral standing pose, clean white background, studio lighting
+- **Object**: Product photo, centered, clean white background, studio lighting, front view
+- **Location**: Wide establishing shot, clean composition, balanced lighting, no people, centered perspective
 
 ### Character Node
 - Generate main character portrait (single front view) or upload image from computer
@@ -72,6 +85,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - "+" button on any image adds it to canvas as Generate Image node with result pre-set
 - Dialogs close automatically after adding image to canvas
 - **Custom variations**: generate custom character images with free-form text prompts
+- **Refine button**: generate 4 cleaned-up portrait variations, browse and select to replace main image
 - **Delete assets**: inline confirmation per image, delete individual assets from any tab
 - **Delete character permanently**: "Delete Forever" removes from database and canvas
 - Drag and drop character images to canvas creates Generate Image node at drop position
@@ -99,6 +113,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Object Page modal**: full-page view with tabs (Main, Angles, Materials, Variations, Custom)
 - "+" button on any image adds it to canvas as Generate Image node with result pre-set
 - **Custom variations**: generate custom object images with free-form text prompts
+- **Refine button**: generate 4 cleaned-up product photo variations, browse and select to replace main image
 - **Delete assets**: inline confirmation per image, delete individual assets from any tab
 - **Delete object permanently**: "Delete Forever" removes from database and canvas
 - **Object as reference**: Connect Object node to Generate Image to use main image as reference
@@ -125,6 +140,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Location Page modal**: full-page view with tabs (Main, Time of Day, Weather, Angles, Custom)
 - "+" button on any image adds it to canvas as Generate Image node with result pre-set
 - **Custom variations**: generate custom location images with free-form text prompts
+- **Refine button**: generate 4 cleaned-up establishing shot variations, browse and select to replace main image
 - **Delete assets**: inline confirmation per image, delete individual assets from any tab
 - **Delete location permanently**: "Delete Forever" removes from database and canvas
 - **Location as reference**: Connect Location node to Generate Image to use main image as reference

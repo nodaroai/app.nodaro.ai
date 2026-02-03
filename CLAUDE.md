@@ -206,6 +206,8 @@ Assets are stored in database tables (`characters`, `objects`, `locations`) with
 - Click asset thumbnail to open detail modal (Character/Object/Location Page)
 - "+" button adds asset to canvas as appropriate node type
 - Located in sidebar under "Library" section
+- Thumbnails refresh automatically when Page modals close (300ms delay for DB propagation)
+- Uses `sourceImageUrl` field for thumbnail display
 
 **How to use assets:**
 1. **Create new asset**: Use "Create Character/Object/Location" buttons in sidebar
@@ -274,6 +276,18 @@ Three specialized node types for creating reusable visual assets with variant ge
 - Each Page modal includes a Custom tab for free-form prompts
 - Generate any variation with a text description
 - Custom images saved alongside standard variants
+
+**Refine Feature:**
+- "Refine" button on Character, Object, and Location Page modals
+- Generates 4 cleaned-up variations of the main asset image
+- User can browse variations, view full-size in lightbox, then select one
+- Selected image becomes the new main image and updates database
+- Thumbnails in Asset Library refresh automatically after refinement
+
+**Refine Prompts (optimized per asset type):**
+- **Character**: Full body portrait, facing camera, neutral standing pose, clean white background, studio lighting, centered composition
+- **Object**: Product photo, centered, clean white background, studio lighting, front view, professional product photography
+- **Location**: Wide establishing shot, clean composition, balanced lighting, no people, centered perspective, cinematic photography
 
 ### Style Presets
 
@@ -4131,6 +4145,11 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Location node as reference image: when Location node connected to Generate Image, the main image is used as reference
 - [x] Multiple location references: connecting multiple Location nodes passes ALL main images as reference images
 - [x] Cyan color theme for Location nodes (distinct from Character=pink, Object=emerald)
+- [x] Refine feature: Character/Object/Location Page modals have "Refine" button to generate 4 cleaned-up variations
+- [x] Refine picker: browse variations, view full-size in lightbox, select to replace main image
+- [x] Refine saves to database: selected refined image updates database with userId preserved
+- [x] Asset Library thumbnail refresh: thumbnails update automatically when Page modals close (300ms delay for DB propagation)
+- [x] Unified Asset Library: shows ALL user assets across all projects with user_id filtering
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

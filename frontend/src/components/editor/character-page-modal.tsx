@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { generateCharacterAsset, getJobStatus, deleteCharacter, generateImage, saveCharacter } from "@/lib/api"
+import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { CharacterNodeData, CharacterAssetItem } from "@/types/nodes"
@@ -341,8 +342,13 @@ centered composition, high quality, single character`
     // Update in database if persisted
     if (data.characterDbId && projectId) {
       try {
+        // Get user ID to ensure it's preserved in the update
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
         await saveCharacter({
           id: data.characterDbId, // Pass ID to trigger UPDATE instead of INSERT
+          userId: user?.id, // CRITICAL: Must pass userId to preserve ownership
           nodeId: characterNodeId,
           projectId,
           name: data.characterName,

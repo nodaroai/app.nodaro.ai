@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { generateObjectAsset, getJobStatus, deleteObject, generateImage, saveObject } from "@/lib/api"
+import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { ObjectNodeData, ObjectAssetItem } from "@/types/nodes"
@@ -352,8 +353,13 @@ no shadows, professional product photography`
     // Update in database if persisted
     if (data.objectDbId && projectId) {
       try {
+        // Get user ID to ensure it's preserved in the update
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
         await saveObject({
           id: data.objectDbId, // Pass ID to trigger UPDATE instead of INSERT
+          userId: user?.id, // CRITICAL: Must pass userId to preserve ownership
           nodeId: objectNodeId,
           projectId,
           name: data.objectName,
