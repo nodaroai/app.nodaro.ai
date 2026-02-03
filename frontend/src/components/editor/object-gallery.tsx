@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ObjectPageModal } from "./object-page-modal"
 import { getObjects, type DbObject } from "@/lib/api"
+import { createClient } from "@/lib/supabase"
 import type { ObjectNodeData } from "@/types/nodes"
 
 export function ObjectGalleryButton() {
@@ -27,7 +28,9 @@ export function ObjectGalleryButton() {
     setLoading(true)
     setError(null)
     try {
-      const { objects } = await getObjects(projectId)
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const { objects } = await getObjects(projectId, user?.id)
       setDbObjects(objects)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load objects")

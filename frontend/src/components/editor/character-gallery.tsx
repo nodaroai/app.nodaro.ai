@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CharacterPageModal } from "./character-page-modal"
 import { getCharacters, type DbCharacter } from "@/lib/api"
+import { createClient } from "@/lib/supabase"
 import type { CharacterNodeData } from "@/types/nodes"
 
 export function CharacterGalleryButton() {
@@ -27,7 +28,9 @@ export function CharacterGalleryButton() {
     setLoading(true)
     setError(null)
     try {
-      const { characters } = await getCharacters(projectId)
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const { characters } = await getCharacters(projectId, user?.id)
       setDbCharacters(characters)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load characters")

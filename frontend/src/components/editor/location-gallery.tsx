@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { LocationPageModal } from "./location-page-modal"
 import { getLocations, type DbLocation } from "@/lib/api"
+import { createClient } from "@/lib/supabase"
 import type { LocationNodeData } from "@/types/nodes"
 
 export function LocationGalleryButton() {
@@ -27,7 +28,9 @@ export function LocationGalleryButton() {
     setLoading(true)
     setError(null)
     try {
-      const { locations } = await getLocations(projectId)
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const { locations } = await getLocations(projectId, user?.id)
       setDbLocations(locations)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load locations")

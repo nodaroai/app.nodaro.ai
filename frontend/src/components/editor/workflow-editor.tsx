@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
+import { createClient } from "@/lib/supabase"
 import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
@@ -389,8 +390,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
               // Save/update character in database
               console.log("🟢🟢🟢 ATTEMPTING TO SAVE CHARACTER TO DB 🟢🟢🟢", { characterDbId: currentData?.characterDbId, nodeId, projectId, name: data.characterName })
+              const supabase = createClient()
+              const { data: { user } } = await supabase.auth.getUser()
               saveCharacter({
                 id: currentData?.characterDbId || undefined,
+                userId: user?.id,
                 nodeId,
                 projectId: projectId || undefined,
                 name: data.characterName,
@@ -468,10 +472,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               toast.success("Object image generated")
 
               // Save/update object in database
+              const supabaseObj = createClient()
+              const { data: { user: objUser } } = await supabaseObj.auth.getUser()
               saveObject({
                 id: currentData?.objectDbId || undefined,
+                userId: objUser?.id,
                 nodeId,
-                projectId: projectId || "",
+                projectId: projectId || undefined,
                 name: data.objectName,
                 description: data.description || undefined,
                 category: data.category || undefined,
@@ -543,10 +550,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               toast.success("Location image generated")
 
               // Save/update location in database
+              const supabaseLoc = createClient()
+              const { data: { user: locUser } } = await supabaseLoc.auth.getUser()
               saveLocation({
                 id: currentData?.locationDbId || undefined,
+                userId: locUser?.id,
                 nodeId,
-                projectId: projectId || "",
+                projectId: projectId || undefined,
                 name: data.locationName,
                 description: data.description || undefined,
                 category: data.category || undefined,
@@ -683,16 +693,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
       const latestData = latestNode?.data as CharacterNodeData | undefined
       if (latestData?.characterDbId) {
-        saveCharacter({
-          id: latestData.characterDbId,
-          nodeId,
-          projectId: projectId || undefined,
-          name: latestData.characterName,
-          sourceImageUrl: latestData.sourceImageUrl || undefined,
-          expressions: latestData.expressions ?? [],
-          poses: latestData.poses ?? [],
-          lightingVariations: latestData.lightingVariations ?? [],
-        }).catch(() => { /* best-effort */ })
+        const supabaseSync = createClient()
+        supabaseSync.auth.getUser().then(({ data: { user: syncUser } }) => {
+          saveCharacter({
+            id: latestData.characterDbId,
+            userId: syncUser?.id,
+            nodeId,
+            projectId: projectId || undefined,
+            name: latestData.characterName,
+            sourceImageUrl: latestData.sourceImageUrl || undefined,
+            expressions: latestData.expressions ?? [],
+            poses: latestData.poses ?? [],
+            lightingVariations: latestData.lightingVariations ?? [],
+          }).catch(() => { /* best-effort */ })
+        })
       }
     } catch (err) {
       // Keep any results generated so far
@@ -761,16 +775,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
       const latestData = latestNode?.data as ObjectNodeData | undefined
       if (latestData?.objectDbId) {
-        saveObject({
-          id: latestData.objectDbId,
-          nodeId,
-          projectId: projectId || "",
-          name: latestData.objectName,
-          sourceImageUrl: latestData.sourceImageUrl || undefined,
-          angles: latestData.angles ?? [],
-          materials: latestData.materials ?? [],
-          variations: latestData.variations ?? [],
-        }).catch(() => { /* best-effort */ })
+        const supabaseObjSync = createClient()
+        supabaseObjSync.auth.getUser().then(({ data: { user: objSyncUser } }) => {
+          saveObject({
+            id: latestData.objectDbId,
+            userId: objSyncUser?.id,
+            nodeId,
+            projectId: projectId || undefined,
+            name: latestData.objectName,
+            sourceImageUrl: latestData.sourceImageUrl || undefined,
+            angles: latestData.angles ?? [],
+            materials: latestData.materials ?? [],
+            variations: latestData.variations ?? [],
+          }).catch(() => { /* best-effort */ })
+        })
       }
     } catch (err) {
       // Keep any results generated so far
@@ -839,16 +857,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
       const latestData = latestNode?.data as LocationNodeData | undefined
       if (latestData?.locationDbId) {
-        saveLocation({
-          id: latestData.locationDbId,
-          nodeId,
-          projectId: projectId || "",
-          name: latestData.locationName,
-          sourceImageUrl: latestData.sourceImageUrl || undefined,
-          timeOfDay: latestData.timeOfDay ?? [],
-          weather: latestData.weather ?? [],
-          angles: latestData.angles ?? [],
-        }).catch(() => { /* best-effort */ })
+        const supabaseLocSync = createClient()
+        supabaseLocSync.auth.getUser().then(({ data: { user: locSyncUser } }) => {
+          saveLocation({
+            id: latestData.locationDbId,
+            userId: locSyncUser?.id,
+            nodeId,
+            projectId: projectId || undefined,
+            name: latestData.locationName,
+            sourceImageUrl: latestData.sourceImageUrl || undefined,
+            timeOfDay: latestData.timeOfDay ?? [],
+            weather: latestData.weather ?? [],
+            angles: latestData.angles ?? [],
+          }).catch(() => { /* best-effort */ })
+        })
       }
     } catch (err) {
       // Keep any results generated so far
