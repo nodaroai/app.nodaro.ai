@@ -732,7 +732,6 @@ export type StickyNoteData = {
   width: number
   height: number
   fontSize: "sm" | "base" | "lg" | "xl"
-  alignment: "left" | "center" | "right"
 }
 
 // --- Scene Node Data ---
@@ -1387,7 +1386,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       width: 200,
       height: 150,
       fontSize: "base",
-      alignment: "left",
     } as StickyNoteData,
   },
 ]
