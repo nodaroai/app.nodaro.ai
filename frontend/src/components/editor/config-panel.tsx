@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback, useRef } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Loader2, Sparkles, Upload } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -77,7 +77,6 @@ import type {
 import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/nodes"
 import { SceneConfig } from "./scene-config"
 import { SceneEditorModal } from "./scene-editor-modal"
-import { DefineCharacterModal } from "./define-character-modal"
 import { AssetSelectionModal, type SelectedAsset } from "./asset-selection-modal"
 
 interface SourceNodeInfo {
@@ -1130,12 +1129,13 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 }
 
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
-  const [showDefineModal, setShowDefineModal] = useState(false)
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
-  const [editingChar, setEditingChar] = useState<CharacterDefinition | null>(null)
+  const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
-  const updateCharacterDefinition = useWorkflowStore((s) => s.updateCharacterDefinition)
+  const addNode = useWorkflowStore((s) => s.addNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const nodes = useWorkflowStore((s) => s.nodes)
 
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
@@ -1144,14 +1144,20 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
     onUpdate({ characterDefinitionIds: attachedIds.filter((cid) => cid !== id) })
   }
 
-  function handleDefineAndAttach(char: CharacterDefinition) {
-    if (editingChar) {
-      updateCharacterDefinition(char.id, { name: char.name, type: char.type, referenceImageUrl: char.referenceImageUrl, description: char.description })
-      setEditingChar(null)
-    } else {
-      addCharacterDefinition(char)
-      onUpdate({ characterDefinitionIds: [...attachedIds, char.id] })
+  function handleDefineNewAsset(assetType: "character" | "object" | "location") {
+    // Calculate position for new node (to the right of existing nodes)
+    const maxX = nodes.length > 0 ? Math.max(...nodes.map((n) => n.position.x)) + 300 : 200
+    const avgY = nodes.length > 0 ? nodes.reduce((sum, n) => sum + n.position.y, 0) / nodes.length : 200
+
+    // Add new node to canvas
+    const newNodeId = addNode(assetType, { x: maxX, y: avgY })
+
+    if (newNodeId) {
+      // Select the new node to open its settings panel
+      selectNode(newNodeId)
     }
+
+    setShowDefineNewMenu(false)
   }
 
   function handleAssetSelected(asset: SelectedAsset) {
@@ -1236,7 +1242,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Assets</label>
         <div className="flex flex-col gap-1.5 mt-2">
           {attachedChars.map((char) => (
-            <div key={char.id} className="flex items-start gap-2 p-2 rounded-md border bg-muted/30 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setEditingChar(char); setShowDefineModal(true) }}>
+            <div key={char.id} className="flex items-start gap-2 p-2 rounded-md border bg-muted/30">
               {char.referenceImageUrl ? (
                 <img src={char.referenceImageUrl} alt={char.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
               ) : (
@@ -1286,13 +1292,43 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           >
             <Plus className="w-3 h-3" /> Add from Library
           </button>
-          <button
-            type="button"
-            onClick={() => setShowDefineModal(true)}
-            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
-          >
-            <UserPlus className="w-3 h-3" /> Define new
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowDefineNewMenu(!showDefineNewMenu)}
+              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+            >
+              <UserPlus className="w-3 h-3" /> Create new
+            </button>
+            {showDefineNewMenu && (
+              <div className="absolute top-full left-0 mt-1 w-36 rounded-md border bg-popover shadow-md z-30">
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-pink-500/10 transition-colors flex items-center gap-2"
+                  onClick={() => handleDefineNewAsset("character")}
+                >
+                  <UserCircle className="w-4 h-4 text-pink-500" />
+                  <span>Character</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
+                  onClick={() => handleDefineNewAsset("object")}
+                >
+                  <Package className="w-4 h-4 text-emerald-500" />
+                  <span>Object</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-cyan-500/10 transition-colors flex items-center gap-2"
+                  onClick={() => handleDefineNewAsset("location")}
+                >
+                  <MapPin className="w-4 h-4 text-cyan-500" />
+                  <span>Location</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1302,14 +1338,6 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         onSelect={handleAssetSelected}
         title="Select Asset from Library"
         excludeIds={attachedIds}
-      />
-
-      <DefineCharacterModal
-        isOpen={showDefineModal}
-        onClose={() => { setShowDefineModal(false); setEditingChar(null) }}
-        onSave={handleDefineAndAttach}
-        existingNames={allCharDefs.map((c) => c.name)}
-        editingCharacter={editingChar}
       />
     </div>
   )
