@@ -2,12 +2,12 @@
 
 import { useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { X, Loader2, Trash2, Plus, Maximize2 } from "lucide-react"
+import { X, Loader2, Trash2, Plus, Maximize2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { generateObjectAsset, getJobStatus, deleteObject } from "@/lib/api"
+import { generateObjectAsset, getJobStatus, deleteObject, generateImage, saveObject } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { ObjectNodeData, ObjectAssetItem } from "@/types/nodes"
@@ -208,12 +208,16 @@ export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps)
   const [confirmingObjectDelete, setConfirmingObjectDelete] = useState(false)
   const [deletingObject, setDeletingObject] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isRefining, setIsRefining] = useState(false)
+  const [refinedResults, setRefinedResults] = useState<string[]>([])
+  const [showRefinePicker, setShowRefinePicker] = useState(false)
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const projectId = useWorkflowStore((s) => s.projectId)
 
   const node = nodes.find((n) => n.id === objectNodeId)
   if (!node || node.type !== "object") return null
@@ -249,6 +253,115 @@ export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps)
       onClose()
     }
   }, [nodes, addNode, selectNode, onClose])
+
+  // Refine object image - generate 4 clean versions
+  const handleRefine = useCallback(async () => {
+    if (!mainImageUrl) {
+      toast.error("No image to refine")
+      return
+    }
+
+    setIsRefining(true)
+    setRefinedResults([])
+
+    try {
+      const objectName = data.objectName || "object"
+      const description = data.description || ""
+
+      const refinePrompt = `${objectName}${description ? `, ${description}` : ""}
+Product photo, centered, clean white background,
+studio lighting, front view, high quality,
+no shadows, professional product photography`
+
+      toast.info("Generating refined versions...")
+
+      // Generate 4 variations
+      const results: string[] = []
+      for (let i = 0; i < 4; i++) {
+        try {
+          const { jobId } = await generateImage(refinePrompt, [mainImageUrl])
+
+          // Poll for result
+          const imageUrl = await new Promise<string>((resolve, reject) => {
+            const interval = setInterval(async () => {
+              try {
+                const job = await getJobStatus(jobId)
+                if (job.status === "completed") {
+                  clearInterval(interval)
+                  resolve(job.output_data?.imageUrl ?? "")
+                } else if (job.status === "failed") {
+                  clearInterval(interval)
+                  reject(new Error(job.error_message ?? "Failed"))
+                }
+              } catch (err) {
+                clearInterval(interval)
+                reject(err)
+              }
+            }, 2000)
+          })
+
+          if (imageUrl) {
+            results.push(imageUrl)
+            setRefinedResults([...results])
+          }
+        } catch (err) {
+          console.error(`Failed to generate refined image ${i + 1}:`, err)
+        }
+      }
+
+      if (results.length === 0) {
+        throw new Error("Failed to generate any refined images")
+      }
+
+      setShowRefinePicker(true)
+    } catch (err) {
+      toast.error("Failed to refine object", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    } finally {
+      setIsRefining(false)
+    }
+  }, [mainImageUrl, data.objectName, data.description])
+
+  // Handle selecting a refined image
+  const handleSelectRefined = useCallback(async (imageUrl: string) => {
+    // Add to generatedResults
+    const newResult = {
+      url: imageUrl,
+      timestamp: new Date().toISOString(),
+      jobId: `refined-${Date.now()}`,
+    }
+
+    const updatedResults = [...(data.generatedResults ?? []), newResult]
+    const newIndex = updatedResults.length - 1
+
+    updateNodeData(objectNodeId, {
+      generatedResults: updatedResults,
+      activeResultIndex: newIndex,
+      sourceImageUrl: imageUrl,
+    })
+
+    // Update in database if persisted
+    if (data.objectDbId && projectId) {
+      try {
+        await saveObject({
+          nodeId: objectNodeId,
+          projectId,
+          name: data.objectName,
+          sourceImageUrl: imageUrl,
+          description: data.description,
+          category: data.category,
+          style: data.style,
+        })
+      } catch (err) {
+        console.error("Failed to save refined image to database:", err)
+      }
+    }
+
+    setShowRefinePicker(false)
+    setRefinedResults([])
+    toast.success("Refined image selected")
+  }, [data, objectNodeId, projectId, updateNodeData])
 
   // Map tab to data key for asset deletion
   const ASSET_DATA_KEYS: Record<string, string> = {
@@ -477,6 +590,27 @@ export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps)
                       onDragStarted={() => setIsDragging(true)}
                       onDragEnded={() => setIsDragging(false)}
                     />
+                    {/* Refine Button */}
+                    <Button
+                      onClick={handleRefine}
+                      disabled={isRefining}
+                      className="w-full mt-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                    >
+                      {isRefining ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Refining... ({refinedResults.length}/4)
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Refine Object
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center mt-1.5">
+                      Generate a clean product photo with studio lighting
+                    </p>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-12">
@@ -615,6 +749,53 @@ export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps)
       </div>
 
       <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+
+      {/* Refine Picker Modal */}
+      {showRefinePicker && refinedResults.length > 0 && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowRefinePicker(false)}
+        >
+          <div
+            className="bg-card rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Select Refined Image</h3>
+              <Button variant="ghost" size="icon" onClick={() => setShowRefinePicker(false)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Choose the best refined version of your object
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {refinedResults.map((url, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={url}
+                    alt={`Refined ${i + 1}`}
+                    className="w-full aspect-square object-cover rounded-lg border border-border hover:border-emerald-500 cursor-pointer transition-colors"
+                    onClick={() => handleSelectRefined(url)}
+                  />
+                  <Button
+                    size="sm"
+                    className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-emerald-500 hover:bg-emerald-600"
+                    onClick={() => handleSelectRefined(url)}
+                  >
+                    Select
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setShowRefinePicker(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>,
     document.body,
   )
