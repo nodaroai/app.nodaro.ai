@@ -184,6 +184,116 @@ export async function getCharacters(projectId?: string): Promise<{ characters: D
   return res.json()
 }
 
+// Object API functions
+export async function generateObject(data: {
+  name: string
+  description?: string
+  category?: string
+  style?: string
+  sourceImageUrl?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-object`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start object generation")
+  }
+  return res.json()
+}
+
+export async function generateObjectAsset(data: {
+  assetType: "angles" | "materials" | "variations" | "custom"
+  variant: string
+  name: string
+  description?: string
+  category?: string
+  style?: string
+  sourceImageUrl: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-object-asset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start object asset generation")
+  }
+  return res.json()
+}
+
+export async function saveObject(data: {
+  id?: string
+  nodeId: string
+  projectId: string
+  name: string
+  description?: string
+  category?: string
+  style?: string
+  sourceImageUrl?: string
+  angles?: { name: string; url: string }[]
+  materials?: { name: string; url: string }[]
+  variations?: { name: string; url: string }[]
+}): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/objects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to save object")
+  }
+  return res.json()
+}
+
+export async function deleteObject(objectId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to delete object")
+  }
+  return res.json()
+}
+
+export interface DbObject {
+  id: string
+  nodeId: string
+  projectId: string | null
+  name: string
+  description: string | null
+  category: string | null
+  style: string | null
+  sourceImageUrl: string | null
+  angles: { name: string; url: string }[]
+  materials: { name: string; url: string }[]
+  variations: { name: string; url: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export async function getObjects(projectId?: string): Promise<{ objects: DbObject[] }> {
+  const url = new URL(`${API_BASE_URL}/v1/objects`)
+  if (projectId) {
+    url.searchParams.set("projectId", projectId)
+  }
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch objects")
+  }
+  return res.json()
+}
+
 export async function splitImage(data: {
   imageUrl: string
   gridCols: number

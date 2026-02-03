@@ -4048,6 +4048,22 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Drag and drop character images to canvas: creates generate-image node at drop position with image as result
 - [x] Character node as reference image: when Character node connected to Generate Image/Image to Video, only the main portrait is used as reference (not expressions/poses/lighting/angles/custom assets)
 - [x] Multiple character references: connecting multiple Character nodes passes ALL main portraits as reference images for consistent multi-character scenes
+- [x] Object Node: generate main object image (single front view) or upload from computer
+- [x] Object Node: individual asset generation -- Angles (5: front/side/top/back/three-quarter), Materials (6: wood/metal/glass/plastic/fabric/stone), Variations (5: clean/weathered/damaged/ornate/minimal)
+- [x] Object Node: sequential per-variant API calls with progressive UI updates
+- [x] Object Node: collapsible asset sections with accordion UI, click-to-enlarge lightbox for all images
+- [x] Object Node: Run button on hover (delete only via Object Page modal)
+- [x] Object Gallery: shows DB objects only, click thumbnail opens Object Page, "+" button adds to canvas
+- [x] Object Page modal: full-page modal with tabs (Main, Angles, Materials, Variations, Custom)
+- [x] Object Page modal: "+" button on any image adds it to canvas as generate-image node with result pre-set
+- [x] Custom variation generation: free-form text prompt generates custom object images via `generate-object-asset` endpoint with `assetType: "custom"`
+- [x] Delete individual assets: inline confirmation per image in Object Page modal
+- [x] Delete object permanently: "Delete Forever" button in Object Page header, deletes from Supabase DB + removes node from canvas
+- [x] Backend: GET /v1/objects (list by projectId), POST /v1/objects (upsert), DELETE /v1/objects/:id endpoints
+- [x] Backend: POST /v1/generate-object (main image), POST /v1/generate-object-asset (variants)
+- [x] Object categories: furniture, vehicle, weapon, food, clothing, electronics, nature, tool, other
+- [x] Object node as reference image: when Object node connected to Generate Image, the main image is used as reference
+- [x] Multiple object references: connecting multiple Object nodes passes ALL main images as reference images
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

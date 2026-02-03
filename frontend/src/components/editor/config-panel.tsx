@@ -71,6 +71,7 @@ import type {
   ScriptScene,
   CharacterDefinition,
   CharacterNodeData,
+  ObjectNodeData,
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/nodes"
 import { SceneConfig } from "./scene-config"
@@ -435,6 +436,11 @@ export function ConfigPanel() {
           {/* Character Node */}
           {selectedNode.type === "character" && (
             <CharacterConfig data={selectedNode.data as CharacterNodeData} onUpdate={update} />
+          )}
+
+          {/* Object Node */}
+          {selectedNode.type === "object" && (
+            <ObjectConfig data={selectedNode.data as ObjectNodeData} onUpdate={update} />
           )}
 
           {/* Scene Node */}
@@ -2651,6 +2657,365 @@ function CharacterConfig({ data, onUpdate }: { readonly data: CharacterNodeData;
         </Button>
       </div>
     </div>
+  )
+}
+
+function ObjectConfig({ data, onUpdate }: { readonly data: ObjectNodeData; readonly onUpdate: (updates: Partial<ObjectNodeData>) => void }) {
+  const generateAsset = useWorkflowStore((s) => s.generateObjectAssetFn)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const hasImage = Boolean(
+    ((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl,
+  )
+  const isRunning = data.executionStatus === "running"
+
+  // Check for duplicate object names across all object nodes
+  const existingNames = useMemo(() => {
+    const names: string[] = []
+    for (const n of nodes) {
+      if (n.type === "object" && n.id !== selectedNodeId) {
+        const nd = n.data as ObjectNodeData
+        if (nd.objectName) names.push(nd.objectName)
+      }
+    }
+    return names
+  }, [nodes, selectedNodeId])
+
+  function handleNameChange(newName: string) {
+    if (!newName) {
+      onUpdate({ objectName: newName })
+      return
+    }
+    // Auto-version duplicate names
+    const baseName = newName
+    let finalName = baseName
+    let version = 2
+    const wasVersioned = existingNames.includes(baseName)
+    while (existingNames.includes(finalName)) {
+      finalName = `${baseName} (${version})`
+      version++
+    }
+    if (wasVersioned) {
+      // Clear reference data so the new version starts fresh
+      onUpdate({
+        objectName: finalName,
+        sourceImageUrl: "",
+        generatedResults: [],
+        activeResultIndex: 0,
+        executionStatus: "idle",
+      })
+    } else {
+      onUpdate({ objectName: finalName })
+    }
+  }
+
+  const duplicateWarning = useMemo(() => {
+    if (!data.objectName) return null
+    // Skip duplicate check if object is already saved to DB - it's already established
+    if (data.objectDbId) return null
+    // Check if user typed a name that matches but hasn't been auto-versioned yet
+    const exactMatch = existingNames.includes(data.objectName)
+    if (exactMatch) return `An object named "${data.objectName}" already exists. It will be auto-versioned on blur.`
+    return null
+  }, [data.objectName, data.objectDbId, existingNames])
+
+  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const { url } = await uploadImage(file)
+      onUpdate({ sourceImageUrl: url })
+    } catch (err) {
+      // error already thrown by uploadImage
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  function handleGenerateAsset(assetType: "angles" | "materials" | "variations") {
+    if (!selectedNodeId || !generateAsset) return
+    generateAsset(selectedNodeId, assetType)
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="obj-name">Object Name</Label>
+        <Input
+          id="obj-name"
+          value={data.objectName}
+          onChange={(e) => onUpdate({ objectName: e.target.value })}
+          onBlur={(e) => handleNameChange(e.target.value)}
+          placeholder="e.g. Magic Sword"
+        />
+        {duplicateWarning && (
+          <p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>
+        )}
+      </div>
+      <div>
+        <Label htmlFor="obj-desc">Description</Label>
+        <Textarea
+          id="obj-desc"
+          value={data.description}
+          onChange={(e) => onUpdate({ description: e.target.value })}
+          placeholder="A glowing sword with ancient runes..."
+          rows={3}
+        />
+      </div>
+      <div>
+        <Label htmlFor="obj-category">Category</Label>
+        <Select value={data.category} onValueChange={(v) => onUpdate({ category: v as ObjectNodeData["category"] })}>
+          <SelectTrigger id="obj-category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="furniture">Furniture</SelectItem>
+            <SelectItem value="vehicle">Vehicle</SelectItem>
+            <SelectItem value="weapon">Weapon</SelectItem>
+            <SelectItem value="food">Food</SelectItem>
+            <SelectItem value="clothing">Clothing</SelectItem>
+            <SelectItem value="electronics">Electronics</SelectItem>
+            <SelectItem value="nature">Nature</SelectItem>
+            <SelectItem value="tool">Tool</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="obj-style">Style</Label>
+        <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as ObjectNodeData["style"] })}>
+          <SelectTrigger id="obj-style">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="realistic">Realistic</SelectItem>
+            <SelectItem value="anime">Anime</SelectItem>
+            <SelectItem value="3d-pixar">3D Pixar</SelectItem>
+            <SelectItem value="illustration">Illustration</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Source image: URL input + Upload button */}
+      <div>
+        <Label htmlFor="obj-image">Reference Image</Label>
+        <div className="flex gap-1.5">
+          <Input
+            id="obj-image"
+            value={data.sourceImageUrl}
+            onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })}
+            placeholder="https://... or upload"
+            className="flex-1"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleUploadImage}
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0 h-9 w-9"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload image from computer"
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Generate Image button */}
+      <Button
+        size="sm"
+        className="w-full text-xs h-8 bg-emerald-500 hover:bg-emerald-600 text-white"
+        disabled={isRunning || !data.objectName}
+        onClick={() => {
+          if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId)
+        }}
+      >
+        {isRunning ? (
+          <>
+            <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Play className="w-3 h-3 mr-1.5" />
+            Generate Image
+          </>
+        )}
+      </Button>
+
+      <Separator />
+
+      {/* Asset Generation - requires main image first */}
+      <div className="flex flex-col gap-2">
+        <Label className="text-xs font-semibold uppercase text-muted-foreground">
+          Object Assets
+        </Label>
+        {!hasImage && (
+          <p className="text-[10px] text-muted-foreground">
+            Generate or upload a main image first, then generate assets below.
+          </p>
+        )}
+
+        <Accordion type="multiple" className="w-full">
+          <AccordionItem value="angles">
+            <AccordionTrigger className="text-xs py-1.5">
+              Angles ({(data.angles ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <ObjectAssetButton
+                label="Generate Angles"
+                status={data.anglesStatus ?? "idle"}
+                itemCount={(data.angles ?? []).length}
+                onClick={() => handleGenerateAsset("angles")}
+                disabled={!hasImage}
+              />
+              <ObjectAssetGrid items={data.angles ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="materials">
+            <AccordionTrigger className="text-xs py-1.5">
+              Materials ({(data.materials ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <ObjectAssetButton
+                label="Generate Materials"
+                status={data.materialsStatus ?? "idle"}
+                itemCount={(data.materials ?? []).length}
+                onClick={() => handleGenerateAsset("materials")}
+                disabled={!hasImage}
+              />
+              <ObjectAssetGrid items={data.materials ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="variations">
+            <AccordionTrigger className="text-xs py-1.5">
+              Variations ({(data.variations ?? []).length})
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1.5 pb-2">
+              <ObjectAssetButton
+                label="Generate Variations"
+                status={data.variationsStatus ?? "idle"}
+                itemCount={(data.variations ?? []).length}
+                onClick={() => handleGenerateAsset("variations")}
+                disabled={!hasImage}
+              />
+              <ObjectAssetGrid items={data.variations ?? []} />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs h-8 mt-1"
+          disabled={
+            !hasImage ||
+            data.anglesStatus === "running" ||
+            data.materialsStatus === "running" ||
+            data.variationsStatus === "running" ||
+            !data.objectName
+          }
+          onClick={() => {
+            handleGenerateAsset("angles")
+            setTimeout(() => handleGenerateAsset("materials"), 500)
+            setTimeout(() => handleGenerateAsset("variations"), 1000)
+          }}
+        >
+          <Sparkles className="w-3 h-3 mr-1.5" />
+          Generate All Assets
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function ObjectAssetButton({
+  label,
+  status,
+  itemCount,
+  onClick,
+  disabled,
+}: {
+  readonly label: string
+  readonly status: string
+  readonly itemCount: number
+  readonly onClick: () => void
+  readonly disabled: boolean
+}) {
+  const isRunning = status === "running"
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="w-full text-xs h-7 justify-start"
+      disabled={disabled || isRunning}
+      onClick={onClick}
+    >
+      {isRunning ? (
+        <>
+          <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+          Generating...
+        </>
+      ) : itemCount > 0 ? (
+        <>
+          <Check className="w-3 h-3 mr-1.5 text-emerald-500" />
+          {label} ({itemCount})
+        </>
+      ) : (
+        <>
+          <Play className="w-3 h-3 mr-1.5" />
+          {label}
+        </>
+      )}
+    </Button>
+  )
+}
+
+function ObjectAssetGrid({ items }: { readonly items: Array<{ name: string; url: string }> }) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+
+  if (items.length === 0) return null
+  return (
+    <>
+      <div className="grid grid-cols-3 gap-1">
+        {items.map((item) => (
+          <button
+            key={item.url}
+            type="button"
+            className="relative aspect-square rounded overflow-hidden bg-muted/30 group cursor-pointer"
+            onClick={() => setLightboxSrc(item.url)}
+            title={item.name}
+          >
+            <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Maximize2 className="w-4 h-4 text-white" />
+            </div>
+            <span className="absolute bottom-0 left-0 right-0 text-[8px] bg-black/60 text-white text-center truncate px-0.5">
+              {item.name}
+            </span>
+          </button>
+        ))}
+      </div>
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
+    </>
   )
 }
 

@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 32 node types across 5 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Asset management system with characters, locations, and objects -- import across projects/workflows, extract references from generated images. Reference image chaining for visual consistency. Single-node and full workflow execution with version history. Character Node with portrait generation/upload, individual asset generation (expressions, poses, angles, lighting), and character gallery. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 35 node types across 7 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Asset management system with characters, locations, and objects -- import across projects/workflows, extract references from generated images. Reference image chaining for visual consistency. Single-node and full workflow execution with version history. Character Node with portrait generation/upload, individual asset generation (expressions, poses, angles, lighting), and character gallery. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
 
 ## Features
 
@@ -17,7 +17,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Graph-based workflows: branching, merging, multiple inputs/outputs
 - Manual save with unsaved changes indicator and exit confirmation
 
-### 32 Node Types
+### 35 Node Types
 
 | Category | Nodes |
 |----------|-------|
@@ -25,6 +25,9 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | **Parameter (8)** | Provider, Duration, Aspect Ratio, Tone, Style Guide, Scene Count, Motion, Camera Motion |
 | **AI (9)** | Generate Script, Generate Image, Image to Video, Video to Video, Text to Video, Text to Speech, Generate Music, Text to Audio, QA Check |
 | **Processing (8)** | Combine Videos, Merge Video & Audio, Extract Audio, Mix Audio, Add Captions, Resize Video, Trim Video, Adjust Volume |
+| **Scene (1)** | Scene |
+| **Character (1)** | Character |
+| **Object (1)** | Object |
 | **Output (2)** | Save to Storage, Webhook Output |
 
 ### Asset Management
@@ -65,6 +68,31 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Drag and drop character images to canvas creates Generate Image node at drop position
 - **Character as reference**: Connect Character node to Generate Image/Image to Video to use main portrait as reference (expressions/poses/etc. are NOT included)
 - **Multiple characters**: Connect multiple Character nodes to pass ALL main portraits as references for consistent multi-character scenes
+
+### Object Node
+- Generate main object image (single front view) or upload image from computer
+- Generate object assets individually for better quality and consistency:
+  - **Angles** (5): front, side, top, back, three-quarter
+  - **Materials** (6): wood, metal, glass, plastic, fabric, stone
+  - **Variations** (5): clean, weathered, damaged, ornate, minimal
+- Sequential per-variant API calls with progressive UI updates
+- Collapsible asset sections with accordion UI
+- Click-to-enlarge lightbox for all object images
+- Run button on hover (delete only available via Object Page modal)
+- **Object categories**: furniture, vehicle, weapon, food, clothing, electronics, nature, tool, other
+
+### Object Library & Persistence
+- **Database persistence**: objects saved to Supabase `objects` table, persist across sessions
+- **Object Library (Gallery)**: popup modal showing only database objects (not canvas nodes)
+- Click object thumbnail to open Object Page modal
+- "+" button adds object to canvas (can add same object multiple times)
+- **Object Page modal**: full-page view with tabs (Main, Angles, Materials, Variations, Custom)
+- "+" button on any image adds it to canvas as Generate Image node with result pre-set
+- **Custom variations**: generate custom object images with free-form text prompts
+- **Delete assets**: inline confirmation per image, delete individual assets from any tab
+- **Delete object permanently**: "Delete Forever" removes from database and canvas
+- **Object as reference**: Connect Object node to Generate Image to use main image as reference
+- **Multiple objects**: Connect multiple Object nodes to pass ALL main images as references
 
 ### Dashboard
 - Projects with folders
@@ -235,6 +263,13 @@ The backend exposes a REST API at `http://localhost:8000`:
 | `/v1/characters` | GET | List characters by projectId |
 | `/v1/characters` | POST | Create or update character |
 | `/v1/characters/:id` | DELETE | Delete character permanently |
+| `/v1/generate-character` | POST | Generate main character portrait |
+| `/v1/generate-character-asset` | POST | Generate character asset variant |
+| `/v1/objects` | GET | List objects by projectId |
+| `/v1/objects` | POST | Create or update object |
+| `/v1/objects/:id` | DELETE | Delete object permanently |
+| `/v1/generate-object` | POST | Generate main object image |
+| `/v1/generate-object-asset` | POST | Generate object asset variant |
 
 Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 

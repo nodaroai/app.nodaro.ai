@@ -14,8 +14,8 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -85,7 +85,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -194,6 +194,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
     }
+    if (type === "object") {
+      // Return the object's main image for use as reference
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
+    }
     if (type === "scene") {
       // If scene has a generated image, return that; otherwise return built prompt
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
@@ -226,6 +232,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "character") {
         // Character node provides its portrait as a reference image
         // Multiple Character nodes can be connected - all their portraits become references
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+      } else if (src.type === "object") {
+        // Object node provides its main image as a reference image
+        // Multiple Object nodes can be connected - all their images become references
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else if (src.type === "upload-video") {
         if (node.type === "combine-videos") {
@@ -425,11 +435,92 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  function runObjectGeneration(nodeId: string, data: ObjectNodeData): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running" })
+
+    return new Promise((resolve, reject) => {
+      generateObject({
+        name: data.objectName,
+        description: data.description || undefined,
+        category: data.category || undefined,
+        style: data.style || undefined,
+        sourceImageUrl: data.sourceImageUrl || undefined,
+      }).then(({ jobId }) => {
+        toast.info("Object generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const imageUrl = job.output_data?.imageUrl
+              const currentNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+              const currentData = currentNode?.data as ObjectNodeData | undefined
+              const existingResults = currentData?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                sourceImageUrl: imageUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Object image generated")
+
+              // Save/update object in database
+              saveObject({
+                id: currentData?.objectDbId || undefined,
+                nodeId,
+                projectId: projectId || "",
+                name: data.objectName,
+                description: data.description || undefined,
+                category: data.category || undefined,
+                style: data.style || undefined,
+                sourceImageUrl: imageUrl || undefined,
+                angles: currentData?.angles ?? [],
+                materials: currentData?.materials ?? [],
+                variations: currentData?.variations ?? [],
+              }).then(({ id: dbId }) => {
+                if (!currentData?.objectDbId) {
+                  updateNodeData(nodeId, { objectDbId: dbId })
+                }
+              }).catch(() => { /* best-effort */ })
+
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Object generation failed", { description: job.error_message ?? "Unknown error" })
+              reject(new Error(job.error_message ?? "Object generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            updateNodeData(nodeId, { executionStatus: "failed" })
+            toast.error("Failed to check job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        updateNodeData(nodeId, { executionStatus: "failed" })
+        toast.error("Failed to start object generation", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        })
+        reject(err)
+      })
+    })
+  }
+
   const ASSET_VARIANTS: Record<string, { variants: string[]; names: string[] }> = {
     expressions: { variants: ["neutral", "smile", "angry", "surprised", "sad", "talking"], names: ["Neutral", "Smile", "Angry", "Surprised", "Sad", "Talking"] },
     poses: { variants: ["standing", "walking", "sitting", "running"], names: ["Standing", "Walking", "Sitting", "Running"] },
     lighting: { variants: ["daylight", "night", "dramatic"], names: ["Daylight", "Night", "Dramatic"] },
     angles: { variants: ["front", "side", "back"], names: ["Front View", "Side View", "Back View"] },
+  }
+
+  const OBJECT_ASSET_VARIANTS: Record<string, { variants: string[]; names: string[] }> = {
+    angles: { variants: ["front", "side", "top", "back", "three-quarter"], names: ["Front", "Side", "Top", "Back", "Three-Quarter"] },
+    materials: { variants: ["wood", "metal", "glass", "plastic", "fabric", "stone"], names: ["Wood", "Metal", "Glass", "Plastic", "Fabric", "Stone"] },
+    variations: { variants: ["clean", "weathered", "damaged", "ornate", "minimal"], names: ["Clean", "Weathered", "Damaged", "Ornate", "Minimal"] },
   }
 
   function pollJobToCompletion(jobId: string): Promise<string> {
@@ -520,6 +611,84 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           expressions: latestData.expressions ?? [],
           poses: latestData.poses ?? [],
           lightingVariations: latestData.lightingVariations ?? [],
+        }).catch(() => { /* best-effort */ })
+      }
+    } catch (err) {
+      // Keep any results generated so far
+      updateNodeData(nodeId, { [statusKey]: "failed" })
+      toast.error(`Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`, {
+        description: err instanceof Error ? err.message : "Unknown error",
+      })
+    }
+  }
+
+  async function handleGenerateObjectAsset(nodeId: string, assetType: "angles" | "materials" | "variations"): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+    if (!node) return
+    const data = node.data as ObjectNodeData
+    if (!data.objectName) {
+      toast.error("Set an object name first")
+      return
+    }
+    const activeResult = (data.generatedResults ?? [])[data.activeResultIndex ?? 0]
+    const imageUrl = activeResult?.url ?? data.sourceImageUrl
+    if (!imageUrl) {
+      toast.error("Generate or upload a main image first")
+      return
+    }
+
+    const statusKeyMap: Record<string, string> = { angles: "anglesStatus", materials: "materialsStatus", variations: "variationsStatus" }
+    const itemsKeyMap: Record<string, string> = { angles: "angles", materials: "materials", variations: "variations" }
+    const statusKey = statusKeyMap[assetType]
+    const itemsKey = itemsKeyMap[assetType]
+
+    const config = OBJECT_ASSET_VARIANTS[assetType]
+    if (!config) return
+
+    updateNodeData(nodeId, { [statusKey]: "running" })
+
+    const results: Array<{ name: string; url: string }> = []
+
+    try {
+      for (let i = 0; i < config.variants.length; i++) {
+        const variant = config.variants[i]
+        const variantName = config.names[i]
+        toast.info(`Generating ${assetType}... ${i + 1}/${config.variants.length} (${variantName})`)
+
+        const { jobId } = await generateObjectAsset({
+          assetType,
+          variant,
+          name: data.objectName,
+          description: data.description || undefined,
+          category: data.category || undefined,
+          style: data.style || undefined,
+          sourceImageUrl: imageUrl,
+        })
+
+        const resultUrl = await pollJobToCompletion(jobId)
+        results.push({ name: variantName, url: resultUrl })
+
+        // Update node data progressively so user sees images appear
+        updateNodeData(nodeId, { [itemsKey]: [...results] })
+      }
+
+      updateNodeData(nodeId, { [statusKey]: "completed" })
+      toast.success(`${assetType} generated: ${results.length} images`)
+
+      // Sync updated assets to database
+      const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+      const latestData = latestNode?.data as ObjectNodeData | undefined
+      if (latestData?.objectDbId) {
+        saveObject({
+          id: latestData.objectDbId,
+          nodeId,
+          projectId: projectId || "",
+          name: latestData.objectName,
+          sourceImageUrl: latestData.sourceImageUrl || undefined,
+          angles: latestData.angles ?? [],
+          materials: latestData.materials ?? [],
+          variations: latestData.variations ?? [],
         }).catch(() => { /* best-effort */ })
       }
     } catch (err) {
@@ -1028,6 +1197,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No character name"))
       }
       return runCharacterGeneration(node.id, charData)
+    }
+
+    if (node.type === "object") {
+      const objData = node.data as ObjectNodeData
+      if (!objData.objectName) {
+        toast.error(`Node "${objData.label}": no object name set`)
+        return Promise.reject(new Error("No object name"))
+      }
+      return runObjectGeneration(node.id, objData)
     }
 
     if (node.type === "scene") {
@@ -1752,6 +1930,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setGenerateCharacterAssetFn(handleGenerateCharacterAsset)
     return () => useWorkflowStore.getState().setGenerateCharacterAssetFn(null)
+  })
+
+  // Register object asset generator
+  useEffect(() => {
+    useWorkflowStore.getState().setGenerateObjectAssetFn(handleGenerateObjectAsset)
+    return () => useWorkflowStore.getState().setGenerateObjectAssetFn(null)
   })
 
   // Ctrl+S keyboard shortcut

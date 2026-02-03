@@ -18,7 +18,7 @@ interface BaseNodeProps {
   readonly id: string
   readonly label: string
   readonly icon: ReactNode
-  readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character"
+  readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "object"
   readonly credits?: number
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode
@@ -31,6 +31,8 @@ const CATEGORY_STYLES: Record<string, string> = {
   processing: "border-amber-500/50 bg-amber-500/5",
   output: "border-green-500/50 bg-green-500/5",
   scene: "border-violet-500/50 bg-violet-500/5",
+  character: "border-pink-500/50 bg-pink-500/5",
+  object: "border-emerald-500/50 bg-emerald-500/5",
 }
 
 const CATEGORY_HEADER: Record<string, string> = {
@@ -39,6 +41,8 @@ const CATEGORY_HEADER: Record<string, string> = {
   processing: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
   output: "bg-green-500/10 text-green-700 dark:text-green-300",
   scene: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  character: "bg-pink-500/10 text-pink-700 dark:text-pink-300",
+  object: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
 }
 
 export function BaseNode({

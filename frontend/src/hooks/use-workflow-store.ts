@@ -58,6 +58,8 @@ interface WorkflowState {
   readonly setCreateSceneNodeFromScript: (fn: ((scriptNodeId: string, sceneIndex: number) => void) | null) => void
   readonly generateCharacterAssetFn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null
   readonly setGenerateCharacterAssetFn: (fn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null) => void
+  readonly generateObjectAssetFn: ((nodeId: string, assetType: "angles" | "materials" | "variations") => Promise<void>) | null
+  readonly setGenerateObjectAssetFn: (fn: ((nodeId: string, assetType: "angles" | "materials" | "variations") => Promise<void>) | null) => void
 }
 
 let nextNodeId = 1
@@ -328,4 +330,6 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setCreateSceneNodeFromScript: (fn) => set({ createSceneNodeFromScript: fn }),
   generateCharacterAssetFn: null,
   setGenerateCharacterAssetFn: (fn) => set({ generateCharacterAssetFn: fn }),
+  generateObjectAssetFn: null,
+  setGenerateObjectAssetFn: (fn) => set({ generateObjectAssetFn: fn }),
 }))

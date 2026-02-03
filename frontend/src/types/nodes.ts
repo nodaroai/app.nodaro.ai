@@ -1,6 +1,6 @@
 import type { Node, Edge } from "@xyflow/react"
 
-export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character"
+export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "object"
 
 export interface FieldMapping {
   readonly sourceNodeId: string
@@ -631,6 +631,42 @@ export type CharacterNodeData = {
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
 }
 
+// --- Object Node Data ---
+
+export interface ObjectAssetItem {
+  readonly name: string
+  readonly url: string
+}
+
+export type ObjectAssetType = "angles" | "materials" | "variations" | "custom"
+
+export type ObjectNodeData = {
+  [key: string]: unknown
+  label: string
+  objectDbId: string
+  objectName: string
+  description: string
+  category: "furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "other"
+  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  sourceImageUrl: string
+  projectId: string
+  createdAt: string
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  generatedResults: GeneratedResult[]
+  activeResultIndex: number
+  fieldMappings: FieldMappings
+  // Individual asset images
+  angles: ObjectAssetItem[]
+  materials: ObjectAssetItem[]
+  variations: ObjectAssetItem[]
+  // Asset generation status
+  anglesStatus: "idle" | "running" | "completed" | "failed"
+  materialsStatus: "idle" | "running" | "completed" | "failed"
+  variationsStatus: "idle" | "running" | "completed" | "failed"
+  // Custom variations
+  customVariations: Array<{ prompt: string; url: string; createdAt: string }>
+}
+
 // --- Scene Node Data ---
 
 export interface SceneCharacterEntry {
@@ -762,6 +798,7 @@ export type SceneNodeData =
   | WebhookOutputData
   | SceneNodeDataType
   | CharacterNodeData
+  | ObjectNodeData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -798,6 +835,7 @@ export type SceneNodeType =
   | "webhook-output"
   | "scene"
   | "character"
+  | "object"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -1144,6 +1182,37 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       anglesStatus: "idle",
       customVariations: [],
     } as CharacterNodeData,
+  },
+  // Object
+  {
+    type: "object",
+    label: "Object",
+    category: "object",
+    creditCost: 5,
+    inputs: ["in"],
+    outputs: ["objectRef"],
+    defaultData: {
+      label: "Object",
+      objectDbId: "",
+      objectName: "",
+      description: "",
+      category: "other",
+      style: "realistic",
+      sourceImageUrl: "",
+      projectId: "",
+      createdAt: "",
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+      fieldMappings: {},
+      angles: [],
+      materials: [],
+      variations: [],
+      anglesStatus: "idle",
+      materialsStatus: "idle",
+      variationsStatus: "idle",
+      customVariations: [],
+    } as ObjectNodeData,
   },
   // Scene
   {
