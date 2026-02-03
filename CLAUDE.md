@@ -225,6 +225,55 @@ Assets are visual references defined at the **workflow level** and importable ac
 - Description labels are category-aware: "Include character 'X': ...", "Include location 'Y': ...", "Include object 'Z': ..."
 - Both storyboard path and standalone node path support all asset categories
 
+### Asset Node System (Character, Object, Location Nodes)
+
+Three specialized node types for creating reusable visual assets with variant generation:
+
+| Node Type | Color | Main Image | Variant Categories |
+|-----------|-------|------------|-------------------|
+| **Character** | Pink | Portrait (front view) | Expressions (6), Poses (4), Lighting (3), Angles (3) |
+| **Object** | Emerald | Object (front view) | Angles (5), Materials (6), Variations (5) |
+| **Location** | Cyan | Establishing shot | Time of Day (6), Weather (6), Angles (5) |
+
+**Character Node Variants:**
+- **Expressions**: neutral, smile, angry, surprised, sad, talking
+- **Poses**: standing, walking, sitting, running
+- **Lighting**: daylight, night, dramatic
+- **Angles**: front, side, back
+
+**Object Node Variants:**
+- **Angles**: front, side, top, back, three-quarter
+- **Materials**: wood, metal, glass, plastic, fabric, stone
+- **Variations**: clean, weathered, damaged, ornate, minimal
+
+**Location Node Variants:**
+- **Time of Day**: dawn, morning, noon, afternoon, dusk, night
+- **Weather**: clear, cloudy, rain, storm, snow, fog
+- **Angles**: wide, medium, closeup, aerial, low-angle
+
+**Database Persistence:**
+- All assets saved to Supabase with `user_id` for ownership
+- Each user sees only their own assets in galleries (user_id filtering)
+- Assets persist across sessions and can be reused in any workflow
+- Delete Forever removes asset from database permanently
+
+**Gallery System:**
+- Character Gallery, Object Gallery, Location Gallery in editor sidebar
+- Shows thumbnails of all saved assets for the current user
+- Click thumbnail to open full Page modal with all variants
+- "+" button adds asset to canvas as a node
+
+**Reference Image Usage:**
+- When connected to Generate Image node, the asset's main image is used as reference
+- Multiple asset nodes can be connected together (Character + Object + Location)
+- All connected asset images are passed to Replicate as `image_input` array
+- Enables complex scenes with consistent characters, objects, and backgrounds
+
+**Custom Variations:**
+- Each Page modal includes a Custom tab for free-form prompts
+- Generate any variation with a text description
+- Custom images saved alongside standard variants
+
 ### Style Presets
 
 Pre-configured visual style templates for quick-start workflows.

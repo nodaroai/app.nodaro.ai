@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 36 node types across 9 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Asset management system with characters, locations, and objects -- import across projects/workflows, extract references from generated images. Reference image chaining for visual consistency. Single-node and full workflow execution with version history. Character Node with portrait generation/upload, individual asset generation (expressions, poses, angles, lighting), and character gallery. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 36 node types across 9 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, and galleries showing only the current user's assets. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
 
 ## Features
 
@@ -33,12 +33,14 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ### Asset Management
 - Define characters, locations, and objects with reference images or text descriptions
+- **User isolation**: Each user sees only their own assets (user_id filtering on all queries)
 - Import assets across projects and workflows (browse by project or "Show all assets")
 - Filter by category: All | Characters | Locations | Objects
 - Extract references directly from generated images (scissors tool on Generate Image output)
 - Auto-attach imported assets to Generate Image nodes
 - Category-aware execution: reference images sent to AI provider, descriptions appended to prompts
 - Visual indicators: category badges (cyan=location, emerald=object), asset count on nodes
+- **Combined references**: Connect Character + Object + Location nodes together for complex scenes with consistent visuals
 
 ### Character Node
 - Generate main character portrait (single front view) or upload image from computer
@@ -54,7 +56,8 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Version handling: auto-versioning for duplicate character names with data clearing
 
 ### Character Library & Persistence
-- **Database persistence**: characters saved to Supabase `characters` table, persist across sessions
+- **Database persistence**: characters saved to Supabase `characters` table with `user_id`, persist across sessions
+- **User isolation**: each user sees only their own characters (user_id filtering)
 - **Character Library (Gallery)**: popup modal showing only database characters (not canvas nodes)
 - Click character thumbnail to open Character Page modal
 - "+" button adds character to canvas (can add same character multiple times)
@@ -83,7 +86,8 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Object categories**: furniture, vehicle, weapon, food, clothing, electronics, nature, tool, other
 
 ### Object Library & Persistence
-- **Database persistence**: objects saved to Supabase `objects` table, persist across sessions
+- **Database persistence**: objects saved to Supabase `objects` table with `user_id`, persist across sessions
+- **User isolation**: each user sees only their own objects (user_id filtering)
 - **Object Library (Gallery)**: popup modal showing only database objects (not canvas nodes)
 - Click object thumbnail to open Object Page modal
 - "+" button adds object to canvas (can add same object multiple times)
@@ -108,7 +112,8 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Location categories**: indoor, outdoor, urban, nature, fantasy, sci-fi, historical, futuristic
 
 ### Location Library & Persistence
-- **Database persistence**: locations saved to Supabase `locations` table, persist across sessions
+- **Database persistence**: locations saved to Supabase `locations` table with `user_id`, persist across sessions
+- **User isolation**: each user sees only their own locations (user_id filtering)
 - **Location Library (Gallery)**: popup modal showing only database locations (not canvas nodes)
 - Click location thumbnail to open Location Page modal
 - "+" button adds location to canvas (can add same location multiple times)
