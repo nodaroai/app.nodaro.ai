@@ -238,11 +238,11 @@ export function WorkflowCanvas() {
               // Return category-specific colors for each node type
               const nodeType = node.type as string
               // Character nodes
-              if (nodeType === 'character') return '#ec4899' // pink-500
+              if (nodeType === 'character') return '#FF0073' // pink accent
               // Object nodes
-              if (nodeType === 'object') return '#10b981' // emerald-500
+              if (nodeType === 'object') return '#FF0073' // pink accent
               // Location nodes
-              if (nodeType === 'location') return '#06b6d4' // cyan-500
+              if (nodeType === 'location') return '#FF0073' // pink accent
               // Scene and AI nodes - dark gray
               if (nodeType === 'scene' ||
                   nodeType.startsWith('generate-') ||
