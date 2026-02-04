@@ -104,7 +104,7 @@ export function BaseNode({
       </button>
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-t-md text-xs font-semibold uppercase tracking-wide dark:normal-case dark:tracking-normal dark:font-medium dark:text-sm",
+          "flex items-center gap-2 px-3 py-2 rounded-t-md font-sans text-[11px] font-semibold uppercase tracking-[0.05em]",
           CATEGORY_HEADER[category],
         )}
       >
@@ -129,7 +129,7 @@ export function BaseNode({
         )}
         <span className="flex-1 truncate">{label}</span>
         {credits !== undefined && credits > 0 && (
-          <span className="text-[10px] font-mono opacity-80 dark:text-xs dark:font-sans dark:opacity-70">{credits}cr</span>
+          <span className="font-mono text-[10px] text-white/70">{credits}cr</span>
         )}
       </div>
 

@@ -77,14 +77,14 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
     <>
       {/* Unified Asset Library - quick access to all assets */}
       <div className="flex flex-col gap-1 pb-2 mb-2 border-b">
-        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#ff0073' }}>
+        <span className="font-sans text-[10px] font-bold uppercase tracking-[0.05em] text-[#64748B]">
           Library
         </span>
         <UnifiedAssetLibraryButton />
       </div>
       {CATEGORIES.map((cat) => (
         <div key={cat} className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#ff0073' }}>
+          <span className="font-sans text-[10px] font-bold uppercase tracking-[0.05em] text-[#64748B]">
             {cat}
           </span>
           {NODE_OPTIONS.filter((n) => n.category === cat).map((node) => (
@@ -136,7 +136,7 @@ export function NodeToolbar() {
     <>
       {/* Desktop: static sidebar panel */}
       <div className="absolute top-4 left-4 z-10 hidden md:flex flex-col gap-2 bg-card border rounded-lg p-3 shadow-md w-48 max-h-[calc(100vh-6rem)] overflow-y-auto">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <span className="font-sans text-[11px] font-bold uppercase tracking-[0.05em] text-[#64748B]">
           Add Node
         </span>
         <NodeList onAdd={handleAddNode} />
