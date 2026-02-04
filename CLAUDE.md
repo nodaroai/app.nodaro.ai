@@ -4350,6 +4350,49 @@ Maintain a CHANGELOG.md:
 | Audio Processing | FFmpeg (Merge Video & Audio, Extract, Mix, Adjust Volume) | All audio processing nodes use FFmpeg, not AI providers |
 | Text to Audio | TangoFlux, Tango, AudioLDM, Bark via Replicate | Sound effects from text descriptions |
 | TTS Model | elevenlabs/turbo-v2.5 via Replicate | 26 voice options, natural speech |
+| AI Provider Abstraction | Replicate (default), KIE.ai (cloud) | Admin-configurable in cloud edition, transparent provider switching |
+
+### AI Provider System
+
+SceneNode supports multiple AI providers for image generation, with edition-based feature gating:
+
+**Editions:**
+- **Self-Hosted (EDITION=self-hosted)**: Always uses Replicate. No provider selection UI. Users pay Replicate directly.
+- **Cloud (EDITION=cloud)**: Admin can choose between Replicate and KIE.ai. Cost markup applied. Provider details hidden from regular users.
+
+**Provider Configuration:**
+- Settings stored in `app_settings` table (key-value JSONB)
+- Default: `ai_provider: "replicate"`, `***REDACTED-OSS-SCRUB***`
+- Admin Settings page at `/admin/settings` (cloud edition only)
+
+**KIE.ai Integration:**
+- API docs: https://docs.kie.ai/
+- Base URL: https://api.kie.ai
+- Auth: Bearer token (KIE_API_KEY env var)
+- Async task model:
+  1. Submit: `POST /api/v1/jobs/createTask`
+  2. Poll: `GET /api/v1/jobs/recordInfo?taskId=xxx`
+- Cost estimation: KIE.ai doesn't return credits consumed, so we use fixed costs based on pricing page
+- Model mapping: `nano-banana` → `google/nano-banana` (4 credits × $0.005 = $0.02)
+
+**Cost Flow:**
+```
+API Response → provider_cost → (apply markup if CLOUD) → display_cost → Job Record
+                    ↓                                                        ↓
+              Stored in DB                                            Displayed in UI
+```
+
+**Privacy (Cloud Edition):**
+- Regular users see only `cost` field (renamed from `display_cost`)
+- `provider` and `provider_cost` fields hidden via `sanitizeJobForPublic()`
+- Admin users see full cost breakdown
+
+**Files:**
+- `backend/src/services/kie-ai.ts` - KIE.ai API client
+- `backend/src/lib/app-settings.ts` - Settings cache (5-minute TTL)
+- `backend/src/routes/admin-settings.ts` - Admin settings CRUD
+- `backend/src/routes/jobs.ts` - Response sanitization
+- `frontend/src/app/(admin)/admin/settings/page.tsx` - Admin Settings UI
 
 ### Workflow Execution Engine
 
