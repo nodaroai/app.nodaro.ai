@@ -72,32 +72,57 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
 
 const CATEGORIES = Array.from(new Set(NODE_OPTIONS.map((n) => n.category)))
 
+// Category-specific hover colors for icons
+const CATEGORY_ICON_HOVER: Record<string, string> = {
+  Input: "group-hover:text-[#007AFF]",
+  Parameter: "group-hover:text-[#6366F1]",
+  AI: "group-hover:text-[#ff0073]",
+  Processing: "group-hover:text-[#475569]",
+  Character: "group-hover:text-[#EC4899]",
+  Object: "group-hover:text-[#10B981]",
+  Location: "group-hover:text-[#06B6D4]",
+  Scene: "group-hover:text-[#8B5CF6]",
+  Output: "group-hover:text-[#22C55E]",
+}
+
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
   return (
     <>
       {/* Unified Asset Library - quick access to all assets */}
-      <div className="flex flex-col gap-1 pb-2 mb-2 border-b dark:border-[#2D2D2D]">
-        <span className="font-sans text-[10px] font-bold uppercase tracking-[0.05em] text-[#ff0073]">
+      <div className="flex flex-col gap-1 pb-3 mb-3 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
+        <span className="font-sans text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B] mb-1">
           Library
         </span>
         <UnifiedAssetLibraryButton />
       </div>
       {CATEGORIES.map((cat) => (
-        <div key={cat} className="flex flex-col gap-1">
-          <span className="font-sans text-[10px] font-bold uppercase tracking-[0.05em] text-[#ff0073]">
+        <div key={cat} className="flex flex-col gap-0.5 mb-4">
+          <span className="font-sans text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#ff0073] mb-1.5">
             {cat}
           </span>
           {NODE_OPTIONS.filter((n) => n.category === cat).map((node) => (
-            <Button
+            <button
               key={node.type}
-              variant="ghost"
-              size="sm"
-              className="justify-start gap-2 h-10 touch-manipulation"
+              type="button"
+              className={cn(
+                "group flex items-center gap-2.5 px-2.5 py-2 rounded-lg",
+                "hover:bg-[#F1F5F9] dark:hover:bg-[#2D2D2D]",
+                "cursor-pointer transition-colors touch-manipulation",
+                "text-left w-full"
+              )}
               onClick={() => onAdd(node.type)}
             >
-              {node.icon}
-              {node.label}
-            </Button>
+              <span className={cn(
+                "text-[#64748B] dark:text-[#94A3B8] transition-colors",
+                CATEGORY_ICON_HOVER[node.category] || "group-hover:text-[#ff0073]",
+                "dark:group-hover:text-[#ff0073]"
+              )}>
+                {node.icon}
+              </span>
+              <span className="text-[#1E293B] dark:text-[#E2E8F0] text-sm">
+                {node.label}
+              </span>
+            </button>
           ))}
         </div>
       ))}
@@ -135,8 +160,8 @@ export function NodeToolbar() {
   return (
     <>
       {/* Desktop: static sidebar panel */}
-      <div className="absolute top-4 left-4 z-10 hidden md:flex flex-col gap-2 bg-card dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border dark:border-[#2D2D2D] rounded-lg p-3 shadow-md w-48 max-h-[calc(100vh-6rem)] overflow-y-auto">
-        <span className="font-sans text-[11px] font-bold uppercase tracking-[0.05em] text-[#ff0073]">
+      <div className="absolute top-4 left-4 z-10 hidden md:flex flex-col gap-2 bg-[#F8FAFC] dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border-r border-[#E2E8F0] dark:border-[#2D2D2D] rounded-lg px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto">
+        <span className="font-sans text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#ff0073] mb-1">
           Add Node
         </span>
         <NodeList onAdd={handleAddNode} />
@@ -160,20 +185,20 @@ export function NodeToolbar() {
             onClick={() => setSheetOpen(false)}
           />
           {/* Sheet */}
-          <div className="absolute bottom-0 left-0 right-0 bg-card dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border-t dark:border-[#2D2D2D] rounded-t-xl shadow-xl animate-in slide-in-from-bottom duration-200">
+          <div className="absolute bottom-0 left-0 right-0 bg-[#F8FAFC] dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border-t border-[#E2E8F0] dark:border-[#2D2D2D] rounded-t-xl shadow-xl animate-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
-              <span className="text-sm font-semibold">Add Node</span>
+              <span className="text-sm font-semibold text-[#1E293B] dark:text-[#E2E8F0]">Add Node</span>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 text-[#64748B] hover:text-[#1E293B] dark:text-[#94A3B8] dark:hover:text-white"
                 onClick={() => setSheetOpen(false)}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="h-px bg-border" />
-            <div className="px-4 py-3 flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
+            <div className="h-px bg-[#E2E8F0] dark:bg-[#2D2D2D]" />
+            <div className="px-4 py-4 flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
               <NodeList onAdd={handleAddNode} />
             </div>
             {/* Safe area padding for devices with home indicator */}
