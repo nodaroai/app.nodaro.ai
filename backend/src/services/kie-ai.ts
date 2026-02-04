@@ -30,6 +30,47 @@ const MAX_POLL_ATTEMPTS = 150  // Max 5 minutes (150 * 2s)
 const MAX_POLL_ATTEMPTS_VIDEO = 300  // Max 10 minutes for video (300 * 2s)
 
 // =============================================================================
+// ERROR SANITIZATION (Cloud edition: don't expose "KIE.ai" to customers)
+// =============================================================================
+
+/**
+ * Create a sanitized error for user display while logging full details.
+ * In cloud edition, we don't want to expose "KIE.ai" provider name to customers.
+ */
+function createSanitizedError(
+  internalMessage: string,
+  context: string,
+): Error {
+  // Log the full internal error for debugging (visible in Railway logs)
+  console.error(`[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`)
+
+  // Parse specific error patterns and return user-friendly messages
+  const lowerMsg = internalMessage.toLowerCase()
+
+  if (lowerMsg.includes("aspect_ratio") || lowerMsg.includes("aspect ratio")) {
+    return new Error("Invalid aspect ratio setting. Please try a different option.")
+  }
+  if (lowerMsg.includes("timed out") || lowerMsg.includes("timeout")) {
+    return new Error("Generation timed out. Please try again.")
+  }
+  if (lowerMsg.includes("not configured") || lowerMsg.includes("api_key")) {
+    return new Error("Service is not properly configured. Please contact support.")
+  }
+  if (lowerMsg.includes("rate limit") || lowerMsg.includes("quota") || lowerMsg.includes("429")) {
+    return new Error("Service is temporarily busy. Please try again in a moment.")
+  }
+  if (lowerMsg.includes("invalid") || lowerMsg.includes("validation")) {
+    return new Error("Invalid input parameters. Please check your settings and try again.")
+  }
+  if (lowerMsg.includes("not support")) {
+    return new Error("This operation is not supported with the current provider.")
+  }
+
+  // Generic fallback - hide all provider-specific details
+  return new Error(`${context} failed. Please try again or contact support if the issue persists.`)
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -83,7 +124,7 @@ async function runKieTask(
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
-    throw new Error("KIE_API_KEY is not configured")
+    throw createSanitizedError("KIE_API_KEY is not configured", "Image generation")
   }
 
   const requestBody = { model, input }
@@ -105,22 +146,22 @@ async function runKieTask(
   console.log(`[KIE.ai] Response status: ${createResponse.status}`)
 
   if (!createResponse.ok) {
-    throw new Error(`KIE.ai createTask failed: ${createResponse.status} - ${responseText}`)
+    throw createSanitizedError(`createTask failed: ${createResponse.status} - ${responseText}`, "Generation")
   }
 
   let createData: KieTaskResponse
   try {
     createData = JSON.parse(responseText) as KieTaskResponse
   } catch {
-    throw new Error(`KIE.ai response is not valid JSON: ${responseText}`)
+    throw createSanitizedError(`response is not valid JSON: ${responseText}`, "Generation")
   }
 
   if (createData.code !== 0 && createData.code !== 200 && createData.code !== undefined) {
-    throw new Error(`KIE.ai createTask error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`)
+    throw createSanitizedError(`createTask error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`, "Generation")
   }
 
   if (!createData.data?.taskId) {
-    throw new Error(`KIE.ai createTask response missing taskId: ${JSON.stringify(createData)}`)
+    throw createSanitizedError(`createTask response missing taskId: ${JSON.stringify(createData)}`, "Generation")
   }
 
   const taskId = createData.data.taskId
@@ -162,14 +203,14 @@ async function runKieTask(
     if (state === "success") {
       const resultJsonStr = detailData.data.resultJson
       if (!resultJsonStr) {
-        throw new Error(`KIE.ai task succeeded but no resultJson found`)
+        throw createSanitizedError("task succeeded but no resultJson found", "Generation")
       }
 
       let resultJson: KieResultJson
       try {
         resultJson = JSON.parse(resultJsonStr) as KieResultJson
       } catch {
-        throw new Error(`KIE.ai resultJson is not valid JSON: ${resultJsonStr}`)
+        throw createSanitizedError(`resultJson is not valid JSON: ${resultJsonStr}`, "Generation")
       }
 
       return { resultJson, costTime: detailData.data.costTime }
@@ -177,11 +218,11 @@ async function runKieTask(
 
     if (state === "failed") {
       const failMsg = detailData.data.failMsg ?? detailData.data.failCode ?? "Unknown error"
-      throw new Error(`KIE.ai task failed: ${failMsg}`)
+      throw createSanitizedError(`task failed: ${failMsg}`, "Generation")
     }
   }
 
-  throw new Error(`KIE.ai task timed out after ${maxAttempts * POLL_INTERVAL_MS / 1000} seconds`)
+  throw createSanitizedError(`task timed out after ${maxAttempts * POLL_INTERVAL_MS / 1000} seconds`, "Generation")
 }
 
 // =============================================================================
@@ -195,7 +236,7 @@ export async function generateImageKie(
 ): Promise<KieResult> {
   const modelConfig = KIE_IMAGE_MODELS[provider]
   if (!modelConfig) {
-    throw new Error(`KIE.ai does not support image provider: ${provider}`)
+    throw createSanitizedError(`does not support image provider: ${provider}`, "Image generation")
   }
 
   console.log(`[KIE.ai] Generating image with ${modelConfig.model}: "${prompt}"`)
@@ -232,7 +273,7 @@ export async function generateImageKie(
 
   const imageUrl = resultJson.resultUrls?.[0]
   if (!imageUrl) {
-    throw new Error(`KIE.ai image task succeeded but no URL in resultUrls`)
+    throw createSanitizedError("image task succeeded but no URL in resultUrls", "Image generation")
   }
 
   console.log(`[KIE.ai] Image completed: ${imageUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
@@ -251,7 +292,7 @@ export async function editImageKie(
 ): Promise<KieResult> {
   const modelConfig = KIE_IMAGE_MODELS[provider]
   if (!modelConfig) {
-    throw new Error(`KIE.ai does not support edit image provider: ${provider}`)
+    throw createSanitizedError(`does not support edit image provider: ${provider}`, "Image editing")
   }
 
   console.log(`[KIE.ai] Editing image with ${modelConfig.model}`)
@@ -271,7 +312,7 @@ export async function editImageKie(
 
   const outputUrl = resultJson.resultUrls?.[0]
   if (!outputUrl) {
-    throw new Error(`KIE.ai edit image task succeeded but no URL in resultUrls`)
+    throw createSanitizedError("edit image task succeeded but no URL in resultUrls", "Image editing")
   }
 
   console.log(`[KIE.ai] Edit image completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
@@ -292,7 +333,7 @@ export async function imageToVideoKie(
 ): Promise<KieResult> {
   const modelConfig = KIE_VIDEO_MODELS[provider]
   if (!modelConfig) {
-    throw new Error(`KIE.ai does not support video provider: ${provider}`)
+    throw createSanitizedError(`does not support video provider: ${provider}`, "Video generation")
   }
 
   console.log(`[KIE.ai] Generating video with ${modelConfig.model}`)
@@ -315,7 +356,7 @@ export async function imageToVideoKie(
 
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
   if (!videoUrl) {
-    throw new Error(`KIE.ai video task succeeded but no URL found`)
+    throw createSanitizedError("video task succeeded but no URL found", "Video generation")
   }
 
   console.log(`[KIE.ai] Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
@@ -334,7 +375,7 @@ export async function textToVideoKie(
 ): Promise<KieResult> {
   const modelConfig = KIE_TEXT_TO_VIDEO_MODELS[provider]
   if (!modelConfig) {
-    throw new Error(`KIE.ai does not support text-to-video provider: ${provider}`)
+    throw createSanitizedError(`does not support text-to-video provider: ${provider}`, "Video generation")
   }
 
   console.log(`[KIE.ai] Generating text-to-video with ${modelConfig.model}: "${prompt}"`)
@@ -349,7 +390,7 @@ export async function textToVideoKie(
 
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
   if (!videoUrl) {
-    throw new Error(`KIE.ai text-to-video task succeeded but no URL found`)
+    throw createSanitizedError("text-to-video task succeeded but no URL found", "Video generation")
   }
 
   console.log(`[KIE.ai] Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
@@ -369,7 +410,7 @@ export async function generateMusicKie(
 ): Promise<KieResult> {
   const modelConfig = KIE_MUSIC_MODELS[provider]
   if (!modelConfig) {
-    throw new Error(`KIE.ai does not support music provider: ${provider}`)
+    throw createSanitizedError(`does not support music provider: ${provider}`, "Music generation")
   }
 
   console.log(`[KIE.ai] Generating music with ${modelConfig.model}: "${prompt}"`)
@@ -388,7 +429,7 @@ export async function generateMusicKie(
 
   const audioUrl = resultJson.resultUrls?.[0] ?? resultJson.audioUrl
   if (!audioUrl) {
-    throw new Error(`KIE.ai music task succeeded but no URL found`)
+    throw createSanitizedError("music task succeeded but no URL found", "Music generation")
   }
 
   console.log(`[KIE.ai] Music completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
@@ -407,7 +448,7 @@ export async function textToSpeechKie(
 ): Promise<KieResult> {
   const modelConfig = KIE_TTS_MODELS[provider]
   if (!modelConfig) {
-    throw new Error(`KIE.ai does not support TTS provider: ${provider}`)
+    throw createSanitizedError(`does not support TTS provider: ${provider}`, "Speech generation")
   }
 
   console.log(`[KIE.ai] Generating TTS with ${modelConfig.model}, voice: ${voice ?? "default"}`)
@@ -421,7 +462,7 @@ export async function textToSpeechKie(
 
   const audioUrl = resultJson.resultUrls?.[0] ?? resultJson.audioUrl
   if (!audioUrl) {
-    throw new Error(`KIE.ai TTS task succeeded but no URL found`)
+    throw createSanitizedError("TTS task succeeded but no URL found", "Speech generation")
   }
 
   console.log(`[KIE.ai] TTS completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`)

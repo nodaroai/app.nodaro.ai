@@ -74,18 +74,20 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
 
   // GPT Image family
+  // Note: GPT Image only supports specific aspect_ratio values: "1:1", "16:9", "9:16"
+  // and requires quality parameter: "low", "medium", "high"
   "gpt-image": {
     model: "gpt-image/1.5-text-to-image",
     credits: 12,
     cost: 0.06,
-    extraParams: { aspect_ratio: "16:9" },
+    extraParams: { aspect_ratio: "1:1", quality: "medium" },
   },
   "gpt-image-i2i": {
     model: "gpt-image/1.5-image-to-image",
     credits: 12,
     cost: 0.06,
     inputType: "image-to-image",
-    extraParams: { aspect_ratio: "16:9" },
+    extraParams: { aspect_ratio: "1:1", quality: "medium" },
   },
 
   // Recraft utilities
