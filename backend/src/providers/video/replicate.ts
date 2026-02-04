@@ -9,6 +9,8 @@ interface ModelConfig {
   model: string
   imageParam: string
   endFrameParam?: string     // Parameter name for end frame (if supported)
+  durationParam?: string     // Parameter name for duration (default: "length")
+  validDurations?: number[]  // Valid duration values (if restricted)
   extraInput?: Record<string, unknown>
 }
 
@@ -34,7 +36,9 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
     model: "google/veo-3.1",
     imageParam: "first_frame",
     endFrameParam: "last_frame", // veo3.1 supports first+last frame interpolation
-    extraInput: { generate_audio: true },
+    durationParam: "duration",   // veo3.1 uses "duration" not "length"
+    validDurations: [4, 6, 8],   // veo3.1 only supports 4, 6, or 8 seconds
+    extraInput: { generate_audio: true, resolution: "1080p" },
   },
   kling: {
     model: "kwaivgi/kling-v1.6-pro",
@@ -82,8 +86,24 @@ export async function imageToVideo(
   if (resolvedProvider === "veo3" || resolvedProvider === "veo3.1") {
     extraInput.generate_audio = generateAudio !== false
   }
+
+  // Handle duration parameter
   if (duration && duration > 0) {
-    extraInput.length = duration
+    const durationParam = cfg.durationParam ?? "length"
+    let finalDuration = duration
+
+    // If provider has restricted valid durations, clamp to nearest valid value
+    if (cfg.validDurations && cfg.validDurations.length > 0) {
+      // Find the closest valid duration
+      finalDuration = cfg.validDurations.reduce((prev, curr) =>
+        Math.abs(curr - duration) < Math.abs(prev - duration) ? curr : prev
+      )
+      if (finalDuration !== duration) {
+        console.log(`[imageToVideo] Duration ${duration}s clamped to ${finalDuration}s (valid: ${cfg.validDurations.join(", ")})`)
+      }
+    }
+
+    extraInput[durationParam] = finalDuration
   }
 
   // Add end frame if provider supports it
