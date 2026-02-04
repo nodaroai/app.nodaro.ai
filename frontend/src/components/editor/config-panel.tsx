@@ -1506,14 +1506,14 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
             <SelectItem value="veo">VEO 2</SelectItem>
             <SelectItem value="veo3">VEO 3</SelectItem>
-            <SelectItem value="veo3.1">VEO 3.1</SelectItem>
+            {/* Note: veo3.1 removed - it doesn't support video input, only image input */}
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
             <SelectItem value="pika">Pika</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
-      {(data.provider === "veo3" || data.provider === "veo3.1") && (
+      {data.provider === "veo3" && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 px-1">
             <input
@@ -1525,35 +1525,18 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             />
             <label htmlFor="v2vGenerateAudio" className="text-xs">Generate Audio</label>
           </div>
-          <p className="text-xs text-muted-foreground px-1">VEO 3/3.1 creates AI audio from the prompt. Disable for silent video.</p>
+          <p className="text-xs text-muted-foreground px-1">VEO 3 creates AI audio from the prompt. Disable for silent video.</p>
         </div>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        {data.provider === "veo3.1" ? (
-          <Select
-            value={String(data.duration)}
-            onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="4">4 seconds</SelectItem>
-              <SelectItem value="6">6 seconds</SelectItem>
-              <SelectItem value="8">8 seconds</SelectItem>
-            </SelectContent>
-          </Select>
-        ) : (
-          <Input
-            type="number"
-            min={1}
-            max={30}
-            value={data.duration}
-            onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
-          />
-        )}
+        <Input
+          type="number"
+          min={1}
+          max={30}
+          value={data.duration}
+          onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
+        />
       </MappableField>
-      {data.provider === "veo3.1" && (
-        <p className="text-xs text-muted-foreground px-1">VEO 3.1 only supports 4, 6, or 8 second durations.</p>
-      )}
     </div>
   )
 }

@@ -6,7 +6,8 @@ import { videoQueue } from "../lib/queue.js"
 const videoToVideoBody = z.object({
   videoUrl: z.string().url(),
   prompt: z.string().max(2000).optional(),
-  provider: z.enum(["veo", "veo3", "veo3.1", "kling", "runway", "pika", "sora", "minimax"]).optional(),
+  // Note: veo3.1 removed - it doesn't support video input, only image input
+  provider: z.enum(["veo", "veo3", "kling", "runway", "pika", "sora", "minimax"]).optional(),
   userId: z.string().uuid().optional(),
 })
 

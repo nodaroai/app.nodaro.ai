@@ -412,7 +412,8 @@ export type VideoToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika"
+  // Note: veo3.1 removed - it doesn't support video input, only image input
+  provider: "minimax" | "veo" | "veo3" | "kling" | "runway" | "pika"
   model: string
   duration: number
   fieldMappings: FieldMappings
