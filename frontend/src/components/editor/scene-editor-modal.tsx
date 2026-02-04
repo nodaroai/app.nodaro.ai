@@ -245,31 +245,31 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9998] bg-black/80 dark:bg-black/90 flex items-center justify-center"
+      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm dark:bg-black/70 dark:backdrop-blur-md"
       onClick={onClose}
     >
       <div
-        className="relative bg-background dark:bg-[#1E1E1E] dark:border dark:border-[#2D2D2D] rounded-lg w-[90vw] h-[85vh] max-w-6xl flex flex-col overflow-hidden shadow-2xl"
+        className="relative bg-background dark:bg-[#1E1E1E] border border-border dark:border-[#2D2D2D] rounded-xl w-[90vw] h-[85vh] max-w-6xl flex flex-col overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b dark:border-[#2D2D2D] dark:bg-[#ff0073] shrink-0">
+        {/* Header - Premium subtle style */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-[#2D2D2D] dark:bg-[#1E1E1E] shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide dark:text-white">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-foreground dark:text-[#ff0073]">
               {data.sceneName ? `Scene: ${data.sceneName}` : "Scene Editor"}
             </h2>
             {linkedActiveScript && data.sourceSceneIndex >= 0 && (
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground dark:text-white/70 bg-muted dark:bg-white/20 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] text-muted-foreground dark:text-[#64748B] bg-muted dark:bg-[#2D2D2D] px-2 py-0.5 rounded-full">
                   Linked: {linkedActiveScript?.title ?? linkedScriptData?.label ?? "Script"} / {linkedSceneName ? `${data.sourceSceneIndex + 1}. ${linkedSceneName}` : `Scene ${data.sourceSceneIndex + 1}`}
                 </span>
-                <button type="button" onClick={handleSyncFromScript} className="text-[10px] text-primary dark:text-white hover:underline">Sync</button>
+                <button type="button" onClick={handleSyncFromScript} className="text-[10px] text-[#ff0073] hover:text-[#ff0073]/80 transition-colors">Sync</button>
               </div>
             )}
           </div>
           <button
             type="button"
-            className="p-1.5 hover:bg-muted dark:hover:bg-white/20 rounded-md transition-colors dark:text-white"
+            className="p-1.5 text-[#64748B] hover:text-foreground dark:hover:text-white rounded-lg hover:bg-muted dark:hover:bg-[#2D2D2D] transition-colors"
             onClick={onClose}
           >
             <X className="w-4 h-4" />
@@ -279,16 +279,18 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
         {/* Body - side by side */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left: Image/Video + Prompt Preview */}
-          <div className="w-1/2 flex flex-col border-r dark:border-[#2D2D2D] overflow-y-auto">
+          <div className="w-1/2 flex flex-col border-r border-[#2D2D2D] overflow-y-auto bg-[#1E1E1E]">
             {/* Tab toggle when videos exist */}
             {videoResults.length > 0 && (
-              <div className="px-4 pt-3 pb-0 shrink-0">
-                <div className="flex gap-1 bg-muted/40 dark:bg-[#2D2D2D] rounded-lg p-0.5">
+              <div className="px-4 pt-4 pb-0 shrink-0">
+                <div className="flex gap-1.5 bg-muted/30 dark:bg-[#121212] rounded-full p-1">
                   <button
                     type="button"
                     onClick={() => setMediaTab("image")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      mediaTab === "image" ? "bg-[#ff0073] text-white shadow-sm" : "text-muted-foreground dark:text-[#94A3B8] hover:text-foreground dark:hover:text-white"
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-full transition-all ${
+                      mediaTab === "image"
+                        ? "bg-[#ff0073] text-white shadow-md"
+                        : "text-[#94A3B8] hover:text-foreground dark:hover:text-white hover:bg-muted/50 dark:hover:bg-[#2D2D2D]"
                     }`}
                   >
                     <Palette className="w-3.5 h-3.5" /> Image
@@ -296,8 +298,10 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   <button
                     type="button"
                     onClick={() => setMediaTab("video")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      mediaTab === "video" ? "bg-[#ff0073] text-white shadow-sm" : "text-muted-foreground dark:text-[#94A3B8] hover:text-foreground dark:hover:text-white"
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-full transition-all ${
+                      mediaTab === "video"
+                        ? "bg-[#ff0073] text-white shadow-md"
+                        : "text-[#94A3B8] hover:text-foreground dark:hover:text-white hover:bg-muted/50 dark:hover:bg-[#2D2D2D]"
                     }`}
                   >
                     <Video className="w-3.5 h-3.5" /> Video
@@ -311,7 +315,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
               {mediaTab === "image" && (
                 <>
                   {status === "running" && (
-                    <div className="flex items-center justify-center h-64 rounded-lg bg-muted/30 dark:bg-[#121212]">
+                    <div className="flex items-center justify-center h-64 rounded-xl bg-[#121212] border border-[#2D2D2D]">
                       <Loader2 className="w-8 h-8 animate-spin text-[#ff0073]" />
                     </div>
                   )}
@@ -321,13 +325,13 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                       <img
                         src={activeUrl}
                         alt="Scene"
-                        className="w-full rounded-lg object-contain max-h-[50vh] cursor-pointer hover:opacity-90 transition-opacity bg-muted/20"
+                        className="w-full rounded-xl object-contain max-h-[50vh] cursor-pointer hover:opacity-90 transition-opacity bg-[#121212] border border-[#2D2D2D]"
                         onClick={() => setPreviewOpen(true)}
                       />
-                      <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
-                          className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-md"
+                          className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-lg backdrop-blur-sm transition-colors"
                           onClick={() => setPreviewOpen(true)}
                           title="Full preview"
                         >
@@ -335,7 +339,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         </button>
                         <button
                           type="button"
-                          className="p-1.5 bg-purple-500/80 hover:bg-purple-500 text-white rounded-md"
+                          className="p-2 bg-[#ff0073]/80 hover:bg-[#ff0073] text-white rounded-lg backdrop-blur-sm transition-colors"
                           onClick={() => setExtractOpen(true)}
                           title="Extract references"
                         >
@@ -343,7 +347,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         </button>
                         <button
                           type="button"
-                          className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-md"
+                          className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm transition-colors"
                           onClick={() => setDeleteConfirm(activeIndex)}
                           title="Delete this result"
                         >
@@ -361,8 +365,8 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   )}
 
                   {status !== "running" && !activeUrl && status !== "failed" && (
-                    <div className="flex items-center justify-center h-48 rounded-lg border-2 border-dashed border-muted-foreground/20 dark:border-[#2D2D2D] dark:bg-[#121212] text-muted-foreground/40 dark:text-[#64748B]">
-                      <span className="text-sm">No image generated yet</span>
+                    <div className="flex items-center justify-center h-48 rounded-xl border-2 border-dashed border-[#2D2D2D] bg-[#121212] text-[#64748B]">
+                      <span className="text-sm font-mono">No image generated yet</span>
                     </div>
                   )}
 
@@ -398,10 +402,10 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
               {mediaTab === "video" && (
                 <>
                   {generatingVideo && (
-                    <div className="flex items-center justify-center h-64 rounded-lg bg-muted/30 dark:bg-[#121212]">
+                    <div className="flex items-center justify-center h-64 rounded-xl bg-[#121212] border border-[#2D2D2D]">
                       <div className="flex flex-col items-center gap-2">
                         <Loader2 className="w-8 h-8 animate-spin text-[#ff0073]" />
-                        <span className="text-xs text-muted-foreground dark:text-[#94A3B8]">Generating video...</span>
+                        <span className="text-xs text-[#94A3B8] font-mono">Generating video...</span>
                       </div>
                     </div>
                   )}
@@ -412,14 +416,14 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         key={activeVideoUrl}
                         src={activeVideoUrl}
                         controls
-                        className="w-full rounded-lg max-h-[50vh] bg-black"
+                        className="w-full rounded-xl max-h-[50vh] bg-black border border-[#2D2D2D]"
                       />
                     </div>
                   )}
 
                   {!generatingVideo && !activeVideoUrl && (
-                    <div className="flex items-center justify-center h-48 rounded-lg border-2 border-dashed border-muted-foreground/20 dark:border-[#2D2D2D] dark:bg-[#121212] text-muted-foreground/40 dark:text-[#64748B]">
-                      <span className="text-sm">No video generated yet</span>
+                    <div className="flex items-center justify-center h-48 rounded-xl border-2 border-dashed border-[#2D2D2D] bg-[#121212] text-[#64748B]">
+                      <span className="text-sm font-mono">No video generated yet</span>
                     </div>
                   )}
 
@@ -457,23 +461,23 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
             {/* Prompt Preview */}
             <div className="px-4 pb-4">
               <Accordion type="single" collapsible>
-                <AccordionItem value="prompt" className="border dark:border-[#2D2D2D] rounded-lg bg-muted/20 dark:bg-[#121212]">
-                  <AccordionTrigger className="px-3 py-2 text-xs hover:no-underline">
+                <AccordionItem value="prompt" className="border border-[#2D2D2D] rounded-xl bg-[#121212] overflow-hidden">
+                  <AccordionTrigger className="px-4 py-3 text-xs hover:no-underline hover:bg-[#1E1E1E] transition-colors">
                     <span className="flex items-center gap-2">
-                      <span className="font-medium text-muted-foreground dark:text-[#94A3B8]">Generated Prompt</span>
-                      <span className={`text-[10px] ${
+                      <span className="font-semibold text-[11px] uppercase tracking-widest text-[#64748B]">Generated Prompt</span>
+                      <span className={`text-[10px] font-mono ${
                         generatedPrompt.length > PROMPT_MAX_LENGTH
                           ? "text-red-500 font-medium"
                           : generatedPrompt.length > PROMPT_MAX_LENGTH * 0.9
                             ? "text-amber-500"
-                            : "text-muted-foreground dark:text-[#64748B]"
+                            : "text-[#64748B]"
                       }`}>
                         ({generatedPrompt.length}/{PROMPT_MAX_LENGTH})
                       </span>
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 pb-3 pt-0">
-                    <p className="text-xs leading-relaxed whitespace-pre-wrap break-words dark:text-[#E2E8F0]">
+                  <AccordionContent className="px-4 pb-4 pt-0">
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap break-words text-[#E2E8F0] font-mono">
                       {displayPrompt || "Configure scene settings to generate a prompt..."}
                     </p>
                   </AccordionContent>
@@ -483,10 +487,10 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
           </div>
 
           {/* Right: Wizard */}
-          <div className="w-1/2 flex flex-col overflow-hidden">
-            {/* Stepper */}
-            <div className="px-4 pt-4 pb-2 shrink-0">
-              <div className="flex items-center justify-between">
+          <div className="w-1/2 flex flex-col overflow-hidden dark:bg-[#1E1E1E]">
+            {/* Stepper - Premium pill tabs */}
+            <div className="px-5 pt-5 pb-3 shrink-0">
+              <div className="flex items-center gap-2">
                 {STEPS.map((s, idx) => {
                   const Icon = s.icon
                   const isActive = currentStep === s.step
@@ -496,23 +500,23 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                       <button
                         type="button"
                         onClick={() => setCurrentStep(s.step)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-all ${
                           isActive
-                            ? "bg-[#ff0073] text-white shadow-sm"
+                            ? "bg-[#ff0073] text-white shadow-md"
                             : isComplete
-                              ? "text-green-600 dark:text-green-400 hover:bg-muted dark:hover:bg-[#2D2D2D]"
-                              : "text-muted-foreground dark:text-[#94A3B8] bg-muted/50 dark:bg-[#2D2D2D] hover:bg-muted dark:hover:bg-[#3D3D3D]"
+                              ? "text-green-500 dark:text-green-400 bg-green-500/10 dark:bg-green-500/10 hover:bg-green-500/20"
+                              : "text-[#94A3B8] bg-[#2D2D2D] hover:bg-[#3D3D3D] hover:text-white"
                         }`}
                       >
                         {isComplete && !isActive ? (
-                          <Check className="w-3.5 h-3.5 text-green-500 dark:text-green-400" />
+                          <Check className="w-3.5 h-3.5" />
                         ) : (
                           <Icon className="w-3.5 h-3.5" />
                         )}
                         <span className="hidden sm:inline">{s.label}</span>
                       </button>
                       {idx < STEPS.length - 1 && (
-                        <div className="flex-1 h-px border-t border-dashed border-muted-foreground/30 dark:border-[#2D2D2D] mx-1" />
+                        <div className="flex-1 h-px bg-[#2D2D2D] mx-2" />
                       )}
                     </div>
                   )
@@ -521,26 +525,26 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
             </div>
 
             {/* Step Content */}
-            <div className="flex-1 overflow-y-auto px-4 pb-2">
+            <div className="flex-1 overflow-y-auto px-5 pb-3">
               <SceneConfig key={currentStep} data={data} onUpdate={handleUpdate} step={currentStep} nodeId={nodeId} />
             </div>
 
             {/* Step Action Button + Navigation */}
-            <div className="px-4 py-3 border-t dark:border-[#2D2D2D] shrink-0 flex flex-col gap-2">
+            <div className="px-5 py-4 border-t border-[#2D2D2D] shrink-0 flex flex-col gap-3 bg-[#1E1E1E]">
               {/* Per-step action button */}
               {currentStep === 2 && (
                 <button
                   type="button"
                   disabled={status === "running"}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 text-white rounded-md transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                   onClick={() => runSingleNode?.(nodeId)}
                 >
                   {status === "running" ? (
-                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
                   ) : activeUrl ? (
-                    <><Play className="w-3.5 h-3.5" /> Regenerate Image</>
+                    <><Play className="w-4 h-4" /> Regenerate Image</>
                   ) : (
-                    <><Play className="w-3.5 h-3.5" /> Generate Scene Image</>
+                    <><Play className="w-4 h-4" /> Generate Scene Image</>
                   )}
                 </button>
               )}
@@ -549,66 +553,66 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   type="button"
                   disabled={generatingAllAudio || !(data?.dialogue ?? []).some((d) => d.text.trim() && !(d.generatedAudioResults?.length))}
                   onClick={handleGenerateAllAudio}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 text-white rounded-md transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                 >
                   {generatingAllAudio ? (
-                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating {audioProgress.current}/{audioProgress.total}...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Generating {audioProgress.current}/{audioProgress.total}...</>
                   ) : (
-                    <><Mic className="w-3.5 h-3.5" /> Generate All Audio</>
+                    <><Mic className="w-4 h-4" /> Generate All Audio</>
                   )}
                 </button>
               )}
               {currentStep === 4 && (
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2">
                   <button
                     type="button"
                     disabled={!activeUrl || generatingVideo}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 text-white rounded-md transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                     onClick={handleGenerateVideo}
                     title={activeUrl ? "Generate video from scene image" : "Generate an image first (Step 2)"}
                   >
                     {generatingVideo ? (
-                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating Video...</>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating Video...</>
                     ) : activeVideoUrl ? (
-                      <><Video className="w-3.5 h-3.5" /> Regenerate Video</>
+                      <><Video className="w-4 h-4" /> Regenerate Video</>
                     ) : (
-                      <><Video className="w-3.5 h-3.5" /> Generate Video</>
+                      <><Video className="w-4 h-4" /> Generate Video</>
                     )}
                   </button>
                   {videoError && (
-                    <p className="text-[10px] text-red-500 text-center">{videoError}</p>
+                    <p className="text-xs text-red-500 text-center">{videoError}</p>
                   )}
                 </div>
               )}
 
               {/* Navigation */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-1">
                 <button
                   type="button"
                   disabled={currentStep === 1}
                   onClick={() => setCurrentStep((currentStep - 1) as WizardStep)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md text-muted-foreground dark:text-[#94A3B8] hover:bg-muted dark:hover:bg-[#2D2D2D] hover:text-foreground dark:hover:text-white disabled:opacity-30 disabled:cursor-default transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[#94A3B8] hover:text-white disabled:opacity-30 disabled:cursor-default transition-colors"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" /> Back
+                  <ChevronLeft className="w-4 h-4" /> Back
                 </button>
-                <span className="text-[10px] text-muted-foreground dark:text-[#64748B]">
+                <span className="text-sm text-[#64748B]">
                   Step {currentStep} of {STEPS.length}
                 </span>
                 {currentStep < 4 ? (
                   <button
                     type="button"
                     onClick={() => setCurrentStep((currentStep + 1) as WizardStep)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/20 transition-colors"
+                    className="flex items-center gap-1.5 px-6 py-2 text-sm font-medium rounded-lg bg-[#ff0073] text-white hover:bg-[#e00066] transition-all shadow-md hover:shadow-lg"
                   >
-                    Next <ChevronRight className="w-3.5 h-3.5" />
+                    Next <ChevronRight className="w-4 h-4" />
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={onClose}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-[#ff0073] text-white hover:bg-[#e0005f] transition-colors"
+                    className="flex items-center gap-1.5 px-6 py-2 text-sm font-medium rounded-lg bg-[#ff0073] text-white hover:bg-[#e00066] transition-all shadow-md hover:shadow-lg"
                   >
-                    Done <Check className="w-3.5 h-3.5" />
+                    Done <Check className="w-4 h-4" />
                   </button>
                 )}
               </div>
