@@ -19,6 +19,7 @@ import {
   KIE_IMAGE_MODELS,
   KIE_VIDEO_MODELS,
   KIE_TEXT_TO_VIDEO_MODELS,
+  KIE_LIP_SYNC_MODELS,
   KIE_MUSIC_MODELS,
   KIE_TTS_MODELS,
   type KieModelConfig,
@@ -360,17 +361,36 @@ export async function imageToVideoKie(
   console.log(`[KIE.ai] Generating video with ${modelConfig.model}`)
   console.log(`[KIE.ai] Image: ${imageUrl}, Prompt: "${prompt ?? ""}"`)
 
+  // Start with extra params from config (sound, duration defaults, etc.)
   const input: Record<string, unknown> = {
-    image: imageUrl,
+    ...(modelConfig.extraParams ?? {}),
     prompt: prompt ?? "smooth cinematic motion",
   }
 
-  if (duration) {
-    input.duration = duration
+  // Handle image parameter - different models use different param names
+  const imageParamName = modelConfig.imageParam ?? "image"
+  if (imageParamName === "image_urls") {
+    // Array format for minimax, kling, grok, sora
+    input[imageParamName] = [imageUrl]
+  } else {
+    // Single URL format for veo, runway, kling-turbo
+    input[imageParamName] = imageUrl
   }
 
+  // Override duration if provided
+  if (duration) {
+    input.duration = String(duration)  // KIE expects string for duration
+  }
+
+  // Handle end frame for models that support it
   if (endFrameUrl) {
-    input.end_frame = endFrameUrl
+    if (provider === "kling-turbo") {
+      input.tail_image_url = endFrameUrl
+    } else if (provider === "veo3.1") {
+      input.end_frame_url = endFrameUrl
+    } else {
+      input.end_frame = endFrameUrl
+    }
   }
 
   const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
@@ -393,6 +413,7 @@ export async function textToVideoKie(
   prompt: string,
   provider: string = "minimax",
   duration?: number,
+  aspectRatio?: string,
 ): Promise<KieResult> {
   const modelConfig = KIE_TEXT_TO_VIDEO_MODELS[provider]
   if (!modelConfig) {
@@ -401,10 +422,20 @@ export async function textToVideoKie(
 
   console.log(`[KIE.ai] Generating text-to-video with ${modelConfig.model}: "${prompt}"`)
 
-  const input: Record<string, unknown> = { prompt }
+  // Start with extra params from config
+  const input: Record<string, unknown> = {
+    ...(modelConfig.extraParams ?? {}),
+    prompt,
+  }
 
+  // Override duration if provided
   if (duration) {
-    input.duration = duration
+    input.duration = String(duration)
+  }
+
+  // Override aspect ratio if provided
+  if (aspectRatio) {
+    input.aspect_ratio = aspectRatio
   }
 
   const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
@@ -415,6 +446,54 @@ export async function textToVideoKie(
   }
 
   console.log(`[KIE.ai] Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: videoUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
+// LIP SYNC / AI AVATAR (Image + Audio → Talking Video)
+// =============================================================================
+
+export async function lipSyncKie(
+  imageUrl: string,
+  audioUrl: string,
+  prompt?: string,
+  provider: string = "kling-avatar",
+  resolution?: string,
+): Promise<KieResult> {
+  const modelConfig = KIE_LIP_SYNC_MODELS[provider]
+  if (!modelConfig) {
+    throw createSanitizedError(`does not support lip-sync provider: ${provider}`, "Lip sync generation")
+  }
+
+  console.log(`[KIE.ai] Generating lip sync video with ${modelConfig.model}`)
+  console.log(`[KIE.ai] Image: ${imageUrl}, Audio: ${audioUrl}`)
+
+  // Start with extra params from config
+  const input: Record<string, unknown> = {
+    ...(modelConfig.extraParams ?? {}),
+    image_url: imageUrl,
+    audio_url: audioUrl,
+  }
+
+  // Add optional prompt (for infinitalk especially)
+  if (prompt) {
+    input.prompt = prompt
+  }
+
+  // Override resolution if provided (for infinitalk: 480p or 720p)
+  if (resolution) {
+    input.resolution = resolution
+  }
+
+  const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
+
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError("lip sync task succeeded but no URL found", "Lip sync generation")
+  }
+
+  console.log(`[KIE.ai] Lip sync completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
 
   return { url: videoUrl, cost: modelConfig.cost }
 }

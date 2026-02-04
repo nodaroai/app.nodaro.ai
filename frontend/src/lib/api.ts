@@ -878,6 +878,31 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   return res.json()
 }
 
+export async function lipSyncApi(
+  imageUrl: string,
+  audioUrl: string,
+  prompt?: string,
+  provider?: string,
+  resolution?: string,
+  userId?: string
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { imageUrl, audioUrl }
+  if (prompt) body.prompt = prompt
+  if (provider) body.provider = provider
+  if (resolution) body.resolution = resolution
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/lip-sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start lip sync generation")
+  }
+  return res.json()
+}
+
 export async function generateMusicApi(prompt: string, provider?: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean, lyrics?: string, referenceAudioUrl?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (provider) body.provider = provider

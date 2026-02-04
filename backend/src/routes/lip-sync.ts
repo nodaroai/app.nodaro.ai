@@ -3,22 +3,18 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 
-const textToVideoBody = z.object({
-  prompt: z.string().min(1).max(2000),
-  provider: z.enum([
-    // Available on both Replicate and KIE
-    "veo3", "kling", "minimax",
-    // Replicate-only
-    "veo", "runway", "pika", "sora",
-    // KIE-only
-    "kling-turbo", "grok", "sora2", "sora2-pro"
-  ]).optional(),
+const lipSyncBody = z.object({
+  imageUrl: z.string().url(),       // Portrait/face image
+  audioUrl: z.string().url(),       // Audio to sync (speech)
+  prompt: z.string().max(500).optional(),  // Optional prompt for infinitalk
+  provider: z.enum(["kling-avatar", "kling-avatar-pro", "infinitalk"]).optional(),
+  resolution: z.enum(["480p", "720p"]).optional(),  // For infinitalk
   userId: z.string().uuid().optional(),
 })
 
-export async function textToVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/text-to-video", async (req, reply) => {
-    const parsed = textToVideoBody.safeParse(req.body)
+export async function lipSyncRoutes(app: FastifyInstance) {
+  app.post("/v1/lip-sync", async (req, reply) => {
+    const parsed = lipSyncBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: {
@@ -28,7 +24,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, userId } = parsed.data
+    const { imageUrl, audioUrl, prompt, provider, resolution, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -36,7 +32,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId ?? null,
         status: "pending",
-        input_data: { prompt, provider, type: "text-to-video" },
+        input_data: { imageUrl, audioUrl, prompt, provider, resolution, type: "lip-sync" },
       })
       .select("id")
       .single()
@@ -47,10 +43,13 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    await videoQueue.add("text-to-video", {
+    await videoQueue.add("lip-sync", {
       jobId: job.id,
+      imageUrl,
+      audioUrl,
       prompt,
-      provider,
+      provider: provider ?? "kling-avatar",
+      resolution,
     })
 
     return { jobId: job.id }

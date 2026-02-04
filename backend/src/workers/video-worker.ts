@@ -22,7 +22,7 @@ import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
-import { editImageKie, generateImageKie } from "../services/kie-ai.js"
+import { editImageKie, generateImageKie, lipSyncKie, textToVideoKie } from "../services/kie-ai.js"
 import { getAppSettings as getKieAppSettings } from "../lib/app-settings.js"
 import { isKieSupported } from "../services/model-mapping.js"
 import { promises as fs } from "node:fs"
@@ -257,20 +257,33 @@ export function createVideoWorker() {
           const { prompt, provider, duration } = job.data as {
             jobId: string
             prompt: string
-            provider?: VideoProvider
+            provider?: string
             duration?: number
           }
           console.log(`[worker] text-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const videoResult = await textToVideo(prompt, provider, duration)
+          // Get settings to determine which backend to use
+          const settings = await getAppSettings()
+          const useKie = settings.ai_provider === "kie" && isKieSupported("text-to-video", provider ?? "minimax")
+
+          let videoUrl: string
+          let providerCost: number | undefined
+
+          if (useKie) {
+            console.log(`[worker] Using KIE.ai for text-to-video (provider: ${provider ?? "minimax"})`)
+            const kieResult = await textToVideoKie(prompt, provider ?? "minimax", duration)
+            videoUrl = kieResult.url
+            providerCost = kieResult.cost
+          } else {
+            const videoResult = await textToVideo(prompt, provider as VideoProvider, duration)
+            videoUrl = videoResult.url
+            providerCost = videoResult.cost
+          }
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(videoResult.url, jobId, "video")
+          const r2Url = await uploadToR2(videoUrl, jobId, "video")
           await job.updateProgress(100)
 
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = videoResult.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           await supabase
@@ -287,6 +300,43 @@ export function createVideoWorker() {
             .eq("id", jobId)
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+        } else if (job.name === "lip-sync") {
+          const { imageUrl, audioUrl, prompt, provider, resolution } = job.data as {
+            jobId: string
+            imageUrl: string
+            audioUrl: string
+            prompt?: string
+            provider?: string
+            resolution?: string
+          }
+          console.log(`[worker] lip-sync ${jobId} (provider: ${provider ?? "kling-avatar"})`)
+
+          // Lip sync is KIE.ai only
+          const result = await lipSyncKie(imageUrl, audioUrl, prompt, provider ?? "kling-avatar", resolution)
+          await job.updateProgress(50)
+
+          const r2Url = await uploadToR2(result.url, jobId, "video")
+          await job.updateProgress(100)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase
+            .from("jobs")
+            .update({
+              status: "completed",
+              progress: 100,
+              output_data: { videoUrl: r2Url },
+              completed_at: new Date().toISOString(),
+              provider: "kie",
+              provider_cost: providerCost,
+              display_cost: displayCost,
+            })
+            .eq("id", jobId)
+
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-speech") {
           const { text, voice, provider } = job.data as {
             jobId: string

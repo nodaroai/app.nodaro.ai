@@ -123,45 +123,85 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
 // VIDEO GENERATION MODELS (Image-to-Video)
 // =============================================================================
 export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
+  // Hailuo/MiniMax
   "minimax": {
-    model: "hailuo/i2v-01",
+    model: "hailuo/image-to-video",
     credits: 80,
-    cost: 0.40,  // 80 credits × $0.005
+    cost: 0.40,
+    imageParam: "image_urls",  // array format
+    extraParams: { sound: false, duration: "5" },
   },
-  "veo": {
-    model: "veo2/image-to-video",
-    credits: 200,
-    cost: 1.00,  // 200 credits × $0.005
-  },
+
+  // VEO family
   "veo3": {
     model: "veo3/image-to-video",
     credits: 400,
-    cost: 2.00,  // 400 credits × $0.005
+    cost: 2.00,
+    imageParam: "image_url",  // single URL
   },
   "veo3.1": {
     model: "veo3.1/image-to-video",
     credits: 250,
-    cost: 1.25,  // 250 credits × $0.005
+    cost: 1.25,
+    imageParam: "image_url",  // supports start_frame_url + end_frame_url
+    extraParams: { generate_audio: true },
   },
+
+  // Kling family
   "kling": {
-    model: "kling/v2.0-pro-i2v",
+    model: "kling-2.6/image-to-video",
     credits: 70,
-    cost: 0.35,  // 70 credits × $0.005
+    cost: 0.35,
+    imageParam: "image_urls",  // array format
+    extraParams: { sound: false, duration: "5" },
   },
+  "kling-turbo": {
+    model: "kling/v2-5-turbo-image-to-video-pro",
+    credits: 50,
+    cost: 0.25,
+    imageParam: "image_url",  // supports tail_image_url for end frame
+    extraParams: { duration: "5", cfg_scale: 0.5 },
+  },
+
+  // Grok
+  "grok-i2v": {
+    model: "grok-imagine/image-to-video",
+    credits: 60,
+    cost: 0.30,
+    imageParam: "image_urls",  // array format
+    extraParams: { mode: "normal", duration: "6", index: 0 },
+  },
+
+  // Sora 2 family
+  "sora2": {
+    model: "sora-2-image-to-video",
+    credits: 150,
+    cost: 0.75,
+    imageParam: "image_urls",  // array format
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+  },
+  "sora2-pro": {
+    model: "sora-2-pro-image-to-video",
+    credits: 200,
+    cost: 1.00,
+    imageParam: "image_urls",  // array format
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+  },
+
+  // Runway
   "runway": {
     model: "runway-aleph/image-to-video",
     credits: 100,
-    cost: 0.50,  // 100 credits × $0.005
+    cost: 0.50,
+    imageParam: "image_url",
   },
-  "sora": {
-    model: "sora2/image-to-video",
-    credits: 150,
-    cost: 0.75,  // 150 credits × $0.005
-  },
+
+  // Wan
   "wan": {
     model: "wan/image-to-video",
     credits: 60,
-    cost: 0.30,  // 60 credits × $0.005
+    cost: 0.30,
+    imageParam: "image_url",
   },
 }
 
@@ -169,25 +209,85 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
 // TEXT-TO-VIDEO MODELS
 // =============================================================================
 export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
+  // Hailuo/MiniMax
   "minimax": {
     model: "hailuo/t2v-01",
     credits: 80,
     cost: 0.40,
+    extraParams: { sound: false, duration: "5" },
   },
+
+  // VEO
   "veo3": {
     model: "veo3/text-to-video",
     credits: 400,
     cost: 2.00,
   },
+
+  // Kling family
   "kling": {
-    model: "kling/v2.0-pro-t2v",
+    model: "kling-2.6/text-to-video",
     credits: 70,
     cost: 0.35,
+    extraParams: { sound: false, aspect_ratio: "1:1", duration: "5" },
   },
-  "sora": {
-    model: "sora2/text-to-video",
+  "kling-turbo": {
+    model: "kling/v2-5-turbo-text-to-video-pro",
+    credits: 50,
+    cost: 0.25,
+    extraParams: { duration: "5", cfg_scale: 0.5 },
+  },
+
+  // Grok
+  "grok": {
+    model: "grok-imagine/text-to-video",
+    credits: 60,
+    cost: 0.30,
+    extraParams: { aspect_ratio: "2:3", mode: "normal", duration: "6" },
+  },
+
+  // Sora 2 family
+  "sora2": {
+    model: "sora-2-text-to-video",
     credits: 150,
     cost: 0.75,
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+  },
+  "sora2-pro": {
+    model: "sora-2-pro-text-to-video",
+    credits: 200,
+    cost: 1.00,
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+  },
+}
+
+// =============================================================================
+// LIP SYNC / AI AVATAR MODELS (Image + Audio → Talking Video)
+// =============================================================================
+export const KIE_LIP_SYNC_MODELS: Record<string, KieModelConfig> = {
+  // Kling AI Avatar
+  "kling-avatar": {
+    model: "kling/ai-avatar-standard",
+    credits: 40,
+    cost: 0.20,
+    imageParam: "image_url",
+    extraParams: {},
+  },
+  "kling-avatar-pro": {
+    model: "kling/ai-avatar-pro",
+    credits: 60,
+    cost: 0.30,
+    imageParam: "image_url",
+    extraParams: {},
+  },
+
+  // Infinitalk (up to 15 sec audio)
+  "infinitalk": {
+    model: "infinitalk/from-audio",
+    credits: 60,
+    cost: 0.30,
+    imageParam: "image_url",
+    extraParams: { resolution: "720p" },
   },
 }
 
@@ -234,11 +334,13 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
 // HELPER FUNCTIONS
 // =============================================================================
 
+export type KieCategory = "image" | "video" | "text-to-video" | "lip-sync" | "music" | "tts" | "special"
+
 /**
  * Get KIE.ai model config for a given category and provider
  */
 export function getKieModelConfig(
-  category: "image" | "video" | "text-to-video" | "music" | "tts" | "special",
+  category: KieCategory,
   provider: string
 ): KieModelConfig | null {
   switch (category) {
@@ -248,6 +350,8 @@ export function getKieModelConfig(
       return KIE_VIDEO_MODELS[provider] ?? null
     case "text-to-video":
       return KIE_TEXT_TO_VIDEO_MODELS[provider] ?? null
+    case "lip-sync":
+      return KIE_LIP_SYNC_MODELS[provider] ?? null
     case "music":
       return KIE_MUSIC_MODELS[provider] ?? null
     case "tts":
@@ -263,7 +367,7 @@ export function getKieModelConfig(
  * Check if a provider is supported on KIE.ai for a given category
  */
 export function isKieSupported(
-  category: "image" | "video" | "text-to-video" | "music" | "tts" | "special",
+  category: KieCategory,
   provider: string
 ): boolean {
   return getKieModelConfig(category, provider) !== null
@@ -273,7 +377,7 @@ export function isKieSupported(
  * Get cost for a KIE.ai model
  */
 export function getKieCost(
-  category: "image" | "video" | "text-to-video" | "music" | "tts" | "special",
+  category: KieCategory,
   provider: string
 ): number {
   const config = getKieModelConfig(category, provider)

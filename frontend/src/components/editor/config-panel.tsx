@@ -67,6 +67,7 @@ import type {
   MixAudioData,
   AdjustVolumeData,
   TrimVideoData,
+  LipSyncData,
   SaveToStorageData,
   WebhookOutputData,
   FieldMappings,
@@ -455,6 +456,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "text-to-audio" && (
             <TextToAudioConfig data={selectedNode.data as TextToAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "lip-sync" && (
+            <LipSyncConfig data={selectedNode.data as LipSyncData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* Processing Nodes */}
@@ -1495,6 +1499,9 @@ function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField
 }
 
 function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToVideoData>) {
+  const { settings } = useAppSettings()
+  const isKie = settings.ai_provider === "kie"
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
@@ -1504,13 +1511,30 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
+            {/* Available on both Replicate and KIE */}
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="veo">VEO 2</SelectItem>
             <SelectItem value="veo3">VEO 3</SelectItem>
             <SelectItem value="veo3.1">VEO 3.1 (end frame)</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
-            <SelectItem value="runway">Runway</SelectItem>
-            <SelectItem value="pika">Pika</SelectItem>
+            {/* Replicate-only providers */}
+            {!isKie && (
+              <>
+                <SelectItem value="veo">VEO 2</SelectItem>
+                <SelectItem value="runway">Runway</SelectItem>
+                <SelectItem value="pika">Pika</SelectItem>
+                <SelectItem value="sora">Sora</SelectItem>
+              </>
+            )}
+            {/* KIE-only providers */}
+            {isKie && (
+              <>
+                <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
+                <SelectItem value="grok-i2v">Grok</SelectItem>
+                <SelectItem value="sora2">Sora 2</SelectItem>
+                <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
+                <SelectItem value="wan">Wan</SelectItem>
+              </>
+            )}
           </SelectContent>
         </Select>
       </MappableField>
@@ -1645,9 +1669,10 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
 
 function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes }: ConfigProps<TextToVideoData>) {
   const category: ProviderCategory = "video"
-  const providers = getProviders(category)
   const models = getModels(category, data.provider)
   const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
+  const { settings } = useAppSettings()
+  const isKie = settings.ai_provider === "kie"
 
   return (
     <div className="flex flex-col gap-3">
@@ -1669,9 +1694,28 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {providers.map((p) => (
-              <SelectItem key={p} value={p}>{getProviderLabel(category, p)}{p === "minimax" ? " (default)" : ""}</SelectItem>
-            ))}
+            {/* Available on both Replicate and KIE */}
+            <SelectItem value="minimax">MiniMax (default)</SelectItem>
+            <SelectItem value="veo3">VEO 3</SelectItem>
+            <SelectItem value="kling">Kling</SelectItem>
+            {/* Replicate-only providers */}
+            {!isKie && (
+              <>
+                <SelectItem value="veo">VEO 2</SelectItem>
+                <SelectItem value="runway">Runway</SelectItem>
+                <SelectItem value="pika">Pika</SelectItem>
+                <SelectItem value="sora">Sora</SelectItem>
+              </>
+            )}
+            {/* KIE-only providers */}
+            {isKie && (
+              <>
+                <SelectItem value="kling-turbo">Kling Turbo</SelectItem>
+                <SelectItem value="grok">Grok</SelectItem>
+                <SelectItem value="sora2">Sora 2</SelectItem>
+                <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
+              </>
+            )}
           </SelectContent>
         </Select>
       </MappableField>
@@ -1880,6 +1924,49 @@ function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField 
           onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 10 })}
         />
       </MappableField>
+    </div>
+  )
+}
+
+function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<LipSyncData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.provider || "kling-avatar"}
+          onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="kling-avatar">Kling Avatar (40 credits)</SelectItem>
+            <SelectItem value="kling-avatar-pro">Kling Avatar Pro (60 credits)</SelectItem>
+            <SelectItem value="infinitalk">Infinitalk (60 credits)</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.resolution || "720p"}
+          onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="480p">480p</SelectItem>
+            <SelectItem value="720p">720p (default)</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="prompt" label="Motion Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={2}
+          value={data.prompt ?? ""}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Optional: describe head/expression motions..."
+        />
+      </MappableField>
+      <p className="text-xs text-muted-foreground">
+        Connect a portrait image and an audio track (speech/voiceover) to generate a talking head video.
+      </p>
     </div>
   )
 }

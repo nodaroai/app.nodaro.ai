@@ -17,8 +17,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, lipSyncApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, LipSyncData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -176,7 +176,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
     }
-    if (type === "image-to-video" || type === "video-to-video" || type === "text-to-video") {
+    if (type === "image-to-video" || type === "video-to-video" || type === "text-to-video" || type === "lip-sync") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
@@ -1545,6 +1545,52 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
       const d = node.data as TextToAudioData
       return runProcessingNode(node.id, () => textToAudioApi(prompt, d.provider || undefined, d.duration || undefined, user?.id), "generatedAudioUrl", "Text to Audio")
+    }
+
+    if (node.type === "lip-sync") {
+      const lsData = node.data as LipSyncData
+
+      // Resolve image from selected node
+      let imageUrl: string | undefined
+      if (lsData.selectedImageNodeId) {
+        const imageNode = nodes.find((n) => n.id === lsData.selectedImageNodeId)
+        if (imageNode) {
+          imageUrl = extractNodeOutput(imageNode)
+        }
+      }
+      // Fallback to legacy single-input behavior
+      if (!imageUrl) {
+        imageUrl = inputs.imageUrl
+      }
+
+      // Resolve audio from selected node
+      let audioUrl: string | undefined
+      if (lsData.selectedAudioNodeId) {
+        const audioNode = nodes.find((n) => n.id === lsData.selectedAudioNodeId)
+        if (audioNode) {
+          audioUrl = extractNodeOutput(audioNode)
+        }
+      }
+      // Fallback to legacy single-input behavior
+      if (!audioUrl) {
+        audioUrl = inputs.audioUrl
+      }
+
+      if (!imageUrl) {
+        toast.error(`Node "${lsData.label}": no portrait image found`)
+        return Promise.reject(new Error("No portrait image"))
+      }
+      if (!audioUrl) {
+        toast.error(`Node "${lsData.label}": no audio track found`)
+        return Promise.reject(new Error("No audio track"))
+      }
+
+      return runProcessingNode(
+        node.id,
+        () => lipSyncApi(imageUrl!, audioUrl!, lsData.prompt || undefined, lsData.provider || undefined, lsData.resolution || undefined, user?.id),
+        "generatedVideoUrl",
+        "Lip Sync"
+      )
     }
 
     if (node.type === "combine-videos") {

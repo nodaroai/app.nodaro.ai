@@ -400,7 +400,7 @@ export type ImageToImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika"
+  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2" | "sora2-pro" | "wan"
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
@@ -440,7 +440,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling"
+  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "grok" | "sora2" | "sora2-pro"
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"
@@ -467,6 +467,23 @@ export type VideoToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+}
+
+export type LipSyncData = {
+  [key: string]: unknown
+  label: string
+  provider: "kling-avatar" | "kling-avatar-pro" | "infinitalk"
+  resolution: "480p" | "720p"
+  prompt: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  // Multi-input selection fields
+  selectedImageNodeId?: string   // ID of node selected for portrait/face image
+  selectedAudioNodeId?: string   // ID of node selected for audio track
 }
 
 export type QACheckData = {
@@ -918,6 +935,7 @@ export type SceneNodeData =
   | MixAudioData
   | AdjustVolumeData
   | TrimVideoData
+  | LipSyncData
   | SaveToStorageData
   | WebhookOutputData
   | SceneNodeDataType
@@ -959,6 +977,7 @@ export type SceneNodeType =
   | "mix-audio"
   | "adjust-volume"
   | "trim-video"
+  | "lip-sync"
   | "save-to-storage"
   | "webhook-output"
   | "scene"
@@ -1272,6 +1291,25 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Trim Video", startTime: 0, endTime: 0, fieldMappings: {} },
+  },
+  // Lip Sync / AI Avatar
+  {
+    type: "lip-sync",
+    label: "Lip Sync",
+    category: "ai",
+    creditCost: 40,
+    inputs: ["image", "audio"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Lip Sync",
+      provider: "kling-avatar",
+      resolution: "720p",
+      prompt: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as LipSyncData,
   },
   // Output
   {

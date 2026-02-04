@@ -5,7 +5,7 @@ import {
   Type, BookOpen, ImageIcon, Film, Merge, Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin,
-  ChevronRight, Search, Download, ArrowLeft, Wand2, Layers,
+  ChevronRight, Search, Download, ArrowLeft, Wand2, Layers, Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SceneNodeType } from "@/types/nodes"
@@ -45,6 +45,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI" },
   { type: "generate-music", label: "Generate Music", icon: <Music className="h-4 w-4" />, category: "AI" },
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI" },
+  { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI" },
   // Processing
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing" },
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing" },

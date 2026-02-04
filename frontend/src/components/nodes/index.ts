@@ -30,6 +30,7 @@ import { ExtractAudioNode } from "./extract-audio-node"
 import { MixAudioNode } from "./mix-audio-node"
 import { AdjustVolumeNode } from "./adjust-volume-node"
 import { TrimVideoNode } from "./trim-video-node"
+import { LipSyncNode } from "./lip-sync-node"
 import { SaveToStorageNode } from "./save-to-storage-node"
 import { WebhookOutputNode } from "./webhook-output-node"
 import { SceneNode } from "./scene-node"
@@ -67,6 +68,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "qa-check": QACheckNode,
   "generate-music": GenerateMusicNode,
   "text-to-audio": TextToAudioNode,
+  "lip-sync": LipSyncNode,
   // Processing
   "combine-videos": CombineVideosNode,
   "merge-video-audio": MergeVideoAudioNode,

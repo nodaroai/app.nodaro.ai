@@ -6,7 +6,14 @@ import { isKieSupported } from "../../services/model-mapping.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
-export type VideoProvider = "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika" | "sora" | "minimax"
+// Replicate providers
+export type ReplicateVideoProvider = "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika" | "sora" | "minimax"
+
+// KIE.ai only providers
+export type KieVideoProvider = "kling-turbo" | "grok-i2v" | "sora2" | "sora2-pro" | "wan"
+
+// All video providers
+export type VideoProvider = ReplicateVideoProvider | KieVideoProvider
 
 interface ModelConfig {
   model: string
