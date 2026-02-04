@@ -1151,12 +1151,12 @@ interface GenerateImageNode {
 interface ImageToVideoNode {
   type: 'image-to-video';
   data: {
-    provider: 'minimax' | 'veo' | 'veo3' | 'kling' | 'runway' | 'pika';
+    provider: 'minimax' | 'veo' | 'veo3' | 'veo3.1' | 'kling' | 'runway' | 'pika';
     model?: string;
-    duration?: number;       // seconds
+    duration?: number;       // seconds (veo3.1 restricted to 4, 6, or 8)
     motion?: 'subtle' | 'moderate' | 'dynamic';
     cameraMotion?: 'static' | 'pan-left' | 'pan-right' | 'zoom-in' | 'zoom-out';
-    generateAudio?: boolean; // VEO 3 only: generate AI audio from prompt
+    generateAudio?: boolean; // VEO 3/3.1 only: generate AI audio from prompt
     // Internal selection state (for single input handle with dropdowns):
     selectedStartFrameNodeId?: string;  // Required - which connected image node to use as start frame
     selectedEndFrameNodeId?: string;    // Optional - which connected image node to use as end frame
@@ -1165,12 +1165,12 @@ interface ImageToVideoNode {
   inputs: ['input'];         // SINGLE input handle accepts images AND audio connections
   // Parameter input handles (optional, override config panel values when connected):
   parameterInputs: ['video_provider', 'duration', 'motion', 'camera_motion'];
-  outputs: ['video'];        // Note: VEO 3 can output video WITH AI-generated audio
+  outputs: ['video'];        // Note: VEO 3/3.1 can output video WITH AI-generated audio
   creditCost: 20;
 
   // SINGLE INPUT HANDLE WITH INTERNAL DROPDOWNS:
   // The node has ONE "input" handle that accepts multiple connection types:
-  // - Image nodes (generate-image, upload-image, character, object, location)
+  // - Image nodes (generate-image, upload-image, character, object, location, scene)
   // - Audio nodes (text-to-speech, generate-music, text-to-audio, upload-audio)
   //
   // Inside the node, dropdown selectors let users choose:
@@ -1178,16 +1178,27 @@ interface ImageToVideoNode {
   //    - Shows thumbnail preview + node label
   //    - Auto-selects first connected image node
   // 2. End Frame (optional) - selects from connected image nodes
-  //    - Only shown for providers that support it: veo3, kling, runway, pika
-  //    - Hidden for minimax, veo (they don't support end frames)
+  //    - Only shown for providers that support it: veo3.1, kling, runway, pika
+  //    - NOTE: veo3 does NOT support end frame, only veo3.1 does
+  //    - Hidden for minimax, veo, veo3 (they don't support end frames)
   // 3. Audio Track (optional) - selects from connected audio nodes
   //    - Audio is merged with video after generation (via FFmpeg)
   //
   // This design simplifies canvas connections (one handle vs many) while
   // providing clear selection UI inside the node config panel.
 
-  // VEO 3 AUDIO:
-  // VEO 3 has a `generate_audio` toggle (default: true when VEO 3 selected).
+  // VEO 3.1 SPECIFICS:
+  // - Supports first+last frame interpolation (image + last_frame parameters)
+  // - Duration restricted to 4, 6, or 8 seconds (UI shows dropdown, not free input)
+  // - Does NOT support video-to-video (only image input, not video input)
+  // - Replicate API parameters: image (not first_frame), last_frame, duration, aspect_ratio
+  //
+  // VEO 3 DIFFERENCES:
+  // - Does NOT support end frame (first+last frame interpolation)
+  // - No duration restrictions (free input field)
+
+  // VEO 3/3.1 AUDIO:
+  // VEO 3/3.1 has a `generate_audio` toggle (default: true when VEO 3/3.1 selected).
   // When enabled, VEO generates AI audio from the prompt (ambient sounds, etc.).
   // VEO does NOT accept external audio files - it only generates audio from prompt.
   // If user wants custom audio instead:
