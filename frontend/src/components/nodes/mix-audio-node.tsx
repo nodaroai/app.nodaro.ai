@@ -66,7 +66,7 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
         {results.length > 1 && (
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
-              <div key={r.jobId} className="relative group/thumb shrink-0">
+              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                 <div className={`w-10 h-10 flex items-center justify-center rounded cursor-pointer transition-opacity bg-muted ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) }}>
                   <AudioLines className="w-4 h-4" />
                 </div>

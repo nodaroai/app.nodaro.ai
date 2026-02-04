@@ -70,7 +70,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
         {results.length > 1 && (
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
-              <div key={r.jobId} className="relative group/thumb shrink-0">
+              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                 <video src={r.url} className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
                 <button type="button" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
               </div>

@@ -20,9 +20,10 @@ import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
 
-// Custom edge types with animated flowing dot - cast to any to avoid complex generic issues
+// Custom edge types with animated flowing dot
 const edgeTypes = {
   default: AnimatedFlowEdge as any,
+  animatedFlow: AnimatedFlowEdge as any,
 }
 
 interface NodeContextMenuState {
@@ -82,24 +83,19 @@ export function WorkflowCanvas() {
         .map((node) => node.id)
     )
 
-    // Transform edges - animate edges from running nodes and add isRunning data for flowing dot
     return edges.map((edge): WorkflowEdge => {
       const isRunning = runningNodeIds.has(edge.source)
-      if (isRunning) {
-        return {
-          ...edge,
-          animated: true,
-          data: { ...edge.data, isRunning: true },
-          style: {
-            ...edge.style,
-            stroke: "#ff0073",
-            strokeWidth: 2,
-          },
-        }
-      }
+
       return {
         ...edge,
-        data: { ...edge.data, isRunning: false },
+        type: 'default', // Explicitly set type to use our AnimatedFlowEdge
+        animated: isRunning,
+        data: { ...edge.data, isRunning },
+        style: isRunning ? {
+          ...edge.style,
+          stroke: "#ff0073",
+          strokeWidth: 2,
+        } : edge.style,
       }
     })
   }, [nodes, edges])
@@ -224,6 +220,7 @@ export function WorkflowCanvas() {
         onPaneContextMenu={handlePaneContextMenu}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        defaultEdgeOptions={{ type: 'default' }}
         connectionMode={ConnectionMode.Loose}
         fitView
         deleteKeyCode="Delete"

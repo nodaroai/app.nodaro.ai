@@ -1048,7 +1048,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   {results.length > 1 && (
                     <div className="flex gap-1 overflow-x-auto">
                       {results.map((r, vi) => (
-                        <div key={r.jobId} className="relative group/aver shrink-0">
+                        <div key={`${r.jobId}-${i}`} className="relative group/aver shrink-0">
                           <button
                             type="button"
                             onClick={() => setActiveAudioVersion(i, vi)}

@@ -161,7 +161,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
         {results.length > 1 && (
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
-              <div key={r.jobId} className="relative group/thumb shrink-0">
+              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                 <button
                   type="button"
                   className={`w-8 h-8 rounded overflow-hidden cursor-pointer transition-opacity ${

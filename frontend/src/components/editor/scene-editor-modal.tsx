@@ -370,7 +370,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   {results.length > 1 && (
                     <div className="flex gap-1.5 overflow-x-auto pb-1">
                       {results.map((r, i) => (
-                        <div key={r.jobId} className="relative group/thumb shrink-0">
+                        <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                           <img
                             src={r.url}
                             alt={`Result ${i + 1}`}
@@ -427,7 +427,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   {videoResults.length > 1 && (
                     <div className="flex gap-1.5 overflow-x-auto pb-1">
                       {videoResults.map((r, i) => (
-                        <div key={r.jobId} className="relative group/thumb shrink-0">
+                        <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                           <div
                             className={`w-14 h-14 rounded-md cursor-pointer transition-opacity flex items-center justify-center bg-muted ${
                               i === activeVideoIndex

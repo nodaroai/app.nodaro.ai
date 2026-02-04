@@ -28,28 +28,31 @@ export function AnimatedFlowEdge({
 
   const isRunning = (data as { isRunning?: boolean })?.isRunning || false
 
+  // Unique filter ID per edge to avoid conflicts
+  const glowFilterId = `glow-${id}`
+
   return (
     <>
       {/* Base edge line */}
       <BaseEdge id={id} path={edgePath} style={style as CSSProperties} markerEnd={markerEnd as string | undefined} />
 
-      {/* Animated dot that travels along the path when running */}
-      {isRunning && (
-        <circle r="5" fill="#ff0073" filter="url(#glow)">
-          <animateMotion dur="1s" repeatCount="indefinite" path={edgePath} />
-        </circle>
-      )}
-
-      {/* SVG filter for glow effect */}
+      {/* SVG filter for glow effect - always defined */}
       <defs>
-        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+        <filter id={glowFilterId} x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="4" result="coloredBlur" />
           <feMerge>
             <feMergeNode in="coloredBlur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
       </defs>
+
+      {/* Animated dot when edge source node is running */}
+      {isRunning && (
+        <circle r="8" fill="#ff0073" filter={`url(#${glowFilterId})`}>
+          <animateMotion dur="2s" repeatCount="indefinite" path={edgePath} />
+        </circle>
+      )}
     </>
   )
 }
