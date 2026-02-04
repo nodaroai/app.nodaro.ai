@@ -73,6 +73,36 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   return res.json()
 }
 
+// --- Edit Image (KIE.ai only) ---
+
+export async function editImage(
+  imageUrl: string,
+  prompt?: string,
+  provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit",
+  userId?: string
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { imageUrl }
+  if (prompt) {
+    body.prompt = prompt
+  }
+  if (provider) {
+    body.provider = provider
+  }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start image editing")
+  }
+  return res.json()
+}
+
 export async function generateCharacter(data: {
   name: string
   description?: string

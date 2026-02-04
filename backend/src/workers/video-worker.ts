@@ -22,6 +22,9 @@ import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
+import { editImageKie } from "../services/kie-ai.js"
+import { getAppSettings as getKieAppSettings } from "../lib/app-settings.js"
+import { isKieSupported } from "../services/model-mapping.js"
 import { promises as fs } from "node:fs"
 import { dirname } from "node:path"
 
@@ -56,6 +59,45 @@ export function createVideoWorker() {
 
           // Get settings and calculate costs
           const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase
+            .from("jobs")
+            .update({
+              status: "completed",
+              progress: 100,
+              output_data: { imageUrl: r2Url },
+              completed_at: new Date().toISOString(),
+              provider: settings.ai_provider,
+              provider_cost: providerCost,
+              display_cost: displayCost,
+            })
+            .eq("id", jobId)
+
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+        } else if (job.name === "edit-image") {
+          const { imageUrl, prompt, provider } = job.data as {
+            jobId: string
+            imageUrl: string
+            prompt?: string
+            provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit"
+          }
+          const resolvedProvider = provider ?? "recraft-upscale"
+          console.log(`[worker] edit-image ${jobId} (provider: ${resolvedProvider}): "${prompt ?? "(no prompt)"}"`)
+
+          // Edit image operations are KIE.ai only - check if KIE.ai is supported
+          const settings = await getAppSettings()
+          if (settings.ai_provider !== "kie" || !isKieSupported("image", resolvedProvider)) {
+            throw new Error(`Edit image operations require KIE.ai provider. Current provider: ${settings.ai_provider}`)
+          }
+
+          const result = await editImageKie(imageUrl, prompt, resolvedProvider)
+          await job.updateProgress(50)
+
+          const r2Url = await uploadToR2(result.url, jobId, "image")
+          await job.updateProgress(100)
+
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 

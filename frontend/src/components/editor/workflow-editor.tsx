@@ -17,8 +17,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { generateImage, editImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -91,7 +91,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -160,6 +160,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return results[activeIndex]?.url ??
         (data.generatedImageUrl as string | undefined) ??
         (data.url as string | undefined)
+    }
+    if (type === "edit-image") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
     }
     if (type === "combine-videos") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
@@ -270,6 +275,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.imageUrl = output
         }
+      } else if (src.type === "edit-image") {
+        // Edit image outputs an image - can be used as input to other nodes
+        if (node.type === "generate-image" || node.type === "edit-image") {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+        } else {
+          inputs.imageUrl = output
+        }
       } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
@@ -369,6 +381,54 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
         toast.error("Failed to start image generation", { description: errMsg })
+        reject(err)
+      })
+    })
+  }
+
+  function runEditImage(nodeId: string, imageUrl: string, prompt?: string, provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit"): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", generatedImageUrl: undefined })
+
+    return new Promise((resolve, reject) => {
+      editImage(imageUrl, prompt, provider, user?.id).then(({ jobId }) => {
+        toast.info("Image editing started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const outputUrl = job.output_data?.imageUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as EditImageData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: outputUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedImageUrl: outputUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Image edited")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Image editing failed", { description: errMsg })
+              reject(new Error(errMsg))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+            toast.error("Failed to check job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        const errMsg = err instanceof Error ? err.message : "Unknown error"
+        updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+        toast.error("Failed to start image editing", { description: errMsg })
         reject(err)
       })
     })
@@ -1297,6 +1357,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const refImages = [...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
       const finalPrompt = charDescs.length > 0 ? `${prompt}\n${charDescs.join(" ")}` : prompt
       return runImageGeneration(node.id, finalPrompt, refImages.length > 0 ? refImages : undefined, (node.data as GenerateImageData).provider || undefined)
+    }
+
+    if (node.type === "edit-image") {
+      const imageUrl = inputs.imageUrl
+      if (!imageUrl) {
+        toast.error(`Node "${(node.data as EditImageData).label}": no input image found`)
+        return Promise.reject(new Error("No input image"))
+      }
+      const editData = node.data as EditImageData
+      const provider = editData.provider || "recraft-upscale"
+      const prompt = editData.prompt || undefined
+      return runEditImage(node.id, imageUrl, prompt, provider)
     }
 
     if (node.type === "image-to-video") {

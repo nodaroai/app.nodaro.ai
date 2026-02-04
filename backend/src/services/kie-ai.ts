@@ -241,6 +241,45 @@ export async function generateImageKie(
 }
 
 // =============================================================================
+// IMAGE EDITING (Edit Image)
+// =============================================================================
+
+export async function editImageKie(
+  imageUrl: string,
+  prompt?: string,
+  provider: string = "recraft-upscale",
+): Promise<KieResult> {
+  const modelConfig = KIE_IMAGE_MODELS[provider]
+  if (!modelConfig) {
+    throw new Error(`KIE.ai does not support edit image provider: ${provider}`)
+  }
+
+  console.log(`[KIE.ai] Editing image with ${modelConfig.model}`)
+  console.log(`[KIE.ai] Image: ${imageUrl}, Prompt: "${prompt ?? ""}"`)
+
+  const input: Record<string, unknown> = {
+    image: imageUrl,
+    output_format: "png",
+  }
+
+  // Add prompt only for nano-banana-edit (general editing with instructions)
+  if (provider === "nano-banana-edit" && prompt) {
+    input.prompt = prompt
+  }
+
+  const { resultJson } = await runKieTask(modelConfig.model, input)
+
+  const outputUrl = resultJson.resultUrls?.[0]
+  if (!outputUrl) {
+    throw new Error(`KIE.ai edit image task succeeded but no URL in resultUrls`)
+  }
+
+  console.log(`[KIE.ai] Edit image completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: outputUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
 // VIDEO GENERATION (Image-to-Video)
 // =============================================================================
 

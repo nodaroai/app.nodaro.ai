@@ -22,6 +22,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useAppSettings } from "@/hooks/use-app-settings"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus } from "@/lib/api"
 import {
@@ -49,6 +50,7 @@ import type {
   CameraMotionData,
   GenerateScriptData,
   GenerateImageData,
+  EditImageData,
   ImageToVideoData,
   VideoToVideoData,
   TextToVideoData,
@@ -317,6 +319,7 @@ export function ConfigPanel() {
       "camera-motion": "Camera Motion",
       "generate-script": "Generate Script",
       "generate-image": "Generate Image",
+      "edit-image": "Edit Image",
       "image-to-video": "Image to Video",
       "video-to-video": "Video to Video",
       "text-to-video": "Text to Video",
@@ -424,6 +427,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "generate-image" && (
             <GenerateImageConfig data={selectedNode.data as GenerateImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "edit-image" && (
+            <EditImageConfig data={selectedNode.data as EditImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "image-to-video" && (
             <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -1185,6 +1191,8 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
   const addNode = useWorkflowStore((s) => s.addNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const nodes = useWorkflowStore((s) => s.nodes)
+  const { settings } = useAppSettings()
+  const isKie = settings.ai_provider === "kie"
 
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
@@ -1249,9 +1257,21 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
+            {/* Replicate providers (always available) */}
             <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
             <SelectItem value="flux">Flux</SelectItem>
             <SelectItem value="dalle">DALL-E</SelectItem>
+            {/* KIE.ai-only providers */}
+            {isKie && (
+              <>
+                <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
+                <SelectItem value="grok">Grok</SelectItem>
+                <SelectItem value="gpt-image">GPT Image</SelectItem>
+                <SelectItem value="flux-i2i">Flux (Image-to-Image)</SelectItem>
+                <SelectItem value="grok-i2i">Grok (Image-to-Image)</SelectItem>
+                <SelectItem value="gpt-image-i2i">GPT Image (Image-to-Image)</SelectItem>
+              </>
+            )}
           </SelectContent>
         </Select>
       </MappableField>
@@ -1388,6 +1408,45 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         title="Select Asset from Library"
         excludeIds={attachedIds}
       />
+    </div>
+  )
+}
+
+function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<EditImageData>) {
+  const showPrompt = data.provider === "nano-banana-edit"
+
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Operation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.provider || "recraft-upscale"}
+          onValueChange={(v) => onUpdate({ provider: v as EditImageData["provider"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="recraft-upscale">Upscale / Enhance</SelectItem>
+            <SelectItem value="recraft-remove-bg">Remove Background</SelectItem>
+            <SelectItem value="nano-banana-edit">Edit with Prompt</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      {showPrompt && (
+        <MappableField field="prompt" label="Edit Instructions" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Textarea
+            rows={3}
+            value={data.prompt}
+            onChange={(e) => onUpdate({ prompt: e.target.value })}
+            placeholder="Describe how to edit the image..."
+          />
+        </MappableField>
+      )}
+      {!showPrompt && (
+        <p className="text-xs text-muted-foreground px-1">
+          {data.provider === "recraft-upscale"
+            ? "Upscale and enhance the input image to higher resolution."
+            : "Remove the background from the input image, leaving a transparent PNG."}
+        </p>
+      )}
     </div>
   )
 }

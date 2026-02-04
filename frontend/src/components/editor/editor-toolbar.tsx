@@ -137,6 +137,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           break
 
         case "generate-image":
+        case "edit-image":
           // Clear generated image results, keep settings
           data.generatedResults = []
           data.generatedImageUrl = undefined

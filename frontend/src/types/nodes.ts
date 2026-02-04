@@ -334,11 +334,24 @@ export type GenerateScriptData = {
   activeResultIndex?: number
 }
 
+// Image providers available on Replicate
+export type ReplicateImageProvider = "nano-banana" | "flux" | "dalle"
+
+// Additional image providers available only on KIE.ai
+export type KieImageProvider =
+  | "nano-banana" | "nano-banana-pro"
+  | "flux" | "flux-i2i"
+  | "grok" | "grok-i2i"
+  | "gpt-image" | "gpt-image-i2i"
+
+// All image providers (union of both)
+export type ImageProvider = ReplicateImageProvider | KieImageProvider
+
 export type GenerateImageData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "nano-banana" | "flux" | "dalle"
+  provider: ImageProvider
   model: string
   style: string
   aspectRatio: "1:1" | "16:9" | "9:16" | "4:3"
@@ -350,6 +363,22 @@ export type GenerateImageData = {
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   characterDefinitionIds?: readonly string[]
+}
+
+// Edit Image providers (KIE.ai only)
+export type EditImageProvider = "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit"
+
+export type EditImageData = {
+  [key: string]: unknown
+  label: string
+  prompt: string  // Used for nano-banana-edit (edit instructions)
+  provider: EditImageProvider
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type ImageToVideoData = {
@@ -856,6 +885,7 @@ export type SceneNodeData =
   | CameraMotionData
   | GenerateScriptData
   | GenerateImageData
+  | EditImageData
   | ImageToVideoData
   | VideoToVideoData
   | TextToVideoData
@@ -895,6 +925,7 @@ export type SceneNodeType =
   | "camera-motion"
   | "generate-script"
   | "generate-image"
+  | "edit-image"
   | "image-to-video"
   | "video-to-video"
   | "text-to-video"
@@ -1069,6 +1100,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["image"],
     defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
+  },
+  {
+    type: "edit-image",
+    label: "Edit Image",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["image"],
+    outputs: ["out"],
+    defaultData: { label: "Edit Image", prompt: "", provider: "recraft-upscale", fieldMappings: {} },
   },
   {
     type: "image-to-video",
