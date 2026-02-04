@@ -203,16 +203,30 @@ export async function generateImageKie(
     console.log(`[KIE.ai] Reference images: ${referenceImageUrls.join(", ")}`)
   }
 
+  // Build input with model-specific parameters
   const input: Record<string, unknown> = {
     prompt,
     output_format: "png",
-    image_size: "16:9",
+    // Apply model-specific extra params (aspect_ratio, image_size, resolution, etc.)
+    ...modelConfig.extraParams,
   }
 
-  // Add reference images if supported
+  // Add reference images based on input type
   if (referenceImageUrls?.length) {
-    input.image_input = referenceImageUrls
+    if (modelConfig.inputType === "image-to-image") {
+      // Image-to-image models use "image" param for the source image
+      input.image = referenceImageUrls[0]
+      // Some models may support multiple images
+      if (referenceImageUrls.length > 1) {
+        input.image_input = referenceImageUrls.slice(1)
+      }
+    } else {
+      // Text-to-image models use "image_input" for reference images
+      input.image_input = referenceImageUrls
+    }
   }
+
+  console.log(`[KIE.ai] Request input:`, JSON.stringify(input, null, 2))
 
   const { resultJson } = await runKieTask(modelConfig.model, input)
 

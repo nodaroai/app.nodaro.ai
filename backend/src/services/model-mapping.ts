@@ -22,35 +22,84 @@ export interface KieModelConfig {
 // IMAGE GENERATION MODELS
 // =============================================================================
 export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
+  // Google Nano Banana family
   "nano-banana": {
     model: "google/nano-banana",
     credits: 4,
     cost: 0.02,  // 4 credits × $0.005
+    extraParams: { image_size: "16:9" },
   },
-  "flux": {
-    model: "flux-schnell",
+  "nano-banana-pro": {
+    model: "nano-banana-pro",
     credits: 6,
-    cost: 0.03,  // 6 credits × $0.005
+    cost: 0.03,
+    extraParams: { image_size: "16:9" },
   },
-  "flux-dev": {
-    model: "flux-dev",
-    credits: 50,
-    cost: 0.25,  // 50 credits × $0.005
+  "nano-banana-edit": {
+    model: "google/nano-banana-edit",
+    credits: 6,
+    cost: 0.03,
+    inputType: "image-to-image",
+    extraParams: { image_size: "16:9" },
   },
-  "ideogram": {
-    model: "ideogram/v3",
-    credits: 16,
-    cost: 0.08,  // 16 credits × $0.005
-  },
-  "recraft": {
-    model: "recraft/v3",
-    credits: 8,
-    cost: 0.04,  // 8 credits × $0.005
-  },
-  "grok": {
-    model: "grok-imagine",
+
+  // Flux family
+  "flux": {
+    model: "flux-2/pro-text-to-image",
     credits: 10,
-    cost: 0.05,  // 10 credits × $0.005
+    cost: 0.05,
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+  "flux-i2i": {
+    model: "flux-2/pro-image-to-image",
+    credits: 10,
+    cost: 0.05,
+    inputType: "image-to-image",
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+
+  // Grok family
+  "grok": {
+    model: "grok-imagine/text-to-image",
+    credits: 8,
+    cost: 0.04,
+    extraParams: { aspect_ratio: "16:9" },
+  },
+  "grok-i2i": {
+    model: "grok-imagine/image-to-image",
+    credits: 8,
+    cost: 0.04,
+    inputType: "image-to-image",
+    extraParams: { aspect_ratio: "16:9" },
+  },
+
+  // GPT Image family
+  "gpt-image": {
+    model: "gpt-image/1.5-text-to-image",
+    credits: 12,
+    cost: 0.06,
+    extraParams: { aspect_ratio: "16:9" },
+  },
+  "gpt-image-i2i": {
+    model: "gpt-image/1.5-image-to-image",
+    credits: 12,
+    cost: 0.06,
+    inputType: "image-to-image",
+    extraParams: { aspect_ratio: "16:9" },
+  },
+
+  // Recraft utilities
+  "recraft-remove-bg": {
+    model: "recraft/remove-background",
+    credits: 4,
+    cost: 0.02,
+    inputType: "image-to-image",
+  },
+  "recraft-upscale": {
+    model: "recraft/crisp-upscale",
+    credits: 6,
+    cost: 0.03,
+    inputType: "image-to-image",
   },
 }
 
