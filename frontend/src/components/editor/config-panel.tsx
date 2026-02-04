@@ -1260,7 +1260,8 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
             {/* Replicate providers (always available) */}
             <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
             <SelectItem value="flux">Flux</SelectItem>
-            <SelectItem value="dalle">DALL-E</SelectItem>
+            {/* DALL-E is Replicate-only, not available on KIE.ai */}
+            {!isKie && <SelectItem value="dalle">DALL-E</SelectItem>}
             {/* KIE.ai-only providers */}
             {isKie && (
               <>
