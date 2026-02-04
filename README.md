@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 37 node types across 10 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display. **New UI/UX**: #ff0073 accent color throughout, animated edges with flowing dot during execution, running node animation with blue base and pink rotating overlay, MiniMap showing actual node colors, and all nodes are resizable.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 37 node types across 10 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display. **New UI/UX**: Complete light/dark mode redesign with Inter + JetBrains Mono typography, category-based node colors, glassmorphism effects in dark mode, floating tab navigation (Editor/Executions/Cost), user-specific execution history with Replicate-style detail modal, animated edges with flowing dot during execution, and all nodes are resizable.
 
 ## Features
 
@@ -19,10 +19,11 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **All nodes resizable**: Drag corners or edges to resize any node
 
 ### UI/UX Design
-- **Accent color**: #ff0073 (pink) used throughout the entire app
-- **Primary buttons**: All default/primary buttons use #ff0073
-- **Sidebar headers**: Section headers (INPUT, PARAMETER, AI, etc.) use #ff0073
-- **Save/Run buttons**: Save, Execute, and Run buttons all use #ff0073 accent
+- **Brand color**: #ff0073 (pink) used throughout the entire app
+- **Typography**: Inter font for UI, JetBrains Mono for monospace data
+- **Light Mode**: Clean Stripe-inspired design with white cards, subtle borders (#E2E8F0)
+- **Dark Mode**: Premium glassmorphism with glow effects and backdrop blur
+- **Category-based node colors**: Each node type has distinct colors in both modes
 - **MiniMap**: Shows each node in its actual category color:
   - Character = pink (#ec4899)
   - Object = emerald (#10b981)
@@ -33,7 +34,12 @@ Visual workflow platform for AI video generation. Build video creation pipelines
   - Parameter nodes = indigo (#6366f1)
   - Processing nodes = amber (#f59e0b)
   - Output nodes = green (#22c55e)
-- **MiniMap toggle**: Button to show/hide MiniMap
+
+### Floating Tab Navigation
+- **Editor**: Main workflow canvas with node-based editing
+- **Executions**: User-specific job history with real-time status
+- **Cost**: Credit usage analytics (coming soon)
+- Tabs float between header and canvas with underline-style active indicator
 
 ### Running Node Animation
 - **Blue base border**: 3px solid #3b82f6 (1.5x thicker than normal)
@@ -215,7 +221,17 @@ Canvas-level organizational node for adding notes and documentation to workflows
 - Projects with folders
 - Workflow management
 - Mobile responsive (collapsible sidebar, touch targets, pinch-to-zoom)
-- Light/Dark mode
+- Light/Dark mode with premium styling
+
+### Execution History
+- **Executions Tab**: View all jobs for the logged-in user
+- **User-specific filtering**: Each user sees only their own executions
+- **Real-time status**: Pending, Processing, Completed, Failed badges
+- **Execution Detail Modal**: Replicate-style two-column layout
+  - Left: Output preview (image/video/audio player)
+  - Right: Job details (ID, type, provider, duration, cost, timestamps)
+  - Collapsible input/output JSON viewers
+  - Delete job action with confirmation
 
 ### Authentication
 - Google OAuth via Supabase
@@ -228,6 +244,7 @@ Canvas-level organizational node for adding notes and documentation to workflows
 | UI Components | shadcn/ui + Tailwind CSS | Built |
 | Visual Editor | React Flow | Built |
 | State Management | Zustand | Built |
+| Typography | Inter + JetBrains Mono (Google Fonts) | Built |
 | Database + Auth | Supabase (PostgreSQL) | Built |
 | Backend | Fastify (Node.js/TypeScript) | Built |
 | Queue | Redis + BullMQ | Built |

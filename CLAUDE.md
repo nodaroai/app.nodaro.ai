@@ -3359,6 +3359,146 @@ Theme toggle (Sun/Moon icon) is accessible on every page:
 - **Editor**: In the editor toolbar (top-right)
 - Theme persists across sessions via `next-themes` with `class` attribute strategy
 
+### Typography System
+
+Professional font pairing for UI and data display:
+
+| Usage | Font | Weight | Size |
+|-------|------|--------|------|
+| UI Text | Inter | 400-600 | 11-14px |
+| Headings | Inter | 600-700 | 16-24px |
+| Monospace (data, IDs, credits) | JetBrains Mono | 400-500 | 10-12px |
+| Node labels | Inter | 600 | 11px uppercase |
+
+**Google Fonts import** (in `globals.css`):
+```css
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+```
+
+### Light Mode Design
+
+Clean, professional styling inspired by Stripe and Linear:
+
+**Color Palette:**
+| Element | Light Mode | Dark Mode |
+|---------|------------|-----------|
+| Background | #F8FAFC (slate-50) | #121212 |
+| Card/Surface | #FFFFFF | #1E1E1E |
+| Border | #E2E8F0 (gray-200) | #2D2D2D |
+| Text Primary | #1E293B (slate-800) | #F8FAFC |
+| Text Secondary | #64748B (slate-500) | #94A3B8 |
+| Accent | #ff0073 | #ff0073 |
+
+**Node Category Colors (Light Mode):**
+| Category | Border | Header BG |
+|----------|--------|-----------|
+| Input | #E2E8F0 | #007AFF (blue) |
+| Parameter | #EEF2FF | #6366F1 (indigo) |
+| AI/Scene/Script | #404040 | #282828 (dark) |
+| Processing | #CBD5E1 | #475569 (slate) |
+| Character | #F9A8D4 | #EC4899 (pink) |
+| Object | #6EE7B7 | #10B981 (emerald) |
+| Location | #67E8F9 | #06B6D4 (cyan) |
+| Output | #86EFAC | #22C55E (green) |
+
+### Dark Mode Premium Styling
+
+Glassmorphism and glow effects for a premium feel:
+
+**Effects:**
+- **Glassmorphism**: `backdrop-blur-sm` on cards and panels
+- **Glow on selection**: Category-colored `box-shadow` when nodes are selected
+- **Accent glow**: #ff0073 glow on AI/Scene nodes: `shadow-[0_0_20px_rgba(255,0,115,0.3)]`
+
+**Node Glow Colors (when selected):**
+```css
+/* Dark mode selected node shadows */
+input: shadow-[0_0_20px_rgba(56,189,248,0.4)]    /* sky-400 */
+parameter: shadow-[0_0_20px_rgba(129,140,248,0.4)] /* indigo-400 */
+ai/scene: shadow-[0_0_25px_rgba(255,0,115,0.5)]   /* brand pink */
+processing: shadow-[0_0_20px_rgba(71,85,105,0.4)] /* slate-600 */
+character: shadow-[0_0_20px_rgba(244,114,182,0.4)] /* pink-400 */
+location: shadow-[0_0_20px_rgba(34,211,238,0.4)]  /* cyan-400 */
+object: shadow-[0_0_20px_rgba(52,211,153,0.4)]    /* emerald-400 */
+output: shadow-[0_0_20px_rgba(34,197,94,0.4)]     /* green-500 */
+```
+
+### Top Navigation Bar (Floating Tabs)
+
+The editor features a floating tab bar that overlaps the header/canvas border:
+
+**Tabs:**
+- **Editor**: Main workflow canvas (Layers icon)
+- **Executions**: Job history filtered by logged-in user (History icon)
+- **Cost**: Credit usage placeholder (DollarSign icon)
+
+**Styling:**
+- **Container**: White bg (light) / #1E1E1E (dark), rounded-lg, subtle border
+- **Active tab**: Underline indicator (`border-b-2 border-[#ff0073]`), pink text
+- **Inactive tab**: Steel gray text (#64748B light / gray-400 dark)
+- **Executions badge**: Pink rounded badge showing running job count
+
+**Position**: Absolute positioned at `-top-5` with `left-1/2 -translate-x-1/2` for centered overlap
+
+**Implementation**: `frontend/src/components/editor/workflow-editor.tsx`
+
+### Executions Tab
+
+User-specific execution history with real-time data:
+
+**Features:**
+- **User filtering**: Shows only jobs belonging to the logged-in user (via `userId` query param)
+- **Pagination**: Cursor-based pagination with Previous/Next buttons
+- **Auto-refresh**: Refresh button to fetch latest jobs
+- **Job cards**: Show type, status badge, duration, cost estimate, relative time
+- **Click to expand**: Opens Execution Detail Modal
+
+**Status Badges:**
+| Status | Light Mode | Dark Mode |
+|--------|------------|-----------|
+| Completed | green-100/green-700 | green-500/20 |
+| Failed | red-100/red-700 | red-500/20 |
+| Processing | yellow-100/yellow-700 | yellow-500/20 |
+| Pending/Queued | blue-100/blue-700 | blue-500/20 |
+| Cancelled | gray-100/gray-700 | gray-500/20 |
+
+**Implementation**: `frontend/src/components/editor/executions-tab.tsx`
+
+### Execution Detail Modal
+
+Replicate-style two-column layout showing prediction details:
+
+**Left Column (60%):**
+- Output preview (image/video/audio player)
+- Large preview area with media controls
+
+**Right Column (40%):**
+- **Status**: Badge with colored indicator
+- **ID**: Monospace job ID with copy button
+- **Type**: Job type (generate-image, generate-video, etc.)
+- **Provider**: AI provider used
+- **Duration**: Time taken (formatted)
+- **Cost**: Estimated cost based on duration
+- **Timestamps**: Created, started, completed times
+- **Input Data**: Collapsible JSON viewer
+- **Output Data**: Collapsible JSON viewer
+- **Error Message**: Red alert if job failed
+
+**Actions:**
+- **Delete button**: Remove job from history (with confirmation)
+- **Copy ID**: Copy job ID to clipboard
+
+**Implementation**: `frontend/src/components/editor/execution-detail-modal.tsx`
+
+### Cost Tab
+
+Placeholder for credit usage analytics (coming soon):
+- Shows "Credit usage analytics coming soon" message
+- Displays DollarSign icon
+- Background matches theme (light: #F8FAFC, dark: #121212)
+
+**Implementation**: `frontend/src/components/editor/cost-tab.tsx`
+
 ### Breakpoints
 
 | Breakpoint | Tailwind | Behavior |
@@ -4400,4 +4540,4 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 ---
 
 *Last updated: 2026-02-04*
-*Version: 1.11.0*
+*Version: 1.12.0*
