@@ -77,14 +77,14 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
     <>
       {/* Unified Asset Library - quick access to all assets */}
       <div className="flex flex-col gap-1 pb-2 mb-2 border-b dark:border-[#2D2D2D]">
-        <span className="font-sans text-[10px] font-bold uppercase tracking-[0.05em] text-[#64748B] dark:text-[#94A3B8]">
+        <span className="font-sans text-[10px] font-bold uppercase tracking-[0.05em] text-[#ff0073]">
           Library
         </span>
         <UnifiedAssetLibraryButton />
       </div>
       {CATEGORIES.map((cat) => (
         <div key={cat} className="flex flex-col gap-1">
-          <span className="font-sans text-[10px] font-bold uppercase tracking-[0.05em] text-[#64748B] dark:text-[#94A3B8]">
+          <span className="font-sans text-[10px] font-bold uppercase tracking-[0.05em] text-[#ff0073]">
             {cat}
           </span>
           {NODE_OPTIONS.filter((n) => n.category === cat).map((node) => (
@@ -136,7 +136,7 @@ export function NodeToolbar() {
     <>
       {/* Desktop: static sidebar panel */}
       <div className="absolute top-4 left-4 z-10 hidden md:flex flex-col gap-2 bg-card dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border dark:border-[#2D2D2D] rounded-lg p-3 shadow-md w-48 max-h-[calc(100vh-6rem)] overflow-y-auto">
-        <span className="font-sans text-[11px] font-bold uppercase tracking-[0.05em] text-[#64748B] dark:text-[#94A3B8]">
+        <span className="font-sans text-[11px] font-bold uppercase tracking-[0.05em] text-[#ff0073]">
           Add Node
         </span>
         <NodeList onAdd={handleAddNode} />
