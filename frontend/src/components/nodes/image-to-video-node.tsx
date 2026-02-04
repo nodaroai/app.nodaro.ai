@@ -43,7 +43,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       id={id}
       label={nodeData.label}
       icon={<Film className="h-4 w-4" />}
-      category="ai"
+      category="i2v"
       credits={20}
       selected={selected}
       isRunning={status === "running"}

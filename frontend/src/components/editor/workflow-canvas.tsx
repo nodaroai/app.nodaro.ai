@@ -243,14 +243,13 @@ export function WorkflowCanvas() {
               if (nodeType === 'object') return '#10b981' // emerald-500
               // Location nodes
               if (nodeType === 'location') return '#06b6d4' // cyan-500
-              // Scene nodes
-              if (nodeType === 'scene') return '#8b5cf6' // violet-500
-              // AI nodes (generate-*, text-to-*, image-to-*, video-to-*, qa-check)
-              if (nodeType.startsWith('generate-') ||
+              // Scene and AI nodes - dark gray
+              if (nodeType === 'scene' ||
+                  nodeType.startsWith('generate-') ||
                   nodeType.startsWith('text-to-') ||
                   nodeType.startsWith('image-to-') ||
                   nodeType.startsWith('video-to-') ||
-                  nodeType === 'qa-check') return '#a855f7' // purple-500
+                  nodeType === 'qa-check') return '#161616'
               // Input nodes
               if (nodeType === 'text-prompt' ||
                   nodeType === 'upload-image' ||
@@ -280,8 +279,8 @@ export function WorkflowCanvas() {
               // Output nodes
               if (nodeType === 'save-to-storage' ||
                   nodeType === 'webhook-output') return '#22c55e' // green-500
-              // Sticky notes
-              if (nodeType === 'sticky-note') return '#fbbf24' // yellow-400
+              // Sticky notes - hidden from MiniMap
+              if (nodeType === 'sticky-note') return 'transparent'
               // Default fallback
               return '#6b7280' // gray-500
             }}

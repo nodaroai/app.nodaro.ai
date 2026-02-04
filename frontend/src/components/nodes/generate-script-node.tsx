@@ -51,7 +51,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       id={id}
       label={nodeData.label}
       icon={<BookOpen className="h-4 w-4" />}
-      category="ai"
+      category="script"
       credits={2}
       selected={selected}
       isRunning={status === "running"}
