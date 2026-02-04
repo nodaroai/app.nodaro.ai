@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ReactFlowProvider } from "@xyflow/react"
-import { Play, Loader2, Square, DollarSign } from "lucide-react"
+import { Play, Loader2, Square, DollarSign, Layers, History } from "lucide-react"
 import { WorkflowCanvas } from "./workflow-canvas"
 import { NodeToolbar } from "./node-toolbar"
 import { ConfigPanel } from "./config-panel"
@@ -2255,63 +2255,117 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         onTabChange={setActiveTab}
       />
 
-      {/* Tab Content */}
-      {activeTab === "editor" && (
-        <div className="flex-1 relative">
-          <ReactFlowProvider>
-            <WorkflowCanvas />
-            <NodeToolbar />
-            <ConfigPanel />
-          </ReactFlowProvider>
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
-            {isRunning ? (
-              <>
-                <Button
-                  size="lg"
-                  onClick={handleStop}
-                  className="rounded-full px-6 text-white"
-                  style={{ backgroundColor: '#ff0073' }}
-                >
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Executing workflow
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleStop}
-                  title="Stop current execution"
-                  className="rounded-lg bg-background"
-                >
-                  <Square className="w-4 h-4" />
-                </Button>
-              </>
-            ) : (
-              <Button
-                size="lg"
-                onClick={handleRun}
-                className="rounded-full px-6 text-white hover:opacity-90"
-                style={{ backgroundColor: '#ff0073' }}
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Execute workflow
-              </Button>
-            )}
+      {/* Main content area with floating tabs */}
+      <div className="flex-1 relative">
+        {/* Floating tabs overlapping header/canvas border */}
+        <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+          <div className="flex items-center gap-0 bg-white dark:bg-[#1E1E1E] rounded-lg px-1 border border-gray-200 dark:border-[#2D2D2D] shadow-lg">
+            <button
+              type="button"
+              onClick={() => setActiveTab("editor")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                activeTab === "editor"
+                  ? "text-[#ff0073] border-[#ff0073]"
+                  : "text-[#64748B] dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              Editor
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("executions")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                activeTab === "executions"
+                  ? "text-[#ff0073] border-[#ff0073]"
+                  : "text-[#64748B] dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              <History className="w-4 h-4" />
+              Executions
+              {isRunning && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
+                  1
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("cost")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                activeTab === "cost"
+                  ? "text-[#ff0073] border-[#ff0073]"
+                  : "text-[#64748B] dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              <DollarSign className="w-4 h-4" />
+              Cost
+            </button>
           </div>
         </div>
-      )}
 
-      {activeTab === "executions" && <ExecutionsTab />}
+        {/* Tab Content */}
+        {activeTab === "editor" && (
+          <div className="absolute inset-0">
+            <ReactFlowProvider>
+              <WorkflowCanvas />
+              <NodeToolbar />
+              <ConfigPanel />
+            </ReactFlowProvider>
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+              {isRunning ? (
+                <>
+                  <Button
+                    size="lg"
+                    onClick={handleStop}
+                    className="rounded-full px-6 text-white"
+                    style={{ backgroundColor: '#ff0073' }}
+                  >
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Executing workflow
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleStop}
+                    title="Stop current execution"
+                    className="rounded-lg bg-background"
+                  >
+                    <Square className="w-4 h-4" />
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="lg"
+                  onClick={handleRun}
+                  className="rounded-full px-6 text-white hover:opacity-90"
+                  style={{ backgroundColor: '#ff0073' }}
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Execute workflow
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
-      {activeTab === "cost" && (
-        <div className="flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212]">
-          <DollarSign className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Cost & Credits</h3>
-          <p className="text-sm text-gray-500 dark:text-[#94A3B8] text-center max-w-md">
-            Track credit usage across all nodes, view cost breakdown by node type, and monitor spending.
-          </p>
-          <p className="text-xs text-gray-400 dark:text-[#64748B] mt-4">Coming soon</p>
-        </div>
-      )}
+        {activeTab === "executions" && (
+          <div className="absolute inset-0">
+            <ExecutionsTab className="h-full" />
+          </div>
+        )}
+
+        {activeTab === "cost" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212]">
+            <DollarSign className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Cost & Credits</h3>
+            <p className="text-sm text-gray-500 dark:text-[#94A3B8] text-center max-w-md">
+              Track credit usage across all nodes, view cost breakdown by node type, and monitor spending.
+            </p>
+            <p className="text-xs text-gray-400 dark:text-[#64748B] mt-4">Coming soon</p>
+          </div>
+        )}
+      </div>
 
       <UnsavedChangesDialog
         open={showUnsavedDialog}

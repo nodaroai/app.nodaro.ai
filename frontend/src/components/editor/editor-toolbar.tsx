@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback } from "react"
-import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson, Layers, History, DollarSign } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -502,7 +502,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   }, [projectId, workflowId, loadWorkflow])
 
   return (
-    <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b bg-card">
+    <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b border-gray-200 dark:border-border bg-white dark:bg-card">
       {/* Left section: Back, Breadcrumbs, Workflow name */}
       <div className="flex items-center gap-1 sm:gap-2 min-w-0">
         {projectId && (
@@ -588,46 +588,6 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         </div>
       </div>
 
-      {/* Center section: Tab navigation */}
-      <div className="hidden md:flex items-center gap-1 bg-muted/50 dark:bg-[#121212] rounded-lg p-1">
-        <button
-          type="button"
-          onClick={() => onTabChange?.("editor")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-            activeTab === "editor"
-              ? "bg-[#ff0073] text-white shadow-sm"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          Editor
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange?.("executions")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-            activeTab === "executions"
-              ? "bg-[#ff0073] text-white shadow-sm"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-          }`}
-        >
-          <History className="w-3.5 h-3.5" />
-          Executions
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange?.("cost")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-            activeTab === "cost"
-              ? "bg-[#ff0073] text-white shadow-sm"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-          }`}
-        >
-          <DollarSign className="w-3.5 h-3.5" />
-          Cost
-        </button>
-      </div>
-
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {validation && (
           <div className="hidden sm:flex items-center gap-1 text-xs mr-2">
@@ -645,7 +605,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           </div>
         )}
 
-        <Button variant="outline" size="sm" onClick={handleValidate} className="hidden sm:flex">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleValidate}
+          className="hidden sm:flex bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200 dark:bg-transparent dark:hover:bg-muted dark:text-foreground dark:border-border"
+        >
           Validate
         </Button>
 

@@ -88,7 +88,7 @@ export function BaseNode({
       />
       <div
         className={cn(
-          "group relative rounded-lg border-2 shadow-sm min-w-[200px] bg-card text-card-foreground h-full",
+          "group relative rounded-lg border-2 shadow-sm min-w-[200px] max-w-[320px] bg-card text-card-foreground h-full overflow-hidden",
           CATEGORY_STYLES[category],
           selected && "ring-2 ring-primary",
           selected && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
@@ -153,7 +153,7 @@ export function BaseNode({
         )}
       </div>
 
-      {children && <div className="px-3 py-2 text-xs">{children}</div>}
+      {children && <div className="px-3 py-2 text-xs overflow-hidden">{children}</div>}
 
       {handles.map((h) => (
         <div key={h.id}>
