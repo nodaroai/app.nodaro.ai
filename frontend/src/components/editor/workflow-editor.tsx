@@ -1219,8 +1219,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             if (job.status === "completed") {
               untrackInterval(poll)
               const url = outputKey === "generatedVideoUrl" ? job.output_data?.videoUrl : job.output_data?.audioUrl
+
+              if (!url) {
+                // If no URL returned, mark as failed
+                const errMsg = "No output URL returned from job"
+                updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+                toast.error(`${label} failed`, { description: errMsg })
+                reject(new Error(errMsg))
+                return
+              }
+
               const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as Record<string, unknown>)?.generatedResults as readonly GeneratedResult[] | undefined ?? []
-              const newResult: GeneratedResult = { url: (url as string) ?? "", timestamp: new Date().toISOString(), jobId }
+              const newResult: GeneratedResult = { url: url as string, timestamp: new Date().toISOString(), jobId }
               updateNodeData(nodeId, {
                 executionStatus: "completed",
                 [outputKey]: url,

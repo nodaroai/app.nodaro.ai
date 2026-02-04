@@ -10,7 +10,10 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import type { ResizeVideoData } from "@/types/nodes"
 
 function ResizeVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as ResizeVideoData
+  // Subscribe to nodes to ensure re-render when node data changes
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const currentNodeData = nodes.find((n) => n.id === id)?.data as ResizeVideoData | undefined
+  const nodeData = currentNodeData ?? (data as ResizeVideoData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

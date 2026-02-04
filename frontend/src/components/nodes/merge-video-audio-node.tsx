@@ -10,7 +10,10 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import type { MergeVideoAudioData } from "@/types/nodes"
 
 function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as MergeVideoAudioData
+  // Subscribe to nodes to ensure re-render when node data changes
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const currentNodeData = nodes.find((n) => n.id === id)?.data as MergeVideoAudioData | undefined
+  const nodeData = currentNodeData ?? (data as MergeVideoAudioData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

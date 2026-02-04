@@ -9,7 +9,10 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import type { AdjustVolumeData } from "@/types/nodes"
 
 function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as AdjustVolumeData
+  // Subscribe to nodes to ensure re-render when node data changes
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const currentNodeData = nodes.find((n) => n.id === id)?.data as AdjustVolumeData | undefined
+  const nodeData = currentNodeData ?? (data as AdjustVolumeData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

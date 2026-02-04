@@ -9,7 +9,10 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import type { MixAudioData } from "@/types/nodes"
 
 function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as MixAudioData
+  // Subscribe to nodes to ensure re-render when node data changes
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const currentNodeData = nodes.find((n) => n.id === id)?.data as MixAudioData | undefined
+  const nodeData = currentNodeData ?? (data as MixAudioData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

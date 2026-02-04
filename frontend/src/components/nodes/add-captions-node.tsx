@@ -10,7 +10,10 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import type { AddCaptionsData } from "@/types/nodes"
 
 function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as AddCaptionsData
+  // Subscribe to nodes to ensure re-render when node data changes
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const currentNodeData = nodes.find((n) => n.id === id)?.data as AddCaptionsData | undefined
+  const nodeData = currentNodeData ?? (data as AddCaptionsData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

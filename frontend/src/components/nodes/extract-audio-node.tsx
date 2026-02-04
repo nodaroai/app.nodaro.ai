@@ -9,7 +9,10 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import type { ExtractAudioData } from "@/types/nodes"
 
 function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as ExtractAudioData
+  // Subscribe to nodes to ensure re-render when node data changes
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const currentNodeData = nodes.find((n) => n.id === id)?.data as ExtractAudioData | undefined
+  const nodeData = currentNodeData ?? (data as ExtractAudioData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

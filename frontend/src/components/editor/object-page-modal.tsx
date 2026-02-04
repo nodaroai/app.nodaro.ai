@@ -327,9 +327,17 @@ no shadows, professional product photography`
       setShowRefinePicker(true)
       setSelectedRefinedIndex(null)
     } catch (err) {
-      toast.error("Failed to refine object", {
-        description: err instanceof Error ? err.message : "Unknown error",
-      })
+      const errorMessage = err instanceof Error ? err.message : "Unknown error"
+      // Check for content moderation error (E005)
+      if (errorMessage.includes("E005") || errorMessage.toLowerCase().includes("flagged as sensitive")) {
+        toast.error("Content moderation error", {
+          description: "The image was flagged by the AI provider's content filter. Try using a different image or adjusting the object's appearance.",
+        })
+      } else {
+        toast.error("Failed to refine object", {
+          description: errorMessage,
+        })
+      }
     } finally {
       setIsRefining(false)
     }
