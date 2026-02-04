@@ -1423,9 +1423,22 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     if (node.type === "scene") {
       const sceneData = node.data as unknown as SceneNodeDataType
-      const { characterDefinitions } = useWorkflowStore.getState()
-      const prompt = buildScenePrompt(sceneData, characterDefinitions)
-      if (!prompt.trim()) {
+      const { nodes: allNodes, edges: allEdges, characterDefinitions } = useWorkflowStore.getState()
+
+      // Resolve inputs from connected nodes (e.g., Text Prompt)
+      const inputs = resolveNodeInputs(node, allNodes, allEdges)
+      const connectedPrompt = inputs.prompt ?? ""
+
+      // Build scene prompt from scene data (cinematography, style, etc.)
+      const sceneStylePrompt = buildScenePrompt(sceneData, characterDefinitions)
+
+      // Combine: connected prompt (scene description) + scene style settings
+      // The connected text should be the main scene description, style comes after
+      let combinedPrompt = connectedPrompt
+        ? `${connectedPrompt}. ${sceneStylePrompt}`
+        : sceneStylePrompt
+
+      if (!combinedPrompt.trim()) {
         toast.error(`Scene "${sceneData.sceneName || sceneData.label}": no scene data to generate prompt`)
         return Promise.reject(new Error("Empty scene prompt"))
       }
@@ -1436,7 +1449,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         ...(sceneData.locations ?? []).map((l) => l.assetId),
         ...sceneData.objects.map((o) => o.assetId),
       ]
-      const refUrls: string[] = []
+      const refUrls: string[] = [...(inputs.referenceImageUrls ?? [])]
       const charDescs: string[] = []
       for (const assetId of allAssetIds) {
         const asset = characterDefinitions.find((a) => a.id === assetId)
@@ -1446,7 +1459,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           charDescs.push(`Include ${label} '${asset.name}': ${asset.description}.`)
         }
       }
-      const finalPrompt = charDescs.length > 0 ? `${prompt}\n${charDescs.join(" ")}` : prompt
+      const finalPrompt = charDescs.length > 0 ? `${combinedPrompt}\n${charDescs.join(" ")}` : combinedPrompt
       const sceneAspectRatio = (sceneData as Record<string, unknown>).aspectRatio as string | undefined
       return runImageGeneration(node.id, finalPrompt, refUrls.length > 0 ? refUrls : undefined, undefined, sceneAspectRatio)
     }
