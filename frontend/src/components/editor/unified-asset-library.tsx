@@ -338,18 +338,18 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
     [projects]
   )
 
-  if (!open) return null
-
-  return createPortal(
+  return (
     <>
-      <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      >
+      {/* Asset Library Modal */}
+      {open && createPortal(
         <div
-          className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2D2D2D] rounded-xl shadow-2xl w-[600px] max-w-[95vw] max-h-[80vh] flex flex-col"
-          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm"
+          onClick={onClose}
         >
+          <div
+            className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2D2D2D] rounded-xl shadow-2xl w-[600px] max-w-[95vw] max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
             <h3 className="text-sm font-semibold uppercase tracking-widest text-white">Asset Library</h3>
@@ -553,9 +553,11 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             )}
           </div>
         </div>
-      </div>
+        </div>,
+        document.body
+      )}
 
-      {/* Page Modals */}
+      {/* Page Modals - rendered outside the library modal so they stay open when library closes */}
       {characterPageNodeId && (
         <CharacterPageModal
           characterNodeId={characterPageNodeId}
@@ -589,8 +591,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           }}
         />
       )}
-    </>,
-    document.body
+    </>
   )
 }
 
