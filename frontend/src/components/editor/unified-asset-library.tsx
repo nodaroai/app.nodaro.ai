@@ -428,7 +428,10 @@ export function UnifiedAssetLibraryButton() {
                   <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]">
                     <SelectValue placeholder="All Projects" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#2D2D2D]">
+                  <SelectContent
+                    className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#2D2D2D] z-[10000]"
+                    position="popper"
+                  >
                     <SelectItem value="all">All Projects</SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
