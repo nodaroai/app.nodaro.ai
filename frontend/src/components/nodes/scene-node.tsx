@@ -75,16 +75,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       handles={[
         { id: "in", type: "target", position: Position.Left },
-        { id: "audio1", type: "target", position: Position.Left, top: "25%" },
-        { id: "audio2", type: "target", position: Position.Left, top: "37%" },
-        { id: "audio3", type: "target", position: Position.Left, top: "49%" },
-        { id: "audio4", type: "target", position: Position.Left, top: "61%" },
-        { id: "audio5", type: "target", position: Position.Left, top: "73%" },
-        { id: "prompt", type: "source", position: Position.Right, top: "15%" },
-        { id: "imageRefs", type: "source", position: Position.Right, top: "30%" },
-        { id: "narration", type: "source", position: Position.Right, top: "55%" },
-        { id: "dialogue", type: "source", position: Position.Right, top: "70%" },
-        { id: "duration", type: "source", position: Position.Right, top: "85%" },
+        { id: "out", type: "source", position: Position.Right },
       ]}
     >
       <div className="flex flex-col gap-1.5">

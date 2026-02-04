@@ -21,7 +21,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         { id: "prompt", type: "source", position: Position.Right, label: "Prompt" },
       ]}
     >
-      <p className="text-muted-foreground truncate max-w-[180px]">
+      <p className="text-sm text-muted-foreground line-clamp-4">
         {nodeData.text || "Enter your prompt..."}
       </p>
     </BaseNode>
