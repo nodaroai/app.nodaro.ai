@@ -37,9 +37,14 @@ function ToolbarButton({ icon, label, shortcut, onClick, active }: ToolbarButton
             onClick={onClick}
             className={cn(
               "w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200",
-              "text-[#94A3B8]",
-              "hover:bg-[#2D2D2D] hover:text-white",
-              active && "bg-[#ff0073]/20 text-[#ff0073]"
+              // Light mode: slate icons
+              "text-[#64748B]",
+              "hover:bg-[#F1F5F9] hover:text-[#0F172A]",
+              // Dark mode: muted icons with dark hover
+              "dark:text-[#94A3B8]",
+              "dark:hover:bg-[#2D2D2D] dark:hover:text-white",
+              // Active state (same for both modes)
+              active && "bg-[#ff0073]/10 text-[#ff0073] dark:bg-[#ff0073]/20 dark:text-[#ff0073]"
             )}
           >
             {icon}
@@ -48,10 +53,14 @@ function ToolbarButton({ icon, label, shortcut, onClick, active }: ToolbarButton
         <TooltipContent
           side="right"
           sideOffset={8}
-          className="bg-[#2D2D2D] text-[#E2E8F0] rounded-lg px-3 py-2 flex items-center gap-2 border border-[#3D3D3D] shadow-xl"
+          className={cn(
+            "rounded-lg px-3 py-2 flex items-center gap-2 shadow-xl",
+            // Dark tooltips work best on both light and dark backgrounds
+            "bg-[#0F172A] text-white border-transparent"
+          )}
         >
           <span className="text-sm">{label}</span>
-          <span className="bg-[#121212] text-[#94A3B8] text-xs px-1.5 py-0.5 rounded font-mono">
+          <span className="bg-[#1E293B] text-[#94A3B8] text-xs px-1.5 py-0.5 rounded font-mono border border-[#334155]">
             {shortcut}
           </span>
         </TooltipContent>
@@ -61,7 +70,7 @@ function ToolbarButton({ icon, label, shortcut, onClick, active }: ToolbarButton
 }
 
 function ToolbarDivider() {
-  return <div className="w-6 h-px bg-[#2D2D2D] mx-auto my-1" />
+  return <div className="w-6 h-px bg-[#E2E8F0] dark:bg-[#2D2D2D] mx-auto my-1" />
 }
 
 export function CanvasToolbar({
@@ -77,11 +86,13 @@ export function CanvasToolbar({
     <div
       className={cn(
         "fixed left-3 top-1/2 -translate-y-1/2 z-50",
-        "bg-[#1E1E1E]/90 backdrop-blur-md",
-        "border border-[#2D2D2D]",
         "p-2 rounded-2xl",
         "flex flex-col gap-1",
-        "shadow-2xl"
+        "backdrop-blur-md",
+        // Light mode: frosted white glass with subtle shadow
+        "bg-white/80 border border-[#E2E8F0] shadow-xl shadow-slate-200/50",
+        // Dark mode: dark glass with deeper shadow
+        "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-2xl dark:shadow-black/20"
       )}
     >
       {/* Primary actions */}
