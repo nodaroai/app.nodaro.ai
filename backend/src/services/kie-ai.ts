@@ -10,22 +10,28 @@
  * 2. Get result: GET /api/v1/jobs/recordInfo?taskId=xxx
  *
  * Cost: KIE.ai API doesn't return credits consumed, so we use
- * estimated costs based on their pricing page (4 credits = $0.02 for nano-banana)
+ * estimated costs based on their pricing page and model-mapping.ts
  */
 
 import { config } from "../lib/config.js"
+import {
+  getKieModelConfig,
+  KIE_IMAGE_MODELS,
+  KIE_VIDEO_MODELS,
+  KIE_TEXT_TO_VIDEO_MODELS,
+  KIE_MUSIC_MODELS,
+  KIE_TTS_MODELS,
+  type KieModelConfig,
+} from "./model-mapping.js"
 
 const KIE_API_BASE = "https://api.kie.ai"
 const POLL_INTERVAL_MS = 2000  // Poll every 2 seconds
 const MAX_POLL_ATTEMPTS = 150  // Max 5 minutes (150 * 2s)
+const MAX_POLL_ATTEMPTS_VIDEO = 300  // Max 10 minutes for video (300 * 2s)
 
-// KIE.ai doesn't return credits in the API response, so we use fixed costs per model
-// Based on KIE.ai pricing: https://kie.ai/pricing
-// 1 credit = $0.005
-const KIE_MODEL_COSTS: Record<string, number> = {
-  "google/nano-banana": 0.02,  // 4 credits × $0.005
-  // Add more models as we integrate them
-}
+// =============================================================================
+// TYPES
+// =============================================================================
 
 interface KieTaskResponse {
   code: number
@@ -42,10 +48,10 @@ interface KieRecordInfoResponse {
   data: {
     taskId: string
     state: "pending" | "processing" | "success" | "failed"
-    resultJson?: string  // JSON string that needs parsing: {"resultUrls": ["url1", "url2"]}
+    resultJson?: string  // JSON string: {"resultUrls": ["url1", "url2"]}
     failCode?: string
     failMsg?: string
-    costTime?: number     // Processing time in ms
+    costTime?: number
     completeTime?: string
     createTime?: string
   }
@@ -53,47 +59,36 @@ interface KieRecordInfoResponse {
 
 interface KieResultJson {
   resultUrls?: string[]
+  audioUrl?: string  // For TTS/music
+  videoUrl?: string  // For video
 }
 
-export interface KieImageResult {
+export interface KieResult {
   url: string
-  cost: number  // Estimated cost based on KIE.ai pricing (not from API response)
+  cost: number  // Estimated cost based on model-mapping.ts
 }
+
+// =============================================================================
+// CORE API FUNCTIONS
+// =============================================================================
 
 /**
- * Generate an image using KIE.ai API
+ * Submit a task to KIE.ai and poll for completion
  */
-export async function generateImageKie(
-  prompt: string,
-  referenceImageUrls?: string[]
-): Promise<KieImageResult> {
+async function runKieTask(
+  model: string,
+  input: Record<string, unknown>,
+  maxAttempts: number = MAX_POLL_ATTEMPTS,
+): Promise<{ resultJson: KieResultJson; costTime?: number }> {
   const apiKey = config.KIE_API_KEY
-
-  // Debug: Check if API key exists (don't log the actual key)
-  console.log(`[KIE.ai] API Key configured: ${apiKey ? "YES" : "NO"} (length: ${apiKey?.length ?? 0})`)
 
   if (!apiKey) {
     throw new Error("KIE_API_KEY is not configured")
   }
 
-  console.log(`[KIE.ai] Generating image: "${prompt}"`)
-  if (referenceImageUrls?.length) {
-    console.log(`[KIE.ai] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
-  }
+  const requestBody = { model, input }
 
-  // Build the request body per KIE.ai docs: https://kie.ai/nano-banana
-  const requestBody = {
-    model: "google/nano-banana",
-    input: {
-      prompt,
-      output_format: "png",
-      image_size: "16:9",
-      ...(referenceImageUrls?.length ? { image_input: referenceImageUrls } : {}),
-    },
-  }
-
-  // Debug: Log request body
-  console.log(`[KIE.ai] Request URL: ${KIE_API_BASE}/api/v1/jobs/createTask`)
+  console.log(`[KIE.ai] Creating task for model: ${model}`)
   console.log(`[KIE.ai] Request body:`, JSON.stringify(requestBody, null, 2))
 
   // Step 1: Create task
@@ -106,34 +101,24 @@ export async function generateImageKie(
     body: JSON.stringify(requestBody),
   })
 
-  // Debug: Log response status
-  console.log(`[KIE.ai] Response status: ${createResponse.status} ${createResponse.statusText}`)
-
-  // Get raw response text first for debugging
   const responseText = await createResponse.text()
-  console.log(`[KIE.ai] Raw response:`, responseText)
+  console.log(`[KIE.ai] Response status: ${createResponse.status}`)
 
   if (!createResponse.ok) {
     throw new Error(`KIE.ai createTask failed: ${createResponse.status} - ${responseText}`)
   }
 
-  // Parse JSON
   let createData: KieTaskResponse
   try {
     createData = JSON.parse(responseText) as KieTaskResponse
-  } catch (parseError) {
+  } catch {
     throw new Error(`KIE.ai response is not valid JSON: ${responseText}`)
   }
 
-  // Debug: Log parsed response
-  console.log(`[KIE.ai] Parsed response:`, JSON.stringify(createData, null, 2))
-
-  // Check for error codes - handle various response structures
   if (createData.code !== 0 && createData.code !== 200 && createData.code !== undefined) {
     throw new Error(`KIE.ai createTask error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`)
   }
 
-  // Check if data and taskId exist
   if (!createData.data?.taskId) {
     throw new Error(`KIE.ai createTask response missing taskId: ${JSON.stringify(createData)}`)
   }
@@ -143,22 +128,17 @@ export async function generateImageKie(
 
   // Step 2: Poll for completion
   let attempts = 0
-  while (attempts < MAX_POLL_ATTEMPTS) {
+  while (attempts < maxAttempts) {
     await sleep(POLL_INTERVAL_MS)
     attempts++
 
     const detailResponse = await fetch(
       `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-      }
+      { headers: { Authorization: `Bearer ${apiKey}` } }
     )
 
     if (!detailResponse.ok) {
-      const errorText = await detailResponse.text().catch(() => "")
-      console.warn(`[KIE.ai] Poll attempt ${attempts} failed: ${detailResponse.status} - ${errorText}`)
+      console.warn(`[KIE.ai] Poll attempt ${attempts} failed: ${detailResponse.status}`)
       continue
     }
 
@@ -167,23 +147,22 @@ export async function generateImageKie(
     try {
       detailData = JSON.parse(detailText) as KieRecordInfoResponse
     } catch {
-      console.warn(`[KIE.ai] Poll attempt ${attempts} invalid JSON: ${detailText}`)
+      console.warn(`[KIE.ai] Poll attempt ${attempts} invalid JSON`)
       continue
     }
 
     const state = detailData.data?.state
     if (!state) {
-      console.warn(`[KIE.ai] Poll attempt ${attempts} missing state: ${detailText}`)
+      console.warn(`[KIE.ai] Poll attempt ${attempts} missing state`)
       continue
     }
 
     console.log(`[KIE.ai] Task ${taskId} state: ${state} (attempt ${attempts})`)
 
     if (state === "success") {
-      // Parse resultJson string to get image URLs
       const resultJsonStr = detailData.data.resultJson
       if (!resultJsonStr) {
-        throw new Error(`KIE.ai task succeeded but no resultJson found: ${JSON.stringify(detailData.data)}`)
+        throw new Error(`KIE.ai task succeeded but no resultJson found`)
       }
 
       let resultJson: KieResultJson
@@ -193,31 +172,213 @@ export async function generateImageKie(
         throw new Error(`KIE.ai resultJson is not valid JSON: ${resultJsonStr}`)
       }
 
-      const imageUrl = resultJson.resultUrls?.[0]
-      if (!imageUrl) {
-        throw new Error(`KIE.ai task succeeded but no image URL in resultUrls: ${resultJsonStr}`)
-      }
-
-      // KIE.ai doesn't return credits in the API response, so we use fixed costs
-      // Based on the model used (currently hardcoded to google/nano-banana)
-      const modelUsed = "google/nano-banana"
-      const estimatedCost = KIE_MODEL_COSTS[modelUsed] ?? 0.02  // Default to nano-banana cost
-
-      console.log(`[KIE.ai] Task completed: ${imageUrl} (model: ${modelUsed}, estimated cost: $${estimatedCost.toFixed(4)})`)
-
-      return { url: imageUrl, cost: estimatedCost }
+      return { resultJson, costTime: detailData.data.costTime }
     }
 
     if (state === "failed") {
       const failMsg = detailData.data.failMsg ?? detailData.data.failCode ?? "Unknown error"
       throw new Error(`KIE.ai task failed: ${failMsg}`)
     }
-
-    // Continue polling for "pending" or "processing" state
   }
 
-  throw new Error(`KIE.ai task timed out after ${MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS / 1000} seconds`)
+  throw new Error(`KIE.ai task timed out after ${maxAttempts * POLL_INTERVAL_MS / 1000} seconds`)
 }
+
+// =============================================================================
+// IMAGE GENERATION
+// =============================================================================
+
+export async function generateImageKie(
+  prompt: string,
+  referenceImageUrls?: string[],
+  provider: string = "nano-banana",
+): Promise<KieResult> {
+  const modelConfig = KIE_IMAGE_MODELS[provider]
+  if (!modelConfig) {
+    throw new Error(`KIE.ai does not support image provider: ${provider}`)
+  }
+
+  console.log(`[KIE.ai] Generating image with ${modelConfig.model}: "${prompt}"`)
+  if (referenceImageUrls?.length) {
+    console.log(`[KIE.ai] Reference images: ${referenceImageUrls.join(", ")}`)
+  }
+
+  const input: Record<string, unknown> = {
+    prompt,
+    output_format: "png",
+    image_size: "16:9",
+  }
+
+  // Add reference images if supported
+  if (referenceImageUrls?.length) {
+    input.image_input = referenceImageUrls
+  }
+
+  const { resultJson } = await runKieTask(modelConfig.model, input)
+
+  const imageUrl = resultJson.resultUrls?.[0]
+  if (!imageUrl) {
+    throw new Error(`KIE.ai image task succeeded but no URL in resultUrls`)
+  }
+
+  console.log(`[KIE.ai] Image completed: ${imageUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: imageUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
+// VIDEO GENERATION (Image-to-Video)
+// =============================================================================
+
+export async function imageToVideoKie(
+  imageUrl: string,
+  prompt?: string,
+  provider: string = "minimax",
+  duration?: number,
+  endFrameUrl?: string,
+): Promise<KieResult> {
+  const modelConfig = KIE_VIDEO_MODELS[provider]
+  if (!modelConfig) {
+    throw new Error(`KIE.ai does not support video provider: ${provider}`)
+  }
+
+  console.log(`[KIE.ai] Generating video with ${modelConfig.model}`)
+  console.log(`[KIE.ai] Image: ${imageUrl}, Prompt: "${prompt ?? ""}"`)
+
+  const input: Record<string, unknown> = {
+    image: imageUrl,
+    prompt: prompt ?? "smooth cinematic motion",
+  }
+
+  if (duration) {
+    input.duration = duration
+  }
+
+  if (endFrameUrl) {
+    input.end_frame = endFrameUrl
+  }
+
+  const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
+
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw new Error(`KIE.ai video task succeeded but no URL found`)
+  }
+
+  console.log(`[KIE.ai] Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: videoUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
+// TEXT-TO-VIDEO
+// =============================================================================
+
+export async function textToVideoKie(
+  prompt: string,
+  provider: string = "minimax",
+  duration?: number,
+): Promise<KieResult> {
+  const modelConfig = KIE_TEXT_TO_VIDEO_MODELS[provider]
+  if (!modelConfig) {
+    throw new Error(`KIE.ai does not support text-to-video provider: ${provider}`)
+  }
+
+  console.log(`[KIE.ai] Generating text-to-video with ${modelConfig.model}: "${prompt}"`)
+
+  const input: Record<string, unknown> = { prompt }
+
+  if (duration) {
+    input.duration = duration
+  }
+
+  const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
+
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw new Error(`KIE.ai text-to-video task succeeded but no URL found`)
+  }
+
+  console.log(`[KIE.ai] Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: videoUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
+// MUSIC GENERATION
+// =============================================================================
+
+export async function generateMusicKie(
+  prompt: string,
+  provider: string = "suno",
+  duration?: number,
+  lyrics?: string,
+): Promise<KieResult> {
+  const modelConfig = KIE_MUSIC_MODELS[provider]
+  if (!modelConfig) {
+    throw new Error(`KIE.ai does not support music provider: ${provider}`)
+  }
+
+  console.log(`[KIE.ai] Generating music with ${modelConfig.model}: "${prompt}"`)
+
+  const input: Record<string, unknown> = { prompt }
+
+  if (duration) {
+    input.duration = duration
+  }
+
+  if (lyrics) {
+    input.lyrics = lyrics
+  }
+
+  const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
+
+  const audioUrl = resultJson.resultUrls?.[0] ?? resultJson.audioUrl
+  if (!audioUrl) {
+    throw new Error(`KIE.ai music task succeeded but no URL found`)
+  }
+
+  console.log(`[KIE.ai] Music completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: audioUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
+// TEXT-TO-SPEECH
+// =============================================================================
+
+export async function textToSpeechKie(
+  text: string,
+  voice?: string,
+  provider: string = "elevenlabs",
+): Promise<KieResult> {
+  const modelConfig = KIE_TTS_MODELS[provider]
+  if (!modelConfig) {
+    throw new Error(`KIE.ai does not support TTS provider: ${provider}`)
+  }
+
+  console.log(`[KIE.ai] Generating TTS with ${modelConfig.model}, voice: ${voice ?? "default"}`)
+
+  const input: Record<string, unknown> = {
+    text,
+    voice: voice ?? "Rachel",
+  }
+
+  const { resultJson } = await runKieTask(modelConfig.model, input)
+
+  const audioUrl = resultJson.resultUrls?.[0] ?? resultJson.audioUrl
+  if (!audioUrl) {
+    throw new Error(`KIE.ai TTS task succeeded but no URL found`)
+  }
+
+  console.log(`[KIE.ai] TTS completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: audioUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))

@@ -2,7 +2,8 @@ import Replicate from "replicate"
 import { config } from "../../lib/config.js"
 import { translateToEnglish } from "../../lib/translate.js"
 import { getAppSettings } from "../../lib/app-settings.js"
-import { generateImageKie } from "../../services/kie-ai.js"
+import { generateImageKie, type KieResult } from "../../services/kie-ai.js"
+import { isKieSupported } from "../../services/model-mapping.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
@@ -55,15 +56,20 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
 
   console.log(`[generateImage] AI Provider from settings: ${aiProvider}`)
 
-  // Route to KIE.ai if configured
+  // Route to KIE.ai if configured and model is supported
+  const resolvedProvider = provider ?? "nano-banana"
   if (aiProvider === "kie") {
-    console.log(`[generateImage] Using KIE.ai API`)
-    const englishPrompt = await translateToEnglish(prompt)
-    return generateImageKie(englishPrompt, referenceImageUrls)
+    // Check if this provider is supported on KIE.ai
+    if (isKieSupported("image", resolvedProvider)) {
+      console.log(`[generateImage] Using KIE.ai API for provider: ${resolvedProvider}`)
+      const englishPrompt = await translateToEnglish(prompt)
+      return generateImageKie(englishPrompt, referenceImageUrls, resolvedProvider)
+    } else {
+      console.log(`[generateImage] Provider ${resolvedProvider} not supported on KIE.ai, falling back to Replicate`)
+    }
   }
 
   // Default: Use Replicate API
-  const resolvedProvider = provider ?? "nano-banana"
   const model = IMAGE_MODELS[resolvedProvider] ?? IMAGE_MODELS["nano-banana"]
   console.log(`[generateImage] Provider: ${resolvedProvider}, Model: ${model}`)
   console.log(`[generateImage] Original prompt: "${prompt}"`)

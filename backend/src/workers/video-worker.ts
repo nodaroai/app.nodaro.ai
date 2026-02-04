@@ -4,7 +4,7 @@ import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { getAppSettings, calculateDisplayCost } from "../lib/app-settings.js"
 import { generateImage, type ImageProvider, type GenerateImageResult } from "../providers/image/replicate.js"
-import { imageToVideo, type VideoProvider } from "../providers/video/replicate.js"
+import { imageToVideo, type VideoProvider, type VideoResult } from "../providers/video/replicate.js"
 import { videoToVideo } from "../providers/video/video-to-video.js"
 import { textToVideo } from "../providers/video/text-to-video.js"
 import { textToSpeech, type VoiceProvider } from "../providers/voice/text-to-speech.js"
@@ -87,11 +87,11 @@ export function createVideoWorker() {
           console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
           // Generate the video with optional end frame support
-          const replicateUrl = await imageToVideo(imageUrl, prompt, provider, generateAudio, duration, endFrameUrl)
+          const videoResult = await imageToVideo(imageUrl, prompt, provider, generateAudio, duration, endFrameUrl)
           await job.updateProgress(40)
 
           // Upload the generated video to R2
-          let finalVideoUrl = await uploadToR2(replicateUrl, jobId, "video")
+          let finalVideoUrl = await uploadToR2(videoResult.url, jobId, "video")
           await job.updateProgress(70)
 
           // If audio URL is provided, merge it with the video
@@ -113,6 +113,11 @@ export function createVideoWorker() {
 
           await job.updateProgress(100)
 
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = videoResult.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
           await supabase
             .from("jobs")
             .update({
@@ -120,10 +125,13 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { videoUrl: finalVideoUrl },
               completed_at: new Date().toISOString(),
+              provider: settings.ai_provider,
+              provider_cost: providerCost,
+              display_cost: displayCost,
             })
             .eq("id", jobId)
 
-          console.log(`[worker] Job ${jobId} completed: ${finalVideoUrl}`)
+          console.log(`[worker] Job ${jobId} completed: ${finalVideoUrl} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "video-to-video") {
           const { videoUrl, prompt, provider } = job.data as {
             jobId: string
@@ -133,11 +141,16 @@ export function createVideoWorker() {
           }
           console.log(`[worker] video-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const replicateUrl = await videoToVideo(videoUrl, prompt, provider)
+          const videoResult = await videoToVideo(videoUrl, prompt, provider)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(replicateUrl, jobId, "video")
+          const r2Url = await uploadToR2(videoResult.url, jobId, "video")
           await job.updateProgress(100)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = videoResult.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           await supabase
             .from("jobs")
@@ -146,23 +159,32 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { videoUrl: r2Url },
               completed_at: new Date().toISOString(),
+              provider: settings.ai_provider,
+              provider_cost: providerCost,
+              display_cost: displayCost,
             })
             .eq("id", jobId)
 
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-video") {
-          const { prompt, provider } = job.data as {
+          const { prompt, provider, duration } = job.data as {
             jobId: string
             prompt: string
             provider?: VideoProvider
+            duration?: number
           }
           console.log(`[worker] text-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const replicateUrl = await textToVideo(prompt, provider)
+          const videoResult = await textToVideo(prompt, provider, duration)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(replicateUrl, jobId, "video")
+          const r2Url = await uploadToR2(videoResult.url, jobId, "video")
           await job.updateProgress(100)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = videoResult.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           await supabase
             .from("jobs")
@@ -171,10 +193,13 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { videoUrl: r2Url },
               completed_at: new Date().toISOString(),
+              provider: settings.ai_provider,
+              provider_cost: providerCost,
+              display_cost: displayCost,
             })
             .eq("id", jobId)
 
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-speech") {
           const { text, voice, provider } = job.data as {
             jobId: string

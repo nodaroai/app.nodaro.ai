@@ -1,9 +1,12 @@
 import Replicate from "replicate"
 import { config } from "../../lib/config.js"
+import { getAppSettings } from "../../lib/app-settings.js"
+import { textToVideoKie, type KieResult } from "../../services/kie-ai.js"
+import { isKieSupported } from "../../services/model-mapping.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
-import type { VideoProvider } from "./replicate.js"
+import type { VideoProvider, VideoResult } from "./replicate.js"
 
 const VIDEO_MODELS: Record<string, string> = {
   minimax: "minimax/video-01",
@@ -18,8 +21,19 @@ const VIDEO_MODELS: Record<string, string> = {
 export async function textToVideo(
   prompt: string,
   provider?: VideoProvider,
-): Promise<string> {
+  duration?: number,
+): Promise<VideoResult> {
   const resolvedProvider = provider ?? "minimax"
+
+  // Check if we should use KIE.ai
+  const settings = await getAppSettings()
+  if (settings.ai_provider === "kie" && isKieSupported("text-to-video", resolvedProvider)) {
+    console.log(`[textToVideo] Using KIE.ai API for provider: ${resolvedProvider}`)
+    const result = await textToVideoKie(prompt, resolvedProvider, duration)
+    return { url: result.url, cost: result.cost }
+  }
+
+  // Default: Use Replicate API
   const model = VIDEO_MODELS[resolvedProvider] ?? VIDEO_MODELS.minimax
   console.log(`[textToVideo] Provider: ${resolvedProvider}, Model: ${model}`)
   console.log(`[textToVideo] Prompt: "${prompt}"`)
@@ -36,5 +50,5 @@ export async function textToVideo(
 
   const resultUrl = String(output)
   console.log(`[textToVideo] Output: "${resultUrl}"`)
-  return resultUrl
+  return { url: resultUrl, cost: null }
 }

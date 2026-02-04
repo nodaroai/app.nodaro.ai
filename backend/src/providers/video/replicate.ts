@@ -1,5 +1,8 @@
 import Replicate from "replicate"
 import { config } from "../../lib/config.js"
+import { getAppSettings } from "../../lib/app-settings.js"
+import { imageToVideoKie, type KieResult } from "../../services/kie-ai.js"
+import { isKieSupported } from "../../services/model-mapping.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
@@ -62,6 +65,11 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 }
 
+export interface VideoResult {
+  url: string
+  cost: number | null
+}
+
 export async function imageToVideo(
   imageUrl: string,
   prompt?: string,
@@ -69,10 +77,20 @@ export async function imageToVideo(
   generateAudio?: boolean,
   duration?: number,
   endFrameUrl?: string,
-): Promise<string> {
+): Promise<VideoResult> {
   const resolvedProvider = provider ?? "minimax"
-  const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
   const finalPrompt = prompt ?? "smooth cinematic motion"
+
+  // Check if we should use KIE.ai
+  const settings = await getAppSettings()
+  if (settings.ai_provider === "kie" && isKieSupported("video", resolvedProvider)) {
+    console.log(`[imageToVideo] Using KIE.ai API for provider: ${resolvedProvider}`)
+    const result = await imageToVideoKie(imageUrl, finalPrompt, resolvedProvider, duration, endFrameUrl)
+    return { url: result.url, cost: result.cost }
+  }
+
+  // Default: Use Replicate API
+  const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
   console.log(`[imageToVideo] Provider: ${resolvedProvider}, Model: ${cfg.model}`)
   console.log(`[imageToVideo] Input image param: "${cfg.imageParam}" = "${imageUrl}"`)
   if (endFrameUrl && cfg.endFrameParam) {
@@ -131,5 +149,6 @@ export async function imageToVideo(
 
   const videoUrl = String(output)
   console.log(`[imageToVideo] Output: "${videoUrl}"`)
-  return videoUrl
+  // Replicate doesn't provide cost info easily, return null
+  return { url: videoUrl, cost: null }
 }
