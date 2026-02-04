@@ -2,7 +2,8 @@ import { Worker } from "bullmq"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { generateImage, type ImageProvider } from "../providers/image/replicate.js"
+import { getAppSettings, calculateDisplayCost } from "../lib/app-settings.js"
+import { generateImage, type ImageProvider, type GenerateImageResult } from "../providers/image/replicate.js"
 import { imageToVideo, type VideoProvider } from "../providers/video/replicate.js"
 import { videoToVideo } from "../providers/video/video-to-video.js"
 import { textToVideo } from "../providers/video/text-to-video.js"
@@ -47,11 +48,16 @@ export function createVideoWorker() {
             console.log(`[worker] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
           }
 
-          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, referenceImageUrls, provider)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           await supabase
             .from("jobs")
@@ -60,10 +66,13 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { imageUrl: r2Url },
               completed_at: new Date().toISOString(),
+              provider: settings.ai_provider,
+              provider_cost: providerCost,
+              display_cost: displayCost,
             })
             .eq("id", jobId)
 
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-video") {
           const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration } = job.data as {
             jobId: string
@@ -372,67 +381,151 @@ export function createVideoWorker() {
           const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: ImageProvider }
           console.log(`[worker] generate-character ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, referenceImageUrls, provider)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { imageUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { imageUrl: r2Url },
+            completed_at: new Date().toISOString(),
+            provider: settings.ai_provider,
+            provider_cost: providerCost,
+            display_cost: displayCost,
+          }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-character-asset") {
           const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: ImageProvider }
           console.log(`[worker] generate-character-asset ${jobId} (type: ${assetType}, provider: ${provider ?? "nano-banana"})`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, referenceImageUrls, provider)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { imageUrl: r2Url, assetType }, completed_at: new Date().toISOString() }).eq("id", jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { imageUrl: r2Url, assetType },
+            completed_at: new Date().toISOString(),
+            provider: settings.ai_provider,
+            provider_cost: providerCost,
+            display_cost: displayCost,
+          }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-object") {
           const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: ImageProvider }
           console.log(`[worker] generate-object ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, referenceImageUrls, provider)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { imageUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { imageUrl: r2Url },
+            completed_at: new Date().toISOString(),
+            provider: settings.ai_provider,
+            provider_cost: providerCost,
+            display_cost: displayCost,
+          }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-object-asset") {
           const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: ImageProvider }
           console.log(`[worker] generate-object-asset ${jobId} (type: ${assetType}, provider: ${provider ?? "nano-banana"})`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, referenceImageUrls, provider)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { imageUrl: r2Url, assetType }, completed_at: new Date().toISOString() }).eq("id", jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { imageUrl: r2Url, assetType },
+            completed_at: new Date().toISOString(),
+            provider: settings.ai_provider,
+            provider_cost: providerCost,
+            display_cost: displayCost,
+          }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-location") {
           const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: ImageProvider }
           console.log(`[worker] generate-location ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, referenceImageUrls, provider)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { imageUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { imageUrl: r2Url },
+            completed_at: new Date().toISOString(),
+            provider: settings.ai_provider,
+            provider_cost: providerCost,
+            display_cost: displayCost,
+          }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-location-asset") {
           const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: ImageProvider }
           console.log(`[worker] generate-location-asset ${jobId} (type: ${assetType}, provider: ${provider ?? "nano-banana"})`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const replicateUrl = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, referenceImageUrls, provider)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(replicateUrl, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { imageUrl: r2Url, assetType }, completed_at: new Date().toISOString() }).eq("id", jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { imageUrl: r2Url, assetType },
+            completed_at: new Date().toISOString(),
+            provider: settings.ai_provider,
+            provider_cost: providerCost,
+            display_cost: displayCost,
+          }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else {
           throw new Error(`Unknown job type: ${job.name}`)

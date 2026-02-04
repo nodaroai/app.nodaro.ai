@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button"
 import { getJobs, type Job } from "@/lib/api"
 import { ExecutionDetailModal } from "./execution-detail-modal"
 import { useAuth } from "@/hooks/use-auth"
-
-// Cost per second for Replicate predictions (approximate)
-const COST_PER_SECOND = 0.000225
+import { EDITION } from "@/lib/edition"
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString)
@@ -38,14 +36,31 @@ function formatDuration(startedAt: string | undefined, completedAt: string | und
   return `${mins}m ${secs.toFixed(0)}s`
 }
 
-function calculateCost(startedAt: string | undefined, completedAt: string | undefined): string {
-  if (!startedAt || !completedAt) return "-"
-  const start = new Date(startedAt).getTime()
-  const end = new Date(completedAt).getTime()
-  const totalTime = (end - start) / 1000
-  const cost = totalTime * COST_PER_SECOND
-  if (cost < 0.01) return `$${cost.toFixed(4)}`
-  return `$${cost.toFixed(3)}`
+function getCostDisplay(job: Job): string {
+  // Cloud edition: API returns `cost` field (= display_cost with markup)
+  // This field is sanitized at the backend to hide provider details
+  if (job.cost != null) {
+    const cost = job.cost
+    if (cost < 0.01) return `$${cost.toFixed(4)}`
+    return `$${cost.toFixed(3)}`
+  }
+
+  // Self-hosted edition or admin: API returns full cost breakdown
+  // Show display_cost if available (CLOUD edition admin), otherwise provider_cost
+  if (job.display_cost != null) {
+    const cost = job.display_cost
+    if (cost < 0.01) return `$${cost.toFixed(4)}`
+    return `$${cost.toFixed(3)}`
+  }
+
+  if (job.provider_cost != null) {
+    const cost = job.provider_cost
+    if (cost < 0.01) return `$${cost.toFixed(4)}`
+    return `$${cost.toFixed(3)}`
+  }
+
+  // No cost data available
+  return "-"
 }
 
 function getQueueTime(createdAt: string, startedAt: string | undefined): string {
@@ -316,7 +331,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-[#ff0073] font-mono">
-                        {calculateCost(job.started_at, job.completed_at)}
+                        {getCostDisplay(job)}
                       </span>
                     </td>
                     <td className="px-4 py-3">

@@ -41,6 +41,11 @@ interface AdminUsageLog {
   readonly user_email: string
 }
 
+export interface AppSettings {
+  readonly ai_provider: "replicate" | "kie"
+  readonly cost_markup_percent: number
+}
+
 export function useAdmin() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -203,5 +208,52 @@ export function useAdmin() {
     }
   }, [])
 
-  return { loading, error, fetchStats, fetchUsers, fetchJobs, fetchUsageLogs }
+  const fetchSettings = useCallback(async (): Promise<AppSettings | null> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/v1/admin/settings`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.error?.message || `Request failed with status ${response.status}`)
+      }
+      const data = await response.json()
+      const settings = data.settings as Record<string, unknown>
+      return {
+        ai_provider: (settings.ai_provider as "replicate" | "kie") ?? "replicate",
+        cost_markup_percent: (settings.cost_markup_percent as number) ?? 25,
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch settings")
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const updateSetting = useCallback(async (key: string, value: unknown): Promise<boolean> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/v1/admin/settings/${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.error?.message || `Request failed with status ${response.status}`)
+      }
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update setting")
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  return { loading, error, fetchStats, fetchUsers, fetchJobs, fetchUsageLogs, fetchSettings, updateSetting }
 }

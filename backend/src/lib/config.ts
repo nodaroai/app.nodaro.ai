@@ -11,10 +11,14 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string().default("scenenode-assets"),
   R2_PUBLIC_URL: z.string().default(""),
   REPLICATE_API_TOKEN: z.string().default(""),
+  KIE_API_KEY: z.string().default(""),
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  EDITION: z.enum(["self-hosted", "cloud"]).default("self-hosted"),
 })
+
+export type Edition = "self-hosted" | "cloud"
 
 function loadConfig() {
   const result = envSchema.safeParse(process.env)

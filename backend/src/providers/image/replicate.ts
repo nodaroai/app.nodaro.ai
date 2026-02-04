@@ -1,6 +1,8 @@
 import Replicate from "replicate"
 import { config } from "../../lib/config.js"
 import { translateToEnglish } from "../../lib/translate.js"
+import { getAppSettings } from "../../lib/app-settings.js"
+import { generateImageKie } from "../../services/kie-ai.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
@@ -41,7 +43,26 @@ const IMAGE_MODELS: Record<ImageProvider, string> = {
   midjourney: "black-forest-labs/flux-1.1-pro",
 }
 
-export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: ImageProvider): Promise<string> {
+export interface GenerateImageResult {
+  url: string
+  cost: number | null  // Cost from Replicate API (null if not available)
+}
+
+export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: ImageProvider): Promise<GenerateImageResult> {
+  // Check which AI provider to use from app settings
+  const settings = await getAppSettings()
+  const aiProvider = settings.ai_provider
+
+  console.log(`[generateImage] AI Provider from settings: ${aiProvider}`)
+
+  // Route to KIE.ai if configured
+  if (aiProvider === "kie") {
+    console.log(`[generateImage] Using KIE.ai API`)
+    const englishPrompt = await translateToEnglish(prompt)
+    return generateImageKie(englishPrompt, referenceImageUrls)
+  }
+
+  // Default: Use Replicate API
   const resolvedProvider = provider ?? "nano-banana"
   const model = IMAGE_MODELS[resolvedProvider] ?? IMAGE_MODELS["nano-banana"]
   console.log(`[generateImage] Provider: ${resolvedProvider}, Model: ${model}`)
@@ -57,10 +78,26 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
     input.image_input = referenceImageUrls
   }
 
-  const output = await replicate.run(model as `${string}/${string}`, { input })
+  // Use predictions API to get full response including cost
+  const prediction = await replicate.predictions.create({
+    model: model as `${string}/${string}`,
+    input,
+  })
+
+  // Wait for completion
+  const completedPrediction = await replicate.wait(prediction)
+
+  const output = completedPrediction.output
 
   console.log(`[generateImage] Raw output type: ${typeof output}, isArray: ${Array.isArray(output)}`)
   console.log(`[generateImage] Raw Replicate output:`, JSON.stringify(output, null, 2))
+
+  // Extract cost from prediction metrics
+  const cost = (completedPrediction.metrics as { predict_time?: number })?.predict_time
+    ? ((completedPrediction.metrics as { predict_time: number }).predict_time * 0.000225) // Approximate cost per second
+    : null
+  console.log(`[generateImage] Prediction metrics:`, JSON.stringify(completedPrediction.metrics))
+  console.log(`[generateImage] Estimated cost: $${cost?.toFixed(6) ?? "N/A"}`)
 
   let resultUrl: string
 
@@ -84,5 +121,5 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   }
 
   console.log(`[generateImage] Result URL: ${resultUrl}`)
-  return resultUrl
+  return { url: resultUrl, cost }
 }

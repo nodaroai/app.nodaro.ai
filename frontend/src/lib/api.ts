@@ -899,6 +899,13 @@ export interface Job {
   started_at?: string
   completed_at?: string
   user_id?: string
+  // Cost fields - returned differently based on edition:
+  // SELF-HOSTED or admin: provider, provider_cost, display_cost
+  // CLOUD regular user: only cost (= display_cost)
+  provider?: string              // Which provider was used (self-hosted/admin only)
+  provider_cost?: number         // Actual cost from API response (self-hosted/admin only)
+  display_cost?: number          // provider_cost with markup (self-hosted/admin only)
+  cost?: number                  // What user pays (cloud edition regular users)
 }
 
 export async function getJobStatus(jobId: string): Promise<Job> {

@@ -5,6 +5,7 @@ import { X, Download, Copy, Check, ChevronDown, ChevronRight, Loader2, Clock, Za
 import { Button } from "@/components/ui/button"
 import type { Job } from "@/lib/api"
 import { deleteJob } from "@/lib/api"
+import { EDITION } from "@/lib/edition"
 
 interface ExecutionDetailModalProps {
   readonly job: Job | null
@@ -91,8 +92,14 @@ function extractJobType(inputData: Job["input_data"]): string {
   return "unknown"
 }
 
-function extractProvider(inputData: Job["input_data"]): string {
-  return inputData.provider || "replicate"
+function extractProvider(inputData: Job["input_data"], job: Job): string | null {
+  // In cloud edition, don't show provider info to regular users
+  // The backend doesn't send the provider field, so we check for its existence
+  if (EDITION === "cloud" && !job.provider) {
+    return null
+  }
+  // Self-hosted or admin: show provider from job record or input data
+  return job.provider || inputData.provider || "replicate"
 }
 
 interface InputFieldProps {
@@ -205,7 +212,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted }: Executio
   const isVideo = outputUrl ? isVideoUrl(outputUrl) : false
   const isAudio = outputUrl ? isAudioUrl(outputUrl) : false
   const jobType = extractJobType(job.input_data)
-  const provider = extractProvider(job.input_data)
+  const provider = extractProvider(job.input_data, job)
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(job.id)
@@ -293,9 +300,9 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted }: Executio
           </div>
 
           <div className="flex items-center gap-6">
-            {/* Type & Provider */}
+            {/* Type & Provider (provider hidden in cloud edition for regular users) */}
             <span className="text-sm text-[#ff0073] font-mono">
-              {jobType} ({provider})
+              {provider ? `${jobType} (${provider})` : jobType}
             </span>
 
             {/* Duration */}

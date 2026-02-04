@@ -8,6 +8,8 @@ export const features = {
   creditsSystem: EDITION === 'cloud',
   billing: EDITION === 'cloud',
   multiTenancy: EDITION === 'cloud',
+  providerSelection: EDITION === 'cloud',  // Admin can choose between Replicate and KIE.ai
+  costMarkup: EDITION === 'cloud',          // Cost markup percentage setting
 } as const
 
 export function isFeatureEnabled(feature: keyof typeof features): boolean {
