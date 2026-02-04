@@ -217,18 +217,18 @@ function MappableField({
   const isMapped = !!mappedSource
 
   return (
-    <div className="rounded-md border border-border/50 bg-muted/20 p-3">
+    <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <Label className="text-xs font-medium">{label}</Label>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</Label>
         {compatible.length > 0 && (
           <Select
             value={mapping?.sourceNodeId ?? "__manual__"}
             onValueChange={(v) => onMapField(field, v === "__manual__" ? null : v)}
           >
-            <SelectTrigger className="h-6 text-[10px] w-auto max-w-[140px] px-2 py-0 shrink-0">
+            <SelectTrigger className="h-6 text-[10px] w-auto max-w-[140px] px-2 py-0 shrink-0 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#2D2D2D]">
               <SelectItem value="__manual__">Manual</SelectItem>
               {compatible.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
@@ -240,7 +240,7 @@ function MappableField({
         )}
       </div>
       {isMapped ? (
-        <p className="text-xs text-muted-foreground bg-background rounded px-2.5 py-2 break-words whitespace-pre-wrap border border-border/50">
+        <p className="text-xs text-gray-500 dark:text-[#94A3B8] bg-[#F8FAFC] dark:bg-[#121212] rounded-lg px-2.5 py-2 break-words whitespace-pre-wrap border border-gray-200 dark:border-[#2D2D2D]">
           {mappedSource.value || "(empty)"}
         </p>
       ) : (
@@ -299,29 +299,74 @@ export function ConfigPanel() {
     deleteNode(selectedNodeId)
   }
 
+  // Get display name for node type
+  const getNodeTypeDisplayName = (type: string): string => {
+    const names: Record<string, string> = {
+      "text-prompt": "Text Prompt",
+      "upload-image": "Upload Image",
+      "upload-video": "Upload Video",
+      "rss-feed": "RSS Feed",
+      "reference-audio": "Reference Audio",
+      "tone": "Tone",
+      "style-guide": "Style Guide",
+      "provider": "Provider",
+      "scene-count": "Scene Count",
+      "duration": "Duration",
+      "aspect-ratio": "Aspect Ratio",
+      "motion": "Motion",
+      "camera-motion": "Camera Motion",
+      "generate-script": "Generate Script",
+      "generate-image": "Generate Image",
+      "image-to-video": "Image to Video",
+      "video-to-video": "Video to Video",
+      "text-to-video": "Text to Video",
+      "text-to-speech": "Text to Speech",
+      "qa-check": "QA Check",
+      "generate-music": "Generate Music",
+      "text-to-audio": "Text to Audio",
+      "combine-videos": "Combine Videos",
+      "merge-video-audio": "Merge Video & Audio",
+      "add-captions": "Add Captions",
+      "resize-video": "Resize Video",
+      "extract-audio": "Extract Audio",
+      "mix-audio": "Mix Audio",
+      "adjust-volume": "Adjust Volume",
+      "trim-video": "Trim Video",
+      "save-to-storage": "Save to Storage",
+      "webhook-output": "Webhook Output",
+      "character": "Character",
+      "object": "Object",
+      "location": "Location",
+      "scene": "Scene",
+    }
+    return names[type] || type.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+  }
+
   return (
-    <div className="absolute inset-0 z-10 bg-card shadow-lg flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l">
-      <div className="flex items-center justify-between px-4 py-3 border-b">
-        <h3 className="text-sm font-semibold">Node Settings</h3>
-        <Button variant="ghost" size="icon" onClick={() => selectNode(null)}>
+    <div className="absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D]">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
+          {getNodeTypeDisplayName(selectedNode.type as string)} Node Settings
+        </h3>
+        <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => selectNode(null)}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 overflow-hidden">
+      <ScrollArea className="flex-1 overflow-hidden bg-[#F8FAFC] dark:bg-[#121212]">
         <div className="flex flex-col gap-5 p-4">
-          <div className="rounded-md border border-border/50 bg-muted/20 p-3">
-            <Label htmlFor="node-label" className="text-xs font-medium">Label</Label>
+          <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+            <Label htmlFor="node-label" className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Label</Label>
             <Input
               id="node-label"
               value={(selectedNode.data as { label: string }).label}
               onChange={(e) => update({ label: e.target.value })}
-              className="mt-2"
+              className="mt-2 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-900 dark:text-[#E2E8F0] focus:border-[#ff0073] focus:ring-[#ff0073]/20"
             />
           </div>
 
           {sources.length > 0 && (
-            <div className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+            <div className="text-xs text-gray-500 dark:text-[#94A3B8] bg-gray-100 dark:bg-[#2D2D2D] rounded-lg px-3 py-2 border border-gray-200 dark:border-[#2D2D2D]">
               <span className="font-medium">{sources.length} connected source{sources.length !== 1 ? "s" : ""}</span>
               {": "}
               {sources.map((s) => s.label).join(", ")}

@@ -192,25 +192,25 @@ export function ScriptPreviewModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-8"
+      className="fixed inset-0 z-[9999] bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="relative bg-card rounded-xl shadow-2xl w-[95vw] max-w-[1400px] max-h-[85vh] flex flex-col overflow-hidden"
+        className="relative bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2D2D2D] rounded-xl shadow-2xl w-[95vw] max-w-[1400px] max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
-          className="absolute top-3 right-3 z-10 text-muted-foreground hover:text-foreground transition-colors"
+          className="absolute top-3 right-3 z-10 text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white transition-colors"
           onClick={onClose}
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Header */}
-        <div className="px-6 pt-5 pb-3 border-b">
-          <h2 className="text-lg font-semibold pr-8">{script.title}</h2>
-          <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+        <div className="px-6 pt-5 pb-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
+          <h2 className="text-lg font-semibold pr-8 text-gray-900 dark:text-white">{script.title}</h2>
+          <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-[#94A3B8]">
             <span>{sceneCount} scenes</span>
             <span>{script.totalDuration}s total</span>
             <span className="flex items-center gap-1">
@@ -221,7 +221,7 @@ export function ScriptPreviewModal({
           <div className="mt-3 flex gap-2">
             <button
               type="button"
-              className="flex items-center gap-2 h-8 px-4 text-xs font-medium rounded-md bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 h-8 px-4 text-xs font-medium rounded-md bg-[#ff0073] hover:bg-[#ff0073]/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={generatingAll || hasAnyRunning || pendingCount === 0}
               onClick={handleGenerateAll}
             >
@@ -235,7 +235,7 @@ export function ScriptPreviewModal({
                   <Play className="w-3.5 h-3.5" />
                   Generate All Images
                   {pendingCount > 0 && (
-                    <span className="text-purple-200">
+                    <span className="text-white/70">
                       ({pendingCount * 5} credits for {pendingCount} images)
                     </span>
                   )}
@@ -244,7 +244,7 @@ export function ScriptPreviewModal({
             </button>
             <button
               type="button"
-              className="flex items-center gap-2 h-8 px-4 text-xs font-medium rounded-md border border-border bg-background hover:bg-muted transition-colors"
+              className="flex items-center gap-2 h-8 px-4 text-xs font-medium rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#121212] text-gray-700 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors"
               onClick={onExpandToNodes}
             >
               <Layers className="w-3.5 h-3.5" />
@@ -254,7 +254,7 @@ export function ScriptPreviewModal({
         </div>
 
         {/* Storyboard grid */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 bg-[#F8FAFC] dark:bg-[#121212]">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sceneIds} strategy={rectSortingStrategy}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -268,14 +268,14 @@ export function ScriptPreviewModal({
               return (
                 <SortableSceneCard key={scene.sceneNumber} id={`scene-${scene.sceneNumber}`} disabled={generatingAll}>
                 <div
-                  className={`rounded-lg border p-3 flex flex-col gap-2 min-w-0 group/scene ${
+                  className={`rounded-xl border p-3 flex flex-col gap-2 min-w-0 group/scene shadow-sm ${
                     status === "failed"
-                      ? "border-red-500/50 bg-red-500/5"
-                      : "bg-muted/20"
+                      ? "border-red-500/50 bg-red-500/5 dark:bg-red-500/10"
+                      : "border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]"
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                    <span className="flex items-center gap-1 text-xs font-semibold text-[#ff0073]">
                       <DragHandle />
                       Scene {scene.sceneNumber}
                     </span>
@@ -286,7 +286,7 @@ export function ScriptPreviewModal({
                         max={60}
                         value={scene.durationHint}
                         onChange={(e) => onUpdateSceneField(i, "durationHint", Math.max(1, Math.min(60, parseInt(e.target.value) || 1)))}
-                        className="w-12 h-5 text-xs text-right text-muted-foreground bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1"
+                        className="w-12 h-5 text-xs text-right text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1"
                         title="Duration (seconds)"
                       />
                       {script.scenes.length > 1 && (
@@ -295,7 +295,7 @@ export function ScriptPreviewModal({
                             <span className="text-red-500 font-medium">Delete?</span>
                             <button
                               type="button"
-                              className="px-1.5 py-0.5 rounded text-[10px] bg-muted hover:bg-muted/80 text-muted-foreground"
+                              className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] text-gray-600 dark:text-[#94A3B8]"
                               onClick={(e) => { e.stopPropagation(); setConfirmingDeleteScene(null) }}
                             >
                               Cancel
@@ -311,7 +311,7 @@ export function ScriptPreviewModal({
                         ) : (
                           <button
                             type="button"
-                            className="w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-red-500 transition-colors opacity-0 group-hover/scene:opacity-100"
+                            className="w-5 h-5 flex items-center justify-center text-gray-300 dark:text-[#64748B] hover:text-red-500 transition-colors opacity-0 group-hover/scene:opacity-100"
                             onClick={(e) => { e.stopPropagation(); setConfirmingDeleteScene(i) }}
                             title="Delete scene"
                           >
@@ -331,13 +331,13 @@ export function ScriptPreviewModal({
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-muted/40 border border-dashed border-muted-foreground/20 flex items-center justify-center">
+                      <div className="w-full h-full bg-gray-50 dark:bg-[#121212] border border-dashed border-gray-200 dark:border-[#2D2D2D] flex items-center justify-center">
                         {status === "running" ? (
-                          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground/40" />
+                          <Loader2 className="w-6 h-6 animate-spin text-gray-300 dark:text-[#64748B]" />
                         ) : status === "failed" ? (
                           <AlertCircle className="w-6 h-6 text-red-400/60" />
                         ) : (
-                          <ImageIcon className="w-8 h-8 text-muted-foreground/20" />
+                          <ImageIcon className="w-8 h-8 text-gray-200 dark:text-[#2D2D2D]" />
                         )}
                       </div>
                     )}
@@ -441,52 +441,52 @@ export function ScriptPreviewModal({
                       const val = e.target.value
                       onUpdateSceneField(i, "mood", val.includes(",") ? val.split(",").map((s) => s.trim()).filter(Boolean) : val)
                     }}
-                    className="w-full text-[10px] italic text-muted-foreground bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1.5 py-0.5"
+                    className="w-full text-[10px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-0.5"
                     placeholder="Mood (comma-separated)..."
                   />
 
                   {/* Section: Action */}
-                  <div className="border-t border-border/20 pt-1.5">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                  <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <Pen className="w-3 h-3" />Action
                     </div>
                     <textarea
                       value={scene.action}
                       onChange={(e) => onUpdateSceneField(i, "action", e.target.value)}
                       rows={2}
-                      className="w-full text-xs font-medium bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1.5 py-1 resize-y"
+                      className="w-full text-xs font-medium text-gray-900 dark:text-[#E2E8F0] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-1 resize-y"
                       placeholder="Action..."
                     />
                   </div>
 
                   {/* Section: Visual Description */}
-                  <div className="border-t border-border/20 pt-1.5">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                  <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <Eye className="w-3 h-3" />Visual Description
                     </div>
                     <textarea
                       value={scene.visualDescription}
                       onChange={(e) => onUpdateSceneField(i, "visualDescription", e.target.value)}
                       rows={3}
-                      className="w-full text-[10px] text-muted-foreground/70 bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1.5 py-1 resize-y"
+                      className="w-full text-[10px] text-gray-600 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1.5 py-1 resize-y"
                       placeholder="Visual description..."
                     />
                   </div>
 
                   {/* Section: Dialogue */}
-                  <div className="border-t border-border/20 pt-1.5">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                  <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <MessageSquare className="w-3 h-3" />
                       Dialogue
                       {(scene.dialogue ?? []).length > 0 && (
-                        <span className="text-[9px] font-normal normal-case tracking-normal text-muted-foreground/60">
+                        <span className="text-[9px] font-normal normal-case tracking-normal text-gray-400 dark:text-[#64748B]">
                           ({(scene.dialogue ?? []).length})
                         </span>
                       )}
                     </div>
                     <div className="flex flex-col gap-1">
                       {(scene.dialogue ?? []).map((d, di) => (
-                        <div key={di} className="flex flex-col gap-0.5 pl-1 border-l-2 border-purple-500/30">
+                        <div key={di} className="flex flex-col gap-0.5 pl-1 border-l-2 border-[#ff0073]/30">
                           <div className="flex items-center gap-1">
                             <input
                               type="text"
@@ -496,7 +496,7 @@ export function ScriptPreviewModal({
                                 newDialogue[di] = { ...newDialogue[di], speaker: e.target.value }
                                 onUpdateSceneField(i, "dialogue", newDialogue)
                               }}
-                              className="flex-1 text-[10px] font-medium bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1 py-0.5"
+                              className="flex-1 text-[10px] font-medium text-gray-900 dark:text-[#E2E8F0] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
                               placeholder="Speaker"
                             />
                             <input
@@ -507,12 +507,12 @@ export function ScriptPreviewModal({
                                 newDialogue[di] = { ...newDialogue[di], emotion: e.target.value || undefined }
                                 onUpdateSceneField(i, "dialogue", newDialogue)
                               }}
-                              className="w-16 text-[10px] italic text-muted-foreground bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1 py-0.5"
+                              className="w-16 text-[10px] italic text-gray-500 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
                               placeholder="emotion"
                             />
                             <button
                               type="button"
-                              className="text-muted-foreground/40 hover:text-red-500 transition-colors"
+                              className="text-gray-300 dark:text-[#64748B] hover:text-red-500 transition-colors"
                               onClick={() => {
                                 const newDialogue = (scene.dialogue ?? []).filter((_, j) => j !== di)
                                 onUpdateSceneField(i, "dialogue", newDialogue)
@@ -529,7 +529,7 @@ export function ScriptPreviewModal({
                               newDialogue[di] = { ...newDialogue[di], text: e.target.value }
                               onUpdateSceneField(i, "dialogue", newDialogue)
                             }}
-                            className="w-full text-[10px] text-muted-foreground bg-transparent border border-transparent hover:border-border focus:border-primary focus:outline-none rounded px-1 py-0.5"
+                            className="w-full text-[10px] text-gray-600 dark:text-[#94A3B8] bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-[#2D2D2D] focus:border-[#ff0073] focus:outline-none rounded px-1 py-0.5"
                             placeholder="Line..."
                           />
                         </div>
@@ -540,7 +540,7 @@ export function ScriptPreviewModal({
                           const newDialogue = [...(scene.dialogue ?? []), { speaker: "", text: "", emotion: "" }]
                           onUpdateSceneField(i, "dialogue", newDialogue)
                         }}
-                        className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground transition-colors self-start px-1"
+                        className="flex items-center gap-0.5 text-[9px] text-gray-500 dark:text-[#94A3B8] hover:text-gray-900 dark:hover:text-white transition-colors self-start px-1"
                       >
                         <Plus className="w-2.5 h-2.5" /> Add line
                       </button>
@@ -548,12 +548,12 @@ export function ScriptPreviewModal({
                   </div>
 
                   {/* Section: Characters */}
-                  <div className="border-t border-border/20 pt-1.5">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                  <div className="border-t border-gray-100 dark:border-[#2D2D2D]/50 pt-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 dark:text-[#64748B] uppercase tracking-wide mb-0.5">
                       <Users className="w-3 h-3" />
                       Characters
                       {charNames.length > 0 && (
-                        <span className="text-[9px] font-normal normal-case tracking-normal text-muted-foreground/60">
+                        <span className="text-[9px] font-normal normal-case tracking-normal text-gray-400 dark:text-[#64748B]">
                           ({charNames.length})
                         </span>
                       )}
@@ -598,7 +598,7 @@ export function ScriptPreviewModal({
                         <input
                           type="text"
                           placeholder="Search characters..."
-                          className="h-6 w-28 px-2 text-xs rounded-full border border-muted-foreground/30 bg-muted/40 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 placeholder:text-muted-foreground/50"
+                          className="h-6 w-28 px-2 text-xs rounded-full border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#121212] outline-none focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/30 placeholder:text-gray-400 dark:placeholder:text-[#64748B] text-gray-900 dark:text-[#E2E8F0]"
                           value={characterInput[i] ?? ""}
                           onChange={(e) => setCharacterInput({ ...characterInput, [i]: e.target.value })}
                           onFocus={() => setFocusedCharInput(i)}
@@ -632,12 +632,12 @@ export function ScriptPreviewModal({
                           )
                           if (suggestions.length === 0 && !inputVal) return null
                           return (
-                            <div className="absolute top-full left-0 mt-1 w-44 max-h-28 overflow-y-auto rounded-md border bg-popover shadow-md z-30">
+                            <div className="absolute top-full left-0 mt-1 w-44 max-h-28 overflow-y-auto rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shadow-lg z-30">
                               {suggestions.map((char) => (
                                 <button
                                   key={char}
                                   type="button"
-                                  className="w-full text-left px-2 py-1 text-xs hover:bg-muted transition-colors flex items-center justify-between"
+                                  className="w-full text-left px-2 py-1 text-xs text-gray-700 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors flex items-center justify-between"
                                   onMouseDown={(e) => {
                                     e.preventDefault()
                                     onUpdateSceneCharacters(i, [...charNames, char])
@@ -660,17 +660,17 @@ export function ScriptPreviewModal({
                                     })()}
                                     {char}
                                   </span>
-                                  <span className="text-[9px] text-muted-foreground">
+                                  <span className="text-[9px] text-gray-400 dark:text-[#64748B]">
                                     {(charSceneMap[char] ?? []).length} scene{(charSceneMap[char] ?? []).length !== 1 ? "s" : ""}
                                   </span>
                                 </button>
                               ))}
                               {suggestions.length === 0 && inputVal && (
-                                <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                                <div className="px-2 py-1.5 text-xs text-gray-500 dark:text-[#94A3B8]">
                                   No character found.{" "}
                                   <button
                                     type="button"
-                                    className="text-primary hover:underline"
+                                    className="text-[#ff0073] hover:underline"
                                     onMouseDown={(e) => {
                                       e.preventDefault()
                                       setCharacterInput({ ...characterInput, [i]: "" })
@@ -688,21 +688,21 @@ export function ScriptPreviewModal({
                     </div>
                     <div className="flex items-center gap-2 mt-1.5">
                       {i === 0 && (
-                        <p className="text-[9px] text-muted-foreground/60">
+                        <p className="text-[9px] text-gray-400 dark:text-[#64748B]">
                           Tip: Use the same name across scenes for a consistent look
                         </p>
                       )}
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setShowDefineCharModal(true) }}
-                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed hover:bg-muted transition-colors text-muted-foreground whitespace-nowrap"
+                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] rounded border border-dashed border-gray-200 dark:border-[#2D2D2D] hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors text-gray-500 dark:text-[#94A3B8] whitespace-nowrap"
                       >
                         <UserPlus className="w-2.5 h-2.5" /> Define character
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 mt-auto pt-1 border-t border-border/30">
+                  <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-[#64748B] mt-auto pt-1 border-t border-gray-100 dark:border-[#2D2D2D]/50">
                     <span className="flex items-center gap-0.5"><ImageIcon className="w-2.5 h-2.5" />5cr</span>
                     <span className="flex items-center gap-0.5"><Film className="w-2.5 h-2.5" />20cr</span>
                     <span className="flex items-center gap-0.5">3cr</span>
@@ -715,10 +715,10 @@ export function ScriptPreviewModal({
             <button
               type="button"
               onClick={() => handleAddScene()}
-              className="rounded-lg border-2 border-dashed border-muted-foreground/20 p-3 flex flex-col items-center justify-center gap-2 min-h-[200px] hover:border-primary/40 hover:bg-muted/10 transition-colors cursor-pointer"
+              className="rounded-xl border-2 border-dashed border-gray-200 dark:border-[#2D2D2D] p-3 flex flex-col items-center justify-center gap-2 min-h-[200px] hover:border-[#ff0073]/40 hover:bg-gray-50 dark:hover:bg-[#1E1E1E] transition-colors cursor-pointer"
             >
-              <Plus className="w-6 h-6 text-muted-foreground/40" />
-              <span className="text-xs text-muted-foreground/60">Add Scene</span>
+              <Plus className="w-6 h-6 text-gray-300 dark:text-[#64748B]" />
+              <span className="text-xs text-gray-400 dark:text-[#64748B]">Add Scene</span>
             </button>
           </div>
           </SortableContext>
