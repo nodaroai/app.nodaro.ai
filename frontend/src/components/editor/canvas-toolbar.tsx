@@ -54,13 +54,21 @@ function ToolbarButton({ icon, label, shortcut, onClick, active }: ToolbarButton
           side="right"
           sideOffset={8}
           className={cn(
-            "rounded-lg px-3 py-2 flex items-center gap-2 shadow-xl",
-            // Dark tooltips work best on both light and dark backgrounds
-            "bg-[#0F172A] text-white border-transparent"
+            "rounded-lg px-3 py-2 flex items-center gap-2",
+            // Light mode: white tooltip with subtle shadow
+            "bg-white text-[#1E293B] border border-[#E2E8F0] shadow-sm",
+            // Dark mode: dark tooltip with deeper shadow
+            "dark:bg-[#2D2D2D] dark:text-[#E2E8F0] dark:border-[#3D3D3D] dark:shadow-xl"
           )}
         >
           <span className="text-sm">{label}</span>
-          <span className="bg-[#1E293B] text-[#94A3B8] text-xs px-1.5 py-0.5 rounded font-mono border border-[#334155]">
+          <span className={cn(
+            "text-xs px-1.5 py-0.5 rounded font-mono",
+            // Light mode: light gray badge
+            "bg-[#F1F5F9] text-[#64748B]",
+            // Dark mode: dark badge
+            "dark:bg-[#121212] dark:text-[#94A3B8]"
+          )}>
             {shortcut}
           </span>
         </TooltipContent>
