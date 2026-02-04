@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
-import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson } from "lucide-react"
+import { useState, useRef, useCallback, useEffect } from "react"
+import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
@@ -19,7 +18,6 @@ import {
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { validateWorkflow, type ValidationResult } from "@/lib/workflow-validation"
 import {
   getCharacterById,
   getObjectById,
@@ -75,15 +73,21 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   )
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const setVideoAutoplay = useWorkflowStore((s) => s.setVideoAutoplay)
-  const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [showSavedState, setShowSavedState] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  function handleValidate() {
-    const result = validateWorkflow(nodes, edges)
-    setValidation(result)
-  }
+  // Show "Saved" state for 1.5 seconds after successful save
+  useEffect(() => {
+    if (saveStatus === "saved" && !isDirty) {
+      setShowSavedState(true)
+      const timer = setTimeout(() => {
+        setShowSavedState(false)
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [saveStatus, isDirty])
 
   // Strip generated content from nodes for template export
   const stripGeneratedContent = (nodesToStrip: WorkflowNode[]): WorkflowNode[] => {
@@ -546,74 +550,11 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             onChange={(e) => setWorkflowName(e.target.value)}
             className="w-28 sm:w-48 h-8 text-sm"
           />
-          {isDirty && (
-            <span className="text-destructive text-lg leading-none shrink-0" title="Unsaved changes">*</span>
-          )}
         </div>
 
-        {/* Save status indicator */}
-        <div className="hidden sm:flex items-center gap-1 text-xs shrink-0">
-          {saveStatus === "saving" && (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-              <span className="text-muted-foreground">Saving...</span>
-            </>
-          )}
-          {saveStatus === "saved" && (
-            <>
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-              <span className="text-green-600 dark:text-green-400">Saved</span>
-            </>
-          )}
-          {saveStatus === "error" && (
-            <>
-              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
-              <span className="text-destructive" title={saveError ?? undefined}>Save failed</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-                onClick={onSave}
-                title="Retry save"
-              >
-                <RefreshCw className="h-3 w-3" />
-              </Button>
-            </>
-          )}
-          {saveStatus === "idle" && isDirty && (
-            <Badge variant="outline" className="text-xs">
-              Unsaved
-            </Badge>
-          )}
-        </div>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-        {validation && (
-          <div className="hidden sm:flex items-center gap-1 text-xs mr-2">
-            {validation.valid ? (
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            ) : (
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-            )}
-            <span>
-              {validation.errors.length} errors, {validation.warnings.length} warnings
-            </span>
-            <Badge variant="secondary" className="text-xs">
-              ~{validation.estimatedCredits} credits
-            </Badge>
-          </div>
-        )}
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleValidate}
-          className="hidden sm:flex bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200 dark:bg-transparent dark:hover:bg-muted dark:text-foreground dark:border-border"
-        >
-          Validate
-        </Button>
-
         <input
           type="file"
           ref={fileInputRef}
@@ -657,20 +598,64 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onSave}
-          disabled={saving || !isDirty}
-          className={isDirty ? "text-white hover:opacity-90" : ""}
-          style={isDirty ? { backgroundColor: '#ff0073', borderColor: '#ff0073' } : undefined}
-        >
-          <Save className="h-4 w-4 sm:mr-1" />
-          <span className="hidden sm:inline">{saving ? "Saving..." : "Save"}</span>
-          {isDirty && !saving && (
-            <span className="ml-0.5 h-2 w-2 rounded-full bg-white shrink-0" />
-          )}
-        </Button>
+        {/* Save Button with integrated state indicator */}
+        {(() => {
+          // Determine save button state
+          const isSaving = saving || saveStatus === "saving"
+          const isSaved = showSavedState && !isDirty
+          const isUnsaved = isDirty && !isSaving
+          const hasError = saveStatus === "error"
+          const isIdle = !isDirty && !isSaving && !isSaved && !hasError
+
+          // Button styling based on state
+          let buttonStyle: React.CSSProperties = {}
+          let buttonClassName = "transition-all duration-300 "
+
+          if (isSaving || isUnsaved || isSaved) {
+            // Pink for unsaved, saving, and saved states
+            buttonStyle = { backgroundColor: '#ff0073', borderColor: '#ff0073' }
+            buttonClassName += "text-white hover:opacity-90"
+          } else if (hasError) {
+            // Red for error state
+            buttonStyle = { backgroundColor: '#ef4444', borderColor: '#ef4444' }
+            buttonClassName += "text-white hover:opacity-90"
+          } else {
+            // Muted for idle state
+            buttonClassName += "bg-gray-100 text-gray-400 border-gray-200 dark:bg-muted dark:text-muted-foreground dark:border-border cursor-default"
+          }
+
+          // Button text
+          let buttonText = "Saved"
+          if (isSaving) buttonText = "Saving..."
+          else if (isSaved) buttonText = "Saved"
+          else if (hasError) buttonText = "Retry"
+          else if (isUnsaved) buttonText = "Unsaved"
+
+          return (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSave}
+              disabled={isSaving || isIdle}
+              className={buttonClassName}
+              style={buttonStyle}
+              title={hasError ? saveError ?? "Save failed" : undefined}
+            >
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin sm:mr-1" />
+              ) : isSaved ? (
+                <CheckCircle className="h-4 w-4 text-green-300 sm:mr-1" />
+              ) : hasError ? (
+                <RefreshCw className="h-4 w-4 sm:mr-1" />
+              ) : isUnsaved ? (
+                <Save className="h-4 w-4 sm:mr-1" />
+              ) : (
+                <CheckCircle className="h-4 w-4 sm:mr-1" />
+              )}
+              <span className="hidden sm:inline">{buttonText}</span>
+            </Button>
+          )
+        })()}
 
         <Button
           variant="outline"
