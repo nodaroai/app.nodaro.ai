@@ -7,7 +7,20 @@ const generateImageBody = z.object({
   prompt: z.string().min(1).max(2000),
   referenceImageUrls: z.array(z.string().url()).max(14).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
-  provider: z.enum(["nano-banana", "flux", "dalle", "midjourney"]).optional(),
+  provider: z.enum([
+    // Replicate providers
+    "nano-banana",
+    "flux",
+    "dalle",
+    "midjourney",
+    // KIE.ai providers
+    "nano-banana-pro",
+    "grok",
+    "gpt-image",
+    "flux-i2i",
+    "grok-i2i",
+    "gpt-image-i2i",
+  ]).optional(),
   userId: z.string().uuid().optional(),
 })
 
