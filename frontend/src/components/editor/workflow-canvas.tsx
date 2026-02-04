@@ -18,7 +18,9 @@ import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
 import { AddNodePopup } from "./add-node-popup"
+import { SearchModal } from "./search-modal"
 import { AnimatedFlowEdge } from "./animated-flow-edge"
+import { UnifiedAssetLibraryModal } from "./unified-asset-library"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
 
@@ -77,6 +79,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [showMiniMap, setShowMiniMap] = useState(true)
   const [addNodePopupOpen, setAddNodePopupOpen] = useState(false)
   const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
+  const [searchModalOpen, setSearchModalOpen] = useState(false)
+  const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   const isMobile = useIsMobile()
 
   // Transform edges to be animated when source node is running
@@ -232,17 +236,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Ctrl+K - Search (placeholder - opens add node popup for now)
+      // Ctrl+K - Search projects and workflows
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault()
-        handleOpenAddNodePopup()
+        setSearchModalOpen(true)
         return
       }
 
-      // Ctrl+L - Asset Library (placeholder)
+      // Ctrl+L - Asset Library
       if ((e.ctrlKey || e.metaKey) && e.key === "l") {
         e.preventDefault()
-        // TODO: Open asset library modal
+        setAssetLibraryOpen(true)
         return
       }
 
@@ -335,10 +339,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       {/* Canvas Toolbar (icon buttons on left) */}
       <CanvasToolbar
         onAddNode={() => handleOpenAddNodePopup()}
-        onSearch={() => handleOpenAddNodePopup()}
-        onAssetLibrary={() => {
-          // TODO: Open asset library modal
-        }}
+        onSearch={() => setSearchModalOpen(true)}
+        onAssetLibrary={() => setAssetLibraryOpen(true)}
         onAddStickyNote={() => handleAddStickyNote()}
         onTidyUp={handleTidyUp}
         onToggleSidebar={onToggleSidebar}
@@ -354,6 +356,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         }}
         onAddNode={handleAddNode}
         position={addNodePopupPosition}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        open={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+      />
+
+      {/* Asset Library Modal */}
+      <UnifiedAssetLibraryModal
+        open={assetLibraryOpen}
+        onClose={() => setAssetLibraryOpen(false)}
       />
 
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
