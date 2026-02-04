@@ -231,12 +231,11 @@ export function LocationPageModal({ locationNodeId, onClose }: LocationPageModal
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const projectId = useWorkflowStore((s) => s.projectId)
 
+  // Find node and derive data (used by hooks below)
   const node = nodes.find((n) => n.id === locationNodeId)
-  if (!node || node.type !== "location") return null
-
-  const data = node.data as LocationNodeData
-  const activeResult = (data.generatedResults ?? [])[data.activeResultIndex ?? 0]
-  const mainImageUrl = activeResult?.url ?? data.sourceImageUrl
+  const data = (node?.type === "location" ? node.data : null) as LocationNodeData | null
+  const activeResult = data ? (data.generatedResults ?? [])[data.activeResultIndex ?? 0] : null
+  const mainImageUrl = activeResult?.url ?? data?.sourceImageUrl ?? null
 
   // Add image to canvas as generate-image node with result already set
   const handleAddImageToCanvas = useCallback((imageUrl: string) => {
@@ -268,7 +267,7 @@ export function LocationPageModal({ locationNodeId, onClose }: LocationPageModal
 
   // Refine location image - generate 4 clean versions
   const handleRefine = useCallback(async () => {
-    if (!mainImageUrl) {
+    if (!mainImageUrl || !data) {
       toast.error("No image to refine")
       return
     }
@@ -334,10 +333,12 @@ high quality, cinematic photography`
     } finally {
       setIsRefining(false)
     }
-  }, [mainImageUrl, data.locationName, data.description, user?.id])
+  }, [mainImageUrl, data, user?.id])
 
   // Handle selecting a refined image
   const handleSelectRefined = useCallback(async (imageUrl: string) => {
+    if (!data) return
+
     // Add to generatedResults
     const newResult = {
       url: imageUrl,
@@ -386,11 +387,11 @@ high quality, cinematic photography`
 
   // Generate all location assets (time of day, weather, angles)
   const handleGenerateAllAssets = useCallback(async () => {
-    const imageUrl = mainImageUrl
-    if (!imageUrl) {
+    if (!mainImageUrl || !data) {
       toast.error("No image available")
       return
     }
+    const imageUrl = mainImageUrl
 
     setGeneratingAllAssets(true)
     setRefinementCompleted(false)
@@ -480,7 +481,7 @@ high quality, cinematic photography`
 
   function handleDeleteAsset(index: number) {
     const dataKey = ASSET_DATA_KEYS[activeTab]
-    if (!dataKey) return
+    if (!dataKey || !data) return
 
     if (activeTab === "custom") {
       const items = [...(data.customVariations ?? [])]
@@ -496,6 +497,7 @@ high quality, cinematic photography`
   }
 
   async function handleDeleteLocation() {
+    if (!data) return
     setDeletingLocation(true)
     try {
       // Delete from database if persisted
@@ -517,7 +519,7 @@ high quality, cinematic photography`
 
   const handleGenerateCustom = useCallback(async () => {
     if (!customPrompt.trim()) return
-    if (!mainImageUrl) {
+    if (!mainImageUrl || !data) {
       toast.error("Generate or upload a main image first")
       return
     }
@@ -579,6 +581,9 @@ high quality, cinematic photography`
     setActiveTab(tab)
     setConfirmingAssetDelete(null)
   }
+
+  // Early return AFTER all hooks have been called (React hooks rule)
+  if (!node || !data) return null
 
   return createPortal(
     <>

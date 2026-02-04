@@ -220,12 +220,11 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const projectId = useWorkflowStore((s) => s.projectId)
 
+  // Find node and derive data (used by hooks below)
   const node = nodes.find((n) => n.id === characterNodeId)
-  if (!node || node.type !== "character") return null
-
-  const data = node.data as CharacterNodeData
-  const activeResult = (data.generatedResults ?? [])[data.activeResultIndex ?? 0]
-  const mainImageUrl = activeResult?.url ?? data.sourceImageUrl
+  const data = (node?.type === "character" ? node.data : null) as CharacterNodeData | null
+  const activeResult = data ? (data.generatedResults ?? [])[data.activeResultIndex ?? 0] : null
+  const mainImageUrl = activeResult?.url ?? data?.sourceImageUrl ?? null
 
   // Add image to canvas as generate-image node with result already set
   const handleAddImageToCanvas = useCallback((imageUrl: string) => {
@@ -257,7 +256,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
 
   // Refine character image - generate 4 clean versions
   const handleRefine = useCallback(async () => {
-    if (!mainImageUrl) {
+    if (!mainImageUrl || !data) {
       toast.error("No image to refine")
       return
     }
@@ -323,10 +322,12 @@ centered composition, high quality, single character`
     } finally {
       setIsRefining(false)
     }
-  }, [mainImageUrl, data.characterName, data.description, user?.id])
+  }, [mainImageUrl, data, user?.id])
 
   // Handle selecting a refined image
   const handleSelectRefined = useCallback(async (imageUrl: string) => {
+    if (!data) return
+
     // Add to generatedResults
     const newResult = {
       url: imageUrl,
@@ -374,11 +375,11 @@ centered composition, high quality, single character`
 
   // Generate all character assets (expressions, poses, lighting, angles)
   const handleGenerateAllAssets = useCallback(async () => {
-    const imageUrl = mainImageUrl
-    if (!imageUrl) {
+    if (!mainImageUrl || !data) {
       toast.error("No portrait available")
       return
     }
+    const imageUrl = mainImageUrl
 
     setGeneratingAllAssets(true)
     setRefinementCompleted(false)
@@ -472,7 +473,7 @@ centered composition, high quality, single character`
 
   function handleDeleteAsset(index: number) {
     const dataKey = ASSET_DATA_KEYS[activeTab]
-    if (!dataKey) return
+    if (!dataKey || !data) return
 
     if (activeTab === "custom") {
       const items = [...(data.customVariations ?? [])]
@@ -488,6 +489,7 @@ centered composition, high quality, single character`
   }
 
   async function handleDeleteCharacter() {
+    if (!data) return
     setDeletingCharacter(true)
     try {
       // Delete from database if persisted
@@ -509,7 +511,7 @@ centered composition, high quality, single character`
 
   const handleGenerateCustom = useCallback(async () => {
     if (!customPrompt.trim()) return
-    if (!mainImageUrl) {
+    if (!mainImageUrl || !data) {
       toast.error("Generate or upload a main portrait first")
       return
     }
@@ -572,6 +574,9 @@ centered composition, high quality, single character`
     setActiveTab(tab)
     setConfirmingAssetDelete(null)
   }
+
+  // Early return AFTER all hooks have been called (React hooks rule)
+  if (!node || !data) return null
 
   return createPortal(
     <>
