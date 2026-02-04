@@ -381,6 +381,22 @@ export type EditImageData = {
   activeResultIndex?: number
 }
 
+// Image-to-Image providers (transform source image with prompt)
+export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i"
+
+export type ImageToImageData = {
+  [key: string]: unknown
+  label: string
+  prompt: string  // Transformation prompt
+  provider: ImageToImageProvider
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
@@ -886,6 +902,7 @@ export type SceneNodeData =
   | GenerateScriptData
   | GenerateImageData
   | EditImageData
+  | ImageToImageData
   | ImageToVideoData
   | VideoToVideoData
   | TextToVideoData
@@ -926,6 +943,7 @@ export type SceneNodeType =
   | "generate-script"
   | "generate-image"
   | "edit-image"
+  | "image-to-image"
   | "image-to-video"
   | "video-to-video"
   | "text-to-video"
@@ -1109,6 +1127,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["image"],
     outputs: ["out"],
     defaultData: { label: "Edit Image", prompt: "", provider: "recraft-upscale", fieldMappings: {} },
+  },
+  {
+    type: "image-to-image",
+    label: "Image to Image",
+    category: "ai",
+    creditCost: 5,
+    inputs: ["image"],
+    outputs: ["out"],
+    defaultData: { label: "Image to Image", prompt: "", provider: "nano-banana", fieldMappings: {} },
   },
   {
     type: "image-to-video",

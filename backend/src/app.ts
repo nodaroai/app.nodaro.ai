@@ -7,6 +7,7 @@ import { jobRoutes } from "./routes/jobs.js"
 import { renderRoutes } from "./routes/render.js"
 import { generateImageRoutes } from "./routes/generate-image.js"
 import { editImageRoutes } from "./routes/edit-image.js"
+import { imageToImageRoutes } from "./routes/image-to-image.js"
 import { generateVideoRoutes } from "./routes/generate-video.js"
 import { videoToVideoRoutes } from "./routes/video-to-video.js"
 import { textToVideoRoutes } from "./routes/text-to-video.js"
@@ -56,6 +57,7 @@ export async function buildApp() {
   await app.register(renderRoutes)
   await app.register(generateImageRoutes)
   await app.register(editImageRoutes)
+  await app.register(imageToImageRoutes)
   await app.register(generateVideoRoutes)
   await app.register(videoToVideoRoutes)
   await app.register(textToVideoRoutes)

@@ -1,0 +1,53 @@
+import type { FastifyInstance } from "fastify"
+import { z } from "zod"
+import { supabase } from "../lib/supabase.js"
+import { videoQueue } from "../lib/queue.js"
+
+const imageToImageBody = z.object({
+  imageUrl: z.string().url(),
+  prompt: z.string().min(1).max(2000),
+  provider: z.enum(["nano-banana", "nano-banana-pro", "flux-i2i", "flux-pro-i2i", "grok-i2i", "gpt-image-i2i"]).optional(),
+  userId: z.string().uuid().optional(),
+})
+
+export async function imageToImageRoutes(app: FastifyInstance) {
+  app.post("/v1/image-to-image", async (req, reply) => {
+    const parsed = imageToImageBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid request",
+        },
+      })
+    }
+
+    const { imageUrl, prompt, provider, userId } = parsed.data
+
+    const { data: job, error } = await supabase
+      .from("jobs")
+      .insert({
+        workflow_id: null,
+        user_id: userId ?? null,
+        status: "pending",
+        input_data: { imageUrl, prompt, provider, type: "image-to-image" },
+      })
+      .select("id")
+      .single()
+
+    if (error) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: error.message },
+      })
+    }
+
+    await videoQueue.add("image-to-image", {
+      jobId: job.id,
+      imageUrl,
+      prompt,
+      provider: provider ?? "nano-banana",
+    })
+
+    return { jobId: job.id }
+  })
+}

@@ -51,6 +51,7 @@ import type {
   GenerateScriptData,
   GenerateImageData,
   EditImageData,
+  ImageToImageData,
   ImageToVideoData,
   VideoToVideoData,
   TextToVideoData,
@@ -431,6 +432,9 @@ export function ConfigPanel() {
           {selectedNode.type === "edit-image" && (
             <EditImageConfig data={selectedNode.data as EditImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "image-to-image" && (
+            <ImageToImageConfig data={selectedNode.data as ImageToImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
           {selectedNode.type === "image-to-video" && (
             <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
@@ -520,7 +524,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "generate-music") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "generate-music") && (
               <Button
                 className="w-full text-white hover:opacity-90"
                 style={{ backgroundColor: '#ff0073' }}
@@ -1257,20 +1261,17 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {/* Replicate providers (always available) */}
+            {/* Text-to-image providers (Replicate) */}
             <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
             <SelectItem value="flux">Flux</SelectItem>
             {/* DALL-E is Replicate-only, not available on KIE.ai */}
             {!isKie && <SelectItem value="dalle">DALL-E</SelectItem>}
-            {/* KIE.ai-only providers */}
+            {/* Text-to-image providers (KIE.ai only) */}
             {isKie && (
               <>
                 <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
                 <SelectItem value="grok">Grok</SelectItem>
                 <SelectItem value="gpt-image">GPT Image</SelectItem>
-                <SelectItem value="flux-i2i">Flux (Image-to-Image)</SelectItem>
-                <SelectItem value="grok-i2i">Grok (Image-to-Image)</SelectItem>
-                <SelectItem value="gpt-image-i2i">GPT Image (Image-to-Image)</SelectItem>
               </>
             )}
           </SelectContent>
@@ -1448,6 +1449,47 @@ function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }:
             : "Remove the background from the input image, leaving a transparent PNG."}
         </p>
       )}
+    </div>
+  )
+}
+
+function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToImageData>) {
+  const { settings } = useAppSettings()
+  const isKie = settings.ai_provider === "kie"
+
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.provider || "nano-banana"}
+          onValueChange={(v) => onUpdate({ provider: v as ImageToImageData["provider"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
+            {isKie && (
+              <>
+                <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
+                <SelectItem value="flux-i2i">Flux-2</SelectItem>
+                <SelectItem value="flux-pro-i2i">Flux-2 Pro</SelectItem>
+                <SelectItem value="grok-i2i">Grok</SelectItem>
+                <SelectItem value="gpt-image-i2i">GPT Image</SelectItem>
+              </>
+            )}
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="prompt" label="Transformation Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          value={data.prompt}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe how to transform the input image..."
+        />
+      </MappableField>
+      <p className="text-xs text-muted-foreground px-1">
+        Transform the input image based on your prompt while maintaining the core composition.
+      </p>
     </div>
   )
 }

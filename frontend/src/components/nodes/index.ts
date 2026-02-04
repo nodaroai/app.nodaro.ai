@@ -14,6 +14,7 @@ import { ReferenceAudioNode } from "./reference-audio-node"
 import { GenerateScriptNode } from "./generate-script-node"
 import { GenerateImageNode } from "./generate-image-node"
 import { EditImageNode } from "./edit-image-node"
+import { ImageToImageNode } from "./image-to-image-node"
 import { ImageToVideoNode } from "./image-to-video-node"
 import { VideoToVideoNode } from "./video-to-video-node"
 import { TextToVideoNode } from "./text-to-video-node"
@@ -58,6 +59,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "generate-script": GenerateScriptNode,
   "generate-image": GenerateImageNode,
   "edit-image": EditImageNode,
+  "image-to-image": ImageToImageNode,
   "image-to-video": ImageToVideoNode,
   "video-to-video": VideoToVideoNode,
   "text-to-video": TextToVideoNode,

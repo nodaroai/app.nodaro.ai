@@ -255,11 +255,19 @@ export async function generateImageKie(
   // Add reference images based on input type
   if (referenceImageUrls?.length) {
     if (modelConfig.inputType === "image-to-image") {
-      // Image-to-image models use "image" param for the source image
-      input.image = referenceImageUrls[0]
-      // Some models may support multiple images
-      if (referenceImageUrls.length > 1) {
-        input.image_input = referenceImageUrls.slice(1)
+      // Image-to-image models - check for custom image parameter name
+      const imageParamName = modelConfig.imageParam ?? "image"
+
+      if (imageParamName === "input_urls" || imageParamName === "image_urls") {
+        // GPT Image uses input_urls as an array, Grok uses image_urls as an array
+        input[imageParamName] = referenceImageUrls
+      } else {
+        // Default: use "image" param for the source image (single URL)
+        input[imageParamName] = referenceImageUrls[0]
+        // Some models may support multiple images
+        if (referenceImageUrls.length > 1) {
+          input.image_input = referenceImageUrls.slice(1)
+        }
       }
     } else {
       // Text-to-image models use "image_input" for reference images
@@ -299,14 +307,27 @@ export async function editImageKie(
   console.log(`[KIE.ai] Image: ${imageUrl}, Prompt: "${prompt ?? ""}"`)
 
   const input: Record<string, unknown> = {
-    image: imageUrl,
     output_format: "png",
+    // Apply model-specific extra params
+    ...modelConfig.extraParams,
+  }
+
+  // Set the image parameter based on model config
+  const imageParamName = modelConfig.imageParam ?? "image"
+  if (imageParamName === "image_urls" || imageParamName === "input_urls") {
+    // Array-based image parameter
+    input[imageParamName] = [imageUrl]
+  } else {
+    // Single URL parameter
+    input[imageParamName] = imageUrl
   }
 
   // Add prompt only for nano-banana-edit (general editing with instructions)
   if (provider === "nano-banana-edit" && prompt) {
     input.prompt = prompt
   }
+
+  console.log(`[KIE.ai] Edit request input:`, JSON.stringify(input, null, 2))
 
   const { resultJson } = await runKieTask(modelConfig.model, input)
 

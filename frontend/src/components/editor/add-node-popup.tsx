@@ -5,7 +5,7 @@ import {
   Type, BookOpen, ImageIcon, Film, Merge, Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin,
-  ChevronRight, Search, Download, ArrowLeft, Wand2,
+  ChevronRight, Search, Download, ArrowLeft, Wand2, Layers,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SceneNodeType } from "@/types/nodes"
@@ -37,6 +37,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI" },
   { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI" },
   { type: "edit-image", label: "Edit Image", icon: <Wand2 className="h-4 w-4" />, category: "AI" },
+  { type: "image-to-image", label: "Image to Image", icon: <Layers className="h-4 w-4" />, category: "AI" },
   { type: "image-to-video", label: "Image to Video", icon: <Film className="h-4 w-4" />, category: "AI" },
   { type: "video-to-video", label: "Video to Video", icon: <Film className="h-4 w-4" />, category: "AI" },
   { type: "text-to-video", label: "Text to Video", icon: <Film className="h-4 w-4" />, category: "AI" },

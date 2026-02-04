@@ -15,6 +15,7 @@ export interface KieModelConfig {
   cost: number            // Cost in USD per generation
   credits: number         // Credits consumed per generation
   inputType?: string      // Some models have different input types
+  imageParam?: string     // Parameter name for input image (default: "image", some use "input_urls")
   extraParams?: Record<string, unknown>  // Default extra parameters
 }
 
@@ -40,6 +41,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     credits: 6,
     cost: 0.03,
     inputType: "image-to-image",
+    imageParam: "image_urls",  // Nano Banana Edit uses image_urls array
     extraParams: { image_size: "16:9" },
   },
 
@@ -51,10 +53,19 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
   "flux-i2i": {
+    model: "flux-2/flex-image-to-image",
+    credits: 8,
+    cost: 0.04,
+    inputType: "image-to-image",
+    imageParam: "input_urls",  // Flux uses input_urls array, not "image"
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+  "flux-pro-i2i": {
     model: "flux-2/pro-image-to-image",
     credits: 10,
     cost: 0.05,
     inputType: "image-to-image",
+    imageParam: "input_urls",  // Flux uses input_urls array, not "image"
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
 
@@ -70,24 +81,27 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     credits: 8,
     cost: 0.04,
     inputType: "image-to-image",
-    extraParams: { aspect_ratio: "16:9" },
+    imageParam: "image_urls",  // Grok uses image_urls array, not "image"
+    extraParams: {},
   },
 
   // GPT Image family
-  // Note: GPT Image only supports specific aspect_ratio values: "1:1", "16:9", "9:16"
-  // and requires quality parameter: "low", "medium", "high"
+  // GPT Image family
+  // Supported aspect_ratio values: "1:1", "3:2", "2:3", "4:3" (NOT "16:9")
+  // Quality parameter: "low", "medium", "high"
   "gpt-image": {
     model: "gpt-image/1.5-text-to-image",
     credits: 12,
     cost: 0.06,
-    extraParams: { aspect_ratio: "1:1", quality: "medium" },
+    extraParams: { aspect_ratio: "3:2", quality: "medium" },
   },
   "gpt-image-i2i": {
     model: "gpt-image/1.5-image-to-image",
     credits: 12,
     cost: 0.06,
     inputType: "image-to-image",
-    extraParams: { aspect_ratio: "1:1", quality: "medium" },
+    imageParam: "input_urls",  // GPT Image uses input_urls array, not "image"
+    extraParams: { aspect_ratio: "3:2", quality: "medium" },
   },
 
   // Recraft utilities

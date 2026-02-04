@@ -17,8 +17,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -91,7 +91,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -162,6 +162,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         (data.url as string | undefined)
     }
     if (type === "edit-image") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
+    }
+    if (type === "image-to-image") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
@@ -277,7 +282,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }
       } else if (src.type === "edit-image") {
         // Edit image outputs an image - can be used as input to other nodes
-        if (node.type === "generate-image" || node.type === "edit-image") {
+        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image") {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+        } else {
+          inputs.imageUrl = output
+        }
+      } else if (src.type === "image-to-image") {
+        // Image-to-image outputs an image - can be used as input to other nodes
+        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
         } else {
           inputs.imageUrl = output
@@ -429,6 +441,54 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
         toast.error("Failed to start image editing", { description: errMsg })
+        reject(err)
+      })
+    })
+  }
+
+  function runImageToImage(nodeId: string, imageUrl: string, prompt: string, provider?: ImageToImageData["provider"]): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running", generatedImageUrl: undefined })
+
+    return new Promise((resolve, reject) => {
+      imageToImage(imageUrl, prompt, provider, user?.id).then(({ jobId }) => {
+        toast.info("Image transformation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const outputUrl = job.output_data?.imageUrl
+              const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as ImageToImageData | undefined)?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: outputUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedImageUrl: outputUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Image transformed")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Image transformation failed", { description: errMsg })
+              reject(new Error(errMsg))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+            toast.error("Failed to check job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        const errMsg = err instanceof Error ? err.message : "Unknown error"
+        updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+        toast.error("Failed to start image transformation", { description: errMsg })
         reject(err)
       })
     })
@@ -1360,7 +1420,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "edit-image") {
-      const imageUrl = inputs.imageUrl
+      // Use imageUrl if available, otherwise use first reference image as fallback
+      const imageUrl = inputs.imageUrl ?? inputs.referenceImageUrls?.[0]
       if (!imageUrl) {
         toast.error(`Node "${(node.data as EditImageData).label}": no input image found`)
         return Promise.reject(new Error("No input image"))
@@ -1369,6 +1430,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const provider = editData.provider || "recraft-upscale"
       const prompt = editData.prompt || undefined
       return runEditImage(node.id, imageUrl, prompt, provider)
+    }
+
+    if (node.type === "image-to-image") {
+      // Use imageUrl if available, otherwise use first reference image as fallback
+      const imageUrl = inputs.imageUrl ?? inputs.referenceImageUrls?.[0]
+      if (!imageUrl) {
+        toast.error(`Node "${(node.data as ImageToImageData).label}": no input image found`)
+        return Promise.reject(new Error("No input image"))
+      }
+      const i2iData = node.data as ImageToImageData
+      const prompt = i2iData.prompt
+      if (!prompt) {
+        toast.error(`Node "${i2iData.label}": transformation prompt is required`)
+        return Promise.reject(new Error("Transformation prompt is required"))
+      }
+      const provider = i2iData.provider || "nano-banana"
+      return runImageToImage(node.id, imageUrl, prompt, provider)
     }
 
     if (node.type === "image-to-video") {

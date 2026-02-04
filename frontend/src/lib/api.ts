@@ -103,6 +103,33 @@ export async function editImage(
   return res.json()
 }
 
+// --- Image to Image (transform image with prompt) ---
+
+export async function imageToImage(
+  imageUrl: string,
+  prompt: string,
+  provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "grok-i2i" | "gpt-image-i2i",
+  userId?: string
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { imageUrl, prompt }
+  if (provider) {
+    body.provider = provider
+  }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start image transformation")
+  }
+  return res.json()
+}
+
 export async function generateCharacter(data: {
   name: string
   description?: string
