@@ -191,10 +191,12 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
       const existingNodeId = findNodeForAsset(asset)
 
       if (existingNodeId) {
+        // Set Page modal state first, then close library after a microtask to ensure state is processed
         if (asset.type === "character") setCharacterPageNodeId(existingNodeId)
         else if (asset.type === "object") setObjectPageNodeId(existingNodeId)
         else if (asset.type === "location") setLocationPageNodeId(existingNodeId)
-        onClose()
+        // Delay onClose to ensure local state update is processed before parent re-renders
+        setTimeout(() => onClose(), 0)
       } else {
         const maxX = nodes.length > 0 ? Math.max(...nodes.map((n) => n.position.x)) + 300 : 200
         const avgY = nodes.length > 0 ? nodes.reduce((sum, n) => sum + n.position.y, 0) / nodes.length : 200
@@ -249,7 +251,8 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             selectNode(nodeId)
             setLocationPageNodeId(nodeId)
           }
-          onClose()
+          // Delay onClose to ensure local state update is processed before parent re-renders
+          setTimeout(() => onClose(), 0)
         }
       }
     },
