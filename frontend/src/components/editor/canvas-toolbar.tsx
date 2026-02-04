@@ -36,25 +36,32 @@ function ToolbarButton({ icon, label, shortcut, onClick, active }: ToolbarButton
             type="button"
             onClick={onClick}
             className={cn(
-              "w-10 h-10 flex items-center justify-center rounded-lg transition-all",
-              "text-[#64748B] dark:text-[#94A3B8]",
-              "hover:bg-[#F1F5F9] dark:hover:bg-[#2D2D2D]",
-              "hover:text-[#0F172A] dark:hover:text-white",
-              active && "bg-[#F1F5F9] dark:bg-[#2D2D2D] text-[#0F172A] dark:text-white"
+              "w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200",
+              "text-[#94A3B8]",
+              "hover:bg-[#2D2D2D] hover:text-white",
+              active && "bg-[#ff0073]/20 text-[#ff0073]"
             )}
           >
             {icon}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right" className="flex items-center gap-2">
-          <span>{label}</span>
-          <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-[#F1F5F9] dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          className="bg-[#2D2D2D] text-[#E2E8F0] rounded-lg px-3 py-2 flex items-center gap-2 border border-[#3D3D3D] shadow-xl"
+        >
+          <span className="text-sm">{label}</span>
+          <span className="bg-[#121212] text-[#94A3B8] text-xs px-1.5 py-0.5 rounded font-mono">
             {shortcut}
-          </kbd>
+          </span>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   )
+}
+
+function ToolbarDivider() {
+  return <div className="w-6 h-px bg-[#2D2D2D] mx-auto my-1" />
 }
 
 export function CanvasToolbar({
@@ -69,14 +76,15 @@ export function CanvasToolbar({
   return (
     <div
       className={cn(
-        "fixed left-0 top-1/2 -translate-y-1/2 z-50",
-        "bg-white dark:bg-[#1E1E1E]",
-        "border-r border-[#E2E8F0] dark:border-[#2D2D2D]",
-        "p-2 rounded-r-xl",
+        "fixed left-3 top-1/2 -translate-y-1/2 z-50",
+        "bg-[#1E1E1E]/90 backdrop-blur-md",
+        "border border-[#2D2D2D]",
+        "p-2 rounded-2xl",
         "flex flex-col gap-1",
-        "shadow-lg"
+        "shadow-2xl"
       )}
     >
+      {/* Primary actions */}
       <ToolbarButton
         icon={<Plus className="w-5 h-5" />}
         label="Add Node"
@@ -98,6 +106,9 @@ export function CanvasToolbar({
         onClick={onAssetLibrary}
       />
 
+      <ToolbarDivider />
+
+      {/* Canvas tools */}
       <ToolbarButton
         icon={<StickyNote className="w-5 h-5" />}
         label="Add Sticky Note"
@@ -112,8 +123,9 @@ export function CanvasToolbar({
         onClick={onTidyUp}
       />
 
-      <div className="h-px bg-[#E2E8F0] dark:bg-[#2D2D2D] my-1" />
+      <ToolbarDivider />
 
+      {/* View controls */}
       <ToolbarButton
         icon={<PanelLeft className="w-5 h-5" />}
         label="Toggle Sidebar"
