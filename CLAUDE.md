@@ -1113,10 +1113,10 @@ interface GenerateScriptNode {
 interface GenerateImageNode {
   type: 'generate-image';
   data: {
-    provider: 'nano-banana' | 'flux' | 'dalle';
+    provider: 'nano-banana' | 'nano-banana-pro' | 'flux' | 'grok' | 'gpt-image' | 'dalle';
     model?: string;
     style?: string;
-    aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3';
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:2' | '2:3';  // GPT Image doesn't support 16:9
     negativePrompt?: string;
     characterIds?: string[];   // Project characters to include in this image
     stylePresetId?: string;    // Style preset to apply
@@ -1126,6 +1126,14 @@ interface GenerateImageNode {
   parameterInputs: ['image_provider', 'aspect_ratio', 'text'];  // text for style_guide, negative_prompt
   outputs: ['image'];                // Output can connect to MULTIPLE nodes
   creditCost: 5;
+
+  // Provider Details (KIE.ai):
+  // - nano-banana: Google Nano Banana (4 credits)
+  // - nano-banana-pro: Higher quality version (6 credits)
+  // - flux: Flux-2 Pro text-to-image (10 credits)
+  // - grok: Grok Imagine text-to-image (8 credits)
+  // - gpt-image: GPT Image 1.5 (12 credits) - note: aspect_ratio limited to 1:1, 3:2, 2:3, 4:3
+  // - dalle: DALL-E (Replicate only, not on KIE.ai)
 
   // Reference input can receive:
   // - Uploaded images (for character consistency)
@@ -1146,6 +1154,50 @@ interface GenerateImageNode {
   // UI: The node config panel shows a "Characters" section with checkboxes
   // for each project character. Selecting a character adds their visual traits
   // and reference image to the generation request.
+}
+
+interface ImageToImageNode {
+  type: 'image-to-image';
+  data: {
+    provider: 'nano-banana' | 'nano-banana-pro' | 'flux-i2i' | 'flux-pro-i2i' | 'grok-i2i' | 'gpt-image-i2i';
+    prompt: string;              // Transformation prompt
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:2' | '2:3';  // GPT Image doesn't support 16:9
+  };
+  inputs: ['image'];             // Input image to transform
+  outputs: ['image'];            // Transformed image
+  creditCost: 5;
+
+  // Provider Details:
+  // - nano-banana: Basic image transformation (4 credits)
+  // - nano-banana-pro: Higher quality (6 credits)
+  // - flux-i2i: Flux-2 Flex model (8 credits)
+  // - flux-pro-i2i: Flux-2 Pro model (10 credits)
+  // - grok-i2i: Grok image transformation (8 credits)
+  // - gpt-image-i2i: GPT Image 1.5 (12 credits) - note: aspect_ratio limited to 1:1, 3:2, 2:3, 4:3
+
+  // KIE.ai API Notes:
+  // Different models expect different parameter names for input images:
+  // - flux models use "input_urls" (array)
+  // - grok/gpt-image use "image_urls" (array)
+  // This is handled via imageParam config in model-mapping.ts
+}
+
+interface EditImageNode {
+  type: 'edit-image';
+  data: {
+    provider: 'recraft-upscale' | 'recraft-remove-bg' | 'nano-banana-edit';
+    prompt?: string;             // Required for nano-banana-edit, optional for recraft
+  };
+  inputs: ['image'];             // Input image to edit
+  outputs: ['image'];            // Edited image
+  creditCost: 4;
+
+  // Provider Details:
+  // - recraft-upscale: AI upscaling with crisp quality (6 credits)
+  // - recraft-remove-bg: Background removal (4 credits)
+  // - nano-banana-edit: Prompt-based image editing (6 credits) - requires prompt
+
+  // Prompt is validated server-side: nano-banana-edit returns error if prompt is missing
 }
 
 interface ImageToVideoNode {
@@ -1996,7 +2048,9 @@ User clicks "Run" on a node
 | Node Type | Credits | ~Cost to Us | Price to User |
 |-----------|---------|-------------|---------------|
 | generate-script | 2 | $0.01 | $0.02 |
-| generate-image | 5 | $0.02 | $0.04 |
+| generate-image | 4-12 | $0.02-$0.06 | $0.04-$0.12 |
+| **image-to-image** | 4-12 | $0.02-$0.06 | $0.04-$0.12 |
+| **edit-image** | 4-6 | $0.02-$0.03 | $0.04-$0.06 |
 | image-to-video | 20 | $0.10 | $0.20 |
 | text-to-speech | 3 | $0.01 | $0.02 |
 | qa-check | 1 | $0.005 | $0.01 |
@@ -2012,6 +2066,32 @@ User clicks "Run" on a node
 | **trim-video** | 0 | $0 | $0 |
 
 **Note:** Simple processing nodes (adjust-volume, trim-video) are FREE - no AI involved.
+
+**Image Generation Cost Breakdown (KIE.ai):**
+| Provider | Credits | USD |
+|----------|---------|-----|
+| nano-banana | 4 | $0.02 |
+| nano-banana-pro | 6 | $0.03 |
+| flux | 10 | $0.05 |
+| grok | 8 | $0.04 |
+| gpt-image | 12 | $0.06 |
+
+**Image-to-Image Cost Breakdown (KIE.ai):**
+| Provider | Credits | USD |
+|----------|---------|-----|
+| nano-banana | 4 | $0.02 |
+| nano-banana-pro | 6 | $0.03 |
+| flux-i2i | 8 | $0.04 |
+| flux-pro-i2i | 10 | $0.05 |
+| grok-i2i | 8 | $0.04 |
+| gpt-image-i2i | 12 | $0.06 |
+
+**Edit Image Cost Breakdown (KIE.ai):**
+| Provider | Credits | USD |
+|----------|---------|-----|
+| recraft-remove-bg | 4 | $0.02 |
+| recraft-upscale | 6 | $0.03 |
+| nano-banana-edit | 6 | $0.03 |
 
 **Total for typical 1-minute video (8 scenes):**
 - Script: 2 credits
