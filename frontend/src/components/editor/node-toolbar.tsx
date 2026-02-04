@@ -130,7 +130,11 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
   )
 }
 
-export function NodeToolbar() {
+interface NodeToolbarProps {
+  readonly visible?: boolean
+}
+
+export function NodeToolbar({ visible = false }: NodeToolbarProps) {
   const addNode = useWorkflowStore((s) => s.addNode)
   const { screenToFlowPosition } = useReactFlow()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -159,15 +163,17 @@ export function NodeToolbar() {
 
   return (
     <>
-      {/* Desktop: static sidebar panel */}
-      <div className="absolute top-4 left-4 z-10 hidden md:flex flex-col gap-2 bg-[#F8FAFC] dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border-r border-[#E2E8F0] dark:border-[#2D2D2D] rounded-lg px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto">
-        <span className="font-sans text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#ff0073] mb-1">
-          Add Node
-        </span>
-        <NodeList onAdd={handleAddNode} />
-      </div>
+      {/* Desktop: static sidebar panel - hidden by default, shown when visible prop is true */}
+      {visible && (
+        <div className="absolute top-4 left-16 z-10 hidden md:flex flex-col gap-2 bg-[#F8FAFC] dark:bg-[#1E1E1E]/95 dark:backdrop-blur-sm border border-[#E2E8F0] dark:border-[#2D2D2D] rounded-xl px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto shadow-lg animate-in slide-in-from-left-2 duration-200">
+          <span className="font-sans text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#ff0073] mb-1">
+            Add Node
+          </span>
+          <NodeList onAdd={handleAddNode} />
+        </div>
+      )}
 
-      {/* Mobile: FAB */}
+      {/* Mobile: FAB - always visible on mobile */}
       <Button
         size="sm"
         className="absolute bottom-4 right-4 z-10 h-12 w-12 rounded-full p-0 shadow-lg md:hidden"

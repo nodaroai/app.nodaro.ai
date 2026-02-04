@@ -15,10 +15,12 @@ import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
 import { NodeContextMenu } from "./node-context-menu"
-import { PaneContextMenu } from "./pane-context-menu"
+import { CanvasContextMenu } from "./canvas-context-menu"
+import { CanvasToolbar } from "./canvas-toolbar"
+import { AddNodePopup } from "./add-node-popup"
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { WorkflowEdge } from "@/types/nodes"
+import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
 
 // Custom edge types with animated flowing dot
 const edgeTypes = {
@@ -32,7 +34,7 @@ interface NodeContextMenuState {
   readonly y: number
 }
 
-interface PaneContextMenuState {
+interface CanvasContextMenuState {
   readonly x: number
   readonly y: number
   readonly flowX: number
@@ -53,7 +55,12 @@ function useIsMobile() {
   return isMobile
 }
 
-export function WorkflowCanvas() {
+interface WorkflowCanvasProps {
+  readonly sidebarVisible: boolean
+  readonly onToggleSidebar: () => void
+}
+
+export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanvasProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const onNodesChange = useWorkflowStore((s) => s.onNodesChange)
@@ -64,11 +71,12 @@ export function WorkflowCanvas() {
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
-  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, setNodes } = useReactFlow()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
-  const [paneContextMenu, setPaneContextMenu] = useState<PaneContextMenuState | null>(null)
+  const [canvasContextMenu, setCanvasContextMenu] = useState<CanvasContextMenuState | null>(null)
   const [showMiniMap, setShowMiniMap] = useState(true)
+  const [addNodePopupOpen, setAddNodePopupOpen] = useState(false)
+  const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
   const isMobile = useIsMobile()
 
   // Transform edges to be animated when source node is running
@@ -110,15 +118,17 @@ export function WorkflowCanvas() {
   const handlePaneClick = useCallback(() => {
     selectNode(null)
     setNodeContextMenu(null)
-    setPaneContextMenu(null)
+    setCanvasContextMenu(null)
+    setAddNodePopupOpen(false)
   }, [selectNode])
 
   const handlePaneContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent) => {
       event.preventDefault()
       setNodeContextMenu(null)
+      setAddNodePopupOpen(false)
       const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      setPaneContextMenu({
+      setCanvasContextMenu({
         x: event.clientX,
         y: event.clientY,
         flowX: flowPosition.x,
@@ -132,21 +142,81 @@ export function WorkflowCanvas() {
     (position?: { x: number; y: number }) => {
       const flowPosition = position || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
       addNode("sticky-note", flowPosition)
-      setPaneContextMenu(null)
+      setCanvasContextMenu(null)
     },
     [addNode, screenToFlowPosition]
   )
+
+  const handleAddNode = useCallback(
+    (type: SceneNodeType) => {
+      const position = addNodePopupPosition
+        ? screenToFlowPosition(addNodePopupPosition)
+        : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+      addNode(type, position)
+      setAddNodePopupOpen(false)
+      setAddNodePopupPosition(undefined)
+    },
+    [addNode, screenToFlowPosition, addNodePopupPosition]
+  )
+
+  const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }) => {
+    setAddNodePopupPosition(position)
+    setAddNodePopupOpen(true)
+    setCanvasContextMenu(null)
+    setNodeContextMenu(null)
+  }, [])
+
+  const handleTidyUp = useCallback(() => {
+    // Simple auto-arrange: sort nodes by type and arrange in a grid
+    const nodesByType: Record<string, typeof nodes> = {}
+    nodes.forEach((node) => {
+      const type = node.type || "unknown"
+      if (!nodesByType[type]) nodesByType[type] = []
+      nodesByType[type].push(node)
+    })
+
+    const arranged: typeof nodes = []
+    let y = 100
+    const xSpacing = 300
+    const ySpacing = 200
+
+    Object.values(nodesByType).forEach((typeNodes) => {
+      let x = 100
+      typeNodes.forEach((node) => {
+        arranged.push({
+          ...node,
+          position: { x, y },
+        })
+        x += xSpacing
+      })
+      y += ySpacing
+    })
+
+    setNodes(arranged)
+    setCanvasContextMenu(null)
+  }, [nodes, setNodes])
+
+  const handleSelectAll = useCallback(() => {
+    setNodes(nodes.map((n) => ({ ...n, selected: true })))
+  }, [nodes, setNodes])
+
+  const handleClearSelection = useCallback(() => {
+    setNodes(nodes.map((n) => ({ ...n, selected: false })))
+    selectNode(null)
+  }, [nodes, setNodes, selectNode])
 
   const handleNodeContextMenu: NodeMouseHandler = useCallback(
     (event, node) => {
       event.preventDefault()
       selectNode(node.id)
-      setPaneContextMenu(null)
+      setCanvasContextMenu(null)
+      setAddNodePopupOpen(false)
       setNodeContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
     },
     [selectNode],
   )
 
+  // Keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // Don't trigger shortcuts when typing in inputs/textareas
@@ -155,25 +225,81 @@ export function WorkflowCanvas() {
         return
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key === "d" && selectedNodeId) {
+      // Tab - Open Add Node popup
+      if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault()
-        duplicateNode(selectedNodeId)
+        handleOpenAddNodePopup()
+        return
       }
-      if (e.key === "Delete" && selectedNodeId) {
-        deleteNode(selectedNodeId)
+
+      // Ctrl+K - Search (placeholder - opens add node popup for now)
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault()
+        handleOpenAddNodePopup()
+        return
       }
-      // Shift+S to add sticky note
+
+      // Ctrl+L - Asset Library (placeholder)
+      if ((e.ctrlKey || e.metaKey) && e.key === "l") {
+        e.preventDefault()
+        // TODO: Open asset library modal
+        return
+      }
+
+      // Shift+S - Add sticky note
       if (e.shiftKey && e.key.toLowerCase() === "s") {
         e.preventDefault()
         handleAddStickyNote()
+        return
+      }
+
+      // Alt+T - Tidy up
+      if (e.altKey && e.key.toLowerCase() === "t") {
+        e.preventDefault()
+        handleTidyUp()
+        return
+      }
+
+      // Ctrl+B - Toggle sidebar
+      if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+        e.preventDefault()
+        onToggleSidebar()
+        return
+      }
+
+      // Ctrl+A - Select all
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        e.preventDefault()
+        handleSelectAll()
+        return
+      }
+
+      // Ctrl+D - Duplicate
+      if ((e.ctrlKey || e.metaKey) && e.key === "d" && selectedNodeId) {
+        e.preventDefault()
+        duplicateNode(selectedNodeId)
+        return
+      }
+
+      // Delete
+      if (e.key === "Delete" && selectedNodeId) {
+        deleteNode(selectedNodeId)
+        return
+      }
+
+      // Escape - Close popups
+      if (e.key === "Escape") {
+        setAddNodePopupOpen(false)
+        setCanvasContextMenu(null)
+        setNodeContextMenu(null)
+        return
       }
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote])
+  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    console.log("[DEBUG] handleDragOver, types:", Array.from(e.dataTransfer.types))
     if (e.dataTransfer.types.includes("application/scenenode-image")) {
       e.preventDefault()
       e.dataTransfer.dropEffect = "copy"
@@ -183,14 +309,12 @@ export function WorkflowCanvas() {
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       const imageUrl = e.dataTransfer.getData("application/scenenode-image")
-      console.log("[DEBUG] handleDrop, imageUrl:", imageUrl)
       if (!imageUrl) return
       e.preventDefault()
 
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      console.log("[DEBUG] Creating generate-image node at:", position)
       // Create generate-image node with the image already set as a result
-      const nodeId = addNode("generate-image", position, {
+      addNode("generate-image", position, {
         generatedResults: [{
           url: imageUrl,
           timestamp: new Date().toISOString(),
@@ -200,133 +324,163 @@ export function WorkflowCanvas() {
         executionStatus: "completed",
         generatedImageUrl: imageUrl,
       })
-      console.log("[DEBUG] Created node:", nodeId)
     },
     [screenToFlowPosition, addNode],
   )
 
+  const hasSelection = nodes.some((n) => n.selected)
+
   return (
     <>
-    <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
-      <ReactFlow
-        nodes={nodes}
-        edges={animatedEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onNodeClick={handleNodeClick}
-        onPaneClick={handlePaneClick}
-        onNodeContextMenu={handleNodeContextMenu}
-        onPaneContextMenu={handlePaneContextMenu}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        defaultEdgeOptions={{ type: 'default' }}
-        connectionMode={ConnectionMode.Loose}
-        fitView
-        deleteKeyCode="Delete"
-        className="bg-background touch-manipulation"
-        zoomOnPinch
-        panOnDrag
-        minZoom={0.2}
-        maxZoom={2}
-      >
-        <Controls className="!bg-card !border !shadow-sm" />
-        {!isMobile && showMiniMap && (
-          <MiniMap
-            className="!bg-card !border !shadow-sm"
-            nodeColor={(node) => {
-              // Return category-specific colors for each node type (vibrant for dark mode)
-              const nodeType = node.type as string
-              // Character nodes - bubblegum pink
-              if (nodeType === 'character') return '#F472B6'
-              // Object nodes - mint green
-              if (nodeType === 'object') return '#34D399'
-              // Location nodes - cyan/turquoise
-              if (nodeType === 'location') return '#22D3EE'
-              // Scene and AI nodes - brand pink (spotlight)
-              if (nodeType === 'scene' ||
-                  nodeType.startsWith('generate-') ||
-                  nodeType.startsWith('text-to-') ||
-                  nodeType.startsWith('image-to-') ||
-                  nodeType.startsWith('video-to-') ||
-                  nodeType === 'qa-check') return '#ff0073'
-              // Input nodes - neon cyan
-              if (nodeType === 'text-prompt' ||
-                  nodeType === 'upload-image' ||
-                  nodeType === 'upload-video' ||
-                  nodeType === 'rss-feed' ||
-                  nodeType === 'reference-audio') return '#38BDF8'
-              // Parameter nodes - modern indigo
-              if (nodeType === 'image-provider' ||
-                  nodeType === 'video-provider' ||
-                  nodeType === 'voice-provider' ||
-                  nodeType === 'script-provider' ||
-                  nodeType === 'duration' ||
-                  nodeType === 'aspect-ratio' ||
-                  nodeType === 'motion' ||
-                  nodeType === 'camera-motion' ||
-                  nodeType === 'voice' ||
-                  nodeType === 'text') return '#818CF8'
-              // Processing nodes - steel grey
-              if (nodeType === 'combine-videos' ||
-                  nodeType === 'merge-video-audio' ||
-                  nodeType === 'add-captions' ||
-                  nodeType === 'resize-video' ||
-                  nodeType === 'extract-audio' ||
-                  nodeType === 'mix-audio' ||
-                  nodeType === 'adjust-volume' ||
-                  nodeType === 'trim-video') return '#475569'
-              // Output nodes - green
-              if (nodeType === 'save-to-storage' ||
-                  nodeType === 'webhook-output') return '#22c55e'
-              // Sticky notes - hidden from MiniMap
-              if (nodeType === 'sticky-note') return 'transparent'
-              // Default fallback
-              return '#6b7280'
-            }}
-            maskColor="rgba(0, 0, 0, 0.2)"
+      {/* Canvas Toolbar (icon buttons on left) */}
+      <CanvasToolbar
+        onAddNode={() => handleOpenAddNodePopup()}
+        onSearch={() => handleOpenAddNodePopup()}
+        onAssetLibrary={() => {
+          // TODO: Open asset library modal
+        }}
+        onAddStickyNote={() => handleAddStickyNote()}
+        onTidyUp={handleTidyUp}
+        onToggleSidebar={onToggleSidebar}
+        sidebarVisible={sidebarVisible}
+      />
+
+      {/* Add Node Popup */}
+      <AddNodePopup
+        open={addNodePopupOpen}
+        onClose={() => {
+          setAddNodePopupOpen(false)
+          setAddNodePopupPosition(undefined)
+        }}
+        onAddNode={handleAddNode}
+        position={addNodePopupPosition}
+      />
+
+      <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
+        <ReactFlow
+          nodes={nodes}
+          edges={animatedEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={handleNodeClick}
+          onPaneClick={handlePaneClick}
+          onNodeContextMenu={handleNodeContextMenu}
+          onPaneContextMenu={handlePaneContextMenu}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultEdgeOptions={{ type: 'default' }}
+          connectionMode={ConnectionMode.Loose}
+          fitView
+          deleteKeyCode="Delete"
+          className="bg-background touch-manipulation"
+          zoomOnPinch
+          panOnDrag
+          minZoom={0.2}
+          maxZoom={2}
+        >
+          <Controls className="!bg-card !border !shadow-sm" />
+          {!isMobile && showMiniMap && (
+            <MiniMap
+              className="!bg-card !border !shadow-sm"
+              nodeColor={(node) => {
+                // Return category-specific colors for each node type (vibrant for dark mode)
+                const nodeType = node.type as string
+                // Character nodes - bubblegum pink
+                if (nodeType === 'character') return '#F472B6'
+                // Object nodes - mint green
+                if (nodeType === 'object') return '#34D399'
+                // Location nodes - cyan/turquoise
+                if (nodeType === 'location') return '#22D3EE'
+                // Scene and AI nodes - brand pink (spotlight)
+                if (nodeType === 'scene' ||
+                    nodeType.startsWith('generate-') ||
+                    nodeType.startsWith('text-to-') ||
+                    nodeType.startsWith('image-to-') ||
+                    nodeType.startsWith('video-to-') ||
+                    nodeType === 'qa-check') return '#ff0073'
+                // Input nodes - neon cyan
+                if (nodeType === 'text-prompt' ||
+                    nodeType === 'upload-image' ||
+                    nodeType === 'upload-video' ||
+                    nodeType === 'rss-feed' ||
+                    nodeType === 'reference-audio') return '#38BDF8'
+                // Parameter nodes - modern indigo
+                if (nodeType === 'image-provider' ||
+                    nodeType === 'video-provider' ||
+                    nodeType === 'voice-provider' ||
+                    nodeType === 'script-provider' ||
+                    nodeType === 'duration' ||
+                    nodeType === 'aspect-ratio' ||
+                    nodeType === 'motion' ||
+                    nodeType === 'camera-motion' ||
+                    nodeType === 'voice' ||
+                    nodeType === 'text') return '#818CF8'
+                // Processing nodes - steel grey
+                if (nodeType === 'combine-videos' ||
+                    nodeType === 'merge-video-audio' ||
+                    nodeType === 'add-captions' ||
+                    nodeType === 'resize-video' ||
+                    nodeType === 'extract-audio' ||
+                    nodeType === 'mix-audio' ||
+                    nodeType === 'adjust-volume' ||
+                    nodeType === 'trim-video') return '#475569'
+                // Output nodes - green
+                if (nodeType === 'save-to-storage' ||
+                    nodeType === 'webhook-output') return '#22c55e'
+                // Sticky notes - hidden from MiniMap
+                if (nodeType === 'sticky-note') return 'transparent'
+                // Default fallback
+                return '#6b7280'
+              }}
+              maskColor="rgba(0, 0, 0, 0.2)"
+            />
+          )}
+          {/* MiniMap toggle button */}
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={() => setShowMiniMap(!showMiniMap)}
+              className="absolute bottom-4 right-4 z-10 flex items-center justify-center w-8 h-8 rounded bg-card border shadow-sm hover:bg-accent transition-colors"
+              title={showMiniMap ? "Hide MiniMap" : "Show MiniMap"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <rect x="12" y="12" width="6" height="6" rx="1" className={showMiniMap ? "fill-[#ff0073]" : ""} />
+              </svg>
+            </button>
+          )}
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={16}
+            size={1}
+            className="!bg-background"
           />
-        )}
-        {/* MiniMap toggle button */}
-        {!isMobile && (
-          <button
-            type="button"
-            onClick={() => setShowMiniMap(!showMiniMap)}
-            className="absolute bottom-4 right-4 z-10 flex items-center justify-center w-8 h-8 rounded bg-card border shadow-sm hover:bg-accent transition-colors"
-            title={showMiniMap ? "Hide MiniMap" : "Show MiniMap"}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <rect x="12" y="12" width="6" height="6" rx="1" className={showMiniMap ? "fill-[#ff0073]" : ""} />
-            </svg>
-          </button>
-        )}
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={16}
-          size={1}
-          className="!bg-background"
+        </ReactFlow>
+      </div>
+
+      {nodeContextMenu && (
+        <NodeContextMenu
+          nodeId={nodeContextMenu.nodeId}
+          x={nodeContextMenu.x}
+          y={nodeContextMenu.y}
+          onClose={() => setNodeContextMenu(null)}
         />
-      </ReactFlow>
-    </div>
+      )}
 
-    {nodeContextMenu && (
-      <NodeContextMenu
-        nodeId={nodeContextMenu.nodeId}
-        x={nodeContextMenu.x}
-        y={nodeContextMenu.y}
-        onClose={() => setNodeContextMenu(null)}
-      />
-    )}
-
-    {paneContextMenu && (
-      <PaneContextMenu
-        x={paneContextMenu.x}
-        y={paneContextMenu.y}
-        onClose={() => setPaneContextMenu(null)}
-        onAddStickyNote={() => handleAddStickyNote({ x: paneContextMenu.flowX, y: paneContextMenu.flowY })}
-      />
-    )}
+      {canvasContextMenu && (
+        <CanvasContextMenu
+          open={true}
+          position={{ x: canvasContextMenu.x, y: canvasContextMenu.y }}
+          onClose={() => setCanvasContextMenu(null)}
+          onAddNode={() => handleOpenAddNodePopup({ x: canvasContextMenu.x, y: canvasContextMenu.y })}
+          onAddStickyNote={() => handleAddStickyNote({ x: canvasContextMenu.flowX, y: canvasContextMenu.flowY })}
+          onTidyUp={handleTidyUp}
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClearSelection}
+          hasSelection={hasSelection}
+        />
+      )}
     </>
   )
 }

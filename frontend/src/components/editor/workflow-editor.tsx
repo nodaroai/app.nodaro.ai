@@ -35,6 +35,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [activeTab, setActiveTab] = useState<"editor" | "executions" | "cost">("editor")
+  const [sidebarVisible, setSidebarVisible] = useState(false)
   const pendingNavRef = useRef<string | null>(null)
   const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(new Set())
 
@@ -2308,8 +2309,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         {activeTab === "editor" && (
           <div className="absolute inset-0">
             <ReactFlowProvider>
-              <WorkflowCanvas />
-              <NodeToolbar />
+              <WorkflowCanvas
+                sidebarVisible={sidebarVisible}
+                onToggleSidebar={() => setSidebarVisible((v) => !v)}
+              />
+              <NodeToolbar visible={sidebarVisible} />
               <ConfigPanel />
             </ReactFlowProvider>
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
