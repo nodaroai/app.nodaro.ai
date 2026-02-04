@@ -235,28 +235,28 @@ export function WorkflowCanvas() {
           <MiniMap
             className="!bg-card !border !shadow-sm"
             nodeColor={(node) => {
-              // Return category-specific colors for each node type
+              // Return category-specific colors for each node type (vibrant for dark mode)
               const nodeType = node.type as string
-              // Character nodes
-              if (nodeType === 'character') return '#FF0073' // pink accent
-              // Object nodes
-              if (nodeType === 'object') return '#FF0073' // pink accent
-              // Location nodes
-              if (nodeType === 'location') return '#FF0073' // pink accent
-              // Scene and AI nodes - dark gray
+              // Character nodes - bubblegum pink
+              if (nodeType === 'character') return '#F472B6'
+              // Object nodes - mint green
+              if (nodeType === 'object') return '#34D399'
+              // Location nodes - cyan/turquoise
+              if (nodeType === 'location') return '#22D3EE'
+              // Scene and AI nodes - brand pink (spotlight)
               if (nodeType === 'scene' ||
                   nodeType.startsWith('generate-') ||
                   nodeType.startsWith('text-to-') ||
                   nodeType.startsWith('image-to-') ||
                   nodeType.startsWith('video-to-') ||
-                  nodeType === 'qa-check') return '#282828'
-              // Input nodes
+                  nodeType === 'qa-check') return '#ff0073'
+              // Input nodes - neon cyan
               if (nodeType === 'text-prompt' ||
                   nodeType === 'upload-image' ||
                   nodeType === 'upload-video' ||
                   nodeType === 'rss-feed' ||
-                  nodeType === 'reference-audio') return '#007AFF' // iOS blue
-              // Parameter nodes
+                  nodeType === 'reference-audio') return '#38BDF8'
+              // Parameter nodes - modern indigo
               if (nodeType === 'image-provider' ||
                   nodeType === 'video-provider' ||
                   nodeType === 'voice-provider' ||
@@ -266,8 +266,8 @@ export function WorkflowCanvas() {
                   nodeType === 'motion' ||
                   nodeType === 'camera-motion' ||
                   nodeType === 'voice' ||
-                  nodeType === 'text') return '#6366F1' // modern indigo
-              // Processing nodes
+                  nodeType === 'text') return '#818CF8'
+              // Processing nodes - steel grey
               if (nodeType === 'combine-videos' ||
                   nodeType === 'merge-video-audio' ||
                   nodeType === 'add-captions' ||
@@ -275,16 +275,16 @@ export function WorkflowCanvas() {
                   nodeType === 'extract-audio' ||
                   nodeType === 'mix-audio' ||
                   nodeType === 'adjust-volume' ||
-                  nodeType === 'trim-video') return '#475569' // steel grey
-              // Output nodes
+                  nodeType === 'trim-video') return '#475569'
+              // Output nodes - green
               if (nodeType === 'save-to-storage' ||
-                  nodeType === 'webhook-output') return '#22c55e' // green-500
+                  nodeType === 'webhook-output') return '#22c55e'
               // Sticky notes - hidden from MiniMap
               if (nodeType === 'sticky-note') return 'transparent'
               // Default fallback
-              return '#6b7280' // gray-500
+              return '#6b7280'
             }}
-            maskColor="rgba(0, 0, 0, 0.1)"
+            maskColor="rgba(0, 0, 0, 0.2)"
           />
         )}
         {/* MiniMap toggle button */}

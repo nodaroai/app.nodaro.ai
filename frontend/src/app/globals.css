@@ -83,37 +83,37 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --background: #121212;
+  --foreground: #E2E8F0;
+  --card: #1E1E1E;
+  --card-foreground: #E2E8F0;
+  --popover: #1E1E1E;
+  --popover-foreground: #E2E8F0;
   --primary: #ff0073;
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --secondary: #2D2D2D;
+  --secondary-foreground: #E2E8F0;
+  --muted: #2D2D2D;
+  --muted-foreground: #94A3B8;
+  --accent: #2D2D2D;
+  --accent-foreground: #E2E8F0;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --border: #2D2D2D;
+  --input: #2D2D2D;
+  --ring: #ff0073;
+  --chart-1: #ff0073;
+  --chart-2: #38BDF8;
+  --chart-3: #818CF8;
+  --chart-4: #34D399;
+  --chart-5: #F472B6;
+  --sidebar: #1E1E1E;
+  --sidebar-foreground: #E2E8F0;
+  --sidebar-primary: #ff0073;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2D2D2D;
+  --sidebar-accent-foreground: #E2E8F0;
+  --sidebar-border: #2D2D2D;
+  --sidebar-ring: #ff0073;
 }
 
 @layer base {
@@ -206,4 +206,61 @@
   syntax: '<angle>';
   initial-value: 0deg;
   inherits: false;
+}
+
+/* Dark mode glassmorphism effect for nodes */
+.dark .node-glass {
+  background: rgba(30, 30, 30, 0.9) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* AI node header glow in dark mode */
+.dark .node-ai-glow {
+  box-shadow: 0 0 20px rgba(255, 0, 115, 0.3);
+}
+
+/* Selected node category glows in dark mode */
+.dark .node-selected-input {
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.4) !important;
+}
+
+.dark .node-selected-parameter {
+  box-shadow: 0 0 20px rgba(129, 140, 248, 0.4) !important;
+}
+
+.dark .node-selected-ai {
+  box-shadow: 0 0 25px rgba(255, 0, 115, 0.5) !important;
+}
+
+.dark .node-selected-processing {
+  box-shadow: 0 0 20px rgba(71, 85, 105, 0.4) !important;
+}
+
+.dark .node-selected-character {
+  box-shadow: 0 0 20px rgba(244, 114, 182, 0.4) !important;
+}
+
+.dark .node-selected-location {
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.4) !important;
+}
+
+.dark .node-selected-object {
+  box-shadow: 0 0 20px rgba(52, 211, 153, 0.4) !important;
+}
+
+/* Connection port styling in dark mode */
+.dark .react-flow__handle {
+  background: #ff0073 !important;
+  border-color: #1E1E1E !important;
+}
+
+/* Default edge color in dark mode */
+.dark .react-flow__edge-path {
+  stroke: #475569;
+}
+
+/* Grid dots in dark mode */
+.dark .react-flow__background pattern circle {
+  fill: #2D2D2D;
 }

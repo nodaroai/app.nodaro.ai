@@ -29,31 +29,31 @@ interface BaseNodeProps {
 }
 
 const CATEGORY_STYLES: Record<string, string> = {
-  input: "border-[#E2E8F0] bg-[#F8FAFC] dark:border-blue-500/70 dark:bg-blue-950/70",
-  parameter: "border-[#EEF2FF] bg-[#F9FAFF] dark:border-indigo-500/70 dark:bg-indigo-950/70",
-  ai: "border-[#404040] bg-[#F8FAFC] dark:border-purple-500/70 dark:bg-purple-950/70",
-  processing: "border-[#CBD5E1] bg-[#F1F5F9] dark:border-amber-500/70 dark:bg-amber-950/70",
-  output: "border-green-300 bg-green-50 dark:border-green-500/70 dark:bg-green-950/70",
-  scene: "border-[#404040] bg-[#F8FAFC] dark:border-violet-500/70 dark:bg-violet-950/70",
-  character: "border-pink-300 bg-pink-50 dark:border-pink-500/70 dark:bg-pink-950/70",
-  object: "border-emerald-300 bg-emerald-50 dark:border-emerald-500/70 dark:bg-emerald-950/70",
-  location: "border-cyan-300 bg-cyan-50 dark:border-cyan-500/70 dark:bg-cyan-950/70",
-  script: "border-[#404040] bg-[#F8FAFC] dark:border-purple-500/70 dark:bg-purple-950/70",
-  i2v: "border-[#404040] bg-[#F8FAFC] dark:border-purple-500/70 dark:bg-purple-950/70",
+  input: "border-[#E2E8F0] bg-[#F8FAFC] dark:border-[#38BDF8] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  parameter: "border-[#EEF2FF] bg-[#F9FAFF] dark:border-[#818CF8] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  ai: "border-[#404040] bg-[#F8FAFC] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  processing: "border-[#CBD5E1] bg-[#F1F5F9] dark:border-[#475569] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  output: "border-green-300 bg-green-50 dark:border-green-500 dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  scene: "border-[#404040] bg-[#F8FAFC] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  character: "border-pink-300 bg-pink-50 dark:border-[#F472B6] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  object: "border-emerald-300 bg-emerald-50 dark:border-[#34D399] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  location: "border-cyan-300 bg-cyan-50 dark:border-[#22D3EE] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  script: "border-[#404040] bg-[#F8FAFC] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  i2v: "border-[#404040] bg-[#F8FAFC] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
 }
 
 const CATEGORY_HEADER: Record<string, string> = {
-  input: "bg-[#007AFF] text-white dark:bg-blue-900/70 dark:text-gray-200",
-  parameter: "bg-[#6366F1] text-white dark:bg-indigo-900/70 dark:text-gray-200",
-  ai: "bg-[#282828] text-white dark:bg-purple-900/70 dark:text-gray-200",
-  processing: "bg-[#475569] text-white dark:bg-amber-900/70 dark:text-gray-200",
-  output: "bg-green-100 text-gray-700 dark:bg-green-900/70 dark:text-gray-200",
-  scene: "bg-[#282828] text-white dark:bg-violet-900/70 dark:text-gray-200",
-  character: "bg-pink-100 text-gray-700 dark:bg-pink-900/70 dark:text-gray-200",
-  object: "bg-emerald-100 text-gray-700 dark:bg-emerald-900/70 dark:text-gray-200",
-  location: "bg-cyan-100 text-gray-700 dark:bg-cyan-900/70 dark:text-gray-200",
-  script: "bg-[#282828] text-white dark:bg-purple-900/70 dark:text-gray-200",
-  i2v: "bg-[#282828] text-white dark:bg-purple-900/70 dark:text-gray-200",
+  input: "bg-[#007AFF] text-white dark:bg-[#38BDF8] dark:text-white",
+  parameter: "bg-[#6366F1] text-white dark:bg-[#818CF8] dark:text-white",
+  ai: "bg-[#282828] text-white dark:bg-[#ff0073] dark:text-white dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  processing: "bg-[#475569] text-white dark:bg-[#475569] dark:text-white",
+  output: "bg-green-100 text-gray-700 dark:bg-green-600 dark:text-white",
+  scene: "bg-[#282828] text-white dark:bg-[#ff0073] dark:text-white dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  character: "bg-pink-100 text-gray-700 dark:bg-[#F472B6] dark:text-white",
+  object: "bg-emerald-100 text-gray-700 dark:bg-[#34D399] dark:text-white",
+  location: "bg-cyan-100 text-gray-700 dark:bg-[#22D3EE] dark:text-white",
+  script: "bg-[#282828] text-white dark:bg-[#ff0073] dark:text-white dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  i2v: "bg-[#282828] text-white dark:bg-[#ff0073] dark:text-white dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
 }
 
 export function BaseNode({
@@ -91,6 +91,14 @@ export function BaseNode({
           "group relative rounded-lg border-2 shadow-sm min-w-[200px] bg-card text-card-foreground h-full",
           CATEGORY_STYLES[category],
           selected && "ring-2 ring-primary",
+          selected && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
+          selected && category === "parameter" && "dark:shadow-[0_0_20px_rgba(129,140,248,0.4)]",
+          selected && (category === "ai" || category === "scene" || category === "script" || category === "i2v") && "dark:shadow-[0_0_25px_rgba(255,0,115,0.5)]",
+          selected && category === "processing" && "dark:shadow-[0_0_20px_rgba(71,85,105,0.4)]",
+          selected && category === "character" && "dark:shadow-[0_0_20px_rgba(244,114,182,0.4)]",
+          selected && category === "location" && "dark:shadow-[0_0_20px_rgba(34,211,238,0.4)]",
+          selected && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
+          selected && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
           isRunning && "node-running",
         )}
         onClick={() => selectNode(id)}
@@ -109,19 +117,31 @@ export function BaseNode({
         )}
       >
         {category === "input" ? (
-          <span className="w-6 h-6 rounded-md bg-white dark:bg-transparent flex items-center justify-center text-[#007AFF] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+          <span className="w-6 h-6 rounded-md bg-white dark:bg-white/20 flex items-center justify-center text-[#007AFF] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
             {icon}
           </span>
         ) : category === "parameter" ? (
-          <span className="w-6 h-6 rounded-md bg-white dark:bg-transparent flex items-center justify-center text-[#6366F1] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+          <span className="w-6 h-6 rounded-md bg-white dark:bg-white/20 flex items-center justify-center text-[#6366F1] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
             {icon}
           </span>
         ) : category === "processing" ? (
-          <span className="w-6 h-6 rounded-md bg-white dark:bg-transparent flex items-center justify-center text-[#475569] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+          <span className="w-6 h-6 rounded-md bg-white dark:bg-white/20 flex items-center justify-center text-[#475569] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
             {icon}
           </span>
-        ) : (category === "ai" || category === "scene" || category === "script" || category === "i2v" || category === "character" || category === "location" || category === "object") ? (
-          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-transparent flex items-center justify-center text-white dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+        ) : category === "character" ? (
+          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+            {icon}
+          </span>
+        ) : category === "location" ? (
+          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+            {icon}
+          </span>
+        ) : category === "object" ? (
+          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+            {icon}
+          </span>
+        ) : (category === "ai" || category === "scene" || category === "script" || category === "i2v") ? (
+          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
             {icon}
           </span>
         ) : (
@@ -129,7 +149,7 @@ export function BaseNode({
         )}
         <span className="flex-1 truncate">{label}</span>
         {credits !== undefined && credits > 0 && (
-          <span className="font-mono text-[10px] text-white/70">{credits}cr</span>
+          <span className="font-mono text-[10px] text-white/70 dark:text-[#ff0073]">{credits}cr</span>
         )}
       </div>
 
