@@ -74,8 +74,8 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       handles={[
-        { id: "in", type: "target", position: Position.Left },
-        { id: "out", type: "source", position: Position.Right },
+        { id: "in", type: "target", position: Position.Left, label: "In" },
+        { id: "out", type: "source", position: Position.Right, label: "Out" },
       ]}
     >
       <div className="flex flex-col gap-1.5">

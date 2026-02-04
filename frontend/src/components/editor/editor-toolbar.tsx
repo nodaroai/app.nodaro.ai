@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback } from "react"
-import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, AlertTriangle, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson, Layers, History, DollarSign } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -34,12 +34,16 @@ import {
 import { createClient } from "@/lib/supabase"
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, LocationNodeData } from "@/types/nodes"
 
+type EditorTab = "editor" | "executions" | "cost"
+
 interface EditorToolbarProps {
   readonly projectId?: string
   readonly workflowId?: string
   readonly onSave: () => void
   readonly saving: boolean
   readonly onNavigate?: (href: string) => void
+  readonly activeTab?: EditorTab
+  readonly onTabChange?: (tab: EditorTab) => void
 }
 
 interface ExportedWorkflow {
@@ -56,7 +60,7 @@ interface ExportedWorkflow {
   }
 }
 
-export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorToolbarProps) {
+export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName)
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -499,6 +503,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
 
   return (
     <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b bg-card">
+      {/* Left section: Back, Breadcrumbs, Workflow name */}
       <div className="flex items-center gap-1 sm:gap-2 min-w-0">
         {projectId && (
           <Button
@@ -581,6 +586,46 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate }: EditorT
             </Badge>
           )}
         </div>
+      </div>
+
+      {/* Center section: Tab navigation */}
+      <div className="hidden md:flex items-center gap-1 bg-muted/50 dark:bg-[#121212] rounded-lg p-1">
+        <button
+          type="button"
+          onClick={() => onTabChange?.("editor")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+            activeTab === "editor"
+              ? "bg-[#ff0073] text-white shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          Editor
+        </button>
+        <button
+          type="button"
+          onClick={() => onTabChange?.("executions")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+            activeTab === "executions"
+              ? "bg-[#ff0073] text-white shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          Executions
+        </button>
+        <button
+          type="button"
+          onClick={() => onTabChange?.("cost")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+            activeTab === "cost"
+              ? "bg-[#ff0073] text-white shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          }`}
+        >
+          <DollarSign className="w-3.5 h-3.5" />
+          Cost
+        </button>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">

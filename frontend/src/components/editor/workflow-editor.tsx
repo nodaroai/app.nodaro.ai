@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ReactFlowProvider } from "@xyflow/react"
-import { Play, Loader2, Square } from "lucide-react"
+import { Play, Loader2, Square, History, DollarSign } from "lucide-react"
 import { WorkflowCanvas } from "./workflow-canvas"
 import { NodeToolbar } from "./node-toolbar"
 import { ConfigPanel } from "./config-panel"
@@ -31,6 +31,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const router = useRouter()
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
+  const [activeTab, setActiveTab] = useState<"editor" | "executions" | "cost">("editor")
   const pendingNavRef = useRef<string | null>(null)
   const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(new Set())
 
@@ -2241,48 +2242,77 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         onSave={handleSave}
         saving={saving}
         onNavigate={navigateWithGuard}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
-      <div className="flex-1 relative">
-        <ReactFlowProvider>
-          <WorkflowCanvas />
-          <NodeToolbar />
-          <ConfigPanel />
-        </ReactFlowProvider>
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
-          {isRunning ? (
-            <>
+
+      {/* Tab Content */}
+      {activeTab === "editor" && (
+        <div className="flex-1 relative">
+          <ReactFlowProvider>
+            <WorkflowCanvas />
+            <NodeToolbar />
+            <ConfigPanel />
+          </ReactFlowProvider>
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+            {isRunning ? (
+              <>
+                <Button
+                  size="lg"
+                  onClick={handleStop}
+                  className="rounded-full px-6 text-white"
+                  style={{ backgroundColor: '#ff0073' }}
+                >
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Executing workflow
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleStop}
+                  title="Stop current execution"
+                  className="rounded-lg bg-background"
+                >
+                  <Square className="w-4 h-4" />
+                </Button>
+              </>
+            ) : (
               <Button
                 size="lg"
-                onClick={handleStop}
-                className="rounded-full px-6 text-white"
+                onClick={handleRun}
+                className="rounded-full px-6 text-white hover:opacity-90"
                 style={{ backgroundColor: '#ff0073' }}
               >
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Executing workflow
+                <Play className="w-4 h-4 mr-2" />
+                Execute workflow
               </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleStop}
-                title="Stop current execution"
-                className="rounded-lg bg-background"
-              >
-                <Square className="w-4 h-4" />
-              </Button>
-            </>
-          ) : (
-            <Button
-              size="lg"
-              onClick={handleRun}
-              className="rounded-full px-6 text-white hover:opacity-90"
-              style={{ backgroundColor: '#ff0073' }}
-            >
-              <Play className="w-4 h-4 mr-2" />
-              Execute workflow
-            </Button>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === "executions" && (
+        <div className="flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212]">
+          <History className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Execution History</h3>
+          <p className="text-sm text-gray-500 dark:text-[#94A3B8] text-center max-w-md">
+            View the history of all workflow executions, including status, duration, and results.
+          </p>
+          <p className="text-xs text-gray-400 dark:text-[#64748B] mt-4">Coming soon</p>
+        </div>
+      )}
+
+      {activeTab === "cost" && (
+        <div className="flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212]">
+          <DollarSign className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Cost & Credits</h3>
+          <p className="text-sm text-gray-500 dark:text-[#94A3B8] text-center max-w-md">
+            Track credit usage across all nodes, view cost breakdown by node type, and monitor spending.
+          </p>
+          <p className="text-xs text-gray-400 dark:text-[#64748B] mt-4">Coming soon</p>
+        </div>
+      )}
+
       <UnsavedChangesDialog
         open={showUnsavedDialog}
         onSave={handleDialogSave}
