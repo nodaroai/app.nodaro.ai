@@ -35,6 +35,7 @@ import { generateObjectRoutes } from "./routes/generate-object.js"
 import { locationRoutes } from "./routes/locations.js"
 import { generateLocationRoutes } from "./routes/generate-location.js"
 import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js"
+import { predictionsRoutes } from "./routes/predictions.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -81,6 +82,7 @@ export async function buildApp() {
   await app.register(locationRoutes)
   await app.register(generateLocationRoutes)
   await app.register(generateLocationAssetRoutes)
+  await app.register(predictionsRoutes)
 
   return app
 }

@@ -793,6 +793,65 @@ export interface CharacterDefinitionRaw {
   readonly description?: string
 }
 
+// --- Replicate Predictions API ---
+
+export interface ReplicatePrediction {
+  id: string
+  model: string
+  version: string
+  input: Record<string, unknown>
+  output: unknown
+  status: "starting" | "processing" | "succeeded" | "failed" | "canceled"
+  error: string | null
+  logs: string | null
+  metrics: {
+    predict_time?: number
+    total_time?: number
+  }
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  urls: {
+    get: string
+    cancel: string
+  }
+  source: string
+}
+
+export async function getPredictions(cursor?: string): Promise<{
+  data: ReplicatePrediction[]
+  next: string | null
+  previous: string | null
+}> {
+  const url = cursor ? `/v1/predictions?cursor=${encodeURIComponent(cursor)}` : "/v1/predictions"
+  const res = await fetch(`${API_BASE_URL}${url}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch predictions")
+  }
+  return res.json()
+}
+
+export async function getPrediction(id: string): Promise<{ data: ReplicatePrediction }> {
+  const res = await fetch(`${API_BASE_URL}/v1/predictions/${id}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch prediction")
+  }
+  return res.json()
+}
+
+export async function cancelPrediction(id: string): Promise<{ data: ReplicatePrediction }> {
+  const res = await fetch(`${API_BASE_URL}/v1/predictions/${id}/cancel`, {
+    method: "POST",
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to cancel prediction")
+  }
+  return res.json()
+}
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),

@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ReactFlowProvider } from "@xyflow/react"
-import { Play, Loader2, Square, History, DollarSign } from "lucide-react"
+import { Play, Loader2, Square, DollarSign } from "lucide-react"
 import { WorkflowCanvas } from "./workflow-canvas"
 import { NodeToolbar } from "./node-toolbar"
 import { ConfigPanel } from "./config-panel"
 import { EditorToolbar } from "./editor-toolbar"
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog"
+import { ExecutionsTab } from "./executions-tab"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
@@ -2291,16 +2292,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         </div>
       )}
 
-      {activeTab === "executions" && (
-        <div className="flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212]">
-          <History className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Execution History</h3>
-          <p className="text-sm text-gray-500 dark:text-[#94A3B8] text-center max-w-md">
-            View the history of all workflow executions, including status, duration, and results.
-          </p>
-          <p className="text-xs text-gray-400 dark:text-[#64748B] mt-4">Coming soon</p>
-        </div>
-      )}
+      {activeTab === "executions" && <ExecutionsTab />}
 
       {activeTab === "cost" && (
         <div className="flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212]">
