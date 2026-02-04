@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { generateObjectAsset, getJobStatus, deleteObject, generateImage, saveObject } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -206,6 +207,7 @@ function AssetGrid({
 }
 
 export function ObjectPageModal({ objectNodeId, onClose }: ObjectPageModalProps) {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>("main")
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [customPrompt, setCustomPrompt] = useState("")
@@ -289,7 +291,7 @@ no shadows, professional product photography`
       const results: string[] = []
       for (let i = 0; i < 4; i++) {
         try {
-          const { jobId } = await generateImage(refinePrompt, [mainImageUrl])
+          const { jobId } = await generateImage(refinePrompt, [mainImageUrl], undefined, undefined, undefined, user?.id)
 
           // Poll for result
           const imageUrl = await new Promise<string>((resolve, reject) => {
@@ -332,7 +334,7 @@ no shadows, professional product photography`
     } finally {
       setIsRefining(false)
     }
-  }, [mainImageUrl, data.objectName, data.description])
+  }, [mainImageUrl, data.objectName, data.description, user?.id])
 
   // Handle selecting a refined image
   const handleSelectRefined = useCallback(async (imageUrl: string) => {
@@ -422,6 +424,7 @@ no shadows, professional product photography`
               category: data.category,
               style: data.style,
               sourceImageUrl: imageUrl,
+              userId: user?.id,
             })
 
             // Poll for result
@@ -465,7 +468,7 @@ no shadows, professional product photography`
     } finally {
       setGeneratingAllAssets(false)
     }
-  }, [mainImageUrl, data, objectNodeId, updateNodeData])
+  }, [mainImageUrl, data, objectNodeId, updateNodeData, user?.id])
 
   // Map tab to data key for asset deletion
   const ASSET_DATA_KEYS: Record<string, string> = {
@@ -529,6 +532,7 @@ no shadows, professional product photography`
         category: data.category || undefined,
         style: data.style || undefined,
         sourceImageUrl: mainImageUrl,
+        userId: user?.id,
       })
 
       toast.info("Generating custom variation...")
@@ -568,7 +572,7 @@ no shadows, professional product photography`
     } finally {
       setGenerating(false)
     }
-  }, [customPrompt, mainImageUrl, data, objectNodeId, updateNodeData])
+  }, [customPrompt, mainImageUrl, data, objectNodeId, updateNodeData, user?.id])
 
   // Reset confirming state when switching tabs
   const handleTabChange = (tab: TabType) => {

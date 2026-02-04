@@ -7,6 +7,7 @@ const videoToVideoBody = z.object({
   videoUrl: z.string().url(),
   prompt: z.string().max(2000).optional(),
   provider: z.enum(["veo", "veo3", "kling", "runway", "pika", "sora", "minimax"]).optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function videoToVideoRoutes(app: FastifyInstance) {
@@ -21,13 +22,13 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, prompt, provider } = parsed.data
+    const { videoUrl, prompt, provider, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: { videoUrl, prompt, provider, type: "video-to-video" },
       })

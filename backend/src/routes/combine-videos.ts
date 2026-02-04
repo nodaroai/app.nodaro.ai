@@ -7,6 +7,7 @@ const combineVideosBody = z.object({
   videoUrls: z.array(z.string().url()).min(2, "At least 2 video URLs required"),
   transition: z.enum(["cut", "fade", "dissolve"]).optional().default("cut"),
   transitionDuration: z.number().min(0).max(5).optional().default(0.5),
+  userId: z.string().uuid().optional(),
 })
 
 export async function combineVideosRoutes(app: FastifyInstance) {
@@ -21,13 +22,13 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrls, transition, transitionDuration } = parsed.data
+    const { videoUrls, transition, transitionDuration, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: { videoUrls, transition, transitionDuration, type: "combine-videos" },
       })

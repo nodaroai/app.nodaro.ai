@@ -17,6 +17,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import { TTS_VOICES } from "@/lib/tts-voices"
 import { textToSpeech, getJobStatus } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
 import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry, GenerateScriptData, WorkflowNode, AudioAssignment } from "@/types/nodes"
 import { mapScriptSceneToNodeData, getSceneCharacterNames } from "@/types/nodes"
 
@@ -170,6 +171,7 @@ function QuickAddInput({
 }
 
 export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) {
+  const { user } = useAuth()
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const workflowNodes = useWorkflowStore((s) => s.nodes)
@@ -222,7 +224,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
     const voiceId = entry.voiceId ?? "Rachel"
     setGeneratingAudio((prev) => new Set([...prev, dialogueIndex]))
     try {
-      const { jobId } = await textToSpeech(entry.text, voiceId)
+      const { jobId } = await textToSpeech(entry.text, voiceId, undefined, user?.id)
 
       const poll = setInterval(async () => {
         try {

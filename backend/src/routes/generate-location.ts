@@ -9,6 +9,7 @@ const generateLocationBody = z.object({
   category: z.enum(["indoor", "outdoor", "urban", "nature", "fantasy", "sci-fi", "historical", "futuristic", "other"]).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   sourceImageUrl: z.string().url().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function generateLocationRoutes(app: FastifyInstance) {
@@ -23,7 +24,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       })
     }
 
-    const { name, description, category, style, sourceImageUrl } = parsed.data
+    const { name, description, category, style, sourceImageUrl, userId } = parsed.data
 
     // Build location scene prompt
     const categoryDesc = category ?? "location"
@@ -39,7 +40,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: {
           prompt,

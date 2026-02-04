@@ -9,6 +9,7 @@ const generateScriptBody = z.object({
   tone: z.string().max(200).optional(),
   targetDuration: z.number().int().min(5).max(600).optional(),
   provider: z.enum(["gemini", "claude", "gpt"]).optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function generateScriptRoutes(app: FastifyInstance) {
@@ -23,13 +24,13 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, sceneCount, tone, targetDuration, provider } = parsed.data
+    const { prompt, sceneCount, tone, targetDuration, provider, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522",
+        user_id: userId ?? null,
         status: "pending",
         input_data: { prompt, sceneCount, tone, targetDuration, provider, type: "generate-script" },
       })

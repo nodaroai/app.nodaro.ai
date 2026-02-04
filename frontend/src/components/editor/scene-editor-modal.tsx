@@ -8,6 +8,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { SceneConfig } from "./scene-config"
 import { buildScenePrompt, buildVideoPrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import { textToSpeech, generateVideo, getJobStatus } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "./extract-references-modal"
@@ -30,6 +31,7 @@ interface SceneEditorModalProps {
 }
 
 export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalProps) {
+  const { user } = useAuth()
   const nodes = useWorkflowStore((s) => s.nodes)
   const allAssets = useWorkflowStore((s) => s.characterDefinitions)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -133,7 +135,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
       const { entry, index } = linesToGenerate[idx]
       setAudioProgress({ current: idx + 1, total: linesToGenerate.length })
       try {
-        const { jobId } = await textToSpeech(entry.text, entry.voiceId ?? "Rachel")
+        const { jobId } = await textToSpeech(entry.text, entry.voiceId ?? "Rachel", undefined, user?.id)
         // Poll until done
         await new Promise<void>((resolve, reject) => {
           const poll = setInterval(async () => {
@@ -181,7 +183,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
       const videoPrompt = data ? buildVideoPrompt(data) : "smooth cinematic motion"
       console.log(`[SceneEditor] Generate Video - provider: ${provider}, prompt: "${videoPrompt.slice(0, 100)}..."`)
       const duration = data?.duration ?? 5
-      const { jobId } = await generateVideo(activeUrl, videoPrompt, provider, generateAudio, duration)
+      const { jobId } = await generateVideo(activeUrl, videoPrompt, provider, generateAudio, duration, user?.id)
       await new Promise<void>((resolve, reject) => {
         const poll = setInterval(async () => {
           try {

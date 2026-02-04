@@ -44,7 +44,7 @@ async function request<T>(
 
 // --- Generate Image (E2E spike) ---
 
-export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[], aspectRatio?: string): Promise<{ jobId: string }> {
+export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[], aspectRatio?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     body.referenceImageUrls = referenceImageUrls
@@ -57,6 +57,9 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   }
   if (aspectRatio) {
     body.aspectRatio = aspectRatio
+  }
+  if (userId) {
+    body.userId = userId
   }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",
@@ -77,6 +80,7 @@ export async function generateCharacter(data: {
   style?: string
   baseOutfit?: string
   sourceImageUrl?: string
+  userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
     method: "POST",
@@ -99,6 +103,7 @@ export async function generateCharacterAsset(data: {
   style?: string
   baseOutfit?: string
   sourceImageUrl?: string
+  userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
     method: "POST",
@@ -210,6 +215,7 @@ export async function generateObject(data: {
   category?: string
   style?: string
   sourceImageUrl?: string
+  userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object`, {
     method: "POST",
@@ -231,6 +237,7 @@ export async function generateObjectAsset(data: {
   category?: string
   style?: string
   sourceImageUrl: string
+  userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object-asset`, {
     method: "POST",
@@ -339,6 +346,7 @@ export async function generateLocation(data: {
   category?: string
   style?: string
   sourceImageUrl?: string
+  userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location`, {
     method: "POST",
@@ -360,6 +368,7 @@ export async function generateLocationAsset(data: {
   category?: string
   style?: string
   sourceImageUrl: string
+  userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location-asset`, {
     method: "POST",
@@ -479,12 +488,16 @@ export async function splitImage(data: {
   return res.json()
 }
 
-export async function generateVideo(imageUrl: string, prompt?: string, provider?: string, generateAudio?: boolean, duration?: number): Promise<{ jobId: string }> {
+export async function generateVideo(imageUrl: string, prompt?: string, provider?: string, generateAudio?: boolean, duration?: number, userId?: string): Promise<{ jobId: string }> {
   console.log(`[generateVideo] Sending request with provider: "${provider ?? 'undefined (will default to minimax)'}"`)
+  const body: Record<string, unknown> = { imageUrl, prompt, provider, generateAudio, duration }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageUrl, prompt, provider, generateAudio, duration }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -493,11 +506,15 @@ export async function generateVideo(imageUrl: string, prompt?: string, provider?
   return res.json()
 }
 
-export async function videoToVideo(videoUrl: string, prompt?: string, provider?: string): Promise<{ jobId: string }> {
+export async function videoToVideo(videoUrl: string, prompt?: string, provider?: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, prompt, provider }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/video-to-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ videoUrl, prompt, provider }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -506,11 +523,15 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
   return res.json()
 }
 
-export async function textToVideo(prompt: string, provider?: string): Promise<{ jobId: string }> {
+export async function textToVideo(prompt: string, provider?: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt, provider }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/text-to-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, provider }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -519,11 +540,15 @@ export async function textToVideo(prompt: string, provider?: string): Promise<{ 
   return res.json()
 }
 
-export async function textToSpeech(text: string, voice?: string, provider?: string): Promise<{ jobId: string }> {
+export async function textToSpeech(text: string, voice?: string, provider?: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { text, voice, provider }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/text-to-speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, voice, provider }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -532,12 +557,13 @@ export async function textToSpeech(text: string, voice?: string, provider?: stri
   return res.json()
 }
 
-export async function generateScriptApi(prompt: string, sceneCount?: number, tone?: string, targetDuration?: number, provider?: string): Promise<{ jobId: string }> {
+export async function generateScriptApi(prompt: string, sceneCount?: number, tone?: string, targetDuration?: number, provider?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (sceneCount !== undefined) body.sceneCount = sceneCount
   if (tone) body.tone = tone
   if (targetDuration !== undefined) body.targetDuration = targetDuration
   if (provider) body.provider = provider
+  if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/generate-script`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -554,11 +580,16 @@ export async function combineVideos(
   videoUrls: string[],
   transition: "cut" | "fade" | "dissolve" = "cut",
   transitionDuration: number = 0.5,
+  userId?: string,
 ): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrls, transition, transitionDuration }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/combine-videos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ videoUrls, transition, transitionDuration }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -567,11 +598,15 @@ export async function combineVideos(
   return res.json()
 }
 
-export async function mergeVideoAudioApi(videoUrl: string, audioUrl: string, voiceoverVolume?: number, backgroundVolume?: number, keepOriginalAudio?: boolean): Promise<{ jobId: string }> {
+export async function mergeVideoAudioApi(videoUrl: string, audioUrl: string, voiceoverVolume?: number, backgroundVolume?: number, keepOriginalAudio?: boolean, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/merge-video-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -580,11 +615,15 @@ export async function mergeVideoAudioApi(videoUrl: string, audioUrl: string, voi
   return res.json()
 }
 
-export async function extractAudioApi(videoUrl: string, audioFormat?: string, outputSilentVideo?: boolean): Promise<{ jobId: string }> {
+export async function extractAudioApi(videoUrl: string, audioFormat?: string, outputSilentVideo?: boolean, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, audioFormat, outputSilentVideo }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/extract-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ videoUrl, audioFormat, outputSilentVideo }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -593,11 +632,15 @@ export async function extractAudioApi(videoUrl: string, audioFormat?: string, ou
   return res.json()
 }
 
-export async function trimVideoApi(videoUrl: string, startTime: number, endTime?: number): Promise<{ jobId: string }> {
+export async function trimVideoApi(videoUrl: string, startTime: number, endTime?: number, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, startTime, endTime }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/trim-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ videoUrl, startTime, endTime }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -606,11 +649,15 @@ export async function trimVideoApi(videoUrl: string, startTime: number, endTime?
   return res.json()
 }
 
-export async function resizeVideoApi(videoUrl: string, targetAspect: string, method: string, padColor?: string): Promise<{ jobId: string }> {
+export async function resizeVideoApi(videoUrl: string, targetAspect: string, method: string, padColor?: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, targetAspect, method, padColor }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/resize-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ videoUrl, targetAspect, method, padColor }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -619,11 +666,15 @@ export async function resizeVideoApi(videoUrl: string, targetAspect: string, met
   return res.json()
 }
 
-export async function adjustVolumeApi(audioUrl: string, volume?: number, normalize?: boolean, fadeIn?: number, fadeOut?: number): Promise<{ jobId: string }> {
+export async function adjustVolumeApi(audioUrl: string, volume?: number, normalize?: boolean, fadeIn?: number, fadeOut?: number, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl, volume, normalize, fadeIn, fadeOut }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/adjust-volume`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ audioUrl, volume, normalize, fadeIn, fadeOut }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -632,11 +683,15 @@ export async function adjustVolumeApi(audioUrl: string, volume?: number, normali
   return res.json()
 }
 
-export async function addCaptionsApi(videoUrl: string, text: string, style?: string, position?: string, fontSize?: number, color?: string, backgroundColor?: string): Promise<{ jobId: string }> {
+export async function addCaptionsApi(videoUrl: string, text: string, style?: string, position?: string, fontSize?: number, color?: string, backgroundColor?: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, text, style, position, fontSize, color, backgroundColor }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/add-captions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ videoUrl, text, style, position, fontSize, color, backgroundColor }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -645,11 +700,15 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   return res.json()
 }
 
-export async function mixAudioApi(audioUrls: string[]): Promise<{ jobId: string }> {
+export async function mixAudioApi(audioUrls: string[], userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrls }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/mix-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ audioUrls }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -703,10 +762,11 @@ export async function downloadYouTubeAudio(url: string): Promise<{ url: string }
   return res.json()
 }
 
-export async function textToAudioApi(prompt: string, provider?: string, duration?: number): Promise<{ jobId: string }> {
+export async function textToAudioApi(prompt: string, provider?: string, duration?: number, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (provider) body.provider = provider
   if (duration !== undefined) body.duration = duration
+  if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/text-to-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -719,7 +779,7 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   return res.json()
 }
 
-export async function generateMusicApi(prompt: string, provider?: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean, lyrics?: string, referenceAudioUrl?: string): Promise<{ jobId: string }> {
+export async function generateMusicApi(prompt: string, provider?: string, duration?: number, genre?: string, mood?: string, instrumental?: boolean, lyrics?: string, referenceAudioUrl?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (provider) body.provider = provider
   if (duration !== undefined) body.duration = duration
@@ -728,6 +788,7 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   if (instrumental !== undefined) body.instrumental = instrumental
   if (lyrics) body.lyrics = lyrics
   if (referenceAudioUrl) body.referenceAudioUrl = referenceAudioUrl
+  if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/generate-music`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -740,11 +801,15 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   return res.json()
 }
 
-export async function extractYouTubeAudioApi(youtubeUrl: string): Promise<{ jobId: string }> {
+export async function extractYouTubeAudioApi(youtubeUrl: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { youtubeUrl }
+  if (userId) {
+    body.userId = userId
+  }
   const res = await fetch(`${API_BASE_URL}/v1/extract-youtube-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ youtubeUrl }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -765,16 +830,68 @@ export async function fetchYouTubeOEmbed(url: string): Promise<YouTubeOEmbedData
   return res.json()
 }
 
-export async function getJobStatus(jobId: string): Promise<{
+export interface Job {
   id: string
   status: string
-  output_data?: { imageUrl?: string; videoUrl?: string; audioUrl?: string; script?: unknown }
+  progress: number
+  input_data: {
+    type?: string
+    prompt?: string
+    provider?: string
+    referenceImageUrls?: string[]
+    imageUrl?: string
+    videoUrl?: string
+    audioUrl?: string
+    text?: string
+    [key: string]: unknown
+  }
+  output_data?: {
+    imageUrl?: string
+    videoUrl?: string
+    audioUrl?: string
+    script?: unknown
+    [key: string]: unknown
+  }
   error_message?: string
-}> {
+  created_at: string
+  started_at?: string
+  completed_at?: string
+  user_id?: string
+}
+
+export async function getJobStatus(jobId: string): Promise<Job> {
   const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`)
   if (!res.ok) throw new Error("Failed to get job status")
   const body = await res.json()
   return body.data
+}
+
+export async function getJobs(userId?: string, cursor?: string): Promise<{
+  data: Job[]
+  next: string | null
+  previous: string | null
+}> {
+  const params = new URLSearchParams()
+  if (userId) params.set("userId", userId)
+  if (cursor) params.set("cursor", cursor)
+  const url = params.toString() ? `/v1/jobs?${params.toString()}` : "/v1/jobs"
+  const res = await fetch(`${API_BASE_URL}${url}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch jobs")
+  }
+  return res.json()
+}
+
+export async function deleteJob(jobId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`, {
+    method: "DELETE",
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to delete job")
+  }
+  return { success: true }
 }
 
 // --- Generic helpers ---

@@ -7,6 +7,7 @@ const textToAudioBody = z.object({
   prompt: z.string().min(1).max(2000),
   provider: z.enum(["tangoflux", "tango", "audioldm", "bark"]).optional(),
   duration: z.number().min(1).max(30).optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function textToAudioRoutes(app: FastifyInstance) {
@@ -21,13 +22,13 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration } = parsed.data
+    const { prompt, provider, duration, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522",
+        user_id: userId ?? null,
         status: "pending",
         input_data: { prompt, provider, duration, type: "text-to-audio" },
       })

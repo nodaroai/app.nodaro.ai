@@ -7,6 +7,7 @@ const textToSpeechBody = z.object({
   text: z.string().min(1).max(5000),
   voice: z.string().optional(),
   provider: z.enum(["elevenlabs", "playht", "azure"]).optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function textToSpeechRoutes(app: FastifyInstance) {
@@ -21,13 +22,13 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    const { text, voice, provider } = parsed.data
+    const { text, voice, provider, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: { text, voice, provider, type: "text-to-speech" },
       })

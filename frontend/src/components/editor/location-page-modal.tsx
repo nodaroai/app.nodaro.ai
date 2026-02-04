@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useAuth } from "@/hooks/use-auth"
 import { generateLocationAsset, getJobStatus, deleteLocation, generateImage, saveLocation } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
@@ -222,6 +223,7 @@ export function LocationPageModal({ locationNodeId, onClose }: LocationPageModal
   const [refinementCompleted, setRefinementCompleted] = useState(false)
   const [generatingAllAssets, setGeneratingAllAssets] = useState(false)
 
+  const { user } = useAuth()
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
@@ -289,7 +291,7 @@ high quality, cinematic photography`
       const results: string[] = []
       for (let i = 0; i < 4; i++) {
         try {
-          const { jobId } = await generateImage(refinePrompt, [mainImageUrl])
+          const { jobId } = await generateImage(refinePrompt, [mainImageUrl], undefined, undefined, undefined, user?.id)
 
           // Poll for result
           const imageUrl = await new Promise<string>((resolve, reject) => {
@@ -332,7 +334,7 @@ high quality, cinematic photography`
     } finally {
       setIsRefining(false)
     }
-  }, [mainImageUrl, data.locationName, data.description])
+  }, [mainImageUrl, data.locationName, data.description, user?.id])
 
   // Handle selecting a refined image
   const handleSelectRefined = useCallback(async (imageUrl: string) => {
@@ -422,6 +424,7 @@ high quality, cinematic photography`
               category: data.category,
               style: data.style,
               sourceImageUrl: imageUrl,
+              userId: user?.id,
             })
 
             // Poll for result
@@ -465,7 +468,7 @@ high quality, cinematic photography`
     } finally {
       setGeneratingAllAssets(false)
     }
-  }, [mainImageUrl, data, locationNodeId, updateNodeData])
+  }, [mainImageUrl, data, locationNodeId, updateNodeData, user?.id])
 
   // Map tab to data key for asset deletion
   const ASSET_DATA_KEYS: Record<string, string> = {
@@ -529,6 +532,7 @@ high quality, cinematic photography`
         category: data.category || undefined,
         style: data.style || undefined,
         sourceImageUrl: mainImageUrl,
+        userId: user?.id,
       })
 
       toast.info("Generating custom variation...")
@@ -568,7 +572,7 @@ high quality, cinematic photography`
     } finally {
       setGenerating(false)
     }
-  }, [customPrompt, mainImageUrl, data, locationNodeId, updateNodeData])
+  }, [customPrompt, mainImageUrl, data, locationNodeId, updateNodeData, user?.id])
 
   // Reset confirming state when switching tabs
   const handleTabChange = (tab: TabType) => {

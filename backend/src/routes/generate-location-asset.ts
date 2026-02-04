@@ -19,6 +19,7 @@ const generateLocationAssetBody = z.object({
   category: z.string().max(50).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   sourceImageUrl: z.string().url().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 function buildVariantPrompt(
@@ -89,7 +90,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       })
     }
 
-    const { assetType, variant, name, description, category, style, sourceImageUrl } = parsed.data
+    const { assetType, variant, name, description, category, style, sourceImageUrl, userId } = parsed.data
 
     if (assetType !== "custom") {
       const validVariants = VARIANTS[assetType]
@@ -109,7 +110,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: {
           prompt,

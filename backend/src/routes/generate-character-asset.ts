@@ -21,6 +21,7 @@ const generateCharacterAssetBody = z.object({
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   baseOutfit: z.string().max(1000).optional(),
   sourceImageUrl: z.string().url().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 function buildVariantPrompt(
@@ -99,7 +100,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       })
     }
 
-    const { assetType, variant, name, description, gender, style, baseOutfit, sourceImageUrl } = parsed.data
+    const { assetType, variant, name, description, gender, style, baseOutfit, sourceImageUrl, userId } = parsed.data
 
     if (assetType !== "custom") {
       const validVariants = VARIANTS[assetType]
@@ -119,7 +120,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: {
           prompt,

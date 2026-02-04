@@ -7,6 +7,7 @@ const trimVideoBody = z.object({
   videoUrl: z.string().url(),
   startTime: z.number().min(0),
   endTime: z.number().min(0),
+  userId: z.string().uuid().optional(),
 })
 
 export async function trimVideoRoutes(app: FastifyInstance) {
@@ -18,13 +19,15 @@ export async function trimVideoRoutes(app: FastifyInstance) {
       })
     }
 
+    const { userId, ...restData } = parsed.data
+
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522",
+        user_id: userId ?? null,
         status: "pending",
-        input_data: { ...parsed.data, type: "trim-video" },
+        input_data: { ...restData, type: "trim-video" },
       })
       .select("id")
       .single()
@@ -33,7 +36,7 @@ export async function trimVideoRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    await videoQueue.add("trim-video", { jobId: job.id, ...parsed.data })
+    await videoQueue.add("trim-video", { jobId: job.id, ...restData })
     return { jobId: job.id }
   })
 }

@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, ExternalLink } from "lucide-react"
+import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getPredictions, type ReplicatePrediction } from "@/lib/api"
+import { getJobs, type Job } from "@/lib/api"
 import { ExecutionDetailModal } from "./execution-detail-modal"
+import { useAuth } from "@/hooks/use-auth"
 
 // Cost per second for Replicate predictions (approximate)
 const COST_PER_SECOND = 0.000225
@@ -25,8 +26,11 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString()
 }
 
-function formatDuration(seconds: number | undefined): string {
-  if (!seconds) return "-"
+function formatDuration(startedAt: string | undefined, completedAt: string | undefined): string {
+  if (!startedAt || !completedAt) return "-"
+  const start = new Date(startedAt).getTime()
+  const end = new Date(completedAt).getTime()
+  const seconds = (end - start) / 1000
   if (seconds < 1) return `${(seconds * 1000).toFixed(0)}ms`
   if (seconds < 60) return `${seconds.toFixed(1)}s`
   const mins = Math.floor(seconds / 60)
@@ -34,30 +38,57 @@ function formatDuration(seconds: number | undefined): string {
   return `${mins}m ${secs.toFixed(0)}s`
 }
 
-function calculateCost(totalTime: number | undefined): string {
-  if (!totalTime) return "-"
+function calculateCost(startedAt: string | undefined, completedAt: string | undefined): string {
+  if (!startedAt || !completedAt) return "-"
+  const start = new Date(startedAt).getTime()
+  const end = new Date(completedAt).getTime()
+  const totalTime = (end - start) / 1000
   const cost = totalTime * COST_PER_SECOND
   if (cost < 0.01) return `$${cost.toFixed(4)}`
   return `$${cost.toFixed(3)}`
 }
 
-function getQueueTime(prediction: ReplicatePrediction): string {
-  if (!prediction.started_at) return "-"
-  const created = new Date(prediction.created_at).getTime()
-  const started = new Date(prediction.started_at).getTime()
+function getQueueTime(createdAt: string, startedAt: string | undefined): string {
+  if (!startedAt) return "-"
+  const created = new Date(createdAt).getTime()
+  const started = new Date(startedAt).getTime()
   const queueMs = started - created
   if (queueMs < 1000) return `${queueMs}ms`
   return `${(queueMs / 1000).toFixed(1)}s`
 }
 
-function extractModelName(model: string): string {
-  // model format: "owner/model-name" or "owner/model-name:version"
-  const parts = model.split("/")
-  if (parts.length > 1) {
-    const modelPart = parts[1].split(":")[0]
-    return modelPart
+function extractJobType(inputData: Job["input_data"]): string {
+  const type = inputData?.type ?? "unknown"
+  // Convert from internal type to display name
+  const typeMap: Record<string, string> = {
+    "generate-image": "Image",
+    "image-to-video": "Video",
+    "video-to-video": "Video",
+    "text-to-video": "Video",
+    "text-to-speech": "TTS",
+    "generate-script": "Script",
+    "combine-videos": "Combine",
+    "merge-video-audio": "Merge",
+    "extract-audio": "Extract",
+    "trim-video": "Trim",
+    "resize-video": "Resize",
+    "adjust-volume": "Volume",
+    "add-captions": "Captions",
+    "mix-audio": "Mix",
+    "generate-music": "Music",
+    "text-to-audio": "Audio",
+    "generate-character": "Character",
+    "generate-character-asset": "Asset",
+    "generate-object": "Object",
+    "generate-object-asset": "Asset",
+    "generate-location": "Location",
+    "generate-location-asset": "Asset",
   }
-  return model
+  return typeMap[type] ?? type
+}
+
+function extractProvider(inputData: Job["input_data"]): string {
+  return inputData?.provider ?? "default"
 }
 
 interface ExecutionsTabProps {
@@ -65,60 +96,78 @@ interface ExecutionsTabProps {
 }
 
 export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
-  const [predictions, setPredictions] = useState<ReplicatePrediction[]>([])
+  const { user } = useAuth()
+  const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [prevCursor, setPrevCursor] = useState<string | null>(null)
-  const [selectedPrediction, setSelectedPrediction] = useState<ReplicatePrediction | null>(null)
+  const [prevCursors, setPrevCursors] = useState<string[]>([])
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
-  const fetchData = useCallback(async (cursor?: string) => {
+  const userId = user?.id
+
+  const fetchData = useCallback(async (cursor?: string, direction: "next" | "prev" | "refresh" = "refresh") => {
+    if (!userId) return
     try {
       setLoading(true)
       setError(null)
-      const result = await getPredictions(cursor)
-      setPredictions(result.data)
+      const result = await getJobs(userId, cursor)
+      setJobs(result.data)
       setNextCursor(result.next)
-      setPrevCursor(result.previous)
+
+      // Track cursor history for pagination
+      if (direction === "next" && cursor) {
+        setPrevCursors(prev => [...prev, cursor])
+      } else if (direction === "prev") {
+        setPrevCursors(prev => prev.slice(0, -1))
+      } else if (direction === "refresh") {
+        setPrevCursors([])
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load predictions")
+      setError(err instanceof Error ? err.message : "Failed to load jobs")
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [userId])
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    if (userId) {
+      fetchData()
+    }
+  }, [fetchData, userId])
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchData()
+    fetchData(undefined, "refresh")
   }
 
   const handleNext = () => {
     if (nextCursor) {
-      fetchData(nextCursor)
+      fetchData(nextCursor, "next")
     }
   }
 
   const handlePrev = () => {
-    if (prevCursor) {
-      fetchData(prevCursor)
+    if (prevCursors.length > 0) {
+      const prevCursor = prevCursors[prevCursors.length - 2] // Go back one
+      fetchData(prevCursor, "prev")
+    } else {
+      fetchData(undefined, "refresh") // Go to first page
     }
   }
 
   const statusColors: Record<string, string> = {
-    succeeded: "bg-green-500/20 text-green-400",
-    failed: "bg-red-500/20 text-red-400",
-    processing: "bg-yellow-500/20 text-yellow-400",
-    starting: "bg-blue-500/20 text-blue-400",
-    canceled: "bg-gray-500/20 text-gray-400",
+    completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
+    failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
+    processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
+    pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+    queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+    cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400",
   }
 
-  if (loading && predictions.length === 0) {
+  if (!userId || (loading && jobs.length === 0)) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-4" />
@@ -164,7 +213,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
               variant="outline"
               size="icon"
               onClick={handlePrev}
-              disabled={!prevCursor || loading}
+              disabled={prevCursors.length === 0 || loading}
               className="h-8 w-8 dark:border-[#2D2D2D] dark:hover:bg-[#2D2D2D]"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -192,10 +241,10 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                   ID
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Model
+                  Type
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Source
+                  Provider
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Status
@@ -204,10 +253,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                   Queued
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Running
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Total
+                  Duration
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Cost
@@ -215,88 +261,68 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-[#2D2D2D]">
-              {predictions.length === 0 ? (
+              {jobs.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
                     No executions found
                   </td>
                 </tr>
               ) : (
-                predictions.map((prediction) => (
+                jobs.map((job) => (
                   <tr
-                    key={prediction.id}
+                    key={job.id}
                     className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors cursor-pointer"
-                    onClick={() => setSelectedPrediction(prediction)}
+                    onClick={() => setSelectedJob(job)}
                   >
                     <td className="px-4 py-3">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setSelectedPrediction(prediction)
+                          setSelectedJob(job)
                         }}
                         className="text-sm font-mono text-[#ff0073] hover:underline"
                       >
-                        {prediction.id.slice(0, 8)}...
+                        {job.id.slice(0, 8)}...
                       </button>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-700 dark:text-[#E2E8F0] font-mono">
-                        {extractModelName(prediction.model)}
+                        {extractJobType(job.input_data)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
-                        {prediction.source || "API"}
+                        {extractProvider(job.input_data)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[prediction.status] || "bg-gray-500/20 text-gray-400"}`}>
-                        {prediction.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">
-                        {getQueueTime(prediction)}
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+                        {job.status}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">
-                        {formatDuration(prediction.metrics?.predict_time)}
+                        {getQueueTime(job.created_at, job.started_at)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">
-                        {formatDuration(prediction.metrics?.total_time)}
+                        {formatDuration(job.started_at, job.completed_at)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-[#ff0073] font-mono">
-                        {calculateCost(prediction.metrics?.total_time)}
+                        {calculateCost(job.started_at, job.completed_at)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
-                        {formatRelativeTime(prediction.created_at)}
+                        {formatRelativeTime(job.created_at)}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <a
-                        href={`https://replicate.com/p/${prediction.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-gray-400 hover:text-[#ff0073] transition-colors"
-                        title="View on Replicate"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
                     </td>
                   </tr>
                 ))
@@ -308,9 +334,13 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
 
       {/* Detail Modal */}
       <ExecutionDetailModal
-        prediction={selectedPrediction}
-        open={selectedPrediction !== null}
-        onClose={() => setSelectedPrediction(null)}
+        job={selectedJob}
+        open={selectedJob !== null}
+        onClose={() => setSelectedJob(null)}
+        onDeleted={(jobId) => {
+          setJobs(prev => prev.filter(j => j.id !== jobId))
+          setSelectedJob(null)
+        }}
       />
     </div>
   )

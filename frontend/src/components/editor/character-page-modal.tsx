@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { generateCharacterAsset, getJobStatus, deleteCharacter, generateImage, saveCharacter } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -195,6 +196,7 @@ function AssetGrid({
 }
 
 export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageModalProps) {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>("main")
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [customPrompt, setCustomPrompt] = useState("")
@@ -278,7 +280,7 @@ centered composition, high quality, single character`
       const results: string[] = []
       for (let i = 0; i < 4; i++) {
         try {
-          const { jobId } = await generateImage(refinePrompt, [mainImageUrl])
+          const { jobId } = await generateImage(refinePrompt, [mainImageUrl], undefined, undefined, undefined, user?.id)
 
           // Poll for result
           const imageUrl = await new Promise<string>((resolve, reject) => {
@@ -321,7 +323,7 @@ centered composition, high quality, single character`
     } finally {
       setIsRefining(false)
     }
-  }, [mainImageUrl, data.characterName, data.description])
+  }, [mainImageUrl, data.characterName, data.description, user?.id])
 
   // Handle selecting a refined image
   const handleSelectRefined = useCallback(async (imageUrl: string) => {
@@ -413,6 +415,7 @@ centered composition, high quality, single character`
               style: data.style,
               baseOutfit: data.baseOutfit,
               sourceImageUrl: imageUrl,
+              userId: user?.id,
             })
 
             // Poll for result
@@ -456,7 +459,7 @@ centered composition, high quality, single character`
     } finally {
       setGeneratingAllAssets(false)
     }
-  }, [mainImageUrl, data, characterNodeId, updateNodeData])
+  }, [mainImageUrl, data, characterNodeId, updateNodeData, user?.id])
 
   // Map tab to data key for asset deletion
   const ASSET_DATA_KEYS: Record<string, string> = {
@@ -522,6 +525,7 @@ centered composition, high quality, single character`
         style: data.style || undefined,
         baseOutfit: data.baseOutfit || undefined,
         sourceImageUrl: mainImageUrl,
+        userId: user?.id,
       })
 
       toast.info("Generating custom variation...")
@@ -561,7 +565,7 @@ centered composition, high quality, single character`
     } finally {
       setGenerating(false)
     }
-  }, [customPrompt, mainImageUrl, data, characterNodeId, updateNodeData])
+  }, [customPrompt, mainImageUrl, data, characterNodeId, updateNodeData, user?.id])
 
   // Reset confirming state when switching tabs
   const handleTabChange = (tab: TabType) => {

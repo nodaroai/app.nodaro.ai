@@ -10,6 +10,7 @@ const generateCharacterBody = z.object({
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   baseOutfit: z.string().max(1000).optional(),
   sourceImageUrl: z.string().url().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function generateCharacterRoutes(app: FastifyInstance) {
@@ -24,7 +25,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { name, description, gender, style, baseOutfit, sourceImageUrl } = parsed.data
+    const { name, description, gender, style, baseOutfit, sourceImageUrl, userId } = parsed.data
 
     // Build single front portrait prompt
     const charDesc = [name, gender, description].filter(Boolean).join(", ")
@@ -40,7 +41,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: {
           prompt,

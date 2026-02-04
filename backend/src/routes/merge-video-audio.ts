@@ -9,6 +9,7 @@ const mergeVideoAudioBody = z.object({
   voiceoverVolume: z.number().min(0).max(200).optional().default(100),
   backgroundVolume: z.number().min(0).max(200).optional().default(30),
   keepOriginalAudio: z.boolean().optional().default(true),
+  userId: z.string().uuid().optional(),
 })
 
 export async function mergeVideoAudioRoutes(app: FastifyInstance) {
@@ -20,13 +21,15 @@ export async function mergeVideoAudioRoutes(app: FastifyInstance) {
       })
     }
 
+    const { userId, ...restData } = parsed.data
+
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522",
+        user_id: userId ?? null,
         status: "pending",
-        input_data: { ...parsed.data, type: "merge-video-audio" },
+        input_data: { ...restData, type: "merge-video-audio" },
       })
       .select("id")
       .single()
@@ -35,7 +38,7 @@ export async function mergeVideoAudioRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    await videoQueue.add("merge-video-audio", { jobId: job.id, ...parsed.data })
+    await videoQueue.add("merge-video-audio", { jobId: job.id, ...restData })
     return { jobId: job.id }
   })
 }

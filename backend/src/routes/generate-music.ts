@@ -13,6 +13,7 @@ const generateMusicBody = z.object({
   lyrics: z.string().max(2000).optional(),
   referenceAudioUrl: z.string().url().optional(),
   modelVersion: z.string().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function generateMusicRoutes(app: FastifyInstance) {
@@ -27,7 +28,7 @@ export async function generateMusicRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, genre, mood, instrumental, lyrics, referenceAudioUrl, modelVersion } = parsed.data
+    const { prompt, provider, duration, genre, mood, instrumental, lyrics, referenceAudioUrl, modelVersion, userId } = parsed.data
 
     // Build enriched prompt with genre/mood if provided
     const parts = [prompt]
@@ -40,7 +41,7 @@ export async function generateMusicRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: { prompt: enrichedPrompt, provider, duration, lyrics, referenceAudioUrl, modelVersion, type: "generate-music" },
       })

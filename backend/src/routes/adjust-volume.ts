@@ -9,6 +9,7 @@ const adjustVolumeBody = z.object({
   normalize: z.boolean().optional().default(false),
   fadeIn: z.number().min(0).max(10).optional().default(0),
   fadeOut: z.number().min(0).max(10).optional().default(0),
+  userId: z.string().uuid().optional(),
 })
 
 export async function adjustVolumeRoutes(app: FastifyInstance) {
@@ -20,13 +21,15 @@ export async function adjustVolumeRoutes(app: FastifyInstance) {
       })
     }
 
+    const { userId, ...restData } = parsed.data
+
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522",
+        user_id: userId ?? null,
         status: "pending",
-        input_data: { ...parsed.data, type: "adjust-volume" },
+        input_data: { ...restData, type: "adjust-volume" },
       })
       .select("id")
       .single()
@@ -35,7 +38,7 @@ export async function adjustVolumeRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    await videoQueue.add("adjust-volume", { jobId: job.id, ...parsed.data })
+    await videoQueue.add("adjust-volume", { jobId: job.id, ...restData })
     return { jobId: job.id }
   })
 }

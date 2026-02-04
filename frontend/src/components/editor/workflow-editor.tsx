@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
+import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { generateImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
@@ -27,6 +28,7 @@ interface WorkflowEditorProps {
 }
 
 export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
+  const { user } = useAuth()
   const { save, load, saving, loading } = useWorkflowPersistence(projectId)
   const fetchProjects = useProjectsStore((s) => s.fetchProjects)
   const router = useRouter()
@@ -325,7 +327,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     updateNodeData(nodeId, { executionStatus: "running", generatedImageUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      generateImage(prompt, referenceImageUrls, provider, undefined, aspectRatio).then(({ jobId }) => {
+      generateImage(prompt, referenceImageUrls, provider, undefined, aspectRatio, user?.id).then(({ jobId }) => {
         toast.info("Image generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -380,6 +382,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         style: data.style || undefined,
         baseOutfit: data.baseOutfit || undefined,
         sourceImageUrl: data.sourceImageUrl || undefined,
+        userId: user?.id,
       }).then(({ jobId }) => {
         toast.info("Character generation started", { description: `Job ID: ${jobId}` })
 
@@ -464,6 +467,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         category: data.category || undefined,
         style: data.style || undefined,
         sourceImageUrl: data.sourceImageUrl || undefined,
+        userId: user?.id,
       }).then(({ jobId }) => {
         toast.info("Object generation started", { description: `Job ID: ${jobId}` })
 
@@ -543,6 +547,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         category: data.category || undefined,
         style: data.style || undefined,
         sourceImageUrl: data.sourceImageUrl || undefined,
+        userId: user?.id,
       }).then(({ jobId }) => {
         toast.info("Location generation started", { description: `Job ID: ${jobId}` })
 
@@ -693,6 +698,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           style: data.style || undefined,
           baseOutfit: data.baseOutfit || undefined,
           sourceImageUrl: portraitUrl,
+          userId: user?.id,
         })
 
         const imageUrl = await pollJobToCompletion(jobId)
@@ -775,6 +781,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           category: data.category || undefined,
           style: data.style || undefined,
           sourceImageUrl: imageUrl,
+          userId: user?.id,
         })
 
         const resultUrl = await pollJobToCompletion(jobId)
@@ -857,6 +864,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           category: data.category || undefined,
           style: data.style || undefined,
           sourceImageUrl: imageUrl,
+          userId: user?.id,
         })
 
         const resultUrl = await pollJobToCompletion(jobId)
@@ -902,7 +910,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      generateVideo(imageUrl, undefined, provider, generateAudio).then(({ jobId }) => {
+      generateVideo(imageUrl, undefined, provider, generateAudio, undefined, user?.id).then(({ jobId }) => {
         toast.info("Video generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -950,7 +958,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      videoToVideo(sourceVideoUrl, prompt, provider).then(({ jobId }) => {
+      videoToVideo(sourceVideoUrl, prompt, provider, user?.id).then(({ jobId }) => {
         toast.info("Video-to-video generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -998,7 +1006,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      textToVideo(prompt, provider).then(({ jobId }) => {
+      textToVideo(prompt, provider, user?.id).then(({ jobId }) => {
         toast.info("Text-to-video generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -1046,7 +1054,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     updateNodeData(nodeId, { executionStatus: "running" })
 
     return new Promise((resolve, reject) => {
-      textToSpeech(text, voice, provider).then(({ jobId }) => {
+      textToSpeech(text, voice, provider, user?.id).then(({ jobId }) => {
         toast.info("Text-to-speech generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -1094,7 +1102,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     updateNodeData(nodeId, { executionStatus: "running" })
 
     return new Promise((resolve, reject) => {
-      generateScriptApi(prompt, sceneCount, tone, targetDuration, provider).then(({ jobId }) => {
+      generateScriptApi(prompt, sceneCount, tone, targetDuration, provider, user?.id).then(({ jobId }) => {
         toast.info("Script generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -1142,7 +1150,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      combineVideos(videoUrls, transition, transitionDuration).then(({ jobId }) => {
+      combineVideos(videoUrls, transition, transitionDuration, user?.id).then(({ jobId }) => {
         toast.info("Combine videos started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -1321,7 +1329,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
       const d = node.data as GenerateMusicData
       const refUrl = inputs.audioUrl || d.referenceAudioUrl || undefined
-      return runProcessingNode(node.id, () => generateMusicApi(prompt, d.provider || undefined, d.duration || undefined, d.genre || undefined, d.mood || undefined, d.instrumental, d.lyrics || undefined, refUrl), "generatedAudioUrl", "Generate Music")
+      return runProcessingNode(node.id, () => generateMusicApi(prompt, d.provider || undefined, d.duration || undefined, d.genre || undefined, d.mood || undefined, d.instrumental, d.lyrics || undefined, refUrl, user?.id), "generatedAudioUrl", "Generate Music")
     }
 
     if (node.type === "text-to-audio") {
@@ -1331,7 +1339,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No prompt"))
       }
       const d = node.data as TextToAudioData
-      return runProcessingNode(node.id, () => textToAudioApi(prompt, d.provider || undefined, d.duration || undefined), "generatedAudioUrl", "Text to Audio")
+      return runProcessingNode(node.id, () => textToAudioApi(prompt, d.provider || undefined, d.duration || undefined, user?.id), "generatedAudioUrl", "Text to Audio")
     }
 
     if (node.type === "combine-videos") {
@@ -1350,35 +1358,35 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (!videoUrl) { toast.error(`Node "${(node.data as MergeVideoAudioData).label}": no video input`); return Promise.reject(new Error("No video")) }
       if (!audioUrl) { toast.error(`Node "${(node.data as MergeVideoAudioData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
       const d = node.data as MergeVideoAudioData
-      return runProcessingNode(node.id, () => mergeVideoAudioApi(videoUrl, audioUrl, d.voiceoverVolume, d.backgroundVolume), "generatedVideoUrl", "Merge Video & Audio")
+      return runProcessingNode(node.id, () => mergeVideoAudioApi(videoUrl, audioUrl, d.voiceoverVolume, d.backgroundVolume, undefined, user?.id), "generatedVideoUrl", "Merge Video & Audio")
     }
 
     if (node.type === "extract-audio") {
       const videoUrl = inputs.videoUrl
       if (!videoUrl) { toast.error(`Node "${(node.data as ExtractAudioData).label}": no video input`); return Promise.reject(new Error("No video")) }
       const d = node.data as ExtractAudioData
-      return runProcessingNode(node.id, () => extractAudioApi(videoUrl, d.audioFormat, d.outputSilentVideo), "generatedAudioUrl", "Extract Audio")
+      return runProcessingNode(node.id, () => extractAudioApi(videoUrl, d.audioFormat, d.outputSilentVideo, user?.id), "generatedAudioUrl", "Extract Audio")
     }
 
     if (node.type === "trim-video") {
       const videoUrl = inputs.videoUrl
       if (!videoUrl) { toast.error(`Node "${(node.data as TrimVideoData).label}": no video input`); return Promise.reject(new Error("No video")) }
       const d = node.data as TrimVideoData
-      return runProcessingNode(node.id, () => trimVideoApi(videoUrl, d.startTime, d.endTime || undefined), "generatedVideoUrl", "Trim Video")
+      return runProcessingNode(node.id, () => trimVideoApi(videoUrl, d.startTime, d.endTime || undefined, user?.id), "generatedVideoUrl", "Trim Video")
     }
 
     if (node.type === "resize-video") {
       const videoUrl = inputs.videoUrl
       if (!videoUrl) { toast.error(`Node "${(node.data as ResizeVideoData).label}": no video input`); return Promise.reject(new Error("No video")) }
       const d = node.data as ResizeVideoData
-      return runProcessingNode(node.id, () => resizeVideoApi(videoUrl, d.targetAspect, d.method, d.padColor || undefined), "generatedVideoUrl", "Resize Video")
+      return runProcessingNode(node.id, () => resizeVideoApi(videoUrl, d.targetAspect, d.method, d.padColor || undefined, user?.id), "generatedVideoUrl", "Resize Video")
     }
 
     if (node.type === "adjust-volume") {
       const audioUrl = inputs.audioUrl
       if (!audioUrl) { toast.error(`Node "${(node.data as AdjustVolumeData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
       const d = node.data as AdjustVolumeData
-      return runProcessingNode(node.id, () => adjustVolumeApi(audioUrl, d.volume, d.normalize, d.fadeIn, d.fadeOut), "generatedAudioUrl", "Adjust Volume")
+      return runProcessingNode(node.id, () => adjustVolumeApi(audioUrl, d.volume, d.normalize, d.fadeIn, d.fadeOut, user?.id), "generatedAudioUrl", "Adjust Volume")
     }
 
     if (node.type === "add-captions") {
@@ -1387,13 +1395,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const d = node.data as AddCaptionsData
       const text = inputs.prompt ?? ""
       if (!text) { toast.error(`Node "${d.label}": no caption text`); return Promise.reject(new Error("No text")) }
-      return runProcessingNode(node.id, () => addCaptionsApi(videoUrl, text, d.style, d.position, d.fontSize, d.color), "generatedVideoUrl", "Add Captions")
+      return runProcessingNode(node.id, () => addCaptionsApi(videoUrl, text, d.style, d.position, d.fontSize, d.color, undefined, user?.id), "generatedVideoUrl", "Add Captions")
     }
 
     if (node.type === "mix-audio") {
       const audioUrls = inputs.audioUrls ?? []
       if (audioUrls.length < 2) { toast.error(`Node "${(node.data as MixAudioData).label}": need at least 2 audio inputs`); return Promise.reject(new Error("Need at least 2 audio tracks")) }
-      return runProcessingNode(node.id, () => mixAudioApi(audioUrls), "generatedAudioUrl", "Mix Audio")
+      return runProcessingNode(node.id, () => mixAudioApi(audioUrls, user?.id), "generatedAudioUrl", "Mix Audio")
     }
 
     if (node.type === "character") {
@@ -1612,7 +1620,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     updateSceneInScript(scriptNodeId, sceneIndex, { imageStatus: "running" })
 
     try {
-      const { jobId } = await generateImage(finalPrompt, allRefImages.length > 0 ? allRefImages : undefined)
+      const { jobId } = await generateImage(finalPrompt, allRefImages.length > 0 ? allRefImages : undefined, undefined, undefined, undefined, user?.id)
 
       await new Promise<void>((resolve, reject) => {
         const poll = trackInterval(setInterval(async () => {

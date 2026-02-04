@@ -5,6 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 
 const mixAudioBody = z.object({
   audioUrls: z.array(z.string().url()).min(2),
+  userId: z.string().uuid().optional(),
 })
 
 export async function mixAudioRoutes(app: FastifyInstance) {
@@ -16,13 +17,15 @@ export async function mixAudioRoutes(app: FastifyInstance) {
       })
     }
 
+    const { userId, ...restData } = parsed.data
+
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522",
+        user_id: userId ?? null,
         status: "pending",
-        input_data: { ...parsed.data, type: "mix-audio" },
+        input_data: { ...restData, type: "mix-audio" },
       })
       .select("id")
       .single()
@@ -31,7 +34,7 @@ export async function mixAudioRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    await videoQueue.add("mix-audio", { jobId: job.id, ...parsed.data })
+    await videoQueue.add("mix-audio", { jobId: job.id, ...restData })
     return { jobId: job.id }
   })
 }

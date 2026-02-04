@@ -8,6 +8,7 @@ const generateImageBody = z.object({
   referenceImageUrls: z.array(z.string().url()).max(14).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
   provider: z.enum(["nano-banana", "flux", "dalle", "midjourney"]).optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function generateImageRoutes(app: FastifyInstance) {
@@ -22,7 +23,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, userId } = parsed.data
 
     // Append character descriptions to prompt
     const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")
@@ -32,7 +33,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: { prompt, referenceImageUrls, provider, type: "generate-image" },
       })

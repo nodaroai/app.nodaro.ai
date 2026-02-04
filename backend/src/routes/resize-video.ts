@@ -8,6 +8,7 @@ const resizeVideoBody = z.object({
   targetAspect: z.enum(["1:1", "16:9", "9:16", "4:5"]),
   method: z.enum(["crop", "pad", "stretch"]).optional().default("pad"),
   padColor: z.string().optional().default("#000000"),
+  userId: z.string().uuid().optional(),
 })
 
 export async function resizeVideoRoutes(app: FastifyInstance) {
@@ -19,13 +20,15 @@ export async function resizeVideoRoutes(app: FastifyInstance) {
       })
     }
 
+    const { userId, ...restData } = parsed.data
+
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522",
+        user_id: userId ?? null,
         status: "pending",
-        input_data: { ...parsed.data, type: "resize-video" },
+        input_data: { ...restData, type: "resize-video" },
       })
       .select("id")
       .single()
@@ -34,7 +37,7 @@ export async function resizeVideoRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    await videoQueue.add("resize-video", { jobId: job.id, ...parsed.data })
+    await videoQueue.add("resize-video", { jobId: job.id, ...restData })
     return { jobId: job.id }
   })
 }

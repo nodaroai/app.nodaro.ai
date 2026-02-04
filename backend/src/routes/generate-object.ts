@@ -9,6 +9,7 @@ const generateObjectBody = z.object({
   category: z.enum(["furniture", "vehicle", "weapon", "food", "clothing", "electronics", "nature", "tool", "other"]).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   sourceImageUrl: z.string().url().optional(),
+  userId: z.string().uuid().optional(),
 })
 
 export async function generateObjectRoutes(app: FastifyInstance) {
@@ -23,7 +24,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
       })
     }
 
-    const { name, description, category, style, sourceImageUrl } = parsed.data
+    const { name, description, category, style, sourceImageUrl, userId } = parsed.data
 
     // Build single front view object prompt
     const categoryDesc = category ?? "object"
@@ -39,7 +40,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: {
           prompt,

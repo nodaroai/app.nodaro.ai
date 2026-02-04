@@ -15,6 +15,7 @@ const extractYouTubeAudioBody = z.object({
     },
     { message: "Must be a valid YouTube URL" },
   ),
+  userId: z.string().uuid().optional(),
 })
 
 export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
@@ -29,13 +30,13 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    const { youtubeUrl } = parsed.data
+    const { youtubeUrl, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: "fb48d4d5-cd33-4599-816a-3262e4908522", // TODO: get from auth
+        user_id: userId ?? null,
         status: "pending",
         input_data: { youtubeUrl, type: "extract-youtube-audio" },
       })
