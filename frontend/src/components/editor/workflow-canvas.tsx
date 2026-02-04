@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState, useMemo } from "react"
 import {
   ReactFlow,
-  Controls,
   MiniMap,
   Background,
   BackgroundVariant,
@@ -17,6 +16,7 @@ import { nodeTypes } from "@/components/nodes"
 import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
+import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
 import { SearchModal } from "./search-modal"
 import { AnimatedFlowEdge } from "./animated-flow-edge"
@@ -347,6 +347,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         sidebarVisible={sidebarVisible}
       />
 
+      {/* Canvas Controls (zoom, fit, minimap toggle - bottom left) */}
+      {!isMobile && (
+        <CanvasControls
+          showMiniMap={showMiniMap}
+          onToggleMiniMap={() => setShowMiniMap(!showMiniMap)}
+        />
+      )}
+
       {/* Add Node Popup */}
       <AddNodePopup
         open={addNodePopupOpen}
@@ -393,7 +401,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           minZoom={0.2}
           maxZoom={2}
         >
-          <Controls className="!bg-card !border !shadow-sm" />
           {!isMobile && showMiniMap && (
             <MiniMap
               className="!bg-card !border !shadow-sm"
@@ -449,20 +456,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
               }}
               maskColor="rgba(0, 0, 0, 0.2)"
             />
-          )}
-          {/* MiniMap toggle button */}
-          {!isMobile && (
-            <button
-              type="button"
-              onClick={() => setShowMiniMap(!showMiniMap)}
-              className="absolute bottom-4 right-4 z-10 flex items-center justify-center w-8 h-8 rounded bg-card border shadow-sm hover:bg-accent transition-colors"
-              title={showMiniMap ? "Hide MiniMap" : "Show MiniMap"}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <rect x="12" y="12" width="6" height="6" rx="1" className={showMiniMap ? "fill-[#ff0073]" : ""} />
-              </svg>
-            </button>
           )}
           <Background
             variant={BackgroundVariant.Dots}
