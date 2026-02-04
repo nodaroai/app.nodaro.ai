@@ -4779,5 +4779,40 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 
 ---
 
+## Future Feature: Remotion Integration
+
+Reference project: https://github.com/jhartquist/claude-remotion-kickstart
+
+### What Remotion adds to SceneNode:
+
+1. **Word-by-word captions** - Text highlighted word by word synced to voiceover (TikTok/Reels style)
+2. **Complex transitions** - Fade, dissolve, wipe, zoom between scenes
+3. **Text animations** - Flying text, lower thirds, After Effects-style titles
+4. **Split screen / Picture-in-Picture** - Multiple videos on same screen
+5. **Progress bars / Timers** - Dynamic elements that change over time
+6. **Animated diagrams** - Mermaid/D2 diagrams that build step by step
+7. **Code with typing effect** - Syntax highlighted code appearing line by line
+8. **Ken Burns effect** - Zoom and pan on images
+9. **Branding package** - Auto intro/outro, logo animations, watermarks
+10. **Interactive templates** - Video story templates, presentation templates
+
+### Architecture concept:
+- SceneNode generates raw assets (AI images, videos, voiceover, music)
+- Remotion does post-production (transitions, captions, animations, effects)
+- Final render outputs professional video
+
+### Components from remotion-kickstart:
+- TitleSlide, ContentSlide, CodeSlide, DiagramSlide, VideoSlide
+- Caption, Logo, Music overlays
+- BRollVideo, ZoomableVideo, Screenshot, AsciiPlayer
+- Presets: Landscape 720p/1080p, Square 1080p, Portrait 1080p
+
+### Integration decisions needed:
+- Where Remotion runs (backend server? cloud function?)
+- UI for selecting effects/transitions (timeline? nodes?)
+- How user configures captions, branding, templates
+
+---
+
 *Last updated: 2026-02-04*
 *Version: 1.14.0*
