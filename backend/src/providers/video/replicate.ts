@@ -34,11 +34,11 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   "veo3.1": {
     model: "google/veo-3.1",
-    imageParam: "first_frame",
+    imageParam: "image",         // veo3.1 uses "image" for start frame (not "first_frame")
     endFrameParam: "last_frame", // veo3.1 supports first+last frame interpolation
     durationParam: "duration",   // veo3.1 uses "duration" not "length"
     validDurations: [4, 6, 8],   // veo3.1 only supports 4, 6, or 8 seconds
-    extraInput: { generate_audio: true, resolution: "1080p" },
+    extraInput: { generate_audio: true, resolution: "1080p", aspect_ratio: "16:9" },
   },
   kling: {
     model: "kwaivgi/kling-v1.6-pro",
@@ -111,15 +111,22 @@ export async function imageToVideo(
     extraInput[cfg.endFrameParam] = endFrameUrl
   }
 
+  // Build the final input object
+  const replicateInput = {
+    prompt: finalPrompt,
+    [cfg.imageParam]: imageUrl,
+    ...extraInput,
+  }
+
+  // Log the exact request for debugging
+  console.log(`[imageToVideo] Replicate request:`, JSON.stringify({
+    model: cfg.model,
+    input: replicateInput,
+  }, null, 2))
+
   const output = await replicate.run(
     cfg.model as `${string}/${string}`,
-    {
-      input: {
-        prompt: finalPrompt,
-        [cfg.imageParam]: imageUrl,
-        ...extraInput,
-      },
-    },
+    { input: replicateInput },
   )
 
   const videoUrl = String(output)
