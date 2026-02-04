@@ -54,8 +54,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: #ff0073;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -88,8 +88,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: #ff0073;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -164,18 +164,45 @@
   filter: drop-shadow(0 0 4px #ff0073) drop-shadow(0 0 8px #ff0073);
 }
 
-/* Subtle pulsing border for running nodes */
+/* Running node with blue base and rotating pink overlay */
 .node-running {
-  border: 2px solid #ff0073 !important;
-  animation: border-pulse 1.5s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(255, 0, 115, 0.4);
+  position: relative;
+  border: 3px solid #3b82f6 !important; /* Blue base line, 1.5x thicker */
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
 }
 
-@keyframes border-pulse {
-  0%, 100% {
-    box-shadow: 0 0 8px rgba(255, 0, 115, 0.4);
+.node-running::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  padding: 3px;
+  background: conic-gradient(
+    from var(--gradient-angle, 0deg),
+    #ff0073 0deg,
+    #ff0073 90deg,
+    transparent 90deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: spin-border 1.5s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spin-border {
+  0% {
+    --gradient-angle: 0deg;
   }
-  50% {
-    box-shadow: 0 0 16px rgba(255, 0, 115, 0.7);
+  100% {
+    --gradient-angle: 360deg;
   }
+}
+
+/* Register the CSS custom property for animation */
+@property --gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
 }

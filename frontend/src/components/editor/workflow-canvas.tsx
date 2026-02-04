@@ -16,8 +16,14 @@ import "@xyflow/react/dist/style.css"
 import { nodeTypes } from "@/components/nodes"
 import { NodeContextMenu } from "./node-context-menu"
 import { PaneContextMenu } from "./pane-context-menu"
+import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
+
+// Custom edge types with animated flowing dot - cast to any to avoid complex generic issues
+const edgeTypes = {
+  default: AnimatedFlowEdge as any,
+}
 
 interface NodeContextMenuState {
   readonly nodeId: string
@@ -76,12 +82,14 @@ export function WorkflowCanvas() {
         .map((node) => node.id)
     )
 
-    // Transform edges - animate edges from running nodes
+    // Transform edges - animate edges from running nodes and add isRunning data for flowing dot
     return edges.map((edge): WorkflowEdge => {
-      if (runningNodeIds.has(edge.source)) {
+      const isRunning = runningNodeIds.has(edge.source)
+      if (isRunning) {
         return {
           ...edge,
           animated: true,
+          data: { ...edge.data, isRunning: true },
           style: {
             ...edge.style,
             stroke: "#ff0073",
@@ -89,7 +97,10 @@ export function WorkflowCanvas() {
           },
         }
       }
-      return edge
+      return {
+        ...edge,
+        data: { ...edge.data, isRunning: false },
+      }
     })
   }, [nodes, edges])
 
@@ -212,6 +223,7 @@ export function WorkflowCanvas() {
         onNodeContextMenu={handleNodeContextMenu}
         onPaneContextMenu={handlePaneContextMenu}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Loose}
         fitView
         deleteKeyCode="Delete"
@@ -225,7 +237,57 @@ export function WorkflowCanvas() {
         {!isMobile && showMiniMap && (
           <MiniMap
             className="!bg-card !border !shadow-sm"
-            nodeColor={(node) => node.selected ? '#ff0073' : '#6b7280'}
+            nodeColor={(node) => {
+              // Return category-specific colors for each node type
+              const nodeType = node.type as string
+              // Character nodes
+              if (nodeType === 'character') return '#ec4899' // pink-500
+              // Object nodes
+              if (nodeType === 'object') return '#10b981' // emerald-500
+              // Location nodes
+              if (nodeType === 'location') return '#06b6d4' // cyan-500
+              // Scene nodes
+              if (nodeType === 'scene') return '#8b5cf6' // violet-500
+              // AI nodes (generate-*, text-to-*, image-to-*, video-to-*, qa-check)
+              if (nodeType.startsWith('generate-') ||
+                  nodeType.startsWith('text-to-') ||
+                  nodeType.startsWith('image-to-') ||
+                  nodeType.startsWith('video-to-') ||
+                  nodeType === 'qa-check') return '#a855f7' // purple-500
+              // Input nodes
+              if (nodeType === 'text-prompt' ||
+                  nodeType === 'upload-image' ||
+                  nodeType === 'upload-video' ||
+                  nodeType === 'rss-feed' ||
+                  nodeType === 'reference-audio') return '#3b82f6' // blue-500
+              // Parameter nodes
+              if (nodeType === 'image-provider' ||
+                  nodeType === 'video-provider' ||
+                  nodeType === 'voice-provider' ||
+                  nodeType === 'script-provider' ||
+                  nodeType === 'duration' ||
+                  nodeType === 'aspect-ratio' ||
+                  nodeType === 'motion' ||
+                  nodeType === 'camera-motion' ||
+                  nodeType === 'voice' ||
+                  nodeType === 'text') return '#6366f1' // indigo-500
+              // Processing nodes
+              if (nodeType === 'combine-videos' ||
+                  nodeType === 'merge-video-audio' ||
+                  nodeType === 'add-captions' ||
+                  nodeType === 'resize-video' ||
+                  nodeType === 'extract-audio' ||
+                  nodeType === 'mix-audio' ||
+                  nodeType === 'adjust-volume' ||
+                  nodeType === 'trim-video') return '#f59e0b' // amber-500
+              // Output nodes
+              if (nodeType === 'save-to-storage' ||
+                  nodeType === 'webhook-output') return '#22c55e' // green-500
+              // Sticky notes
+              if (nodeType === 'sticky-note') return '#fbbf24' // yellow-400
+              // Default fallback
+              return '#6b7280' // gray-500
+            }}
             maskColor="rgba(0, 0, 0, 0.1)"
           />
         )}

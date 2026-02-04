@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 37 node types across 10 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 37 node types across 10 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display. **New UI/UX**: #ff0073 accent color throughout, animated edges with flowing dot during execution, running node animation with blue base and pink rotating overlay, MiniMap showing actual node colors, and all nodes are resizable.
 
 ## Features
 
@@ -16,6 +16,31 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Provider cascading dropdowns: Category -> Provider -> Model
 - Graph-based workflows: branching, merging, multiple inputs/outputs
 - Manual save with unsaved changes indicator and exit confirmation
+- **All nodes resizable**: Drag corners or edges to resize any node
+
+### UI/UX Design
+- **Accent color**: #ff0073 (pink) used throughout the entire app
+- **Primary buttons**: All default/primary buttons use #ff0073
+- **Sidebar headers**: Section headers (INPUT, PARAMETER, AI, etc.) use #ff0073
+- **Save/Run buttons**: Save, Execute, and Run buttons all use #ff0073 accent
+- **MiniMap**: Shows each node in its actual category color:
+  - Character = pink (#ec4899)
+  - Object = emerald (#10b981)
+  - Location = cyan (#06b6d4)
+  - Scene = violet (#8b5cf6)
+  - AI nodes = purple (#a855f7)
+  - Input nodes = blue (#3b82f6)
+  - Parameter nodes = indigo (#6366f1)
+  - Processing nodes = amber (#f59e0b)
+  - Output nodes = green (#22c55e)
+- **MiniMap toggle**: Button to show/hide MiniMap
+
+### Running Node Animation
+- **Blue base border**: 3px solid #3b82f6 (1.5x thicker than normal)
+- **Pink rotating overlay**: #ff0073 conic-gradient that spins around the node
+- **Animated edges**: When a node is running, edges from it turn pink with dashed lines
+- **Flowing dot**: Pink glowing dot (#ff0073) travels along the edge path using SVG animateMotion
+- Activates automatically during workflow execution
 
 ### 37 Node Types
 
@@ -399,11 +424,16 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - Asset upload to Cloudflare R2
 - Redis + BullMQ job queue with progress tracking
 
+### Workflow Export/Import
+- **3-dot menu** in editor toolbar with Export/Import options
+- **Export with Assets**: Downloads JSON with all generated images embedded
+- **Export as Template**: Downloads JSON without images (structure only)
+- **Import workflow**: Upload JSON to restore workflow and assets
+
 ## Planned Features
 
 - Style presets library
 - Build from Prompt (auto-generate workflow from text description)
-- Workflow export/import as JSON
 - API access for n8n/Make.com integration
 
 ## License

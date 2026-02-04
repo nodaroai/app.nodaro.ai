@@ -3368,6 +3368,99 @@ Theme toggle (Sun/Moon icon) is accessible on every page:
 | 768px+ | `md:` | Sidebar visible, full breadcrumbs, MiniMap shown |
 | 1024px+ | `lg:` | 3-column project grid |
 
+### UI/UX Styling
+
+**Accent Color**: `#ff0073` (pink) is the main accent color used throughout the entire application.
+
+| Element | Color |
+|---------|-------|
+| Primary buttons (`variant="default"`) | #ff0073 |
+| Save button (when dirty) | #ff0073 |
+| Execute/Run buttons | #ff0073 |
+| Sidebar section headers (INPUT, PARAMETER, etc.) | #ff0073 |
+| Video autoplay toggle (when active) | #ff0073 |
+| MiniMap toggle (when active) | #ff0073 fill |
+
+**CSS Variables** (in `globals.css`):
+```css
+:root {
+  --primary: #ff0073;
+  --primary-foreground: #ffffff;
+}
+.dark {
+  --primary: #ff0073;
+  --primary-foreground: #ffffff;
+}
+```
+
+### MiniMap Node Colors
+
+The MiniMap shows each node in its actual category color (not a fixed color):
+
+| Node Type | Color |
+|-----------|-------|
+| Character | #ec4899 (pink-500) |
+| Object | #10b981 (emerald-500) |
+| Location | #06b6d4 (cyan-500) |
+| Scene | #8b5cf6 (violet-500) |
+| AI nodes (generate-*, text-to-*, etc.) | #a855f7 (purple-500) |
+| Input nodes | #3b82f6 (blue-500) |
+| Parameter nodes | #6366f1 (indigo-500) |
+| Processing nodes | #f59e0b (amber-500) |
+| Output nodes | #22c55e (green-500) |
+| Sticky notes | #fbbf24 (yellow-400) |
+
+### Running Node Animation
+
+When a node is executing, it shows a distinctive animated border:
+
+**CSS Implementation** (in `globals.css`):
+```css
+.node-running {
+  position: relative;
+  border: 3px solid #3b82f6 !important; /* Blue base, 1.5x thicker */
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}
+
+.node-running::before {
+  background: conic-gradient(
+    from var(--gradient-angle, 0deg),
+    #ff0073 0deg,
+    #ff0073 90deg,
+    transparent 90deg,
+    transparent 360deg
+  );
+  animation: spin-border 1.5s linear infinite;
+}
+```
+
+### Animated Edges with Flowing Dot
+
+During workflow execution, edges from running nodes show animated data flow:
+
+1. **Edge styling**: Pink (#ff0073) stroke with 2px width, dashed line animation
+2. **Flowing dot**: Pink glowing circle (5px radius) that travels along the bezier path
+3. **Implementation**: Custom `AnimatedFlowEdge` component using SVG `<animateMotion>`
+
+**Location**: `frontend/src/components/editor/animated-flow-edge.tsx`
+
+**Usage in workflow-canvas.tsx**:
+```tsx
+const edgeTypes = {
+  default: AnimatedFlowEdge,
+}
+
+// Edges get isRunning data when source node is executing
+const animatedEdges = edges.map((edge) => ({
+  ...edge,
+  data: { isRunning: runningNodeIds.has(edge.source) },
+}))
+```
+
+### Node Resizing
+
+All nodes are resizable using React Flow's `NodeResizer` component. Users can drag corners or edges to resize any node. Each node type has appropriate minimum dimensions defined in `BaseNode`.
+
 ---
 
 ## Development Workflow
@@ -4306,5 +4399,5 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 
 ---
 
-*Last updated: 2026-02-03*
-*Version: 1.10.0*
+*Last updated: 2026-02-04*
+*Version: 1.11.0*
