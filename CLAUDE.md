@@ -4342,7 +4342,7 @@ Maintain a CHANGELOG.md:
 | Video Processing | FFmpeg in dedicated worker | Required for self-hosted edition |
 | Realtime Updates | Polling (MVP) → SSE (Phase 2) | No additional infrastructure needed |
 | Image Generation Model | google/nano-banana via Replicate | Good quality, supports reference images, internally uses flux-schnell |
-| Video Generation Model | minimax/video-01 (default), google/veo-2 (VEO), google/veo-3 (VEO 3) via Replicate | MiniMax accepts first_frame_image; VEO 3 supports generate_audio toggle |
+| Video Generation Model | minimax/video-01 (default), google/veo-2 (VEO), google/veo-3 (VEO 3), google/veo-3.1 (VEO 3.1) via Replicate | MiniMax accepts first_frame_image; VEO 3 supports generate_audio toggle; VEO 3.1 supports first+last frame interpolation (4/6/8s duration only) |
 | Asset Storage | Cloudflare R2 | S3-compatible, no egress fees, serves generated images and videos |
 | Execution Model | Frontend DAG Engine | Topological sort, parallel execution per level, sequential between levels |
 | Translation | google/gemini-2.5-flash via Replicate | Creative prompt translation (Hebrew, etc. to English) |
@@ -4713,6 +4713,19 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Refine saves to database: selected refined image updates database with userId preserved
 - [x] Asset Library thumbnail refresh: thumbnails update automatically when Page modals close (300ms delay for DB propagation)
 - [x] Unified Asset Library: shows ALL user assets across all projects with user_id filtering
+- [x] VEO 3.1 support: first+last frame interpolation, duration restricted to 4/6/8 seconds dropdown
+- [x] VEO 3.1 removed from Video to Video node (API doesn't support video input, only image input)
+- [x] Image to Video node: single input handle accepts all connection types (images, audio)
+- [x] Image to Video node: internal dropdowns for Start Frame, End Frame, Audio Track with thumbnail preview
+- [x] Image to Video node: auto-select first connected image as Start Frame
+- [x] Image to Video node: End Frame support for veo3.1, kling, runway, pika providers
+- [x] Processing nodes store subscription: all 8 FFmpeg nodes now properly re-render after job completion
+- [x] Trim Video fix: changed from `-c copy` (stream copy) to re-encoding (`-c:v libx264 -c:a aac`) for reliable output
+- [x] Trim Video fix: uses input seeking (`-ss` before `-i`) with duration (`-t`) instead of absolute time (`-to`)
+- [x] Content moderation error handling: E005 errors show user-friendly messages in Page modals
+- [x] Asset Library fix: click thumbnail opens Page modal, click + button adds to canvas (sidebar and floating toolbar)
+- [x] Asset Library fix: Page modals render outside library modal to avoid z-index issues
+- [x] React hooks order fix: Page modals declare all hooks before conditional returns
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
@@ -4767,4 +4780,4 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 ---
 
 *Last updated: 2026-02-04*
-*Version: 1.13.0*
+*Version: 1.14.0*
