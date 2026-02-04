@@ -3515,11 +3515,48 @@ Placeholder for credit usage analytics (coming soon):
 | Element | Color |
 |---------|-------|
 | Primary buttons (`variant="default"`) | #ff0073 |
-| Save button (when dirty) | #ff0073 |
+| Save button (Unsaved/Saving/Saved states) | #ff0073 |
 | Execute/Run buttons | #ff0073 |
 | Sidebar section headers (INPUT, PARAMETER, etc.) | #ff0073 |
 | Video autoplay toggle (when active) | #ff0073 |
 | MiniMap toggle (when active) | #ff0073 fill |
+| Canvas Controls active state | #ff0073/10 bg + #ff0073 text |
+
+### Editor Toolbar (Top Bar)
+
+The top toolbar in the workflow editor with navigation, save controls, and settings.
+
+**Location**: `frontend/src/components/editor/editor-toolbar.tsx`
+
+**Elements (left to right):**
+- Back button (arrow left) - navigates to project
+- Breadcrumbs: Project name > Workflow name (editable input)
+- Save button with integrated states
+- Video autoplay toggle
+- Theme toggle (sun/moon)
+- More menu (export/import)
+
+**Save Button States:**
+
+| State | Background | Icon | Text | Behavior |
+|-------|------------|------|------|----------|
+| Idle (no changes) | muted gray | CheckCircle | "Saved" | Disabled |
+| Unsaved (dirty) | #ff0073 | Save | "Unsaved" | Enabled, clickable |
+| Saving | #ff0073 | Loader2 (spinning) | "Saving..." | Disabled |
+| Saved | #ff0073 | CheckCircle (green-300) | "Saved" | Shows for 1.5s, then returns to Idle |
+| Error | red (#ef4444) | RefreshCw | "Retry" | Enabled, shows error on hover |
+
+**Removed Components:**
+- ~~Validate button~~ - Validation now happens automatically when executing workflow
+- ~~Asterisk (*) unsaved indicator~~ - Replaced by integrated Save button states
+
+**React Flow Attribution:**
+- Hidden via `proOptions={{ hideAttribution: true }}` on ReactFlow component
+- Located in `frontend/src/components/editor/workflow-canvas.tsx`
+
+**Next.js Dev Indicator:**
+- Hidden via `devIndicators: false` in `frontend/next.config.ts`
+- Only affects development mode
 
 **CSS Variables** (in `globals.css`):
 ```css
@@ -3620,10 +3657,40 @@ A vertical icon toolbar fixed on the left side of the canvas, providing quick ac
 
 **Styling:**
 - Fixed position: left side, vertically centered
-- Background: white (light) / #1E1E1E (dark)
-- Border-right with rounded right corners
+- Glassmorphism effect: backdrop blur with semi-transparent background
+- Light mode: white/80 bg, subtle shadow, slate-200 shadow tint
+- Dark mode: #1E1E1E/90 bg, deeper shadow, black/20 shadow tint
+- Rounded corners (rounded-2xl)
 - Each button shows tooltip with label and shortcut on hover
-- Active state (for Toggle Sidebar) highlighted
+- Active state (for Toggle Sidebar) highlighted with pink (#ff0073)
+
+**Tooltip Styling:**
+- Light mode: white bg, #1E293B text, #E2E8F0 border, subtle shadow
+- Dark mode: #2D2D2D bg, #E2E8F0 text, #3D3D3D border, deeper shadow
+- Shortcut badge: #F1F5F9 bg (light) / #121212 bg (dark)
+
+### Canvas Controls
+
+A horizontal control bar at the bottom-left of the canvas for zoom and minimap controls.
+
+**Location**: `frontend/src/components/editor/canvas-controls.tsx`
+
+**Buttons:**
+
+| Icon | Label | Action |
+|------|-------|--------|
+| Maximize2 | Fit to Screen | Fits all nodes in view with 0.2 padding |
+| ZoomIn | Zoom In | Increases zoom level |
+| ZoomOut | Zoom Out | Decreases zoom level |
+| Map | Toggle MiniMap | Shows/hides the minimap (active state highlighted) |
+
+**Styling:**
+- Fixed position: bottom-left, offset from Canvas Toolbar (left-16)
+- Glassmorphism: backdrop-blur with semi-transparent background
+- Light mode: white/80 bg, #E2E8F0 border, subtle shadow
+- Dark mode: #1E1E1E/90 bg, #2D2D2D border, deeper shadow
+- Active state (MiniMap toggle): pink (#ff0073) background tint
+- Hidden on mobile (< 768px)
 
 ### Add Node Popup
 
@@ -4667,4 +4734,4 @@ After Phase 1.3 you have a working system that takes a workflow and outputs vide
 ---
 
 *Last updated: 2026-02-04*
-*Version: 1.12.0*
+*Version: 1.13.0*

@@ -15,9 +15,10 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Dropdown filtering by compatible node types
 - Provider cascading dropdowns: Category -> Provider -> Model
 - Graph-based workflows: branching, merging, multiple inputs/outputs
-- Manual save with unsaved changes indicator and exit confirmation
+- **Save button with integrated states**: Unsaved/Saving/Saved with visual feedback
 - **All nodes resizable**: Drag corners or edges to resize any node
-- **Canvas Toolbar**: Quick-access icon buttons on left side
+- **Canvas Toolbar**: Quick-access icon buttons on left side (glassmorphism effect)
+- **Canvas Controls**: Bottom-left zoom and minimap controls
 - **Add Node Popup**: Category-based node browser with search
 - **Search Modal**: Search projects and workflows (opens in new tab)
 - **Context Menu**: Right-click canvas for quick actions
@@ -34,6 +35,22 @@ A vertical toolbar fixed on the left side of the canvas for quick actions:
 | Sticky Note | Shift+S | Adds sticky note |
 | Tidy Up | Alt+T | Auto-arranges nodes |
 | Toggle Sidebar | Ctrl+B | Shows/hides node list |
+
+**Styling:**
+- Glassmorphism effect with backdrop blur
+- Light mode: white/80 background with subtle shadow
+- Dark mode: #1E1E1E/90 background with deeper shadow
+- Tooltips show label + keyboard shortcut
+
+### Canvas Controls
+A horizontal control bar at the bottom-left of the canvas:
+
+| Button | Action |
+|--------|--------|
+| Fit to Screen | Fits all nodes in viewport |
+| Zoom In | Increases zoom level |
+| Zoom Out | Decreases zoom level |
+| Toggle MiniMap | Shows/hides the minimap |
 
 ### Keyboard Shortcuts
 | Shortcut | Action |
@@ -54,6 +71,8 @@ A vertical toolbar fixed on the left side of the canvas for quick actions:
 - **Typography**: Inter font for UI, JetBrains Mono for monospace data
 - **Light Mode**: Clean Stripe-inspired design with white cards, subtle borders (#E2E8F0)
 - **Dark Mode**: Premium glassmorphism with glow effects and backdrop blur
+- **Glassmorphism toolbars**: Canvas Toolbar and Controls use backdrop-blur with semi-transparent backgrounds
+- **Save button states**: Integrated visual feedback (Unsaved → Saving → Saved with green checkmark)
 - **Category-based node colors**: Each node type has distinct colors in both modes
 - **MiniMap**: Shows each node in its actual category color:
   - Character = pink (#ec4899)
