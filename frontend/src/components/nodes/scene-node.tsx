@@ -74,17 +74,17 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "audio1", type: "target", position: Position.Left, label: "Audio 1", top: "25%" },
-        { id: "audio2", type: "target", position: Position.Left, label: "Audio 2", top: "37%" },
-        { id: "audio3", type: "target", position: Position.Left, label: "Audio 3", top: "49%" },
-        { id: "audio4", type: "target", position: Position.Left, label: "Audio 4", top: "61%" },
-        { id: "audio5", type: "target", position: Position.Left, label: "Audio 5", top: "73%" },
-        { id: "prompt", type: "source", position: Position.Right, label: "Prompt", top: "15%" },
-        { id: "imageRefs", type: "source", position: Position.Right, label: "Refs", top: "30%" },
-        { id: "narration", type: "source", position: Position.Right, label: "Narration", top: "55%" },
-        { id: "dialogue", type: "source", position: Position.Right, label: "Dialogue", top: "70%" },
-        { id: "duration", type: "source", position: Position.Right, label: "Duration", top: "85%" },
+        { id: "in", type: "target", position: Position.Left },
+        { id: "audio1", type: "target", position: Position.Left, top: "25%" },
+        { id: "audio2", type: "target", position: Position.Left, top: "37%" },
+        { id: "audio3", type: "target", position: Position.Left, top: "49%" },
+        { id: "audio4", type: "target", position: Position.Left, top: "61%" },
+        { id: "audio5", type: "target", position: Position.Left, top: "73%" },
+        { id: "prompt", type: "source", position: Position.Right, top: "15%" },
+        { id: "imageRefs", type: "source", position: Position.Right, top: "30%" },
+        { id: "narration", type: "source", position: Position.Right, top: "55%" },
+        { id: "dialogue", type: "source", position: Position.Right, top: "70%" },
+        { id: "duration", type: "source", position: Position.Right, top: "85%" },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -109,7 +109,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute top-1 right-1 flex gap-1">
               <button
                 type="button"
-                className="w-5 h-5 flex items-center justify-center bg-purple-500/80 hover:bg-purple-500 text-white rounded-full shadow-sm"
+                className="w-5 h-5 flex items-center justify-center bg-[#ff0073]/80 hover:bg-[#ff0073] text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   setExtractOpen(true)
@@ -205,7 +205,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Metadata row */}
         <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500">
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073]">
             {nodeData.shotType}
           </span>
           {nodeData.aspectRatio && nodeData.aspectRatio !== "16:9" && (
@@ -238,7 +238,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity flex gap-0.5">
         <button
           type="button"
-          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-violet-500 hover:bg-violet-600 text-white rounded-bl-md shadow-md transition-colors"
+          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-[#ff0073] hover:bg-[#e00066] text-white rounded-bl-md shadow-md transition-colors"
           onClick={(e) => {
             e.stopPropagation()
             runSingleNode?.(id)
@@ -250,7 +250,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
         </button>
         <button
           type="button"
-          className="flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium bg-violet-500/80 hover:bg-violet-600 text-white rounded-br-md shadow-md transition-colors"
+          className="flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium bg-[#ff0073]/80 hover:bg-[#e00066] text-white rounded-br-md shadow-md transition-colors"
           onClick={(e) => {
             e.stopPropagation()
             setEditorOpen(true)
