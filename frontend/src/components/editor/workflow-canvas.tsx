@@ -249,13 +249,13 @@ export function WorkflowCanvas() {
                   nodeType.startsWith('text-to-') ||
                   nodeType.startsWith('image-to-') ||
                   nodeType.startsWith('video-to-') ||
-                  nodeType === 'qa-check') return '#161616'
+                  nodeType === 'qa-check') return '#282828'
               // Input nodes
               if (nodeType === 'text-prompt' ||
                   nodeType === 'upload-image' ||
                   nodeType === 'upload-video' ||
                   nodeType === 'rss-feed' ||
-                  nodeType === 'reference-audio') return '#3b82f6' // blue-500
+                  nodeType === 'reference-audio') return '#007AFF' // iOS blue
               // Parameter nodes
               if (nodeType === 'image-provider' ||
                   nodeType === 'video-provider' ||
@@ -266,7 +266,7 @@ export function WorkflowCanvas() {
                   nodeType === 'motion' ||
                   nodeType === 'camera-motion' ||
                   nodeType === 'voice' ||
-                  nodeType === 'text') return '#6366f1' // indigo-500
+                  nodeType === 'text') return '#6366F1' // modern indigo
               // Processing nodes
               if (nodeType === 'combine-videos' ||
                   nodeType === 'merge-video-audio' ||
@@ -275,7 +275,7 @@ export function WorkflowCanvas() {
                   nodeType === 'extract-audio' ||
                   nodeType === 'mix-audio' ||
                   nodeType === 'adjust-volume' ||
-                  nodeType === 'trim-video') return '#f59e0b' // amber-500
+                  nodeType === 'trim-video') return '#475569' // steel grey
               // Output nodes
               if (nodeType === 'save-to-storage' ||
                   nodeType === 'webhook-output') return '#22c55e' // green-500

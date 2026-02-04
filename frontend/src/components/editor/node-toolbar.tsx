@@ -77,14 +77,14 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
     <>
       {/* Unified Asset Library - quick access to all assets */}
       <div className="flex flex-col gap-1 pb-2 mb-2 border-b">
-        <span className="text-[10px] font-semibold uppercase" style={{ color: '#ff0073' }}>
+        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#ff0073' }}>
           Library
         </span>
         <UnifiedAssetLibraryButton />
       </div>
       {CATEGORIES.map((cat) => (
         <div key={cat} className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase" style={{ color: '#ff0073' }}>
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#ff0073' }}>
             {cat}
           </span>
           {NODE_OPTIONS.filter((n) => n.category === cat).map((node) => (

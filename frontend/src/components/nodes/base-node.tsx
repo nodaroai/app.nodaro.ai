@@ -29,31 +29,31 @@ interface BaseNodeProps {
 }
 
 const CATEGORY_STYLES: Record<string, string> = {
-  input: "border-blue-300 bg-blue-50 dark:border-blue-500/70 dark:bg-blue-950/70",
-  parameter: "border-indigo-300 bg-indigo-50 dark:border-indigo-500/70 dark:bg-indigo-950/70",
-  ai: "border-[#161616] bg-white dark:border-purple-500/70 dark:bg-purple-950/70",
-  processing: "border-amber-300 bg-amber-50 dark:border-amber-500/70 dark:bg-amber-950/70",
+  input: "border-[#E2E8F0] bg-[#F8FAFC] dark:border-blue-500/70 dark:bg-blue-950/70",
+  parameter: "border-[#EEF2FF] bg-[#F9FAFF] dark:border-indigo-500/70 dark:bg-indigo-950/70",
+  ai: "border-[#404040] bg-[#F8FAFC] dark:border-purple-500/70 dark:bg-purple-950/70",
+  processing: "border-[#CBD5E1] bg-[#F1F5F9] dark:border-amber-500/70 dark:bg-amber-950/70",
   output: "border-green-300 bg-green-50 dark:border-green-500/70 dark:bg-green-950/70",
-  scene: "border-[#161616] bg-white dark:border-violet-500/70 dark:bg-violet-950/70",
+  scene: "border-[#404040] bg-[#F8FAFC] dark:border-violet-500/70 dark:bg-violet-950/70",
   character: "border-pink-300 bg-pink-50 dark:border-pink-500/70 dark:bg-pink-950/70",
   object: "border-emerald-300 bg-emerald-50 dark:border-emerald-500/70 dark:bg-emerald-950/70",
   location: "border-cyan-300 bg-cyan-50 dark:border-cyan-500/70 dark:bg-cyan-950/70",
-  script: "border-[#161616] bg-white dark:border-purple-500/70 dark:bg-purple-950/70",
-  i2v: "border-[#161616] bg-white dark:border-purple-500/70 dark:bg-purple-950/70",
+  script: "border-[#404040] bg-[#F8FAFC] dark:border-purple-500/70 dark:bg-purple-950/70",
+  i2v: "border-[#404040] bg-[#F8FAFC] dark:border-purple-500/70 dark:bg-purple-950/70",
 }
 
 const CATEGORY_HEADER: Record<string, string> = {
-  input: "bg-blue-100 text-gray-700 dark:bg-blue-900/70 dark:text-gray-200",
-  parameter: "bg-indigo-100 text-gray-700 dark:bg-indigo-900/70 dark:text-gray-200",
-  ai: "bg-[#161616] text-white dark:bg-purple-900/70 dark:text-gray-200",
-  processing: "bg-amber-100 text-gray-700 dark:bg-amber-900/70 dark:text-gray-200",
+  input: "bg-[#007AFF] text-white dark:bg-blue-900/70 dark:text-gray-200",
+  parameter: "bg-[#6366F1] text-white dark:bg-indigo-900/70 dark:text-gray-200",
+  ai: "bg-[#282828] text-white dark:bg-purple-900/70 dark:text-gray-200",
+  processing: "bg-[#475569] text-white dark:bg-amber-900/70 dark:text-gray-200",
   output: "bg-green-100 text-gray-700 dark:bg-green-900/70 dark:text-gray-200",
-  scene: "bg-[#161616] text-white dark:bg-violet-900/70 dark:text-gray-200",
+  scene: "bg-[#282828] text-white dark:bg-violet-900/70 dark:text-gray-200",
   character: "bg-pink-100 text-gray-700 dark:bg-pink-900/70 dark:text-gray-200",
   object: "bg-emerald-100 text-gray-700 dark:bg-emerald-900/70 dark:text-gray-200",
   location: "bg-cyan-100 text-gray-700 dark:bg-cyan-900/70 dark:text-gray-200",
-  script: "bg-[#161616] text-white dark:bg-purple-900/70 dark:text-gray-200",
-  i2v: "bg-[#161616] text-white dark:bg-purple-900/70 dark:text-gray-200",
+  script: "bg-[#282828] text-white dark:bg-purple-900/70 dark:text-gray-200",
+  i2v: "bg-[#282828] text-white dark:bg-purple-900/70 dark:text-gray-200",
 }
 
 export function BaseNode({
@@ -104,11 +104,23 @@ export function BaseNode({
       </button>
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-t-md text-sm font-medium",
+          "flex items-center gap-2 px-3 py-2 rounded-t-md text-xs font-semibold uppercase tracking-wide dark:normal-case dark:tracking-normal dark:font-medium dark:text-sm",
           CATEGORY_HEADER[category],
         )}
       >
-        {(category === "ai" || category === "scene" || category === "script" || category === "i2v") ? (
+        {category === "input" ? (
+          <span className="w-6 h-6 rounded-md bg-white dark:bg-transparent flex items-center justify-center text-[#007AFF] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+            {icon}
+          </span>
+        ) : category === "parameter" ? (
+          <span className="w-6 h-6 rounded-md bg-white dark:bg-transparent flex items-center justify-center text-[#6366F1] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+            {icon}
+          </span>
+        ) : category === "processing" ? (
+          <span className="w-6 h-6 rounded-md bg-white dark:bg-transparent flex items-center justify-center text-[#475569] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+            {icon}
+          </span>
+        ) : (category === "ai" || category === "scene" || category === "script" || category === "i2v" || category === "character" || category === "location" || category === "object") ? (
           <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-transparent flex items-center justify-center text-white dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
             {icon}
           </span>
@@ -117,7 +129,7 @@ export function BaseNode({
         )}
         <span className="flex-1 truncate">{label}</span>
         {credits !== undefined && credits > 0 && (
-          <span className="text-xs opacity-70">{credits}cr</span>
+          <span className="text-[10px] font-mono opacity-80 dark:text-xs dark:font-sans dark:opacity-70">{credits}cr</span>
         )}
       </div>
 
