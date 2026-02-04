@@ -1210,8 +1210,8 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
         <Select value={data.videoProvider ?? "minimax"} onValueChange={(v) => onUpdate({ videoProvider: v })}>
           <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
           <SelectContent position="popper" className="z-[9999]">
-            {["minimax", "veo", "veo3", "kling", "runway", "pika"].map((p) => (
-              <SelectItem key={p} value={p}>{p === "veo" ? "VEO 2" : p === "veo3" ? "VEO 3" : p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>
+            {["minimax", "veo", "veo3", "veo3.1", "kling", "runway", "pika"].map((p) => (
+              <SelectItem key={p} value={p}>{p === "veo" ? "VEO 2" : p === "veo3" ? "VEO 3" : p === "veo3.1" ? "VEO 3.1" : p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>
             ))}
           </SelectContent>
         </Select>

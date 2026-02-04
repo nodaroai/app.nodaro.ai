@@ -17,7 +17,8 @@ import {
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
 // Providers that support End Frame (second image for video ending)
-const END_FRAME_SUPPORTED_PROVIDERS = ["veo3", "kling", "runway", "pika"]
+// Note: veo3 does NOT support end frame, only veo3.1 does
+const END_FRAME_SUPPORTED_PROVIDERS = ["veo3.1", "kling", "runway", "pika"]
 
 // Node types that output images
 const IMAGE_OUTPUT_TYPES = [
@@ -67,16 +68,20 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   // Check if provider supports End Frame
   const supportsEndFrame = END_FRAME_SUPPORTED_PROVIDERS.includes(nodeData.provider)
 
-  // Get all connected nodes to this node's input handle
+  // Get all connected nodes to this node's input handle (deduplicated by node ID)
   const connectedNodes = useMemo(() => {
     // Find all edges where target is this node
     const connectedEdges = edges.filter((e) => e.target === id)
 
-    const result: ConnectedNodeInfo[] = []
+    // Use a Map to deduplicate by node ID (in case of multiple edges from same source)
+    const nodeMap = new Map<string, ConnectedNodeInfo>()
 
     for (const edge of connectedEdges) {
       const srcNode = nodes.find((n) => n.id === edge.source)
       if (!srcNode) continue
+
+      // Skip if we already processed this node
+      if (nodeMap.has(srcNode.id)) continue
 
       const srcData = srcNode.data as Record<string, unknown>
       const nodeType = String(srcNode.type ?? "unknown")
@@ -102,7 +107,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           (srcData.mainImageUrl as string | undefined)
       }
 
-      result.push({
+      nodeMap.set(srcNode.id, {
         id: srcNode.id,
         label: (srcData.label as string | undefined) ?? nodeType,
         type: nodeType,
@@ -111,7 +116,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       })
     }
 
-    return result
+    return Array.from(nodeMap.values())
   }, [edges, nodes, id])
 
   // Filter connected nodes by type

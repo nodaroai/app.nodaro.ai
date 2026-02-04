@@ -1403,15 +1403,16 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="veo">VEO</SelectItem>
+            <SelectItem value="veo">VEO 2</SelectItem>
             <SelectItem value="veo3">VEO 3</SelectItem>
+            <SelectItem value="veo3.1">VEO 3.1 (end frame)</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
             <SelectItem value="pika">Pika</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
-      {data.provider === "veo3" && (
+      {(data.provider === "veo3" || data.provider === "veo3.1") && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 px-1">
             <input
@@ -1423,7 +1424,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             />
             <label htmlFor="generateAudio" className="text-xs">Generate Audio</label>
           </div>
-          <p className="text-xs text-muted-foreground px-1">VEO 3 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
+          <p className="text-xs text-muted-foreground px-1">VEO 3/3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
         </div>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1486,15 +1487,16 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="veo">VEO</SelectItem>
+            <SelectItem value="veo">VEO 2</SelectItem>
             <SelectItem value="veo3">VEO 3</SelectItem>
+            <SelectItem value="veo3.1">VEO 3.1</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
             <SelectItem value="pika">Pika</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
-      {data.provider === "veo3" && (
+      {(data.provider === "veo3" || data.provider === "veo3.1") && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 px-1">
             <input
@@ -1506,7 +1508,7 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             />
             <label htmlFor="v2vGenerateAudio" className="text-xs">Generate Audio</label>
           </div>
-          <p className="text-xs text-muted-foreground px-1">VEO 3 creates AI audio from the prompt. Disable for silent video.</p>
+          <p className="text-xs text-muted-foreground px-1">VEO 3/3.1 creates AI audio from the prompt. Disable for silent video.</p>
         </div>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

@@ -355,7 +355,7 @@ export type GenerateImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "minimax" | "veo" | "veo3" | "kling" | "runway" | "pika"
+  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika"
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
@@ -395,7 +395,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "kling"
+  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling"
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"
@@ -412,7 +412,7 @@ export type VideoToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "veo" | "veo3" | "kling" | "runway" | "pika"
+  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika"
   model: string
   duration: number
   fieldMappings: FieldMappings
@@ -830,7 +830,7 @@ export type SceneNodeDataType = {
   sourceSceneIndex: number
   autoSyncWithScript: boolean
   audioAssignments: AudioAssignment[]
-  videoProvider: "minimax" | "veo" | "veo3" | "kling" | "runway" | "pika"
+  videoProvider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika"
   generatedVideoResults: GeneratedResult[]
   activeVideoResultIndex: number
   generatedVideoUrl: string

@@ -18,7 +18,10 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
-  const activeUrl = activeResult?.url ?? nodeData.generatedImageUrl
+  // Check multiple possible URL fields for robustness (match Image to Video thumbnail logic)
+  const rawUrl = activeResult?.url ?? nodeData.generatedImageUrl ?? (nodeData as Record<string, unknown>).url as string | undefined
+  // Treat empty strings as undefined (falsy check)
+  const activeUrl = rawUrl && rawUrl.trim() ? rawUrl : undefined
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const attachedIds = nodeData.characterDefinitionIds ?? []

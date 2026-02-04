@@ -3,7 +3,7 @@ import { config } from "../../lib/config.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
-export type VideoProvider = "veo" | "veo3" | "kling" | "runway" | "pika" | "sora" | "minimax"
+export type VideoProvider = "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika" | "sora" | "minimax"
 
 interface ModelConfig {
   model: string
@@ -27,7 +27,13 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
   veo3: {
     model: "google/veo-3",
     imageParam: "image",
-    endFrameParam: "last_frame", // veo3 supports end frame
+    // veo3 doesn't support end frame (only veo3.1 does)
+    extraInput: { generate_audio: true },
+  },
+  "veo3.1": {
+    model: "google/veo-3.1",
+    imageParam: "first_frame",
+    endFrameParam: "last_frame", // veo3.1 supports first+last frame interpolation
     extraInput: { generate_audio: true },
   },
   kling: {
@@ -73,7 +79,7 @@ export async function imageToVideo(
   console.log(`[imageToVideo] Motion prompt: "${finalPrompt}"`)
 
   const extraInput = { ...cfg.extraInput }
-  if (resolvedProvider === "veo3") {
+  if (resolvedProvider === "veo3" || resolvedProvider === "veo3.1") {
     extraInput.generate_audio = generateAudio !== false
   }
   if (duration && duration > 0) {

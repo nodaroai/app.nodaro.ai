@@ -8,7 +8,7 @@ const generateVideoBody = z.object({
   endFrameUrl: z.string().url().optional(),        // Optional end frame (for supported providers)
   audioUrl: z.string().url().optional(),           // Optional audio track to merge after generation
   prompt: z.string().max(2000).optional(),
-  provider: z.enum(["veo", "veo3", "kling", "runway", "pika", "sora", "minimax"]).optional(),
+  provider: z.enum(["veo", "veo3", "veo3.1", "kling", "runway", "pika", "sora", "minimax"]).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
   userId: z.string().uuid().optional(),
