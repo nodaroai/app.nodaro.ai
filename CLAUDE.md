@@ -3601,6 +3601,133 @@ const animatedEdges = edges.map((edge) => ({
 
 All nodes are resizable using React Flow's `NodeResizer` component. Users can drag corners or edges to resize any node. Each node type has appropriate minimum dimensions defined in `BaseNode`.
 
+### Canvas Toolbar
+
+A vertical icon toolbar fixed on the left side of the canvas, providing quick access to common actions.
+
+**Location**: `frontend/src/components/editor/canvas-toolbar.tsx`
+
+**Buttons (top to bottom):**
+
+| Icon | Label | Shortcut | Action |
+|------|-------|----------|--------|
+| Plus | Add Node | Tab | Opens Add Node popup |
+| Search | Search | Ctrl+K | Opens Search modal (projects/workflows) |
+| Package | Asset Library | Ctrl+L | Opens Asset Library modal |
+| StickyNote | Add Sticky Note | Shift+S | Adds sticky note at center |
+| Wand2 | Tidy Up | Alt+T | Auto-arranges nodes by type |
+| PanelLeft | Toggle Sidebar | Ctrl+B | Shows/hides node toolbar sidebar |
+
+**Styling:**
+- Fixed position: left side, vertically centered
+- Background: white (light) / #1E1E1E (dark)
+- Border-right with rounded right corners
+- Each button shows tooltip with label and shortcut on hover
+- Active state (for Toggle Sidebar) highlighted
+
+### Add Node Popup
+
+A centered popup for quickly adding nodes to the canvas with category navigation and search.
+
+**Location**: `frontend/src/components/editor/add-node-popup.tsx`
+
+**Features:**
+- Header: "What do you want to create?"
+- Search input with keyboard focus on open
+- Category pills: INPUT, PARAMETER, AI, PROCESSING, ASSETS, OUTPUT
+- Category-specific icon colors on hover
+- Keyboard navigation: Arrow keys to navigate, Enter to select, Escape to close
+- Click outside or Escape to dismiss
+
+**Category Colors (hover):**
+
+| Category | Color |
+|----------|-------|
+| Input | #007AFF (blue) |
+| Parameter | #6366F1 (indigo) |
+| AI | #ff0073 (pink) |
+| Processing | #475569 (slate) |
+| Assets | #8B5CF6 (violet) |
+| Output | #22C55E (green) |
+
+### Search Modal
+
+A modal for searching user's projects and workflows, with results opening in new tabs.
+
+**Location**: `frontend/src/components/editor/search-modal.tsx`
+
+**Features:**
+- Search input with debounced queries (300ms)
+- Results grouped by type: Projects, Workflows
+- Project results show folder icon (blue)
+- Workflow results show git-branch icon (pink #ff0073)
+- Click result or press Enter to open in new tab
+- Keyboard navigation: Arrow up/down, Enter to open, Escape to close
+- Footer shows keyboard hints
+
+**URLs opened:**
+- Projects: `/projects/{id}` (new tab)
+- Workflows: `/projects/{projectId}/workflows/{id}` (new tab)
+
+### Canvas Context Menu
+
+Right-click context menu on the canvas for quick actions.
+
+**Location**: `frontend/src/components/editor/canvas-context-menu.tsx`
+
+**Menu items:**
+
+| Item | Shortcut | Action |
+|------|----------|--------|
+| Add node | Tab | Opens Add Node popup at click position |
+| Add sticky note | Shift+S | Adds sticky note at click position |
+| Tidy up workflow | Alt+T | Auto-arranges all nodes |
+| Select all | Ctrl+A | Selects all nodes |
+| Clear selection | - | Deselects all nodes (disabled when no selection) |
+
+**Styling:**
+- Appears at mouse position (adjusted to stay on screen)
+- White background (light) / #1E1E1E (dark)
+- Keyboard shortcuts shown as styled badges
+- Closes on click outside, scroll, or Escape
+
+### Keyboard Shortcuts
+
+Global keyboard shortcuts available in the workflow editor:
+
+| Shortcut | Action |
+|----------|--------|
+| Tab | Open Add Node popup |
+| Ctrl+K | Open Search modal (projects/workflows) |
+| Ctrl+L | Open Asset Library modal |
+| Shift+S | Add sticky note at center |
+| Alt+T | Tidy up workflow (auto-arrange) |
+| Ctrl+B | Toggle node toolbar sidebar |
+| Ctrl+A | Select all nodes |
+| Ctrl+D | Duplicate selected node |
+| Delete | Delete selected node |
+| Escape | Close popups/menus |
+
+**Note:** Shortcuts are disabled when typing in inputs/textareas.
+
+**Implementation**: Keyboard event listener in `frontend/src/components/editor/workflow-canvas.tsx`
+
+### Node Toolbar Sidebar
+
+The node toolbar sidebar is **hidden by default** and can be toggled via:
+- Clicking the Toggle Sidebar button in the Canvas Toolbar
+- Pressing Ctrl+B
+
+**Location**: `frontend/src/components/editor/node-toolbar.tsx`
+
+**Features:**
+- Position: left side, offset to account for Canvas Toolbar (left-16)
+- Shows Asset Library button at top
+- Lists all node types organized by category
+- Category-specific hover colors for icons
+- Slide-in animation when shown
+- Mobile: Shows as bottom sheet via FAB button
+
 ---
 
 ## Development Workflow

@@ -4,7 +4,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ## Current Status
 
-**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 37 node types across 10 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display. **New UI/UX**: Complete light/dark mode redesign with Inter + JetBrains Mono typography, category-based node colors, glassmorphism effects in dark mode, floating tab navigation (Editor/Executions/Cost), user-specific execution history with Replicate-style detail modal, animated edges with flowing dot during execution, and all nodes are resizable.
+**Phase 1.3 (Execution) - Complete.** Full DAG execution engine with topological sort, parallel execution at each level, and sequential dependency waiting. 37 node types across 10 categories. All AI nodes executable: image generation (google/nano-banana), video generation (minimax/video-01, google/veo-2, google/veo-3), video-to-video, text-to-video, text-to-speech (ElevenLabs via Replicate), script generation (Gemini 2.5 Flash), music generation (MusicGen/MiniMax/Lyria/Bark), text-to-audio (TangoFlux/Tango/AudioLDM/Bark), and 8 FFmpeg processing nodes. VEO 3 with native audio generation toggle. Complete Asset Node System: Character (pink), Object (emerald), and Location (cyan) nodes with variant generation, database persistence with user_id isolation, galleries showing only the current user's assets, and **Refine feature** for generating cleaned-up variations of any asset. All asset types work as reference images when connected to Generate Image -- multiple assets can be connected together for complex scenes. Scene Node with 4-step Wizard UI (Story, Image, Audio, Video), Script Connection with scene import and auto-sync, per-dialogue audio generation with voice selection, video generation with provider selection and duration, and Generated Prompt accordion display. **New UI/UX**: Complete light/dark mode redesign with Inter + JetBrains Mono typography, category-based node colors, glassmorphism effects in dark mode, floating tab navigation (Editor/Executions/Cost), user-specific execution history with Replicate-style detail modal, animated edges with flowing dot during execution, all nodes resizable, **Canvas Toolbar** with quick-access buttons, **Add Node popup** with category navigation and search, **Search modal** for projects/workflows (opens in new tab), **right-click context menu**, and comprehensive **keyboard shortcuts**.
 
 ## Features
 
@@ -17,6 +17,37 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - Graph-based workflows: branching, merging, multiple inputs/outputs
 - Manual save with unsaved changes indicator and exit confirmation
 - **All nodes resizable**: Drag corners or edges to resize any node
+- **Canvas Toolbar**: Quick-access icon buttons on left side
+- **Add Node Popup**: Category-based node browser with search
+- **Search Modal**: Search projects and workflows (opens in new tab)
+- **Context Menu**: Right-click canvas for quick actions
+- **Auto-arrange**: Tidy up workflow to organize nodes by type
+
+### Canvas Toolbar
+A vertical toolbar fixed on the left side of the canvas for quick actions:
+
+| Button | Shortcut | Action |
+|--------|----------|--------|
+| + (Add Node) | Tab | Opens Add Node popup |
+| Search | Ctrl+K | Opens project/workflow search |
+| Assets | Ctrl+L | Opens Asset Library |
+| Sticky Note | Shift+S | Adds sticky note |
+| Tidy Up | Alt+T | Auto-arranges nodes |
+| Toggle Sidebar | Ctrl+B | Shows/hides node list |
+
+### Keyboard Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| Tab | Open Add Node popup |
+| Ctrl+K | Search projects/workflows |
+| Ctrl+L | Open Asset Library |
+| Shift+S | Add sticky note |
+| Alt+T | Tidy up (auto-arrange) |
+| Ctrl+B | Toggle sidebar |
+| Ctrl+A | Select all nodes |
+| Ctrl+D | Duplicate selected |
+| Delete | Delete selected |
+| Escape | Close popups |
 
 ### UI/UX Design
 - **Brand color**: #ff0073 (pink) used throughout the entire app
