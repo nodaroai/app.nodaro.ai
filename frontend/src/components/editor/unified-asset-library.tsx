@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { createPortal } from "react-dom"
 import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, FolderOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -382,32 +383,41 @@ export function UnifiedAssetLibraryButton() {
         )}
       </Button>
 
-      {open && (
-        <div className="fixed inset-0 z-[60]">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border rounded-xl shadow-2xl w-[600px] max-w-[95vw] max-h-[80vh] flex flex-col">
+      {open && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2D2D2D] rounded-xl shadow-2xl w-[600px] max-w-[95vw] max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h3 className="text-sm font-semibold">Asset Library</h3>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-white">Asset Library</h3>
+              <button
+                type="button"
+                className="p-1 text-white/80 hover:text-white transition-colors"
+                onClick={() => setOpen(false)}
+              >
                 <X className="h-4 w-4" />
-              </Button>
+              </button>
             </div>
 
             {/* Search and Filters */}
-            <div className="px-4 py-3 border-b space-y-2">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] space-y-2 bg-white dark:bg-[#1E1E1E]">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-[#64748B]" />
                 <Input
                   placeholder="Search assets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-9"
+                  className="pl-9 h-9 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-900 dark:text-[#E2E8F0] placeholder:text-gray-400 dark:placeholder:text-[#64748B] focus:border-[#ff0073] focus:ring-[#ff0073]/20"
                 />
               </div>
               {/* Project Filter */}
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-[60px]">
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-[#64748B] min-w-[60px]">
                   <FolderOpen className="h-3.5 w-3.5" />
                   <span>Project:</span>
                 </div>
@@ -415,10 +425,10 @@ export function UnifiedAssetLibraryButton() {
                   value={filterByProject}
                   onValueChange={setFilterByProject}
                 >
-                  <SelectTrigger className="h-8 text-xs flex-1">
+                  <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]">
                     <SelectValue placeholder="All Projects" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#2D2D2D]">
                     <SelectItem value="all">All Projects</SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
@@ -431,7 +441,7 @@ export function UnifiedAssetLibraryButton() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2 text-xs"
+                    className="h-8 px-2 text-xs text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
                     onClick={() => setFilterByProject("all")}
                   >
                     Clear
@@ -441,57 +451,69 @@ export function UnifiedAssetLibraryButton() {
             </div>
 
             {/* Type Filter Tabs */}
-            <div className="flex gap-1 px-4 py-2 border-b">
-              <Button
-                variant={typeFilter === "all" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-8 text-xs"
+            <div className="flex gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
+              <button
+                type="button"
+                className={`h-8 px-4 text-xs font-medium rounded-full transition-colors ${
+                  typeFilter === "all"
+                    ? "bg-[#ff0073] text-white"
+                    : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+                }`}
                 onClick={() => setTypeFilter("all")}
               >
                 All
-                <span className="ml-1.5 text-[10px] opacity-60">({counts.all})</span>
-              </Button>
-              <Button
-                variant={typeFilter === "character" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-8 text-xs gap-1"
+                <span className="ml-1.5 text-[10px] opacity-70">({counts.all})</span>
+              </button>
+              <button
+                type="button"
+                className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                  typeFilter === "character"
+                    ? "bg-[#ff0073] text-white"
+                    : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+                }`}
                 onClick={() => setTypeFilter("character")}
               >
                 <UserCircle className="h-3 w-3" />
                 Characters
-                <span className="ml-1 text-[10px] opacity-60">({counts.character})</span>
-              </Button>
-              <Button
-                variant={typeFilter === "object" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-8 text-xs gap-1"
+                <span className="text-[10px] opacity-70">({counts.character})</span>
+              </button>
+              <button
+                type="button"
+                className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                  typeFilter === "object"
+                    ? "bg-[#ff0073] text-white"
+                    : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+                }`}
                 onClick={() => setTypeFilter("object")}
               >
                 <Package className="h-3 w-3" />
                 Objects
-                <span className="ml-1 text-[10px] opacity-60">({counts.object})</span>
-              </Button>
-              <Button
-                variant={typeFilter === "location" ? "secondary" : "ghost"}
-                size="sm"
-                className="h-8 text-xs gap-1"
+                <span className="text-[10px] opacity-70">({counts.object})</span>
+              </button>
+              <button
+                type="button"
+                className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                  typeFilter === "location"
+                    ? "bg-[#ff0073] text-white"
+                    : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+                }`}
                 onClick={() => setTypeFilter("location")}
               >
                 <MapPin className="h-3 w-3" />
                 Locations
-                <span className="ml-1 text-[10px] opacity-60">({counts.location})</span>
-              </Button>
+                <span className="text-[10px] opacity-70">({counts.location})</span>
+              </button>
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 bg-[#F8FAFC] dark:bg-[#121212]">
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <Loader2 className="w-8 h-8 animate-spin mb-2" />
+                <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
+                  <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#ff0073]" />
                   <p className="text-sm">Loading assets...</p>
                 </div>
               ) : error ? (
-                <div className="flex flex-col items-center justify-center py-12 text-destructive">
+                <div className="flex flex-col items-center justify-center py-12 text-red-500">
                   <AlertCircle className="w-8 h-8 mb-2" />
                   <p className="text-sm">{error}</p>
                   <Button variant="outline" size="sm" className="mt-2" onClick={fetchAllAssets}>
@@ -499,7 +521,7 @@ export function UnifiedAssetLibraryButton() {
                   </Button>
                 </div>
               ) : filteredAssets.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
                   <Grid3X3 className="w-10 h-10 mb-2 opacity-40" />
                   <p className="text-sm">
                     {searchQuery || typeFilter !== "all" || filterByProject !== "all"
@@ -524,12 +546,12 @@ export function UnifiedAssetLibraryButton() {
                       <div key={asset.id} className="relative group">
                         <button
                           type="button"
-                          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/30 transition-colors cursor-pointer text-left w-full"
+                          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] hover:border-[#ff0073] hover:shadow-md transition-all cursor-pointer text-left w-full"
                           onClick={() => handleAssetClick(asset)}
                           title={`View ${asset.name}`}
                         >
                           {asset.thumbnailUrl ? (
-                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted/30">
+                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-[#121212]">
                               <img
                                 src={asset.thumbnailUrl}
                                 alt={asset.name}
@@ -537,27 +559,27 @@ export function UnifiedAssetLibraryButton() {
                               />
                             </div>
                           ) : (
-                            <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
-                              <BadgeIcon className="w-8 h-8 text-muted-foreground/30" />
+                            <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-[#121212] flex items-center justify-center">
+                              <BadgeIcon className="w-8 h-8 text-gray-300 dark:text-[#2D2D2D]" />
                             </div>
                           )}
-                          <span className="text-xs truncate w-full text-center">{asset.name}</span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${badge.color}`}>
+                          <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
                             {asset.type}
                           </span>
                           {projectName && (
-                            <span className="text-[9px] text-muted-foreground/70 truncate w-full text-center">
+                            <span className="text-[9px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
                               {projectName}
                             </span>
                           )}
                           {isOnCanvas && (
-                            <span className="text-[9px] text-muted-foreground">On canvas</span>
+                            <span className="text-[9px] text-gray-400 dark:text-[#64748B]">On canvas</span>
                           )}
                         </button>
                         {/* Add to canvas button */}
                         <button
                           type="button"
-                          className="absolute bottom-8 right-1 w-6 h-6 flex items-center justify-center bg-violet-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-violet-600"
+                          className="absolute bottom-8 right-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
                           onClick={(e) => handleAddToCanvas(e, asset)}
                           title={`Add ${asset.name} to canvas`}
                         >
@@ -570,7 +592,8 @@ export function UnifiedAssetLibraryButton() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Page Modals */}
