@@ -65,20 +65,43 @@ export function createVideoWorker() {
 
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "image-to-video") {
-          const { imageUrl, prompt, provider, generateAudio, duration } = job.data as {
+          const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration } = job.data as {
             jobId: string
             imageUrl: string
+            endFrameUrl?: string      // Optional end frame for supported providers
+            audioUrl?: string         // Optional audio to merge after video generation
             prompt?: string
             provider?: VideoProvider
             generateAudio?: boolean
             duration?: number
           }
-          console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
+          console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
-          const replicateUrl = await imageToVideo(imageUrl, prompt, provider, generateAudio, duration)
-          await job.updateProgress(50)
+          // Generate the video with optional end frame support
+          const replicateUrl = await imageToVideo(imageUrl, prompt, provider, generateAudio, duration, endFrameUrl)
+          await job.updateProgress(40)
 
-          const r2Url = await uploadToR2(replicateUrl, jobId, "video")
+          // Upload the generated video to R2
+          let finalVideoUrl = await uploadToR2(replicateUrl, jobId, "video")
+          await job.updateProgress(70)
+
+          // If audio URL is provided, merge it with the video
+          if (audioUrl) {
+            console.log(`[worker] Merging audio into video for job ${jobId}`)
+            const mergedPath = await mergeVideoAudio({
+              videoUrl: finalVideoUrl,
+              audioUrl,
+              voiceoverVolume: 100,
+              backgroundVolume: 30, // Lower the generated audio if present
+              keepOriginalAudio: generateAudio ?? false,
+            })
+            await job.updateProgress(90)
+
+            // Upload merged video
+            finalVideoUrl = await uploadFileToR2(mergedPath, `${jobId}-merged`, "video")
+            await cleanupWorkDir(dirname(mergedPath))
+          }
+
           await job.updateProgress(100)
 
           await supabase
@@ -86,12 +109,12 @@ export function createVideoWorker() {
             .update({
               status: "completed",
               progress: 100,
-              output_data: { videoUrl: r2Url },
+              output_data: { videoUrl: finalVideoUrl },
               completed_at: new Date().toISOString(),
             })
             .eq("id", jobId)
 
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+          console.log(`[worker] Job ${jobId} completed: ${finalVideoUrl}`)
         } else if (job.name === "video-to-video") {
           const { videoUrl, prompt, provider } = job.data as {
             jobId: string

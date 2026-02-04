@@ -4,7 +4,9 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 
 const generateVideoBody = z.object({
-  imageUrl: z.string().url(),
+  imageUrl: z.string().url(),                      // Start frame image
+  endFrameUrl: z.string().url().optional(),        // Optional end frame (for supported providers)
+  audioUrl: z.string().url().optional(),           // Optional audio track to merge after generation
   prompt: z.string().max(2000).optional(),
   provider: z.enum(["veo", "veo3", "kling", "runway", "pika", "sora", "minimax"]).optional(),
   generateAudio: z.boolean().optional(),
@@ -24,7 +26,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, generateAudio, duration, userId } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -32,7 +34,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId ?? null,
         status: "pending",
-        input_data: { imageUrl, prompt, provider, generateAudio, duration, type: "image-to-video" },
+        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, type: "image-to-video" },
       })
       .select("id")
       .single()
@@ -46,6 +48,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     await videoQueue.add("image-to-video", {
       jobId: job.id,
       imageUrl,
+      endFrameUrl,
+      audioUrl,
       prompt,
       provider,
       generateAudio,

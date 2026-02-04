@@ -488,12 +488,54 @@ export async function splitImage(data: {
   return res.json()
 }
 
-export async function generateVideo(imageUrl: string, prompt?: string, provider?: string, generateAudio?: boolean, duration?: number, userId?: string): Promise<{ jobId: string }> {
-  console.log(`[generateVideo] Sending request with provider: "${provider ?? 'undefined (will default to minimax)'}"`)
-  const body: Record<string, unknown> = { imageUrl, prompt, provider, generateAudio, duration }
-  if (userId) {
-    body.userId = userId
+export interface GenerateVideoOptions {
+  startFrameUrl: string
+  endFrameUrl?: string     // Optional end frame (for providers that support it)
+  audioUrl?: string        // Optional audio track to merge
+  prompt?: string
+  provider?: string
+  generateAudio?: boolean
+  duration?: number
+  userId?: string
+}
+
+export async function generateVideo(options: GenerateVideoOptions): Promise<{ jobId: string }>
+export async function generateVideo(imageUrl: string, prompt?: string, provider?: string, generateAudio?: boolean, duration?: number, userId?: string): Promise<{ jobId: string }>
+export async function generateVideo(
+  imageUrlOrOptions: string | GenerateVideoOptions,
+  prompt?: string,
+  provider?: string,
+  generateAudio?: boolean,
+  duration?: number,
+  userId?: string
+): Promise<{ jobId: string }> {
+  let body: Record<string, unknown>
+
+  // Handle both old and new API signatures
+  if (typeof imageUrlOrOptions === "object") {
+    const opts = imageUrlOrOptions
+    console.log(`[generateVideo] Sending request with provider: "${opts.provider ?? 'undefined (will default to minimax)'}"`)
+    body = {
+      imageUrl: opts.startFrameUrl,  // Backend still expects imageUrl for backward compat
+      endFrameUrl: opts.endFrameUrl,
+      audioUrl: opts.audioUrl,
+      prompt: opts.prompt,
+      provider: opts.provider,
+      generateAudio: opts.generateAudio,
+      duration: opts.duration,
+    }
+    if (opts.userId) {
+      body.userId = opts.userId
+    }
+  } else {
+    // Legacy signature for backward compatibility
+    console.log(`[generateVideo] Sending request with provider: "${provider ?? 'undefined (will default to minimax)'}"`)
+    body = { imageUrl: imageUrlOrOptions, prompt, provider, generateAudio, duration }
+    if (userId) {
+      body.userId = userId
+    }
   }
+
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

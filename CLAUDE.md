@@ -1157,12 +1157,34 @@ interface ImageToVideoNode {
     motion?: 'subtle' | 'moderate' | 'dynamic';
     cameraMotion?: 'static' | 'pan-left' | 'pan-right' | 'zoom-in' | 'zoom-out';
     generateAudio?: boolean; // VEO 3 only: generate AI audio from prompt
+    // Internal selection state (for single input handle with dropdowns):
+    selectedStartFrameNodeId?: string;  // Required - which connected image node to use as start frame
+    selectedEndFrameNodeId?: string;    // Optional - which connected image node to use as end frame
+    selectedAudioNodeId?: string;       // Optional - which connected audio node to use
   };
-  inputs: ['image', 'motion-prompt?'];
+  inputs: ['input'];         // SINGLE input handle accepts images AND audio connections
   // Parameter input handles (optional, override config panel values when connected):
   parameterInputs: ['video_provider', 'duration', 'motion', 'camera_motion'];
   outputs: ['video'];        // Note: VEO 3 can output video WITH AI-generated audio
   creditCost: 20;
+
+  // SINGLE INPUT HANDLE WITH INTERNAL DROPDOWNS:
+  // The node has ONE "input" handle that accepts multiple connection types:
+  // - Image nodes (generate-image, upload-image, character, object, location)
+  // - Audio nodes (text-to-speech, generate-music, text-to-audio, upload-audio)
+  //
+  // Inside the node, dropdown selectors let users choose:
+  // 1. Start Frame (required) - selects from connected image nodes
+  //    - Shows thumbnail preview + node label
+  //    - Auto-selects first connected image node
+  // 2. End Frame (optional) - selects from connected image nodes
+  //    - Only shown for providers that support it: veo3, kling, runway, pika
+  //    - Hidden for minimax, veo (they don't support end frames)
+  // 3. Audio Track (optional) - selects from connected audio nodes
+  //    - Audio is merged with video after generation (via FFmpeg)
+  //
+  // This design simplifies canvas connections (one handle vs many) while
+  // providing clear selection UI inside the node config panel.
 
   // VEO 3 AUDIO:
   // VEO 3 has a `generate_audio` toggle (default: true when VEO 3 selected).

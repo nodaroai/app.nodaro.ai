@@ -367,6 +367,10 @@ export type ImageToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  // Multi-input selection fields
+  selectedStartFrameNodeId?: string  // ID of node selected for start frame
+  selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)
+  selectedAudioNodeId?: string       // ID of node selected for audio track (optional)
 }
 
 export type TextToSpeechData = {

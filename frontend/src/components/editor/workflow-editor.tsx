@@ -156,7 +156,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (type === "generate-image") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
-      return results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
+      // Check all possible URL fields to match thumbnail extraction logic
+      return results[activeIndex]?.url ??
+        (data.generatedImageUrl as string | undefined) ??
+        (data.url as string | undefined)
     }
     if (type === "combine-videos") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
@@ -906,12 +909,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
-  function runVideoGeneration(nodeId: string, imageUrl: string, provider?: string, generateAudio?: boolean): Promise<void> {
+  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      generateVideo(imageUrl, undefined, provider, generateAudio, undefined, user?.id).then(({ jobId }) => {
+      generateVideo({
+        startFrameUrl,
+        endFrameUrl,
+        audioUrl,
+        provider,
+        generateAudio,
+        duration,
+        userId: user?.id,
+      }).then(({ jobId }) => {
         toast.info("Video generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -1279,14 +1290,47 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "image-to-video") {
-      const imageUrl = inputs.imageUrl
-      if (!imageUrl) {
-        toast.error(`Node "${(node.data as ImageToVideoData).label}": no image found`)
-        return Promise.reject(new Error("No image"))
+      const i2vData = node.data as ImageToVideoData
+      const nodeProvider = i2vData.provider
+
+      // Resolve start frame from selected node or fallback to inputs
+      let startFrameUrl: string | undefined
+      if (i2vData.selectedStartFrameNodeId) {
+        const startNode = nodes.find((n) => n.id === i2vData.selectedStartFrameNodeId)
+        if (startNode) {
+          startFrameUrl = extractNodeOutput(startNode)
+        }
       }
-      const nodeProvider = (node.data as ImageToVideoData).provider
-      console.log(`[executeNode] image-to-video node provider from data: "${nodeProvider ?? 'undefined'}"`)
-      return runVideoGeneration(node.id, imageUrl, nodeProvider || undefined, (node.data as ImageToVideoData).generateAudio)
+      // Fallback to legacy single-input behavior
+      if (!startFrameUrl) {
+        startFrameUrl = inputs.imageUrl
+      }
+
+      if (!startFrameUrl) {
+        toast.error(`Node "${i2vData.label}": no start frame image found`)
+        return Promise.reject(new Error("No start frame image"))
+      }
+
+      // Resolve end frame from selected node (optional)
+      let endFrameUrl: string | undefined
+      if (i2vData.selectedEndFrameNodeId) {
+        const endNode = nodes.find((n) => n.id === i2vData.selectedEndFrameNodeId)
+        if (endNode) {
+          endFrameUrl = extractNodeOutput(endNode)
+        }
+      }
+
+      // Resolve audio from selected node (optional)
+      let audioUrl: string | undefined
+      if (i2vData.selectedAudioNodeId) {
+        const audioNode = nodes.find((n) => n.id === i2vData.selectedAudioNodeId)
+        if (audioNode) {
+          audioUrl = extractNodeOutput(audioNode)
+        }
+      }
+
+      console.log(`[executeNode] image-to-video node provider: "${nodeProvider ?? 'undefined'}", startFrame: ${!!startFrameUrl}, endFrame: ${!!endFrameUrl}, audio: ${!!audioUrl}`)
+      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration)
     }
 
     if (node.type === "video-to-video") {
