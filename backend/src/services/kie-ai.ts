@@ -90,13 +90,20 @@ interface KieRecordInfoResponse {
   message: string
   data: {
     taskId: string
-    state: "pending" | "processing" | "success" | "failed"
+    // Valid states per docs.kie.ai/market/common/get-task-detail:
+    // - "waiting": Task is queued and waiting to be processed
+    // - "queuing": Task is in the processing queue
+    // - "generating": Task is currently being processed
+    // - "success": Task completed successfully
+    // - "fail": Task failed (NOTE: "fail" not "failed"!)
+    state: "waiting" | "queuing" | "generating" | "success" | "fail"
     resultJson?: string  // JSON string: {"resultUrls": ["url1", "url2"]}
     failCode?: string
     failMsg?: string
     costTime?: number
     completeTime?: string
     createTime?: string
+    progress?: number  // 0-100, available for sora2 models
   }
 }
 
@@ -203,7 +210,9 @@ async function runKieTask(
       continue
     }
 
-    console.log(`[KIE.ai] Task ${taskId} state: ${state} (attempt ${attempts})`)
+    // Log progress for sora2 models (0-100)
+    const progress = detailData.data.progress
+    console.log(`[KIE.ai] Task ${taskId} state: ${state}${progress !== undefined ? ` (progress: ${progress}%)` : ""} (attempt ${attempts})`)
 
     if (state === "success") {
       const resultJsonStr = detailData.data.resultJson
@@ -221,10 +230,14 @@ async function runKieTask(
       return { resultJson, costTime: detailData.data.costTime }
     }
 
-    if (state === "failed") {
+    // NOTE: KIE.ai API returns "fail" not "failed"!
+    if (state === "fail") {
       const failMsg = detailData.data.failMsg ?? detailData.data.failCode ?? "Unknown error"
+      console.error(`[KIE.ai] Task ${taskId} failed: ${failMsg}`)
       throw createSanitizedError(`task failed: ${failMsg}`, "Generation")
     }
+
+    // States "waiting", "queuing", "generating" are all in-progress - continue polling
   }
 
   throw createSanitizedError(`task timed out after ${maxAttempts * POLL_INTERVAL_MS / 1000} seconds`, "Generation")
