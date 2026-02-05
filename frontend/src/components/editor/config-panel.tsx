@@ -1807,7 +1807,7 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
             : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
       )}
-      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField>
+      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.aspectRatio}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
