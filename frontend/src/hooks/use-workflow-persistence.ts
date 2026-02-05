@@ -3,14 +3,175 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { WorkflowNode, WorkflowEdge, CharacterDefinition } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult } from "@/types/nodes"
 
 interface SaveResult {
   readonly success: boolean
   readonly error?: string
 }
 
+interface JobRecord {
+  id: string
+  status: string
+  output_data: { imageUrl?: string; videoUrl?: string; audioUrl?: string; script?: unknown } | null
+  error_message: string | null
+}
+
 const SAVED_DISPLAY_DURATION = 2000
+
+/**
+ * Sync node results from jobs table.
+ * When user leaves and returns, jobs may have completed in the background.
+ * This function checks for any nodes with "running" status and updates them
+ * with the actual job results from the database.
+ */
+async function syncNodeResultsFromDB(nodes: WorkflowNode[], supabase: ReturnType<typeof createClient>): Promise<WorkflowNode[]> {
+  // Find all nodes that might need syncing:
+  // 1. Nodes with executionStatus === "running" or "pending"
+  // 2. Nodes with generatedResults that have jobIds we can check
+  const nodesToSync: { node: WorkflowNode; jobIds: string[] }[] = []
+
+  for (const node of nodes) {
+    const data = node.data as Record<string, unknown>
+    const status = data.executionStatus as string | undefined
+    const results = (data.generatedResults ?? []) as GeneratedResult[]
+
+    // Collect jobIds from this node
+    const jobIds = results.map(r => r.jobId).filter(Boolean)
+
+    // If node is in running/pending state or has jobs to check
+    if (status === "running" || status === "pending" || jobIds.length > 0) {
+      nodesToSync.push({ node, jobIds })
+    }
+  }
+
+  if (nodesToSync.length === 0) {
+    return nodes
+  }
+
+  // Collect all unique jobIds
+  const allJobIds = [...new Set(nodesToSync.flatMap(n => n.jobIds))]
+
+  if (allJobIds.length === 0) {
+    // No jobIds to check - just reset running/pending nodes to idle
+    return nodes.map(node => {
+      const data = node.data as Record<string, unknown>
+      const status = data.executionStatus as string | undefined
+      if (status === "running" || status === "pending") {
+        return {
+          ...node,
+          data: { ...data, executionStatus: "idle" }
+        }
+      }
+      return node
+    })
+  }
+
+  // Query all jobs at once
+  const { data: jobs, error } = await supabase
+    .from("jobs")
+    .select("id, status, output_data, error_message")
+    .in("id", allJobIds)
+
+  if (error || !jobs) {
+    console.error("[sync] Failed to fetch jobs:", error)
+    return nodes
+  }
+
+  // Create a map of jobId -> job for quick lookup
+  const jobMap = new Map<string, JobRecord>()
+  for (const job of jobs) {
+    jobMap.set(job.id, job as JobRecord)
+  }
+
+  // Update nodes based on job status
+  const updatedNodes = nodes.map(node => {
+    const data = node.data as Record<string, unknown>
+    const status = data.executionStatus as string | undefined
+    const results = (data.generatedResults ?? []) as GeneratedResult[]
+
+    // Check if this node needs updating
+    if (status !== "running" && status !== "pending") {
+      return node
+    }
+
+    // Find the most recent job for this node
+    const mostRecentResult = results[0]
+    if (!mostRecentResult?.jobId) {
+      // No job to check - reset to idle
+      return {
+        ...node,
+        data: { ...data, executionStatus: "idle" }
+      }
+    }
+
+    const job = jobMap.get(mostRecentResult.jobId)
+    if (!job) {
+      // Job not found - reset to idle
+      return {
+        ...node,
+        data: { ...data, executionStatus: "idle" }
+      }
+    }
+
+    if (job.status === "completed") {
+      // Job completed - update node with result
+      const outputUrl = job.output_data?.imageUrl ?? job.output_data?.videoUrl ?? job.output_data?.audioUrl
+
+      // Update the result with the URL if it was missing
+      const updatedResults = results.map((r, i) => {
+        if (i === 0 && r.jobId === job.id && !r.url && outputUrl) {
+          return { ...r, url: outputUrl }
+        }
+        return r
+      })
+
+      const newData: Record<string, unknown> = {
+        ...data,
+        executionStatus: "completed",
+        generatedResults: updatedResults,
+        activeResultIndex: 0,
+      }
+
+      // Set the appropriate URL field based on node type
+      if (job.output_data?.imageUrl) {
+        newData.generatedImageUrl = job.output_data.imageUrl
+      } else if (job.output_data?.videoUrl) {
+        newData.generatedVideoUrl = job.output_data.videoUrl
+      } else if (job.output_data?.audioUrl) {
+        newData.generatedAudioUrl = job.output_data.audioUrl
+      } else if (job.output_data?.script) {
+        newData.generatedScript = job.output_data.script
+      }
+
+      console.log(`[sync] Updated node ${node.id} with completed job ${job.id}`)
+      return { ...node, data: newData }
+    } else if (job.status === "failed") {
+      // Job failed - update node with error
+      console.log(`[sync] Updated node ${node.id} with failed job ${job.id}`)
+      return {
+        ...node,
+        data: {
+          ...data,
+          executionStatus: "failed",
+          errorMessage: job.error_message ?? "Job failed"
+        }
+      }
+    } else if (job.status === "cancelled") {
+      // Job was cancelled - reset to idle
+      console.log(`[sync] Updated node ${node.id} - job ${job.id} was cancelled`)
+      return {
+        ...node,
+        data: { ...data, executionStatus: "idle" }
+      }
+    }
+
+    // Job is still pending/processing - keep as running
+    return node
+  })
+
+  return updatedNodes
+}
 
 export function useWorkflowPersistence(projectId?: string) {
   const [saving, setSaving] = useState(false)
@@ -119,13 +280,36 @@ export function useWorkflowPersistence(projectId?: string) {
 
         const settings = (data.settings ?? {}) as Record<string, unknown>
         const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
+        let nodes = data.nodes as WorkflowNode[]
+        const edges = data.edges as WorkflowEdge[]
+
+        // Sync node results from jobs table
+        // This handles the case where user left while jobs were running
+        const syncedNodes = await syncNodeResultsFromDB(nodes, supabase)
+        const nodesChanged = JSON.stringify(syncedNodes) !== JSON.stringify(nodes)
+        nodes = syncedNodes
+
         loadWorkflow(
           data.id,
           data.name,
-          data.nodes as WorkflowNode[],
-          data.edges as WorkflowEdge[],
+          nodes,
+          edges,
           charDefs,
         )
+
+        // If nodes were updated during sync, save the updated workflow
+        if (nodesChanged && projectId) {
+          console.log("[sync] Nodes were updated, saving workflow...")
+          const { error: saveError } = await supabase
+            .from("workflows")
+            .update({ nodes: JSON.parse(JSON.stringify(nodes)) })
+            .eq("id", id)
+
+          if (saveError) {
+            console.error("[sync] Failed to save synced nodes:", saveError)
+          }
+        }
+
         return { success: true }
       } catch (err) {
         return {
@@ -136,7 +320,7 @@ export function useWorkflowPersistence(projectId?: string) {
         setLoading(false)
       }
     },
-    [loadWorkflow],
+    [loadWorkflow, projectId],
   )
 
   // Cleanup fade timer on unmount

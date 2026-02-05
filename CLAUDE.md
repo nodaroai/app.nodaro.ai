@@ -4782,6 +4782,13 @@ The workflow executor uses a DAG-based approach:
 
 6. **Executable Node Types**: Only `generate-image`, `image-to-video`, and `video-to-video` are executable. All other node types (input, parameter, processing) are data-only and read by downstream nodes.
 
+7. **Node Result Synchronization**: When a user leaves and returns to a workflow, jobs may have completed in the background. The `syncNodeResultsFromDB` function (in `use-workflow-persistence.ts`) handles this by:
+   - Finding nodes with `executionStatus === "running"` or `"pending"`
+   - Extracting `jobId` values from each node's `generatedResults` array
+   - Querying the jobs table for actual status
+   - Updating node data if job completed (setting output URL and status) or failed (setting error message)
+   - Persisting the updated nodes back to the workflow if any changes were made
+
 ### Character & Location Extraction
 
 Users can extract visual references from generated scene images to maintain consistency across scenes.
