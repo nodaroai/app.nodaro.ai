@@ -1511,13 +1511,15 @@ const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "wan": [5],
 }
 
-// KIE.ai providers that support start + end frame (2 images → video)
-// Note: This applies to both KIE and Replicate modes for these providers
+// Providers that support start + end frame (2 images → video)
+// Note: This applies to both KIE and Replicate modes
 const PROVIDERS_WITH_END_FRAME: string[] = [
-  "minimax",     // end_image_url parameter
-  "veo3",        // imageUrls array with 2 images
-  "veo3.1",      // imageUrls array with 2 images
-  "kling-turbo", // tail_image_url parameter
+  "minimax",     // KIE: end_image_url parameter
+  "veo3",        // KIE: imageUrls array with 2 images
+  "veo3.1",      // KIE: imageUrls array with 2 images
+  "kling-turbo", // KIE: tail_image_url parameter
+  "runway",      // Replicate
+  "pika",        // Replicate
 ]
 
 function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToVideoData>) {
@@ -1542,7 +1544,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             {/* Available on both Replicate and KIE */}
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
             <SelectItem value="veo3">VEO 3</SelectItem>
-            <SelectItem value="veo3.1">VEO 3.1 (end frame)</SelectItem>
+            <SelectItem value="veo3.1">VEO 3.1 (Fast)</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             {/* Replicate-only providers */}
             {!isKie && (

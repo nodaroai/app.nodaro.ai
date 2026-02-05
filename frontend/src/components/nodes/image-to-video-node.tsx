@@ -17,8 +17,16 @@ import {
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
 // Providers that support End Frame (second image for video ending)
-// Note: veo3 does NOT support end frame, only veo3.1 does
-const END_FRAME_SUPPORTED_PROVIDERS = ["veo3.1", "kling", "runway", "pika"]
+// VEO3/VEO3.1: uses imageUrls array [startFrame, endFrame]
+// MiniMax: uses end_image_url parameter
+// Kling Turbo: uses tail_image_url parameter
+// Note: kling (regular), grok, sora2 do NOT support end frame
+const END_FRAME_SUPPORTED_PROVIDERS = [
+  "veo3", "veo3.1",           // VEO - imageUrls array
+  "minimax",                   // Hailuo - end_image_url
+  "kling-turbo",               // Kling Turbo - tail_image_url
+  "runway", "pika",            // Replicate providers
+]
 
 // Node types that output images
 const IMAGE_OUTPUT_TYPES = [
