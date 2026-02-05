@@ -299,13 +299,41 @@ Canvas-level organizational node for adding notes and documentation to workflows
 | Backend | Fastify (Node.js/TypeScript) | Built |
 | Queue | Redis + BullMQ | Built |
 | Storage | Cloudflare R2 | Built |
-| AI (Image) | google/nano-banana via Replicate | Built |
-| AI (Video) | minimax/video-01, google/veo-3 via Replicate | Built |
+| AI Providers | Replicate (default), KIE.ai (cloud) | Built |
+| AI (Image) | nano-banana, nano-banana-pro, flux, grok, gpt-image | Built |
+| AI (Video) | minimax, veo3, veo3.1, kling, kling-turbo, sora2, grok | Built |
 | AI (Script) | google/gemini-2.5-flash via Replicate | Built |
 | AI (TTS) | elevenlabs/turbo-v2.5 via Replicate | Built |
 | AI (Music) | MusicGen, MiniMax, Lyria, Bark via Replicate | Built |
 | AI (Audio) | TangoFlux, Tango, AudioLDM, Bark via Replicate | Built |
+| AI (Lip Sync) | kling-avatar, hailuo-avatar via KIE.ai | Built |
 | Video/Audio Processing | FFmpeg (merge, trim, resize, extract, mix, captions) | Built |
+
+### AI Provider Support
+
+SceneNode supports two AI provider backends:
+
+**Replicate (Self-Hosted Edition - Default)**
+- Used when `EDITION=self-hosted` or no KIE.ai key configured
+- Users pay Replicate directly for API usage
+- All image/video/audio models available
+
+**KIE.ai (Cloud Edition - Admin Configurable)**
+- Admin can switch provider in Settings page (`/admin/settings`)
+- Platform pays KIE.ai, applies markup to user costs
+- Additional models: VEO 3.1 (fast), Kling Turbo, Sora2, Grok, Lip Sync
+- Model-specific features: duration validation, start+end frame support
+
+**KIE.ai Video Models:**
+| Provider | Duration | End Frame Support |
+|----------|----------|-------------------|
+| minimax | 5s | Yes (end_image_url) |
+| veo3 | 8s (fixed) | Yes (imageUrls array) |
+| veo3.1 | 8s (fixed) | Yes (imageUrls array) |
+| kling | 5/10s | No |
+| kling-turbo | 5/10s | Yes (tail_image_url) |
+| grok | 6/10s | No |
+| sora2 | 5/10s | No |
 
 ## Quick Start
 
@@ -342,18 +370,23 @@ npm run dev
 # Frontend (.env in frontend/)
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+NEXT_PUBLIC_EDITION=self-hosted  # or "cloud" for cloud edition
 
 # Backend (.env in backend/)
 SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 REDIS_URL=redis://localhost:6379
 REPLICATE_API_TOKEN=r8_xxxxx
+
+# KIE.ai (optional, cloud edition only)
+KIE_API_KEY=kie_xxxxx
 ```
 
 ### Getting API Keys
 
 - **Supabase**: https://supabase.com/dashboard - Create a project, copy URL and anon key
 - **Replicate**: https://replicate.com/account/api-tokens - Provides access to Nano Banana (images), video models, and ElevenLabs TTS
+- **KIE.ai** (optional): https://kie.ai - Cloud edition only, provides access to VEO3, Kling, Sora2, Grok, and Lip Sync models
 
 ## Project Structure
 

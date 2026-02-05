@@ -351,20 +351,32 @@ SceneNode does **API orchestration**, not ML inference. All AI work is HTTP call
 
 ### AI Providers (Abstracted)
 
-**MVP (via Replicate):**
-| Category | Model |
-|----------|-------|
-| **Image Generation** | google/nano-banana-pro |
-| **Video Generation** | google/veo-2 (VEO), google/veo-3 (VEO 3) |
+SceneNode supports two AI provider backends, configurable per edition:
+
+**Self-Hosted Edition (via Replicate):**
+| Category | Models |
+|----------|--------|
+| **Image Generation** | nano-banana, nano-banana-pro, flux |
+| **Video Generation** | minimax, veo, veo3, kling, runway, pika, sora |
+| **Voice** | ElevenLabs (via Replicate) |
 | **Script/QA** | google/gemini-2.5-flash |
 
-**Phase 2+ (additional providers):**
-| Category | Providers |
-|----------|-----------|
-| **Image Generation** | Flux, DALL-E |
-| **Video Generation** | Kling, Runway, Pika |
-| **Voice** | ElevenLabs, PlayHT |
-| **Script/QA** | Claude, GPT |
+**Cloud Edition (via KIE.ai - Admin Configurable):**
+| Category | Models |
+|----------|--------|
+| **Image Generation** | nano-banana, nano-banana-pro, flux, grok, gpt-image |
+| **Video Generation** | minimax, veo3, veo3.1, kling, kling-turbo, grok, sora2, sora2-pro |
+| **Lip Sync** | kling-avatar, hailuo-avatar |
+| **Voice** | ElevenLabs (via Replicate) |
+| **Script/QA** | google/gemini-2.5-flash |
+
+**Edition Differences:**
+| Feature | Self-Hosted | Cloud |
+|---------|-------------|-------|
+| AI Provider | Replicate only | Replicate or KIE.ai (admin choice) |
+| Provider Selection UI | Hidden | Admin Settings page |
+| Cost Display | Raw provider cost | Provider cost × markup % |
+| Who Pays Provider | User directly | Platform (with margin) |
 
 ---
 
@@ -4445,15 +4457,72 @@ SceneNode supports multiple AI providers for image generation, with edition-base
 - Default: `ai_provider: "replicate"`, `***REDACTED-OSS-SCRUB***`
 - Admin Settings page at `/admin/settings` (cloud edition only)
 
-**KIE.ai Integration:**
+**KIE.ai Integration (WORKING):**
+- **Status**: Fully operational for image generation, video generation (image-to-video, text-to-video), and lip sync
 - API docs: https://docs.kie.ai/
 - Base URL: https://api.kie.ai
 - Auth: Bearer token (KIE_API_KEY env var)
-- Async task model:
-  1. Submit: `POST /api/v1/jobs/createTask`
-  2. Poll: `GET /api/v1/jobs/recordInfo?taskId=xxx`
-- Cost estimation: KIE.ai doesn't return credits consumed, so we use fixed costs based on pricing page
-- Model mapping: `nano-banana` → `google/nano-banana` (4 credits × $0.005 = $0.02)
+
+**API Endpoints:**
+| Operation | Endpoint | Notes |
+|-----------|----------|-------|
+| Standard tasks | `POST /api/v1/jobs/createTask` | Most models |
+| Standard polling | `GET /api/v1/jobs/recordInfo?taskId=xxx` | state: pending/generating/success/failed |
+| VEO3 tasks | `POST /api/v1/veo/generate` | Special endpoint for VEO |
+| VEO3 polling | `GET /api/v1/veo/record-info?taskId=xxx` | successFlag: 0=generating, 1=success, 2/3=failed |
+
+**Model Mapping Architecture:**
+Central configuration in `backend/src/services/model-mapping.ts`:
+
+```typescript
+export interface KieModelConfig {
+  model: string           // KIE.ai model identifier
+  cost: number            // Cost in USD per generation
+  credits: number         // Credits consumed per generation
+  imageParam?: string     // Parameter name for input image
+  extraParams?: Record<string, unknown>  // Default extra parameters
+  allowedDurations?: number[]  // Video models: allowed durations in seconds
+  usesNFrames?: boolean        // Sora uses n_frames instead of duration
+  supportsEndFrame?: boolean   // Supports start + end frame (2 images → video)
+  endFrameParam?: string       // Parameter name for end frame
+}
+```
+
+**Supported KIE.ai Models:**
+
+| Category | Provider | Model ID | Cost | Duration | End Frame |
+|----------|----------|----------|------|----------|-----------|
+| **Image** | nano-banana | google/nano-banana | $0.02 | - | - |
+| **Image** | nano-banana-pro | google/nano-banana-pro | $0.025 | - | - |
+| **Image** | flux | flux/pro | $0.03 | - | - |
+| **Image** | grok | grok-imagine/image | $0.03 | - | - |
+| **Image** | gpt-image | gpt/image | $0.04 | - | - |
+| **Video** | minimax | hailuo/02-image-to-video-pro | $0.40 | 5s | ✅ end_image_url |
+| **Video** | veo3 | veo3 | $2.00 | 8s (fixed) | ✅ imageUrls[] |
+| **Video** | veo3.1 | veo3_fast | $1.25 | 8s (fixed) | ✅ imageUrls[] |
+| **Video** | kling | kling-2.6/image-to-video | $0.35 | 5/10s | ❌ |
+| **Video** | kling-turbo | kling/v2-5-turbo-image-to-video-pro | $0.25 | 5/10s | ✅ tail_image_url |
+| **Video** | grok-i2v | grok-imagine/image-to-video | $0.30 | 6/10s | ❌ |
+| **Video** | sora2 | sora-2-image-to-video | $0.75 | 5/10s | ❌ (uses n_frames) |
+| **Video** | sora2-pro | sora-2-pro-image-to-video | $1.00 | 5/10s | ❌ (uses n_frames) |
+| **Text-to-Video** | veo3 | veo3 | $2.00 | 8s (fixed) | - |
+| **Text-to-Video** | kling | kling-2.6/text-to-video | $0.35 | 5/10s | - |
+| **Text-to-Video** | grok | grok-imagine/text-to-video | $0.30 | 6/10s | - |
+| **Lip Sync** | kling-avatar | kling/kling-ai-avatars | $0.40 | - | - |
+| **Lip Sync** | hailuo-avatar | hailuo/hailuo-ai-avatars | $0.35 | - | - |
+
+**Duration Validation:**
+- Frontend shows duration dropdown filtered by provider's allowed durations
+- VEO3/VEO3.1: Fixed 8 seconds (no duration parameter)
+- Kling/Kling-Turbo: 5 or 10 seconds
+- Grok: 6 or 10 seconds
+- Sora: Uses `n_frames` (10 = ~5s, 15 = ~10s)
+
+**End Frame Support (Start + End Image → Video):**
+- VEO3/VEO3.1: Pass array `imageUrls: [startFrame, endFrame]`
+- MiniMax: Use `end_image_url` parameter
+- Kling Turbo: Use `tail_image_url` parameter
+- Others (kling, grok, sora2): Single image only (no end frame)
 
 **Cost Flow:**
 ```
@@ -4468,11 +4537,13 @@ API Response → provider_cost → (apply markup if CLOUD) → display_cost → 
 - Admin users see full cost breakdown
 
 **Files:**
-- `backend/src/services/kie-ai.ts` - KIE.ai API client
+- `backend/src/services/model-mapping.ts` - Central model configuration (costs, durations, capabilities)
+- `backend/src/services/kie-ai.ts` - KIE.ai API client with VEO3 special handling
 - `backend/src/lib/app-settings.ts` - Settings cache (5-minute TTL)
 - `backend/src/routes/admin-settings.ts` - Admin settings CRUD
 - `backend/src/routes/jobs.ts` - Response sanitization
 - `frontend/src/app/(admin)/admin/settings/page.tsx` - Admin Settings UI
+- `frontend/src/components/editor/config-panel.tsx` - Duration dropdown filtering
 
 ### Workflow Execution Engine
 
