@@ -15,7 +15,7 @@ const generateVideoBody = z.object({
     // Replicate only
     "veo", "runway", "pika", "sora",
     // KIE only
-    "kling-turbo", "grok-i2v", "sora2", "sora2-pro", "wan"
+    "kling-turbo", "grok-i2v", "sora2-pro"
   ]).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),

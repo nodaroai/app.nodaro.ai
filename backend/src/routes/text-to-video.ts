@@ -11,7 +11,7 @@ const textToVideoBody = z.object({
     // Replicate-only
     "veo", "runway", "pika", "sora",
     // KIE-only
-    "kling-turbo", "grok", "sora2", "sora2-pro"
+    "kling-turbo", "grok", "sora2-pro"
   ]).optional(),
   userId: z.string().uuid().optional(),
 })

@@ -52,8 +52,22 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
     >
       <div className="flex flex-col gap-1">
         {status === "running" && (
-          <div className="flex items-center justify-center h-28 rounded-md bg-muted/30">
+          <div className="flex flex-col items-center justify-center h-28 rounded-md bg-muted/30 gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            {/* Show progress percentage if available from KIE.ai providers */}
+            {nodeData.currentJobProgress != null && nodeData.currentJobProgress > 0 && (
+              <div className="flex flex-col items-center gap-1 w-full px-4">
+                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-300 ease-out"
+                    style={{ width: `${nodeData.currentJobProgress}%` }}
+                  />
+                </div>
+                <span className="text-[11px] text-muted-foreground font-medium">
+                  {nodeData.currentJobProgress}%
+                </span>
+              </div>
+            )}
           </div>
         )}
 

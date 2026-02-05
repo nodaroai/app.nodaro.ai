@@ -138,6 +138,26 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     [connectedNodes]
   )
 
+  // Get connected text-prompt content (for Motion Prompt visual indicator)
+  const connectedTextPrompt = useMemo(() => {
+    // Find connected text-prompt nodes
+    const connectedEdges = edges.filter((e) => e.target === id)
+    for (const edge of connectedEdges) {
+      const srcNode = nodes.find((n) => n.id === edge.source)
+      if (srcNode?.type === "text-prompt") {
+        const srcData = srcNode.data as Record<string, unknown>
+        const text = srcData.text as string | undefined
+        if (text?.trim()) {
+          return {
+            text: text.trim(),
+            nodeLabel: (srcData.label as string | undefined) ?? "Text Prompt",
+          }
+        }
+      }
+    }
+    return null
+  }, [edges, nodes, id])
+
   // Auto-select first image for Start Frame when connected
   useEffect(() => {
     if (imageNodes.length > 0 && !nodeData.selectedStartFrameNodeId) {
@@ -395,24 +415,51 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
               )}
             </div>
 
-            {/* Motion Prompt - Optional text description */}
-            <div className="flex flex-col gap-1 mt-1">
-              <span className="text-[10px] text-muted-foreground font-medium">
-                Motion Prompt <span className="text-muted-foreground/60">(optional)</span>
-              </span>
-              <textarea
-                value={nodeData.motionPrompt ?? ""}
-                onChange={(e) => updateNodeData(id, { motionPrompt: e.target.value })}
-                placeholder="Describe the motion, e.g. 'camera slowly zooms in while subject walks forward'"
-                className="w-full min-h-[60px] p-2 text-[11px] bg-background border rounded-md resize-none placeholder:text-muted-foreground/50"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
           </div>
         )}
 
+        {/* Motion Prompt - Always visible, shows connected text when available */}
+        <div className="flex flex-col gap-1 px-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground font-medium">
+              Motion Prompt <span className="text-muted-foreground/60">(optional)</span>
+            </span>
+            {connectedTextPrompt && !nodeData.motionPrompt && (
+              <span className="text-[9px] text-primary/70 italic flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
+                From: {connectedTextPrompt.nodeLabel}
+              </span>
+            )}
+          </div>
+          {/* Show connected text preview when no direct motionPrompt is set */}
+          {connectedTextPrompt && !nodeData.motionPrompt && (
+            <div
+              className="w-full min-h-[40px] p-2 text-[11px] bg-primary/5 border border-primary/20 rounded-md text-muted-foreground italic overflow-hidden"
+              style={{ wordBreak: "break-word" }}
+            >
+              {connectedTextPrompt.text.length > 120
+                ? `${connectedTextPrompt.text.slice(0, 120)}...`
+                : connectedTextPrompt.text}
+            </div>
+          )}
+          <textarea
+            value={nodeData.motionPrompt ?? ""}
+            onChange={(e) => updateNodeData(id, { motionPrompt: e.target.value })}
+            placeholder={connectedTextPrompt && !nodeData.motionPrompt
+              ? "Type to override connected prompt..."
+              : "Describe the motion, e.g. 'camera slowly zooms in while subject walks forward'"
+            }
+            className={`w-full min-h-[60px] p-2 text-[11px] border rounded-md resize-none placeholder:text-muted-foreground/50 ${
+              connectedTextPrompt && !nodeData.motionPrompt
+                ? "bg-muted/20 border-dashed h-[36px] min-h-[36px]"
+                : "bg-background"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+
         {/* Empty state when nothing connected */}
-        {!hasConnections && status !== "running" && !activeUrl && (
+        {!hasConnections && !connectedTextPrompt && status !== "running" && !activeUrl && (
           <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
             <Film className="w-8 h-8" />
             <span className="text-[10px]">Connect image/audio nodes</span>
@@ -421,8 +468,22 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Video Preview / Loading / Error States */}
         {status === "running" && (
-          <div className="flex items-center justify-center h-28 rounded-md bg-muted/30">
+          <div className="flex flex-col items-center justify-center h-28 rounded-md bg-muted/30 gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            {/* Show progress percentage if available from KIE.ai providers */}
+            {nodeData.currentJobProgress != null && nodeData.currentJobProgress > 0 && (
+              <div className="flex flex-col items-center gap-1 w-full px-4">
+                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-300 ease-out"
+                    style={{ width: `${nodeData.currentJobProgress}%` }}
+                  />
+                </div>
+                <span className="text-[11px] text-muted-foreground font-medium">
+                  {nodeData.currentJobProgress}%
+                </span>
+              </div>
+            )}
           </div>
         )}
 

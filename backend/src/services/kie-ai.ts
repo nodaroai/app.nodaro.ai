@@ -36,40 +36,61 @@ const MAX_POLL_ATTEMPTS_VIDEO = 300  // Max 10 minutes for video (300 * 2s)
 // =============================================================================
 
 /**
+ * Custom error class that carries both sanitized message (for UI) and internal details (for logs/debugging).
+ * The `message` property is user-friendly, while `internalDetails` contains the raw KIE.ai error.
+ */
+export class KieError extends Error {
+  public readonly internalDetails: string
+  public readonly context: string
+
+  constructor(sanitizedMessage: string, internalDetails: string, context: string) {
+    super(sanitizedMessage)
+    this.name = "KieError"
+    this.internalDetails = internalDetails
+    this.context = context
+  }
+
+  /** Get full error message including internal details (for logging/debugging) */
+  getFullMessage(): string {
+    return `[${this.context}] ${this.message} | Internal: ${this.internalDetails}`
+  }
+}
+
+/**
  * Create a sanitized error for user display while logging full details.
  * In cloud edition, we don't want to expose "KIE.ai" provider name to customers.
+ * Returns a KieError that carries both the sanitized message and internal details.
  */
 function createSanitizedError(
   internalMessage: string,
   context: string,
-): Error {
+): KieError {
   // Log the full internal error for debugging (visible in Railway logs)
   console.error(`[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`)
 
   // Parse specific error patterns and return user-friendly messages
   const lowerMsg = internalMessage.toLowerCase()
 
+  let sanitizedMessage: string
+
   if (lowerMsg.includes("aspect_ratio") || lowerMsg.includes("aspect ratio")) {
-    return new Error("Invalid aspect ratio setting. Please try a different option.")
-  }
-  if (lowerMsg.includes("timed out") || lowerMsg.includes("timeout")) {
-    return new Error("Generation timed out. Please try again.")
-  }
-  if (lowerMsg.includes("not configured") || lowerMsg.includes("api_key")) {
-    return new Error("Service is not properly configured. Please contact support.")
-  }
-  if (lowerMsg.includes("rate limit") || lowerMsg.includes("quota") || lowerMsg.includes("429")) {
-    return new Error("Service is temporarily busy. Please try again in a moment.")
-  }
-  if (lowerMsg.includes("invalid") || lowerMsg.includes("validation")) {
-    return new Error("Invalid input parameters. Please check your settings and try again.")
-  }
-  if (lowerMsg.includes("not support")) {
-    return new Error("This operation is not supported with the current provider.")
+    sanitizedMessage = "Invalid aspect ratio setting. Please try a different option."
+  } else if (lowerMsg.includes("timed out") || lowerMsg.includes("timeout")) {
+    sanitizedMessage = "Generation timed out. Please try again."
+  } else if (lowerMsg.includes("not configured") || lowerMsg.includes("api_key")) {
+    sanitizedMessage = "Service is not properly configured. Please contact support."
+  } else if (lowerMsg.includes("rate limit") || lowerMsg.includes("quota") || lowerMsg.includes("429")) {
+    sanitizedMessage = "Service is temporarily busy. Please try again in a moment."
+  } else if (lowerMsg.includes("invalid") || lowerMsg.includes("validation")) {
+    sanitizedMessage = "Invalid input parameters. Please check your settings and try again."
+  } else if (lowerMsg.includes("not support")) {
+    sanitizedMessage = "This operation is not supported with the current provider."
+  } else {
+    // Generic fallback - hide all provider-specific details
+    sanitizedMessage = `${context} failed. Please try again or contact support if the issue persists.`
   }
 
-  // Generic fallback - hide all provider-specific details
-  return new Error(`${context} failed. Please try again or contact support if the issue persists.`)
+  return new KieError(sanitizedMessage, internalMessage, context)
 }
 
 // =============================================================================
@@ -122,13 +143,18 @@ export interface KieResult {
 // CORE API FUNCTIONS
 // =============================================================================
 
+/** Progress callback type for real-time progress updates */
+export type ProgressCallback = (progress: number) => Promise<void>
+
 /**
  * Submit a task to KIE.ai and poll for completion
+ * @param onProgress - Optional callback called when progress updates (0-100)
  */
 async function runKieTask(
   model: string,
   input: Record<string, unknown>,
   maxAttempts: number = MAX_POLL_ATTEMPTS,
+  onProgress?: ProgressCallback,
 ): Promise<{ resultJson: KieResultJson; costTime?: number }> {
   const apiKey = config.KIE_API_KEY
 
@@ -138,8 +164,12 @@ async function runKieTask(
 
   const requestBody = { model, input }
 
-  console.log(`[KIE.ai] Creating task for model: ${model}`)
-  console.log(`[KIE.ai] Request body:`, JSON.stringify(requestBody, null, 2))
+  console.log(`[KIE.ai] >>>>>> SENDING TO KIE.AI API <<<<<<`)
+  console.log(`[KIE.ai] Endpoint: ${KIE_API_BASE}/api/v1/jobs/createTask`)
+  console.log(`[KIE.ai] Model: ${model}`)
+  console.log(`[KIE.ai] FULL REQUEST BODY:`)
+  console.log(JSON.stringify(requestBody, null, 2))
+  console.log(`[KIE.ai] >>>>>> END REQUEST BODY <<<<<<`)
 
   // Step 1: Create task
   const createResponse = await fetch(`${KIE_API_BASE}/api/v1/jobs/createTask`, {
@@ -210,9 +240,18 @@ async function runKieTask(
       continue
     }
 
-    // Log progress for sora2 models (0-100)
+    // Log progress for sora2 models (0-100) and call callback if provided
     const progress = detailData.data.progress
     console.log(`[KIE.ai] Task ${taskId} state: ${state}${progress !== undefined ? ` (progress: ${progress}%)` : ""} (attempt ${attempts})`)
+
+    // Call progress callback if we have progress data
+    if (progress !== undefined && onProgress) {
+      try {
+        await onProgress(progress)
+      } catch (e) {
+        console.warn(`[KIE.ai] Progress callback error:`, e)
+      }
+    }
 
     if (state === "success") {
       const resultJsonStr = detailData.data.resultJson
@@ -232,9 +271,13 @@ async function runKieTask(
 
     // NOTE: KIE.ai API returns "fail" not "failed"!
     if (state === "fail") {
-      const failMsg = detailData.data.failMsg ?? detailData.data.failCode ?? "Unknown error"
-      console.error(`[KIE.ai] Task ${taskId} failed: ${failMsg}`)
-      throw createSanitizedError(`task failed: ${failMsg}`, "Generation")
+      const failMsg = detailData.data.failMsg ?? "Unknown error"
+      const failCode = detailData.data.failCode ?? "no_code"
+      console.error(`[KIE.ai] Task ${taskId} FAILED:`)
+      console.error(`  failCode: ${failCode}`)
+      console.error(`  failMsg: ${failMsg}`)
+      console.error(`  Full response: ${JSON.stringify(detailData, null, 2)}`)
+      throw createSanitizedError(`task failed: [${failCode}] ${failMsg}`, "Generation")
     }
 
     // States "waiting", "queuing", "generating" are all in-progress - continue polling
@@ -525,17 +568,27 @@ export async function imageToVideoKie(
   provider: string = "minimax",
   duration?: number,
   endFrameUrl?: string,
+  onProgress?: ProgressCallback,
 ): Promise<KieResult> {
   const modelConfig = KIE_VIDEO_MODELS[provider]
   if (!modelConfig) {
     throw createSanitizedError(`does not support video provider: ${provider}`, "Video generation")
   }
 
-  console.log(`[KIE.ai] Generating video with provider: ${provider}, model: ${modelConfig.model}`)
-  console.log(`[KIE.ai] Image: ${imageUrl}`)
-  console.log(`[KIE.ai] Prompt: "${prompt ?? "(default)"}"`)
-  console.log(`[KIE.ai] Duration: ${duration ?? "(default)"}, End frame: ${endFrameUrl ?? "(none)"}`)
-  console.log(`[KIE.ai] Model config: usesNFrames=${modelConfig.usesNFrames}, allowedDurations=${JSON.stringify(modelConfig.allowedDurations)}`)
+  console.log(`[KIE.ai] ========== VIDEO GENERATION REQUEST ==========`)
+  console.log(`[KIE.ai] Provider: ${provider}`)
+  console.log(`[KIE.ai] Model: ${modelConfig.model}`)
+  console.log(`[KIE.ai] Image URL: ${imageUrl}`)
+  console.log(`[KIE.ai] Prompt: "${prompt ?? "(default: smooth cinematic motion)"}"`)
+  console.log(`[KIE.ai] Duration requested: ${duration ?? "(default)"}`)
+  console.log(`[KIE.ai] End frame URL: ${endFrameUrl ?? "(none)"}`)
+  console.log(`[KIE.ai] Model config:`)
+  console.log(`  - usesNFrames: ${modelConfig.usesNFrames ?? false}`)
+  console.log(`  - allowedDurations: ${JSON.stringify(modelConfig.allowedDurations)}`)
+  console.log(`  - extraParams: ${JSON.stringify(modelConfig.extraParams ?? {})}`)
+  console.log(`  - imageParam: ${modelConfig.imageParam ?? "image"}`)
+  console.log(`  - supportsEndFrame: ${modelConfig.supportsEndFrame ?? false}`)
+  console.log(`[KIE.ai] ==============================================`)
 
   // VEO3 uses a special API endpoint
   if (provider === "veo3" || provider === "veo3.1") {
@@ -598,7 +651,7 @@ export async function imageToVideoKie(
 
   console.log(`[KIE.ai] Final input:`, JSON.stringify(input, null, 2))
 
-  const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
+  const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO, onProgress)
 
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
   if (!videoUrl) {

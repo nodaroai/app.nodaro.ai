@@ -10,7 +10,7 @@ const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 export type ReplicateVideoProvider = "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika" | "sora" | "minimax"
 
 // KIE.ai only providers
-export type KieVideoProvider = "kling-turbo" | "grok-i2v" | "sora2" | "sora2-pro" | "wan"
+export type KieVideoProvider = "kling-turbo" | "grok-i2v" | "sora2-pro"
 
 // All video providers
 export type VideoProvider = ReplicateVideoProvider | KieVideoProvider

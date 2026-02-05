@@ -22,7 +22,7 @@ import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
-import { editImageKie, generateImageKie, imageToVideoKie, lipSyncKie, textToVideoKie } from "../services/kie-ai.js"
+import { editImageKie, generateImageKie, imageToVideoKie, lipSyncKie, textToVideoKie, KieError, type ProgressCallback } from "../services/kie-ai.js"
 import { getAppSettings as getKieAppSettings } from "../lib/app-settings.js"
 import { isKieSupported } from "../services/model-mapping.js"
 import { promises as fs } from "node:fs"
@@ -182,7 +182,20 @@ export function createVideoWorker() {
 
           if (useKie) {
             console.log(`[worker] Using KIE.ai for image-to-video (provider: ${provider ?? "minimax"})`)
-            const kieResult = await imageToVideoKie(imageUrl, prompt, provider ?? "minimax", duration, endFrameUrl)
+
+            // Create progress callback that updates the job record in the database
+            // This allows the frontend to show real-time progress
+            const onProgress: ProgressCallback = async (progress: number) => {
+              // Pass through the raw KIE.ai progress (0-100%)
+              console.log(`[worker] Job ${jobId} KIE progress: ${progress}%`)
+
+              await supabase
+                .from("jobs")
+                .update({ progress })
+                .eq("id", jobId)
+            }
+
+            const kieResult = await imageToVideoKie(imageUrl, prompt, provider ?? "minimax", duration, endFrameUrl, onProgress)
             videoUrl = kieResult.url
             providerCost = kieResult.cost
           } else {
@@ -707,13 +720,30 @@ export function createVideoWorker() {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error"
-        console.error(`[worker] Job ${jobId} failed:`, message)
+
+        // For KieError, log the internal details for debugging
+        let internalDetails: string | undefined
+        if (err instanceof KieError) {
+          internalDetails = err.internalDetails
+          console.error(`[worker] Job ${jobId} failed (KIE.ai):`)
+          console.error(`  User message: ${message}`)
+          console.error(`  Internal details: ${internalDetails}`)
+          console.error(`  Context: ${err.context}`)
+        } else {
+          console.error(`[worker] Job ${jobId} failed:`, message)
+        }
+
+        // Save error to database - include internal details for debugging
+        // Format: "User message | Internal: KIE.ai error details"
+        const errorMessageForDb = internalDetails
+          ? `${message} | Internal: ${internalDetails}`
+          : message
 
         await supabase
           .from("jobs")
           .update({
             status: "failed",
-            error_message: message,
+            error_message: errorMessageForDb,
             completed_at: new Date().toISOString(),
           })
           .eq("id", jobId)

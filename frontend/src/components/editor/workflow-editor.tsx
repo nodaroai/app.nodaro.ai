@@ -1031,7 +1031,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number, prompt?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
-    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
+    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined, currentJobId: undefined, currentJobProgress: undefined })
 
     return new Promise((resolve, reject) => {
       generateVideo({
@@ -1045,10 +1045,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         userId: user?.id,
       }).then(({ jobId }) => {
         toast.info("Video generation started", { description: `Job ID: ${jobId}` })
+        // Store the job ID so we can track progress
+        updateNodeData(nodeId, { currentJobId: jobId })
 
         const poll = trackInterval(setInterval(async () => {
           try {
             const job = await getJobStatus(jobId)
+
+            // Update progress if available (KIE.ai providers report progress)
+            if (job.progress != null && job.progress > 0) {
+              updateNodeData(nodeId, { currentJobProgress: job.progress })
+            }
+
             if (job.status === "completed") {
               untrackInterval(poll)
               const videoUrl = job.output_data?.videoUrl
@@ -1059,25 +1067,27 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 generatedVideoUrl: videoUrl,
                 generatedResults: [newResult, ...existingResults],
                 activeResultIndex: 0,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
               })
               toast.success("Video generated")
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
               const errMsg = job.error_message ?? "Unknown error"
-              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
               toast.error("Video generation failed", { description: errMsg })
               reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
+            updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
             toast.error("Failed to check video job status")
             reject(err)
           }
         }, 2000))
       }).catch((err) => {
-        updateNodeData(nodeId, { executionStatus: "failed" })
+        updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
         toast.error("Failed to start video generation", {
           description: err instanceof Error ? err.message : "Unknown error",
         })
@@ -1088,15 +1098,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   function runVideoToVideoGeneration(nodeId: string, sourceVideoUrl: string, prompt?: string, provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
-    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
+    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined, currentJobId: undefined, currentJobProgress: undefined })
 
     return new Promise((resolve, reject) => {
       videoToVideo(sourceVideoUrl, prompt, provider, user?.id).then(({ jobId }) => {
         toast.info("Video-to-video generation started", { description: `Job ID: ${jobId}` })
+        // Store the job ID so we can track progress
+        updateNodeData(nodeId, { currentJobId: jobId })
 
         const poll = trackInterval(setInterval(async () => {
           try {
             const job = await getJobStatus(jobId)
+
+            // Update progress if available (KIE.ai providers report progress)
+            if (job.progress != null && job.progress > 0) {
+              updateNodeData(nodeId, { currentJobProgress: job.progress })
+            }
+
             if (job.status === "completed") {
               untrackInterval(poll)
               const videoUrl = job.output_data?.videoUrl
@@ -1107,25 +1125,27 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 generatedVideoUrl: videoUrl,
                 generatedResults: [newResult, ...existingResults],
                 activeResultIndex: 0,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
               })
               toast.success("Video-to-video generated")
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
               const errMsg = job.error_message ?? "Unknown error"
-              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
               toast.error("Video-to-video generation failed", { description: errMsg })
               reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
+            updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
             toast.error("Failed to check video-to-video job status")
             reject(err)
           }
         }, 2000))
       }).catch((err) => {
-        updateNodeData(nodeId, { executionStatus: "failed" })
+        updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
         toast.error("Failed to start video-to-video generation", {
           description: err instanceof Error ? err.message : "Unknown error",
         })
@@ -1136,15 +1156,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   function runTextToVideoGeneration(nodeId: string, prompt: string, provider?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
-    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
+    updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined, currentJobId: undefined, currentJobProgress: undefined })
 
     return new Promise((resolve, reject) => {
       textToVideo(prompt, provider, user?.id).then(({ jobId }) => {
         toast.info("Text-to-video generation started", { description: `Job ID: ${jobId}` })
+        // Store the job ID so we can track progress
+        updateNodeData(nodeId, { currentJobId: jobId })
 
         const poll = trackInterval(setInterval(async () => {
           try {
             const job = await getJobStatus(jobId)
+
+            // Update progress if available (KIE.ai providers report progress)
+            if (job.progress != null && job.progress > 0) {
+              updateNodeData(nodeId, { currentJobProgress: job.progress })
+            }
+
             if (job.status === "completed") {
               untrackInterval(poll)
               const videoUrl = job.output_data?.videoUrl
@@ -1155,25 +1183,27 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 generatedVideoUrl: videoUrl,
                 generatedResults: [newResult, ...existingResults],
                 activeResultIndex: 0,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
               })
               toast.success("Text-to-video generated")
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
               const errMsg = job.error_message ?? "Unknown error"
-              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
               toast.error("Text-to-video generation failed", { description: errMsg })
               reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
+            updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
             toast.error("Failed to check text-to-video job status")
             reject(err)
           }
         }, 2000))
       }).catch((err) => {
-        updateNodeData(nodeId, { executionStatus: "failed" })
+        updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
         toast.error("Failed to start text-to-video generation", {
           description: err instanceof Error ? err.message : "Unknown error",
         })
@@ -1490,8 +1520,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }
       }
 
-      console.log(`[executeNode] image-to-video node provider: "${nodeProvider ?? 'undefined'}", startFrame: ${!!startFrameUrl}, endFrame: ${!!endFrameUrl}, audio: ${!!audioUrl}, prompt: ${!!i2vData.motionPrompt}`)
-      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, i2vData.motionPrompt)
+      // Use connected Text Prompt (inputs.prompt) OR direct motionPrompt field
+      const prompt = inputs.prompt ?? i2vData.motionPrompt
+      console.log(`[executeNode] image-to-video node provider: "${nodeProvider ?? 'undefined'}", startFrame: ${!!startFrameUrl}, endFrame: ${!!endFrameUrl}, audio: ${!!audioUrl}, prompt: ${!!prompt}, inputs.prompt: ${!!inputs.prompt}, motionPrompt: ${!!i2vData.motionPrompt}`)
+      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt)
     }
 
     if (node.type === "video-to-video") {

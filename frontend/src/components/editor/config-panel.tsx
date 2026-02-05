@@ -196,6 +196,7 @@ interface ConfigProps<T> {
   readonly fieldMappings: FieldMappings
   readonly onMapField: (field: string, sourceNodeId: string | null) => void
   readonly nodes: ReadonlyArray<WorkflowNode>
+  readonly onUpdateNode?: (nodeId: string, data: Record<string, unknown>) => void
 }
 
 function MappableField({
@@ -437,7 +438,7 @@ export function ConfigPanel() {
             <ImageToImageConfig data={selectedNode.data as ImageToImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "image-to-video" && (
-            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} onUpdateNode={updateNodeData} />
           )}
           {selectedNode.type === "video-to-video" && (
             <VideoToVideoConfig data={selectedNode.data as VideoToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -1506,9 +1507,7 @@ const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "kling": [5, 10],
   "kling-turbo": [5, 10],
   "grok-i2v": [6, 10],
-  "sora2": [5, 10],
   "sora2-pro": [5, 10],
-  "wan": [5],
 }
 
 // Providers that support start + end frame (2 images → video)
@@ -1522,9 +1521,10 @@ const PROVIDERS_WITH_END_FRAME: string[] = [
   "pika",        // Replicate
 ]
 
-function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToVideoData>) {
+function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode }: ConfigProps<ImageToVideoData>) {
   const { settings } = useAppSettings()
   const isKie = settings.ai_provider === "kie"
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
   // Get allowed durations for current provider (KIE mode only)
   const allowedDurations = isKie ? (KIE_VIDEO_DURATIONS[data.provider || "minimax"] || [5]) : null
@@ -1532,8 +1532,141 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
   // Check if current provider supports end frame
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
 
+  // Find connected text-prompt sources
+  const connectedTextPrompts = useMemo(() => {
+    return sources.filter((s) => s.type === "text-prompt").map((s) => ({
+      id: s.id,
+      label: s.label,
+      text: (s.nodeData?.text as string) || "",
+      targetHandle: s.targetHandle,
+    }))
+  }, [sources])
+
+  // Find connected image sources (generate-image, upload-image, character, object, location)
+  const connectedImages = useMemo(() => {
+    const imageTypes = ["generate-image", "upload-image", "character", "object", "location"]
+    return sources.filter((s) => imageTypes.includes(s.type)).map((s) => {
+      let imageUrl: string | undefined
+      const nodeData = s.nodeData || {}
+
+      // Extract image URL based on node type
+      if (s.type === "upload-image") {
+        imageUrl = (nodeData.url as string) || undefined
+      } else if (s.type === "generate-image") {
+        // Check generatedResults first, then generatedImageUrl
+        const results = nodeData.generatedResults as Array<{ url?: string }> | undefined
+        const activeIndex = (nodeData.activeResultIndex as number) ?? 0
+        if (results && results.length > 0) {
+          imageUrl = results[activeIndex]?.url || results[0]?.url
+        }
+        if (!imageUrl) {
+          imageUrl = (nodeData.generatedImageUrl as string) || undefined
+        }
+      } else if (s.type === "character" || s.type === "object" || s.type === "location") {
+        // Asset nodes store main image in sourceImageUrl
+        imageUrl = (nodeData.sourceImageUrl as string) || undefined
+      }
+
+      return {
+        id: s.id,
+        type: s.type,
+        label: s.label,
+        imageUrl,
+        targetHandle: s.targetHandle,
+      }
+    })
+  }, [sources])
+
+  // Handler for updating connected text prompt
+  const handleTextPromptChange = useCallback((nodeId: string, newText: string) => {
+    if (onUpdateNode) {
+      onUpdateNode(nodeId, { text: newText })
+    }
+  }, [onUpdateNode])
+
   return (
     <div className="flex flex-col gap-3">
+      {/* Connected Images Section */}
+      {connectedImages.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
+            Connected Images ({connectedImages.length})
+          </Label>
+          <div className="flex flex-wrap gap-2">
+            {connectedImages.map((img) => (
+              <div key={img.id} className="relative group">
+                <div className="flex flex-col gap-1">
+                  <div
+                    className="w-16 h-16 rounded-lg border border-gray-200 dark:border-[#2D2D2D] overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-gray-100 dark:bg-[#121212]"
+                    onClick={() => img.imageUrl && setLightboxImage(img.imageUrl)}
+                    title={`Click to view: ${img.label}`}
+                  >
+                    {img.imageUrl ? (
+                      <img
+                        src={img.imageUrl}
+                        alt={img.label}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageIcon className="w-6 h-6 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[9px] text-gray-500 dark:text-[#64748B] truncate max-w-[64px] text-center">
+                    {img.targetHandle === "end-frame" ? "End Frame" : img.label}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">Click to view full size</p>
+        </div>
+      )}
+
+      {/* Connected Text Prompts Section */}
+      {connectedTextPrompts.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
+            Motion Prompt (from connected node)
+          </Label>
+          {connectedTextPrompts.map((prompt) => (
+            <div key={prompt.id} className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <FileText className="w-3 h-3 text-[#ff0073]" />
+                <span className="text-[10px] text-[#ff0073] font-medium">{prompt.label}</span>
+              </div>
+              <Textarea
+                value={prompt.text}
+                onChange={(e) => handleTextPromptChange(prompt.id, e.target.value)}
+                placeholder="Enter motion prompt..."
+                rows={3}
+                className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Motion Prompt (manual, when no text prompt connected) */}
+      {connectedTextPrompts.length === 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
+            Motion Prompt
+          </Label>
+          <Textarea
+            value={data.motionPrompt || ""}
+            onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
+            placeholder="Describe the motion or animation you want..."
+            rows={3}
+            className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1.5">
+            Tip: Connect a Text Prompt node for reusable prompts
+          </p>
+        </div>
+      )}
+
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={data.provider || "minimax"}
@@ -1560,9 +1693,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
               <>
                 <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
                 <SelectItem value="grok-i2v">Grok</SelectItem>
-                <SelectItem value="sora2">Sora 2</SelectItem>
                 <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
-                <SelectItem value="wan">Wan</SelectItem>
               </>
             )}
           </SelectContent>
@@ -1651,6 +1782,15 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           </SelectContent>
         </Select>
       </MappableField>
+
+      {/* Image Lightbox */}
+      {lightboxImage && (
+        <ImageLightbox
+          src={lightboxImage}
+          alt="Connected image"
+          onClose={() => setLightboxImage(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1718,7 +1858,6 @@ const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "kling": [5, 10],
   "kling-turbo": [5, 10],
   "grok": [6, 10],
-  "sora2": [5, 10],
   "sora2-pro": [5, 10],
 }
 
@@ -1770,7 +1909,6 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
               <>
                 <SelectItem value="kling-turbo">Kling Turbo</SelectItem>
                 <SelectItem value="grok">Grok</SelectItem>
-                <SelectItem value="sora2">Sora 2</SelectItem>
                 <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
               </>
             )}

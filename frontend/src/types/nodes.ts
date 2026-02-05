@@ -400,7 +400,7 @@ export type ImageToImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2" | "sora2-pro" | "wan"
+  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro"
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
@@ -417,6 +417,9 @@ export type ImageToVideoData = {
   selectedStartFrameNodeId?: string  // ID of node selected for start frame
   selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)
   selectedAudioNodeId?: string       // ID of node selected for audio track (optional)
+  // Progress tracking fields
+  currentJobId?: string              // ID of the currently running job (for progress polling)
+  currentJobProgress?: number        // Progress percentage from backend (0-100)
 }
 
 export type TextToSpeechData = {
@@ -441,7 +444,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "grok" | "sora2" | "sora2-pro"
+  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "grok" | "sora2-pro"
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"
@@ -452,6 +455,9 @@ export type TextToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  // Progress tracking fields
+  currentJobId?: string              // ID of the currently running job (for progress polling)
+  currentJobProgress?: number        // Progress percentage from backend (0-100)
 }
 
 export type VideoToVideoData = {
@@ -468,6 +474,9 @@ export type VideoToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  // Progress tracking fields
+  currentJobId?: string              // ID of the currently running job (for progress polling)
+  currentJobProgress?: number        // Progress percentage from backend (0-100)
 }
 
 export type LipSyncData = {
