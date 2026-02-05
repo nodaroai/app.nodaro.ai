@@ -146,8 +146,10 @@ async function runKieTask(
 
   const responseText = await createResponse.text()
   console.log(`[KIE.ai] Response status: ${createResponse.status}`)
+  console.log(`[KIE.ai] Response body (first 500 chars): ${responseText.substring(0, 500)}`)
 
   if (!createResponse.ok) {
+    console.error(`[KIE.ai] createTask HTTP error - Status: ${createResponse.status}, Body: ${responseText}`)
     throw createSanitizedError(`createTask failed: ${createResponse.status} - ${responseText}`, "Generation")
   }
 
@@ -159,6 +161,7 @@ async function runKieTask(
   }
 
   if (createData.code !== 0 && createData.code !== 200 && createData.code !== undefined) {
+    console.error(`[KIE.ai] createTask API error - Code: ${createData.code}, Message: ${createData.message}, Full: ${JSON.stringify(createData)}`)
     throw createSanitizedError(`createTask error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`, "Generation")
   }
 
@@ -519,6 +522,7 @@ export async function imageToVideoKie(
   console.log(`[KIE.ai] Image: ${imageUrl}`)
   console.log(`[KIE.ai] Prompt: "${prompt ?? "(default)"}"`)
   console.log(`[KIE.ai] Duration: ${duration ?? "(default)"}, End frame: ${endFrameUrl ?? "(none)"}`)
+  console.log(`[KIE.ai] Model config: usesNFrames=${modelConfig.usesNFrames}, allowedDurations=${JSON.stringify(modelConfig.allowedDurations)}`)
 
   // VEO3 uses a special API endpoint
   if (provider === "veo3" || provider === "veo3.1") {
