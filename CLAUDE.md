@@ -3804,6 +3804,25 @@ const animatedEdges = edges.map((edge) => ({
 }))
 ```
 
+### Edge Highlighting on Node Drag
+
+When a user drags a node on the canvas, all edges connected to that node (both incoming and outgoing) are highlighted in pink (#ff0073) to help visualize the node's connections in busy canvases.
+
+**Behavior:**
+- Drag start: All edges where `edge.source === nodeId` OR `edge.target === nodeId` turn pink
+- Drag end: Edges return to their default color
+- Execution animations take priority: If a node is running while being dragged, execution animation colors (pink for output, blue for input) are preserved
+
+**Implementation**: Uses `onNodeDragStart` and `onNodeDragStop` handlers on the ReactFlow component, with a `draggingNodeId` state variable.
+
+**Location**: `frontend/src/components/editor/workflow-canvas.tsx`
+
+**Priority order for edge colors:**
+1. Running output animation (pink #ff0073) - highest priority
+2. Running input animation (blue #3b82f6)
+3. Drag highlighting (pink #ff0073)
+4. Default edge color - lowest priority
+
 ### Node Resizing
 
 All nodes are resizable using React Flow's `NodeResizer` component. Users can drag corners or edges to resize any node. Each node type has appropriate minimum dimensions defined in `BaseNode`.

@@ -81,9 +81,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
   const isMobile = useIsMobile()
 
-  // Transform edges to be animated when source or target node is running
+  // Transform edges to be animated when source or target node is running, or highlighted when dragging
   const animatedEdges = useMemo(() => {
     // Build a set of node IDs that are currently running
     const runningNodeIds = new Set(
@@ -100,22 +101,36 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const isInputRunning = runningNodeIds.has(edge.target)  // Input: target is running (blue)
       const hasAnimation = isRunning || isInputRunning
 
-      // Determine edge color: pink for output, blue for input (pink takes priority)
-      const edgeColor = isRunning ? "#ff0073" : isInputRunning ? "#3b82f6" : undefined
+      // Check if this edge is connected to the currently dragged node
+      const isDragging = draggingNodeId !== null &&
+        (edge.source === draggingNodeId || edge.target === draggingNodeId)
+
+      // Execution animations take priority over drag highlighting
+      // Edge color priority: running (pink) > input running (blue) > dragging (pink) > default
+      let edgeColor: string | undefined
+      if (isRunning) {
+        edgeColor = "#ff0073"  // Pink for output animation
+      } else if (isInputRunning) {
+        edgeColor = "#3b82f6"  // Blue for input animation
+      } else if (isDragging) {
+        edgeColor = "#ff0073"  // Pink for drag highlighting
+      }
+
+      const shouldHighlight = hasAnimation || isDragging
 
       return {
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
-        animated: hasAnimation,
+        animated: hasAnimation, // Only animate for execution, not for dragging
         data: { ...edge.data, isRunning, isInputRunning },
-        style: hasAnimation ? {
+        style: shouldHighlight ? {
           ...edge.style,
           stroke: edgeColor,
           strokeWidth: 2,
         } : edge.style,
       }
     })
-  }, [nodes, edges])
+  }, [nodes, edges, draggingNodeId])
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
@@ -394,6 +409,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onPaneClick={handlePaneClick}
           onNodeContextMenu={handleNodeContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
+          onNodeDragStart={(_event, node) => setDraggingNodeId(node.id)}
+          onNodeDragStop={() => setDraggingNodeId(null)}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: 'default' }}

@@ -99,6 +99,11 @@ A horizontal control bar at the bottom-left of the canvas:
 - **Flowing dots**: Glowing circles travel along the edge path using SVG animateMotion
 - Activates automatically during workflow execution
 
+### Edge Highlighting on Drag
+- **Drag highlighting**: All connected edges (incoming and outgoing) turn pink (#ff0073) while dragging a node
+- **Visual clarity**: Helps identify node connections in busy canvases
+- **Priority**: Execution animations take precedence over drag highlighting
+
 ### 37 Node Types
 
 | Category | Nodes |
