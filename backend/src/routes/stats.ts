@@ -41,40 +41,47 @@ export async function statsRoutes(app: FastifyInstance) {
     console.log("[stats] Request received:", { scope, userId, rawQuery: req.query })
 
     try {
-      // Build the base query
-      let query = supabase
-        .from("jobs")
-        .select("id, status, input_data, started_at, completed_at")
-
       // Filtering logic:
       // - scope="user": ALWAYS filter by userId (required for personal stats)
       // - scope="platform": no filter (shows all jobs, admin-only feature)
-      let filterApplied = false
-      if (scope === "platform") {
-        // No filter - show all jobs (TODO: add admin check)
-        console.log("[stats] Platform scope - no user filter applied")
-      } else {
-        // Default to "user" scope - always filter by userId
-        if (!userId) {
-          // No userId provided for user scope - return empty stats
-          console.log("[stats] User scope but no userId - returning empty stats")
-          return {
-            data: {
-              totalExecutions: 0,
-              successful: 0,
-              failed: 0,
-              failureRate: 0,
-              avgImageTime: null,
-              avgVideoTime: null,
-            },
-          }
+
+      // For user scope, userId is required
+      if (scope !== "platform" && !userId) {
+        console.log("[stats] User scope but no userId - returning empty stats")
+        return {
+          data: {
+            totalExecutions: 0,
+            successful: 0,
+            failed: 0,
+            failureRate: 0,
+            avgImageTime: null,
+            avgVideoTime: null,
+          },
         }
-        console.log("[stats] User scope - filtering by user_id:", userId)
-        query = query.eq("user_id", userId)
-        filterApplied = true
       }
 
-      const { data: jobs, error } = await query
+      // Build query based on scope
+      let data: Array<{ id: string; status: string; input_data: unknown; started_at: string | null; completed_at: string | null }> | null
+      let error: Error | null = null
+
+      if (scope === "platform") {
+        console.log("[stats] Platform scope - fetching ALL jobs (no user filter)")
+        const result = await supabase
+          .from("jobs")
+          .select("id, status, input_data, started_at, completed_at")
+        data = result.data
+        error = result.error
+      } else {
+        console.log("[stats] User scope - filtering by user_id:", userId)
+        const result = await supabase
+          .from("jobs")
+          .select("id, status, input_data, started_at, completed_at")
+          .eq("user_id", userId)
+        data = result.data
+        error = result.error
+      }
+
+      const jobs = data
 
       if (error) {
         console.error("[stats] Supabase query error:", error)
@@ -84,7 +91,7 @@ export async function statsRoutes(app: FastifyInstance) {
       }
 
       const allJobs = jobs ?? []
-      console.log("[stats] Query returned", allJobs.length, "jobs (filterApplied:", filterApplied, ")")
+      console.log("[stats] Query returned", allJobs.length, "jobs for scope:", scope)
 
       // Calculate stats
       const totalExecutions = allJobs.length
