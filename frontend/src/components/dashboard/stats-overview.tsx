@@ -1,10 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Loader2, Activity, CheckCircle, XCircle, Percent, Image, Video, Clock, Zap } from "lucide-react"
-import { getStats, type StatsResponse } from "@/lib/api"
+import { getStats, cancelAllJobs, type StatsResponse } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface StatCardProps {
   readonly label: string
@@ -46,29 +57,47 @@ export function StatsOverview({ className }: StatsOverviewProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [scope, setScope] = useState<"user" | "platform">("user")
+  const [cancelAllDialogOpen, setCancelAllDialogOpen] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  const fetchStats = useCallback(async () => {
+    if (!user) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const userIdToSend = scope === "user" ? user.id : undefined
+      console.log("[stats-overview] Fetching stats:", { scope, userId: userIdToSend, isAdmin })
+      const result = await getStats(scope, userIdToSend)
+      console.log("[stats-overview] Stats result:", result.data)
+      setStats(result.data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch stats")
+    } finally {
+      setLoading(false)
+    }
+  }, [user, scope, isAdmin])
 
   useEffect(() => {
-    async function fetchStats() {
-      if (!user) return
-
-      setLoading(true)
-      setError(null)
-
-      try {
-        const userIdToSend = scope === "user" ? user.id : undefined
-        console.log("[stats-overview] Fetching stats:", { scope, userId: userIdToSend, isAdmin })
-        const result = await getStats(scope, userIdToSend)
-        console.log("[stats-overview] Stats result:", result.data)
-        setStats(result.data)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch stats")
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchStats()
-  }, [user, scope, isAdmin])
+  }, [fetchStats])
+
+  const handleCancelAll = useCallback(async () => {
+    if (!user) return
+
+    setCancelling(true)
+    try {
+      await cancelAllJobs(user.id)
+      // Refresh stats after cancelling
+      await fetchStats()
+    } catch (err) {
+      console.error("Failed to cancel all jobs:", err)
+    } finally {
+      setCancelling(false)
+      setCancelAllDialogOpen(false)
+    }
+  }, [user, fetchStats])
 
   if (error) {
     return (
@@ -114,7 +143,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
         </div>
       )}
 
-      {/* Pending/Processing badges */}
+      {/* Pending/Processing badges with Cancel All button */}
       {stats && ((stats.pending ?? 0) > 0 || (stats.processing ?? 0) > 0) && (
         <div className="flex items-center gap-2 mb-3">
           {(stats.pending ?? 0) > 0 && (
@@ -128,6 +157,23 @@ export function StatsOverview({ className }: StatsOverviewProps) {
               <Zap className="w-3 h-3" />
               {stats.processing} processing
             </span>
+          )}
+          {/* Cancel All button - only show on "My Stats" view */}
+          {scope === "user" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+              onClick={() => setCancelAllDialogOpen(true)}
+              disabled={cancelling}
+            >
+              {cancelling ? (
+                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+              ) : (
+                <XCircle className="w-3 h-3 mr-1" />
+              )}
+              Cancel All
+            </Button>
           )}
         </div>
       )}
@@ -176,6 +222,36 @@ export function StatsOverview({ className }: StatsOverviewProps) {
           loading={loading}
         />
       </div>
+
+      {/* Cancel All Confirmation Dialog */}
+      <AlertDialog open={cancelAllDialogOpen} onOpenChange={setCancelAllDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel all pending jobs?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel {(stats?.pending ?? 0) + (stats?.processing ?? 0)} job{(stats?.pending ?? 0) + (stats?.processing ?? 0) !== 1 ? "s" : ""} that are currently pending or processing.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelling}>Keep Running</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelAll}
+              disabled={cancelling}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              {cancelling ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Cancelling...
+                </>
+              ) : (
+                "Cancel All Jobs"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
