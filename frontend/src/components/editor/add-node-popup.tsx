@@ -5,7 +5,7 @@ import {
   Type, BookOpen, ImageIcon, Film, Merge, Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin,
-  ChevronRight, Search, Download, ArrowLeft, Wand2, Layers, Users,
+  ChevronRight, Search, Download, ArrowLeft, Wand2, Layers, Users, Waypoints, ArrowUpFromLine,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SceneNodeType } from "@/types/nodes"
@@ -46,6 +46,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "generate-music", label: "Generate Music", icon: <Music className="h-4 w-4" />, category: "AI" },
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI" },
   { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI" },
+  { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI" },
   // Processing
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing" },
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing" },
@@ -55,6 +56,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing" },
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing" },
   { type: "trim-video", label: "Trim Video", icon: <Scissors className="h-4 w-4" />, category: "Processing" },
+  { type: "video-upscale", label: "Video Upscale", icon: <ArrowUpFromLine className="h-4 w-4" />, category: "Processing" },
   // Assets
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Assets" },
   { type: "object", label: "Create Object", icon: <Package className="h-4 w-4" />, category: "Assets" },
