@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { isFeatureEnabled } from "@/lib/edition"
+import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
 
 const STORAGE_KEY = "scenenode-sidebar-collapsed"
 
@@ -41,45 +42,53 @@ const NAV_ITEMS: readonly NavItem[] = [
 ]
 
 interface AppSidebarProps {
-  readonly forceCollapsed?: boolean
+  /** If true, sidebar starts collapsed but can still be expanded by user */
+  readonly defaultCollapsed?: boolean
   readonly onMobileClose?: () => void
   readonly isMobileOpen?: boolean
   readonly className?: string
 }
 
 export function AppSidebar({
-  forceCollapsed = false,
+  defaultCollapsed = false,
   onMobileClose,
   isMobileOpen = false,
   className,
 }: AppSidebarProps) {
   const pathname = usePathname()
   const { user, isAdmin, signOut } = useAuth()
-  const [collapsed, setCollapsed] = useState(false)
+  const { isCollapsed, setCollapsed } = useSidebar()
   const [mounted, setMounted] = useState(false)
+  const [initializedFromStorage, setInitializedFromStorage] = useState(false)
 
-  // Load collapsed state from localStorage on mount
+  // Load collapsed state from localStorage on mount, respecting defaultCollapsed
   useEffect(() => {
+    if (initializedFromStorage) return
+
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored !== null) {
+    if (defaultCollapsed) {
+      // For editor, always start collapsed
+      setCollapsed(true)
+    } else if (stored !== null) {
+      // For non-editor pages, use stored preference
       setCollapsed(stored === "true")
     }
+    setInitializedFromStorage(true)
     setMounted(true)
-  }, [])
+  }, [defaultCollapsed, setCollapsed, initializedFromStorage])
 
-  // Apply forceCollapsed when it changes (e.g., entering editor)
+  // When navigating to editor, auto-collapse (but don't lock)
   useEffect(() => {
-    if (forceCollapsed && !collapsed) {
+    if (mounted && defaultCollapsed && !isCollapsed) {
       setCollapsed(true)
-      localStorage.setItem(STORAGE_KEY, "true")
     }
-  }, [forceCollapsed, collapsed])
+  }, [defaultCollapsed, mounted, isCollapsed, setCollapsed])
 
-  const toggleCollapsed = () => {
-    const newValue = !collapsed
+  const toggleCollapsed = useCallback(() => {
+    const newValue = !isCollapsed
     setCollapsed(newValue)
     localStorage.setItem(STORAGE_KEY, String(newValue))
-  }
+  }, [isCollapsed, setCollapsed])
 
   const handleNavClick = () => {
     onMobileClose?.()
@@ -89,8 +98,6 @@ export function AppSidebar({
   if (!mounted) {
     return null
   }
-
-  const effectiveCollapsed = forceCollapsed || collapsed
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -109,29 +116,29 @@ export function AppSidebar({
           "bg-white dark:bg-zinc-950",
           // Theme-aware border
           "border-zinc-200 dark:border-zinc-800",
-          effectiveCollapsed ? "w-14" : "w-56",
+          isCollapsed ? "w-14" : "w-56",
           isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
           className,
         )}
       >
-        {/* Logo */}
-        <div className="flex items-center justify-between h-14 px-3 border-b border-zinc-200 dark:border-zinc-800">
+        {/* Logo - matches editor header height (h-[41px] = py-2 + border-b) */}
+        <div className="flex items-center justify-between h-[41px] px-3 border-b border-zinc-200 dark:border-zinc-800">
           <Link
             href="/projects"
             onClick={handleNavClick}
             className={cn(
               "flex items-center gap-2 font-bold text-[#ff0073] transition-all duration-300",
-              effectiveCollapsed ? "justify-center w-full" : "",
+              isCollapsed ? "justify-center w-full" : "",
             )}
           >
-            {effectiveCollapsed ? (
+            {isCollapsed ? (
               <span className="text-lg">S</span>
             ) : (
               <span className="text-lg">SceneNode</span>
             )}
           </Link>
           {/* Mobile close button */}
-          {!effectiveCollapsed && (
+          {!isCollapsed && (
             <Button
               variant="ghost"
               size="sm"
@@ -161,18 +168,18 @@ export function AppSidebar({
                 onClick={handleNavClick}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200",
-                  effectiveCollapsed ? "justify-center px-0" : "",
+                  isCollapsed ? "justify-center px-0" : "",
                   isActive
                     ? "bg-pink-50 dark:bg-[#ff0073]/10 text-[#ff0073] border-l-2 border-[#ff0073] -ml-0.5 pl-[10px]"
                     : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-white",
                 )}
               >
                 <item.icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-[#ff0073]")} />
-                {!effectiveCollapsed && <span>{item.label}</span>}
+                {!isCollapsed && <span>{item.label}</span>}
               </Link>
             )
 
-            if (effectiveCollapsed) {
+            if (isCollapsed) {
               return (
                 <Tooltip key={item.href}>
                   <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
@@ -194,7 +201,7 @@ export function AppSidebar({
         <div className="px-2 py-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
           {/* Collapse toggle */}
           <div className="hidden md:block">
-            {effectiveCollapsed ? (
+            {isCollapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -231,10 +238,10 @@ export function AppSidebar({
             <div
               className={cn(
                 "flex items-center gap-2",
-                effectiveCollapsed ? "justify-center" : "justify-between",
+                isCollapsed ? "justify-center" : "justify-between",
               )}
             >
-              {effectiveCollapsed ? (
+              {isCollapsed ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -288,7 +295,7 @@ export function AppSidebar({
           )}
 
           {/* Theme toggle */}
-          {effectiveCollapsed ? (
+          {isCollapsed ? (
             <div className="flex justify-center">
               <ThemeToggle />
             </div>
@@ -324,6 +331,5 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
   )
 }
 
-// Export the collapsed width for use in other components
-export const SIDEBAR_COLLAPSED_WIDTH = 56 // w-14 = 3.5rem = 56px
-export const SIDEBAR_EXPANDED_WIDTH = 224 // w-56 = 14rem = 224px
+// Re-export width constants for backward compatibility
+export { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH }

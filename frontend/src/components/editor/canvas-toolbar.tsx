@@ -8,6 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useSidebar } from "@/components/layout/sidebar-context"
 
 interface CanvasToolbarProps {
   readonly onAddNode: () => void
@@ -90,19 +91,24 @@ export function CanvasToolbar({
   onToggleSidebar,
   sidebarVisible,
 }: CanvasToolbarProps) {
+  const { sidebarWidth } = useSidebar()
+  // Position to the right of the sidebar + 12px gap
+  const leftPosition = sidebarWidth + 12
+
   return (
     <div
       className={cn(
-        // Position to the right of the collapsed sidebar (56px) + 12px gap = 68px
-        "fixed left-[68px] top-1/2 -translate-y-1/2 z-50",
+        "fixed top-1/2 -translate-y-1/2 z-50",
         "p-2 rounded-2xl",
         "flex flex-col gap-1",
         "backdrop-blur-md",
+        "transition-all duration-300 ease-in-out",
         // Light mode: frosted white glass with subtle shadow
         "bg-white/80 border border-[#E2E8F0] shadow-xl shadow-slate-200/50",
         // Dark mode: dark glass with deeper shadow
         "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-2xl dark:shadow-black/20"
       )}
+      style={{ left: `${leftPosition}px` }}
     >
       {/* Primary actions */}
       <ToolbarButton

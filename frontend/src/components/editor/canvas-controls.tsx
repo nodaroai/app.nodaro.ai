@@ -9,6 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useSidebar } from "@/components/layout/sidebar-context"
 
 interface CanvasControlsProps {
   readonly showMiniMap: boolean
@@ -65,19 +66,23 @@ function ControlButton({ icon, label, onClick, active }: ControlButtonProps) {
 
 export function CanvasControls({ showMiniMap, onToggleMiniMap }: CanvasControlsProps) {
   const { fitView, zoomIn, zoomOut } = useReactFlow()
+  const { sidebarWidth } = useSidebar()
+  // Position to the right of the sidebar + 12px gap
+  const leftPosition = sidebarWidth + 12
 
   return (
     <div
       className={cn(
-        // Position to the right of the collapsed sidebar (56px) + 12px gap = 68px
-        "absolute bottom-4 left-[68px] z-10",
+        "absolute bottom-4 z-10",
         "flex items-center gap-1 p-1",
         "rounded-xl backdrop-blur-md",
+        "transition-all duration-300 ease-in-out",
         // Light mode
         "bg-white/80 border border-[#E2E8F0] shadow-sm",
         // Dark mode
         "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-xl"
       )}
+      style={{ left: `${leftPosition}px` }}
     >
       <ControlButton
         icon={<Maximize2 className="w-4 h-4" />}
