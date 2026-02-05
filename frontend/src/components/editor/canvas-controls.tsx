@@ -69,7 +69,8 @@ export function CanvasControls({ showMiniMap, onToggleMiniMap }: CanvasControlsP
   return (
     <div
       className={cn(
-        "absolute bottom-4 left-16 z-10",
+        // Position to the right of the collapsed sidebar (56px) + 12px gap = 68px
+        "absolute bottom-4 left-[68px] z-10",
         "flex items-center gap-1 p-1",
         "rounded-xl backdrop-blur-md",
         // Light mode

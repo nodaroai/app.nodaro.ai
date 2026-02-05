@@ -93,7 +93,8 @@ export function CanvasToolbar({
   return (
     <div
       className={cn(
-        "fixed left-3 top-1/2 -translate-y-1/2 z-50",
+        // Position to the right of the collapsed sidebar (56px) + 12px gap = 68px
+        "fixed left-[68px] top-1/2 -translate-y-1/2 z-50",
         "p-2 rounded-2xl",
         "flex flex-col gap-1",
         "backdrop-blur-md",
