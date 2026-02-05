@@ -55,7 +55,10 @@ export function StatsOverview({ className }: StatsOverviewProps) {
       setError(null)
 
       try {
-        const result = await getStats(scope, scope === "user" ? user.id : undefined)
+        const userIdToSend = scope === "user" ? user.id : undefined
+        console.log("[stats-overview] Fetching stats:", { scope, userId: userIdToSend, isAdmin })
+        const result = await getStats(scope, userIdToSend)
+        console.log("[stats-overview] Stats result:", result.data)
         setStats(result.data)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch stats")
@@ -65,7 +68,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
     }
 
     fetchStats()
-  }, [user, scope])
+  }, [user, scope, isAdmin])
 
   if (error) {
     return (

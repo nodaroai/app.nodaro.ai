@@ -37,6 +37,9 @@ export async function statsRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { scope?: string; userId?: string } }>("/v1/stats", async (req, reply) => {
     const { scope = "user", userId } = req.query
 
+    // Debug logging
+    console.log("[stats] Request received:", { scope, userId, rawQuery: req.query })
+
     try {
       // Build the base query
       let query = supabase
@@ -46,12 +49,15 @@ export async function statsRoutes(app: FastifyInstance) {
       // Filtering logic:
       // - scope="user": ALWAYS filter by userId (required for personal stats)
       // - scope="platform": no filter (shows all jobs, admin-only feature)
+      let filterApplied = false
       if (scope === "platform") {
         // No filter - show all jobs (TODO: add admin check)
+        console.log("[stats] Platform scope - no user filter applied")
       } else {
         // Default to "user" scope - always filter by userId
         if (!userId) {
           // No userId provided for user scope - return empty stats
+          console.log("[stats] User scope but no userId - returning empty stats")
           return {
             data: {
               totalExecutions: 0,
@@ -63,18 +69,22 @@ export async function statsRoutes(app: FastifyInstance) {
             },
           }
         }
+        console.log("[stats] User scope - filtering by user_id:", userId)
         query = query.eq("user_id", userId)
+        filterApplied = true
       }
 
       const { data: jobs, error } = await query
 
       if (error) {
+        console.error("[stats] Supabase query error:", error)
         return reply.status(500).send({
           error: { code: "internal_error", message: error.message },
         })
       }
 
       const allJobs = jobs ?? []
+      console.log("[stats] Query returned", allJobs.length, "jobs (filterApplied:", filterApplied, ")")
 
       // Calculate stats
       const totalExecutions = allJobs.length
