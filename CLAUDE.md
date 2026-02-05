@@ -3767,11 +3767,24 @@ When a node is executing, it shows a distinctive animated border:
 
 ### Animated Edges with Flowing Dot
 
-During workflow execution, edges from running nodes show animated data flow:
+During workflow execution, edges connected to running nodes show animated data flow with two distinct animations:
 
-1. **Edge styling**: Pink (#ff0073) stroke with 2px width, dashed line animation
-2. **Flowing dot**: Pink glowing circle (5px radius) that travels along the bezier path
-3. **Implementation**: Custom `AnimatedFlowEdge` component using SVG `<animateMotion>`
+**Output Animation (Pink)** - Data flowing FROM the running node:
+- Color: #ff0073 (pink accent)
+- Triggered when: `edge.source` is a running node
+- Direction: Flows from source to target (natural path direction)
+
+**Input Animation (Blue)** - Data flowing TO the running node:
+- Color: #3b82f6 (Tailwind blue-500)
+- Triggered when: `edge.target` is a running node
+- Direction: Flows from source to target (same as pink)
+
+**Visual behavior:**
+- Both animations can run simultaneously on different edges
+- If an edge has both (source AND target running), pink takes priority
+- Same animation speed (2s), dot size (8px radius), and glow effect
+
+**Implementation**: Custom `AnimatedFlowEdge` component using SVG `<animateMotion>`
 
 **Location**: `frontend/src/components/editor/animated-flow-edge.tsx`
 
@@ -3781,10 +3794,13 @@ const edgeTypes = {
   default: AnimatedFlowEdge,
 }
 
-// Edges get isRunning data when source node is executing
+// Edges get isRunning/isInputRunning data based on running nodes
 const animatedEdges = edges.map((edge) => ({
   ...edge,
-  data: { isRunning: runningNodeIds.has(edge.source) },
+  data: {
+    isRunning: runningNodeIds.has(edge.source),       // Pink output animation
+    isInputRunning: runningNodeIds.has(edge.target),  // Blue input animation
+  },
 }))
 ```
 

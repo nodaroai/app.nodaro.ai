@@ -83,7 +83,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   const isMobile = useIsMobile()
 
-  // Transform edges to be animated when source node is running
+  // Transform edges to be animated when source or target node is running
   const animatedEdges = useMemo(() => {
     // Build a set of node IDs that are currently running
     const runningNodeIds = new Set(
@@ -96,16 +96,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     )
 
     return edges.map((edge): WorkflowEdge => {
-      const isRunning = runningNodeIds.has(edge.source)
+      const isRunning = runningNodeIds.has(edge.source)       // Output: source is running (pink)
+      const isInputRunning = runningNodeIds.has(edge.target)  // Input: target is running (blue)
+      const hasAnimation = isRunning || isInputRunning
+
+      // Determine edge color: pink for output, blue for input (pink takes priority)
+      const edgeColor = isRunning ? "#ff0073" : isInputRunning ? "#3b82f6" : undefined
 
       return {
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
-        animated: isRunning,
-        data: { ...edge.data, isRunning },
-        style: isRunning ? {
+        animated: hasAnimation,
+        data: { ...edge.data, isRunning, isInputRunning },
+        style: hasAnimation ? {
           ...edge.style,
-          stroke: "#ff0073",
+          stroke: edgeColor,
           strokeWidth: 2,
         } : edge.style,
       }

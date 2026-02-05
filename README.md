@@ -94,8 +94,9 @@ A horizontal control bar at the bottom-left of the canvas:
 ### Running Node Animation
 - **Blue base border**: 3px solid #3b82f6 (1.5x thicker than normal)
 - **Pink rotating overlay**: #ff0073 conic-gradient that spins around the node
-- **Animated edges**: When a node is running, edges from it turn pink with dashed lines
-- **Flowing dot**: Pink glowing dot (#ff0073) travels along the edge path using SVG animateMotion
+- **Animated edges (output)**: Edges FROM the running node turn pink (#ff0073) with flowing dot
+- **Animated edges (input)**: Edges TO the running node turn blue (#3b82f6) with flowing dot
+- **Flowing dots**: Glowing circles travel along the edge path using SVG animateMotion
 - Activates automatically during workflow execution
 
 ### 37 Node Types
