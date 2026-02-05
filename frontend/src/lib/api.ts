@@ -1025,6 +1025,29 @@ export async function deleteJob(jobId: string): Promise<{ success: boolean }> {
   return { success: true }
 }
 
+export interface BatchJobStatus {
+  id: string
+  status: string
+  output_data: { imageUrl?: string; videoUrl?: string; audioUrl?: string; script?: unknown } | null
+  error_message: string | null
+}
+
+export async function getBatchJobStatus(jobIds: string[]): Promise<BatchJobStatus[]> {
+  if (jobIds.length === 0) return []
+
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/batch-status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobIds }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch batch job status")
+  }
+  const body = await res.json()
+  return body.data
+}
+
 // --- Generic helpers ---
 
 export interface WorkflowCharacterInfo {

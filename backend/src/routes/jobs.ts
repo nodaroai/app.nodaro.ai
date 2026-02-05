@@ -118,6 +118,37 @@ export async function jobRoutes(app: FastifyInstance) {
 
   // NOTE: Cancel route moved to cancel-jobs.ts (has ownership verification + BullMQ integration)
 
+  // Batch fetch job statuses by IDs (for workflow sync)
+  app.post<{ Body: { jobIds: string[] } }>("/v1/jobs/batch-status", async (req, reply) => {
+    const { jobIds } = req.body
+
+    if (!jobIds || !Array.isArray(jobIds) || jobIds.length === 0) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "jobIds array is required" },
+      })
+    }
+
+    // Limit to 100 job IDs per request
+    if (jobIds.length > 100) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "Maximum 100 job IDs per request" },
+      })
+    }
+
+    const { data: jobs, error } = await supabase
+      .from("jobs")
+      .select("id, status, output_data, error_message")
+      .in("id", jobIds)
+
+    if (error) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: error.message },
+      })
+    }
+
+    return { data: jobs ?? [] }
+  })
+
   app.delete<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
     const { id } = req.params
 

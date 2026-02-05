@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { getBatchJobStatus, type BatchJobStatus } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult } from "@/types/nodes"
 
 interface SaveResult {
@@ -10,22 +11,15 @@ interface SaveResult {
   readonly error?: string
 }
 
-interface JobRecord {
-  id: string
-  status: string
-  output_data: { imageUrl?: string; videoUrl?: string; audioUrl?: string; script?: unknown } | null
-  error_message: string | null
-}
-
 const SAVED_DISPLAY_DURATION = 2000
 
 /**
- * Sync node results from jobs table.
+ * Sync node results from jobs table via backend API.
  * When user leaves and returns, jobs may have completed in the background.
  * This function checks for any nodes with "running" status and updates them
  * with the actual job results from the database.
  */
-async function syncNodeResultsFromDB(nodes: WorkflowNode[], supabase: ReturnType<typeof createClient>): Promise<WorkflowNode[]> {
+async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNode[]> {
   // Find all nodes that might need syncing:
   // 1. Nodes with executionStatus === "running" or "pending"
   // 2. Nodes with generatedResults that have jobIds we can check
@@ -37,7 +31,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[], supabase: ReturnType
     const results = (data.generatedResults ?? []) as GeneratedResult[]
 
     // Collect jobIds from this node
-    const jobIds = results.map(r => r.jobId).filter(Boolean)
+    const jobIds = results.map(r => r.jobId).filter((id): id is string => Boolean(id))
 
     // If node is in running/pending state or has jobs to check
     if (status === "running" || status === "pending" || jobIds.length > 0) {
@@ -67,21 +61,19 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[], supabase: ReturnType
     })
   }
 
-  // Query all jobs at once
-  const { data: jobs, error } = await supabase
-    .from("jobs")
-    .select("id, status, output_data, error_message")
-    .in("id", allJobIds)
-
-  if (error || !jobs) {
-    console.error("[sync] Failed to fetch jobs:", error)
+  // Query all jobs at once via backend API
+  let jobs: BatchJobStatus[]
+  try {
+    jobs = await getBatchJobStatus(allJobIds)
+  } catch (err) {
+    console.error("[sync] Failed to fetch jobs:", err)
     return nodes
   }
 
   // Create a map of jobId -> job for quick lookup
-  const jobMap = new Map<string, JobRecord>()
+  const jobMap = new Map<string, BatchJobStatus>()
   for (const job of jobs) {
-    jobMap.set(job.id, job as JobRecord)
+    jobMap.set(job.id, job)
   }
 
   // Update nodes based on job status
@@ -283,9 +275,9 @@ export function useWorkflowPersistence(projectId?: string) {
         let nodes = data.nodes as WorkflowNode[]
         const edges = data.edges as WorkflowEdge[]
 
-        // Sync node results from jobs table
+        // Sync node results from jobs table via backend API
         // This handles the case where user left while jobs were running
-        const syncedNodes = await syncNodeResultsFromDB(nodes, supabase)
+        const syncedNodes = await syncNodeResultsFromDB(nodes)
         const nodesChanged = JSON.stringify(syncedNodes) !== JSON.stringify(nodes)
         nodes = syncedNodes
 
