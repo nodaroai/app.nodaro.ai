@@ -64,11 +64,15 @@ export async function statsRoutes(app: FastifyInstance) {
       let data: Array<{ id: string; status: string; input_data: unknown; started_at: string | null; completed_at: string | null }> | null
       let error: Error | null = null
 
+      // Note: Supabase has a default 1000 row limit. Use .range() to fetch all rows.
+      const MAX_ROWS = 100000
+
       if (scope === "platform") {
         console.log("[stats] Platform scope - fetching ALL jobs (no user filter)")
         const result = await supabase
           .from("jobs")
           .select("id, status, input_data, started_at, completed_at")
+          .range(0, MAX_ROWS - 1)
         data = result.data
         error = result.error
       } else {
@@ -77,6 +81,7 @@ export async function statsRoutes(app: FastifyInstance) {
           .from("jobs")
           .select("id, status, input_data, started_at, completed_at")
           .eq("user_id", userId)
+          .range(0, MAX_ROWS - 1)
         data = result.data
         error = result.error
       }
