@@ -1145,6 +1145,29 @@ export async function videoUpscaleApi(
   return res.json()
 }
 
+// Stats types
+export interface StatsResponse {
+  totalExecutions: number
+  successful: number
+  failed: number
+  failureRate: number
+  avgImageTime: number | null
+  avgVideoTime: number | null
+}
+
+export async function getStats(scope: "user" | "platform" = "user", userId?: string): Promise<{ data: StatsResponse }> {
+  const params = new URLSearchParams()
+  params.set("scope", scope)
+  if (userId) params.set("userId", userId)
+
+  const res = await fetch(`${API_BASE_URL}/v1/stats?${params.toString()}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch stats")
+  }
+  return res.json()
+}
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),

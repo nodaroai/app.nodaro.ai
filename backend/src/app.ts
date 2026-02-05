@@ -42,6 +42,7 @@ import { predictionsRoutes } from "./routes/predictions.js"
 import { adminSettingsRoutes } from "./routes/admin-settings.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
+import { statsRoutes } from "./routes/stats.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -95,6 +96,7 @@ export async function buildApp() {
   await app.register(adminSettingsRoutes)
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)
+  await app.register(statsRoutes)
 
   return app
 }

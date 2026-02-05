@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { ProjectCard } from "@/components/dashboard/project-card"
 import { CreateProjectDialog } from "@/components/dashboard/create-project-dialog"
+import { StatsOverview } from "@/components/dashboard/stats-overview"
 
 export default function ProjectsPage() {
   const projects = useProjectsStore((s) => s.projects)
@@ -42,6 +43,8 @@ export default function ProjectsPage() {
           <span className="sm:hidden">New</span>
         </Button>
       </div>
+
+      <StatsOverview className="mb-6" />
 
       <div className="relative mb-4 sm:mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
