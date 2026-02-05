@@ -77,12 +77,15 @@ export function AppSidebar({
     setMounted(true)
   }, [defaultCollapsed, setCollapsed, initializedFromStorage])
 
-  // When navigating to editor, auto-collapse (but don't lock)
+  // When navigating to editor, auto-collapse on initial load only (not on every toggle)
+  // This runs once when defaultCollapsed becomes true (entering editor)
   useEffect(() => {
-    if (mounted && defaultCollapsed && !isCollapsed) {
+    if (defaultCollapsed && mounted) {
       setCollapsed(true)
     }
-  }, [defaultCollapsed, mounted, isCollapsed, setCollapsed])
+    // Intentionally omit isCollapsed - we only want this to run when entering editor page
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultCollapsed, mounted])
 
   const toggleCollapsed = useCallback(() => {
     const newValue = !isCollapsed

@@ -508,7 +508,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   }, [projectId, workflowId, loadWorkflow])
 
   return (
-    <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b border-gray-200 dark:border-border bg-white dark:bg-card">
+    <div className="flex items-center justify-between gap-2 px-2 sm:px-4 h-[41px] border-b border-gray-200 dark:border-border bg-white dark:bg-card">
       {/* Left section: Back, Breadcrumbs, Workflow name */}
       <div className="flex items-center gap-1 sm:gap-2 min-w-0">
         {projectId && (
