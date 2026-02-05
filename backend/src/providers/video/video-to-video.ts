@@ -1,78 +1,54 @@
-import Replicate from "replicate"
-import { config } from "../../lib/config.js"
+/**
+ * Video-to-Video Provider
+ *
+ * IMPORTANT: Video-to-Video ONLY works on KIE.ai!
+ * Replicate models (minimax, kling, runway, pika) do NOT support video input.
+ *
+ * Available V2V providers:
+ * - wan: Wan 2.6 - standard createTask with video_urls array
+ * - runway-aleph: Runway Aleph - special endpoint, max 5 sec output
+ */
+
+import { videoToVideoKie } from "../../services/kie-ai.js"
 import { routeProvider, applyMarkup, logExecutionResult } from "../../services/provider-router.js"
 
-const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
+import type { VideoResult } from "./replicate.js"
 
-import type { VideoProvider, VideoResult } from "./replicate.js"
-
-// Note: Video-to-Video always uses Replicate, NOT KIE.ai
-// KIE.ai doesn't have dedicated video-to-video endpoints - their image-to-video
-// models (like minimax/hailuo) only accept image URLs, not video URLs.
-// When in KIE.ai mode, this falls back to Replicate with 10% markup.
-
-interface ModelConfig {
-  model: string
-  videoParam: string
-  extraInput?: Record<string, unknown>
-}
-
-// Note: VEO 2, VEO 3, and Sora do NOT support video-to-video (arbitrary video input)
-// They only support image-to-video. Only models with actual V2V support are listed here.
-const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
-  minimax: {
-    model: "minimax/video-01",
-    videoParam: "subject_reference",  // NOT first_frame_image (that's for I2V)
-    extraInput: { prompt_optimizer: true },
-  },
-  kling: {
-    model: "kwaivgi/kling-v1.6-pro",
-    videoParam: "input_video",
-  },
-  runway: {
-    model: "runway/gen3a-turbo",
-    videoParam: "video",
-  },
-  pika: {
-    model: "pika-labs/pika",
-    videoParam: "video",
-  },
-}
+// V2V Provider type - only KIE.ai providers work
+export type V2VProvider = "wan" | "runway-aleph"
 
 export async function videoToVideo(
   videoUrl: string,
   prompt?: string,
-  provider?: VideoProvider,
+  provider?: string,
 ): Promise<VideoResult> {
-  const resolvedProvider = provider ?? "minimax"
+  // Default to "wan" - Wan 2.6 is the most reliable V2V provider
+  const resolvedProvider = provider ?? "wan"
   const finalPrompt = prompt ?? "continue this video with smooth cinematic motion"
 
   // Use centralized provider routing
-  // Note: KIE.ai doesn't support video-to-video, so this always falls back to Replicate
-  // When in KIE.ai mode, the fallback applies 10% markup
   const routing = await routeProvider("video-to-video", resolvedProvider, "videoToVideo")
 
-  // Always use Replicate API for video-to-video (KIE.ai doesn't support V2V)
-  const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
-  console.log(`[videoToVideo] Provider: ${resolvedProvider}, Model: ${cfg.model}`)
-  console.log(`[videoToVideo] Input video param: "${cfg.videoParam}" = "${videoUrl}"`)
+  console.log(`[videoToVideo] Provider: ${resolvedProvider}`)
+  console.log(`[videoToVideo] Video URL: ${videoUrl}`)
   console.log(`[videoToVideo] Prompt: "${finalPrompt}"`)
 
-  const output = await replicate.run(
-    cfg.model as `${string}/${string}`,
-    {
-      input: {
-        prompt: finalPrompt,
-        [cfg.videoParam]: videoUrl,
-        ...cfg.extraInput,
-      },
-    },
-  )
+  // Route to KIE.ai - this is the ONLY path for V2V
+  // (Replicate models don't support video input)
+  if (routing.useKie) {
+    const result = await videoToVideoKie(videoUrl, finalPrompt, resolvedProvider)
+    const displayCost = applyMarkup(result.cost, routing.costMarkupPercent)
+    logExecutionResult("videoToVideo", "kie", result.cost, displayCost)
+    return { url: result.url, cost: result.cost, displayCost, providerUsed: "kie" }
+  }
 
-  const resultUrl = String(output)
-  const cost: number | null = null  // Replicate doesn't provide cost info easily
-  const displayCost = applyMarkup(cost, routing.costMarkupPercent)
-  logExecutionResult("videoToVideo", "replicate", cost, displayCost)
-  console.log(`[videoToVideo] Output: "${resultUrl}"`)
-  return { url: resultUrl, cost, displayCost, providerUsed: "replicate" }
+  // If KIE.ai mode is not active (self-hosted with ai_provider=replicate),
+  // we still need to use KIE.ai for V2V because Replicate doesn't support it.
+  // Log a warning and use KIE.ai anyway.
+  console.warn(`[videoToVideo] WARNING: V2V only works on KIE.ai. Using KIE.ai even though ai_provider=${routing.settings.ai_provider}`)
+
+  const result = await videoToVideoKie(videoUrl, finalPrompt, resolvedProvider)
+  const displayCost = applyMarkup(result.cost, routing.costMarkupPercent)
+  logExecutionResult("videoToVideo", "kie", result.cost, displayCost)
+  return { url: result.url, cost: result.cost, displayCost, providerUsed: "kie" }
 }

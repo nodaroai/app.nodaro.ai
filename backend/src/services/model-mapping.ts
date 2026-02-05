@@ -274,6 +274,33 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
 }
 
 // =============================================================================
+// VIDEO-TO-VIDEO MODELS (Video input → Video output)
+// These are the ONLY working V2V providers - Replicate models don't support V2V!
+// =============================================================================
+export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
+  // Wan 2.6 - Standard createTask endpoint, input: video_urls array
+  "wan": {
+    model: "wan/2-6-video-to-video",
+    credits: 80,
+    cost: 0.40,
+    imageParam: "video_urls",  // Array format: ["video_url"]
+    extraParams: {},
+  },
+
+  // Runway Aleph - SPECIAL endpoint: /api/v1/aleph/generate
+  // Input: videoUrl (string), max 5 second output
+  // Polling: GET /api/v1/aleph/{taskId}
+  "runway-aleph": {
+    model: "runway-aleph",  // Special handling needed
+    credits: 100,
+    cost: 0.50,
+    imageParam: "videoUrl",  // Single URL string
+    extraParams: {},
+    allowedDurations: [5],  // Max 5 second output
+  },
+}
+
+// =============================================================================
 // LIP SYNC / AI AVATAR MODELS (Image + Audio → Talking Video)
 // =============================================================================
 export const KIE_LIP_SYNC_MODELS: Record<string, KieModelConfig> = {
@@ -361,9 +388,9 @@ export function getKieModelConfig(
     case "video":
       return KIE_VIDEO_MODELS[provider] ?? null
     case "video-to-video":
-      // KIE.ai doesn't support video-to-video operations
-      // All V2V requests fall back to Replicate
-      return null
+      // KIE.ai V2V providers: Wan 2.6 and Runway Aleph
+      // These are the ONLY working V2V providers (Replicate models don't support V2V!)
+      return KIE_VIDEO_TO_VIDEO_MODELS[provider] ?? null
     case "text-to-video":
       return KIE_TEXT_TO_VIDEO_MODELS[provider] ?? null
     case "lip-sync":

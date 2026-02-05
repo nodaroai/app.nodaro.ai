@@ -464,8 +464,10 @@ export type VideoToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  // Note: veo3.1 removed - it doesn't support video input, only image input
-  provider: "minimax" | "veo" | "veo3" | "kling" | "runway" | "pika"
+  // V2V ONLY works on KIE.ai - Replicate models don't support video input
+  // - wan: Wan 2.6 (default) - standard createTask with video_urls array
+  // - runway-aleph: Runway Aleph - max 5 sec output
+  provider: "wan" | "runway-aleph"
   model: string
   duration: number
   fieldMappings: FieldMappings
@@ -1182,7 +1184,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 25,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Video to Video", prompt: "", provider: "runway", model: "gen-3-alpha", duration: 5, fieldMappings: {} },
+    // V2V ONLY works on KIE.ai - Replicate models don't support video input
+    defaultData: { label: "Video to Video", prompt: "", provider: "wan", model: "wan/2-6-video-to-video", fieldMappings: {} },
   },
   {
     type: "text-to-video",

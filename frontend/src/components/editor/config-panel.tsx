@@ -1808,29 +1808,22 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
       </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
-          value={data.provider || "minimax"}
+          value={data.provider || "wan"}
           onValueChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {/* Note: VEO 2, VEO 3, VEO 3.1, and Sora do NOT support video-to-video */}
-            {/* They only accept image input (image-to-video), not arbitrary video input */}
-            <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="kling">Kling</SelectItem>
-            <SelectItem value="runway">Runway</SelectItem>
-            <SelectItem value="pika">Pika</SelectItem>
+            {/* V2V ONLY works on KIE.ai - Replicate models don't support video input */}
+            <SelectItem value="wan">Wan 2.6 (default)</SelectItem>
+            <SelectItem value="runway-aleph">Runway Aleph (max 5 sec)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
-      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input
-          type="number"
-          min={1}
-          max={30}
-          value={data.duration}
-          onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 5 })}
-        />
-      </MappableField>
+      {data.provider === "runway-aleph" && (
+        <p className="text-xs text-amber-500 px-1">
+          Note: Runway Aleph outputs are limited to 5 seconds maximum.
+        </p>
+      )}
     </div>
   )
 }
