@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2, Activity, CheckCircle, XCircle, Percent, Image, Video } from "lucide-react"
+import { Loader2, Activity, CheckCircle, XCircle, Percent, Image, Video, Clock, Zap } from "lucide-react"
 import { getStats, type StatsResponse } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
@@ -111,6 +111,24 @@ export function StatsOverview({ className }: StatsOverviewProps) {
           >
             Platform Stats
           </button>
+        </div>
+      )}
+
+      {/* Pending/Processing badges */}
+      {stats && ((stats.pending ?? 0) > 0 || (stats.processing ?? 0) > 0) && (
+        <div className="flex items-center gap-2 mb-3">
+          {(stats.pending ?? 0) > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+              <Clock className="w-3 h-3" />
+              {stats.pending} pending
+            </span>
+          )}
+          {(stats.processing ?? 0) > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+              <Zap className="w-3 h-3" />
+              {stats.processing} processing
+            </span>
+          )}
         </div>
       )}
 
