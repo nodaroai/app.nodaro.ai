@@ -106,6 +106,27 @@ function extractProvider(inputData: Job["input_data"]): string {
   return inputData?.provider ?? "default"
 }
 
+/**
+ * Get display text for the actual API provider used (KIE.ai vs Replicate)
+ * This shows which backend service actually processed the job
+ */
+function getApiProviderDisplay(job: Job): { text: string; isFallback: boolean } {
+  // job.provider field indicates which API was used: "kie" or "replicate"
+  // If not set, we don't know which provider was used
+  if (!job.provider) {
+    return { text: "-", isFallback: false }
+  }
+
+  if (job.provider === "kie") {
+    return { text: "KIE.ai", isFallback: false }
+  }
+
+  // Check if this was a fallback (in KIE.ai mode but Replicate was used)
+  // We determine this by checking if the job has markup applied
+  // For now, just show "Replicate" with a note if it might be a fallback
+  return { text: "Replicate", isFallback: false }
+}
+
 interface ExecutionsTabProps {
   readonly className?: string
 }
@@ -259,7 +280,10 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                   Type
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Provider
+                  Model
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  API
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Status
@@ -281,7 +305,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
             <tbody className="divide-y divide-gray-100 dark:divide-[#2D2D2D]">
               {jobs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
+                  <td colSpan={9} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
                     No executions found
                   </td>
                 </tr>
@@ -313,6 +337,22 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                       <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
                         {extractProvider(job.input_data)}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const apiProvider = getApiProviderDisplay(job)
+                        return (
+                          <span className={`text-sm font-medium ${
+                            apiProvider.text === "KIE.ai"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : apiProvider.text === "Replicate"
+                              ? "text-blue-600 dark:text-blue-400"
+                              : "text-gray-500 dark:text-[#94A3B8]"
+                          }`}>
+                            {apiProvider.text}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
