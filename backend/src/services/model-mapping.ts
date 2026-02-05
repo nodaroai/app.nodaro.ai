@@ -139,22 +139,23 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
   // VEO family - Uses SPECIAL API endpoint: /api/v1/veo/generate
   // Model param is just "veo3" or "veo3_fast", requires special handling in kie-ai.ts
-  // VEO generates ~8 second clips, duration not configurable
+  // IMPORTANT: VEO3 has NO duration parameter - always produces 8 second clips
+  // Source: docs.kie.ai FAQ: "Clips made directly in VEO 3.1 are limited to 8 seconds"
   "veo3": {
-    model: "veo3",  // For /api/v1/veo/generate endpoint
+    model: "veo3",  // Quality model - higher quality, slower
     credits: 400,
     cost: 2.00,
     imageParam: "imageUrls",  // Array format for VEO API
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
-    allowedDurations: [8],  // VEO3 produces ~8 second videos, not configurable
+    allowedDurations: [8],  // FIXED: VEO3 always produces 8 second videos (not configurable)
   },
   "veo3.1": {
-    model: "veo3_fast",  // Fast mode for veo3
+    model: "veo3_fast",  // Fast model - quicker generation, lower quality
     credits: 250,
     cost: 1.25,
     imageParam: "imageUrls",
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
-    allowedDurations: [8],  // VEO3 Fast produces ~8 second videos, not configurable
+    allowedDurations: [8],  // FIXED: VEO3 Fast always produces 8 second videos (not configurable)
   },
 
   // Kling family - VERIFIED: docs.kie.ai/market/kling/image-to-video
@@ -233,12 +234,13 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
 
   // VEO - Uses SPECIAL API endpoint: /api/v1/veo/generate
+  // IMPORTANT: VEO3 has NO duration parameter - always produces 8 second clips
   "veo3": {
-    model: "veo3",  // For /api/v1/veo/generate endpoint
+    model: "veo3",  // Quality model - higher quality, slower
     credits: 400,
     cost: 2.00,
     extraParams: { generationType: "TEXT_2_VIDEO" },
-    allowedDurations: [8],  // VEO3 produces ~8 second videos, not configurable
+    allowedDurations: [8],  // FIXED: VEO3 always produces 8 second videos (not configurable)
   },
 
   // Kling family - VERIFIED: docs.kie.ai/market/kling/text-to-video
