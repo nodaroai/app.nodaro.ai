@@ -4503,7 +4503,6 @@ export interface KieModelConfig {
 | **Video** | kling | kling-2.6/image-to-video | $0.35 | 5/10s | ❌ |
 | **Video** | kling-turbo | kling/v2-5-turbo-image-to-video-pro | $0.25 | 5/10s | ✅ tail_image_url |
 | **Video** | grok-i2v | grok-imagine/image-to-video | $0.30 | 6/10s | ❌ |
-| **Video** | sora2 | sora-2-image-to-video | $0.75 | 5/10s | ❌ (uses n_frames) |
 | **Video** | sora2-pro | sora-2-pro-image-to-video | $1.00 | 5/10s | ❌ (uses n_frames) |
 | **Text-to-Video** | veo3 | veo3 | $2.00 | 8s (fixed) | - |
 | **Text-to-Video** | kling | kling-2.6/text-to-video | $0.35 | 5/10s | - |
@@ -4539,11 +4538,90 @@ API Response → provider_cost → (apply markup if CLOUD) → display_cost → 
 **Files:**
 - `backend/src/services/model-mapping.ts` - Central model configuration (costs, durations, capabilities)
 - `backend/src/services/kie-ai.ts` - KIE.ai API client with VEO3 special handling
+- `backend/src/services/provider-router.ts` - Centralized provider routing with fallback
 - `backend/src/lib/app-settings.ts` - Settings cache (5-minute TTL)
 - `backend/src/routes/admin-settings.ts` - Admin settings CRUD
 - `backend/src/routes/jobs.ts` - Response sanitization
 - `frontend/src/app/(admin)/admin/settings/page.tsx` - Admin Settings UI
 - `frontend/src/components/editor/config-panel.tsx` - Duration dropdown filtering
+
+### Provider Routing Layer
+
+Centralized routing logic in `backend/src/services/provider-router.ts` handles all provider decisions:
+
+**Routing Logic:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Provider Routing Decision                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Is ai_provider = "kie"?                                        │
+│         │                                                        │
+│    ┌────┴────┐                                                   │
+│    │         │                                                   │
+│   YES        NO ──────────────────► Use Replicate (no markup)   │
+│    │                                                             │
+│    ▼                                                             │
+│  Is model/operation supported on KIE.ai?                        │
+│         │                                                        │
+│    ┌────┴────┐                                                   │
+│    │         │                                                   │
+│   YES        NO ──► Use Replicate (10% fallback markup)         │
+│    │                                                             │
+│    ▼                                                             │
+│  Use KIE.ai (configured markup from app_settings)               │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**CRITICAL: Fallback is for UNSUPPORTED models only!**
+- If KIE.ai SUPPORTS the model but returns an error (500, timeout, rate limit), the error propagates to the user
+- We do NOT silently fall back to Replicate on errors
+- Fallback only happens when `isKieSupported(category, provider)` returns false
+
+**Cost Markup:**
+| Scenario | Markup Applied |
+|----------|----------------|
+| Self-hosted (Replicate direct) | None (0%) |
+| Cloud KIE.ai (model supported) | Admin-configured (default 25%) |
+| Cloud Replicate fallback (model unsupported on KIE.ai) | 10% |
+
+**Supported Categories:**
+- `image` - Text-to-image generation
+- `video` - Image-to-video generation
+- `video-to-video` - Video continuation (Replicate only, KIE.ai doesn't support)
+- `text-to-video` - Text-to-video generation
+- `lip-sync` - Avatar/lip sync
+- `music` - Music generation
+- `tts` - Text-to-speech
+- `special` - Special models
+
+**Result Objects:**
+All provider functions now return:
+```typescript
+interface VideoResult {
+  url: string
+  cost: number | null           // Raw cost from provider
+  displayCost?: number | null   // Cost with markup applied
+  providerUsed?: ProviderUsed   // "kie" | "replicate"
+}
+```
+
+**Usage in Provider Files:**
+```typescript
+import { routeProvider, applyMarkup, logExecutionResult } from "../../services/provider-router.js"
+
+const routing = await routeProvider("video", resolvedProvider, "imageToVideo")
+
+if (routing.useKie) {
+  const result = await imageToVideoKie(...)
+  return { url: result.url, cost: result.cost, displayCost: applyMarkup(result.cost, routing.costMarkupPercent), providerUsed: "kie" }
+}
+
+// Use Replicate (either default or fallback from KIE.ai mode)
+const result = await replicate.run(...)
+return { url, cost: null, displayCost: null, providerUsed: "replicate" }
+```
 
 ### Workflow Execution Engine
 
