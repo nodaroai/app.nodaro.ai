@@ -4623,6 +4623,38 @@ const result = await replicate.run(...)
 return { url, cost: null, displayCost: null, providerUsed: "replicate" }
 ```
 
+### Provider Enum Sync (CRITICAL)
+
+**EVERY time a provider list changes for ANY node type, you MUST update ALL of these locations:**
+
+| Layer | File | What to Update |
+|-------|------|----------------|
+| 1. Frontend type | `frontend/src/types/nodes.ts` | TypeScript type for node data |
+| 2. Frontend dropdown | `frontend/src/components/editor/config-panel.tsx` | `<SelectItem>` options |
+| 3. **Backend Zod enum** | `backend/src/routes/<node-type>.ts` | Zod validation schema |
+| 4. Backend provider function | `backend/src/providers/<category>/<node-type>.ts` | Provider implementation |
+| 5. Model mapping | `backend/src/services/model-mapping.ts` | If KIE.ai model |
+
+**Forgetting step 3 (Zod enum) has caused the same validation bug 3 times.**
+
+Example - adding a new V2V provider:
+```typescript
+// 1. frontend/src/types/nodes.ts
+provider: "wan" | "runway-aleph" | "new-provider"
+
+// 2. frontend/src/components/editor/config-panel.tsx
+<SelectItem value="new-provider">New Provider</SelectItem>
+
+// 3. backend/src/routes/video-to-video.ts  ← MOST COMMONLY FORGOTTEN!
+provider: z.enum(["wan", "runway-aleph", "new-provider"]).optional()
+
+// 4. backend/src/providers/video/video-to-video.ts
+// Add handling for "new-provider"
+
+// 5. backend/src/services/model-mapping.ts (if KIE.ai)
+KIE_VIDEO_TO_VIDEO_MODELS["new-provider"] = { ... }
+```
+
 ### Workflow Execution Engine
 
 The workflow executor uses a DAG-based approach:
