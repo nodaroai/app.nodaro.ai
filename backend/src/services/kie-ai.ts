@@ -346,6 +346,131 @@ export async function editImageKie(
 // VIDEO GENERATION (Image-to-Video)
 // =============================================================================
 
+/**
+ * VEO3 uses a special API endpoint: /api/v1/veo/generate
+ * This is different from the standard createTask endpoint
+ */
+async function runVeoTask(
+  model: string,
+  prompt: string,
+  imageUrls?: string[],
+): Promise<{ resultJson: KieResultJson; costTime?: number }> {
+  const apiKey = config.KIE_API_KEY
+
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video generation")
+  }
+
+  const requestBody: Record<string, unknown> = {
+    model,  // "veo3" or "veo3_fast"
+    prompt,
+  }
+
+  // Add image URLs for image-to-video mode
+  if (imageUrls?.length) {
+    requestBody.imageUrls = imageUrls
+    requestBody.generationType = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+  } else {
+    requestBody.generationType = "TEXT_2_VIDEO"
+  }
+
+  console.log(`[KIE.ai VEO] Creating VEO task with model: ${model}`)
+  console.log(`[KIE.ai VEO] Request body:`, JSON.stringify(requestBody, null, 2))
+
+  // Step 1: Create VEO task using special endpoint
+  const createResponse = await fetch(`${KIE_API_BASE}/api/v1/veo/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  const responseText = await createResponse.text()
+  console.log(`[KIE.ai VEO] Response status: ${createResponse.status}`)
+  console.log(`[KIE.ai VEO] Response body: ${responseText.substring(0, 500)}`)
+
+  if (!createResponse.ok) {
+    throw createSanitizedError(`VEO generate failed: ${createResponse.status} - ${responseText}`, "Video generation")
+  }
+
+  let createData: KieTaskResponse
+  try {
+    createData = JSON.parse(responseText) as KieTaskResponse
+  } catch {
+    throw createSanitizedError(`VEO response is not valid JSON: ${responseText}`, "Video generation")
+  }
+
+  if (createData.code !== 0 && createData.code !== 200 && createData.code !== undefined) {
+    throw createSanitizedError(`VEO generate error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`, "Video generation")
+  }
+
+  if (!createData.data?.taskId) {
+    throw createSanitizedError(`VEO generate response missing taskId: ${JSON.stringify(createData)}`, "Video generation")
+  }
+
+  const taskId = createData.data.taskId
+  console.log(`[KIE.ai VEO] Task created: ${taskId}`)
+
+  // Step 2: Poll for completion using standard recordInfo endpoint
+  let attempts = 0
+  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    await sleep(POLL_INTERVAL_MS)
+    attempts++
+
+    const detailResponse = await fetch(
+      `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } }
+    )
+
+    if (!detailResponse.ok) {
+      console.warn(`[KIE.ai VEO] Poll attempt ${attempts} failed: ${detailResponse.status}`)
+      continue
+    }
+
+    const detailText = await detailResponse.text()
+    let detailData: KieRecordInfoResponse
+    try {
+      detailData = JSON.parse(detailText) as KieRecordInfoResponse
+    } catch {
+      console.warn(`[KIE.ai VEO] Poll attempt ${attempts} invalid JSON`)
+      continue
+    }
+
+    const state = detailData.data?.state
+    if (!state) {
+      console.warn(`[KIE.ai VEO] Poll attempt ${attempts} missing state`)
+      continue
+    }
+
+    console.log(`[KIE.ai VEO] Task ${taskId} state: ${state} (attempt ${attempts})`)
+
+    if (state === "success") {
+      const resultJsonStr = detailData.data.resultJson
+      if (!resultJsonStr) {
+        throw createSanitizedError("VEO task succeeded but no resultJson found", "Video generation")
+      }
+
+      let resultJson: KieResultJson
+      try {
+        resultJson = JSON.parse(resultJsonStr) as KieResultJson
+      } catch {
+        throw createSanitizedError(`VEO resultJson is not valid JSON: ${resultJsonStr}`, "Video generation")
+      }
+
+      return { resultJson, costTime: detailData.data.costTime }
+    }
+
+    if (state === "failed") {
+      const failMsg = detailData.data.failMsg ?? detailData.data.failCode ?? "Unknown error"
+      throw createSanitizedError(`VEO task failed: ${failMsg}`, "Video generation")
+    }
+  }
+
+  throw createSanitizedError(`VEO task timed out after ${MAX_POLL_ATTEMPTS_VIDEO * POLL_INTERVAL_MS / 1000} seconds`, "Video generation")
+}
+
 export async function imageToVideoKie(
   imageUrl: string,
   prompt?: string,
@@ -358,10 +483,30 @@ export async function imageToVideoKie(
     throw createSanitizedError(`does not support video provider: ${provider}`, "Video generation")
   }
 
-  console.log(`[KIE.ai] Generating video with ${modelConfig.model}`)
-  console.log(`[KIE.ai] Image: ${imageUrl}, Prompt: "${prompt ?? ""}"`)
+  console.log(`[KIE.ai] Generating video with provider: ${provider}, model: ${modelConfig.model}`)
+  console.log(`[KIE.ai] Image: ${imageUrl}`)
+  console.log(`[KIE.ai] Prompt: "${prompt ?? "(default)"}"`)
+  console.log(`[KIE.ai] Duration: ${duration ?? "(default)"}, End frame: ${endFrameUrl ?? "(none)"}`)
 
-  // Start with extra params from config (sound, duration defaults, etc.)
+  // VEO3 uses a special API endpoint
+  if (provider === "veo3" || provider === "veo3.1") {
+    const imageUrls = endFrameUrl ? [imageUrl, endFrameUrl] : [imageUrl]
+    const { resultJson } = await runVeoTask(
+      modelConfig.model,
+      prompt ?? "smooth cinematic motion",
+      imageUrls
+    )
+
+    const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    if (!videoUrl) {
+      throw createSanitizedError("VEO video task succeeded but no URL found", "Video generation")
+    }
+
+    console.log(`[KIE.ai] VEO Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+    return { url: videoUrl, cost: modelConfig.cost }
+  }
+
+  // Standard createTask endpoint for other providers
   const input: Record<string, unknown> = {
     ...(modelConfig.extraParams ?? {}),
     prompt: prompt ?? "smooth cinematic motion",
@@ -369,11 +514,13 @@ export async function imageToVideoKie(
 
   // Handle image parameter - different models use different param names
   const imageParamName = modelConfig.imageParam ?? "image"
+  console.log(`[KIE.ai] Using image parameter: ${imageParamName}`)
+
   if (imageParamName === "image_urls") {
-    // Array format for minimax, kling, grok, sora
+    // Array format for kling, grok, sora
     input[imageParamName] = [imageUrl]
   } else {
-    // Single URL format for veo, runway, kling-turbo
+    // Single URL format for hailuo, kling-turbo
     input[imageParamName] = imageUrl
   }
 
@@ -386,12 +533,14 @@ export async function imageToVideoKie(
   if (endFrameUrl) {
     if (provider === "kling-turbo") {
       input.tail_image_url = endFrameUrl
-    } else if (provider === "veo3.1") {
-      input.end_frame_url = endFrameUrl
+    } else if (provider === "minimax") {
+      input.end_image_url = endFrameUrl  // Hailuo uses end_image_url
     } else {
       input.end_frame = endFrameUrl
     }
   }
+
+  console.log(`[KIE.ai] Final input:`, JSON.stringify(input, null, 2))
 
   const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
 
@@ -420,9 +569,24 @@ export async function textToVideoKie(
     throw createSanitizedError(`does not support text-to-video provider: ${provider}`, "Video generation")
   }
 
-  console.log(`[KIE.ai] Generating text-to-video with ${modelConfig.model}: "${prompt}"`)
+  console.log(`[KIE.ai] Generating text-to-video with provider: ${provider}, model: ${modelConfig.model}`)
+  console.log(`[KIE.ai] Prompt: "${prompt}"`)
+  console.log(`[KIE.ai] Duration: ${duration ?? "(default)"}, Aspect ratio: ${aspectRatio ?? "(default)"}`)
 
-  // Start with extra params from config
+  // VEO3 uses a special API endpoint
+  if (provider === "veo3") {
+    const { resultJson } = await runVeoTask(modelConfig.model, prompt)
+
+    const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    if (!videoUrl) {
+      throw createSanitizedError("VEO text-to-video task succeeded but no URL found", "Video generation")
+    }
+
+    console.log(`[KIE.ai] VEO Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+    return { url: videoUrl, cost: modelConfig.cost }
+  }
+
+  // Standard createTask endpoint for other providers
   const input: Record<string, unknown> = {
     ...(modelConfig.extraParams ?? {}),
     prompt,
@@ -437,6 +601,8 @@ export async function textToVideoKie(
   if (aspectRatio) {
     input.aspect_ratio = aspectRatio
   }
+
+  console.log(`[KIE.ai] Final input:`, JSON.stringify(input, null, 2))
 
   const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO)
 

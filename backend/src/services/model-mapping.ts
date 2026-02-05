@@ -121,33 +121,37 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
 
 // =============================================================================
 // VIDEO GENERATION MODELS (Image-to-Video)
+// Verified against docs.kie.ai - 2024
 // =============================================================================
 export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
-  // Hailuo/MiniMax
+  // Hailuo/MiniMax - VERIFIED: docs.kie.ai/market/hailuo/02-image-to-video-pro
+  // Uses single image_url, NOT array!
   "minimax": {
-    model: "hailuo/image-to-video",
+    model: "hailuo/02-image-to-video-pro",
     credits: 80,
     cost: 0.40,
-    imageParam: "image_urls",  // array format
-    extraParams: { sound: false, duration: "5" },
+    imageParam: "image_url",  // single URL (NOT array!)
+    extraParams: { prompt_optimizer: false },
   },
 
-  // VEO family
+  // VEO family - Uses SPECIAL API endpoint: /api/v1/veo/generate
+  // Model param is just "veo3" or "veo3_fast", requires special handling in kie-ai.ts
   "veo3": {
-    model: "veo3/image-to-video",
+    model: "veo3",  // For /api/v1/veo/generate endpoint
     credits: 400,
     cost: 2.00,
-    imageParam: "image_url",  // single URL
+    imageParam: "imageUrls",  // Array format for VEO API
+    extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
   },
   "veo3.1": {
-    model: "veo3.1/image-to-video",
+    model: "veo3_fast",  // Fast mode for veo3
     credits: 250,
     cost: 1.25,
-    imageParam: "image_url",  // supports start_frame_url + end_frame_url
-    extraParams: { generate_audio: true },
+    imageParam: "imageUrls",
+    extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
   },
 
-  // Kling family
+  // Kling family - VERIFIED: docs.kie.ai/market/kling/image-to-video
   "kling": {
     model: "kling-2.6/image-to-video",
     credits: 70,
@@ -155,24 +159,25 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "image_urls",  // array format
     extraParams: { sound: false, duration: "5" },
   },
+  // VERIFIED: docs.kie.ai/market/kling/v2-5-turbo-image-to-video-pro
   "kling-turbo": {
     model: "kling/v2-5-turbo-image-to-video-pro",
     credits: 50,
     cost: 0.25,
-    imageParam: "image_url",  // supports tail_image_url for end frame
+    imageParam: "image_url",  // single URL, supports tail_image_url for end frame
     extraParams: { duration: "5", cfg_scale: 0.5 },
   },
 
-  // Grok
+  // Grok - VERIFIED: docs.kie.ai/market/grok-imagine/image-to-video
   "grok-i2v": {
     model: "grok-imagine/image-to-video",
     credits: 60,
     cost: 0.30,
     imageParam: "image_urls",  // array format
-    extraParams: { mode: "normal", duration: "6", index: 0 },
+    extraParams: { mode: "normal", duration: "6" },
   },
 
-  // Sora 2 family
+  // Sora 2 family - VERIFIED: docs.kie.ai/market/sora2/sora-2-image-to-video
   "sora2": {
     model: "sora-2-image-to-video",
     credits: 150,
@@ -180,6 +185,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "image_urls",  // array format
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
   },
+  // VERIFIED: docs.kie.ai/market/sora2/sora-2-pro-image-to-video
   "sora2-pro": {
     model: "sora-2-pro-image-to-video",
     credits: 200,
@@ -188,15 +194,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
   },
 
-  // Runway
-  "runway": {
-    model: "runway-aleph/image-to-video",
-    credits: 100,
-    cost: 0.50,
-    imageParam: "image_url",
-  },
-
-  // Wan
+  // Wan (needs verification)
   "wan": {
     model: "wan/image-to-video",
     credits: 60,
@@ -207,29 +205,31 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
 // =============================================================================
 // TEXT-TO-VIDEO MODELS
+// Verified against docs.kie.ai - 2024
 // =============================================================================
 export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
-  // Hailuo/MiniMax
+  // Hailuo/MiniMax - VERIFIED: docs.kie.ai/market/hailuo/02-text-to-video-pro
   "minimax": {
-    model: "hailuo/t2v-01",
+    model: "hailuo/02-text-to-video-pro",
     credits: 80,
     cost: 0.40,
-    extraParams: { sound: false, duration: "5" },
+    extraParams: { prompt_optimizer: false },
   },
 
-  // VEO
+  // VEO - Uses SPECIAL API endpoint: /api/v1/veo/generate
   "veo3": {
-    model: "veo3/text-to-video",
+    model: "veo3",  // For /api/v1/veo/generate endpoint
     credits: 400,
     cost: 2.00,
+    extraParams: { generationType: "TEXT_2_VIDEO" },
   },
 
-  // Kling family
+  // Kling family - VERIFIED: docs.kie.ai/market/kling/text-to-video
   "kling": {
     model: "kling-2.6/text-to-video",
     credits: 70,
     cost: 0.35,
-    extraParams: { sound: false, aspect_ratio: "1:1", duration: "5" },
+    extraParams: { sound: false, aspect_ratio: "16:9", duration: "5" },
   },
   "kling-turbo": {
     model: "kling/v2-5-turbo-text-to-video-pro",
@@ -243,7 +243,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "grok-imagine/text-to-video",
     credits: 60,
     cost: 0.30,
-    extraParams: { aspect_ratio: "2:3", mode: "normal", duration: "6" },
+    extraParams: { aspect_ratio: "16:9", mode: "normal", duration: "6" },
   },
 
   // Sora 2 family
