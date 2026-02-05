@@ -6,8 +6,9 @@ import { videoQueue } from "../lib/queue.js"
 const videoToVideoBody = z.object({
   videoUrl: z.string().url(),
   prompt: z.string().max(2000).optional(),
-  // Note: veo3.1 removed - it doesn't support video input, only image input
-  provider: z.enum(["veo", "veo3", "kling", "runway", "pika", "sora", "minimax"]).optional(),
+  // V2V ONLY works on KIE.ai - Replicate models don't support video input
+  // Only Wan 2.6 and Runway Aleph support actual V2V
+  provider: z.enum(["wan", "runway-aleph"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
