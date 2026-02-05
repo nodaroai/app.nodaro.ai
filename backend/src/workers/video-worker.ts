@@ -2,6 +2,7 @@ import { Worker } from "bullmq"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
+import { CreditsService } from "../services/credits.js"
 import { getAppSettings, calculateDisplayCost } from "../lib/app-settings.js"
 import { generateImage, type ImageProvider, type GenerateImageResult } from "../providers/image/replicate.js"
 import { imageToVideo, type VideoProvider, type VideoResult } from "../providers/video/replicate.js"
@@ -47,6 +48,47 @@ async function shouldSaveJobResult(jobId: string): Promise<boolean> {
   return true
 }
 
+/**
+ * Commit credits after successful job completion (cloud edition only).
+ * Wrapped in try-catch to avoid failing the job if credit commit fails.
+ */
+async function commitJobCredits(usageLogId: string | null | undefined, jobId: string): Promise<void> {
+  if (config.EDITION === "self-hosted" || !usageLogId) return
+
+  try {
+    await CreditsService.commitCredits(usageLogId)
+    console.log(`[worker] Credits committed for job ${jobId}`)
+  } catch (error) {
+    console.error(`[worker] Failed to commit credits for job ${jobId}:`, error)
+    // Don't fail the job if credit commit fails
+  }
+}
+
+/**
+ * Refund credits after job failure (cloud edition only).
+ * Only refunds for system errors, NOT for provider errors (where we got charged).
+ */
+async function refundJobCredits(usageLogId: string | null | undefined, jobId: string, errorMessage: string): Promise<void> {
+  if (config.EDITION === "self-hosted" || !usageLogId) return
+
+  try {
+    // Don't refund if provider charged us (provider errors)
+    const isProviderError = errorMessage?.toLowerCase().includes("provider") ||
+                           errorMessage?.toLowerCase().includes("api error") ||
+                           errorMessage?.toLowerCase().includes("kie.ai")
+
+    if (!isProviderError) {
+      await CreditsService.refundCredits(usageLogId)
+      console.log(`[worker] Credits refunded for job ${jobId}`)
+    } else {
+      console.log(`[worker] Provider error - not refunding credits for job ${jobId}: ${errorMessage}`)
+    }
+  } catch (error) {
+    console.error(`[worker] Failed to refund credits for job ${jobId}:`, error)
+    // Don't fail the job if credit refund fails
+  }
+}
+
 export function createVideoWorker() {
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
@@ -56,6 +98,14 @@ export function createVideoWorker() {
     "video-generation",
     async (job) => {
       const { jobId } = job.data as { jobId: string }
+
+      // Fetch usage_log_id for credit tracking (cloud edition)
+      const { data: jobRecord } = await supabase
+        .from("jobs")
+        .select("usage_log_id")
+        .eq("id", jobId)
+        .single()
+      const usageLogId = jobRecord?.usage_log_id
 
       try {
         await supabase
@@ -97,6 +147,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "edit-image") {
           const { imageUrl, prompt, provider } = job.data as {
@@ -139,6 +190,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-image") {
           const { imageUrl, prompt, provider } = job.data as {
@@ -187,6 +239,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-video") {
           const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration } = job.data as {
@@ -275,6 +328,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${finalVideoUrl} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "video-to-video") {
           const { videoUrl, prompt, provider } = job.data as {
@@ -312,6 +366,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-video") {
           const { prompt, provider, duration } = job.data as {
@@ -362,6 +417,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "lip-sync") {
           const { imageUrl, audioUrl, prompt, provider, resolution } = job.data as {
@@ -402,6 +458,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-speech") {
           const { text, voice, provider } = job.data as {
@@ -431,6 +488,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "generate-script") {
           const { prompt, sceneCount, tone, targetDuration, provider } = job.data as {
@@ -459,6 +517,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: "${script.title}" (${script.scenes.length} scenes)`)
         } else if (job.name === "combine-videos") {
           const { videoUrls, transition, transitionDuration } = job.data as {
@@ -491,6 +550,7 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "merge-video-audio") {
           const { videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio } = job.data as {
@@ -506,6 +566,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "extract-audio") {
@@ -525,6 +586,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: audioR2Url, ...(silentVideoR2Url ? { videoUrl: silentVideoR2Url } : {}) }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${audioR2Url}`)
 
         } else if (job.name === "trim-video") {
@@ -540,6 +602,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "resize-video") {
@@ -555,6 +618,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "adjust-volume") {
@@ -570,6 +634,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "add-captions") {
@@ -585,6 +650,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "mix-audio") {
@@ -598,6 +664,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "extract-youtube-audio") {
@@ -608,6 +675,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${audioUrl}`)
 
         } else if (job.name === "generate-music") {
@@ -620,6 +688,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "text-to-audio") {
@@ -632,6 +701,7 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "generate-character") {
@@ -660,6 +730,7 @@ export function createVideoWorker() {
             provider_cost: providerCost,
             display_cost: displayCost,
           }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-character-asset") {
@@ -688,6 +759,7 @@ export function createVideoWorker() {
             provider_cost: providerCost,
             display_cost: displayCost,
           }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-object") {
@@ -716,6 +788,7 @@ export function createVideoWorker() {
             provider_cost: providerCost,
             display_cost: displayCost,
           }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-object-asset") {
@@ -744,6 +817,7 @@ export function createVideoWorker() {
             provider_cost: providerCost,
             display_cost: displayCost,
           }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-location") {
@@ -772,6 +846,7 @@ export function createVideoWorker() {
             provider_cost: providerCost,
             display_cost: displayCost,
           }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-location-asset") {
@@ -800,6 +875,7 @@ export function createVideoWorker() {
             provider_cost: providerCost,
             display_cost: displayCost,
           }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "motion-transfer") {
@@ -851,6 +927,7 @@ export function createVideoWorker() {
             provider_cost: providerCost,
             display_cost: displayCost,
           }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "video-upscale") {
@@ -896,6 +973,7 @@ export function createVideoWorker() {
             provider_cost: providerCost,
             display_cost: displayCost,
           }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else {
@@ -931,6 +1009,7 @@ export function createVideoWorker() {
           })
           .eq("id", jobId)
 
+        await refundJobCredits(usageLogId, jobId, message)
         throw err
       }
     },
