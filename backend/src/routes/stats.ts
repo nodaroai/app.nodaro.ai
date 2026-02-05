@@ -37,17 +37,32 @@ export async function statsRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { scope?: string; userId?: string } }>("/v1/stats", async (req, reply) => {
     const { scope = "user", userId } = req.query
 
-    // For platform scope, require userId to be admin (TODO: proper auth check)
-    // For now, we allow platform scope if no userId filtering is applied
-
     try {
       // Build the base query
       let query = supabase
         .from("jobs")
         .select("id, status, input_data, started_at, completed_at")
 
-      // Filter by user if scope is "user" and userId provided
-      if (scope === "user" && userId) {
+      // Filtering logic:
+      // - scope="user": ALWAYS filter by userId (required for personal stats)
+      // - scope="platform": no filter (shows all jobs, admin-only feature)
+      if (scope === "platform") {
+        // No filter - show all jobs (TODO: add admin check)
+      } else {
+        // Default to "user" scope - always filter by userId
+        if (!userId) {
+          // No userId provided for user scope - return empty stats
+          return {
+            data: {
+              totalExecutions: 0,
+              successful: 0,
+              failed: 0,
+              failureRate: 0,
+              avgImageTime: null,
+              avgVideoTime: null,
+            },
+          }
+        }
         query = query.eq("user_id", userId)
       }
 
