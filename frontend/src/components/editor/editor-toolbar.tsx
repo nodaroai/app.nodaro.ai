@@ -4,7 +4,6 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ThemeToggle } from "@/components/theme-toggle"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -669,8 +668,6 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         >
           {videoAutoplay ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
         </Button>
-
-        <ThemeToggle />
       </div>
     </div>
   )
