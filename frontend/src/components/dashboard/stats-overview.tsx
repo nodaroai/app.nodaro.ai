@@ -114,21 +114,21 @@ export function StatsOverview({ className }: StatsOverviewProps) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <StatCard
           label="Executions"
-          value={stats?.totalExecutions ?? 0}
+          value={(stats?.totalExecutions ?? 0).toLocaleString()}
           icon={<Activity className="h-3.5 w-3.5 text-[#ff0073]" />}
           colorClass="bg-[#ff0073]/10"
           loading={loading}
         />
         <StatCard
           label="Successful"
-          value={stats?.successful ?? 0}
+          value={(stats?.successful ?? 0).toLocaleString()}
           icon={<CheckCircle className="h-3.5 w-3.5 text-green-500" />}
           colorClass="bg-green-500/10"
           loading={loading}
         />
         <StatCard
           label="Failed"
-          value={stats?.failed ?? 0}
+          value={(stats?.failed ?? 0).toLocaleString()}
           icon={<XCircle className="h-3.5 w-3.5 text-red-500" />}
           colorClass="bg-red-500/10"
           loading={loading}
