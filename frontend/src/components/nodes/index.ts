@@ -31,6 +31,8 @@ import { MixAudioNode } from "./mix-audio-node"
 import { AdjustVolumeNode } from "./adjust-volume-node"
 import { TrimVideoNode } from "./trim-video-node"
 import { LipSyncNode } from "./lip-sync-node"
+import { MotionTransferNode } from "./motion-transfer-node"
+import { VideoUpscaleNode } from "./video-upscale-node"
 import { SaveToStorageNode } from "./save-to-storage-node"
 import { WebhookOutputNode } from "./webhook-output-node"
 import { SceneNode } from "./scene-node"
@@ -69,6 +71,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "generate-music": GenerateMusicNode,
   "text-to-audio": TextToAudioNode,
   "lip-sync": LipSyncNode,
+  "motion-transfer": MotionTransferNode,
   // Processing
   "combine-videos": CombineVideosNode,
   "merge-video-audio": MergeVideoAudioNode,
@@ -78,6 +81,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "mix-audio": MixAudioNode,
   "adjust-volume": AdjustVolumeNode,
   "trim-video": TrimVideoNode,
+  "video-upscale": VideoUpscaleNode,
   // Output
   "save-to-storage": SaveToStorageNode,
   "webhook-output": WebhookOutputNode,

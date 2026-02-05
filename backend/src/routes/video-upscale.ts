@@ -1,18 +1,27 @@
+/**
+ * Video Upscale Route
+ *
+ * Upscales a video using Topaz Video Upscaler via KIE.ai.
+ *
+ * Input:
+ * - videoUrl: Source video to upscale (max 50MB)
+ * - upscaleFactor: "1", "2", or "4"
+ */
+
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 
-const videoToVideoBody = z.object({
+const videoUpscaleBody = z.object({
   videoUrl: z.string().url(),
-  prompt: z.string().max(2000).optional(),
-  // V2V uses Wan 2.6 only via KIE.ai (no provider selection)
+  upscaleFactor: z.enum(["1", "2", "4"]).default("2"),
   userId: z.string().uuid().optional(),
 })
 
-export async function videoToVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/video-to-video", async (req, reply) => {
-    const parsed = videoToVideoBody.safeParse(req.body)
+export async function videoUpscaleRoutes(app: FastifyInstance) {
+  app.post("/v1/video-upscale", async (req, reply) => {
+    const parsed = videoUpscaleBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: {
@@ -22,7 +31,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, prompt, userId } = parsed.data
+    const { videoUrl, upscaleFactor, userId } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -30,7 +39,11 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId ?? null,
         status: "pending",
-        input_data: { videoUrl, prompt, type: "video-to-video" },
+        input_data: {
+          videoUrl,
+          upscaleFactor,
+          type: "video-upscale",
+        },
       })
       .select("id")
       .single()
@@ -41,10 +54,10 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    await videoQueue.add("video-to-video", {
+    await videoQueue.add("video-upscale", {
       jobId: job.id,
       videoUrl,
-      prompt,
+      upscaleFactor,
     })
 
     return { jobId: job.id }

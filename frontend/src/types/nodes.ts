@@ -464,11 +464,8 @@ export type VideoToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  // V2V ONLY works on KIE.ai - Replicate models don't support video input
-  // - wan: Wan 2.6 (default) - standard createTask with video_urls array
-  // - kling-2.6: Kling 2.6 Motion Control - style transfer with motion
-  provider: "wan" | "kling-2.6"
-  model: string
+  // V2V uses Wan 2.6 only via KIE.ai (Replicate doesn't support video input)
+  // No provider selection - single provider (wan)
   duration: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -496,6 +493,40 @@ export type LipSyncData = {
   // Multi-input selection fields
   selectedImageNodeId?: string   // ID of node selected for portrait/face image
   selectedAudioNodeId?: string   // ID of node selected for audio track
+}
+
+// Motion Transfer: Apply motion from video to image character
+// KIE.ai model: kling-2.6/motion-control
+export type MotionTransferData = {
+  [key: string]: unknown
+  label: string
+  prompt: string // Optional, max 2500 chars
+  characterOrientation: "image" | "video" // image = max 10s, video = max 30s
+  resolution: "720p" | "1080p"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+// Video Upscale: Upscale video resolution using Topaz
+// KIE.ai model: topaz/video-upscale
+export type VideoUpscaleData = {
+  [key: string]: unknown
+  label: string
+  upscaleFactor: "1" | "2" | "4"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
 }
 
 export type QACheckData = {
@@ -990,6 +1021,8 @@ export type SceneNodeType =
   | "adjust-volume"
   | "trim-video"
   | "lip-sync"
+  | "motion-transfer"
+  | "video-upscale"
   | "save-to-storage"
   | "webhook-output"
   | "scene"
@@ -1184,8 +1217,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 25,
     inputs: ["in"],
     outputs: ["video"],
-    // V2V ONLY works on KIE.ai - Replicate models don't support video input
-    defaultData: { label: "Video to Video", prompt: "", provider: "wan", model: "wan/2-6-video-to-video", fieldMappings: {} },
+    // V2V uses Wan 2.6 only via KIE.ai (no provider selection needed)
+    defaultData: { label: "Video to Video", prompt: "", fieldMappings: {} },
   },
   {
     type: "text-to-video",
@@ -1323,6 +1356,42 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as LipSyncData,
+  },
+  // Motion Transfer (Kling 2.6 Motion Control)
+  {
+    type: "motion-transfer",
+    label: "Motion Transfer",
+    category: "ai",
+    creditCost: 30,
+    inputs: ["image", "video"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Motion Transfer",
+      prompt: "",
+      characterOrientation: "video",
+      resolution: "720p",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as MotionTransferData,
+  },
+  // Video Upscale (Topaz)
+  {
+    type: "video-upscale",
+    label: "Video Upscale",
+    category: "processing",
+    creditCost: 15,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Video Upscale",
+      upscaleFactor: "2",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VideoUpscaleData,
   },
   // Output
   {

@@ -40,6 +40,8 @@ import { generateLocationRoutes } from "./routes/generate-location.js"
 import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js"
 import { predictionsRoutes } from "./routes/predictions.js"
 import { adminSettingsRoutes } from "./routes/admin-settings.js"
+import { motionTransferRoutes } from "./routes/motion-transfer.js"
+import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -91,6 +93,8 @@ export async function buildApp() {
   await app.register(generateLocationAssetRoutes)
   await app.register(predictionsRoutes)
   await app.register(adminSettingsRoutes)
+  await app.register(motionTransferRoutes)
+  await app.register(videoUpscaleRoutes)
 
   return app
 }

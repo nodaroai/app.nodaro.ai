@@ -68,6 +68,8 @@ import type {
   AdjustVolumeData,
   TrimVideoData,
   LipSyncData,
+  MotionTransferData,
+  VideoUpscaleData,
   SaveToStorageData,
   WebhookOutputData,
   FieldMappings,
@@ -461,8 +463,14 @@ export function ConfigPanel() {
           {selectedNode.type === "lip-sync" && (
             <LipSyncConfig data={selectedNode.data as LipSyncData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "motion-transfer" && (
+            <MotionTransferConfig data={selectedNode.data as MotionTransferData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
 
           {/* Processing Nodes */}
+          {selectedNode.type === "video-upscale" && (
+            <VideoUpscaleConfig data={selectedNode.data as VideoUpscaleData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
           {selectedNode.type === "combine-videos" && (
             <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
@@ -1806,19 +1814,75 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           rows={3}
         />
       </MappableField>
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+      <p className="text-xs text-muted-foreground px-1">
+        Uses Wan 2.6 via KIE.ai (only provider that supports video-to-video)
+      </p>
+    </div>
+  )
+}
+
+function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<MotionTransferData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          value={data.prompt}
+          onChange={(e) => onUpdate({ prompt: e.target.value.slice(0, 2500) })}
+          placeholder="Optional: Describe the motion transfer..."
+          rows={2}
+        />
+        <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
+      </MappableField>
+      <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
-          value={data.provider || "wan"}
-          onValueChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
+          value={data.characterOrientation || "video"}
+          onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {/* V2V ONLY works on KIE.ai - Replicate models don't support video input */}
-            <SelectItem value="wan">Wan 2.6 (default)</SelectItem>
-            <SelectItem value="kling-2.6">Kling 2.6 Motion Control</SelectItem>
+            <SelectItem value="image">Image (same as picture, max 10s)</SelectItem>
+            <SelectItem value="video">Video (consistent with video, max 30s)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
+      <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.resolution || "720p"}
+          onValueChange={(v) => onUpdate({ resolution: v as MotionTransferData["resolution"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="720p">720p</SelectItem>
+            <SelectItem value="1080p">1080p</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <p className="text-xs text-muted-foreground px-1">
+        Uses Kling 2.6 Motion Control via KIE.ai. Connect image and video inputs.
+      </p>
+    </div>
+  )
+}
+
+function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<VideoUpscaleData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="upscaleFactor" label="Upscale Factor" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.upscaleFactor || "2"}
+          onValueChange={(v) => onUpdate({ upscaleFactor: v as VideoUpscaleData["upscaleFactor"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">1x (no upscale, AI enhance only)</SelectItem>
+            <SelectItem value="2">2x (recommended)</SelectItem>
+            <SelectItem value="4">4x (maximum)</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <p className="text-xs text-muted-foreground px-1">
+        Uses Topaz Video Upscaler via KIE.ai. Max 50MB input video.
+      </p>
     </div>
   )
 }

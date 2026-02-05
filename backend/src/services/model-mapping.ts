@@ -275,7 +275,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
 // =============================================================================
 // VIDEO-TO-VIDEO MODELS (Video input → Video output)
-// These are the ONLY working V2V providers - Replicate models don't support V2V!
+// Only Wan 2.6 supports V2V - Replicate models don't support video input!
 // =============================================================================
 export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 - Standard createTask endpoint, input: video_urls array
@@ -286,15 +286,39 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "video_urls",  // Array format: ["video_url"]
     extraParams: {},
   },
+}
 
-  // Kling 2.6 Motion Control - style transfer with motion preservation
-  // Standard createTask endpoint, input: video_urls array
-  "kling-2.6": {
-    model: "kling-2.6/video-to-video",
+// =============================================================================
+// MOTION TRANSFER MODELS (Image + Video → Motion-Applied Video)
+// Uses character from image and applies motion from video
+// =============================================================================
+export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
+  // Kling 2.6 Motion Control - VERIFIED: docs.kie.ai/market/kling/motion-control
+  // input_urls: array of image URLs (character reference)
+  // video_urls: array of video URLs (motion source)
+  // character_orientation: "image" (max 10s) or "video" (max 30s)
+  "kling": {
+    model: "kling-2.6/motion-control",
     credits: 100,
     cost: 0.50,
-    imageParam: "video_urls",  // Array format: ["video_url"]
-    extraParams: {},
+    imageParam: "input_urls",  // Array format for input images
+    extraParams: { character_orientation: "image", resolution: "720p" },
+  },
+}
+
+// =============================================================================
+// VIDEO UPSCALE MODELS (Video → Upscaled Video)
+// =============================================================================
+export const KIE_VIDEO_UPSCALE_MODELS: Record<string, KieModelConfig> = {
+  // Topaz Video Upscaler - VERIFIED: docs.kie.ai/market/topaz/video-upscale
+  // video_url: STRING (NOT array!), max 50MB input
+  // upscale_factor: "1", "2", or "4"
+  "topaz": {
+    model: "topaz/video-upscale",
+    credits: 60,
+    cost: 0.30,
+    imageParam: "video_url",  // Single URL string (NOT array!)
+    extraParams: { upscale_factor: "2" },
   },
 }
 
@@ -371,7 +395,7 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "lip-sync" | "music" | "tts" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "music" | "tts" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -386,11 +410,14 @@ export function getKieModelConfig(
     case "video":
       return KIE_VIDEO_MODELS[provider] ?? null
     case "video-to-video":
-      // KIE.ai V2V providers: Wan 2.6 and Runway Aleph
-      // These are the ONLY working V2V providers (Replicate models don't support V2V!)
+      // Only Wan 2.6 supports V2V (Replicate models don't support video input!)
       return KIE_VIDEO_TO_VIDEO_MODELS[provider] ?? null
     case "text-to-video":
       return KIE_TEXT_TO_VIDEO_MODELS[provider] ?? null
+    case "motion-transfer":
+      return KIE_MOTION_TRANSFER_MODELS[provider] ?? null
+    case "video-upscale":
+      return KIE_VIDEO_UPSCALE_MODELS[provider] ?? null
     case "lip-sync":
       return KIE_LIP_SYNC_MODELS[provider] ?? null
     case "music":

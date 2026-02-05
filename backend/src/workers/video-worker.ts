@@ -22,7 +22,7 @@ import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
-import { editImageKie, generateImageKie, imageToVideoKie, lipSyncKie, textToVideoKie, KieError, type ProgressCallback } from "../services/kie-ai.js"
+import { editImageKie, generateImageKie, imageToVideoKie, lipSyncKie, textToVideoKie, motionTransferKie, videoUpscaleKie, KieError, type ProgressCallback } from "../services/kie-ai.js"
 import { getAppSettings as getKieAppSettings } from "../lib/app-settings.js"
 import { isKieSupported } from "../services/model-mapping.js"
 import { promises as fs } from "node:fs"
@@ -714,6 +714,96 @@ export function createVideoWorker() {
             display_cost: displayCost,
           }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+
+        } else if (job.name === "motion-transfer") {
+          // Motion Transfer: Image + Video → Motion-Applied Video
+          // Uses Kling 2.6 Motion Control via KIE.ai
+          const { imageUrl, videoUrl, prompt, characterOrientation, resolution } = job.data as {
+            jobId: string
+            imageUrl: string
+            videoUrl: string
+            prompt?: string
+            characterOrientation?: "image" | "video"
+            resolution?: "720p" | "1080p"
+          }
+          console.log(`[worker] motion-transfer ${jobId} (orientation: ${characterOrientation ?? "image"}, resolution: ${resolution ?? "720p"})`)
+
+          // Create progress callback for real-time updates
+          const onProgress: ProgressCallback = async (progress: number) => {
+            console.log(`[worker] Job ${jobId} motion-transfer progress: ${progress}%`)
+            await supabase.from("jobs").update({ progress }).eq("id", jobId)
+          }
+
+          const result = await motionTransferKie(
+            imageUrl,
+            videoUrl,
+            prompt,
+            characterOrientation ?? "image",
+            resolution ?? "720p",
+            onProgress
+          )
+          await job.updateProgress(50)
+
+          const r2Url = await uploadToR2(result.url, jobId, "video")
+          await job.updateProgress(100)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { videoUrl: r2Url },
+            completed_at: new Date().toISOString(),
+            provider: "kie",
+            provider_cost: providerCost,
+            display_cost: displayCost,
+          }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+
+        } else if (job.name === "video-upscale") {
+          // Video Upscale: Video → Upscaled Video
+          // Uses Topaz Video Upscaler via KIE.ai
+          const { videoUrl, upscaleFactor } = job.data as {
+            jobId: string
+            videoUrl: string
+            upscaleFactor?: "1" | "2" | "4"
+          }
+          console.log(`[worker] video-upscale ${jobId} (factor: ${upscaleFactor ?? "2"}x)`)
+
+          // Create progress callback for real-time updates
+          const onProgress: ProgressCallback = async (progress: number) => {
+            console.log(`[worker] Job ${jobId} video-upscale progress: ${progress}%`)
+            await supabase.from("jobs").update({ progress }).eq("id", jobId)
+          }
+
+          const result = await videoUpscaleKie(
+            videoUrl,
+            upscaleFactor ?? "2",
+            onProgress
+          )
+          await job.updateProgress(50)
+
+          const r2Url = await uploadToR2(result.url, jobId, "video")
+          await job.updateProgress(100)
+
+          // Get settings and calculate costs
+          const settings = await getAppSettings()
+          const providerCost = result.cost
+          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { videoUrl: r2Url },
+            completed_at: new Date().toISOString(),
+            provider: "kie",
+            provider_cost: providerCost,
+            display_cost: displayCost,
+          }).eq("id", jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
 
         } else {
           throw new Error(`Unknown job type: ${job.name}`)

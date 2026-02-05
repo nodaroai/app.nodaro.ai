@@ -1343,6 +1343,22 @@ interface QACheckNode {
   outputs: ['approved', 'rejected', 'feedback'];
   creditCost: 1;
 }
+
+interface MotionTransferNode {
+  type: 'motion-transfer';
+  data: {
+    prompt?: string;                           // Optional, max 2500 chars
+    characterOrientation: 'image' | 'video';   // 'image' = max 10s, 'video' = max 30s
+    resolution: '720p' | '1080p';
+  };
+  inputs: ['image', 'video'];                  // Image (character) + Video (motion source)
+  outputs: ['video'];
+  creditCost: 100;
+  // Uses Kling 2.6 Motion Control via KIE.ai ONLY
+  // Applies motion from source video to character from source image
+  // characterOrientation: 'image' means character faces same direction as in image (max 10s output)
+  // characterOrientation: 'video' means character orientation follows video (max 30s output)
+}
 ```
 
 ### Processing Nodes
@@ -1457,6 +1473,19 @@ interface TrimVideoNode {
   inputs: ['video'];
   outputs: ['video'];
   creditCost: 0;  // Simple processing, no AI
+}
+
+interface VideoUpscaleNode {
+  type: 'video-upscale';
+  data: {
+    upscaleFactor: '1' | '2' | '4';  // 1x = no upscale, 2x = double resolution, 4x = 4x resolution
+  };
+  inputs: ['video'];
+  outputs: ['video'];
+  creditCost: 60;
+  // Uses Topaz Video Upscaler via KIE.ai ONLY
+  // NOTE: Maximum input video size is 50MB
+  // Output resolution depends on input: e.g., 720p input × 2x = 1440p output
 }
 ```
 
@@ -4899,7 +4928,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Global video autoplay toggle in editor toolbar
 - [x] Single-node execution (Run button per node, hanging tab style)
 - [x] Floating Execute/Stop workflow buttons (bottom center)
-- [x] Video to Video node (KIE.ai only: Wan 2.6, Runway Aleph - Replicate doesn't support V2V)
+- [x] Video to Video node (KIE.ai only: Wan 2.6 - Replicate doesn't support V2V)
 - [x] DAG Execution Engine (topological sort with Kahn's algorithm)
 - [x] Parallel execution at each level (Promise.allSettled)
 - [x] Sequential execution with dependency waiting between levels
@@ -4918,7 +4947,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Renamed Add Audio to Merge Video & Audio for clarity
 - [x] VEO 2 and VEO 3 as separate providers in Image to Video nodes (NOT Video to Video - V2V uses KIE.ai only)
 - [x] Generate Audio checkbox only shown when VEO 3 is selected (not VEO 2)
-- [x] 37 node types total (Input: 5, Parameter: 8, AI: 9, Scene: 1, Character: 1, Object: 1, Location: 1, Processing: 8, Output: 2, Utility: 1)
+- [x] 39 node types total (Input: 5, Parameter: 8, AI: 10, Scene: 1, Character: 1, Object: 1, Location: 1, Processing: 9, Output: 2, Utility: 1)
 - [x] Character & Location extraction from scene images (crop + upload to R2, used as references in Expand to Nodes)
 - [x] Asset management system: characters, locations, objects with category-aware execution
 - [x] Import Assets modal with project hierarchy, "Show all assets" mode, filter tabs (All/Characters/Locations/Objects)
@@ -5018,7 +5047,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Asset Library thumbnail refresh: thumbnails update automatically when Page modals close (300ms delay for DB propagation)
 - [x] Unified Asset Library: shows ALL user assets across all projects with user_id filtering
 - [x] VEO 3.1 support: first+last frame interpolation, duration restricted to 4/6/8 seconds dropdown
-- [x] Video to Video node rewritten: now uses KIE.ai exclusively (Wan 2.6, Runway Aleph) - Replicate models don't support V2V
+- [x] Video to Video node rewritten: now uses KIE.ai exclusively (Wan 2.6 only) - Replicate models don't support V2V
 - [x] Image to Video node: single input handle accepts all connection types (images, audio)
 - [x] Image to Video node: internal dropdowns for Start Frame, End Frame, Audio Track with thumbnail preview
 - [x] Image to Video node: auto-select first connected image as Start Frame
@@ -5030,6 +5059,8 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Asset Library fix: click thumbnail opens Page modal, click + button adds to canvas (sidebar and floating toolbar)
 - [x] Asset Library fix: Page modals render outside library modal to avoid z-index issues
 - [x] React hooks order fix: Page modals declare all hooks before conditional returns
+- [x] Motion Transfer node (AI): applies motion from source video to character from source image via Kling 2.6 Motion Control (KIE.ai only)
+- [x] Video Upscale node (Processing): upscales video resolution via Topaz Video Upscaler (KIE.ai only, max 50MB input)
 
 ### Phase 1.4 - Polish & Admin (5-7 days)
 

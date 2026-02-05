@@ -20,6 +20,8 @@ import {
   KIE_VIDEO_MODELS,
   KIE_VIDEO_TO_VIDEO_MODELS,
   KIE_TEXT_TO_VIDEO_MODELS,
+  KIE_MOTION_TRANSFER_MODELS,
+  KIE_VIDEO_UPSCALE_MODELS,
   KIE_LIP_SYNC_MODELS,
   KIE_MUSIC_MODELS,
   KIE_TTS_MODELS,
@@ -775,6 +777,106 @@ export async function videoToVideoKie(
   }
 
   console.log(`[KIE.ai] V2V completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: outputUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
+// MOTION TRANSFER (Image + Video → Motion-Applied Video)
+// Uses character from image and applies motion from video
+// Model: kling-2.6/motion-control
+// =============================================================================
+
+export async function motionTransferKie(
+  imageUrl: string,
+  videoUrl: string,
+  prompt?: string,
+  characterOrientation: "image" | "video" = "image",
+  resolution: "720p" | "1080p" = "720p",
+  onProgress?: ProgressCallback,
+): Promise<KieResult> {
+  const modelConfig = KIE_MOTION_TRANSFER_MODELS["kling"]
+  if (!modelConfig) {
+    throw createSanitizedError("Motion transfer model not configured", "Motion transfer")
+  }
+
+  console.log(`[KIE.ai] ========== MOTION TRANSFER REQUEST ==========`)
+  console.log(`[KIE.ai] Model: ${modelConfig.model}`)
+  console.log(`[KIE.ai] Image URL (character source): ${imageUrl}`)
+  console.log(`[KIE.ai] Video URL (motion source): ${videoUrl}`)
+  console.log(`[KIE.ai] Prompt: "${prompt ?? "(none)"}"`)
+  console.log(`[KIE.ai] Character orientation: ${characterOrientation}`)
+  console.log(`[KIE.ai] Resolution: ${resolution}`)
+  console.log(`[KIE.ai] Max duration: ${characterOrientation === "image" ? "10s" : "30s"}`)
+  console.log(`[KIE.ai] ==============================================`)
+
+  // Build input based on KIE.ai docs for kling-2.6/motion-control
+  const input: Record<string, unknown> = {
+    input_urls: [imageUrl],  // Array of image URLs (character reference)
+    video_urls: [videoUrl],  // Array of video URLs (motion source)
+    character_orientation: characterOrientation,
+    resolution,
+  }
+
+  // Add optional prompt if provided
+  if (prompt) {
+    input.prompt = prompt
+  }
+
+  console.log(`[KIE.ai] Final input:`, JSON.stringify(input, null, 2))
+
+  const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO, onProgress)
+
+  const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!outputUrl) {
+    throw createSanitizedError("Motion transfer task succeeded but no URL found", "Motion transfer")
+  }
+
+  console.log(`[KIE.ai] Motion transfer completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+
+  return { url: outputUrl, cost: modelConfig.cost }
+}
+
+// =============================================================================
+// VIDEO UPSCALE (Video → Upscaled Video)
+// Model: topaz/video-upscale
+// NOTE: video_url is STRING (NOT array!), max 50MB input
+// =============================================================================
+
+export async function videoUpscaleKie(
+  videoUrl: string,
+  upscaleFactor: "1" | "2" | "4" = "2",
+  onProgress?: ProgressCallback,
+): Promise<KieResult> {
+  const modelConfig = KIE_VIDEO_UPSCALE_MODELS["topaz"]
+  if (!modelConfig) {
+    throw createSanitizedError("Video upscale model not configured", "Video upscale")
+  }
+
+  console.log(`[KIE.ai] ========== VIDEO UPSCALE REQUEST ==========`)
+  console.log(`[KIE.ai] Model: ${modelConfig.model}`)
+  console.log(`[KIE.ai] Video URL: ${videoUrl}`)
+  console.log(`[KIE.ai] Upscale factor: ${upscaleFactor}x`)
+  console.log(`[KIE.ai] NOTE: Max input size 50MB`)
+  console.log(`[KIE.ai] ==============================================`)
+
+  // Build input based on KIE.ai docs for topaz/video-upscale
+  // IMPORTANT: video_url is STRING, not array!
+  const input: Record<string, unknown> = {
+    video_url: videoUrl,  // Single URL string (NOT array!)
+    upscale_factor: upscaleFactor,
+  }
+
+  console.log(`[KIE.ai] Final input:`, JSON.stringify(input, null, 2))
+
+  const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO, onProgress)
+
+  const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!outputUrl) {
+    throw createSanitizedError("Video upscale task succeeded but no URL found", "Video upscale")
+  }
+
+  console.log(`[KIE.ai] Video upscale completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
 
   return { url: outputUrl, cost: modelConfig.cost }
 }
