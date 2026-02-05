@@ -5238,5 +5238,173 @@ Reference project: https://github.com/jhartquist/claude-remotion-kickstart
 
 ---
 
-*Last updated: 2026-02-04*
-*Version: 1.14.0*
+## Credits System Implementation
+
+### Overview
+
+SceneNode uses a **credits-based billing system** for the cloud edition. Credits are the internal currency that users spend to run AI operations. Self-hosted edition skips all credit checks.
+
+### Credit Pricing Model
+
+**Base formula:** `1 credit = $0.10 provider cost`
+
+This means:
+- If Replicate charges us $0.05 for an operation → costs 0.5 credits
+- If KIE.ai charges us $0.30 for an operation → costs 3 credits
+
+### Subscription Tiers
+
+| Tier | Monthly Price | Credits Included | Per-Credit Cost |
+|------|---------------|------------------|-----------------|
+| Free | $0 | 50 | - |
+| Basic | $19 | 95 | $0.20 |
+| Standard | $39 | 235 | $0.17 |
+| Pro | $79 | 530 | $0.15 |
+| Business | $149 | 1,120 | $0.13 |
+
+### Model Identifiers (Case-Sensitive)
+
+All model identifiers use **lowercase with hyphens** except VEO which uses **dot notation**:
+
+| Category | Model ID | Provider |
+|----------|----------|----------|
+| Image | `nano-banana` | KIE.ai |
+| Image | `flux` | KIE.ai |
+| Image | `grok` | KIE.ai |
+| Image | `gpt-image` | KIE.ai |
+| Video | `veo3` | KIE.ai |
+| Video | `veo3.1` | KIE.ai |
+| Video | `kling` | KIE.ai |
+| Video | `kling-turbo` | KIE.ai |
+| Video | `minimax` | KIE.ai |
+| TTS | `elevenlabs` | KIE.ai |
+
+**Important:** VEO models use dot notation (`veo3.1`), NOT hyphens or underscores.
+
+### Credit Flow
+
+```
+1. Job Created
+   └── Reserve credits (estimate based on model)
+
+2. Job Processing
+   └── API call to provider (KIE.ai or Replicate)
+
+3. Job Completed
+   ├── Get actual cost from API response
+   ├── Calculate credits: providerCost / 0.10
+   ├── Commit actual credits used
+   └── Refund difference if overestimated
+
+4. Job Failed
+   └── Full refund of reserved credits
+```
+
+### Cost Calculation
+
+**KIE.ai (static pricing):**
+```typescript
+// From model-mapping.ts
+const KIE_PRICES = {
+  "nano-banana": 0.03,
+  "flux": 0.05,
+  "veo3": 0.50,
+  "veo3.1": 0.75,
+  // etc.
+}
+credits = KIE_PRICES[modelId] / 0.10
+```
+
+**Replicate (dynamic pricing):**
+```typescript
+// From Replicate API response
+const predictTime = response.metrics?.predict_time ?? 0
+const providerCost = predictTime * 0.000225
+credits = providerCost / 0.10
+```
+
+### Database Schema
+
+**New columns added to `jobs` table:**
+```sql
+ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS provider TEXT;
+ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS provider_cost DECIMAL(10, 6);
+ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS display_cost DECIMAL(10, 6);
+```
+
+**`app_settings` table:**
+```sql
+CREATE TABLE public.app_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key TEXT NOT NULL UNIQUE,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by UUID REFERENCES public.profiles(id)
+);
+
+-- Initial settings
+INSERT INTO public.app_settings (key, value) VALUES
+    ('ai_provider', '"replicate"'),
+    ***REDACTED-OSS-SCRUB***;
+```
+
+**`profiles` table (credits-related columns):**
+```sql
+credits_balance INTEGER NOT NULL DEFAULT 50
+```
+
+**`usage_logs` table:**
+```sql
+CREATE TABLE public.usage_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id),
+    job_id UUID REFERENCES public.jobs(id),
+    action TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    credits_used INTEGER NOT NULL,
+    cost_usd DECIMAL(10, 6),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### Cost Markup (Cloud Edition)
+
+Cloud edition applies a markup to provider costs:
+
+```typescript
+const markupPercent = appSettings.cost_markup_percent || 25
+const [formula removed]
+```
+
+**API Response Sanitization:**
+- Cloud edition regular users see `cost` (renamed from `display_cost`)
+- Cloud edition admins see full data (`provider`, `provider_cost`, `display_cost`)
+- Self-hosted edition sees full data (no sanitization)
+
+### Self-Hosted Edition
+
+When `EDITION=self-hosted`:
+- All credit checks are skipped
+- Users pay AI providers directly
+- No markup applied
+- Full cost data visible in API responses
+
+### Caching
+
+App settings are cached for 60 seconds to reduce database queries:
+```typescript
+const SETTINGS_CACHE_TTL = 60 * 1000 // 60 seconds
+```
+
+### Monthly Reset Logic
+
+Credits reset based on subscription period, NOT calendar month:
+- Uses `subscriptions.current_period_end` timestamp
+- When period ends, credits reset to tier allocation
+- Unused credits do NOT roll over
+
+---
+
+*Last updated: 2026-02-05*
+*Version: 1.15.0*
