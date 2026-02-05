@@ -22,6 +22,7 @@ import {
   KIE_LIP_SYNC_MODELS,
   KIE_MUSIC_MODELS,
   KIE_TTS_MODELS,
+  durationToNFrames,
   type KieModelConfig,
 } from "./model-mapping.js"
 
@@ -557,7 +558,14 @@ export async function imageToVideoKie(
 
   // Override duration if provided
   if (duration) {
-    input.duration = String(duration)  // KIE expects string for duration
+    if (modelConfig.usesNFrames) {
+      // Sora uses n_frames instead of duration
+      // n_frames 10 = ~5 seconds, n_frames 15 = ~10 seconds
+      input.n_frames = durationToNFrames(duration)
+      console.log(`[KIE.ai] Converting duration ${duration}s to n_frames: ${input.n_frames}`)
+    } else {
+      input.duration = String(duration)  // KIE expects string for duration
+    }
   }
 
   // Handle end frame for models that support it
@@ -625,7 +633,14 @@ export async function textToVideoKie(
 
   // Override duration if provided
   if (duration) {
-    input.duration = String(duration)
+    if (modelConfig.usesNFrames) {
+      // Sora uses n_frames instead of duration
+      // n_frames 10 = ~5 seconds, n_frames 15 = ~10 seconds
+      input.n_frames = durationToNFrames(duration)
+      console.log(`[KIE.ai] Converting duration ${duration}s to n_frames: ${input.n_frames}`)
+    } else {
+      input.duration = String(duration)
+    }
   }
 
   // Override aspect ratio if provided
