@@ -1,12 +1,27 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react"
+import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, Clock, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getJobs, type Job } from "@/lib/api"
+import { getJobs, getStats, cancelJob, cancelAllJobs, type Job, type StatsResponse } from "@/lib/api"
 import { ExecutionDetailModal } from "./execution-detail-modal"
 import { useAuth } from "@/hooks/use-auth"
-import { EDITION } from "@/lib/edition"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString)
@@ -142,8 +157,21 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
   const [prevCursors, setPrevCursors] = useState<string[]>([])
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [stats, setStats] = useState<StatsResponse | null>(null)
+  const [cancelAllDialogOpen, setCancelAllDialogOpen] = useState(false)
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
 
   const userId = user?.id
+
+  const fetchStats = useCallback(async () => {
+    if (!userId) return
+    try {
+      const result = await getStats("user", userId)
+      setStats(result.data)
+    } catch (err) {
+      console.error("Failed to fetch stats:", err)
+    }
+  }, [userId])
 
   const fetchData = useCallback(async (cursor?: string, direction: "next" | "prev" | "refresh" = "refresh") => {
     if (!userId) return
@@ -162,19 +190,57 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
       } else if (direction === "refresh") {
         setPrevCursors([])
       }
+
+      // Also refresh stats
+      fetchStats()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load jobs")
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [userId])
+  }, [userId, fetchStats])
+
+  const handleCancelJob = useCallback(async (jobId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!userId) return
+
+    setCancellingJobId(jobId)
+    try {
+      await cancelJob(jobId, userId)
+      // Optimistically update the job status
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: "cancelled" } : j))
+      // Refresh stats
+      fetchStats()
+    } catch (err) {
+      console.error("Failed to cancel job:", err)
+    } finally {
+      setCancellingJobId(null)
+    }
+  }, [userId, fetchStats])
+
+  const handleCancelAll = useCallback(async () => {
+    if (!userId) return
+
+    try {
+      const result = await cancelAllJobs(userId)
+      if (result.cancelled > 0) {
+        // Refresh the jobs list and stats
+        fetchData(undefined, "refresh")
+      }
+    } catch (err) {
+      console.error("Failed to cancel all jobs:", err)
+    } finally {
+      setCancelAllDialogOpen(false)
+    }
+  }, [userId, fetchData])
 
   useEffect(() => {
     if (userId) {
       fetchData()
+      fetchStats()
     }
-  }, [fetchData, userId])
+  }, [fetchData, fetchStats, userId])
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -202,7 +268,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
     processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
     pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
     queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
-    cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400",
+    cancelled: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
   }
 
   if (!userId || (loading && jobs.length === 0)) {
@@ -232,10 +298,41 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
     <div className={`flex-1 flex flex-col bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-[#E2E8F0]">
-          Execution History
-        </h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-[#E2E8F0]">
+            Execution History
+          </h2>
+          {/* Stats badges */}
+          {stats && (
+            <div className="flex items-center gap-2">
+              {(stats.pending > 0) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+                  <Clock className="w-3 h-3" />
+                  {stats.pending} pending
+                </span>
+              )}
+              {(stats.processing > 0) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
+                  <Zap className="w-3 h-3" />
+                  {stats.processing} processing
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
+          {/* Cancel All button */}
+          {stats && (stats.pending + stats.processing > 0) && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setCancelAllDialogOpen(true)}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              <XCircle className="w-4 h-4 mr-1.5" />
+              Cancel All ({stats.pending + stats.processing})
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -302,12 +399,15 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Created
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-16">
+
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-[#2D2D2D]">
               {jobs.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
+                  <td colSpan={10} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
                     No executions found
                   </td>
                 </tr>
@@ -381,6 +481,32 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                         {formatRelativeTime(job.created_at)}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      {["pending", "queued", "processing"].includes(job.status) && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                                onClick={(e) => handleCancelJob(job.id, e)}
+                                disabled={cancellingJobId === job.id}
+                              >
+                                {cancellingJobId === job.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <XCircle className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left">
+                              <p>Cancel this job</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -399,6 +525,28 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
           setSelectedJob(null)
         }}
       />
+
+      {/* Cancel All Confirmation Dialog */}
+      <AlertDialog open={cancelAllDialogOpen} onOpenChange={setCancelAllDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel all pending jobs?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel {stats ? stats.pending + stats.processing : 0} job{(stats?.pending ?? 0) + (stats?.processing ?? 0) !== 1 ? "s" : ""} that are currently pending or processing.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Running</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelAll}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              Cancel All Jobs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

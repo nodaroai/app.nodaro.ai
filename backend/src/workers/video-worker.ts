@@ -28,6 +28,25 @@ import { isKieSupported } from "../services/model-mapping.js"
 import { promises as fs } from "node:fs"
 import { dirname } from "node:path"
 
+/**
+ * Check if job was cancelled before saving completion result.
+ * This prevents race condition where user cancels but job already completed.
+ * Returns true if job should proceed with saving, false if cancelled.
+ */
+async function shouldSaveJobResult(jobId: string): Promise<boolean> {
+  const { data: currentJob } = await supabase
+    .from("jobs")
+    .select("status")
+    .eq("id", jobId)
+    .single()
+
+  if (currentJob?.status === "cancelled") {
+    console.log(`[worker] Job ${jobId} was cancelled during processing, discarding result`)
+    return false
+  }
+  return true
+}
+
 export function createVideoWorker() {
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
@@ -61,6 +80,9 @@ export function createVideoWorker() {
           const settings = await getAppSettings()
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase
             .from("jobs")
@@ -100,6 +122,9 @@ export function createVideoWorker() {
 
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase
             .from("jobs")
@@ -145,6 +170,9 @@ export function createVideoWorker() {
 
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase
             .from("jobs")
@@ -231,6 +259,9 @@ export function createVideoWorker() {
 
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase
             .from("jobs")
             .update({
@@ -264,6 +295,9 @@ export function createVideoWorker() {
           const settings = await getAppSettings()
           const providerCost = videoResult.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase
             .from("jobs")
@@ -312,6 +346,9 @@ export function createVideoWorker() {
 
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase
             .from("jobs")
             .update({
@@ -349,6 +386,9 @@ export function createVideoWorker() {
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase
             .from("jobs")
             .update({
@@ -378,6 +418,9 @@ export function createVideoWorker() {
           const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
           await job.updateProgress(100)
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase
             .from("jobs")
             .update({
@@ -402,6 +445,9 @@ export function createVideoWorker() {
 
           const script = await generateScript(prompt, sceneCount, tone, targetDuration, provider)
           await job.updateProgress(100)
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase
             .from("jobs")
@@ -432,6 +478,9 @@ export function createVideoWorker() {
           // Cleanup temp files
           await fs.rm(dirname(outputPath), { recursive: true, force: true }).catch(() => {})
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase
             .from("jobs")
             .update({
@@ -454,6 +503,8 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "video")
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -471,6 +522,8 @@ export function createVideoWorker() {
           }
           await cleanupWorkDir(dirname(result.audioPath))
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: audioR2Url, ...(silentVideoR2Url ? { videoUrl: silentVideoR2Url } : {}) }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${audioR2Url}`)
 
@@ -484,6 +537,8 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "video")
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -497,6 +552,8 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "video")
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -510,6 +567,8 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "audio")
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -523,6 +582,8 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "video")
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -534,6 +595,8 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "audio")
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -542,6 +605,8 @@ export function createVideoWorker() {
           console.log(`[worker] extract-youtube-audio ${jobId}`)
           const audioUrl = await extractYouTubeAudio(youtubeUrl)
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${audioUrl}`)
 
@@ -552,6 +617,8 @@ export function createVideoWorker() {
           await job.updateProgress(50)
           const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -562,6 +629,8 @@ export function createVideoWorker() {
           await job.updateProgress(50)
           const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
           await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -578,6 +647,9 @@ export function createVideoWorker() {
           const settings = await getAppSettings()
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase.from("jobs").update({
             status: "completed",
@@ -604,6 +676,9 @@ export function createVideoWorker() {
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase.from("jobs").update({
             status: "completed",
             progress: 100,
@@ -628,6 +703,9 @@ export function createVideoWorker() {
           const settings = await getAppSettings()
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase.from("jobs").update({
             status: "completed",
@@ -654,6 +732,9 @@ export function createVideoWorker() {
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase.from("jobs").update({
             status: "completed",
             progress: 100,
@@ -679,6 +760,9 @@ export function createVideoWorker() {
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase.from("jobs").update({
             status: "completed",
             progress: 100,
@@ -703,6 +787,9 @@ export function createVideoWorker() {
           const settings = await getAppSettings()
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase.from("jobs").update({
             status: "completed",
@@ -752,6 +839,9 @@ export function createVideoWorker() {
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
           await supabase.from("jobs").update({
             status: "completed",
             progress: 100,
@@ -793,6 +883,9 @@ export function createVideoWorker() {
           const settings = await getAppSettings()
           const providerCost = result.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
 
           await supabase.from("jobs").update({
             status: "completed",

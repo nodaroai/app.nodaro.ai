@@ -1150,6 +1150,9 @@ export interface StatsResponse {
   totalExecutions: number
   successful: number
   failed: number
+  cancelled: number
+  pending: number
+  processing: number
   failureRate: number
   avgImageTime: number | null
   avgVideoTime: number | null
@@ -1164,6 +1167,33 @@ export async function getStats(scope: "user" | "platform" = "user", userId?: str
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throw new Error(err?.error?.message ?? "Failed to fetch stats")
+  }
+  return res.json()
+}
+
+// Cancel job functions
+export async function cancelJob(jobId: string, userId?: string): Promise<{ success: boolean; cancelled: number }> {
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to cancel job")
+  }
+  return res.json()
+}
+
+export async function cancelAllJobs(userId: string): Promise<{ success: boolean; cancelled: number }> {
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/cancel-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to cancel jobs")
   }
   return res.json()
 }

@@ -5,6 +5,9 @@ interface StatsResponse {
   totalExecutions: number
   successful: number
   failed: number
+  cancelled: number
+  pending: number
+  processing: number
   failureRate: number
   avgImageTime: number | null
   avgVideoTime: number | null
@@ -26,6 +29,9 @@ export async function statsRoutes(app: FastifyInstance) {
             totalExecutions: 0,
             successful: 0,
             failed: 0,
+            cancelled: 0,
+            pending: 0,
+            processing: 0,
             failureRate: 0,
             avgImageTime: null,
             avgVideoTime: null,
@@ -49,6 +55,9 @@ export async function statsRoutes(app: FastifyInstance) {
         totalExecutions: data?.totalExecutions ?? 0,
         successful: data?.successful ?? 0,
         failed: data?.failed ?? 0,
+        cancelled: data?.cancelled ?? 0,
+        pending: data?.pending ?? 0,
+        processing: data?.processing ?? 0,
         failureRate: data?.failureRate ?? 0,
         avgImageTime: data?.avgImageTime ?? null,
         avgVideoTime: data?.avgVideoTime ?? null,
