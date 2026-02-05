@@ -45,6 +45,7 @@ import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./routes/credits.js"
+import { adminRoutes } from "./routes/admin.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -101,6 +102,7 @@ export async function buildApp() {
   await app.register(statsRoutes)
   await app.register(cancelJobsRoutes)
   await app.register(creditsRoutes)
+  await app.register(adminRoutes)
 
   return app
 }

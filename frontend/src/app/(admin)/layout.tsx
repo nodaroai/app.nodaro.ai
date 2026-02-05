@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Menu,
   X,
+  Bell,
+  Cpu,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -35,6 +37,8 @@ const ADMIN_NAV = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/jobs", label: "Jobs", icon: Briefcase },
   { href: "/admin/usage", label: "Usage", icon: Activity },
+  { href: "/admin/alerts", label: "Alerts", icon: Bell },
+  { href: "/admin/models", label: "Models", icon: Cpu },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ] as const
 
