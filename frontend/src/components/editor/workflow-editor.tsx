@@ -1533,7 +1533,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No source video"))
       }
       const v2vData = node.data as VideoToVideoData
-      const prompt = v2vData.prompt?.trim()
+      // Use connected Text Prompt (inputs.prompt) OR direct prompt field
+      const prompt = inputs.prompt ?? v2vData.prompt?.trim()
       return runVideoToVideoGeneration(node.id, sourceVideoUrl, prompt, v2vData.provider || undefined)
     }
 

@@ -17,20 +17,13 @@ interface ModelConfig {
   extraInput?: Record<string, unknown>
 }
 
+// Note: VEO 2, VEO 3, and Sora do NOT support video-to-video (arbitrary video input)
+// They only support image-to-video. Only models with actual V2V support are listed here.
 const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
   minimax: {
     model: "minimax/video-01",
-    videoParam: "first_frame_image",
+    videoParam: "subject_reference",  // NOT first_frame_image (that's for I2V)
     extraInput: { prompt_optimizer: true },
-  },
-  veo: {
-    model: "google/veo-2",
-    videoParam: "video",
-  },
-  veo3: {
-    model: "google/veo-3",
-    videoParam: "video",
-    extraInput: { generate_audio: true },
   },
   kling: {
     model: "kwaivgi/kling-v1.6-pro",
@@ -42,10 +35,6 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   pika: {
     model: "pika-labs/pika",
-    videoParam: "video",
-  },
-  sora: {
-    model: "openai/sora",
     videoParam: "video",
   },
 }

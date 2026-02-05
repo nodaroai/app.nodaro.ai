@@ -1813,31 +1813,15 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
+            {/* Note: VEO 2, VEO 3, VEO 3.1, and Sora do NOT support video-to-video */}
+            {/* They only accept image input (image-to-video), not arbitrary video input */}
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="veo">VEO 2</SelectItem>
-            <SelectItem value="veo3">VEO 3</SelectItem>
-            {/* Note: veo3.1 removed - it doesn't support video input, only image input */}
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="runway">Runway</SelectItem>
             <SelectItem value="pika">Pika</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
-      {data.provider === "veo3" && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="v2vGenerateAudio"
-              checked={(data as Record<string, unknown>).generateAudio !== false}
-              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="v2vGenerateAudio" className="text-xs">Generate Audio</label>
-          </div>
-          <p className="text-xs text-muted-foreground px-1">VEO 3 creates AI audio from the prompt. Disable for silent video.</p>
-        </div>
-      )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           type="number"
