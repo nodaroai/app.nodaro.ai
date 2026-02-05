@@ -365,7 +365,7 @@ SceneNode supports two AI provider backends, configurable per edition:
 | Category | Models |
 |----------|--------|
 | **Image Generation** | nano-banana, nano-banana-pro, flux, grok, gpt-image |
-| **Video Generation** | minimax, veo3, veo3.1, kling, kling-turbo, grok, sora2, sora2-pro |
+| **Video Generation** | minimax, veo3, veo3.1, kling, kling-turbo, grok-i2v, sora2-pro |
 | **Lip Sync** | kling-avatar, hailuo-avatar |
 | **Voice** | ElevenLabs (via Replicate) |
 | **Script/QA** | google/gemini-2.5-flash |

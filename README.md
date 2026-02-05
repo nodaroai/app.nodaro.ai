@@ -301,7 +301,7 @@ Canvas-level organizational node for adding notes and documentation to workflows
 | Storage | Cloudflare R2 | Built |
 | AI Providers | Replicate (default), KIE.ai (cloud) | Built |
 | AI (Image) | nano-banana, nano-banana-pro, flux, grok, gpt-image | Built |
-| AI (Video) | minimax, veo3, veo3.1, kling, kling-turbo, sora2, grok | Built |
+| AI (Video) | minimax, veo3, veo3.1, kling, kling-turbo, sora2-pro, grok | Built |
 | AI (Script) | google/gemini-2.5-flash via Replicate | Built |
 | AI (TTS) | elevenlabs/turbo-v2.5 via Replicate | Built |
 | AI (Music) | MusicGen, MiniMax, Lyria, Bark via Replicate | Built |
@@ -321,8 +321,9 @@ SceneNode supports two AI provider backends:
 **KIE.ai (Cloud Edition - Admin Configurable)**
 - Admin can switch provider in Settings page (`/admin/settings`)
 - Platform pays KIE.ai, applies markup to user costs
-- Additional models: VEO 3.1 (fast), Kling Turbo, Sora2, Grok, Lip Sync
+- Additional models: VEO 3.1 (fast), Kling Turbo, Sora2 Pro, Grok, Lip Sync
 - Model-specific features: duration validation, start+end frame support
+- Real-time progress tracking during video generation (0-100%)
 
 **KIE.ai Video Models:**
 | Provider | Duration | End Frame Support |
@@ -332,8 +333,8 @@ SceneNode supports two AI provider backends:
 | veo3.1 | 8s (fixed) | Yes (imageUrls array) |
 | kling | 5/10s | No |
 | kling-turbo | 5/10s | Yes (tail_image_url) |
-| grok | 6/10s | No |
-| sora2 | 5/10s | No |
+| grok-i2v | 6/10s | No |
+| sora2-pro | 5/10s | No |
 
 ## Quick Start
 
@@ -523,6 +524,9 @@ Full API documentation: see [CLAUDE.md](./CLAUDE.md)
 - **Scene Node**: Cinematic control center with 4-step wizard (Story, Image, Audio, Video), smart prompt builder with priority-based truncation, Script Connection with auto-sync, per-dialogue TTS with 26 voices, video generation with provider selection (minimax/veo/veo3/kling/runway/pika), Image/Video tab toggle with version history
 - Asset upload to Cloudflare R2
 - Redis + BullMQ job queue with progress tracking
+- **Real-time progress tracking**: Video nodes show progress bar (0-100%) during KIE.ai generation
+- **Motion Prompt field**: Image-to-Video nodes display connected Text Prompt content automatically
+- **KieError class**: Internal error details logged for debugging without exposing to users
 
 ### Workflow Export/Import
 - **3-dot menu** in editor toolbar with Export/Import options
