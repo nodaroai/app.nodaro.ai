@@ -5238,6 +5238,89 @@ Reference project: https://github.com/jhartquist/claude-remotion-kickstart
 
 ---
 
+## File Upload System
+
+### Overview
+
+SceneNode supports direct file uploads for images, videos, and audio. Files are validated, stored in Cloudflare R2, and referenced by workflow nodes.
+
+### Upload Pipeline
+
+```
+User File → Frontend (useFileUpload hook)
+          → POST /v1/upload/image (or /video, /audio)
+          → File Validation (MIME, size, quota)
+          → R2 Storage
+          → Asset Record in DB
+          → Return { url, r2Key, thumbnailUrl }
+```
+
+### Backend
+
+**Endpoint:** `POST /v1/upload` (Fastify multipart)
+
+**Files:**
+- `backend/src/routes/upload.ts` - Upload route handler
+- `backend/src/utils/file-validation.ts` - MIME type validation, size limits, storage quota checks
+- `backend/src/utils/thumbnail.ts` - Auto-generates thumbnails (sharp for images, ffmpeg for video frames)
+
+**Validation Rules:**
+| Type | Max Size | Allowed MIME Types |
+|------|----------|--------------------|
+| Image | 10 MB | image/jpeg, image/png, image/webp, image/gif |
+| Video | 500 MB | video/mp4, video/webm, video/quicktime |
+| Audio | 50 MB | audio/mpeg, audio/wav, audio/ogg, audio/mp4, audio/webm |
+
+**Storage Quota:** Checked against `profiles.storage_used_bytes` and tier limits.
+
+### Frontend
+
+**Hook:** `frontend/src/hooks/use-file-upload.ts`
+- Wraps upload API with loading/error/progress state
+- Returns `{ upload, isUploading, error, reset }`
+- Used by all three upload node components
+
+**Upload Nodes:**
+| Node | File | Modes |
+|------|------|-------|
+| Upload Image | `frontend/src/components/nodes/upload-image-node.tsx` | File upload + URL input |
+| Upload Video | `frontend/src/components/nodes/upload-video-node.tsx` | File upload + URL input |
+| Upload Audio | `frontend/src/components/nodes/upload-audio-node.tsx` | File upload + URL input |
+
+**Dual Mode UI:** Each upload node supports:
+1. **Upload mode** (default): Drag-and-drop or click-to-browse file picker
+2. **URL mode**: Paste external URL directly
+
+After upload, the node stores `r2Url` (R2 storage URL) and `url` (display URL) in node data.
+
+### Node Registration Chain
+
+When adding a new upload node type, update ALL of these files:
+1. `frontend/src/types/nodes.ts` - TypeScript data type + NODE_DEFINITIONS
+2. `frontend/src/components/nodes/<name>.tsx` - Node component
+3. `frontend/src/components/nodes/index.ts` - Import + nodeTypes map
+4. `frontend/src/components/editor/add-node-popup.tsx` - NODE_OPTIONS
+5. `frontend/src/components/editor/node-toolbar.tsx` - NODE_OPTIONS
+6. `frontend/src/components/editor/config-panel.tsx` - Import type, name map, conditional render, config component
+7. `frontend/src/components/editor/workflow-canvas.tsx` - MiniMap color
+8. `frontend/src/components/editor/workflow-editor.tsx` - extractNodeOutput + resolveNodeInputs
+9. `frontend/src/components/nodes/image-to-video-node.tsx` - AUDIO_OUTPUT_TYPES (if audio)
+10. `frontend/src/components/nodes/lip-sync-node.tsx` - AUDIO_OUTPUT_TYPES (if audio)
+
+### Admin Library Endpoints
+
+- `POST /v1/admin/assets/:id/promote` - Promote asset to library (sets `is_library_item: true`)
+- `POST /v1/admin/assets/:id/demote` - Demote asset from library (sets `is_library_item: false`)
+
+### Asset Table Columns (added)
+
+```sql
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS is_library_item BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS is_shared BOOLEAN DEFAULT FALSE;
+```
+
+---
+
 ## Credits System Implementation
 
 ### Overview
