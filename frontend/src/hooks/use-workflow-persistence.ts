@@ -13,6 +13,16 @@ interface SaveResult {
 
 const SAVED_DISPLAY_DURATION = 2000
 
+// UUID v4 regex pattern
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Check if a string is a valid UUID
+ */
+function isValidUuid(id: string): boolean {
+  return UUID_REGEX.test(id)
+}
+
 /**
  * Sync node results from jobs table via backend API.
  * When user leaves and returns, jobs may have completed in the background.
@@ -30,8 +40,10 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
     const status = data.executionStatus as string | undefined
     const results = (data.generatedResults ?? []) as GeneratedResult[]
 
-    // Collect jobIds from this node
-    const jobIds = results.map(r => r.jobId).filter((id): id is string => Boolean(id))
+    // Collect jobIds from this node (only valid UUIDs, skip imported/local IDs)
+    const jobIds = results
+      .map(r => r.jobId)
+      .filter((id): id is string => Boolean(id) && isValidUuid(id))
 
     // If node is in running/pending state or has jobs to check
     if (status === "running" || status === "pending" || jobIds.length > 0) {
