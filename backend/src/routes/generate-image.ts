@@ -100,12 +100,10 @@ export async function generateImageRoutes(app: FastifyInstance) {
         )
         usageLogId = reservation.usageLogId
 
-        // Store usageLogId in job's input_data for worker to access
+        // Store usageLogId in dedicated column for worker to access
         await supabase
           .from("jobs")
-          .update({
-            input_data: { prompt, referenceImageUrls, provider, type: "generate-image", usageLogId },
-          })
+          .update({ usage_log_id: usageLogId })
           .eq("id", job.id)
       } catch (err) {
         console.error("[generate-image] Credit reservation failed:", err)
