@@ -1029,7 +1029,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
-  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number): Promise<void> {
+  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number, prompt?: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
@@ -1038,6 +1038,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         startFrameUrl,
         endFrameUrl,
         audioUrl,
+        prompt,
         provider,
         generateAudio,
         duration,
@@ -1489,8 +1490,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }
       }
 
-      console.log(`[executeNode] image-to-video node provider: "${nodeProvider ?? 'undefined'}", startFrame: ${!!startFrameUrl}, endFrame: ${!!endFrameUrl}, audio: ${!!audioUrl}`)
-      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration)
+      console.log(`[executeNode] image-to-video node provider: "${nodeProvider ?? 'undefined'}", startFrame: ${!!startFrameUrl}, endFrame: ${!!endFrameUrl}, audio: ${!!audioUrl}, prompt: ${!!i2vData.motionPrompt}`)
+      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, i2vData.motionPrompt)
     }
 
     if (node.type === "video-to-video") {

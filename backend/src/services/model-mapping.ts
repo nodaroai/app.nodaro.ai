@@ -201,23 +201,25 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
   // Sora 2 family - VERIFIED: docs.kie.ai/market/sora2/sora-2-image-to-video
   // Sora uses n_frames (10 or 15) instead of duration in seconds
+  // size: "standard" (720p) or "high" (1080p)
   "sora2": {
     model: "sora-2-image-to-video",
     credits: 150,
     cost: 0.75,
     imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard", remove_watermark: true },
     allowedDurations: [5, 10],  // Sora n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
     supportsEndFrame: false,  // Sora2 only accepts 1 image
   },
   // VERIFIED: docs.kie.ai/market/sora2/sora-2-pro-image-to-video
+  // size: "standard" (720p) or "high" (1080p)
   "sora2-pro": {
     model: "sora-2-pro-image-to-video",
     credits: 200,
     cost: 1.00,
     imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
-    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard", remove_watermark: true },
     allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
     supportsEndFrame: false,  // Sora2 Pro only accepts 1 image

@@ -394,6 +394,20 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
               )}
             </div>
+
+            {/* Motion Prompt - Optional text description */}
+            <div className="flex flex-col gap-1 mt-1">
+              <span className="text-[10px] text-muted-foreground font-medium">
+                Motion Prompt <span className="text-muted-foreground/60">(optional)</span>
+              </span>
+              <textarea
+                value={nodeData.motionPrompt ?? ""}
+                onChange={(e) => updateNodeData(id, { motionPrompt: e.target.value })}
+                placeholder="Describe the motion, e.g. 'camera slowly zooms in while subject walks forward'"
+                className="w-full min-h-[60px] p-2 text-[11px] bg-background border rounded-md resize-none placeholder:text-muted-foreground/50"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
           </div>
         )}
 
