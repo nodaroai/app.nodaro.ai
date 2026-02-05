@@ -19,6 +19,8 @@ export interface KieModelConfig {
   extraParams?: Record<string, unknown>  // Default extra parameters
   allowedDurations?: number[]  // Video models: allowed duration values in seconds
   usesNFrames?: boolean        // Sora uses n_frames (10, 15) instead of duration
+  supportsEndFrame?: boolean   // Video models: supports start + end frame (2 images → video)
+  endFrameParam?: string       // Parameter name for end frame (e.g., "tail_image_url", "end_image_url")
 }
 
 // =============================================================================
@@ -135,6 +137,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "image_url",  // single URL (NOT array!)
     extraParams: { prompt_optimizer: false },
     allowedDurations: [5],  // Hailuo produces ~5 second videos
+    supportsEndFrame: true,
+    endFrameParam: "end_image_url",  // Optional end frame parameter
   },
 
   // VEO family - Uses SPECIAL API endpoint: /api/v1/veo/generate
@@ -148,6 +152,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "imageUrls",  // Array format for VEO API
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
     allowedDurations: [8],  // FIXED: VEO3 always produces 8 second videos (not configurable)
+    supportsEndFrame: true,  // Pass 2 images in imageUrls array for start+end frame
+    // Note: VEO uses imageUrls array - [startFrame, endFrame] - no separate endFrameParam
   },
   "veo3.1": {
     model: "veo3_fast",  // Fast model - quicker generation, lower quality
@@ -156,6 +162,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "imageUrls",
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
     allowedDurations: [8],  // FIXED: VEO3 Fast always produces 8 second videos (not configurable)
+    supportsEndFrame: true,  // Pass 2 images in imageUrls array for start+end frame
+    // Note: VEO uses imageUrls array - [startFrame, endFrame] - no separate endFrameParam
   },
 
   // Kling family - VERIFIED: docs.kie.ai/market/kling/image-to-video
@@ -163,18 +171,21 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "kling-2.6/image-to-video",
     credits: 70,
     cost: 0.35,
-    imageParam: "image_urls",  // array format
+    imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
     extraParams: { sound: false, duration: "5" },
     allowedDurations: [5, 10],  // Kling supports 5 or 10 second videos
+    supportsEndFrame: false,  // Kling 2.6 only accepts 1 image (no end frame)
   },
   // VERIFIED: docs.kie.ai/market/kling/v2-5-turbo-image-to-video-pro
   "kling-turbo": {
     model: "kling/v2-5-turbo-image-to-video-pro",
     credits: 50,
     cost: 0.25,
-    imageParam: "image_url",  // single URL, supports tail_image_url for end frame
+    imageParam: "image_url",  // single URL for start frame
     extraParams: { duration: "5", cfg_scale: 0.5 },
     allowedDurations: [5, 10],  // Kling Turbo supports 5 or 10 second videos
+    supportsEndFrame: true,
+    endFrameParam: "tail_image_url",  // End frame parameter
   },
 
   // Grok - VERIFIED: docs.kie.ai/market/grok-imagine/image-to-video
@@ -182,9 +193,10 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "grok-imagine/image-to-video",
     credits: 60,
     cost: 0.30,
-    imageParam: "image_urls",  // array format
+    imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
     extraParams: { mode: "normal", duration: "6" },
     allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
+    supportsEndFrame: false,  // Grok only accepts 1 image
   },
 
   // Sora 2 family - VERIFIED: docs.kie.ai/market/sora2/sora-2-image-to-video
@@ -193,29 +205,32 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "sora-2-image-to-video",
     credits: 150,
     cost: 0.75,
-    imageParam: "image_urls",  // array format
+    imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
     allowedDurations: [5, 10],  // Sora n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
+    supportsEndFrame: false,  // Sora2 only accepts 1 image
   },
   // VERIFIED: docs.kie.ai/market/sora2/sora-2-pro-image-to-video
   "sora2-pro": {
     model: "sora-2-pro-image-to-video",
     credits: 200,
     cost: 1.00,
-    imageParam: "image_urls",  // array format
+    imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
     allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
+    supportsEndFrame: false,  // Sora2 Pro only accepts 1 image
   },
 
-  // Wan (needs verification)
+  // Wan (needs verification - assuming no end frame support)
   "wan": {
     model: "wan/image-to-video",
     credits: 60,
     cost: 0.30,
     imageParam: "image_url",
     allowedDurations: [5],  // Default to 5s until verified
+    supportsEndFrame: false,  // Assumed - needs verification
   },
 }
 
@@ -440,4 +455,27 @@ export function usesNFrames(
 export function durationToNFrames(durationSeconds: number): string {
   // Sora: n_frames 10 = ~5 seconds, n_frames 15 = ~10 seconds
   return durationSeconds <= 5 ? "10" : "15"
+}
+
+/**
+ * Check if a video model supports start + end frame (2 images → video)
+ */
+export function supportsEndFrame(
+  category: "video" | "text-to-video",
+  provider: string
+): boolean {
+  const config = getKieModelConfig(category, provider)
+  return config?.supportsEndFrame ?? false
+}
+
+/**
+ * Get the end frame parameter name for a video model
+ * Returns undefined if model doesn't support end frame or uses array format (VEO)
+ */
+export function getEndFrameParam(
+  category: "video" | "text-to-video",
+  provider: string
+): string | undefined {
+  const config = getKieModelConfig(category, provider)
+  return config?.endFrameParam
 }

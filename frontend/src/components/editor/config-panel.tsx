@@ -1511,12 +1511,24 @@ const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "wan": [5],
 }
 
+// KIE.ai providers that support start + end frame (2 images → video)
+// Note: This applies to both KIE and Replicate modes for these providers
+const PROVIDERS_WITH_END_FRAME: string[] = [
+  "minimax",     // end_image_url parameter
+  "veo3",        // imageUrls array with 2 images
+  "veo3.1",      // imageUrls array with 2 images
+  "kling-turbo", // tail_image_url parameter
+]
+
 function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToVideoData>) {
   const { settings } = useAppSettings()
   const isKie = settings.ai_provider === "kie"
 
   // Get allowed durations for current provider (KIE mode only)
   const allowedDurations = isKie ? (KIE_VIDEO_DURATIONS[data.provider || "minimax"] || [5]) : null
+
+  // Check if current provider supports end frame
+  const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
 
   return (
     <div className="flex flex-col gap-3">
@@ -1600,6 +1612,14 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             ? "VEO 3 produces ~8 second videos (not configurable)."
             : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
+      )}
+      {supportsEndFrame && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">End Frame (optional)</Label>
+          <p className="text-xs text-muted-foreground px-1">
+            Connect a second image node to the &quot;end-frame&quot; input handle for start→end frame video generation.
+          </p>
+        </div>
       )}
       <MappableField field="motion" label="Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
