@@ -875,7 +875,7 @@ Example: Image node output → connects to both Video node AND next Image node a
 | Node | Type | Values | Output Handle | Connects To |
 |------|------|--------|---------------|-------------|
 | ImageProviderNode | `image-provider` | nano-banana, flux, dalle, midjourney | `image_provider` | Generate Image |
-| VideoProviderNode | `video-provider` | minimax, veo, veo3, kling, runway, pika | `video_provider` | Image to Video (V2V uses separate KIE.ai providers: wan, runway-aleph) |
+| VideoProviderNode | `video-provider` | minimax, veo, veo3, kling, runway, pika | `video_provider` | Image to Video (V2V uses separate KIE.ai providers: wan, kling-2.6) |
 | VoiceProviderNode | `voice-provider` | elevenlabs, playht, azure | `voice_provider` | Text to Speech |
 | ScriptProviderNode | `script-provider` | claude, gpt, gemini | `script_provider` | Generate Script |
 
@@ -4640,13 +4640,13 @@ return { url, cost: null, displayCost: null, providerUsed: "replicate" }
 Example - adding a new V2V provider:
 ```typescript
 // 1. frontend/src/types/nodes.ts
-provider: "wan" | "runway-aleph" | "new-provider"
+provider: "wan" | "kling-2.6" | "new-provider"
 
 // 2. frontend/src/components/editor/config-panel.tsx
 <SelectItem value="new-provider">New Provider</SelectItem>
 
 // 3. backend/src/routes/video-to-video.ts  ← MOST COMMONLY FORGOTTEN!
-provider: z.enum(["wan", "runway-aleph", "new-provider"]).optional()
+provider: z.enum(["wan", "kling-2.6", "new-provider"]).optional()
 
 // 4. backend/src/providers/video/video-to-video.ts
 // Add handling for "new-provider"

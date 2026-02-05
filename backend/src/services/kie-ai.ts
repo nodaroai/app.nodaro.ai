@@ -734,135 +734,9 @@ export async function textToVideoKie(
 }
 
 // =============================================================================
-// VIDEO-TO-VIDEO (Wan 2.6 + Runway Aleph)
+// VIDEO-TO-VIDEO (Wan 2.6 + Kling 2.6)
 // These are the ONLY working V2V providers - Replicate models don't support V2V!
 // =============================================================================
-
-/**
- * Runway Aleph uses a special API endpoint: /api/v1/aleph/generate
- * Polling uses: GET /api/v1/aleph/{taskId}
- * Max output: 5 seconds
- */
-interface AlephRecordInfoResponse {
-  code: number
-  msg: string
-  data: {
-    taskId: string
-    state: "waiting" | "queuing" | "generating" | "success" | "fail"
-    resultUrl?: string
-    failMsg?: string
-    failCode?: string
-  }
-}
-
-async function runAlephTask(
-  videoUrl: string,
-  prompt: string,
-): Promise<{ resultJson: KieResultJson; costTime?: number }> {
-  const apiKey = config.KIE_API_KEY
-
-  if (!apiKey) {
-    throw createSanitizedError("KIE_API_KEY is not configured", "Video generation")
-  }
-
-  const requestBody = {
-    videoUrl,
-    prompt,
-  }
-
-  console.log(`[KIE.ai Aleph] Creating Runway Aleph task`)
-  console.log(`[KIE.ai Aleph] Request body:`, JSON.stringify(requestBody, null, 2))
-
-  // Step 1: Create Aleph task using special endpoint
-  const createResponse = await fetch(`${KIE_API_BASE}/api/v1/aleph/generate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(requestBody),
-  })
-
-  const responseText = await createResponse.text()
-  console.log(`[KIE.ai Aleph] Response status: ${createResponse.status}`)
-  console.log(`[KIE.ai Aleph] Response body: ${responseText.substring(0, 500)}`)
-
-  if (!createResponse.ok) {
-    throw createSanitizedError(`Aleph generate failed: ${createResponse.status} - ${responseText}`, "Video generation")
-  }
-
-  let createData: KieTaskResponse
-  try {
-    createData = JSON.parse(responseText) as KieTaskResponse
-  } catch {
-    throw createSanitizedError(`Aleph response is not valid JSON: ${responseText}`, "Video generation")
-  }
-
-  if (createData.code !== 0 && createData.code !== 200 && createData.code !== undefined) {
-    throw createSanitizedError(`Aleph generate error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`, "Video generation")
-  }
-
-  if (!createData.data?.taskId) {
-    throw createSanitizedError(`Aleph generate response missing taskId: ${JSON.stringify(createData)}`, "Video generation")
-  }
-
-  const taskId = createData.data.taskId
-  console.log(`[KIE.ai Aleph] Task created: ${taskId}`)
-
-  // Step 2: Poll for completion using Aleph-specific endpoint
-  let attempts = 0
-  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
-    await sleep(POLL_INTERVAL_MS)
-    attempts++
-
-    const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/aleph/${taskId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
-    )
-
-    if (!detailResponse.ok) {
-      console.warn(`[KIE.ai Aleph] Poll attempt ${attempts} failed: ${detailResponse.status}`)
-      continue
-    }
-
-    const detailText = await detailResponse.text()
-    console.log(`[KIE.ai Aleph] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`)
-
-    let detailData: AlephRecordInfoResponse
-    try {
-      detailData = JSON.parse(detailText) as AlephRecordInfoResponse
-    } catch {
-      console.warn(`[KIE.ai Aleph] Poll attempt ${attempts} invalid JSON`)
-      continue
-    }
-
-    const state = detailData.data?.state
-    console.log(`[KIE.ai Aleph] Task ${taskId} state: ${state} (attempt ${attempts})`)
-
-    if (state === "success") {
-      const resultUrl = detailData.data.resultUrl
-      if (!resultUrl) {
-        throw createSanitizedError("Aleph task succeeded but no resultUrl found", "Video generation")
-      }
-
-      console.log(`[KIE.ai Aleph] Video complete! URL: ${resultUrl}`)
-
-      return {
-        resultJson: { resultUrls: [resultUrl] },
-        costTime: undefined,
-      }
-    }
-
-    if (state === "fail") {
-      const failMsg = detailData.data.failMsg ?? `Error code: ${detailData.data.failCode ?? "unknown"}`
-      throw createSanitizedError(`Aleph task failed: ${failMsg}`, "Video generation")
-    }
-
-    // States "waiting", "queuing", "generating" are in-progress - continue polling
-  }
-
-  throw createSanitizedError(`Aleph task timed out after ${MAX_POLL_ATTEMPTS_VIDEO * POLL_INTERVAL_MS / 1000} seconds`, "Video generation")
-}
 
 export async function videoToVideoKie(
   videoUrl: string,
@@ -884,24 +758,11 @@ export async function videoToVideoKie(
 
   const finalPrompt = prompt ?? "continue this video with smooth cinematic motion"
 
-  // Runway Aleph uses a special API endpoint
-  if (provider === "runway-aleph") {
-    const { resultJson } = await runAlephTask(videoUrl, finalPrompt)
-
-    const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
-    if (!outputUrl) {
-      throw createSanitizedError("Aleph V2V task succeeded but no URL found", "Video generation")
-    }
-
-    console.log(`[KIE.ai] Aleph V2V completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
-    return { url: outputUrl, cost: modelConfig.cost }
-  }
-
-  // Standard createTask endpoint for Wan 2.6
+  // Standard createTask endpoint for all V2V providers (Wan 2.6, Kling 2.6)
   const input: Record<string, unknown> = {
     ...(modelConfig.extraParams ?? {}),
     prompt: finalPrompt,
-    video_urls: [videoUrl],  // Wan uses video_urls array
+    video_urls: [videoUrl],  // All V2V models use video_urls array
   }
 
   console.log(`[KIE.ai] Final input:`, JSON.stringify(input, null, 2))

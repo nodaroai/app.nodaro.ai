@@ -466,8 +466,8 @@ export type VideoToVideoData = {
   prompt: string
   // V2V ONLY works on KIE.ai - Replicate models don't support video input
   // - wan: Wan 2.6 (default) - standard createTask with video_urls array
-  // - runway-aleph: Runway Aleph - max 5 sec output
-  provider: "wan" | "runway-aleph"
+  // - kling-2.6: Kling 2.6 Motion Control - style transfer with motion
+  provider: "wan" | "kling-2.6"
   model: string
   duration: number
   fieldMappings: FieldMappings

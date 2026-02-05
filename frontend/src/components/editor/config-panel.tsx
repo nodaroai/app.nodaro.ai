@@ -1815,15 +1815,10 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectContent>
             {/* V2V ONLY works on KIE.ai - Replicate models don't support video input */}
             <SelectItem value="wan">Wan 2.6 (default)</SelectItem>
-            <SelectItem value="runway-aleph">Runway Aleph (max 5 sec)</SelectItem>
+            <SelectItem value="kling-2.6">Kling 2.6 Motion Control</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
-      {data.provider === "runway-aleph" && (
-        <p className="text-xs text-amber-500 px-1">
-          Note: Runway Aleph outputs are limited to 5 seconds maximum.
-        </p>
-      )}
     </div>
   )
 }

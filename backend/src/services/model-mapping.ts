@@ -287,16 +287,14 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: {},
   },
 
-  // Runway Aleph - SPECIAL endpoint: /api/v1/aleph/generate
-  // Input: videoUrl (string), max 5 second output
-  // Polling: GET /api/v1/aleph/{taskId}
-  "runway-aleph": {
-    model: "runway-aleph",  // Special handling needed
+  // Kling 2.6 Motion Control - style transfer with motion preservation
+  // Standard createTask endpoint, input: video_urls array
+  "kling-2.6": {
+    model: "kling-2.6/video-to-video",
     credits: 100,
     cost: 0.50,
-    imageParam: "videoUrl",  // Single URL string
+    imageParam: "video_urls",  // Array format: ["video_url"]
     extraParams: {},
-    allowedDurations: [5],  // Max 5 second output
   },
 }
 

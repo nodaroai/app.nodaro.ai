@@ -7,8 +7,8 @@ const videoToVideoBody = z.object({
   videoUrl: z.string().url(),
   prompt: z.string().max(2000).optional(),
   // V2V ONLY works on KIE.ai - Replicate models don't support video input
-  // Only Wan 2.6 and Runway Aleph support actual V2V
-  provider: z.enum(["wan", "runway-aleph"]).optional(),
+  // Only Wan 2.6 and Kling 2.6 Motion Control support actual V2V
+  provider: z.enum(["wan", "kling-2.6"]).optional(),
   userId: z.string().uuid().optional(),
 })
 

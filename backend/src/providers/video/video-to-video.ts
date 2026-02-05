@@ -6,7 +6,7 @@
  *
  * Available V2V providers:
  * - wan: Wan 2.6 - standard createTask with video_urls array
- * - runway-aleph: Runway Aleph - special endpoint, max 5 sec output
+ * - kling-2.6: Kling 2.6 Motion Control - style transfer with motion
  */
 
 import { videoToVideoKie } from "../../services/kie-ai.js"
@@ -15,7 +15,7 @@ import { routeProvider, applyMarkup, logExecutionResult } from "../../services/p
 import type { VideoResult } from "./replicate.js"
 
 // V2V Provider type - only KIE.ai providers work
-export type V2VProvider = "wan" | "runway-aleph"
+export type V2VProvider = "wan" | "kling-2.6"
 
 export async function videoToVideo(
   videoUrl: string,
