@@ -1,6 +1,7 @@
 import { TextPromptNode } from "./text-prompt-node"
 import { UploadImageNode } from "./upload-image-node"
 import { UploadVideoNode } from "./upload-video-node"
+import { UploadAudioNode } from "./upload-audio-node"
 import { RSSFeedNode } from "./rss-feed-node"
 import { ToneNode } from "./tone-node"
 import { StyleGuideNode } from "./style-guide-node"
@@ -47,6 +48,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "text-prompt": TextPromptNode,
   "upload-image": UploadImageNode,
   "upload-video": UploadVideoNode,
+  "upload-audio": UploadAudioNode,
   "rss-feed": RSSFeedNode,
   // Parameter
   "tone": ToneNode,

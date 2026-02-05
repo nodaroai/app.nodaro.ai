@@ -153,6 +153,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (type === "upload-video") {
       return (data.url as string | undefined)?.trim()
     }
+    if (type === "upload-audio") {
+      return (data.r2Url as string | undefined)?.trim() || (data.url as string | undefined)?.trim()
+    }
     if (type === "generate-image") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
@@ -335,6 +338,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           if (asset?.referenceImageUrl) {
             inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), asset.referenceImageUrl]
           }
+        }
+      } else if (src.type === "upload-audio") {
+        if (node.type === "mix-audio") {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+        } else {
+          inputs.audioUrl = output
         }
       } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "extract-audio" || src.type === "adjust-volume" || src.type === "mix-audio") {
         if (node.type === "mix-audio") {

@@ -38,6 +38,7 @@ import type {
   TextPromptData,
   UploadImageData,
   UploadVideoData,
+  UploadAudioData,
   RSSFeedData,
   ReferenceAudioData,
   ToneData,
@@ -320,6 +321,7 @@ export function ConfigPanel() {
       "text-prompt": "Text Prompt",
       "upload-image": "Upload Image",
       "upload-video": "Upload Video",
+      "upload-audio": "Upload Audio",
       "rss-feed": "RSS Feed",
       "reference-audio": "Reference Audio",
       "tone": "Tone",
@@ -400,6 +402,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "upload-video" && (
             <UploadVideoConfig data={selectedNode.data as UploadVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "upload-audio" && (
+            <UploadAudioConfig data={selectedNode.data as UploadAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "rss-feed" && (
             <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -618,6 +623,22 @@ function UploadVideoConfig({ data, onUpdate }: ConfigProps<UploadVideoData>) {
           value={data.url}
           onChange={(e) => onUpdate({ url: e.target.value })}
           placeholder="https://example.com/video.mp4"
+        />
+      </div>
+    </div>
+  )
+}
+
+function UploadAudioConfig({ data, onUpdate }: ConfigProps<UploadAudioData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="audio-url">Audio URL</Label>
+        <Input
+          id="audio-url"
+          value={data.url}
+          onChange={(e) => onUpdate({ url: e.target.value })}
+          placeholder="https://example.com/audio.mp3"
         />
       </div>
     </div>

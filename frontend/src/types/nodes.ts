@@ -28,6 +28,19 @@ export type UploadImageData = {
   label: string
   assetId: string
   url: string
+  r2Url: string
+  thumbnailUrl: string
+  filename: string
+  fileSize: number
+  mimeType: string
+  externalUrl: string
+  isUploading: boolean
+  uploadError: string
+  metadata: {
+    width?: number
+    height?: number
+    format?: string
+  }
 }
 
 export type UploadVideoData = {
@@ -35,6 +48,39 @@ export type UploadVideoData = {
   label: string
   assetId: string
   url: string
+  r2Url: string
+  thumbnailUrl: string
+  filename: string
+  fileSize: number
+  mimeType: string
+  externalUrl: string
+  isUploading: boolean
+  uploadError: string
+  metadata: {
+    width?: number
+    height?: number
+    durationSeconds?: number
+    codec?: string
+  }
+}
+
+export type UploadAudioData = {
+  [key: string]: unknown
+  label: string
+  assetId: string
+  url: string
+  r2Url: string
+  filename: string
+  fileSize: number
+  mimeType: string
+  externalUrl: string
+  isUploading: boolean
+  uploadError: string
+  metadata: {
+    durationSeconds?: number
+    codec?: string
+    sampleRate?: number
+  }
 }
 
 export type RSSFeedData = {
@@ -949,6 +995,7 @@ export type SceneNodeData =
   | TextPromptData
   | UploadImageData
   | UploadVideoData
+  | UploadAudioData
   | RSSFeedData
   | ReferenceAudioData
   | ToneData
@@ -993,6 +1040,7 @@ export type SceneNodeType =
   | "text-prompt"
   | "upload-image"
   | "upload-video"
+  | "upload-audio"
   | "rss-feed"
   | "reference-audio"
   | "tone"
@@ -1064,7 +1112,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: [],
     outputs: ["image"],
-    defaultData: { label: "Upload Image", assetId: "", url: "" },
+    defaultData: { label: "Upload Image", assetId: "", url: "" } as unknown as SceneNodeData,
   },
   {
     type: "upload-video",
@@ -1073,7 +1121,16 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: [],
     outputs: ["video"],
-    defaultData: { label: "Upload Video", assetId: "", url: "" },
+    defaultData: { label: "Upload Video", assetId: "", url: "" } as unknown as SceneNodeData,
+  },
+  {
+    type: "upload-audio",
+    label: "Upload Audio",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["audio"],
+    defaultData: { label: "Upload Audio", assetId: "", url: "" } as unknown as SceneNodeData,
   },
   {
     type: "rss-feed",

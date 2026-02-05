@@ -447,6 +447,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
                 if (nodeType === 'text-prompt' ||
                     nodeType === 'upload-image' ||
                     nodeType === 'upload-video' ||
+                    nodeType === 'upload-audio' ||
                     nodeType === 'rss-feed' ||
                     nodeType === 'reference-audio') return '#38BDF8'
                 // Parameter nodes - modern indigo

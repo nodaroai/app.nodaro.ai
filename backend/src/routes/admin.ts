@@ -3,8 +3,27 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 
 // ============================================================
-// Admin Routes - Cost Alerts & Model Pricing Management
+// Admin Routes - Cost Alerts, Model Pricing & Asset Library
 // ============================================================
+
+// ---- Helpers ----
+
+async function checkIsAdmin(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single()
+
+  if (error) {
+    // PGRST116 = no rows found (user doesn't exist) -> not admin
+    if (error.code === "PGRST116") return false
+    throw new Error(`Admin check failed: ${error.message}`)
+  }
+
+  if (!data) return false
+  return data.role === "admin" || data.role === "super_admin"
+}
 
 // ---- Zod Schemas ----
 
@@ -40,6 +59,14 @@ const modelIdParams = z.object({
 
 const toggleModelBody = z.object({
   isEnabled: z.boolean(),
+})
+
+const assetIdParams = z.object({
+  id: z.string().uuid(),
+})
+
+const assetActionBody = z.object({
+  userId: z.string().uuid(),
 })
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -345,5 +372,187 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     return { success: true }
+  })
+
+  // ============================================================
+  // Asset Library Endpoints
+  // ============================================================
+
+  /**
+   * POST /v1/admin/assets/:id/promote-to-library
+   * Promote an asset to the shared library (admin only)
+   */
+  app.post<{
+    Params: { id: string }
+  }>("/v1/admin/assets/:id/promote-to-library", async (req, reply) => {
+    const paramsResult = assetIdParams.safeParse(req.params)
+    if (!paramsResult.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: paramsResult.error.issues[0]?.message ?? "Invalid asset ID",
+        },
+      })
+    }
+
+    const bodyResult = assetActionBody.safeParse(req.body)
+    if (!bodyResult.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: bodyResult.error.issues[0]?.message ?? "userId is required",
+        },
+      })
+    }
+
+    const { id: assetId } = paramsResult.data
+    const { userId } = bodyResult.data
+
+    // Check admin permission
+    const isAdmin = await checkIsAdmin(userId)
+    if (!isAdmin) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Only admins can promote assets to library" },
+      })
+    }
+
+    // Fetch the asset to merge metadata
+    const { data: existing, error: fetchError } = await supabase
+      .from("assets")
+      .select("*")
+      .eq("id", assetId)
+      .single()
+
+    if (fetchError) {
+      if (fetchError.code === "PGRST116") {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Asset not found" },
+        })
+      }
+      return reply.status(500).send({
+        error: { code: "internal_error", message: fetchError.message },
+      })
+    }
+
+    // Merge promotion info, removing stale demote metadata from previous cycle
+    const existingMetadata = (existing.metadata as Record<string, unknown>) ?? {}
+    const { demoted_at: _da, demoted_by: _db, ...cleanMetadata } = existingMetadata
+    const updatedMetadata = {
+      ...cleanMetadata,
+      promoted_at: new Date().toISOString(),
+      promoted_by: userId,
+    }
+
+    const { data: asset, error: updateError } = await supabase
+      .from("assets")
+      .update({
+        is_library_item: true,
+        upload_source: "library",
+        metadata: updatedMetadata,
+      })
+      .eq("id", assetId)
+      .select()
+      .single()
+
+    if (updateError) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: updateError.message },
+      })
+    }
+
+    return {
+      success: true,
+      message: "Asset promoted to library",
+      data: asset,
+    }
+  })
+
+  /**
+   * POST /v1/admin/assets/:id/demote-from-library
+   * Remove an asset from the shared library (admin only)
+   */
+  app.post<{
+    Params: { id: string }
+  }>("/v1/admin/assets/:id/demote-from-library", async (req, reply) => {
+    const paramsResult = assetIdParams.safeParse(req.params)
+    if (!paramsResult.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: paramsResult.error.issues[0]?.message ?? "Invalid asset ID",
+        },
+      })
+    }
+
+    const bodyResult = assetActionBody.safeParse(req.body)
+    if (!bodyResult.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: bodyResult.error.issues[0]?.message ?? "userId is required",
+        },
+      })
+    }
+
+    const { id: assetId } = paramsResult.data
+    const { userId } = bodyResult.data
+
+    // Check admin permission
+    const isAdmin = await checkIsAdmin(userId)
+    if (!isAdmin) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Only admins can demote assets from library" },
+      })
+    }
+
+    // Fetch the asset to merge metadata
+    const { data: existing, error: fetchError } = await supabase
+      .from("assets")
+      .select("*")
+      .eq("id", assetId)
+      .single()
+
+    if (fetchError) {
+      if (fetchError.code === "PGRST116") {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Asset not found" },
+        })
+      }
+      return reply.status(500).send({
+        error: { code: "internal_error", message: fetchError.message },
+      })
+    }
+
+    // Remove promotion metadata
+    const existingMetadata = (existing.metadata as Record<string, unknown>) ?? {}
+    const { promoted_at, promoted_by, ...restMetadata } = existingMetadata
+    const updatedMetadata = {
+      ...restMetadata,
+      demoted_at: new Date().toISOString(),
+      demoted_by: userId,
+    }
+
+    const { data: asset, error: updateError } = await supabase
+      .from("assets")
+      .update({
+        is_library_item: false,
+        upload_source: "manual_upload",
+        metadata: updatedMetadata,
+      })
+      .eq("id", assetId)
+      .select()
+      .single()
+
+    if (updateError) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: updateError.message },
+      })
+    }
+
+    return {
+      success: true,
+      message: "Asset demoted from library",
+      data: asset,
+    }
   })
 }

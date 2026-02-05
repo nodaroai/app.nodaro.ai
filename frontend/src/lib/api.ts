@@ -848,6 +848,48 @@ export async function uploadAudio(file: File): Promise<{ url: string }> {
   return res.json()
 }
 
+export interface UploadResult {
+  readonly url: string
+  readonly thumbnailUrl: string | null
+  readonly assetId: string | null
+  readonly category: "image" | "video" | "audio"
+  readonly filename: string
+  readonly mimeType: string
+  readonly sizeBytes: number
+  readonly metadata: {
+    readonly width?: number
+    readonly height?: number
+    readonly format?: string
+    readonly durationSeconds?: number
+    readonly codec?: string
+    readonly sampleRate?: number
+  } | null
+  readonly r2Key: string
+}
+
+export async function uploadFile(
+  file: File,
+  userId?: string,
+): Promise<UploadResult> {
+  const formData = new FormData()
+  formData.append("file", file)
+  if (userId) {
+    formData.append("userId", userId)
+  }
+
+  const res = await fetch(`${API_BASE_URL}/v1/upload`, {
+    method: "POST",
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    const message = err?.error?.message ?? "Upload failed"
+    throw new Error(message)
+  }
+  const json = await res.json()
+  return json.data ?? json
+}
+
 export async function downloadYouTubeAudio(url: string): Promise<{ url: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/youtube-audio`, {
     method: "POST",

@@ -33,6 +33,7 @@ const AUDIO_OUTPUT_TYPES = [
   "text-to-speech",
   "generate-music",
   "text-to-audio",
+  "upload-audio",
   "reference-audio",
   "extract-audio",
   "adjust-volume",
