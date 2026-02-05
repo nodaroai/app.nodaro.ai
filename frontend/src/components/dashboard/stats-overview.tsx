@@ -16,19 +16,19 @@ interface StatCardProps {
 
 function StatCard({ label, value, icon, colorClass, loading }: StatCardProps) {
   return (
-    <div className="rounded-lg border bg-card p-4 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className={cn("p-2 rounded-md", colorClass ?? "bg-muted")}>
+    <div className="rounded-lg border bg-card px-3 py-2 shadow-sm">
+      <div className="flex items-center gap-2">
+        <div className={cn("p-1.5 rounded-md", colorClass ?? "bg-muted")}>
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground truncate">{label}</p>
+          <p className="text-[11px] text-muted-foreground">{label}</p>
           {loading ? (
-            <div className="h-6 flex items-center">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <div className="h-5 flex items-center">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <p className="text-lg font-semibold truncate">{value}</p>
+            <p className="text-base font-semibold">{value}</p>
           )}
         </div>
       </div>
@@ -111,46 +111,46 @@ export function StatsOverview({ className }: StatsOverviewProps) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <StatCard
-          label="Total Executions"
+          label="Executions"
           value={stats?.totalExecutions ?? 0}
-          icon={<Activity className="h-4 w-4 text-[#ff0073]" />}
+          icon={<Activity className="h-3.5 w-3.5 text-[#ff0073]" />}
           colorClass="bg-[#ff0073]/10"
           loading={loading}
         />
         <StatCard
           label="Successful"
           value={stats?.successful ?? 0}
-          icon={<CheckCircle className="h-4 w-4 text-green-500" />}
+          icon={<CheckCircle className="h-3.5 w-3.5 text-green-500" />}
           colorClass="bg-green-500/10"
           loading={loading}
         />
         <StatCard
           label="Failed"
           value={stats?.failed ?? 0}
-          icon={<XCircle className="h-4 w-4 text-red-500" />}
+          icon={<XCircle className="h-3.5 w-3.5 text-red-500" />}
           colorClass="bg-red-500/10"
           loading={loading}
         />
         <StatCard
           label="Failure Rate"
           value={`${stats?.failureRate ?? 0}%`}
-          icon={<Percent className="h-4 w-4 text-orange-500" />}
+          icon={<Percent className="h-3.5 w-3.5 text-orange-500" />}
           colorClass="bg-orange-500/10"
           loading={loading}
         />
         <StatCard
-          label="Avg. Image Time"
+          label="Avg. Image"
           value={formatTime(stats?.avgImageTime ?? null)}
-          icon={<Image className="h-4 w-4 text-blue-500" />}
+          icon={<Image className="h-3.5 w-3.5 text-blue-500" />}
           colorClass="bg-blue-500/10"
           loading={loading}
         />
         <StatCard
-          label="Avg. Video Time"
+          label="Avg. Video"
           value={formatTime(stats?.avgVideoTime ?? null)}
-          icon={<Video className="h-4 w-4 text-purple-500" />}
+          icon={<Video className="h-3.5 w-3.5 text-purple-500" />}
           colorClass="bg-purple-500/10"
           loading={loading}
         />
