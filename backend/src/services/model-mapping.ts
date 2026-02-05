@@ -346,7 +346,7 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "text-to-video" | "lip-sync" | "music" | "tts" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "lip-sync" | "music" | "tts" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -360,6 +360,10 @@ export function getKieModelConfig(
       return KIE_IMAGE_MODELS[provider] ?? null
     case "video":
       return KIE_VIDEO_MODELS[provider] ?? null
+    case "video-to-video":
+      // KIE.ai doesn't support video-to-video operations
+      // All V2V requests fall back to Replicate
+      return null
     case "text-to-video":
       return KIE_TEXT_TO_VIDEO_MODELS[provider] ?? null
     case "lip-sync":

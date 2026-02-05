@@ -1,8 +1,7 @@
 import Replicate from "replicate"
 import { config } from "../../lib/config.js"
-import { getAppSettings } from "../../lib/app-settings.js"
-import { textToVideoKie, type KieResult } from "../../services/kie-ai.js"
-import { isKieSupported } from "../../services/model-mapping.js"
+import { textToVideoKie } from "../../services/kie-ai.js"
+import { routeProvider, applyMarkup, logExecutionResult } from "../../services/provider-router.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
@@ -25,15 +24,18 @@ export async function textToVideo(
 ): Promise<VideoResult> {
   const resolvedProvider = provider ?? "minimax"
 
-  // Check if we should use KIE.ai
-  const settings = await getAppSettings()
-  if (settings.ai_provider === "kie" && isKieSupported("text-to-video", resolvedProvider)) {
-    console.log(`[textToVideo] Using KIE.ai API for provider: ${resolvedProvider}`)
+  // Use centralized provider routing
+  const routing = await routeProvider("text-to-video", resolvedProvider, "textToVideo")
+
+  // Route to KIE.ai if supported
+  if (routing.useKie) {
     const result = await textToVideoKie(prompt, resolvedProvider, duration)
-    return { url: result.url, cost: result.cost }
+    const displayCost = applyMarkup(result.cost, routing.costMarkupPercent)
+    logExecutionResult("textToVideo", "kie", result.cost, displayCost)
+    return { url: result.url, cost: result.cost, displayCost, providerUsed: "kie" }
   }
 
-  // Default: Use Replicate API
+  // Use Replicate API (either default or fallback from KIE.ai mode)
   const model = VIDEO_MODELS[resolvedProvider] ?? VIDEO_MODELS.minimax
   console.log(`[textToVideo] Provider: ${resolvedProvider}, Model: ${model}`)
   console.log(`[textToVideo] Prompt: "${prompt}"`)
@@ -49,6 +51,9 @@ export async function textToVideo(
   )
 
   const resultUrl = String(output)
+  const cost: number | null = null  // Replicate doesn't provide cost info easily
+  const displayCost = applyMarkup(cost, routing.costMarkupPercent)
+  logExecutionResult("textToVideo", "replicate", cost, displayCost)
   console.log(`[textToVideo] Output: "${resultUrl}"`)
-  return { url: resultUrl, cost: null }
+  return { url: resultUrl, cost, displayCost, providerUsed: "replicate" }
 }

@@ -1,5 +1,6 @@
 import Replicate from "replicate"
 import { config } from "../../lib/config.js"
+import { routeProvider, applyMarkup, logExecutionResult } from "../../services/provider-router.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
@@ -8,6 +9,7 @@ import type { VideoProvider, VideoResult } from "./replicate.js"
 // Note: Video-to-Video always uses Replicate, NOT KIE.ai
 // KIE.ai doesn't have dedicated video-to-video endpoints - their image-to-video
 // models (like minimax/hailuo) only accept image URLs, not video URLs.
+// When in KIE.ai mode, this falls back to Replicate with 10% markup.
 
 interface ModelConfig {
   model: string
@@ -56,6 +58,11 @@ export async function videoToVideo(
   const resolvedProvider = provider ?? "minimax"
   const finalPrompt = prompt ?? "continue this video with smooth cinematic motion"
 
+  // Use centralized provider routing
+  // Note: KIE.ai doesn't support video-to-video, so this always falls back to Replicate
+  // When in KIE.ai mode, the fallback applies 10% markup
+  const routing = await routeProvider("video-to-video", resolvedProvider, "videoToVideo")
+
   // Always use Replicate API for video-to-video (KIE.ai doesn't support V2V)
   const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
   console.log(`[videoToVideo] Provider: ${resolvedProvider}, Model: ${cfg.model}`)
@@ -74,6 +81,9 @@ export async function videoToVideo(
   )
 
   const resultUrl = String(output)
+  const cost: number | null = null  // Replicate doesn't provide cost info easily
+  const displayCost = applyMarkup(cost, routing.costMarkupPercent)
+  logExecutionResult("videoToVideo", "replicate", cost, displayCost)
   console.log(`[videoToVideo] Output: "${resultUrl}"`)
-  return { url: resultUrl, cost: null }
+  return { url: resultUrl, cost, displayCost, providerUsed: "replicate" }
 }

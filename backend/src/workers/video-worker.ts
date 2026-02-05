@@ -129,11 +129,11 @@ export function createVideoWorker() {
 
           // For image-to-image, we pass the source image as reference and use the prompt to transform
           // nano-banana works on both Replicate and KIE.ai, others are KIE.ai only
-          let result: { url: string; cost: number }
+          let result: { url: string; cost: number | null }
           if (settings.ai_provider === "kie" && isKieSupported("image", resolvedProvider)) {
             result = await generateImageKie(prompt, [imageUrl], resolvedProvider)
           } else if (resolvedProvider === "nano-banana" || resolvedProvider === "nano-banana-pro") {
-            // Fallback to Replicate for nano-banana
+            // Fallback to Replicate for nano-banana (uses centralized routing)
             result = await generateImage(prompt, [imageUrl], "nano-banana")
           } else {
             throw new Error(`Provider ${resolvedProvider} is only available with KIE.ai. Current provider: ${settings.ai_provider}`)
@@ -178,7 +178,7 @@ export function createVideoWorker() {
           const useKie = settings.ai_provider === "kie" && isKieSupported("video", provider ?? "minimax")
 
           let videoUrl: string
-          let providerCost: number | undefined
+          let providerCost: number | null | undefined
 
           if (useKie) {
             console.log(`[worker] Using KIE.ai for image-to-video (provider: ${provider ?? "minimax"})`)
@@ -293,7 +293,7 @@ export function createVideoWorker() {
           const useKie = settings.ai_provider === "kie" && isKieSupported("text-to-video", provider ?? "minimax")
 
           let videoUrl: string
-          let providerCost: number | undefined
+          let providerCost: number | null | undefined
 
           if (useKie) {
             console.log(`[worker] Using KIE.ai for text-to-video (provider: ${provider ?? "minimax"})`)

@@ -1,9 +1,8 @@
 import Replicate from "replicate"
 import { config } from "../../lib/config.js"
 import { translateToEnglish } from "../../lib/translate.js"
-import { getAppSettings } from "../../lib/app-settings.js"
-import { generateImageKie, type KieResult } from "../../services/kie-ai.js"
-import { isKieSupported } from "../../services/model-mapping.js"
+import { generateImageKie } from "../../services/kie-ai.js"
+import { routeProvider, applyMarkup, logExecutionResult, type ProviderUsed } from "../../services/provider-router.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
@@ -46,30 +45,32 @@ const IMAGE_MODELS: Record<ImageProvider, string> = {
 
 export interface GenerateImageResult {
   url: string
-  cost: number | null  // Cost from Replicate API (null if not available)
+  cost: number | null  // Raw cost from provider
+  displayCost: number | null  // Cost with any markup applied
+  providerUsed: ProviderUsed  // Which provider was actually used
 }
 
 export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: ImageProvider): Promise<GenerateImageResult> {
-  // Check which AI provider to use from app settings
-  const settings = await getAppSettings()
-  const aiProvider = settings.ai_provider
-
-  console.log(`[generateImage] AI Provider from settings: ${aiProvider}`)
-
-  // Route to KIE.ai if configured and model is supported
   const resolvedProvider = provider ?? "nano-banana"
-  if (aiProvider === "kie") {
-    // Check if this provider is supported on KIE.ai
-    if (isKieSupported("image", resolvedProvider)) {
-      console.log(`[generateImage] Using KIE.ai API for provider: ${resolvedProvider}`)
-      const englishPrompt = await translateToEnglish(prompt)
-      return generateImageKie(englishPrompt, referenceImageUrls, resolvedProvider)
-    } else {
-      console.log(`[generateImage] Provider ${resolvedProvider} not supported on KIE.ai, falling back to Replicate`)
+
+  // Use centralized provider routing
+  const routing = await routeProvider("image", resolvedProvider, "generateImage")
+
+  // Route to KIE.ai if supported
+  if (routing.useKie) {
+    const englishPrompt = await translateToEnglish(prompt)
+    const result = await generateImageKie(englishPrompt, referenceImageUrls, resolvedProvider)
+    const displayCost = applyMarkup(result.cost, routing.costMarkupPercent)
+    logExecutionResult("generateImage", "kie", result.cost, displayCost)
+    return {
+      url: result.url,
+      cost: result.cost,
+      displayCost,
+      providerUsed: "kie",
     }
   }
 
-  // Default: Use Replicate API
+  // Use Replicate API (either default or fallback from KIE.ai mode)
   const model = IMAGE_MODELS[resolvedProvider] ?? IMAGE_MODELS["nano-banana"]
   console.log(`[generateImage] Provider: ${resolvedProvider}, Model: ${model}`)
   console.log(`[generateImage] Original prompt: "${prompt}"`)
@@ -126,6 +127,8 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
     throw new Error(`Unexpected Replicate output: ${JSON.stringify(output)}`)
   }
 
+  const displayCost = applyMarkup(cost, routing.costMarkupPercent)
+  logExecutionResult("generateImage", "replicate", cost, displayCost)
   console.log(`[generateImage] Result URL: ${resultUrl}`)
-  return { url: resultUrl, cost }
+  return { url: resultUrl, cost, displayCost, providerUsed: "replicate" }
 }

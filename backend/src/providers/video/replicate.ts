@@ -1,8 +1,7 @@
 import Replicate from "replicate"
 import { config } from "../../lib/config.js"
-import { getAppSettings } from "../../lib/app-settings.js"
-import { imageToVideoKie, type KieResult } from "../../services/kie-ai.js"
-import { isKieSupported } from "../../services/model-mapping.js"
+import { imageToVideoKie } from "../../services/kie-ai.js"
+import { routeProvider, applyMarkup, logExecutionResult, type ProviderUsed } from "../../services/provider-router.js"
 
 const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
 
@@ -74,7 +73,9 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
 
 export interface VideoResult {
   url: string
-  cost: number | null
+  cost: number | null  // Raw cost from provider
+  displayCost?: number | null  // Cost with any markup applied
+  providerUsed?: ProviderUsed  // Which provider was actually used
 }
 
 export async function imageToVideo(
@@ -88,15 +89,18 @@ export async function imageToVideo(
   const resolvedProvider = provider ?? "minimax"
   const finalPrompt = prompt ?? "smooth cinematic motion"
 
-  // Check if we should use KIE.ai
-  const settings = await getAppSettings()
-  if (settings.ai_provider === "kie" && isKieSupported("video", resolvedProvider)) {
-    console.log(`[imageToVideo] Using KIE.ai API for provider: ${resolvedProvider}`)
+  // Use centralized provider routing
+  const routing = await routeProvider("video", resolvedProvider, "imageToVideo")
+
+  // Route to KIE.ai if supported
+  if (routing.useKie) {
     const result = await imageToVideoKie(imageUrl, finalPrompt, resolvedProvider, duration, endFrameUrl)
-    return { url: result.url, cost: result.cost }
+    const displayCost = applyMarkup(result.cost, routing.costMarkupPercent)
+    logExecutionResult("imageToVideo", "kie", result.cost, displayCost)
+    return { url: result.url, cost: result.cost, displayCost, providerUsed: "kie" }
   }
 
-  // Default: Use Replicate API
+  // Use Replicate API (either default or fallback from KIE.ai mode)
   const cfg = VIDEO_MODEL_CONFIGS[resolvedProvider] ?? VIDEO_MODEL_CONFIGS.minimax
   console.log(`[imageToVideo] Provider: ${resolvedProvider}, Model: ${cfg.model}`)
   console.log(`[imageToVideo] Input image param: "${cfg.imageParam}" = "${imageUrl}"`)
@@ -155,7 +159,9 @@ export async function imageToVideo(
   )
 
   const videoUrl = String(output)
+  const cost: number | null = null  // Replicate doesn't provide cost info easily
+  const displayCost = applyMarkup(cost, routing.costMarkupPercent)
+  logExecutionResult("imageToVideo", "replicate", cost, displayCost)
   console.log(`[imageToVideo] Output: "${videoUrl}"`)
-  // Replicate doesn't provide cost info easily, return null
-  return { url: videoUrl, cost: null }
+  return { url: videoUrl, cost, displayCost, providerUsed: "replicate" }
 }
