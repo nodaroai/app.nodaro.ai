@@ -1498,9 +1498,25 @@ function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField
   )
 }
 
+// KIE.ai allowed durations per video provider
+const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
+  "minimax": [5],
+  "veo3": [8],
+  "veo3.1": [8],
+  "kling": [5, 10],
+  "kling-turbo": [5, 10],
+  "grok-i2v": [6, 10],
+  "sora2": [5, 10],
+  "sora2-pro": [5, 10],
+  "wan": [5],
+}
+
 function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToVideoData>) {
   const { settings } = useAppSettings()
   const isKie = settings.ai_provider === "kie"
+
+  // Get allowed durations for current provider (KIE mode only)
+  const allowedDurations = isKie ? (KIE_VIDEO_DURATIONS[data.provider || "minimax"] || [5]) : null
 
   return (
     <div className="flex flex-col gap-3">
@@ -1554,19 +1570,21 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         </div>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        {data.provider === "veo3.1" ? (
+        {isKie && allowedDurations ? (
+          // KIE mode: show dropdown with allowed durations for this provider
           <Select
-            value={String(data.duration)}
+            value={String(allowedDurations.includes(data.duration) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
           >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="4">4 seconds</SelectItem>
-              <SelectItem value="6">6 seconds</SelectItem>
-              <SelectItem value="8">8 seconds</SelectItem>
+              {allowedDurations.map((d) => (
+                <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         ) : (
+          // Replicate mode: free-form number input
           <Input
             type="number"
             min={1}
@@ -1576,8 +1594,12 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           />
         )}
       </MappableField>
-      {data.provider === "veo3.1" && (
-        <p className="text-xs text-muted-foreground px-1">VEO 3.1 only supports 4, 6, or 8 second durations.</p>
+      {isKie && allowedDurations && allowedDurations.length === 1 && (
+        <p className="text-xs text-muted-foreground px-1">
+          {data.provider === "veo3" || data.provider === "veo3.1"
+            ? "VEO 3 produces ~8 second videos (not configurable)."
+            : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
+        </p>
       )}
       <MappableField field="motion" label="Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
@@ -1667,12 +1689,26 @@ function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
   )
 }
 
+// KIE.ai allowed durations per text-to-video provider
+const KIE_T2V_DURATIONS: Record<string, number[]> = {
+  "minimax": [5],
+  "veo3": [8],
+  "kling": [5, 10],
+  "kling-turbo": [5, 10],
+  "grok": [6, 10],
+  "sora2": [5, 10],
+  "sora2-pro": [5, 10],
+}
+
 function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes }: ConfigProps<TextToVideoData>) {
   const category: ProviderCategory = "video"
   const models = getModels(category, data.provider)
   const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
   const { settings } = useAppSettings()
   const isKie = settings.ai_provider === "kie"
+
+  // Get allowed durations for current provider (KIE mode only)
+  const allowedDurations = isKie ? (KIE_T2V_DURATIONS[data.provider || "minimax"] || [5]) : null
 
   return (
     <div className="flex flex-col gap-3">
@@ -1740,19 +1776,21 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
         )}
       </div>
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        {data.provider === "veo3.1" ? (
+        {isKie && allowedDurations ? (
+          // KIE mode: show dropdown with allowed durations for this provider
           <Select
-            value={String(data.duration)}
+            value={String(allowedDurations.includes(data.duration) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
           >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="4">4 seconds</SelectItem>
-              <SelectItem value="6">6 seconds</SelectItem>
-              <SelectItem value="8">8 seconds</SelectItem>
+              {allowedDurations.map((d) => (
+                <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         ) : (
+          // Replicate mode: free-form number input
           <Input
             type="number"
             min={1}
@@ -1762,10 +1800,14 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
           />
         )}
       </MappableField>
-      {data.provider === "veo3.1" && (
-        <p className="text-xs text-muted-foreground px-1">VEO 3.1 only supports 4, 6, or 8 second durations.</p>
+      {isKie && allowedDurations && allowedDurations.length === 1 && (
+        <p className="text-xs text-muted-foreground px-1">
+          {data.provider === "veo3"
+            ? "VEO 3 produces ~8 second videos (not configurable)."
+            : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
+        </p>
       )}
-      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField>
         <Select
           value={data.aspectRatio}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}

@@ -347,8 +347,37 @@ export async function editImageKie(
 // =============================================================================
 
 /**
+ * VEO3 response types - VEO uses a different response format from standard KIE tasks
+ */
+interface VeoRecordInfoResponse {
+  code: number
+  msg: string
+  data: {
+    taskId: string
+    paramJson?: string
+    createTime?: string
+    completeTime?: string
+    successFlag: number  // 0=generating, 1=success, 2=failed, 3=generation failed
+    fallbackFlag?: boolean
+    errorCode?: number
+    errorMessage?: string
+    response?: {
+      taskId: string
+      resultUrls: string[]
+      originUrls?: string[]
+      resolution?: string
+    }
+  }
+}
+
+/**
  * VEO3 uses a special API endpoint: /api/v1/veo/generate
- * This is different from the standard createTask endpoint
+ * Polling uses: /api/v1/veo/record-info (NOT the standard /api/v1/jobs/recordInfo)
+ * Status is indicated by successFlag (not state):
+ *   0 = generating (still processing)
+ *   1 = success
+ *   2 = failed
+ *   3 = generation failed
  */
 async function runVeoTask(
   model: string,
@@ -413,14 +442,16 @@ async function runVeoTask(
   const taskId = createData.data.taskId
   console.log(`[KIE.ai VEO] Task created: ${taskId}`)
 
-  // Step 2: Poll for completion using standard recordInfo endpoint
+  // Step 2: Poll for completion using VEO-specific endpoint (NOT the standard recordInfo!)
+  // VEO endpoint: /api/v1/veo/record-info (with hyphen)
+  // Status field: successFlag (0=generating, 1=success, 2=failed, 3=generation failed)
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
     await sleep(POLL_INTERVAL_MS)
     attempts++
 
     const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
+      `${KIE_API_BASE}/api/v1/veo/record-info?taskId=${taskId}`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     )
 
@@ -430,42 +461,42 @@ async function runVeoTask(
     }
 
     const detailText = await detailResponse.text()
-    let detailData: KieRecordInfoResponse
+    console.log(`[KIE.ai VEO] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`)
+
+    let detailData: VeoRecordInfoResponse
     try {
-      detailData = JSON.parse(detailText) as KieRecordInfoResponse
+      detailData = JSON.parse(detailText) as VeoRecordInfoResponse
     } catch {
       console.warn(`[KIE.ai VEO] Poll attempt ${attempts} invalid JSON`)
       continue
     }
 
-    const state = detailData.data?.state
-    if (!state) {
-      console.warn(`[KIE.ai VEO] Poll attempt ${attempts} missing state`)
-      continue
-    }
+    const successFlag = detailData.data?.successFlag
+    console.log(`[KIE.ai VEO] Task ${taskId} successFlag: ${successFlag} (attempt ${attempts})`)
 
-    console.log(`[KIE.ai VEO] Task ${taskId} state: ${state} (attempt ${attempts})`)
-
-    if (state === "success") {
-      const resultJsonStr = detailData.data.resultJson
-      if (!resultJsonStr) {
-        throw createSanitizedError("VEO task succeeded but no resultJson found", "Video generation")
+    // successFlag: 0=generating, 1=success, 2=failed, 3=generation failed
+    if (successFlag === 1) {
+      // Success - get result URLs from data.response.resultUrls
+      const resultUrls = detailData.data.response?.resultUrls
+      if (!resultUrls?.length) {
+        throw createSanitizedError("VEO task succeeded but no resultUrls found", "Video generation")
       }
 
-      let resultJson: KieResultJson
-      try {
-        resultJson = JSON.parse(resultJsonStr) as KieResultJson
-      } catch {
-        throw createSanitizedError(`VEO resultJson is not valid JSON: ${resultJsonStr}`, "Video generation")
+      console.log(`[KIE.ai VEO] Video complete! URLs: ${resultUrls.join(", ")}`)
+
+      return {
+        resultJson: { resultUrls },
+        costTime: undefined,
       }
-
-      return { resultJson, costTime: detailData.data.costTime }
     }
 
-    if (state === "failed") {
-      const failMsg = detailData.data.failMsg ?? detailData.data.failCode ?? "Unknown error"
-      throw createSanitizedError(`VEO task failed: ${failMsg}`, "Video generation")
+    if (successFlag === 2 || successFlag === 3) {
+      // Failed
+      const errorMsg = detailData.data.errorMessage ?? `Error code: ${detailData.data.errorCode ?? "unknown"}`
+      throw createSanitizedError(`VEO task failed: ${errorMsg}`, "Video generation")
     }
+
+    // successFlag === 0 means still generating, continue polling
   }
 
   throw createSanitizedError(`VEO task timed out after ${MAX_POLL_ATTEMPTS_VIDEO * POLL_INTERVAL_MS / 1000} seconds`, "Video generation")

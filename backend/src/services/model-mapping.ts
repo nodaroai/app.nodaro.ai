@@ -17,6 +17,8 @@ export interface KieModelConfig {
   inputType?: string      // Some models have different input types
   imageParam?: string     // Parameter name for input image (default: "image", some use "input_urls")
   extraParams?: Record<string, unknown>  // Default extra parameters
+  allowedDurations?: number[]  // Video models: allowed duration values in seconds
+  usesNFrames?: boolean        // Sora uses n_frames (10, 15) instead of duration
 }
 
 // =============================================================================
@@ -132,16 +134,19 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.40,
     imageParam: "image_url",  // single URL (NOT array!)
     extraParams: { prompt_optimizer: false },
+    allowedDurations: [5],  // Hailuo produces ~5 second videos
   },
 
   // VEO family - Uses SPECIAL API endpoint: /api/v1/veo/generate
   // Model param is just "veo3" or "veo3_fast", requires special handling in kie-ai.ts
+  // VEO generates ~8 second clips, duration not configurable
   "veo3": {
     model: "veo3",  // For /api/v1/veo/generate endpoint
     credits: 400,
     cost: 2.00,
     imageParam: "imageUrls",  // Array format for VEO API
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
+    allowedDurations: [8],  // VEO3 produces ~8 second videos, not configurable
   },
   "veo3.1": {
     model: "veo3_fast",  // Fast mode for veo3
@@ -149,6 +154,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 1.25,
     imageParam: "imageUrls",
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
+    allowedDurations: [8],  // VEO3 Fast produces ~8 second videos, not configurable
   },
 
   // Kling family - VERIFIED: docs.kie.ai/market/kling/image-to-video
@@ -158,6 +164,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.35,
     imageParam: "image_urls",  // array format
     extraParams: { sound: false, duration: "5" },
+    allowedDurations: [5, 10],  // Kling supports 5 or 10 second videos
   },
   // VERIFIED: docs.kie.ai/market/kling/v2-5-turbo-image-to-video-pro
   "kling-turbo": {
@@ -166,6 +173,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.25,
     imageParam: "image_url",  // single URL, supports tail_image_url for end frame
     extraParams: { duration: "5", cfg_scale: 0.5 },
+    allowedDurations: [5, 10],  // Kling Turbo supports 5 or 10 second videos
   },
 
   // Grok - VERIFIED: docs.kie.ai/market/grok-imagine/image-to-video
@@ -175,15 +183,19 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.30,
     imageParam: "image_urls",  // array format
     extraParams: { mode: "normal", duration: "6" },
+    allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
   },
 
   // Sora 2 family - VERIFIED: docs.kie.ai/market/sora2/sora-2-image-to-video
+  // Sora uses n_frames (10 or 15) instead of duration in seconds
   "sora2": {
     model: "sora-2-image-to-video",
     credits: 150,
     cost: 0.75,
     imageParam: "image_urls",  // array format
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    allowedDurations: [5, 10],  // Sora n_frames: 10 (~5s), 15 (~10s)
+    usesNFrames: true,  // Uses n_frames parameter instead of duration
   },
   // VERIFIED: docs.kie.ai/market/sora2/sora-2-pro-image-to-video
   "sora2-pro": {
@@ -192,6 +204,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 1.00,
     imageParam: "image_urls",  // array format
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
+    usesNFrames: true,  // Uses n_frames parameter instead of duration
   },
 
   // Wan (needs verification)
@@ -200,6 +214,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 60,
     cost: 0.30,
     imageParam: "image_url",
+    allowedDurations: [5],  // Default to 5s until verified
   },
 }
 
@@ -214,6 +229,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 80,
     cost: 0.40,
     extraParams: { prompt_optimizer: false },
+    allowedDurations: [5],  // Hailuo produces ~5 second videos
   },
 
   // VEO - Uses SPECIAL API endpoint: /api/v1/veo/generate
@@ -222,6 +238,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 400,
     cost: 2.00,
     extraParams: { generationType: "TEXT_2_VIDEO" },
+    allowedDurations: [8],  // VEO3 produces ~8 second videos, not configurable
   },
 
   // Kling family - VERIFIED: docs.kie.ai/market/kling/text-to-video
@@ -230,12 +247,14 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 70,
     cost: 0.35,
     extraParams: { sound: false, aspect_ratio: "16:9", duration: "5" },
+    allowedDurations: [5, 10],  // Kling supports 5 or 10 second videos
   },
   "kling-turbo": {
     model: "kling/v2-5-turbo-text-to-video-pro",
     credits: 50,
     cost: 0.25,
     extraParams: { duration: "5", cfg_scale: 0.5 },
+    allowedDurations: [5, 10],  // Kling Turbo supports 5 or 10 second videos
   },
 
   // Grok
@@ -244,6 +263,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 60,
     cost: 0.30,
     extraParams: { aspect_ratio: "16:9", mode: "normal", duration: "6" },
+    allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
   },
 
   // Sora 2 family
@@ -252,12 +272,16 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 150,
     cost: 0.75,
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    allowedDurations: [5, 10],  // Sora n_frames: 10 (~5s), 15 (~10s)
+    usesNFrames: true,  // Uses n_frames parameter instead of duration
   },
   "sora2-pro": {
     model: "sora-2-pro-text-to-video",
     credits: 200,
     cost: 1.00,
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
+    usesNFrames: true,  // Uses n_frames parameter instead of duration
   },
 }
 
@@ -382,4 +406,36 @@ export function getKieCost(
 ): number {
   const config = getKieModelConfig(category, provider)
   return config?.cost ?? 0
+}
+
+/**
+ * Get allowed durations for a video model
+ * Returns array of allowed duration values in seconds
+ */
+export function getAllowedDurations(
+  category: "video" | "text-to-video",
+  provider: string
+): number[] {
+  const config = getKieModelConfig(category, provider)
+  return config?.allowedDurations ?? [5]  // Default to 5 seconds if not specified
+}
+
+/**
+ * Check if a video model uses n_frames instead of duration
+ * (Sora models use n_frames: 10 or 15)
+ */
+export function usesNFrames(
+  category: "video" | "text-to-video",
+  provider: string
+): boolean {
+  const config = getKieModelConfig(category, provider)
+  return config?.usesNFrames ?? false
+}
+
+/**
+ * Convert duration in seconds to n_frames for Sora models
+ */
+export function durationToNFrames(durationSeconds: number): string {
+  // Sora: n_frames 10 = ~5 seconds, n_frames 15 = ~10 seconds
+  return durationSeconds <= 5 ? "10" : "15"
 }
