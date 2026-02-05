@@ -1100,6 +1100,51 @@ export async function cancelPrediction(id: string): Promise<{ data: ReplicatePre
   return res.json()
 }
 
+export async function motionTransferApi(
+  imageUrl: string,
+  videoUrl: string,
+  prompt?: string,
+  characterOrientation?: "image" | "video",
+  resolution?: "720p" | "1080p",
+  userId?: string
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { imageUrl, videoUrl }
+  if (prompt) body.prompt = prompt
+  if (characterOrientation) body.characterOrientation = characterOrientation
+  if (resolution) body.resolution = resolution
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/motion-transfer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start motion transfer")
+  }
+  return res.json()
+}
+
+export async function videoUpscaleApi(
+  videoUrl: string,
+  upscaleFactor?: "1" | "2" | "4",
+  userId?: string
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl }
+  if (upscaleFactor) body.upscaleFactor = upscaleFactor
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/video-upscale`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start video upscale")
+  }
+  return res.json()
+}
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),

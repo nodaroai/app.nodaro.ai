@@ -979,6 +979,8 @@ export type SceneNodeData =
   | AdjustVolumeData
   | TrimVideoData
   | LipSyncData
+  | MotionTransferData
+  | VideoUpscaleData
   | SaveToStorageData
   | WebhookOutputData
   | SceneNodeDataType

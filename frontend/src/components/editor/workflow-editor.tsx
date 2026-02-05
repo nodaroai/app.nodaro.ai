@@ -17,8 +17,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, lipSyncApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, LipSyncData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -91,7 +91,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -176,7 +176,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
     }
-    if (type === "image-to-video" || type === "video-to-video" || type === "text-to-video" || type === "lip-sync") {
+    if (type === "image-to-video" || type === "video-to-video" || type === "text-to-video" || type === "lip-sync" || type === "motion-transfer" || type === "video-upscale") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
@@ -294,7 +294,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.imageUrl = output
         }
-      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
+      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "lip-sync" || src.type === "motion-transfer" || src.type === "video-upscale" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
         } else {
@@ -1624,6 +1624,61 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         () => lipSyncApi(imageUrl!, audioUrl!, lsData.prompt || undefined, lsData.provider || undefined, lsData.resolution || undefined, user?.id),
         "generatedVideoUrl",
         "Lip Sync"
+      )
+    }
+
+    if (node.type === "motion-transfer") {
+      const mtData = node.data as unknown as MotionTransferData
+
+      // Motion Transfer has two input handles: "image" and "video"
+      // We need to resolve inputs by checking which handle each edge connects to
+      const incomingEdges = edges.filter((e) => e.target === node.id)
+      let imageUrl: string | undefined
+      let videoUrl: string | undefined
+
+      for (const edge of incomingEdges) {
+        const sourceNode = nodes.find((n) => n.id === edge.source)
+        if (!sourceNode) continue
+        const output = extractNodeOutput(sourceNode)
+        if (!output) continue
+
+        if (edge.targetHandle === "image") {
+          imageUrl = output
+        } else if (edge.targetHandle === "video") {
+          videoUrl = output
+        }
+      }
+
+      if (!imageUrl) {
+        toast.error(`Node "${mtData.label}": no character image found (connect to "Image" input)`)
+        return Promise.reject(new Error("No character image"))
+      }
+      if (!videoUrl) {
+        toast.error(`Node "${mtData.label}": no motion video found (connect to "Video" input)`)
+        return Promise.reject(new Error("No motion video"))
+      }
+
+      return runProcessingNode(
+        node.id,
+        () => motionTransferApi(imageUrl!, videoUrl!, mtData.prompt || undefined, mtData.characterOrientation || undefined, mtData.resolution || undefined, user?.id),
+        "generatedVideoUrl",
+        "Motion Transfer"
+      )
+    }
+
+    if (node.type === "video-upscale") {
+      const vuData = node.data as unknown as VideoUpscaleData
+      const videoUrl = inputs.videoUrl
+      if (!videoUrl) {
+        toast.error(`Node "${vuData.label}": no video input found`)
+        return Promise.reject(new Error("No video input"))
+      }
+
+      return runProcessingNode(
+        node.id,
+        () => videoUpscaleApi(videoUrl, vuData.upscaleFactor || undefined, user?.id),
+        "generatedVideoUrl",
+        "Video Upscale"
       )
     }
 

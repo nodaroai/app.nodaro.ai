@@ -193,8 +193,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         handles={[
-          { id: "image", type: "target", position: Position.Left, label: "Image", style: { top: "30%" } },
-          { id: "audio", type: "target", position: Position.Left, label: "Audio", style: { top: "70%" } },
+          { id: "image", type: "target", position: Position.Left, label: "Image", top: "30%" },
+          { id: "audio", type: "target", position: Position.Left, label: "Audio", top: "70%" },
           { id: "video", type: "source", position: Position.Right, label: "Video" },
         ]}
       >

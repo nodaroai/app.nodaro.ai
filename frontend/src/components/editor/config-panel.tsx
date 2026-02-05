@@ -464,12 +464,12 @@ export function ConfigPanel() {
             <LipSyncConfig data={selectedNode.data as LipSyncData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "motion-transfer" && (
-            <MotionTransferConfig data={selectedNode.data as MotionTransferData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+            <MotionTransferConfig data={selectedNode.data as unknown as MotionTransferData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* Processing Nodes */}
           {selectedNode.type === "video-upscale" && (
-            <VideoUpscaleConfig data={selectedNode.data as VideoUpscaleData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+            <VideoUpscaleConfig data={selectedNode.data as unknown as VideoUpscaleData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "combine-videos" && (
             <CombineVideosConfig data={selectedNode.data as CombineVideosData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
