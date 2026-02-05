@@ -875,7 +875,7 @@ Example: Image node output → connects to both Video node AND next Image node a
 | Node | Type | Values | Output Handle | Connects To |
 |------|------|--------|---------------|-------------|
 | ImageProviderNode | `image-provider` | nano-banana, flux, dalle, midjourney | `image_provider` | Generate Image |
-| VideoProviderNode | `video-provider` | minimax, veo, veo3, kling, runway, pika | `video_provider` | Image to Video, Video to Video |
+| VideoProviderNode | `video-provider` | minimax, veo, veo3, kling, runway, pika | `video_provider` | Image to Video (V2V uses separate KIE.ai providers: wan, runway-aleph) |
 | VoiceProviderNode | `voice-provider` | elevenlabs, playht, azure | `voice_provider` | Text to Speech |
 | ScriptProviderNode | `script-provider` | claude, gpt, gemini | `script_provider` | Generate Script |
 
@@ -4589,7 +4589,7 @@ Centralized routing logic in `backend/src/services/provider-router.ts` handles a
 **Supported Categories:**
 - `image` - Text-to-image generation
 - `video` - Image-to-video generation
-- `video-to-video` - Video continuation (Replicate only, KIE.ai doesn't support)
+- `video-to-video` - Video continuation (KIE.ai ONLY - Replicate doesn't support video input)
 - `text-to-video` - Text-to-video generation
 - `lip-sync` - Avatar/lip sync
 - `music` - Music generation
@@ -4867,7 +4867,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Global video autoplay toggle in editor toolbar
 - [x] Single-node execution (Run button per node, hanging tab style)
 - [x] Floating Execute/Stop workflow buttons (bottom center)
-- [x] Video to Video node (continuation/style reference via minimax/video-01)
+- [x] Video to Video node (KIE.ai only: Wan 2.6, Runway Aleph - Replicate doesn't support V2V)
 - [x] DAG Execution Engine (topological sort with Kahn's algorithm)
 - [x] Parallel execution at each level (Promise.allSettled)
 - [x] Sequential execution with dependency waiting between levels
@@ -4884,7 +4884,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Text to Audio node (TangoFlux/Tango/AudioLDM/Bark) for sound effects generation
 - [x] VEO 3 integration with generate_audio toggle for native AI audio
 - [x] Renamed Add Audio to Merge Video & Audio for clarity
-- [x] VEO 2 and VEO 3 as separate providers in Image to Video and Video to Video nodes
+- [x] VEO 2 and VEO 3 as separate providers in Image to Video nodes (NOT Video to Video - V2V uses KIE.ai only)
 - [x] Generate Audio checkbox only shown when VEO 3 is selected (not VEO 2)
 - [x] 37 node types total (Input: 5, Parameter: 8, AI: 9, Scene: 1, Character: 1, Object: 1, Location: 1, Processing: 8, Output: 2, Utility: 1)
 - [x] Character & Location extraction from scene images (crop + upload to R2, used as references in Expand to Nodes)
@@ -4986,7 +4986,7 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 - [x] Asset Library thumbnail refresh: thumbnails update automatically when Page modals close (300ms delay for DB propagation)
 - [x] Unified Asset Library: shows ALL user assets across all projects with user_id filtering
 - [x] VEO 3.1 support: first+last frame interpolation, duration restricted to 4/6/8 seconds dropdown
-- [x] VEO 3.1 removed from Video to Video node (API doesn't support video input, only image input)
+- [x] Video to Video node rewritten: now uses KIE.ai exclusively (Wan 2.6, Runway Aleph) - Replicate models don't support V2V
 - [x] Image to Video node: single input handle accepts all connection types (images, audio)
 - [x] Image to Video node: internal dropdowns for Start Frame, End Frame, Audio Track with thumbnail preview
 - [x] Image to Video node: auto-select first connected image as Start Frame
