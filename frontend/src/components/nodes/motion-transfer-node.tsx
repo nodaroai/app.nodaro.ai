@@ -48,8 +48,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       handles={[
-        { id: "image", type: "target", position: Position.Left, label: "Image", top: "30%" },
-        { id: "video", type: "target", position: Position.Left, label: "Video", top: "70%" },
+        { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "out", type: "source", position: Position.Right, label: "Output" },
       ]}
     >

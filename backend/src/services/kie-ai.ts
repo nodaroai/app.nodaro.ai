@@ -806,16 +806,17 @@ export async function motionTransferKie(
   console.log(`[KIE.ai] Video URL (motion source): ${videoUrl}`)
   console.log(`[KIE.ai] Prompt: "${prompt ?? "(none)"}"`)
   console.log(`[KIE.ai] Character orientation: ${characterOrientation}`)
-  console.log(`[KIE.ai] Resolution: ${resolution}`)
+  console.log(`[KIE.ai] Mode: ${resolution}`)
   console.log(`[KIE.ai] Max duration: ${characterOrientation === "image" ? "10s" : "30s"}`)
   console.log(`[KIE.ai] ==============================================`)
 
   // Build input based on KIE.ai docs for kling-2.6/motion-control
+  // NOTE: Field is "mode" not "resolution" per KIE.ai API docs
   const input: Record<string, unknown> = {
     input_urls: [imageUrl],  // Array of image URLs (character reference)
     video_urls: [videoUrl],  // Array of video URLs (motion source)
     character_orientation: characterOrientation,
-    resolution,
+    mode: resolution,  // KIE.ai uses "mode" for resolution (720p/1080p)
   }
 
   // Add optional prompt if provided
@@ -823,7 +824,7 @@ export async function motionTransferKie(
     input.prompt = prompt
   }
 
-  console.log(`[KIE.ai] Final input:`, JSON.stringify(input, null, 2))
+  console.log(`[KIE.ai] Motion Transfer Request:`, JSON.stringify(input, null, 2))
 
   const { resultJson } = await runKieTask(modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO, onProgress)
 

@@ -1220,7 +1220,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     // V2V uses Wan 2.6 only via KIE.ai (no provider selection needed)
-    defaultData: { label: "Video to Video", prompt: "", fieldMappings: {} },
+    defaultData: { label: "Video to Video", prompt: "", duration: 5, fieldMappings: {} },
   },
   {
     type: "text-to-video",

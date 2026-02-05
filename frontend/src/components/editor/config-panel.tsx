@@ -118,9 +118,17 @@ function getCompatibleSources(
   const compatibleTypes = FIELD_COMPATIBLE_TYPES[field]
   if (!compatibleTypes) return sources
 
-  return sources.filter((s) => {
+  const filtered = sources.filter((s) => {
     if (!compatibleTypes.includes(s.type)) return false
     if (s.type === "provider" && providerCategory && s.providerCategory !== providerCategory) return false
+    return true
+  })
+
+  // Deduplicate by id to avoid React key warnings
+  const seen = new Set<string>()
+  return filtered.filter((s) => {
+    if (seen.has(s.id)) return false
+    seen.add(s.id)
     return true
   })
 }
@@ -537,7 +545,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "generate-music") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale") && (
               <Button
                 className="w-full text-white hover:opacity-90"
                 style={{ backgroundColor: '#ff0073' }}

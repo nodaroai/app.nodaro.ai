@@ -1358,15 +1358,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   function runProcessingNode(nodeId: string, apiCall: () => Promise<{ jobId: string }>, outputKey: "generatedVideoUrl" | "generatedAudioUrl", label: string): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
-    updateNodeData(nodeId, { executionStatus: "running", [outputKey]: undefined })
+    updateNodeData(nodeId, { executionStatus: "running", [outputKey]: undefined, currentJobId: undefined, currentJobProgress: 0 })
 
     return new Promise((resolve, reject) => {
       apiCall().then(({ jobId }) => {
         toast.info(`${label} started`, { description: `Job ID: ${jobId}` })
+        // Store the job ID on the node for progress tracking
+        updateNodeData(nodeId, { currentJobId: jobId })
 
         const poll = trackInterval(setInterval(async () => {
           try {
             const job = await getJobStatus(jobId)
+
+            // Update progress while processing
+            if (job.status === "processing" && job.progress != null) {
+              updateNodeData(nodeId, { currentJobProgress: job.progress })
+            }
+
             if (job.status === "completed") {
               untrackInterval(poll)
               const url = outputKey === "generatedVideoUrl" ? job.output_data?.videoUrl : job.output_data?.audioUrl
@@ -1374,7 +1382,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               if (!url) {
                 // If no URL returned, mark as failed
                 const errMsg = "No output URL returned from job"
-                updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+                updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
                 toast.error(`${label} failed`, { description: errMsg })
                 reject(new Error(errMsg))
                 return
@@ -1387,25 +1395,27 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 [outputKey]: url,
                 generatedResults: [newResult, ...existingResults],
                 activeResultIndex: 0,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
               })
               toast.success(`${label} complete`)
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
               const errMsg = job.error_message ?? "Unknown error"
-              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
               toast.error(`${label} failed`, { description: errMsg })
               reject(new Error(errMsg))
             }
           } catch (err) {
             untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
+            updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
             toast.error(`Failed to check ${label} status`)
             reject(err)
           }
         }, 2000))
       }).catch((err) => {
-        updateNodeData(nodeId, { executionStatus: "failed" })
+        updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
         toast.error(`Failed to start ${label}`, { description: err instanceof Error ? err.message : "Unknown error" })
         reject(err)
       })
@@ -1534,12 +1544,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
       const v2vData = node.data as VideoToVideoData
       // Use connected Text Prompt (inputs.prompt) OR direct prompt field
-      const prompt = inputs.prompt ?? v2vData.prompt?.trim()
-      return runVideoToVideoGeneration(node.id, sourceVideoUrl, prompt, v2vData.provider || undefined)
+      const inputPrompt = typeof inputs.prompt === "string" ? inputs.prompt : undefined
+      const dataPrompt = typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : undefined
+      const prompt = inputPrompt ?? dataPrompt
+      const provider = typeof v2vData.provider === "string" ? v2vData.provider : undefined
+      return runVideoToVideoGeneration(node.id, sourceVideoUrl, prompt, provider)
     }
 
     if (node.type === "text-to-video") {
-      const prompt = inputs.prompt ?? (node.data as TextToVideoData).prompt?.trim()
+      const prompt = (typeof inputs.prompt === "string" ? inputs.prompt : undefined) ?? (node.data as TextToVideoData).prompt?.trim()
       if (!prompt) {
         toast.error(`Node "${(node.data as TextToVideoData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
@@ -1551,7 +1564,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const ttsData = node.data as TextToSpeechData
       const text = (ttsData.textSource === "direct" && ttsData.directText?.trim())
         ? ttsData.directText.trim()
-        : (inputs.prompt ?? "")
+        : (typeof inputs.prompt === "string" ? inputs.prompt : "")
       if (!text) {
         toast.error(`Node "${ttsData.label}": no text found`)
         return Promise.reject(new Error("No text"))
@@ -1630,8 +1643,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (node.type === "motion-transfer") {
       const mtData = node.data as unknown as MotionTransferData
 
-      // Motion Transfer has two input handles: "image" and "video"
-      // We need to resolve inputs by checking which handle each edge connects to
+      // Motion Transfer auto-detects input type based on source node type
+      // Image-producing nodes: generate-image, upload-image, character, location, object
+      // Video-producing nodes: image-to-video, text-to-video, video-to-video, upload-video
+      const IMAGE_PRODUCING_TYPES = new Set(["generate-image", "upload-image", "character", "location", "object"])
+      const VIDEO_PRODUCING_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video"])
+
       const incomingEdges = edges.filter((e) => e.target === node.id)
       let imageUrl: string | undefined
       let videoUrl: string | undefined
@@ -1642,19 +1659,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const output = extractNodeOutput(sourceNode)
         if (!output) continue
 
-        if (edge.targetHandle === "image") {
+        // Auto-detect by source node type
+        if (IMAGE_PRODUCING_TYPES.has(sourceNode.type || "")) {
           imageUrl = output
-        } else if (edge.targetHandle === "video") {
+        } else if (VIDEO_PRODUCING_TYPES.has(sourceNode.type || "")) {
           videoUrl = output
         }
       }
 
       if (!imageUrl) {
-        toast.error(`Node "${mtData.label}": no character image found (connect to "Image" input)`)
+        toast.error(`Node "${mtData.label}": no character image found. Connect an image node (Generate Image, Upload Image, Character, etc.)`)
         return Promise.reject(new Error("No character image"))
       }
       if (!videoUrl) {
-        toast.error(`Node "${mtData.label}": no motion video found (connect to "Video" input)`)
+        toast.error(`Node "${mtData.label}": no motion video found. Connect a video node (Image to Video, Upload Video, etc.)`)
         return Promise.reject(new Error("No motion video"))
       }
 

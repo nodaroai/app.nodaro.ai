@@ -43,6 +43,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
           videoUrl,
           upscaleFactor,
           type: "video-upscale",
+          provider: "topaz/video-upscale",  // Actual KIE.ai model used
         },
       })
       .select("id")

@@ -108,7 +108,7 @@ export async function editImage(
 export async function imageToImage(
   imageUrl: string,
   prompt: string,
-  provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "grok-i2i" | "gpt-image-i2i",
+  provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i",
   userId?: string
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, prompt }

@@ -30,7 +30,12 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId ?? null,
         status: "pending",
-        input_data: { videoUrl, prompt, type: "video-to-video" },
+        input_data: {
+          videoUrl,
+          prompt,
+          type: "video-to-video",
+          provider: "wan/2-6-video-to-video",  // Actual KIE.ai model used
+        },
       })
       .select("id")
       .single()

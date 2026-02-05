@@ -254,7 +254,7 @@ export function createVideoWorker() {
           }
           console.log(`[worker] video-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const videoResult = await videoToVideo(videoUrl, prompt, provider)
+          const videoResult = await videoToVideo(videoUrl, prompt)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(videoResult.url, jobId, "video")

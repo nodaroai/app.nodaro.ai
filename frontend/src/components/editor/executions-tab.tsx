@@ -98,6 +98,8 @@ function extractJobType(inputData: Job["input_data"]): string {
     "generate-object-asset": "Asset",
     "generate-location": "Location",
     "generate-location-asset": "Asset",
+    "motion-transfer": "Motion",
+    "video-upscale": "Upscale",
   }
   return typeMap[type] ?? type
 }

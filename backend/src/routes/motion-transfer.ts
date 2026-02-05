@@ -53,6 +53,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
           characterOrientation,
           resolution,
           type: "motion-transfer",
+          provider: "kling-2.6/motion-control",  // Actual KIE.ai model used
         },
       })
       .select("id")

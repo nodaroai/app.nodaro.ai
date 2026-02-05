@@ -158,8 +158,8 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>{nodeData.provider}</span>
-          <span>{nodeData.duration}s</span>
+          <span>{nodeData.provider as string}</span>
+          <span>{nodeData.duration as number}s</span>
         </div>
       </div>
     </BaseNode>
