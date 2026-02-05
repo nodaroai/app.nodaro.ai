@@ -116,23 +116,7 @@ export async function jobRoutes(app: FastifyInstance) {
     }
   })
 
-  app.post<{ Params: { id: string } }>("/v1/jobs/:id/cancel", async (req, reply) => {
-    const { id } = req.params
-
-    const { error } = await supabase
-      .from("jobs")
-      .update({ status: "cancelled" })
-      .eq("id", id)
-      .in("status", ["pending", "queued", "processing"])
-
-    if (error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
-      })
-    }
-
-    return { data: { id, status: "cancelled" } }
-  })
+  // NOTE: Cancel route moved to cancel-jobs.ts (has ownership verification + BullMQ integration)
 
   app.delete<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
     const { id } = req.params
