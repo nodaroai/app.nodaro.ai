@@ -85,6 +85,15 @@ A horizontal control bar at the bottom-left of the canvas:
   - Processing nodes = amber (#f59e0b)
   - Output nodes = green (#22c55e)
 
+### Collapsible Sidebar Navigation
+- **Expanded mode (220px)**: Full logo, navigation labels, user email, collapse button
+- **Collapsed mode (56px)**: Icons only with tooltips on hover
+- **Navigation items**: Projects, Settings, Admin (admin users only)
+- **Smooth animation**: 300ms ease-in-out width transition
+- **Persistence**: Collapsed state saved to localStorage
+- **Mobile**: Hidden by default, hamburger menu reveals with overlay
+- **Accent color**: #ff0073 pink active state with left border indicator
+
 ### Floating Tab Navigation
 - **Editor**: Main workflow canvas with node-based editing
 - **Executions**: User-specific job history with real-time status

@@ -3492,6 +3492,53 @@ All pages are fully responsive and mobile-friendly.
 
 ### Dashboard Pages
 
+#### App Sidebar (Collapsible Navigation)
+
+The main navigation sidebar supports collapse/expand functionality for better space utilization.
+
+**Location**: `frontend/src/components/layout/app-sidebar.tsx`
+
+**Structure:**
+```
+┌─────────────────┐     ┌────┐
+│ SceneNode       │     │ S  │  ← Logo (full/icon)
+│                 │     │    │
+│ 📁 Projects     │     │ 📁 │  ← Nav items
+│ ⚙️ Settings     │ ⟷  │ ⚙️ │
+│ 👑 Admin        │     │ 👑 │  ← Admin only
+│                 │     │    │
+│ [◀ Collapse]    │     │ ▶  │  ← Toggle
+│ user@email.com  │     │ 🟢 │  ← User avatar
+└─────────────────┘     └────┘
+   Expanded (220px)    Collapsed (56px)
+```
+
+**Features:**
+- **Expanded width**: 220px with full labels
+- **Collapsed width**: 56px with icons only
+- **Tooltips**: Show labels on hover when collapsed
+- **Active state**: Pink left border (#ff0073) + subtle pink background tint
+- **Smooth animation**: 300ms ease-in-out width transition
+- **Persistence**: State saved to `localStorage` key `scenenode-sidebar-collapsed`
+- **Mobile**: Hidden by default, revealed via hamburger menu with overlay
+
+**Navigation Items:**
+| Icon | Label | Route | Visibility |
+|------|-------|-------|------------|
+| FolderOpen | Projects | /projects | Always |
+| Settings | Settings | /settings | Always |
+| Shield | Admin | /admin | Admin users only |
+
+**Bottom Section:**
+- Collapse/expand toggle button (chevron icon)
+- User avatar with email (truncated)
+- Sign out button with tooltip
+- Theme toggle
+
+**Admin Sidebar**: Similar collapsible functionality with admin-specific navigation (Dashboard, Users, Jobs, Usage, Settings). Uses separate localStorage key `scenenode-admin-sidebar-collapsed`.
+
+#### Responsive Behavior
+
 - **Sidebar**: Collapses off-screen on mobile (<768px), revealed via hamburger menu with overlay backdrop
 - **Mobile header**: Appears on small screens with hamburger button, logo, and theme toggle
 - **Projects grid**: Adjusts from 3 columns (desktop) to 2 (tablet) to 1 (mobile)
