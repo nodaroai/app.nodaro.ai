@@ -22,7 +22,7 @@ import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
-import { editImageKie, generateImageKie, lipSyncKie, textToVideoKie } from "../services/kie-ai.js"
+import { editImageKie, generateImageKie, imageToVideoKie, lipSyncKie, textToVideoKie } from "../services/kie-ai.js"
 import { getAppSettings as getKieAppSettings } from "../lib/app-settings.js"
 import { isKieSupported } from "../services/model-mapping.js"
 import { promises as fs } from "node:fs"
@@ -167,18 +167,34 @@ export function createVideoWorker() {
             endFrameUrl?: string      // Optional end frame for supported providers
             audioUrl?: string         // Optional audio to merge after video generation
             prompt?: string
-            provider?: VideoProvider
+            provider?: string
             generateAudio?: boolean
             duration?: number
           }
           console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
-          // Generate the video with optional end frame support
-          const videoResult = await imageToVideo(imageUrl, prompt, provider, generateAudio, duration, endFrameUrl)
+          // Get settings to determine which backend to use
+          const settings = await getAppSettings()
+          const useKie = settings.ai_provider === "kie" && isKieSupported("video", provider ?? "minimax")
+
+          let videoUrl: string
+          let providerCost: number | undefined
+
+          if (useKie) {
+            console.log(`[worker] Using KIE.ai for image-to-video (provider: ${provider ?? "minimax"})`)
+            const kieResult = await imageToVideoKie(imageUrl, prompt, provider ?? "minimax", duration, endFrameUrl)
+            videoUrl = kieResult.url
+            providerCost = kieResult.cost
+          } else {
+            // Generate the video with optional end frame support via Replicate
+            const videoResult = await imageToVideo(imageUrl, prompt, provider as VideoProvider, generateAudio, duration, endFrameUrl)
+            videoUrl = videoResult.url
+            providerCost = videoResult.cost
+          }
           await job.updateProgress(40)
 
           // Upload the generated video to R2
-          let finalVideoUrl = await uploadToR2(videoResult.url, jobId, "video")
+          let finalVideoUrl = await uploadToR2(videoUrl, jobId, "video")
           await job.updateProgress(70)
 
           // If audio URL is provided, merge it with the video
@@ -200,9 +216,6 @@ export function createVideoWorker() {
 
           await job.updateProgress(100)
 
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = videoResult.cost
           const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           await supabase
