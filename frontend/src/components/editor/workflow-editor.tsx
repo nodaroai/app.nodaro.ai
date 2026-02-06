@@ -455,12 +455,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runImageToImage(nodeId: string, imageUrl: string, prompt: string, provider?: ImageToImageData["provider"]): Promise<void> {
+  function runImageToImage(nodeId: string, imageUrl: string, prompt: string, provider?: ImageToImageData["provider"], referenceImageUrls?: string[]): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedImageUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      imageToImage(imageUrl, prompt, provider, user?.id).then(({ jobId }) => {
+      imageToImage(imageUrl, prompt, provider, user?.id, referenceImageUrls).then(({ jobId }) => {
         toast.info("Image transformation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -1496,7 +1496,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("Transformation prompt is required"))
       }
       const provider = i2iData.provider || "nano-banana"
-      return runImageToImage(node.id, imageUrl, prompt, provider)
+      // Collect additional reference images (from character/location/object nodes)
+      // excluding the main image to avoid duplicates
+      const refUrls = inputs.referenceImageUrls?.filter(url => url !== imageUrl) ?? []
+      return runImageToImage(node.id, imageUrl, prompt, provider, refUrls.length > 0 ? refUrls : undefined)
     }
 
     if (node.type === "image-to-video") {

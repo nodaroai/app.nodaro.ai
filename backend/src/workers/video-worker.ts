@@ -193,25 +193,28 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-image") {
-          const { imageUrl, prompt, provider } = job.data as {
+          const { imageUrl, referenceImageUrls, prompt, provider } = job.data as {
             jobId: string
             imageUrl: string
+            referenceImageUrls?: string[]
             prompt: string
             provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "grok-i2i" | "gpt-image-i2i"
           }
           const resolvedProvider = provider ?? "nano-banana"
-          console.log(`[worker] image-to-image ${jobId} (provider: ${resolvedProvider}): "${prompt}"`)
+          // Combine main image with additional reference images (e.g., from Location/Character nodes)
+          const allImages = [imageUrl, ...(referenceImageUrls ?? [])]
+          console.log(`[worker] image-to-image ${jobId} (provider: ${resolvedProvider}, images: ${allImages.length}): "${prompt}"`)
 
           const settings = await getAppSettings()
 
-          // For image-to-image, we pass the source image as reference and use the prompt to transform
+          // For image-to-image, we pass the source image + references and use the prompt to transform
           // nano-banana works on both Replicate and KIE.ai, others are KIE.ai only
           let result: { url: string; cost: number | null }
           if (settings.ai_provider === "kie" && isKieSupported("image", resolvedProvider)) {
-            result = await generateImageKie(prompt, [imageUrl], resolvedProvider)
+            result = await generateImageKie(prompt, allImages, resolvedProvider)
           } else if (resolvedProvider === "nano-banana" || resolvedProvider === "nano-banana-pro") {
             // Fallback to Replicate for nano-banana (uses centralized routing)
-            result = await generateImage(prompt, [imageUrl], "nano-banana")
+            result = await generateImage(prompt, allImages, "nano-banana")
           } else {
             throw new Error(`Provider ${resolvedProvider} is only available with KIE.ai. Current provider: ${settings.ai_provider}`)
           }

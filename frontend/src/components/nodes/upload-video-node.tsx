@@ -4,6 +4,7 @@ import { memo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Upload, Link, Loader2, AlertCircle, X, Play } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import type { UploadVideoData } from "@/types/nodes"
@@ -23,6 +24,7 @@ function formatDuration(seconds: number): string {
 function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as UploadVideoData
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
+  const [previewOpen, setPreviewOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const { upload, isUploading, uploadError, clearError } = useFileUpload()
@@ -93,6 +95,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
+    <>
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -129,10 +132,38 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
           {hasFile ? (
             <div className="relative group">
               {thumbnailUrl ? (
-                <div className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative">
+                <div
+                  className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPreviewOpen(true)
+                  }}
+                >
                   <img
                     src={thumbnailUrl}
                     alt={nodeData.filename || "Video thumbnail"}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
+                      <Play className="w-4 h-4 text-white ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+              ) : videoUrl ? (
+                <div
+                  className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPreviewOpen(true)
+                  }}
+                >
+                  <video
+                    src={videoUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -238,6 +269,15 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
         </>
       )}
     </BaseNode>
+    {videoUrl && (
+      <MediaPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        type="video"
+        url={videoUrl}
+      />
+    )}
+    </>
   )
 }
 

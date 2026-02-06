@@ -23,6 +23,7 @@ import {
   demoteFromLibrary,
   type LibraryAsset,
 } from "@/lib/api"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 
 // ============================================================
 // Types
@@ -103,6 +104,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
   const [loadingMore, setLoadingMore] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [previewAsset, setPreviewAsset] = useState<LibraryAsset | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   // Debounce search input
@@ -314,6 +316,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
                     onAddToCanvas={onAddToCanvas ? () => onAddToCanvas(asset) : undefined}
                     onPromote={() => handlePromote(asset)}
                     onDemote={() => handleDemote(asset)}
+                    onPreview={() => setPreviewAsset(asset)}
                   />
                 ))}
               </div>
@@ -352,6 +355,14 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
           </p>
         </div>
       </div>
+      {previewAsset && (previewAsset.type === "image" || previewAsset.type === "video") && (
+        <MediaPreviewModal
+          isOpen={Boolean(previewAsset)}
+          onClose={() => setPreviewAsset(null)}
+          type={previewAsset.type as "image" | "video"}
+          url={previewAsset.url}
+        />
+      )}
     </div>,
     document.body,
   )
@@ -373,6 +384,7 @@ interface AssetCardProps {
   onAddToCanvas?: () => void
   onPromote: () => void
   onDemote: () => void
+  onPreview: () => void
 }
 
 function AssetCard({
@@ -387,11 +399,20 @@ function AssetCard({
   onAddToCanvas,
   onPromote,
   onDemote,
+  onPreview,
 }: AssetCardProps) {
   return (
     <div className="group relative rounded-lg border border-border bg-muted/20 overflow-hidden hover:border-[#ff0073]/30 transition-colors">
       {/* Thumbnail area */}
-      <div className="aspect-square bg-muted/30 flex items-center justify-center relative overflow-hidden">
+      <div
+        className="aspect-square bg-muted/30 flex items-center justify-center relative overflow-hidden cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation()
+          if ((asset.type === "image" || asset.type === "video") && asset.url) {
+            onPreview()
+          }
+        }}
+      >
         {asset.type === "image" && asset.thumbnailUrl ? (
           <img
             src={asset.thumbnailUrl}
@@ -409,6 +430,21 @@ function AssetCard({
             <img
               src={asset.thumbnailUrl}
               alt={asset.filename}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
+                <Video className="w-4 h-4 text-white" />
+              </div>
+            </div>
+          </div>
+        ) : asset.type === "video" && asset.url ? (
+          <div className="relative w-full h-full">
+            <video
+              src={asset.url}
+              preload="metadata"
+              muted
+              playsInline
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 flex items-center justify-center">

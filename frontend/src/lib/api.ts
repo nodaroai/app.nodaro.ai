@@ -109,7 +109,8 @@ export async function imageToImage(
   imageUrl: string,
   prompt: string,
   provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i",
-  userId?: string
+  userId?: string,
+  referenceImageUrls?: string[]
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, prompt }
   if (provider) {
@@ -117,6 +118,9 @@ export async function imageToImage(
   }
   if (userId) {
     body.userId = userId
+  }
+  if (referenceImageUrls && referenceImageUrls.length > 0) {
+    body.referenceImageUrls = referenceImageUrls
   }
   const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
     method: "POST",

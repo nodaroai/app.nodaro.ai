@@ -8,6 +8,7 @@ const imageToImageBody = z.object({
   prompt: z.string().min(1).max(2000),
   provider: z.enum(["nano-banana", "nano-banana-pro", "flux-i2i", "flux-pro-i2i", "grok-i2i", "gpt-image-i2i"]).optional(),
   userId: z.string().uuid().optional(),
+  referenceImageUrls: z.array(z.string().url()).max(13).optional(),
 })
 
 export async function imageToImageRoutes(app: FastifyInstance) {
@@ -22,7 +23,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, userId } = parsed.data
+    const { imageUrl, prompt, provider, userId, referenceImageUrls } = parsed.data
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -30,7 +31,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId ?? null,
         status: "pending",
-        input_data: { imageUrl, prompt, provider, type: "image-to-image" },
+        input_data: { imageUrl, prompt, provider, referenceImageUrls, type: "image-to-image" },
       })
       .select("id")
       .single()
@@ -44,6 +45,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     await videoQueue.add("image-to-image", {
       jobId: job.id,
       imageUrl,
+      referenceImageUrls,
       prompt,
       provider: provider ?? "nano-banana",
     })
