@@ -51,9 +51,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url }: MediaPreviewMo
           <video
             src={url}
             className="max-w-full max-h-[80vh] rounded-lg"
+            controls
             autoPlay
-            loop
-            muted
             playsInline
           />
         )}
