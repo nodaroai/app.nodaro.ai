@@ -894,7 +894,7 @@ export async function uploadFile(
   return json.data ?? json
 }
 
-export async function downloadYouTubeAudio(url: string): Promise<{ url: string }> {
+export async function downloadYouTubeAudio(url: string): Promise<{ url: string; thumbnailUrl: string | null }> {
   const res = await fetch(`${API_BASE_URL}/v1/youtube-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -902,7 +902,7 @@ export async function downloadYouTubeAudio(url: string): Promise<{ url: string }
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to download YouTube audio")
+    throw new Error(err?.error?.message ?? "Failed to extract audio from video")
   }
   return res.json()
 }

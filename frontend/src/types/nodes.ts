@@ -1169,12 +1169,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "youtube-video",
-    label: "YouTube Video",
+    label: "Video URL",
     category: "input",
     creditCost: 0,
     inputs: [],
     outputs: ["video"],
-    defaultData: { label: "YouTube Video", youtubeUrl: "", videoId: "", title: "", thumbnailUrl: "" },
+    defaultData: { label: "Video URL", youtubeUrl: "", videoId: "", title: "", thumbnailUrl: "" },
   },
   {
     type: "reference-audio",

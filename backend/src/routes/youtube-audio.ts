@@ -7,23 +7,31 @@ import { promises as fs } from "node:fs"
 import youtubedl from "youtube-dl-exec"
 import { uploadBufferToR2 } from "../lib/storage.js"
 
-const youtubeAudioBody = z.object({
+// Supported video platforms (yt-dlp supports 1000+ sites natively)
+const SUPPORTED_HOSTNAMES = [
+  "youtube.com", "youtu.be",
+  "tiktok.com",
+  "instagram.com",
+  "twitter.com", "x.com",
+]
+
+const videoAudioBody = z.object({
   url: z.string().url().refine(
     (url) => {
       try {
         const parsed = new URL(url)
-        return parsed.hostname.includes("youtube.com") || parsed.hostname.includes("youtu.be")
+        return SUPPORTED_HOSTNAMES.some((h) => parsed.hostname.includes(h))
       } catch {
         return false
       }
     },
-    { message: "Must be a valid YouTube URL" },
+    { message: "Must be a valid video URL (YouTube, TikTok, Instagram, or X)" },
   ),
 })
 
 export async function youtubeAudioRoutes(app: FastifyInstance) {
   app.post("/v1/youtube-audio", async (req, reply) => {
-    const parsed = youtubeAudioBody.safeParse(req.body)
+    const parsed = videoAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: {
@@ -51,6 +59,8 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
         noPlaylist: true,
         noCheckCertificates: true,
         preferFreeFormats: true,
+        writeThumbnail: true,
+        convertThumbnails: "jpg",
         // Use Android client to bypass JS runtime requirement
         extractorArgs: "youtube:player_client=android",
         addHeader: [
@@ -59,7 +69,7 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
         ],
       } as Record<string, unknown>)
 
-      // Find the actual output file - yt-dlp may use different naming
+      // Find the actual audio file - yt-dlp may use different naming
       let actualPath = expectedPath
       try {
         await fs.access(expectedPath)
@@ -91,25 +101,48 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
 
       console.log(`[youtube-audio] Downloaded to: ${actualPath} (${stat.size} bytes)`)
 
-      // Upload to R2 with correct MP3 content type
+      // Upload audio to R2 with correct MP3 content type
       const buffer = await fs.readFile(actualPath)
       const r2Key = `audios/yt-${outputId}.mp3`
       const r2Url = await uploadBufferToR2(buffer, r2Key, "audio/mpeg")
 
-      // Cleanup temp file
+      // Cleanup audio temp file
       await fs.unlink(actualPath).catch(() => {})
 
-      console.log(`[youtube-audio] Uploaded to R2: ${r2Url}`)
+      // Find and upload thumbnail (yt-dlp writes it alongside audio)
+      let thumbnailUrl: string | undefined
+      const thumbExtensions = [".jpg", ".webp", ".png"]
+      for (const ext of thumbExtensions) {
+        const thumbPath = join(tmpdir(), `${baseName}${ext}`)
+        try {
+          await fs.access(thumbPath)
+          const thumbStat = await fs.stat(thumbPath)
+          if (thumbStat.size > 0) {
+            const thumbBuffer = await fs.readFile(thumbPath)
+            const contentType = ext === ".jpg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png"
+            const thumbR2Key = `thumbnails/yt-${outputId}${ext}`
+            thumbnailUrl = await uploadBufferToR2(thumbBuffer, thumbR2Key, contentType)
+            console.log(`[youtube-audio] Uploaded thumbnail to R2: ${thumbnailUrl}`)
+          }
+          await fs.unlink(thumbPath).catch(() => {})
+          break
+        } catch {
+          continue
+        }
+      }
 
-      return { url: r2Url }
+      console.log(`[youtube-audio] Uploaded audio to R2: ${r2Url}`)
+
+      return { url: r2Url, thumbnailUrl: thumbnailUrl ?? null }
     } catch (err) {
       // Cleanup on error - try all possible paths
-      const extensions = [".mp3", ".m4a", ".webm", ".opus", ".ogg", ".wav"]
-      for (const ext of extensions) {
+      const audioExts = [".mp3", ".m4a", ".webm", ".opus", ".ogg", ".wav"]
+      const thumbExts = [".jpg", ".webp", ".png"]
+      for (const ext of [...audioExts, ...thumbExts]) {
         await fs.unlink(join(tmpdir(), `${baseName}${ext}`)).catch(() => {})
       }
 
-      const message = err instanceof Error ? err.message : "Failed to download YouTube audio"
+      const message = err instanceof Error ? err.message : "Failed to download audio from video"
       console.error(`[youtube-audio] Error: ${message}`)
 
       return reply.status(500).send({

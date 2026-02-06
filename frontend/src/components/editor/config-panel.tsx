@@ -326,7 +326,7 @@ export function ConfigPanel() {
       "upload-video": "Upload Video",
       "upload-audio": "Upload Audio",
       "rss-feed": "RSS Feed",
-      "youtube-video": "YouTube Video",
+      "youtube-video": "Video URL",
       "reference-audio": "Reference Audio",
       "tone": "Tone",
       "style-guide": "Style Guide",
@@ -696,16 +696,38 @@ function RSSFeedConfig({ data, onUpdate }: ConfigProps<RSSFeedData>) {
   )
 }
 
-function extractYouTubeVideoId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /^([a-zA-Z0-9_-]{11})$/,
-  ]
-  for (const pattern of patterns) {
-    const match = url.match(pattern)
-    if (match) return match[1]
-  }
+function extractVideoUrlId(url: string): string | null {
+  // YouTube
+  const ytMatch = url.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/
+  )
+  if (ytMatch) return ytMatch[1]
+  // TikTok
+  const tiktokMatch = url.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/)
+  if (tiktokMatch) return tiktokMatch[1]
+  // Instagram
+  const igMatch = url.match(/instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/)
+  if (igMatch) return igMatch[1]
+  // Twitter/X
+  const twMatch = url.match(/(?:twitter\.com|x\.com)\/[\w]+\/status\/(\d+)/)
+  if (twMatch) return twMatch[1]
   return null
+}
+
+function detectVideoPlatform(url: string): string {
+  if (/youtube\.com|youtu\.be/.test(url)) return "youtube"
+  if (/tiktok\.com/.test(url)) return "tiktok"
+  if (/instagram\.com/.test(url)) return "instagram"
+  if (/(?:twitter\.com|x\.com)/.test(url)) return "twitter"
+  return "unknown"
+}
+
+const VIDEO_PLATFORM_LABELS: Record<string, string> = {
+  youtube: "YouTube",
+  tiktok: "TikTok",
+  instagram: "Instagram",
+  twitter: "Twitter/X",
+  unknown: "Video",
 }
 
 function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
@@ -714,19 +736,28 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
   const handleUrlChange = useCallback(async (url: string) => {
     onUpdate({ youtubeUrl: url })
 
-    const videoId = extractYouTubeVideoId(url)
+    const videoId = extractVideoUrlId(url)
     if (!videoId) {
       onUpdate({ videoId: "", title: "", thumbnailUrl: "" })
       return
     }
 
+    const platform = detectVideoPlatform(url)
     onUpdate({ videoId })
     setLoading(true)
     try {
-      const meta = await fetchYouTubeOEmbed(url)
-      onUpdate({ title: meta.title, thumbnailUrl: meta.thumbnail_url })
+      if (platform === "youtube") {
+        const meta = await fetchYouTubeOEmbed(url)
+        onUpdate({ title: meta.title, thumbnailUrl: meta.thumbnail_url })
+      } else {
+        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[platform]} Video`, thumbnailUrl: "" })
+      }
     } catch {
-      onUpdate({ title: "", thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` })
+      if (platform === "youtube") {
+        onUpdate({ title: "", thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` })
+      } else {
+        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[platform]} Video`, thumbnailUrl: "" })
+      }
     } finally {
       setLoading(false)
     }
@@ -735,12 +766,12 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="youtube-url">YouTube URL</Label>
+        <Label htmlFor="video-url">Video URL</Label>
         <Input
-          id="youtube-url"
+          id="video-url"
           value={data.youtubeUrl}
           onChange={(e) => handleUrlChange(e.target.value)}
-          placeholder="https://www.youtube.com/watch?v=..."
+          placeholder="YouTube, TikTok, Instagram, or X URL"
         />
       </div>
       {loading && (
@@ -753,7 +784,7 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
         <div className="rounded-md overflow-hidden">
           <img
             src={data.thumbnailUrl}
-            alt={data.title || "YouTube video"}
+            alt={data.title || "Video"}
             className="w-full rounded-md"
           />
         </div>

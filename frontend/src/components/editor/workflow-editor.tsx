@@ -1627,14 +1627,27 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const { updateNodeData } = useWorkflowStore.getState()
       updateNodeData(node.id, { executionStatus: "running", generatedText: undefined, currentJobId: undefined, currentJobProgress: 0 })
 
-      // If input is a YouTube URL, extract audio first
-      const isYouTubeUrl = /(?:youtube\.com|youtu\.be)/.test(audioUrl)
+      // If input is a video platform URL, extract audio first
+      const isVideoUrl = /(?:youtube\.com|youtu\.be|tiktok\.com|instagram\.com|twitter\.com|x\.com)/.test(audioUrl)
 
       const getTranscribeAudioUrl = async (): Promise<string> => {
-        if (!isYouTubeUrl) return audioUrl as string
-        toast.info("Extracting audio from YouTube...")
-        const { url } = await downloadYouTubeAudio(audioUrl as string)
-        return url
+        if (!isVideoUrl) return audioUrl as string
+        toast.info("Extracting audio from video...")
+        const result = await downloadYouTubeAudio(audioUrl as string)
+
+        // Update source Video URL node with thumbnail if extracted
+        if (result.thumbnailUrl) {
+          const { edges, nodes: currentNodes } = useWorkflowStore.getState()
+          const incomingEdge = edges.find((e) => e.target === node.id)
+          if (incomingEdge) {
+            const sourceNode = currentNodes.find((n) => n.id === incomingEdge.source)
+            if (sourceNode?.type === "youtube-video" && !(sourceNode.data as Record<string, unknown>).thumbnailUrl) {
+              updateNodeData(sourceNode.id, { thumbnailUrl: result.thumbnailUrl })
+            }
+          }
+        }
+
+        return result.url
       }
 
       return new Promise((resolve, reject) => {

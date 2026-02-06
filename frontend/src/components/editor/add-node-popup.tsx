@@ -25,7 +25,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
-  { type: "youtube-video", label: "YouTube Video", icon: <Video className="h-4 w-4" />, category: "Input" },
+  { type: "youtube-video", label: "Video URL", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "reference-audio", label: "Reference Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   // Parameter
   { type: "tone", label: "Tone", icon: <Palette className="h-4 w-4" />, category: "Parameter" },
