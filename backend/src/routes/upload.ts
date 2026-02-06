@@ -189,6 +189,7 @@ export async function uploadRoutes(app: FastifyInstance) {
           size_bytes: buffer.length,
           r2_key: r2Key,
           r2_url: publicUrl,
+          upload_source: "manual_upload",
           metadata: {
             ...(metadata ?? {}),
             thumbnail_url: thumbnailUrl,

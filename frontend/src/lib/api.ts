@@ -1263,6 +1263,118 @@ export async function cancelAllJobs(userId: string): Promise<{ success: boolean;
   return res.json()
 }
 
+// ============================================================
+// Media Library
+// ============================================================
+
+export interface LibraryAsset {
+  id: string
+  type: "image" | "video" | "audio"
+  filename: string
+  mimeType: string
+  sizeBytes: number
+  url: string
+  thumbnailUrl: string | null
+  metadata: Record<string, unknown>
+  isLibraryItem: boolean
+  uploadSource: string
+  createdAt: string
+}
+
+export async function getLibraryAssets(params: {
+  userId: string
+  type?: string
+  search?: string
+  limit?: number
+  cursor?: string
+}): Promise<{ data: LibraryAsset[]; nextCursor: string | null }> {
+  const qs = new URLSearchParams({ userId: params.userId })
+  if (params.type && params.type !== "all") qs.set("type", params.type)
+  if (params.search) qs.set("search", params.search)
+  if (params.limit) qs.set("limit", String(params.limit))
+  if (params.cursor) qs.set("cursor", params.cursor)
+
+  const res = await fetch(`${API_BASE_URL}/v1/library?${qs.toString()}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch library assets")
+  }
+  return res.json()
+}
+
+export async function deleteLibraryAsset(
+  assetId: string,
+  userId: string,
+): Promise<{ success: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/library/${assetId}?userId=${encodeURIComponent(userId)}`,
+    { method: "DELETE" },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to delete asset")
+  }
+  return res.json()
+}
+
+export async function promoteToLibrary(
+  assetId: string,
+  userId: string,
+): Promise<{ success: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/library/${assetId}/promote`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to promote asset")
+  }
+  return res.json()
+}
+
+export async function demoteFromLibrary(
+  assetId: string,
+  userId: string,
+): Promise<{ success: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/library/${assetId}/demote`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to demote asset")
+  }
+  return res.json()
+}
+
+export async function saveGeneratedToLibrary(params: {
+  userId: string
+  url: string
+  type: "image" | "video" | "audio"
+  filename?: string
+  metadata?: Record<string, unknown>
+  isLibraryItem?: boolean
+}): Promise<{ data: { id: string; isLibraryItem: boolean } }> {
+  const res = await fetch(`${API_BASE_URL}/v1/library/save-generated`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to save to library")
+  }
+  return res.json()
+}
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),

@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import {
   Select,
   SelectContent,
@@ -505,19 +506,24 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
               Video
             </div>
-            {results.length > 0 && (
-              <button
-                type="button"
-                className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDeleteConfirm(activeIndex)
-                }}
-                title="Delete this result"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
+            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {results.length > 0 && (
+                <button
+                  type="button"
+                  className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteConfirm(activeIndex)
+                  }}
+                  title="Delete this result"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <SaveToLibraryButton url={activeUrl} type="video" />
+            </div>
           </div>
         )}
 

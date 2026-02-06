@@ -78,6 +78,10 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
   try {
     jobs = await getBatchJobStatus(allJobIds)
   } catch (err) {
+    // Ignore abort errors (component unmounted during fetch)
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return nodes
+    }
     console.error("[sync] Failed to fetch jobs:", err)
     return nodes
   }

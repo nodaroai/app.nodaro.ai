@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import type { ImageToImageData } from "@/types/nodes"
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -95,6 +96,9 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
                     <X className="w-3 h-3" />
                   </button>
                 )}
+              </div>
+              <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <SaveToLibraryButton url={activeUrl} type="image" />
               </div>
             </div>
           )}

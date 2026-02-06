@@ -245,9 +245,10 @@ export async function updateStorageUsage(
   if (!profile) return
 
   const currentUsed = profile.storage_used_bytes ?? 0
+  const newUsage = Math.max(0, currentUsed + additionalBytes)
 
   await supabase
     .from("profiles")
-    .update({ storage_used_bytes: currentUsed + additionalBytes })
+    .update({ storage_used_bytes: newUsage })
     .eq("id", userId)
 }

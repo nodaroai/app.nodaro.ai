@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { promises as fs } from "node:fs"
 import { config } from "./config.js"
 
@@ -74,4 +74,13 @@ export async function uploadFileToR2(
   )
 
   return `${config.R2_PUBLIC_URL}/${key}`
+}
+
+export async function deleteFromR2(key: string): Promise<void> {
+  await s3.send(
+    new DeleteObjectCommand({
+      Bucket: config.R2_BUCKET_NAME,
+      Key: key,
+    }),
+  )
 }

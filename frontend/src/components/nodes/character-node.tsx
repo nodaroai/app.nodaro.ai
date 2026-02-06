@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
+import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import type { CharacterNodeData } from "@/types/nodes"
 
 const STYLE_LABELS: Record<string, string> = {
@@ -97,6 +98,10 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
                   setLightboxSrc(activeUrl)
                 }}
               />
+            </div>
+            {/* Save to library button */}
+            <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <SaveToLibraryButton url={activeUrl} type="image" />
             </div>
             {/* Enlarge button */}
             <button

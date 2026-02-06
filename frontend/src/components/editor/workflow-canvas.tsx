@@ -21,8 +21,10 @@ import { AddNodePopup } from "./add-node-popup"
 import { SearchModal } from "./search-modal"
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { UnifiedAssetLibraryModal } from "./unified-asset-library"
+import { MediaLibraryModal } from "./media-library-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
+import type { LibraryAsset } from "@/lib/api"
 
 // Custom edge types with animated flowing dot
 const edgeTypes = {
@@ -81,6 +83,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
+  const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
   const isMobile = useIsMobile()
 
@@ -270,6 +273,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Ctrl+M - Media Library
+      if ((e.ctrlKey || e.metaKey) && e.key === "m") {
+        e.preventDefault()
+        setMediaLibraryOpen((prev) => !prev)
+        return
+      }
+
       // Shift+S - Add sticky note
       if (e.shiftKey && e.key.toLowerCase() === "s") {
         e.preventDefault()
@@ -352,6 +362,37 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [screenToFlowPosition, addNode],
   )
 
+  const handleAddAssetToCanvas = useCallback(
+    (asset: LibraryAsset) => {
+      const position = screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      })
+
+      const nodeTypeMap: Record<string, SceneNodeType> = {
+        image: "upload-image",
+        video: "upload-video",
+        audio: "upload-audio",
+      }
+      const nodeType = nodeTypeMap[asset.type]
+      if (!nodeType) return
+
+      addNode(nodeType, position, {
+        r2Url: asset.url,
+        url: asset.url,
+        thumbnailUrl: asset.thumbnailUrl ?? undefined,
+        filename: asset.filename,
+        fileSize: asset.sizeBytes,
+        mimeType: asset.mimeType,
+        metadata: asset.metadata,
+        assetId: asset.id,
+      })
+
+      setMediaLibraryOpen(false)
+    },
+    [screenToFlowPosition, addNode],
+  )
+
   const hasSelection = nodes.some((n) => n.selected)
 
   return (
@@ -361,6 +402,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onAddNode={() => handleOpenAddNodePopup()}
         onSearch={() => setSearchModalOpen(true)}
         onAssetLibrary={() => setAssetLibraryOpen(true)}
+        onMediaLibrary={() => setMediaLibraryOpen(true)}
         onAddStickyNote={() => handleAddStickyNote()}
         onTidyUp={handleTidyUp}
         onToggleSidebar={onToggleSidebar}
@@ -396,6 +438,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       <UnifiedAssetLibraryModal
         open={assetLibraryOpen}
         onClose={() => setAssetLibraryOpen(false)}
+      />
+
+      {/* Media Library Modal */}
+      <MediaLibraryModal
+        open={mediaLibraryOpen}
+        onClose={() => setMediaLibraryOpen(false)}
+        onAddToCanvas={handleAddAssetToCanvas}
       />
 
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>

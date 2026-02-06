@@ -24,6 +24,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAppSettings } from "@/hooks/use-app-settings"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
+import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus } from "@/lib/api"
 import {
   getProviders,
@@ -560,6 +561,20 @@ export function ConfigPanel() {
                 Run This Node
               </Button>
             )}
+
+            {(() => {
+              const d = selectedNode.data as Record<string, unknown>
+              const results = (d.generatedResults ?? []) as Array<{ url?: string }>
+              const activeIdx = (d.activeResultIndex as number) ?? 0
+              const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
+              if (!activeUrl) return null
+              const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync"])
+              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio"])
+              const mediaType: "image" | "video" | "audio" = videoTypes.has(selectedNode.type as string) ? "video" : audioTypes.has(selectedNode.type as string) ? "audio" : "image"
+              return (
+                <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />
+              )
+            })()}
 
             <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={handleDelete}>
               Delete Node

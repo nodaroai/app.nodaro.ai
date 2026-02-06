@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Search, Package, StickyNote, Wand2, PanelLeft } from "lucide-react"
+import { Plus, Search, Package, Film, StickyNote, Wand2, PanelLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   Tooltip,
@@ -14,6 +14,7 @@ interface CanvasToolbarProps {
   readonly onAddNode: () => void
   readonly onSearch: () => void
   readonly onAssetLibrary: () => void
+  readonly onMediaLibrary: () => void
   readonly onAddStickyNote: () => void
   readonly onTidyUp: () => void
   readonly onToggleSidebar: () => void
@@ -86,6 +87,7 @@ export function CanvasToolbar({
   onAddNode,
   onSearch,
   onAssetLibrary,
+  onMediaLibrary,
   onAddStickyNote,
   onTidyUp,
   onToggleSidebar,
@@ -130,6 +132,13 @@ export function CanvasToolbar({
         label="Asset Library"
         shortcut="Ctrl+L"
         onClick={onAssetLibrary}
+      />
+
+      <ToolbarButton
+        icon={<Film className="w-5 h-5" />}
+        label="Media Library"
+        shortcut="Ctrl+M"
+        onClick={onMediaLibrary}
       />
 
       <ToolbarDivider />
