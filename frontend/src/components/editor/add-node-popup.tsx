@@ -6,6 +6,7 @@ import {
   Hash, Clock, RatioIcon, Mic, ShieldCheck, Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin,
   ChevronRight, Search, Download, ArrowLeft, Wand2, Layers, Users, Waypoints, ArrowUpFromLine,
+  FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SceneNodeType } from "@/types/nodes"
@@ -24,6 +25,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
+  { type: "youtube-video", label: "YouTube Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "reference-audio", label: "Reference Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   // Parameter
   { type: "tone", label: "Tone", icon: <Palette className="h-4 w-4" />, category: "Parameter" },
@@ -48,6 +50,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI" },
   { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI" },
   { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI" },
+  { type: "transcribe", label: "Transcribe", icon: <FileText className="h-4 w-4" />, category: "AI" },
   // Processing
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing" },
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing" },

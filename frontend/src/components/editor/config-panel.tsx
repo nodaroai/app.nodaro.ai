@@ -41,6 +41,7 @@ import type {
   UploadVideoData,
   UploadAudioData,
   RSSFeedData,
+  YouTubeVideoData,
   ReferenceAudioData,
   ToneData,
   StyleGuideData,
@@ -61,6 +62,7 @@ import type {
   QACheckData,
   GenerateMusicData,
   TextToAudioData,
+  TranscribeData,
   CombineVideosData,
   MergeVideoAudioData,
   AddCaptionsData,
@@ -324,6 +326,7 @@ export function ConfigPanel() {
       "upload-video": "Upload Video",
       "upload-audio": "Upload Audio",
       "rss-feed": "RSS Feed",
+      "youtube-video": "YouTube Video",
       "reference-audio": "Reference Audio",
       "tone": "Tone",
       "style-guide": "Style Guide",
@@ -343,6 +346,7 @@ export function ConfigPanel() {
       "qa-check": "QA Check",
       "generate-music": "Generate Music",
       "text-to-audio": "Text to Audio",
+      "transcribe": "Transcribe",
       "combine-videos": "Combine Videos",
       "merge-video-audio": "Merge Video & Audio",
       "add-captions": "Add Captions",
@@ -409,6 +413,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "rss-feed" && (
             <RSSFeedConfig data={selectedNode.data as RSSFeedData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "youtube-video" && (
+            <YouTubeVideoConfig data={selectedNode.data as YouTubeVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "reference-audio" && (
             <ReferenceAudioConfig data={selectedNode.data as ReferenceAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -479,6 +486,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "motion-transfer" && (
             <MotionTransferConfig data={selectedNode.data as unknown as MotionTransferData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "transcribe" && (
+            <TranscribeConfig data={selectedNode.data as TranscribeData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* Processing Nodes */}
@@ -682,6 +692,77 @@ function RSSFeedConfig({ data, onUpdate }: ConfigProps<RSSFeedData>) {
           onChange={(e) => onUpdate({ itemIndex: parseInt(e.target.value, 10) || 0 })}
         />
       </div>
+    </div>
+  )
+}
+
+function extractYouTubeVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    /^([a-zA-Z0-9_-]{11})$/,
+  ]
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
+  const [loading, setLoading] = useState(false)
+
+  const handleUrlChange = useCallback(async (url: string) => {
+    onUpdate({ youtubeUrl: url })
+
+    const videoId = extractYouTubeVideoId(url)
+    if (!videoId) {
+      onUpdate({ videoId: "", title: "", thumbnailUrl: "" })
+      return
+    }
+
+    onUpdate({ videoId })
+    setLoading(true)
+    try {
+      const meta = await fetchYouTubeOEmbed(url)
+      onUpdate({ title: meta.title, thumbnailUrl: meta.thumbnail_url })
+    } catch {
+      onUpdate({ title: "", thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` })
+    } finally {
+      setLoading(false)
+    }
+  }, [onUpdate])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="youtube-url">YouTube URL</Label>
+        <Input
+          id="youtube-url"
+          value={data.youtubeUrl}
+          onChange={(e) => handleUrlChange(e.target.value)}
+          placeholder="https://www.youtube.com/watch?v=..."
+        />
+      </div>
+      {loading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          <span>Fetching metadata...</span>
+        </div>
+      )}
+      {!loading && data.thumbnailUrl && (
+        <div className="rounded-md overflow-hidden">
+          <img
+            src={data.thumbnailUrl}
+            alt={data.title || "YouTube video"}
+            className="w-full rounded-md"
+          />
+        </div>
+      )}
+      {data.title && (
+        <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+          <span className="font-medium">Title:</span> {data.title}
+        </div>
+      )}
     </div>
   )
 }
@@ -2205,6 +2286,56 @@ function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField 
           value={data.duration}
           onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 10 })}
         />
+      </MappableField>
+    </div>
+  )
+}
+
+function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TranscribeData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.provider || "whisper"}
+          onValueChange={(v) => onUpdate({ provider: v as TranscribeData["provider"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="whisper">Whisper (default)</SelectItem>
+            <SelectItem value="incredibly-fast-whisper">Incredibly Fast Whisper</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="language" label="Language" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.language || "auto"}
+          onValueChange={(v) => onUpdate({ language: v })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto Detect</SelectItem>
+            <SelectItem value="en">English</SelectItem>
+            <SelectItem value="he">Hebrew</SelectItem>
+            <SelectItem value="es">Spanish</SelectItem>
+            <SelectItem value="fr">French</SelectItem>
+            <SelectItem value="de">German</SelectItem>
+            <SelectItem value="it">Italian</SelectItem>
+            <SelectItem value="pt">Portuguese</SelectItem>
+            <SelectItem value="ja">Japanese</SelectItem>
+            <SelectItem value="zh">Chinese</SelectItem>
+            <SelectItem value="ko">Korean</SelectItem>
+            <SelectItem value="ar">Arabic</SelectItem>
+            <SelectItem value="ru">Russian</SelectItem>
+            <SelectItem value="hi">Hindi</SelectItem>
+            <SelectItem value="nl">Dutch</SelectItem>
+            <SelectItem value="tr">Turkish</SelectItem>
+            <SelectItem value="pl">Polish</SelectItem>
+            <SelectItem value="sv">Swedish</SelectItem>
+            <SelectItem value="th">Thai</SelectItem>
+            <SelectItem value="vi">Vietnamese</SelectItem>
+            <SelectItem value="uk">Ukrainian</SelectItem>
+          </SelectContent>
+        </Select>
       </MappableField>
     </div>
   )

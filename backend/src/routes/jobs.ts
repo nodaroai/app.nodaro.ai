@@ -42,17 +42,12 @@ interface PublicJob {
  * - Rename `display_cost` to `cost` (what the user pays)
  */
 function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
-  // Debug logging to trace sanitization
-  console.log(`[jobs] sanitizeJobForPublic - EDITION: "${config.EDITION}", isAdmin: ${isAdmin}`)
-
   // Self-hosted edition or admin users: return full data
   if (config.EDITION === "self-hosted" || isAdmin) {
-    console.log(`[jobs] Returning full job data (self-hosted or admin)`)
     return job
   }
 
   // Cloud edition regular users: hide sensitive provider details
-  console.log(`[jobs] Sanitizing for cloud user - hiding provider details, renaming display_cost to cost`)
   const { provider, provider_cost, display_cost, ...rest } = job
   return {
     ...rest,

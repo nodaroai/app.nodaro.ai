@@ -17,8 +17,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -91,7 +91,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -153,6 +153,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (type === "upload-video") {
       return (data.url as string | undefined)?.trim()
     }
+    if (type === "youtube-video") {
+      return (data.youtubeUrl as string | undefined)?.trim()
+    }
     if (type === "upload-audio") {
       return (data.r2Url as string | undefined)?.trim() || (data.url as string | undefined)?.trim()
     }
@@ -188,6 +191,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined)
+    }
+    if (type === "transcribe") {
+      const tResults = (data.generatedResults as Array<{ text: string }> | undefined) ?? []
+      const tActiveIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return tResults[tActiveIndex]?.text ?? (data.generatedText as string | undefined)
     }
     if (type === "generate-script") {
       const scriptResults = (data.generatedResults as GeneratedScriptResult[] | undefined) ?? []
@@ -269,7 +277,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Location node provides its main image as a reference image
         // Multiple Location nodes can be connected - all their images become references
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
-      } else if (src.type === "upload-video") {
+      } else if (src.type === "upload-video" || src.type === "youtube-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
         } else {
@@ -351,6 +359,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.audioUrl = output
         }
+      } else if (src.type === "transcribe") {
+        // Transcribe outputs text - can feed into add-captions, text-prompt downstream, etc.
+        inputs.prompt = output
       }
     }
 
@@ -1604,6 +1615,82 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
       const d = node.data as TextToAudioData
       return runProcessingNode(node.id, () => textToAudioApi(prompt, d.provider || undefined, d.duration || undefined, user?.id), "generatedAudioUrl", "Text to Audio")
+    }
+
+    if (node.type === "transcribe") {
+      let audioUrl = inputs.audioUrl ?? inputs.videoUrl
+      if (!audioUrl) {
+        toast.error(`Node "${(node.data as TranscribeData).label}": no audio/video input found`)
+        return Promise.reject(new Error("No audio input"))
+      }
+      const d = node.data as TranscribeData
+      const { updateNodeData } = useWorkflowStore.getState()
+      updateNodeData(node.id, { executionStatus: "running", generatedText: undefined, currentJobId: undefined, currentJobProgress: 0 })
+
+      // If input is a YouTube URL, extract audio first
+      const isYouTubeUrl = /(?:youtube\.com|youtu\.be)/.test(audioUrl)
+
+      const getTranscribeAudioUrl = async (): Promise<string> => {
+        if (!isYouTubeUrl) return audioUrl as string
+        toast.info("Extracting audio from YouTube...")
+        const { url } = await downloadYouTubeAudio(audioUrl as string)
+        return url
+      }
+
+      return new Promise((resolve, reject) => {
+        getTranscribeAudioUrl().then((resolvedAudioUrl) => {
+          audioUrl = resolvedAudioUrl
+          return transcribeApi(audioUrl, d.provider || undefined, d.language || undefined, user?.id)
+        }).then(({ jobId }) => {
+          toast.info("Transcription started", { description: `Job ID: ${jobId}` })
+          updateNodeData(node.id, { currentJobId: jobId })
+
+          const poll = trackInterval(setInterval(async () => {
+            try {
+              const job = await getJobStatus(jobId)
+              if (job.status === "processing" && job.progress != null) {
+                updateNodeData(node.id, { currentJobProgress: job.progress })
+              }
+              if (job.status === "completed") {
+                untrackInterval(poll)
+                const text = job.output_data?.text as string | undefined
+                const language = job.output_data?.language as string | undefined ?? "unknown"
+                if (!text) {
+                  const errMsg = "No transcript text returned from job"
+                  updateNodeData(node.id, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
+                  toast.error("Transcription failed", { description: errMsg })
+                  reject(new Error(errMsg))
+                  return
+                }
+                const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data) as Record<string, unknown>)?.generatedResults as Array<{ text: string; language: string; jobId: string; timestamp: string }> | undefined ?? []
+                const newResult = { text, language, jobId, timestamp: new Date().toISOString() }
+                updateNodeData(node.id, {
+                  executionStatus: "completed",
+                  generatedText: text,
+                  generatedResults: [newResult, ...existingResults],
+                  activeResultIndex: 0,
+                  currentJobId: undefined,
+                  currentJobProgress: undefined,
+                })
+                toast.success("Transcription complete")
+                resolve()
+              } else if (job.status === "failed") {
+                untrackInterval(poll)
+                const errMsg = job.error_message ?? "Unknown error"
+                updateNodeData(node.id, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
+                toast.error("Transcription failed", { description: errMsg })
+                reject(new Error(errMsg))
+              }
+            } catch (err) {
+              console.error("[transcribe] Poll error:", err)
+            }
+          }, 2000))
+        }).catch((err: Error) => {
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message, currentJobId: undefined, currentJobProgress: undefined })
+          toast.error("Transcription failed", { description: err.message })
+          reject(err)
+        })
+      })
     }
 
     if (node.type === "lip-sync") {

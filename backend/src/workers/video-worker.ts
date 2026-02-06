@@ -22,6 +22,7 @@ import { mixAudio } from "../providers/video/mix-audio.js"
 import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
+import { transcribe, type TranscribeProvider } from "../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
 import { editImageKie, generateImageKie, imageToVideoKie, lipSyncKie, textToVideoKie, motionTransferKie, videoUpscaleKie, KieError, type ProgressCallback } from "../services/kie-ai.js"
 import { getAppSettings as getKieAppSettings } from "../lib/app-settings.js"
@@ -706,6 +707,22 @@ export function createVideoWorker() {
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "transcribe") {
+          const { audioUrl, provider, language } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string }
+          console.log(`[worker] transcribe ${jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
+          const result = await transcribe(audioUrl, provider, language)
+          await job.updateProgress(100)
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { text: result.text, language: result.language, segments: result.segments },
+            completed_at: new Date().toISOString(),
+          }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: transcribed ${result.text.length} chars (language: ${result.language})`)
 
         } else if (job.name === "generate-character") {
           const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: ImageProvider }

@@ -91,6 +91,15 @@ export type RSSFeedData = {
   extractFields: string[]
 }
 
+export type YouTubeVideoData = {
+  [key: string]: unknown
+  label: string
+  youtubeUrl: string
+  videoId: string
+  title: string
+  thumbnailUrl: string
+}
+
 export type ReferenceAudioData = {
   [key: string]: unknown
   label: string
@@ -620,6 +629,19 @@ export type TextToAudioData = {
   activeResultIndex?: number
 }
 
+export type TranscribeData = {
+  [key: string]: unknown
+  label: string
+  provider: "whisper" | "incredibly-fast-whisper"
+  language: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedText?: string
+  generatedResults?: Array<{ text: string; language: string; jobId: string; timestamp: string }>
+  activeResultIndex?: number
+}
+
 // --- Processing Node Data ---
 
 export type CombineVideosData = {
@@ -997,6 +1019,7 @@ export type SceneNodeData =
   | UploadVideoData
   | UploadAudioData
   | RSSFeedData
+  | YouTubeVideoData
   | ReferenceAudioData
   | ToneData
   | StyleGuideData
@@ -1017,6 +1040,7 @@ export type SceneNodeData =
   | QACheckData
   | GenerateMusicData
   | TextToAudioData
+  | TranscribeData
   | CombineVideosData
   | MergeVideoAudioData
   | AddCaptionsData
@@ -1042,6 +1066,7 @@ export type SceneNodeType =
   | "upload-video"
   | "upload-audio"
   | "rss-feed"
+  | "youtube-video"
   | "reference-audio"
   | "tone"
   | "style-guide"
@@ -1062,6 +1087,7 @@ export type SceneNodeType =
   | "qa-check"
   | "generate-music"
   | "text-to-audio"
+  | "transcribe"
   | "combine-videos"
   | "merge-video-audio"
   | "add-captions"
@@ -1140,6 +1166,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: [],
     outputs: ["content"],
     defaultData: { label: "RSS Feed", feedUrl: "", itemIndex: 0, extractFields: ["title", "description"] },
+  },
+  {
+    type: "youtube-video",
+    label: "YouTube Video",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["video"],
+    defaultData: { label: "YouTube Video", youtubeUrl: "", videoId: "", title: "", thumbnailUrl: "" },
   },
   {
     type: "reference-audio",
@@ -1323,6 +1358,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Text to Audio", prompt: "", provider: "tangoflux", duration: 10, fieldMappings: {} },
+  },
+  {
+    type: "transcribe",
+    label: "Transcribe",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["in"],
+    outputs: ["text"],
+    defaultData: { label: "Transcribe", provider: "whisper", language: "auto", fieldMappings: {} },
   },
   // Processing
   {

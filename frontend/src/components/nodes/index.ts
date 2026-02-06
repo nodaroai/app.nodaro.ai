@@ -3,6 +3,7 @@ import { UploadImageNode } from "./upload-image-node"
 import { UploadVideoNode } from "./upload-video-node"
 import { UploadAudioNode } from "./upload-audio-node"
 import { RSSFeedNode } from "./rss-feed-node"
+import { YouTubeVideoNode } from "./youtube-video-node"
 import { ToneNode } from "./tone-node"
 import { StyleGuideNode } from "./style-guide-node"
 import { ProviderNode } from "./provider-node"
@@ -23,6 +24,7 @@ import { TextToSpeechNode } from "./text-to-speech-node"
 import { QACheckNode } from "./qa-check-node"
 import { GenerateMusicNode } from "./generate-music-node"
 import { TextToAudioNode } from "./text-to-audio-node"
+import { TranscribeNode } from "./transcribe-node"
 import { CombineVideosNode } from "./combine-videos-node"
 import { MergeVideoAudioNode } from "./merge-video-audio-node"
 import { AddCaptionsNode } from "./add-captions-node"
@@ -50,6 +52,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "upload-video": UploadVideoNode,
   "upload-audio": UploadAudioNode,
   "rss-feed": RSSFeedNode,
+  "youtube-video": YouTubeVideoNode,
   // Parameter
   "tone": ToneNode,
   "style-guide": StyleGuideNode,
@@ -74,6 +77,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "text-to-audio": TextToAudioNode,
   "lip-sync": LipSyncNode,
   "motion-transfer": MotionTransferNode,
+  "transcribe": TranscribeNode,
   // Processing
   "combine-videos": CombineVideosNode,
   "merge-video-audio": MergeVideoAudioNode,

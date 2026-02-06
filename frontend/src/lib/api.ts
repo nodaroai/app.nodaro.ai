@@ -924,6 +924,23 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   return res.json()
 }
 
+export async function transcribeApi(audioUrl: string, provider?: string, language?: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl }
+  if (provider) body.provider = provider
+  if (language) body.language = language
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/transcribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start transcription")
+  }
+  return res.json()
+}
+
 export async function lipSyncApi(
   imageUrl: string,
   audioUrl: string,
@@ -1081,11 +1098,17 @@ export interface BatchJobStatus {
 export async function getBatchJobStatus(jobIds: string[]): Promise<BatchJobStatus[]> {
   if (jobIds.length === 0) return []
 
-  const res = await fetch(`${API_BASE_URL}/v1/jobs/batch-status`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jobIds }),
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}/v1/jobs/batch-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobIds }),
+    })
+  } catch {
+    // Network error (backend not running) - return empty silently
+    return []
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throw new Error(err?.error?.message ?? "Failed to fetch batch job status")

@@ -208,6 +208,21 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.thumbnailUrl = undefined
           break
 
+        case "youtube-video":
+          data.youtubeUrl = ""
+          data.videoId = ""
+          data.title = ""
+          data.thumbnailUrl = ""
+          break
+
+        case "transcribe":
+          data.generatedResults = []
+          data.activeResultIndex = 0
+          data.generatedText = undefined
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          break
+
         default:
           // For any other node type, clear common generated fields
           if ('generatedResults' in data) {
