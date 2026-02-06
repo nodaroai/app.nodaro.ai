@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { isFeatureEnabled } from "@/lib/edition"
+import { APP_VERSION } from "@/lib/version"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
 
 const STORAGE_KEY = "scenenode-sidebar-collapsed"
@@ -202,6 +203,13 @@ export function AppSidebar({
 
         {/* Bottom section */}
         <div className="px-2 py-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+          {/* Version */}
+          <div className="text-center">
+            <span className="text-xs text-muted-foreground">
+              {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
+            </span>
+          </div>
+
           {/* Collapse toggle */}
           <div className="hidden md:block">
             {isCollapsed ? (
