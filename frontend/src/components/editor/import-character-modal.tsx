@@ -62,13 +62,13 @@ export function ImportCharacterModal({
         }
 
         const results: WorkflowOption[] = (data ?? [])
-          .filter((w) => w.id !== currentWorkflowId)
-          .map((w) => {
+          .filter((w: { id: string }) => w.id !== currentWorkflowId)
+          .map((w: { id: string; name: string; settings: unknown }) => {
             const settings = (w.settings ?? {}) as Record<string, unknown>
             const chars = (settings.characterDefinitions ?? []) as CharacterDefinition[]
             return { id: w.id, name: w.name, characters: chars }
           })
-          .filter((w) => w.characters.length > 0)
+          .filter((w: WorkflowOption) => w.characters.length > 0)
 
         setWorkflows(results)
       } catch (err) {

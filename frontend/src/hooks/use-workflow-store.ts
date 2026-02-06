@@ -23,6 +23,7 @@ interface WorkflowState {
   readonly saveStatus: SaveStatus
   readonly saveError: string | null
   readonly videoAutoplay: boolean
+  readonly newNodeIds: Set<string>
   readonly characterDefinitions: CharacterDefinition[]
 
   readonly setWorkflowId: (id: string | null) => void
@@ -42,6 +43,7 @@ interface WorkflowState {
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
   readonly setVideoAutoplay: (autoplay: boolean) => void
+  readonly clearNewNode: (id: string) => void
   readonly runSingleNode: ((nodeId: string) => void) | null
   readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
   readonly generateSceneImage: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null
@@ -83,6 +85,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   saveStatus: "idle" as SaveStatus,
   saveError: null,
   videoAutoplay: true,
+  newNodeIds: new Set<string>(),
   characterDefinitions: [],
 
   setWorkflowId: (id) => set({ workflowId: id }),
@@ -160,6 +163,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
     set((state) => ({
       nodes: [...state.nodes, newNode],
+      newNodeIds: new Set([...state.newNodeIds, id]),
       isDirty: true,
     }))
 
@@ -200,6 +204,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
       return {
         nodes: [...state.nodes, newNode],
+        newNodeIds: new Set([...state.newNodeIds, newNode.id]),
         selectedNodeId: newNode.id,
         isDirty: true,
       }
@@ -286,6 +291,13 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   setVideoAutoplay: (autoplay) => set({ videoAutoplay: autoplay }),
 
+  clearNewNode: (id) =>
+    set((state) => {
+      const next = new Set(state.newNodeIds)
+      next.delete(id)
+      return { newNodeIds: next }
+    }),
+
   runSingleNode: null,
   setRunSingleNode: (fn) => set({ runSingleNode: fn }),
   generateSceneImage: null,
@@ -322,6 +334,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     set((state) => ({
       nodes: [...state.nodes, ...newNodes],
       edges: [...state.edges, ...newEdges],
+      newNodeIds: new Set([...state.newNodeIds, ...newNodes.map((n) => n.id)]),
       isDirty: true,
     }))
   },

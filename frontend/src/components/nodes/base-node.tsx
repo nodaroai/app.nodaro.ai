@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode, MouseEvent } from "react"
+import { useEffect, type ReactNode, type MouseEvent } from "react"
 import { Handle, Position, NodeResizer } from "@xyflow/react"
 import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -89,6 +89,15 @@ export function BaseNode({
 }: BaseNodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
+  const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
+  const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
+  const isNew = newNodeIds.has(id)
+
+  useEffect(() => {
+    if (!isNew) return
+    const timer = setTimeout(() => clearNewNode(id), 4000)
+    return () => clearTimeout(timer)
+  }, [isNew, id, clearNewNode])
 
   function handleDuplicate(e: MouseEvent) {
     e.stopPropagation()
@@ -118,6 +127,7 @@ export function BaseNode({
           selected && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
           selected && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
           isRunning && "node-running",
+          isNew && !isRunning && "node-new-pulse",
         )}
         onClick={() => selectNode(id)}
       >

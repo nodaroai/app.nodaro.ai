@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, type BatchJobStatus } from "@/lib/api"
-import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 
 interface SaveResult {
   readonly success: boolean
@@ -66,7 +66,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
       if (status === "running" || status === "pending") {
         return {
           ...node,
-          data: { ...data, executionStatus: "idle" }
+          data: { ...data, executionStatus: "idle" } as SceneNodeData
         }
       }
       return node
@@ -178,7 +178,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
     return node
   })
 
-  return updatedNodes
+  return updatedNodes as WorkflowNode[]
 }
 
 export function useWorkflowPersistence(projectId?: string) {

@@ -70,7 +70,7 @@ export function useAdmin() {
       }
 
       const totalCreditsUsed = (usageRes.data ?? []).reduce(
-        (sum, log) => sum + (log.credits_used ?? 0),
+        (sum: number, log: { credits_used?: number }) => sum + (log.credits_used ?? 0),
         0,
       )
 
@@ -138,18 +138,18 @@ export function useAdmin() {
 
       if (!jobs || jobs.length === 0) return []
 
-      const userIds = [...new Set(jobs.map((j) => j.user_id))]
-      const workflowIds = [...new Set(jobs.map((j) => j.workflow_id))]
+      const userIds = [...new Set(jobs.map((j: Record<string, string>) => j.user_id))]
+      const workflowIds = [...new Set(jobs.map((j: Record<string, string>) => j.workflow_id))]
 
       const [usersRes, workflowsRes] = await Promise.all([
         supabase.from("profiles").select("id, email").in("id", userIds),
         supabase.from("workflows").select("id, name").in("id", workflowIds),
       ])
 
-      const userMap = new Map((usersRes.data ?? []).map((u) => [u.id, u.email]))
-      const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, w.name]))
+      const userMap = new Map((usersRes.data ?? []).map((u: Record<string, string>) => [u.id, u.email]))
+      const wfMap = new Map((workflowsRes.data ?? []).map((w: Record<string, string>) => [w.id, w.name]))
 
-      return jobs.map((j) => ({
+      return jobs.map((j: Record<string, unknown>) => ({
         id: j.id,
         status: j.status,
         credits_used: j.credits_used,
@@ -184,15 +184,15 @@ export function useAdmin() {
 
       if (!logs || logs.length === 0) return []
 
-      const userIds = [...new Set(logs.map((l) => l.user_id))]
+      const userIds = [...new Set(logs.map((l: Record<string, string>) => l.user_id))]
       const { data: users } = await supabase
         .from("profiles")
         .select("id, email")
         .in("id", userIds)
 
-      const userMap = new Map((users ?? []).map((u) => [u.id, u.email]))
+      const userMap = new Map((users ?? []).map((u: Record<string, string>) => [u.id, u.email]))
 
-      return logs.map((l) => ({
+      return logs.map((l: Record<string, unknown>) => ({
         id: l.id,
         action: l.action,
         provider: l.provider,

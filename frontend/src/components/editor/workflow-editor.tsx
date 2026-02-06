@@ -849,7 +849,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const latestData = latestNode?.data as CharacterNodeData | undefined
       if (latestData?.characterDbId) {
         const supabaseSync = createClient()
-        supabaseSync.auth.getUser().then(({ data: { user: syncUser } }) => {
+        supabaseSync.auth.getUser().then(({ data: { user: syncUser } }: { data: { user: { id: string } | null } }) => {
           saveCharacter({
             id: latestData.characterDbId,
             userId: syncUser?.id,
@@ -932,7 +932,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const latestData = latestNode?.data as ObjectNodeData | undefined
       if (latestData?.objectDbId) {
         const supabaseObjSync = createClient()
-        supabaseObjSync.auth.getUser().then(({ data: { user: objSyncUser } }) => {
+        supabaseObjSync.auth.getUser().then(({ data: { user: objSyncUser } }: { data: { user: { id: string } | null } }) => {
           saveObject({
             id: latestData.objectDbId,
             userId: objSyncUser?.id,
@@ -1015,7 +1015,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const latestData = latestNode?.data as LocationNodeData | undefined
       if (latestData?.locationDbId) {
         const supabaseLocSync = createClient()
-        supabaseLocSync.auth.getUser().then(({ data: { user: locSyncUser } }) => {
+        supabaseLocSync.auth.getUser().then(({ data: { user: locSyncUser } }: { data: { user: { id: string } | null } }) => {
           saveLocation({
             id: latestData.locationDbId,
             userId: locSyncUser?.id,
