@@ -25,6 +25,12 @@ export async function combineVideosRoutes(app: FastifyInstance) {
 
     const { videoUrls, transition, transitionDuration, userId } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     // Model identifier for credit check (FFmpeg processing = 0 credits)
     const modelIdentifier = "ffmpeg"
 
@@ -32,7 +38,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: { videoUrls, transition, transitionDuration, type: "combine-videos" },
       })

@@ -25,11 +25,17 @@ export async function imageToImageRoutes(app: FastifyInstance) {
 
     const { imageUrl, prompt, provider, userId, referenceImageUrls } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: { imageUrl, prompt, provider, referenceImageUrls, type: "image-to-image" },
       })

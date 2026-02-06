@@ -24,6 +24,12 @@ export async function editImageRoutes(app: FastifyInstance) {
 
     const { imageUrl, prompt, provider, userId } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     // Validate that nano-banana-edit has a prompt
     if (provider === "nano-banana-edit" && !prompt) {
       return reply.status(400).send({
@@ -38,7 +44,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: { imageUrl, prompt, provider, type: "edit-image" },
       })

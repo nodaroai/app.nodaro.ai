@@ -39,6 +39,12 @@ export async function generateImageRoutes(app: FastifyInstance) {
 
     const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, userId } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     // Determine model identifier for credit check (default to nano-banana)
     const modelIdentifier = provider ?? "nano-banana"
 
@@ -50,7 +56,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: { prompt, referenceImageUrls, provider, type: "generate-image" },
       })

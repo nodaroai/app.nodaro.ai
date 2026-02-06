@@ -17,7 +17,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
@@ -38,6 +38,33 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const pendingNavRef = useRef<string | null>(null)
   const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(new Set())
+  const [activeJobCount, setActiveJobCount] = useState(0)
+
+  // Poll active job count for the Executions badge
+  useEffect(() => {
+    if (!user?.id) return
+
+    let cancelled = false
+
+    async function fetchActiveCount() {
+      try {
+        const result = await getStats("user", user!.id)
+        if (!cancelled) {
+          setActiveJobCount(result.data.pending + result.data.processing)
+        }
+      } catch {
+        // Silently ignore - badge is non-critical
+      }
+    }
+
+    fetchActiveCount()
+    const interval = setInterval(fetchActiveCount, 10_000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (workflowId) {
@@ -2761,9 +2788,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             >
               <History className="w-4 h-4" />
               Executions
-              {isRunning && (
+              {activeJobCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
-                  1
+                  {activeJobCount}
                 </span>
               )}
             </button>

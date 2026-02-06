@@ -25,6 +25,12 @@ export async function textToAudioRoutes(app: FastifyInstance) {
 
     const { prompt, provider, duration, userId } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     // Determine model identifier for credit check (default to tangoflux)
     const modelIdentifier = provider ?? "tangoflux"
 
@@ -32,7 +38,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: { prompt, provider, duration, type: "text-to-audio" },
       })

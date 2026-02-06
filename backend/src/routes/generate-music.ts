@@ -31,6 +31,12 @@ export async function generateMusicRoutes(app: FastifyInstance) {
 
     const { prompt, provider, duration, genre, mood, instrumental, lyrics, referenceAudioUrl, modelVersion, userId } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     // Determine model identifier for credit check (default to musicgen)
     const modelIdentifier = provider ?? "musicgen"
 
@@ -45,7 +51,7 @@ export async function generateMusicRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: { prompt: enrichedPrompt, provider, duration, lyrics, referenceAudioUrl, modelVersion, type: "generate-music" },
       })

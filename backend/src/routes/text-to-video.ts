@@ -31,6 +31,12 @@ export async function textToVideoRoutes(app: FastifyInstance) {
 
     const { prompt, provider, userId } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     // Determine model identifier for credit check (default to minimax)
     const modelIdentifier = provider ?? "minimax"
 
@@ -38,7 +44,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: { prompt, provider, type: "text-to-video" },
       })

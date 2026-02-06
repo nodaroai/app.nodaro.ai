@@ -37,6 +37,12 @@ export async function generateVideoRoutes(app: FastifyInstance) {
 
     const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, userId } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     // Determine model identifier for credit check (default to minimax)
     const modelIdentifier = provider ?? "minimax"
 
@@ -44,7 +50,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, type: "image-to-video" },
       })

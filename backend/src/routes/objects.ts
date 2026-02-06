@@ -147,8 +147,14 @@ export async function objectRoutes(app: FastifyInstance) {
 
     const { id, userId, nodeId, workflowId, projectId, name, description, category, style, sourceImageUrl, angles, materials, variations } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     const row = {
-      user_id: userId ?? null,
+      user_id: userId,
       node_id: nodeId,
       workflow_id: workflowId ?? null,
       project_id: projectId ?? null,

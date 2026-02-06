@@ -13,12 +13,13 @@ export interface CreditReservation {
 }
 
 /**
- * Extend Fastify request with credit reservation data.
- * After creditGuard runs, request.creditReservation is available.
+ * Extend Fastify request with credit reservation data and userId.
+ * After creditGuard runs, request.creditReservation and request.userId are available.
  */
 declare module "fastify" {
   interface FastifyRequest {
     creditReservation?: CreditReservation
+    userId?: string
   }
 }
 
@@ -51,6 +52,9 @@ export function creditGuard(
 
     const body = req.body as Record<string, unknown> | undefined
     const userId = (body?.userId as string) ?? undefined
+
+    // Always store userId on request so route handlers can access it
+    req.userId = userId
 
     // No userId means anonymous request - skip credit check
     if (!userId) return

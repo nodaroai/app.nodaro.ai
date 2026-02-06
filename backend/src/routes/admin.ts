@@ -110,12 +110,18 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { alertType, threshold, userId, isEnabled } = parsed.data
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     const { data, error } = await supabase
       .from("admin_alerts")
       .insert({
         alert_type: alertType,
         threshold,
-        user_id: userId ?? null,
+        user_id: userId,
         is_enabled: isEnabled,
       })
       .select()

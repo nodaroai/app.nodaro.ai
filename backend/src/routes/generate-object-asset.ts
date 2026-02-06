@@ -104,6 +104,12 @@ export async function generateObjectAssetRoutes(app: FastifyInstance) {
       }
     }
 
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
     // Model identifier for credit check (hardcoded to nano-banana)
     const modelIdentifier = "nano-banana"
 
@@ -113,7 +119,7 @@ export async function generateObjectAssetRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: userId ?? null,
+        user_id: userId,
         status: "pending",
         input_data: {
           prompt,
