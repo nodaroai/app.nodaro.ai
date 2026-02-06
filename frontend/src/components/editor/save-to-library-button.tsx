@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 import { BookmarkPlus, Loader2, Check, X } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { saveGeneratedToLibrary } from "@/lib/api"
-import { EDITION } from "@/lib/edition"
+import { isCloud } from "@/lib/edition"
 import { cn } from "@/lib/utils"
 
 // ============================================================
@@ -173,7 +173,7 @@ export function SaveToLibraryButton({
       if (saveState === "saving" || saveState === "saved") return
 
       // Cloud edition + admin -> show dialog
-      if (EDITION === "cloud" && isAdmin) {
+      if (isCloud() && isAdmin) {
         setShowAdminDialog(true)
         return
       }

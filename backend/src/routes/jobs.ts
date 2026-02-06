@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
-import { config } from "../lib/config.js"
+import { isCloud } from "../lib/config.js"
 
 // Job type from database
 interface JobRecord {
@@ -43,7 +43,7 @@ interface PublicJob {
  */
 function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
   // Self-hosted edition or admin users: return full data
-  if (config.EDITION === "self-hosted" || isAdmin) {
+  if (!isCloud() || isAdmin) {
     return job
   }
 

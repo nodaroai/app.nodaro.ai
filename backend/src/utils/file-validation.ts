@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js"
-import { config } from "../lib/config.js"
+import { hasCredits } from "../lib/config.js"
 
 // ============================================================
 // MIME Type Validation
@@ -185,7 +185,7 @@ export async function checkStorageQuota(
   fileSizeBytes: number,
 ): Promise<StorageQuotaResult> {
   // Self-hosted: no quota enforcement
-  if (config.EDITION === "self-hosted") {
+  if (!hasCredits()) {
     return { allowed: true }
   }
 
@@ -234,7 +234,7 @@ export async function updateStorageUsage(
   additionalBytes: number,
 ): Promise<void> {
   // Self-hosted: no tracking
-  if (config.EDITION === "self-hosted") return
+  if (!hasCredits()) return
 
   const { data: profile } = await supabase
     .from("profiles")

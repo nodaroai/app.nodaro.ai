@@ -1,4 +1,5 @@
 .claude/
+CLAUDE.md
 node_modules/
 .next/
 .env

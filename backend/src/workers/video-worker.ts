@@ -1,6 +1,6 @@
 import { Worker } from "bullmq"
 import IORedis from "ioredis"
-import { config } from "../lib/config.js"
+import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
 import { getAppSettings, calculateDisplayCost } from "../lib/app-settings.js"
@@ -54,7 +54,7 @@ async function shouldSaveJobResult(jobId: string): Promise<boolean> {
  * Wrapped in try-catch to avoid failing the job if credit commit fails.
  */
 async function commitJobCredits(usageLogId: string | null | undefined, jobId: string): Promise<void> {
-  if (config.EDITION === "self-hosted" || !usageLogId) return
+  if (!hasCredits() || !usageLogId) return
 
   try {
     await CreditsService.commitCredits(usageLogId)
@@ -70,7 +70,7 @@ async function commitJobCredits(usageLogId: string | null | undefined, jobId: st
  * Only refunds for system errors, NOT for provider errors (where we got charged).
  */
 async function refundJobCredits(usageLogId: string | null | undefined, jobId: string, errorMessage: string): Promise<void> {
-  if (config.EDITION === "self-hosted" || !usageLogId) return
+  if (!hasCredits() || !usageLogId) return
 
   try {
     // Don't refund if provider charged us (provider errors)

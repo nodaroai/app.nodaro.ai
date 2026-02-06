@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { config } from "../lib/config.js"
+import { isCloud } from "../lib/config.js"
 import { deleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 
@@ -327,7 +327,7 @@ export async function libraryRoutes(app: FastifyInstance) {
 
       // Only admins on cloud edition can save to shared library
       if (isLibraryItem) {
-        if (config.EDITION !== "cloud") {
+        if (!isCloud()) {
           return reply.status(403).send({
             error: {
               code: "forbidden",

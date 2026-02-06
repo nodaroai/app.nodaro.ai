@@ -39,9 +39,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Admin routes: only available in cloud edition
-  const edition = process.env.NEXT_PUBLIC_EDITION || 'self-hosted'
-  if (pathname.startsWith("/admin") && edition !== 'cloud') {
+  // Admin routes: only available in business + cloud editions
+  const edition = process.env.NEXT_PUBLIC_EDITION || 'community'
+  if (pathname.startsWith("/admin") && edition === 'community') {
     const url = request.nextUrl.clone()
     url.pathname = "/projects"
     return NextResponse.redirect(url)

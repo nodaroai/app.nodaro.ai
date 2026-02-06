@@ -15,10 +15,35 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-  EDITION: z.enum(["self-hosted", "cloud"]).default("self-hosted"),
+  EDITION: z.enum(["community", "business", "cloud"]).default("community"),
 })
 
-export type Edition = "self-hosted" | "cloud"
+export type Edition = "community" | "business" | "cloud"
+
+/** community = open source, no credits, no admin */
+export function isCommunity(): boolean {
+  return config.EDITION === "community"
+}
+
+/** business = self-hosted with admin, user mgmt, no credits */
+export function isBusiness(): boolean {
+  return config.EDITION === "business"
+}
+
+/** cloud = full SaaS with credits, billing, markup */
+export function isCloud(): boolean {
+  return config.EDITION === "cloud"
+}
+
+/** business + cloud have admin panel and user management */
+export function hasAdmin(): boolean {
+  return config.EDITION === "business" || config.EDITION === "cloud"
+}
+
+/** only cloud edition has credit system */
+export function hasCredits(): boolean {
+  return config.EDITION === "cloud"
+}
 
 function loadConfig() {
   const result = envSchema.safeParse(process.env)

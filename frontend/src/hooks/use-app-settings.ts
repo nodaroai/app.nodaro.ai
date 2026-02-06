@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { EDITION } from "@/lib/edition"
+import { isCommunity } from "@/lib/edition"
 
 export interface AppSettings {
   readonly ai_provider: "replicate" | "kie"
@@ -18,8 +18,8 @@ let cachedSettings: AppSettings | null = null
 let fetchPromise: Promise<AppSettings> | null = null
 
 async function fetchAppSettings(): Promise<AppSettings> {
-  // Self-hosted edition always uses replicate
-  if (EDITION === "self-hosted") {
+  // Community edition always uses replicate
+  if (isCommunity()) {
     return DEFAULT_SETTINGS
   }
 

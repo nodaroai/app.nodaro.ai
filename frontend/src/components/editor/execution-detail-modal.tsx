@@ -5,7 +5,7 @@ import { X, Download, Copy, Check, ChevronDown, ChevronRight, Loader2, Clock, Za
 import { Button } from "@/components/ui/button"
 import type { Job } from "@/lib/api"
 import { deleteJob } from "@/lib/api"
-import { EDITION } from "@/lib/edition"
+import { isCloud } from "@/lib/edition"
 
 interface ExecutionDetailModalProps {
   readonly job: Job | null
@@ -95,7 +95,7 @@ function extractJobType(inputData: Job["input_data"]): string {
 function extractProvider(inputData: Job["input_data"], job: Job): string | null {
   // In cloud edition, don't show provider info to regular users
   // The backend doesn't send the provider field, so we check for its existence
-  if (EDITION === "cloud" && !job.provider) {
+  if (isCloud() && !job.provider) {
     return null
   }
   // Self-hosted or admin: show provider from job record or input data

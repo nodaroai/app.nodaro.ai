@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Loader2, Settings, Server, Percent, Check, AlertCircle } from "lucide-react"
 import { useAdmin, type AppSettings } from "@/hooks/use-admin"
-import { isFeatureEnabled, EDITION } from "@/lib/edition"
+import { isFeatureEnabled, isCloud } from "@/lib/edition"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -82,7 +82,7 @@ export default function AdminSettingsPage() {
   }
 
   // Self-hosted edition: show message that settings are pre-configured
-  if (EDITION === "self-hosted") {
+  if (!isCloud()) {
     return (
       <div className="p-6 max-w-2xl mx-auto">
         <div className="flex items-center gap-2 mb-6">
