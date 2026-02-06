@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { isCloud } from "../lib/config.js"
+import { config, isCloud } from "../lib/config.js"
 import { deleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 
