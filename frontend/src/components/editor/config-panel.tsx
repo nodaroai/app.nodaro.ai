@@ -1758,36 +1758,34 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Connected Images Section */}
+      {/* Connected Images Section - side by side label + thumbnail per row */}
       {connectedImages.length > 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
             Connected Images ({connectedImages.length})
           </Label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2">
             {connectedImages.map((img) => (
-              <div key={img.id} className="relative group">
-                <div className="flex flex-col gap-1">
-                  <div
-                    className="w-16 h-16 rounded-lg border border-gray-200 dark:border-[#2D2D2D] overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-gray-100 dark:bg-[#121212]"
-                    onClick={() => img.imageUrl && setLightboxImage(img.imageUrl)}
-                    title={`Click to view: ${img.label}`}
-                  >
-                    {img.imageUrl ? (
-                      <img
-                        src={img.imageUrl}
-                        alt={img.label}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="w-6 h-6 text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[9px] text-gray-500 dark:text-[#64748B] truncate max-w-[64px] text-center">
-                    {img.label}
-                  </span>
+              <div key={img.id} className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-500 dark:text-[#64748B] font-medium w-16 shrink-0 leading-tight truncate" title={img.label}>
+                  {img.label}
+                </span>
+                <div
+                  className="flex-1 h-16 rounded-lg border border-gray-200 dark:border-[#2D2D2D] overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-gray-100 dark:bg-[#121212]"
+                  onClick={() => img.imageUrl && setLightboxImage(img.imageUrl)}
+                  title={`Click to view: ${img.label}`}
+                >
+                  {img.imageUrl ? (
+                    <img
+                      src={img.imageUrl}
+                      alt={img.label}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -1922,7 +1920,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">End Frame (optional)</Label>
           <p className="text-xs text-muted-foreground px-1">
-            Connect a second image node to the &quot;end-frame&quot; input handle for start→end frame video generation.
+            Connect an image node to the &quot;End Frame&quot; handle for start-to-end frame video generation.
           </p>
         </div>
       )}

@@ -163,13 +163,13 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       handles={handles}
     >
       <div className="flex flex-col gap-2">
-        {/* Frame Previews */}
-        <div className="flex gap-2">
-          {/* Start Frame Preview */}
-          <div className="flex-1 flex flex-col gap-1">
-            <span className="text-[10px] text-muted-foreground font-medium">Start Frame</span>
+        {/* Frame Previews - side by side label + image per row */}
+        <div className="flex flex-col gap-2">
+          {/* Start Frame */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground font-medium w-[52px] shrink-0 leading-tight">Start Frame</span>
             {startFrameInfo?.thumbnailUrl ? (
-              <div className="relative w-full aspect-video rounded-md overflow-hidden bg-muted/30 border border-muted">
+              <div className="relative flex-1 h-[52px] rounded-md overflow-hidden bg-muted/30 border border-muted">
                 <img
                   src={startFrameInfo.thumbnailUrl}
                   alt={startFrameInfo.label}
@@ -180,26 +180,26 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </span>
               </div>
             ) : startFrameInfo ? (
-              <div className="w-full aspect-video rounded-md bg-muted/30 border border-muted flex items-center justify-center">
+              <div className="flex-1 h-[52px] rounded-md bg-muted/30 border border-muted flex items-center justify-center">
                 <ImageIcon className="w-4 h-4 text-muted-foreground/40" />
               </div>
             ) : (
-              <div className="w-full aspect-video rounded-md border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
+              <div className="flex-1 h-[52px] rounded-md border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
                 <ImageIcon className="w-4 h-4 text-muted-foreground/20" />
               </div>
             )}
           </div>
 
-          {/* End Frame Preview */}
-          <div className="flex-1 flex flex-col gap-1">
-            <span className="text-[10px] text-muted-foreground font-medium">
+          {/* End Frame */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground font-medium w-[52px] shrink-0 leading-tight">
               End Frame
               {!supportsEndFrame && (
-                <span className="text-[8px] text-amber-500/80 ml-0.5" title={`${nodeData.provider} doesn't support end frame`}>N/A</span>
+                <span className="text-[8px] text-amber-500/80 ml-0.5 block" title={`${nodeData.provider} doesn't support end frame`}>N/A</span>
               )}
             </span>
             {endFrameInfo?.thumbnailUrl ? (
-              <div className="relative w-full aspect-video rounded-md overflow-hidden bg-muted/30 border border-muted">
+              <div className="relative flex-1 h-[52px] rounded-md overflow-hidden bg-muted/30 border border-muted">
                 <img
                   src={endFrameInfo.thumbnailUrl}
                   alt={endFrameInfo.label}
@@ -210,11 +210,11 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </span>
               </div>
             ) : endFrameInfo ? (
-              <div className="w-full aspect-video rounded-md bg-muted/30 border border-muted flex items-center justify-center">
+              <div className="flex-1 h-[52px] rounded-md bg-muted/30 border border-muted flex items-center justify-center">
                 <ImageIcon className="w-4 h-4 text-muted-foreground/40" />
               </div>
             ) : (
-              <div className={`w-full aspect-video rounded-md border-2 border-dashed flex items-center justify-center ${
+              <div className={`flex-1 h-[52px] rounded-md border-2 border-dashed flex items-center justify-center ${
                 supportsEndFrame ? "border-muted-foreground/20" : "border-muted-foreground/10 opacity-50"
               }`}>
                 <ImageIcon className="w-4 h-4 text-muted-foreground/20" />
