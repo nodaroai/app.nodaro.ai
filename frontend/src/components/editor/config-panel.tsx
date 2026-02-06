@@ -1708,7 +1708,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
 
   // Find connected image sources (generate-image, upload-image, character, object, location)
   const connectedImages = useMemo(() => {
-    const imageTypes = ["generate-image", "upload-image", "character", "object", "location"]
+    const imageTypes = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
     return sources.filter((s) => imageTypes.includes(s.type)).map((s) => {
       let imageUrl: string | undefined
       const nodeData = s.nodeData || {}
@@ -1716,7 +1716,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
       // Extract image URL based on node type
       if (s.type === "upload-image") {
         imageUrl = (nodeData.url as string) || undefined
-      } else if (s.type === "generate-image") {
+      } else if (s.type === "generate-image" || s.type === "edit-image" || s.type === "image-to-image" || s.type === "scene") {
         // Check generatedResults first, then generatedImageUrl
         const results = nodeData.generatedResults as Array<{ url?: string }> | undefined
         const activeIndex = (nodeData.activeResultIndex as number) ?? 0
@@ -1731,10 +1731,18 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         imageUrl = (nodeData.sourceImageUrl as string) || undefined
       }
 
+      // Determine display label based on target handle
+      let displayLabel = s.label
+      if (s.targetHandle === "startFrame") {
+        displayLabel = `Start: ${s.label}`
+      } else if (s.targetHandle === "endFrame") {
+        displayLabel = `End: ${s.label}`
+      }
+
       return {
         id: s.id,
         type: s.type,
-        label: s.label,
+        label: displayLabel,
         imageUrl,
         targetHandle: s.targetHandle,
       }
@@ -1778,7 +1786,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
                     )}
                   </div>
                   <span className="text-[9px] text-gray-500 dark:text-[#64748B] truncate max-w-[64px] text-center">
-                    {img.targetHandle === "end-frame" ? "End Frame" : img.label}
+                    {img.label}
                   </span>
                 </div>
               </div>

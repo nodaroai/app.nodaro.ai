@@ -1517,45 +1517,53 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const i2vData = node.data as ImageToVideoData
       const nodeProvider = i2vData.provider
 
-      // Resolve start frame from selected node or fallback to inputs
+      // Resolve start frame from dedicated handle
       let startFrameUrl: string | undefined
-      if (i2vData.selectedStartFrameNodeId) {
+      const startEdge = edges.find((e) => e.target === node.id && e.targetHandle === "startFrame")
+      if (startEdge) {
+        const startNode = nodes.find((n) => n.id === startEdge.source)
+        if (startNode) startFrameUrl = extractNodeOutput(startNode)
+      }
+      // Fallback: legacy selectedStartFrameNodeId or generic imageUrl
+      if (!startFrameUrl && i2vData.selectedStartFrameNodeId) {
         const startNode = nodes.find((n) => n.id === i2vData.selectedStartFrameNodeId)
-        if (startNode) {
-          startFrameUrl = extractNodeOutput(startNode)
-        }
+        if (startNode) startFrameUrl = extractNodeOutput(startNode)
       }
-      // Fallback to legacy single-input behavior
-      if (!startFrameUrl) {
-        startFrameUrl = inputs.imageUrl
-      }
+      if (!startFrameUrl) startFrameUrl = inputs.imageUrl
 
       if (!startFrameUrl) {
         toast.error(`Node "${i2vData.label}": no start frame image found`)
         return Promise.reject(new Error("No start frame image"))
       }
 
-      // Resolve end frame from selected node (optional)
+      // Resolve end frame from dedicated handle
       let endFrameUrl: string | undefined
-      if (i2vData.selectedEndFrameNodeId) {
+      const endEdge = edges.find((e) => e.target === node.id && e.targetHandle === "endFrame")
+      if (endEdge) {
+        const endNode = nodes.find((n) => n.id === endEdge.source)
+        if (endNode) endFrameUrl = extractNodeOutput(endNode)
+      }
+      // Fallback: legacy selectedEndFrameNodeId
+      if (!endFrameUrl && i2vData.selectedEndFrameNodeId) {
         const endNode = nodes.find((n) => n.id === i2vData.selectedEndFrameNodeId)
-        if (endNode) {
-          endFrameUrl = extractNodeOutput(endNode)
-        }
+        if (endNode) endFrameUrl = extractNodeOutput(endNode)
       }
 
-      // Resolve audio from selected node (optional)
+      // Resolve audio from dedicated handle
       let audioUrl: string | undefined
-      if (i2vData.selectedAudioNodeId) {
+      const audioEdge = edges.find((e) => e.target === node.id && e.targetHandle === "audio")
+      if (audioEdge) {
+        const audioNode = nodes.find((n) => n.id === audioEdge.source)
+        if (audioNode) audioUrl = extractNodeOutput(audioNode)
+      }
+      // Fallback: legacy selectedAudioNodeId
+      if (!audioUrl && i2vData.selectedAudioNodeId) {
         const audioNode = nodes.find((n) => n.id === i2vData.selectedAudioNodeId)
-        if (audioNode) {
-          audioUrl = extractNodeOutput(audioNode)
-        }
+        if (audioNode) audioUrl = extractNodeOutput(audioNode)
       }
 
       // Use connected Text Prompt (inputs.prompt) OR direct motionPrompt field
       const prompt = inputs.prompt ?? i2vData.motionPrompt
-      console.log(`[executeNode] image-to-video node provider: "${nodeProvider ?? 'undefined'}", startFrame: ${!!startFrameUrl}, endFrame: ${!!endFrameUrl}, audio: ${!!audioUrl}, prompt: ${!!prompt}, inputs.prompt: ${!!inputs.prompt}, motionPrompt: ${!!i2vData.motionPrompt}`)
       return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt)
     }
 
@@ -2409,13 +2417,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         targetHandle: "in",
       } as WorkflowEdge)
 
-      // Edges: Generate Image → Image to Video
+      // Edges: Generate Image → Image to Video (start frame)
       newEdges.push({
         id: `edge_${Date.now()}_${i}_img_vid`,
         source: imageNodeId,
         sourceHandle: "image",
         target: videoNodeId,
-        targetHandle: "in",
+        targetHandle: "startFrame",
       } as WorkflowEdge)
 
       // Edges: Image to Video → Merge (video)
