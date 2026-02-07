@@ -11,7 +11,7 @@ import type {
   ProviderResult,
   ProviderOptions,
 } from "../provider.interface.js"
-import { replicate } from "./client.js"
+import { replicate, extractUrl, extractCost } from "./client.js"
 
 interface ReplicateVideoModelConfig {
   model: string
@@ -175,16 +175,21 @@ export class ReplicateVideoProvider
       )
     )
 
-    const output = await replicate.run(
-      cfg.model as `${string}/${string}`,
-      { input: replicateInput }
-    )
+    const prediction = await replicate.predictions.create({
+      model: cfg.model as `${string}/${string}`,
+      input: replicateInput,
+    })
+    const completed = await replicate.wait(prediction)
+    const output = completed.output
 
-    const videoUrl = String(output)
-    console.log(
-      `[Replicate:imageToVideo] Output: "${videoUrl}"`
-    )
-    return { url: videoUrl, cost: null }
+    const videoUrl = extractUrl(typeof output === "string" ? output : Array.isArray(output) && output.length > 0 ? output[0] : output)
+    console.log(`[Replicate:imageToVideo] Output: "${videoUrl}"`)
+
+    const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
+    console.log(`[Replicate:imageToVideo] Prediction metrics:`, JSON.stringify(completed.metrics))
+    console.log(`[Replicate:imageToVideo] Estimated cost: $${cost?.toFixed(6) ?? "N/A"}`)
+
+    return { url: videoUrl, cost }
   }
 
   async textToVideo(
@@ -205,20 +210,23 @@ export class ReplicateVideoProvider
       `[Replicate:textToVideo] Prompt: "${prompt}"`
     )
 
-    const output = await replicate.run(
-      replicateModel as `${string}/${string}`,
-      {
-        input: {
-          prompt,
-          prompt_optimizer: true,
-        },
-      }
-    )
+    const prediction = await replicate.predictions.create({
+      model: replicateModel as `${string}/${string}`,
+      input: {
+        prompt,
+        prompt_optimizer: true,
+      },
+    })
+    const completed = await replicate.wait(prediction)
+    const output = completed.output
 
-    const resultUrl = String(output)
-    console.log(
-      `[Replicate:textToVideo] Output: "${resultUrl}"`
-    )
-    return { url: resultUrl, cost: null }
+    const resultUrl = extractUrl(typeof output === "string" ? output : Array.isArray(output) && output.length > 0 ? output[0] : output)
+    console.log(`[Replicate:textToVideo] Output: "${resultUrl}"`)
+
+    const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
+    console.log(`[Replicate:textToVideo] Prediction metrics:`, JSON.stringify(completed.metrics))
+    console.log(`[Replicate:textToVideo] Estimated cost: $${cost?.toFixed(6) ?? "N/A"}`)
+
+    return { url: resultUrl, cost }
   }
 }
