@@ -123,6 +123,96 @@ async function getModelCreditCostFromDB(modelIdentifier: string): Promise<{
 
 export class CreditsService {
   /**
+   * Log a credit transaction (never throws -- errors are logged silently)
+   */
+  private static async logTransaction(params: {
+    userId: string
+    amount: number
+    creditType: "subscription" | "topup"
+    source: "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "refund" | "paddle_refund" | "expiry"
+    description?: string
+    jobId?: string
+    paddleTransactionId?: string
+    adminUserId?: string
+    balanceAfter: number
+  }): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from("credit_transactions")
+        .insert({
+          user_id: params.userId,
+          amount: params.amount,
+          credit_type: params.creditType,
+          source: params.source,
+          description: params.description || null,
+          job_id: params.jobId || null,
+          paddle_transaction_id: params.paddleTransactionId || null,
+          admin_user_id: params.adminUserId || null,
+          balance_after: params.balanceAfter,
+        })
+      if (error) {
+        console.error("[credits] Failed to log transaction:", error)
+      }
+    } catch (err) {
+      console.error("[credits] Failed to log transaction:", err)
+    }
+  }
+
+  /**
+   * Admin: adjust a user's credits (add or remove)
+   */
+  static async adminAdjustCredits(params: {
+    userId: string
+    amount: number
+    creditType: "subscription" | "topup"
+    description: string
+    adminUserId: string
+  }): Promise<{ newBalance: number }> {
+    if (creditsDisabled()) {
+      return { newBalance: 999999 }
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("subscription_credits, topup_credits")
+      .eq("id", params.userId)
+      .single()
+
+    if (profileError || !profile) {
+      throw new Error("User profile not found")
+    }
+
+    const field = params.creditType === "subscription" ? "subscription_credits" : "topup_credits"
+    const currentValue = ((profile as Record<string, unknown>)[field] ?? 0) as number
+    const newValue = Math.max(0, currentValue + params.amount)
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ [field]: newValue })
+      .eq("id", params.userId)
+
+    if (updateError) {
+      throw new Error(`Failed to update credits: ${updateError.message}`)
+    }
+
+    const newTotal = params.creditType === "subscription"
+      ? newValue + (profile.topup_credits ?? 0)
+      : (profile.subscription_credits ?? 0) + newValue
+
+    await CreditsService.logTransaction({
+      userId: params.userId,
+      amount: params.amount,
+      creditType: params.creditType,
+      source: "admin_adjustment",
+      description: params.description,
+      adminUserId: params.adminUserId,
+      balanceAfter: newTotal,
+    })
+
+    return { newBalance: newTotal }
+  }
+
+  /**
    * Check if user has sufficient credits (read-only check)
    * Returns allowed: true for self-hosted mode
    */
@@ -304,6 +394,26 @@ export class CreditsService {
       throw new Error(`Failed to update credits: ${updateError.message}`)
     }
 
+    // Log the deduction as credit transactions
+    const subDeducted = subscriptionCredits - newSubscription
+    const topDeducted = topupCredits - newTopup
+    const newTotal = newSubscription + newTopup
+
+    if (subDeducted > 0) {
+      await CreditsService.logTransaction({
+        userId, amount: -subDeducted, creditType: "subscription",
+        source: "usage", description: `Job ${jobId}: ${modelIdentifier}`,
+        jobId, balanceAfter: newTotal,
+      })
+    }
+    if (topDeducted > 0) {
+      await CreditsService.logTransaction({
+        userId, amount: -topDeducted, creditType: "topup",
+        source: "usage", description: `Job ${jobId}: ${modelIdentifier}`,
+        jobId, balanceAfter: newTotal,
+      })
+    }
+
     // Create usage log entry
     const { data: usageLog, error: logError } = await supabase
       .from("usage_logs")
@@ -419,6 +529,23 @@ export class CreditsService {
           .eq("id", usageLog.user_id)
       }
     }
+
+    // Log the refund as a credit transaction
+    const { data: refundProfile } = await supabase
+      .from("profiles")
+      .select("subscription_credits, topup_credits")
+      .eq("id", usageLog.user_id)
+      .single()
+
+    await CreditsService.logTransaction({
+      userId: usageLog.user_id,
+      amount: usageLog.credits_used,
+      creditType: "topup",
+      source: "refund",
+      description: "Refund for failed job",
+      jobId: usageLogId,
+      balanceAfter: (refundProfile?.subscription_credits ?? 0) + (refundProfile?.topup_credits ?? 0),
+    })
 
     // Mark as refunded
     await supabase

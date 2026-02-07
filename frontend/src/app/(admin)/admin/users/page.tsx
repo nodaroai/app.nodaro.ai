@@ -10,8 +10,9 @@ interface AdminUser {
   readonly id: string
   readonly email: string
   readonly full_name: string | null
-  readonly tier: string
-  readonly credits_balance: number
+  readonly subscription_tier: string
+  readonly subscription_credits: number
+  readonly topup_credits: number
   readonly role: string
   readonly created_at: string
 }
@@ -57,9 +58,12 @@ export default function AdminUsersPage() {
                   {user.full_name ?? "-"}
                 </td>
                 <td className="px-4 py-2">
-                  <Badge variant="outline">{user.tier}</Badge>
+                  <Badge variant="outline">{user.subscription_tier}</Badge>
                 </td>
-                <td className="px-4 py-2">{user.credits_balance}</td>
+                <td className="px-4 py-2">
+                  <div>{user.subscription_credits + user.topup_credits}</div>
+                  <div className="text-[10px] text-muted-foreground">{user.subscription_credits} sub + {user.topup_credits} topup</div>
+                </td>
                 <td className="px-4 py-2">
                   <Badge variant={user.role !== "user" ? "default" : "secondary"}>
                     {user.role}

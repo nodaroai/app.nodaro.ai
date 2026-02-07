@@ -16,8 +16,9 @@ interface AdminUser {
   readonly id: string
   readonly email: string
   readonly full_name: string | null
-  readonly tier: string
-  readonly credits_balance: number
+  readonly subscription_tier: string
+  readonly subscription_credits: number
+  readonly topup_credits: number
   readonly role: string
   readonly created_at: string
 }
@@ -56,16 +57,18 @@ export function useAdmin() {
     try {
       const supabase = createClient()
 
-      const [usersRes, projectsRes, workflowsRes, jobsRes, usageRes] = await Promise.all([
+      const [usersRes, projectsRes, workflowsRes, jobsCountRes, jobsStatusRes, usageRes] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("projects").select("id", { count: "exact", head: true }),
         supabase.from("workflows").select("id", { count: "exact", head: true }),
-        supabase.from("jobs").select("id, status"),
+        supabase.from("jobs").select("id", { count: "exact", head: true }),
+        // Note: status breakdown limited to first 1000 rows by Supabase default
+        supabase.from("jobs").select("status"),
         supabase.from("usage_logs").select("credits_used"),
       ])
 
       const jobsByStatus: Record<string, number> = {}
-      for (const job of jobsRes.data ?? []) {
+      for (const job of jobsStatusRes.data ?? []) {
         jobsByStatus[job.status] = (jobsByStatus[job.status] ?? 0) + 1
       }
 
@@ -78,7 +81,7 @@ export function useAdmin() {
         totalUsers: usersRes.count ?? 0,
         totalProjects: projectsRes.count ?? 0,
         totalWorkflows: workflowsRes.count ?? 0,
-        totalJobs: jobsRes.data?.length ?? 0,
+        totalJobs: jobsCountRes.count ?? 0,
         jobsByStatus,
         totalCreditsUsed,
       }
@@ -97,7 +100,7 @@ export function useAdmin() {
       const supabase = createClient()
       const { data, error: err } = await supabase
         .from("profiles")
-        .select("id, email, full_name, tier, credits_balance, role, created_at")
+        .select("id, email, full_name, subscription_tier, subscription_credits, topup_credits, role, created_at")
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1)
 
