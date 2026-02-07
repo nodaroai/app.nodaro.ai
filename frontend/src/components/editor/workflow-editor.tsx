@@ -24,6 +24,34 @@ import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, Uploa
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
+const NODE_CREDIT_COSTS: Record<string, number> = {
+  "generate-script": 2,
+  "generate-image": 5,
+  "edit-image": 3,
+  "image-to-image": 5,
+  "image-to-video": 20,
+  "video-to-video": 25,
+  "text-to-video": 25,
+  "text-to-speech": 3,
+  "generate-music": 5,
+  "text-to-audio": 3,
+  "lip-sync": 40,
+  "motion-transfer": 30,
+  "video-upscale": 20,
+  "transcribe": 2,
+  "combine-videos": 2,
+  "merge-video-audio": 1,
+  "extract-audio": 1,
+  "trim-video": 0,
+  "resize-video": 1,
+  "adjust-volume": 0,
+  "add-captions": 2,
+  "mix-audio": 1,
+  "character": 5,
+  "object": 5,
+  "location": 5,
+}
+
 interface WorkflowEditorProps {
   readonly projectId?: string
   readonly workflowId?: string
@@ -55,7 +83,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (!hasCredits()) return
     const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
     const executableNodes = storeNodes.filter((n) => execTypes.has(n.type ?? ""))
-    setWorkflowCreditEstimate(executableNodes.length)
+    const total = executableNodes.reduce((sum, node) => sum + (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1), 0)
+    setWorkflowCreditEstimate(total)
   }, [storeNodes])
 
   // Poll active job count for the Executions badge
@@ -2018,7 +2047,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const { data: { user: authUser } } = await supabase.auth.getUser()
         if (authUser) {
           const { data: balance } = await getUserCredits(authUser.id)
-          const estimatedCost = executableNodes.length
+          const estimatedCost = executableNodes.reduce((sum, node) => sum + (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1), 0)
           if (balance.total < estimatedCost) {
             setInsufficientCreditsData({
               required: estimatedCost,

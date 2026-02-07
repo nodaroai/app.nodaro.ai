@@ -2,8 +2,9 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Captions, Loader2, AlertCircle, X, Play } from "lucide-react"
+import { Captions, Loader2, AlertCircle, X } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -83,11 +84,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground">{nodeData.style} ({nodeData.position})</p>
       </div>
     </BaseNode>
-    {status !== "running" && (
-      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity">
-        <button type="button" className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-b-md shadow-md transition-colors" style={{ backgroundColor: '#ff0073' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e60068'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff0073'} onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}><Play className="w-3 h-3" />Run</button>
-      </div>
-    )}
+    <RunNodeButton nodeId={id} credits={2} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

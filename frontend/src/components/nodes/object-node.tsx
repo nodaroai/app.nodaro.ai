@@ -2,8 +2,9 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Package, Loader2, AlertCircle, X, Play, ImageIcon, Maximize2, ChevronDown, ChevronRight } from "lucide-react"
+import { Package, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
@@ -228,22 +229,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
 
     {/* Run button - Delete is only available via Object Page modal */}
-    {status !== "running" && (
-      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity">
-        <button
-          type="button"
-          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium bg-emerald-500 hover:bg-emerald-600 text-white rounded-b-md shadow-md transition-colors"
-          onClick={(e) => {
-            e.stopPropagation()
-            runSingleNode?.(id)
-          }}
-          title="Generate object image"
-        >
-          <Play className="w-3 h-3" />
-          Run
-        </button>
-      </div>
-    )}
+    <RunNodeButton nodeId={id} credits={5} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
