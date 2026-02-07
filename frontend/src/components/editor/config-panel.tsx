@@ -22,7 +22,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useAppSettings } from "@/hooks/use-app-settings"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus } from "@/lib/api"
@@ -1364,9 +1363,6 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
   const addNode = useWorkflowStore((s) => s.addNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const nodes = useWorkflowStore((s) => s.nodes)
-  const { settings } = useAppSettings()
-  const isKie = settings.ai_provider === "kie"
-
   const attachedIds = data.characterDefinitionIds ?? []
   const attachedChars = allCharDefs.filter((c) => attachedIds.includes(c.id))
 
@@ -1430,19 +1426,12 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {/* Text-to-image providers (Replicate) */}
             <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
+            <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
             <SelectItem value="flux">Flux</SelectItem>
-            {/* DALL-E is Replicate-only, not available on KIE.ai */}
-            {!isKie && <SelectItem value="dalle">DALL-E</SelectItem>}
-            {/* Text-to-image providers (KIE.ai only) */}
-            {isKie && (
-              <>
-                <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
-                <SelectItem value="grok">Grok</SelectItem>
-                <SelectItem value="gpt-image">GPT Image</SelectItem>
-              </>
-            )}
+            <SelectItem value="grok">Grok</SelectItem>
+            <SelectItem value="gpt-image">GPT Image</SelectItem>
+            <SelectItem value="dalle">DALL-E</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -1623,9 +1612,6 @@ function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }:
 }
 
 function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToImageData>) {
-  const { settings } = useAppSettings()
-  const isKie = settings.ai_provider === "kie"
-
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1636,15 +1622,11 @@ function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
-            {isKie && (
-              <>
-                <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
-                <SelectItem value="flux-i2i">Flux-2</SelectItem>
-                <SelectItem value="flux-pro-i2i">Flux-2 Pro</SelectItem>
-                <SelectItem value="grok-i2i">Grok</SelectItem>
-                <SelectItem value="gpt-image-i2i">GPT Image</SelectItem>
-              </>
-            )}
+            <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
+            <SelectItem value="flux-i2i">Flux-2</SelectItem>
+            <SelectItem value="flux-pro-i2i">Flux-2 Pro</SelectItem>
+            <SelectItem value="grok-i2i">Grok</SelectItem>
+            <SelectItem value="gpt-image-i2i">GPT Image</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -1686,12 +1668,10 @@ const PROVIDERS_WITH_END_FRAME: string[] = [
 ]
 
 function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode }: ConfigProps<ImageToVideoData>) {
-  const { settings } = useAppSettings()
-  const isKie = settings.ai_provider === "kie"
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
-  // Get allowed durations for current provider (KIE mode only)
-  const allowedDurations = isKie ? (KIE_VIDEO_DURATIONS[data.provider || "minimax"] || [5]) : null
+  // Get allowed durations for current provider (model-specific)
+  const allowedDurations = KIE_VIDEO_DURATIONS[data.provider || "minimax"] || null
 
   // Check if current provider supports end frame
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
@@ -1844,28 +1824,17 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {/* Available on both Replicate and KIE */}
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
             <SelectItem value="veo3">VEO 3</SelectItem>
             <SelectItem value="veo3.1">VEO 3.1 (Fast)</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
-            {/* Replicate-only providers */}
-            {!isKie && (
-              <>
-                <SelectItem value="veo">VEO 2</SelectItem>
-                <SelectItem value="runway">Runway</SelectItem>
-                <SelectItem value="pika">Pika</SelectItem>
-                <SelectItem value="sora">Sora</SelectItem>
-              </>
-            )}
-            {/* KIE-only providers */}
-            {isKie && (
-              <>
-                <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
-                <SelectItem value="grok-i2v">Grok</SelectItem>
-                <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
-              </>
-            )}
+            <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
+            <SelectItem value="veo">VEO 2</SelectItem>
+            <SelectItem value="grok-i2v">Grok</SelectItem>
+            <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
+            <SelectItem value="runway">Runway</SelectItem>
+            <SelectItem value="pika">Pika</SelectItem>
+            <SelectItem value="sora">Sora</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -1885,8 +1854,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         </div>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        {isKie && allowedDurations ? (
-          // KIE mode: show dropdown with allowed durations for this provider
+        {allowedDurations ? (
           <Select
             value={String(allowedDurations.includes(data.duration) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
@@ -1899,7 +1867,6 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             </SelectContent>
           </Select>
         ) : (
-          // Replicate mode: free-form number input
           <Input
             type="number"
             min={1}
@@ -1909,7 +1876,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           />
         )}
       </MappableField>
-      {isKie && allowedDurations && allowedDurations.length === 1 && (
+      {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
           {data.provider === "veo3" || data.provider === "veo3.1"
             ? "VEO 3 produces ~8 second videos (not configurable)."
@@ -2063,11 +2030,8 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
   const category: ProviderCategory = "video"
   const models = getModels(category, data.provider)
   const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
-  const { settings } = useAppSettings()
-  const isKie = settings.ai_provider === "kie"
-
-  // Get allowed durations for current provider (KIE mode only)
-  const allowedDurations = isKie ? (KIE_T2V_DURATIONS[data.provider || "minimax"] || [5]) : null
+  // Get allowed durations for current provider (model-specific)
+  const allowedDurations = KIE_T2V_DURATIONS[data.provider || "minimax"] || null
 
   return (
     <div className="flex flex-col gap-3">
@@ -2089,27 +2053,16 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {/* Available on both Replicate and KIE */}
             <SelectItem value="minimax">MiniMax (default)</SelectItem>
             <SelectItem value="veo3">VEO 3</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
-            {/* Replicate-only providers */}
-            {!isKie && (
-              <>
-                <SelectItem value="veo">VEO 2</SelectItem>
-                <SelectItem value="runway">Runway</SelectItem>
-                <SelectItem value="pika">Pika</SelectItem>
-                <SelectItem value="sora">Sora</SelectItem>
-              </>
-            )}
-            {/* KIE-only providers */}
-            {isKie && (
-              <>
-                <SelectItem value="kling-turbo">Kling Turbo</SelectItem>
-                <SelectItem value="grok">Grok</SelectItem>
-                <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
-              </>
-            )}
+            <SelectItem value="kling-turbo">Kling Turbo</SelectItem>
+            <SelectItem value="veo">VEO 2</SelectItem>
+            <SelectItem value="grok">Grok</SelectItem>
+            <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
+            <SelectItem value="runway">Runway</SelectItem>
+            <SelectItem value="pika">Pika</SelectItem>
+            <SelectItem value="sora">Sora</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -2134,8 +2087,7 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
         )}
       </div>
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        {isKie && allowedDurations ? (
-          // KIE mode: show dropdown with allowed durations for this provider
+        {allowedDurations ? (
           <Select
             value={String(allowedDurations.includes(data.duration) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
@@ -2148,7 +2100,6 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
             </SelectContent>
           </Select>
         ) : (
-          // Replicate mode: free-form number input
           <Input
             type="number"
             min={1}
@@ -2158,7 +2109,7 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
           />
         )}
       </MappableField>
-      {isKie && allowedDurations && allowedDurations.length === 1 && (
+      {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
           {data.provider === "veo3"
             ? "VEO 3 produces ~8 second videos (not configurable)."
