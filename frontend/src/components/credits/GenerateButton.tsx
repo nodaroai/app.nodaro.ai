@@ -2,80 +2,96 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Loader2 } from "lucide-react"
-import { useAuth } from "@/hooks/use-auth"
+import { getModelCreditCost } from "@/lib/api"
+import { hasCredits } from "@/lib/edition"
+import { useUserCredits } from "@/components/credits/CreditBalance"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-
-interface Props {
-  modelIdentifier: string
-  onGenerate: () => Promise<void>
+interface GenerateButtonProps {
+  onClick: () => void
   disabled?: boolean
+  isRunning?: boolean
+  modelIdentifier: string
+  userId: string
+  label?: string
   children?: React.ReactNode
 }
 
 export function GenerateButton({
+  onClick,
+  disabled = false,
+  isRunning = false,
   modelIdentifier,
-  onGenerate,
-  disabled,
-  children = "Generate",
-}: Props) {
-  const { user } = useAuth()
+  userId,
+  label = "Generate",
+  children,
+}: GenerateButtonProps) {
   const [creditCost, setCreditCost] = useState<number | null>(null)
-  const [canAfford, setCanAfford] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
+  const { balance } = useUserCredits(userId)
+
+  const creditsActive = hasCredits()
+  const totalBalance = balance?.total ?? 0
+  const insufficient = creditsActive && creditCost !== null && creditCost > 0 && totalBalance < creditCost
 
   useEffect(() => {
-    async function checkAffordability() {
-      if (!user?.id || !modelIdentifier) return
+    if (!creditsActive || !modelIdentifier) return
 
+    let cancelled = false
+    async function fetchCost() {
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/v1/credits/check?userId=${user.id}&model=${modelIdentifier}`
-        )
-        const json = await res.json()
-        const data = json.data ?? json
-
-        setCreditCost(data.creditCost ?? null)
-        setCanAfford(data.allowed ?? true)
-        setError(data.error ?? null)
-      } catch (err) {
-        console.error("Failed to check credits:", err)
+        const result = await getModelCreditCost(modelIdentifier)
+        const data = result.data ?? (result as unknown as { model: string; creditCost: number })
+        if (!cancelled) {
+          setCreditCost(data.creditCost)
+        }
+      } catch {
+        if (!cancelled) {
+          setCreditCost(null)
+        }
       }
     }
 
-    checkAffordability()
-  }, [modelIdentifier, user?.id])
+    fetchCost()
+    return () => { cancelled = true }
+  }, [modelIdentifier, creditsActive])
 
-  const handleClick = async () => {
-    setIsGenerating(true)
-    try {
-      await onGenerate()
-    } finally {
-      setIsGenerating(false)
-    }
+  const showCreditInfo = creditsActive && creditCost !== null && creditCost > 0
+
+  const buttonContent = (
+    <>
+      {isRunning && <Loader2 className="w-4 h-4 animate-spin" />}
+      {isRunning ? "Processing..." : (children ?? label)}
+      {showCreditInfo && !isRunning && (
+        <span className="ml-1 opacity-80">
+          ({creditCost} {creditCost === 1 ? "credit" : "credits"})
+        </span>
+      )}
+    </>
+  )
+
+  const button = (
+    <Button
+      onClick={onClick}
+      disabled={disabled || isRunning || insufficient}
+      className="w-full"
+    >
+      {buttonContent}
+    </Button>
+  )
+
+  if (insufficient) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="w-full">{button}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          Insufficient credits (need {creditCost}, have {totalBalance})
+        </TooltipContent>
+      </Tooltip>
+    )
   }
 
-  return (
-    <div className="space-y-2">
-      <Button
-        onClick={handleClick}
-        disabled={disabled || !canAfford || isGenerating}
-        className="w-full"
-      >
-        {isGenerating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-        {children}
-        {creditCost !== null && creditCost > 0 && (
-          <span className="ml-1">
-            ({creditCost} {creditCost === 1 ? "credit" : "credits"})
-          </span>
-        )}
-      </Button>
-
-      {!canAfford && error && (
-        <p className="text-sm text-destructive">{error}</p>
-      )}
-    </div>
-  )
+  return button
 }

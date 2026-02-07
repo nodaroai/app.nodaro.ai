@@ -1402,6 +1402,59 @@ export async function saveGeneratedToLibrary(params: {
   return res.json()
 }
 
+// ============================================================
+// Credits API
+// ============================================================
+
+export interface UserBalance {
+  total: number
+  subscription: number
+  topup: number
+  dailySpent: number
+  dailyLimit: number | null
+  monthlyAllocation: number
+  tier: string
+  features: Record<string, unknown>
+  periodEnd: string | null
+}
+
+export interface CreditCheckResult {
+  allowed: boolean
+  error?: string
+  balance?: number
+  required?: number
+  creditCost?: number
+  dailyLimit?: number
+  dailySpent?: number
+}
+
+export async function getUserCredits(userId: string): Promise<{ data: UserBalance }> {
+  const res = await fetch(`${API_BASE_URL}/v1/user/credits?userId=${encodeURIComponent(userId)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to get credits")
+  }
+  return res.json()
+}
+
+export async function checkCredits(userId: string, model: string): Promise<{ data: CreditCheckResult }> {
+  const res = await fetch(`${API_BASE_URL}/v1/credits/check?userId=${encodeURIComponent(userId)}&model=${encodeURIComponent(model)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to check credits")
+  }
+  return res.json()
+}
+
+export async function getModelCreditCost(model: string): Promise<{ data: { model: string; creditCost: number } }> {
+  const res = await fetch(`${API_BASE_URL}/v1/credits/model-cost?model=${encodeURIComponent(model)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to get model cost")
+  }
+  return res.json()
+}
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),
