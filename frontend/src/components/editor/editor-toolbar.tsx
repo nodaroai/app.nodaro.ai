@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react"
 import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson } from "lucide-react"
+import { CreditBalance } from "@/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -76,6 +77,14 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   const [importing, setImporting] = useState(false)
   const [showSavedState, setShowSavedState] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [userId, setUserId] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserId(user?.id ?? undefined)
+    })
+  }, [])
 
   // Show "Saved" state for 1.5 seconds after successful save
   useEffect(() => {
@@ -571,6 +580,8 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        {userId && <CreditBalance userId={userId} />}
+
         <input
           type="file"
           ref={fileInputRef}

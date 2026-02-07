@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useCallback, useRef } from "react"
+import { useMemo, useState, useCallback, useRef, useEffect } from "react"
 import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +24,8 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { GenerateButton } from "@/components/credits/GenerateButton"
+import { createClient } from "@/lib/supabase"
 import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus } from "@/lib/api"
 import {
   getProviders,
@@ -268,6 +270,13 @@ function MappableField({
   )
 }
 
+function getModelIdentifier(node: WorkflowNode): string {
+  const data = node.data as Record<string, unknown>
+  const provider = data.provider as string | undefined
+  if (provider) return provider
+  return node.type ?? "unknown"
+}
+
 export function ConfigPanel() {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -276,6 +285,15 @@ export function ConfigPanel() {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+
+  const [userId, setUserId] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserId(user?.id ?? undefined)
+    })
+  }, [])
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
@@ -561,14 +579,13 @@ export function ConfigPanel() {
 
           <div className="flex flex-col gap-2 pt-2">
             {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale") && (
-              <Button
-                className="w-full text-white hover:opacity-90"
-                style={{ backgroundColor: '#ff0073' }}
+              <GenerateButton
                 onClick={() => runSingleNode?.(selectedNode.id)}
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Run This Node
-              </Button>
+                modelIdentifier={getModelIdentifier(selectedNode)}
+                userId={userId ?? ""}
+                label="Run This Node"
+                isRunning={(selectedNode.data as Record<string, unknown>).executionStatus === "running"}
+              />
             )}
 
             {(() => {
