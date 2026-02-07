@@ -12,13 +12,14 @@ interface AdminStats {
   readonly totalCreditsUsed: number
 }
 
-interface AdminUser {
+export interface AdminUser {
   readonly id: string
   readonly email: string
   readonly full_name: string | null
   readonly subscription_tier: string
   readonly subscription_credits: number
   readonly topup_credits: number
+  readonly daily_spent_credits: number
   readonly role: string
   readonly created_at: string
 }
@@ -100,7 +101,7 @@ export function useAdmin() {
       const supabase = createClient()
       const { data, error: err } = await supabase
         .from("profiles")
-        .select("id, email, full_name, subscription_tier, subscription_credits, topup_credits, role, created_at")
+        .select("id, email, full_name, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, role, created_at")
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1)
 
