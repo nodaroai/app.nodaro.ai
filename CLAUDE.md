@@ -4668,9 +4668,10 @@ SceneNode uses a **Provider Registry** pattern to abstract AI providers behind t
 3. **Error propagation**: If a provider supports a model but returns an error, that error propagates (no silent fallback)
 4. **Cost normalization**: All operations return `RouteResult { url, cost, displayCost, providerUsed }`
 
-**Editions:**
-- **Self-Hosted (ai_provider=replicate)**: Replicate only, no markup, users pay directly
-- **Cloud (ai_provider=kie)**: KIE.ai primary with Replicate fallback for unsupported models
+**Editions & Provider Routing:**
+- **Community (EDITION=community)**: Replicate only, no markup, users bring own API keys
+- **Business (EDITION=business)**: Replicate only, admin panel for user management, no credits
+- **Cloud (EDITION=cloud, ai_provider=kie)**: KIE.ai primary with Replicate fallback, credit system, cost markup
 
 **File Structure:**
 ```
@@ -5060,12 +5061,27 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 
 ### Routes
 
-| Route | Purpose |
-|-------|---------|
-| `/admin` | Dashboard with stats (total users, projects, workflows, jobs, credits used) |
-| `/admin/users` | List all users with tier, credits, role, join date |
-| `/admin/jobs` | List all jobs with status filter, user, workflow, credits |
-| `/admin/usage` | Usage logs with action, provider, credits, user |
+| Route | Purpose | Status |
+|-------|---------|--------|
+| `/admin` | Dashboard with stats (users, projects, workflows, jobs, credits) | Working |
+| `/admin/users` | Users with subscription_credits + topup_credits breakdown | Working |
+| `/admin/jobs` | Jobs with status filter, user, workflow, credits | Working |
+| `/admin/usage` | Usage logs with action, provider, credits, user | Working |
+| `/admin/models` | Model pricing management | Exists (needs upgrade) |
+| `/admin/alerts` | System alerts | Exists |
+| `/admin/settings` | App settings (AI provider, markup) | Working |
+
+### Admin API Routes (`backend/src/routes/admin-credits.ts`)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/v1/admin/users` | List all users with credit breakdown |
+| GET | `/v1/admin/users/:id/balance` | Detailed balance for a user |
+| POST | `/v1/admin/users/:id/credits` | Admin credit adjustment (add/remove) |
+| GET | `/v1/admin/users/:id/transactions` | Credit transaction history |
+| GET | `/v1/admin/models` | List all model pricing |
+| PUT | `/v1/admin/models/:identifier/pricing` | Update model credit cost/enabled/tier |
+| GET | `/v1/admin/credits/summary` | Platform-wide credit stats |
 
 ### Access Control
 
@@ -5250,11 +5266,13 @@ Admin panel at `/admin` for platform management. Only accessible to users with `
 ### Phase 1.4 - Polish & Admin (5-7 days)
 
 **User-facing:**
-- [ ] Credit system (deduct on job completion)
-- [ ] Overage handling (prompt to upgrade when credits run out)
-- [ ] Dashboard with projects list
-- [ ] Job history view
-- [ ] Basic error messages and user feedback
+- [x] Credit system (reserve on job creation, commit on success, refund on failure)
+- [x] Credit system frontend (CreditBalance, GenerateButton, InsufficientCreditsModal, dynamic pricing)
+- [x] credit_transactions audit log
+- [x] Overage handling (prompt to upgrade when credits run out)
+- [x] Dashboard with projects list
+- [x] Job history view
+- [x] Basic error messages and user feedback
 
 **Admin Panel (`/admin/*` routes):**
 - [ ] Admin middleware (check `user.role === 'admin'`)
@@ -5417,6 +5435,58 @@ ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS is_shared BOOLEAN DEFAULT FAL
 
 ---
 
+## Editions System
+
+SceneNode supports three deployment editions, controlled by the `EDITION` environment variable (backend) and `NEXT_PUBLIC_EDITION` (frontend).
+
+### Edition Matrix
+
+| Feature | Community | Business | Cloud |
+|---------|-----------|----------|-------|
+| Open source | Yes | Yes | No |
+| Self-hosted | Yes | Yes | No (SaaS) |
+| Credit system | No | No | Yes |
+| Billing (Paddle) | No | No | Yes |
+| Admin panel | No | Yes | Yes |
+| User management | No | Yes | Yes |
+| Cost markup | No | No | Yes |
+| Provider selection | User brings own API keys | User brings own API keys | Platform provides (KIE.ai + Replicate) |
+| Multi-tenancy | No | No | Yes |
+
+### Configuration
+
+**Backend** (`backend/src/lib/config.ts`):
+- `EDITION` env var: `"community"` (default) | `"business"` | `"cloud"`
+- Helper functions: `isCommunity()`, `isBusiness()`, `isCloud()`, `hasAdmin()`, `hasCredits()`
+- Validated via Zod schema at startup
+
+**Frontend** (`frontend/src/lib/edition.ts`):
+- `NEXT_PUBLIC_EDITION` env var: same values
+- Same helper functions + `features` object for feature flags
+- `isFeatureEnabled(feature)` for conditional rendering
+
+### Feature Gating Pattern
+```typescript
+// Backend: skip credit operations in non-cloud editions
+if (!hasCredits()) return { allowed: true, balance: 999999 }
+
+// Frontend: hide credit UI in non-cloud editions
+if (!hasCredits()) return null  // CreditBalance, GenerateButton, RunNodeButton
+
+// Frontend: hide admin link in community edition
+if (!hasAdmin()) return null  // Admin sidebar link
+```
+
+### Default Values
+
+| Edition | `hasCredits()` | `hasAdmin()` | `hasUserManagement()` |
+|---------|---------------|-------------|----------------------|
+| community | false | false | false |
+| business | false | true | true |
+| cloud | true | true | true |
+
+---
+
 ## Credits System Implementation
 
 ### Overview
@@ -5479,6 +5549,31 @@ All model identifiers use **lowercase with hyphens** except VEO which uses **dot
    └── Full refund of reserved credits
 ```
 
+### Frontend Credit Components
+
+All credit UI is gated behind `hasCredits()` which returns `true` only when `NEXT_PUBLIC_EDITION=cloud`.
+
+**Components (`frontend/src/components/credits/`):**
+
+| Component | Purpose |
+|-----------|---------|
+| `CreditBalance` | Toolbar widget showing total credits + tier badge, auto-refresh 30s |
+| `GenerateButton` | Config panel button showing credit cost per model, disables when insufficient |
+| `InsufficientCreditsModal` | Dialog showing balance vs required, with Upgrade/Buy CTAs |
+| `RunNodeButton` | Shared hover button under each node showing "Run (N CR)" |
+
+**Hook (`frontend/src/hooks/use-model-credits.ts`):**
+- `useModelCredits(modelId, fallback)` -- fetches credit cost from `/v1/credits/model-cost` with in-memory cache
+- `getCachedCredits(modelId)` -- sync cache lookup for workflow estimation
+- All 26 executable node files use this hook for dynamic pricing (not hardcoded)
+
+**Workflow Estimation:**
+- Execute workflow button shows total estimated cost `"(N CR)"`
+- Uses `getCachedCredits()` per node's provider, falls back to static `NODE_CREDIT_COSTS` map
+- Credit check runs before workflow execution; blocks with modal if insufficient
+
+**Credit Deduction Priority:** Subscription credits first, then topup credits (subscription expires monthly, topup never expires).
+
 ### Cost Calculation
 
 **KIE.ai (static pricing):**
@@ -5529,7 +5624,38 @@ INSERT INTO public.app_settings (key, value) VALUES
 
 **`profiles` table (credits-related columns):**
 ```sql
-credits_balance INTEGER NOT NULL DEFAULT 50
+subscription_credits INTEGER NOT NULL DEFAULT 50  -- Monthly credits (reset each billing cycle)
+topup_credits INTEGER NOT NULL DEFAULT 0          -- Purchased credits (never expire)
+credits_balance INTEGER                           -- Legacy field (deprecated, use sub + topup)
+subscription_tier TEXT DEFAULT 'free'
+daily_spent_credits INTEGER DEFAULT 0
+```
+
+**`credit_transactions` table (audit log):**
+```sql
+CREATE TABLE credit_transactions (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id),
+    amount INTEGER NOT NULL,                -- positive = add, negative = deduct
+    credit_type TEXT NOT NULL,              -- 'subscription' | 'topup'
+    source TEXT NOT NULL,                   -- 'usage' | 'refund' | 'admin_adjustment' | 'subscription_renewal' | 'one_time_purchase' | 'paddle_refund' | 'expiry'
+    description TEXT,
+    job_id UUID REFERENCES jobs(id),
+    paddle_transaction_id TEXT,
+    admin_user_id UUID REFERENCES profiles(id),
+    balance_after INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+**`model_pricing` table:**
+```sql
+CREATE TABLE model_pricing (
+    model_identifier TEXT PRIMARY KEY,
+    credit_cost INTEGER NOT NULL,
+    is_enabled BOOLEAN DEFAULT true,
+    tier_restriction TEXT                   -- minimum tier required (null = all tiers)
+);
 ```
 
 **`usage_logs` table:**
@@ -5585,5 +5711,5 @@ Credits reset based on subscription period, NOT calendar month:
 
 ---
 
-*Last updated: 2026-02-05*
-*Version: 1.15.0*
+*Last updated: 2026-02-08*
+*Version: 1.16.0*
