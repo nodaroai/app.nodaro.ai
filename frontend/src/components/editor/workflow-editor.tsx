@@ -17,7 +17,9 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
+import { hasCredits } from "@/lib/edition"
+import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
@@ -39,6 +41,22 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const pendingNavRef = useRef<string | null>(null)
   const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(new Set())
   const [activeJobCount, setActiveJobCount] = useState(0)
+  const [showInsufficientCredits, setShowInsufficientCredits] = useState(false)
+  const [insufficientCreditsData, setInsufficientCreditsData] = useState<{
+    required: number
+    available: number
+    tier: string
+  } | null>(null)
+  const [workflowCreditEstimate, setWorkflowCreditEstimate] = useState<number>(0)
+
+  // Update credit estimate when nodes change
+  const storeNodes = useWorkflowStore((s) => s.nodes)
+  useEffect(() => {
+    if (!hasCredits()) return
+    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+    const executableNodes = storeNodes.filter((n) => execTypes.has(n.type ?? ""))
+    setWorkflowCreditEstimate(executableNodes.length)
+  }, [storeNodes])
 
   // Poll active job count for the Executions badge
   useEffect(() => {
@@ -1993,6 +2011,29 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return
     }
 
+    // Credit check before workflow execution (cloud edition only)
+    if (hasCredits()) {
+      try {
+        const supabase = createClient()
+        const { data: { user: authUser } } = await supabase.auth.getUser()
+        if (authUser) {
+          const { data: balance } = await getUserCredits(authUser.id)
+          const estimatedCost = executableNodes.length
+          if (balance.total < estimatedCost) {
+            setInsufficientCreditsData({
+              required: estimatedCost,
+              available: balance.total,
+              tier: balance.tier,
+            })
+            setShowInsufficientCredits(true)
+            return
+          }
+        }
+      } catch (err) {
+        console.warn("[workflow] Credit check failed, proceeding anyway:", err)
+      }
+    }
+
     const levels = buildExecutionLevels(nodes, edges)
 
     setIsRunning(true)
@@ -2851,6 +2892,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 >
                   <Play className="w-4 h-4 mr-2" />
                   Execute workflow
+                  {hasCredits() && workflowCreditEstimate > 0 && (
+                    <span className="ml-2 opacity-80">({workflowCreditEstimate} CR)</span>
+                  )}
                 </Button>
               )}
             </div>
@@ -2880,6 +2924,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         onSave={handleDialogSave}
         onDiscard={handleDialogDiscard}
         onCancel={handleDialogCancel}
+      />
+
+      <InsufficientCreditsModal
+        open={showInsufficientCredits}
+        onClose={() => setShowInsufficientCredits(false)}
+        required={insufficientCreditsData?.required ?? 0}
+        available={insufficientCreditsData?.available ?? 0}
+        tier={insufficientCreditsData?.tier ?? "free"}
       />
     </div>
   )
