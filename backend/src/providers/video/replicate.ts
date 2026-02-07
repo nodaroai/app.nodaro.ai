@@ -55,7 +55,7 @@ const VIDEO_MODEL_CONFIGS: Record<string, ModelConfig> = {
     endFrameParam: "end_image", // kling supports end frame
   },
   runway: {
-    model: "runway/gen3a-turbo",
+    model: "runwayml/gen4-turbo",
     imageParam: "image",
     endFrameParam: "end_image", // runway supports end frame
   },

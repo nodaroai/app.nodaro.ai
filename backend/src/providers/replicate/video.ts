@@ -59,7 +59,7 @@ const VIDEO_MODEL_CONFIGS: Record<string, ReplicateVideoModelConfig> =
       endFrameParam: "end_image", // kling supports end frame
     },
     runway: {
-      model: "runway/gen3a-turbo",
+      model: "runwayml/gen4-turbo",
       imageParam: "image",
       endFrameParam: "end_image", // runway supports end frame
     },
@@ -80,7 +80,7 @@ const TEXT_TO_VIDEO_MODELS: Record<string, string> = {
   veo: "google/veo-2",
   veo3: "google/veo-3",
   kling: "kwaivgi/kling-v1.6-pro",
-  runway: "runway/gen3a-turbo",
+  runway: "runwayml/gen4-turbo",
   pika: "pika-labs/pika",
   sora: "openai/sora",
 }
