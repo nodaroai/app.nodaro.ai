@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { EditImageData } from "@/types/nodes"
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -29,6 +30,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = rawUrl && rawUrl.trim() ? rawUrl : undefined
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const credits = useModelCredits(nodeData.provider ?? "recraft-upscale", 1)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -54,7 +56,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<Wand2 className="h-4 w-4" />}
         category="ai"
-        credits={3}
+        credits={credits}
         selected={selected}
         isRunning={status === "running"}
         handles={[
@@ -158,7 +160,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <RunNodeButton nodeId={id} credits={3} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

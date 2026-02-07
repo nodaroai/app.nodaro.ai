@@ -9,10 +9,12 @@ import { ScriptPreviewModal } from "@/components/editor/script-preview-modal"
 import { ExpandStoryboardDialog, type ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateScriptData
+  const credits = useModelCredits("gemini", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const generateSceneImage = useWorkflowStore((s) => s.generateSceneImage)
@@ -53,7 +55,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<BookOpen className="h-4 w-4" />}
       category="script"
-      credits={2}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[
@@ -213,7 +215,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={2} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     {activeScript && (
       <ScriptPreviewModal
         isOpen={showFullscreen}

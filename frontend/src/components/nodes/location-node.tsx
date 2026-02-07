@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { LocationNodeData } from "@/types/nodes"
 
 const STYLE_LABELS: Record<string, string> = {
@@ -32,6 +33,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function LocationNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as LocationNodeData
+  const credits = useModelCredits(nodeData.provider ?? "nano-banana", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -70,7 +72,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<MapPin className="h-4 w-4" />}
       category="location"
-      credits={5}
+      credits={credits}
       selected={selected}
       isRunning={status === "running" || anyAssetRunning}
       handles={[
@@ -229,7 +231,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
 
     {/* Run button - Delete is only available via Location Page modal */}
-    <RunNodeButton nodeId={id} credits={5} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

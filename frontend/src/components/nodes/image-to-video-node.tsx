@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
 // Providers that support End Frame (second image for video ending)
@@ -62,6 +63,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const credits = useModelCredits(nodeData.provider ?? "minimax", 4)
 
   const supportsEndFrame = END_FRAME_SUPPORTED_PROVIDERS.includes(nodeData.provider)
 
@@ -158,7 +160,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Film className="h-4 w-4" />}
       category="i2v"
-      credits={20}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={handles}
@@ -400,7 +402,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
 
     {/* Run Button */}
-    <RunNodeButton nodeId={id} credits={20} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
 
     {/* Preview Modal */}
     {activeUrl && (

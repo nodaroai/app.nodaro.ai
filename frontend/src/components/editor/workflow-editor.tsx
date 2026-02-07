@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
@@ -83,7 +84,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (!hasCredits()) return
     const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
     const executableNodes = storeNodes.filter((n) => execTypes.has(n.type ?? ""))
-    const total = executableNodes.reduce((sum, node) => sum + (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1), 0)
+    const total = executableNodes.reduce((sum, node) => {
+      const data = node.data as Record<string, unknown>
+      const provider = data.provider as string | undefined
+      if (provider) {
+        const cached = getCachedCredits(provider)
+        if (cached !== undefined) return sum + cached
+      }
+      return sum + (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1)
+    }, 0)
     setWorkflowCreditEstimate(total)
   }, [storeNodes])
 
@@ -2047,7 +2056,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const { data: { user: authUser } } = await supabase.auth.getUser()
         if (authUser) {
           const { data: balance } = await getUserCredits(authUser.id)
-          const estimatedCost = executableNodes.reduce((sum, node) => sum + (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1), 0)
+          const estimatedCost = executableNodes.reduce((sum, node) => {
+            const data = node.data as Record<string, unknown>
+            const provider = data.provider as string | undefined
+            if (provider) {
+              const cached = getCachedCredits(provider)
+              if (cached !== undefined) return sum + cached
+            }
+            return sum + (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1)
+          }, 0)
           if (balance.total < estimatedCost) {
             setInsufficientCreditsData({
               required: estimatedCost,

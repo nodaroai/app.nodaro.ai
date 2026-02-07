@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
 
 // Node types that output images (for portrait/face)
@@ -70,6 +71,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const credits = useModelCredits(nodeData.provider ?? "kling-avatar", 2)
 
   // Get all connected nodes to this node (deduplicated by node ID)
   const connectedNodes = useMemo(() => {
@@ -191,7 +193,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<Users className="h-4 w-4" />}
         category="ai"
-        credits={40}
+        credits={credits}
         selected={selected}
         isRunning={status === "running"}
         handles={[
@@ -405,7 +407,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       </BaseNode>
 
       {/* Run Button */}
-      <RunNodeButton nodeId={id} credits={40} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
 
       {/* Preview Modal */}
       {activeUrl && (

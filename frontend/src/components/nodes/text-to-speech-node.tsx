@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getVoiceName } from "@/lib/tts-voices"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { TextToSpeechData } from "@/types/nodes"
 
 function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
@@ -20,6 +21,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const credits = useModelCredits(nodeData.provider ?? "elevenlabs", 1)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -43,7 +45,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Mic className="h-4 w-4" />}
       category="ai"
-      credits={3}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[
@@ -146,7 +148,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={3} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

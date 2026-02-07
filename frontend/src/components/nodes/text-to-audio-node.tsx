@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { TextToAudioData } from "@/types/nodes"
 
 function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
@@ -19,6 +20,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const credits = useModelCredits(nodeData.provider ?? "tangoflux", 1)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -42,7 +44,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Volume2 className="h-4 w-4" />}
       category="ai"
-      credits={3}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[
@@ -145,7 +147,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={3} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

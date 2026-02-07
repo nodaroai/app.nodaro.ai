@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { GenerateMusicData } from "@/types/nodes"
 
 function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
@@ -19,6 +20,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const credits = useModelCredits(nodeData.provider ?? "suno", 1)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -30,7 +32,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative group/run">
-    <BaseNode id={id} label={nodeData.label} icon={<Music className="h-4 w-4" />} category="ai" credits={5} selected={selected} isRunning={status === "running"}
+    <BaseNode id={id} label={nodeData.label} icon={<Music className="h-4 w-4" />} category="ai" credits={credits} selected={selected} isRunning={status === "running"}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Prompt", top: "35%" },
         { id: "ref-audio", type: "target", position: Position.Left, label: "Ref Audio", top: "75%" },
@@ -80,7 +82,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground">{nodeData.provider || "musicgen"} - {nodeData.duration}s{nodeData.genre ? ` - ${nodeData.genre}` : ""}{nodeData.instrumental ? " (instrumental)" : ""}</p>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={5} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
   )

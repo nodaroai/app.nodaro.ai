@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { MotionTransferData } from "@/types/nodes"
 
 function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
@@ -20,6 +21,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
+  const credits = useModelCredits("kling-motion", 5)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -45,7 +47,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Waypoints className="h-4 w-4" />}
       category="ai"
-      credits={30}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[
@@ -165,7 +167,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={30} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}

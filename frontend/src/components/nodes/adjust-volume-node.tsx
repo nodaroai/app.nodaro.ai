@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { AdjustVolumeData } from "@/types/nodes"
 
 function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
@@ -14,6 +15,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const currentNodeData = nodes.find((n) => n.id === id)?.data as AdjustVolumeData | undefined
   const nodeData = currentNodeData ?? (data as AdjustVolumeData)
+  const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -33,7 +35,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative group/run">
-    <BaseNode id={id} label={nodeData.label} icon={<Volume1 className="h-4 w-4" />} category="processing" credits={0} selected={selected} isRunning={status === "running"}
+    <BaseNode id={id} label={nodeData.label} icon={<Volume1 className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "audio-out", type: "source", position: Position.Right, label: "Audio" },
@@ -82,7 +84,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground">{nodeData.volume}%{nodeData.normalize ? " (normalized)" : ""}</p>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
   )

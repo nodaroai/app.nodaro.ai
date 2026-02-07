@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { AddCaptionsData } from "@/types/nodes"
 
 function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
@@ -15,6 +16,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const currentNodeData = nodes.find((n) => n.id === id)?.data as AddCaptionsData | undefined
   const nodeData = currentNodeData ?? (data as AddCaptionsData)
+  const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -36,7 +38,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative group/run">
-    <BaseNode id={id} label={nodeData.label} icon={<Captions className="h-4 w-4" />} category="processing" credits={2} selected={selected} isRunning={status === "running"}
+    <BaseNode id={id} label={nodeData.label} icon={<Captions className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "video-out", type: "source", position: Position.Right, label: "Video" },
@@ -84,7 +86,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground">{nodeData.style} ({nodeData.position})</p>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={2} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

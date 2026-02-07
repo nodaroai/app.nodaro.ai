@@ -10,10 +10,12 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { SceneEditorModal } from "@/components/editor/scene-editor-modal"
 import { ExtractReferencesModal } from "@/components/editor/extract-references-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
 
 function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SceneNodeDataType
+  const credits = useModelCredits("scene", 0)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -71,7 +73,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.sceneName || nodeData.label}
       icon={<Clapperboard className="h-4 w-4" />}
       category="scene"
-      credits={0}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[

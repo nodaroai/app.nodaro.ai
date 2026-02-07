@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { MergeVideoAudioData } from "@/types/nodes"
 
 function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
@@ -15,6 +16,7 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const currentNodeData = nodes.find((n) => n.id === id)?.data as MergeVideoAudioData | undefined
   const nodeData = currentNodeData ?? (data as MergeVideoAudioData)
+  const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -48,7 +50,7 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Volume2 className="h-4 w-4" />}
       category="processing"
-      credits={1}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[
@@ -138,7 +140,7 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={1} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     {activeUrl && (
       <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} />
     )}

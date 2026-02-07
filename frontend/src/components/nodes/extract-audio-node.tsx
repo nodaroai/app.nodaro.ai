@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { ExtractAudioData } from "@/types/nodes"
 
 function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
@@ -14,6 +15,7 @@ function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const currentNodeData = nodes.find((n) => n.id === id)?.data as ExtractAudioData | undefined
   const nodeData = currentNodeData ?? (data as ExtractAudioData)
+  const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -45,7 +47,7 @@ function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<AudioLines className="h-4 w-4" />}
       category="processing"
-      credits={1}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[
@@ -122,7 +124,7 @@ function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground">{nodeData.audioFormat}</p>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={1} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

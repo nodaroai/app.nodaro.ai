@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { CharacterNodeData } from "@/types/nodes"
 
 const STYLE_LABELS: Record<string, string> = {
@@ -20,6 +21,7 @@ const STYLE_LABELS: Record<string, string> = {
 
 function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CharacterNodeData
+  const credits = useModelCredits(nodeData.provider ?? "nano-banana", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -59,7 +61,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<UserCircle className="h-4 w-4" />}
       category="character"
-      credits={5}
+      credits={credits}
       selected={selected}
       isRunning={status === "running" || anyAssetRunning}
       handles={[
@@ -219,7 +221,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
 
     {/* Run button - Delete is only available via Character Page modal */}
-    <RunNodeButton nodeId={id} credits={5} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

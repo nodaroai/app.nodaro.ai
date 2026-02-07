@@ -8,6 +8,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { TranscribeData } from "@/types/nodes"
 
 function TranscriptPreviewModal({
@@ -70,6 +71,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
   const activeText = activeResult?.text ?? nodeData.generatedText
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const credits = useModelCredits(nodeData.provider ?? "whisper", 1)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -98,7 +100,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
           label={nodeData.label}
           icon={<FileText className="h-4 w-4" />}
           category="ai"
-          credits={3}
+          credits={credits}
           selected={selected}
           isRunning={status === "running"}
           handles={[
@@ -211,7 +213,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           </div>
         </BaseNode>
-        <RunNodeButton nodeId={id} credits={3} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         <DeleteConfirmationDialog
           isOpen={deleteConfirm !== null}
           onClose={() => setDeleteConfirm(null)}

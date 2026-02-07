@@ -10,6 +10,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "@/components/editor/extract-references-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { useModelCredits } from "@/hooks/use-model-credits"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -32,6 +33,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [extractOpen, setExtractOpen] = useState(false)
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
+  const credits = useModelCredits(nodeData.provider ?? "nano-banana", 1)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -55,7 +57,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<ImageIcon className="h-4 w-4" />}
       category="ai"
-      credits={5}
+      credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[
@@ -178,7 +180,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={5} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}
