@@ -3,12 +3,21 @@ import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
-import { getAppSettings, calculateDisplayCost } from "../lib/app-settings.js"
-import { generateImage, type ImageProvider, type GenerateImageResult } from "../providers/image/replicate.js"
-import { imageToVideo, type VideoProvider, type VideoResult } from "../providers/video/replicate.js"
-import { videoToVideo } from "../providers/video/video-to-video.js"
-import { textToVideo } from "../providers/video/text-to-video.js"
-import { textToSpeech, type VoiceProvider } from "../providers/voice/text-to-speech.js"
+import {
+  initProviders,
+  generateImage,
+  editImage,
+  imageToVideo,
+  textToVideo,
+  videoToVideo,
+  motionTransfer,
+  videoUpscale,
+  lipSync,
+  textToSpeech as routedTextToSpeech,
+  type RouteResult,
+} from "../providers/index.js"
+import { KieError } from "../providers/kie/client.js"
+import type { ProgressCallback } from "../providers/provider.interface.js"
 import { generateScript, type ScriptProvider } from "../providers/script/script-generator.js"
 import { uploadToR2, uploadFileToR2 } from "../lib/storage.js"
 import { combineVideos } from "../providers/video/combine-videos.js"
@@ -24,9 +33,6 @@ import { generateMusic, type MusicProvider } from "../providers/audio/generate-m
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { transcribe, type TranscribeProvider } from "../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
-import { editImageKie, generateImageKie, imageToVideoKie, lipSyncKie, textToVideoKie, motionTransferKie, videoUpscaleKie, KieError, type ProgressCallback } from "../services/kie-ai.js"
-import { getAppSettings as getKieAppSettings } from "../lib/app-settings.js"
-import { isKieSupported } from "../services/model-mapping.js"
 import { promises as fs } from "node:fs"
 import { dirname } from "node:path"
 
@@ -91,6 +97,8 @@ async function refundJobCredits(usageLogId: string | null | undefined, jobId: st
 }
 
 export function createVideoWorker() {
+  initProviders()
+
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
   })
@@ -115,22 +123,17 @@ export function createVideoWorker() {
           .eq("id", jobId)
 
         if (job.name === "generate-image") {
-          const { prompt, referenceImageUrls, provider } = job.data as { jobId: string; prompt: string; referenceImageUrls?: string[]; provider?: ImageProvider }
+          const { prompt, referenceImageUrls, provider } = job.data as { jobId: string; prompt: string; referenceImageUrls?: string[]; provider?: string }
           console.log(`[worker] generate-image ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           if (referenceImageUrls?.length) {
             console.log(`[worker] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
           }
 
-          const result = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -142,14 +145,14 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { imageUrl: r2Url },
               completed_at: new Date().toISOString(),
-              provider: settings.ai_provider,
-              provider_cost: providerCost,
-              display_cost: displayCost,
+              provider: result.providerUsed,
+              provider_cost: result.cost,
+              display_cost: result.displayCost,
             })
             .eq("id", jobId)
 
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "edit-image") {
           const { imageUrl, prompt, provider } = job.data as {
             jobId: string
@@ -160,20 +163,11 @@ export function createVideoWorker() {
           const resolvedProvider = provider ?? "recraft-upscale"
           console.log(`[worker] edit-image ${jobId} (provider: ${resolvedProvider}): "${prompt ?? "(no prompt)"}"`)
 
-          // Edit image operations are KIE.ai only - check if KIE.ai is supported
-          const settings = await getAppSettings()
-          if (settings.ai_provider !== "kie" || !isKieSupported("image", resolvedProvider)) {
-            throw new Error(`Edit image operations require KIE.ai provider. Current provider: ${settings.ai_provider}`)
-          }
-
-          const result = await editImageKie(imageUrl, prompt, resolvedProvider)
+          const result = await editImage(imageUrl, resolvedProvider, prompt)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -185,14 +179,14 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { imageUrl: r2Url },
               completed_at: new Date().toISOString(),
-              provider: settings.ai_provider,
-              provider_cost: providerCost,
-              display_cost: displayCost,
+              provider: result.providerUsed,
+              provider_cost: result.cost,
+              display_cost: result.displayCost,
             })
             .eq("id", jobId)
 
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-image") {
           const { imageUrl, referenceImageUrls, prompt, provider } = job.data as {
             jobId: string
@@ -206,26 +200,11 @@ export function createVideoWorker() {
           const allImages = [imageUrl, ...(referenceImageUrls ?? [])]
           console.log(`[worker] image-to-image ${jobId} (provider: ${resolvedProvider}, images: ${allImages.length}): "${prompt}"`)
 
-          const settings = await getAppSettings()
-
-          // For image-to-image, we pass the source image + references and use the prompt to transform
-          // nano-banana works on both Replicate and KIE.ai, others are KIE.ai only
-          let result: { url: string; cost: number | null }
-          if (settings.ai_provider === "kie" && isKieSupported("image", resolvedProvider)) {
-            result = await generateImageKie(prompt, allImages, resolvedProvider)
-          } else if (resolvedProvider === "nano-banana" || resolvedProvider === "nano-banana-pro") {
-            // Fallback to Replicate for nano-banana (uses centralized routing)
-            result = await generateImage(prompt, allImages, "nano-banana")
-          } else {
-            throw new Error(`Provider ${resolvedProvider} is only available with KIE.ai. Current provider: ${settings.ai_provider}`)
-          }
+          const result = await generateImage(prompt, resolvedProvider, allImages)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -237,14 +216,14 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { imageUrl: r2Url },
               completed_at: new Date().toISOString(),
-              provider: settings.ai_provider,
-              provider_cost: providerCost,
-              display_cost: displayCost,
+              provider: result.providerUsed,
+              provider_cost: result.cost,
+              display_cost: result.displayCost,
             })
             .eq("id", jobId)
 
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-video") {
           const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration } = job.data as {
             jobId: string
@@ -258,41 +237,17 @@ export function createVideoWorker() {
           }
           console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
-          // Get settings to determine which backend to use
-          const settings = await getAppSettings()
-          const useKie = settings.ai_provider === "kie" && isKieSupported("video", provider ?? "minimax")
-
-          let videoUrl: string
-          let providerCost: number | null | undefined
-
-          if (useKie) {
-            console.log(`[worker] Using KIE.ai for image-to-video (provider: ${provider ?? "minimax"})`)
-
-            // Create progress callback that updates the job record in the database
-            // This allows the frontend to show real-time progress
-            const onProgress: ProgressCallback = async (progress: number) => {
-              // Pass through the raw KIE.ai progress (0-100%)
-              console.log(`[worker] Job ${jobId} KIE progress: ${progress}%`)
-
-              await supabase
-                .from("jobs")
-                .update({ progress })
-                .eq("id", jobId)
-            }
-
-            const kieResult = await imageToVideoKie(imageUrl, prompt, provider ?? "minimax", duration, endFrameUrl, onProgress)
-            videoUrl = kieResult.url
-            providerCost = kieResult.cost
-          } else {
-            // Generate the video with optional end frame support via Replicate
-            const videoResult = await imageToVideo(imageUrl, prompt, provider as VideoProvider, generateAudio, duration, endFrameUrl)
-            videoUrl = videoResult.url
-            providerCost = videoResult.cost
+          // Create progress callback that updates the job record in the database
+          const onProgress: ProgressCallback = async (progress: number) => {
+            console.log(`[worker] Job ${jobId} progress: ${progress}%`)
+            await supabase.from("jobs").update({ progress }).eq("id", jobId)
           }
+
+          const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress })
           await job.updateProgress(40)
 
           // Upload the generated video to R2
-          let finalVideoUrl = await uploadToR2(videoUrl, jobId, "video")
+          let finalVideoUrl = await uploadToR2(result.url, jobId, "video")
           await job.updateProgress(70)
 
           // If audio URL is provided, merge it with the video
@@ -314,8 +269,6 @@ export function createVideoWorker() {
 
           await job.updateProgress(100)
 
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
-
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
 
@@ -326,33 +279,28 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { videoUrl: finalVideoUrl },
               completed_at: new Date().toISOString(),
-              provider: settings.ai_provider,
-              provider_cost: providerCost,
-              display_cost: displayCost,
+              provider: result.providerUsed,
+              provider_cost: result.cost,
+              display_cost: result.displayCost,
             })
             .eq("id", jobId)
 
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${finalVideoUrl} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${finalVideoUrl} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "video-to-video") {
           const { videoUrl, prompt, provider } = job.data as {
             jobId: string
             videoUrl: string
             prompt?: string
-            provider?: VideoProvider
+            provider?: string
           }
-          console.log(`[worker] video-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
+          console.log(`[worker] video-to-video ${jobId} (provider: ${provider ?? "wan"})`)
 
-          const videoResult = await videoToVideo(videoUrl, prompt)
+          const result = await videoToVideo(videoUrl, provider ?? "wan", prompt)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(videoResult.url, jobId, "video")
+          const r2Url = await uploadToR2(result.url, jobId, "video")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = videoResult.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -364,14 +312,14 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { videoUrl: r2Url },
               completed_at: new Date().toISOString(),
-              provider: settings.ai_provider,
-              provider_cost: providerCost,
-              display_cost: displayCost,
+              provider: result.providerUsed,
+              provider_cost: result.cost,
+              display_cost: result.displayCost,
             })
             .eq("id", jobId)
 
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-video") {
           const { prompt, provider, duration } = job.data as {
             jobId: string
@@ -381,29 +329,11 @@ export function createVideoWorker() {
           }
           console.log(`[worker] text-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          // Get settings to determine which backend to use
-          const settings = await getAppSettings()
-          const useKie = settings.ai_provider === "kie" && isKieSupported("text-to-video", provider ?? "minimax")
-
-          let videoUrl: string
-          let providerCost: number | null | undefined
-
-          if (useKie) {
-            console.log(`[worker] Using KIE.ai for text-to-video (provider: ${provider ?? "minimax"})`)
-            const kieResult = await textToVideoKie(prompt, provider ?? "minimax", duration)
-            videoUrl = kieResult.url
-            providerCost = kieResult.cost
-          } else {
-            const videoResult = await textToVideo(prompt, provider as VideoProvider, duration)
-            videoUrl = videoResult.url
-            providerCost = videoResult.cost
-          }
+          const result = await textToVideo(prompt, provider ?? "minimax", duration)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(videoUrl, jobId, "video")
+          const r2Url = await uploadToR2(result.url, jobId, "video")
           await job.updateProgress(100)
-
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -415,14 +345,14 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { videoUrl: r2Url },
               completed_at: new Date().toISOString(),
-              provider: settings.ai_provider,
-              provider_cost: providerCost,
-              display_cost: displayCost,
+              provider: result.providerUsed,
+              provider_cost: result.cost,
+              display_cost: result.displayCost,
             })
             .eq("id", jobId)
 
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "lip-sync") {
           const { imageUrl, audioUrl, prompt, provider, resolution } = job.data as {
             jobId: string
@@ -434,17 +364,11 @@ export function createVideoWorker() {
           }
           console.log(`[worker] lip-sync ${jobId} (provider: ${provider ?? "kling-avatar"})`)
 
-          // Lip sync is KIE.ai only
-          const result = await lipSyncKie(imageUrl, audioUrl, prompt, provider ?? "kling-avatar", resolution)
+          const result = await lipSync(imageUrl, audioUrl, provider ?? "kling-avatar", prompt, resolution)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(result.url, jobId, "video")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -456,27 +380,27 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { videoUrl: r2Url },
               completed_at: new Date().toISOString(),
-              provider: "kie",
-              provider_cost: providerCost,
-              display_cost: displayCost,
+              provider: result.providerUsed,
+              provider_cost: result.cost,
+              display_cost: result.displayCost,
             })
             .eq("id", jobId)
 
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-speech") {
           const { text, voice, provider } = job.data as {
             jobId: string
             text: string
             voice?: string
-            provider?: VoiceProvider
+            provider?: string
           }
           console.log(`[worker] text-to-speech ${jobId} (provider: ${provider ?? "elevenlabs"})`)
 
-          const replicateUrl = await textToSpeech(text, voice, provider)
+          const result = await routedTextToSpeech(text, provider ?? "elevenlabs", voice)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
+          const r2Url = await uploadToR2(result.url, jobId, "audio")
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -489,11 +413,14 @@ export function createVideoWorker() {
               progress: 100,
               output_data: { audioUrl: r2Url },
               completed_at: new Date().toISOString(),
+              provider: result.providerUsed,
+              provider_cost: result.cost,
+              display_cost: result.displayCost,
             })
             .eq("id", jobId)
 
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "generate-script") {
           const { prompt, sceneCount, tone, targetDuration, provider } = job.data as {
             jobId: string
@@ -725,18 +652,13 @@ export function createVideoWorker() {
           console.log(`[worker] Job ${jobId} completed: transcribed ${result.text.length} chars (language: ${result.language})`)
 
         } else if (job.name === "generate-character") {
-          const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: ImageProvider }
+          const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: string }
           console.log(`[worker] generate-character ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const result = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -746,26 +668,21 @@ export function createVideoWorker() {
             progress: 100,
             output_data: { imageUrl: r2Url },
             completed_at: new Date().toISOString(),
-            provider: settings.ai_provider,
-            provider_cost: providerCost,
-            display_cost: displayCost,
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-character-asset") {
-          const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: ImageProvider }
+          const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: string }
           console.log(`[worker] generate-character-asset ${jobId} (type: ${assetType}, provider: ${provider ?? "nano-banana"})`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const result = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -775,26 +692,21 @@ export function createVideoWorker() {
             progress: 100,
             output_data: { imageUrl: r2Url, assetType },
             completed_at: new Date().toISOString(),
-            provider: settings.ai_provider,
-            provider_cost: providerCost,
-            display_cost: displayCost,
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-object") {
-          const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: ImageProvider }
+          const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: string }
           console.log(`[worker] generate-object ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const result = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -804,26 +716,21 @@ export function createVideoWorker() {
             progress: 100,
             output_data: { imageUrl: r2Url },
             completed_at: new Date().toISOString(),
-            provider: settings.ai_provider,
-            provider_cost: providerCost,
-            display_cost: displayCost,
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-object-asset") {
-          const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: ImageProvider }
+          const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: string }
           console.log(`[worker] generate-object-asset ${jobId} (type: ${assetType}, provider: ${provider ?? "nano-banana"})`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const result = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -833,26 +740,21 @@ export function createVideoWorker() {
             progress: 100,
             output_data: { imageUrl: r2Url, assetType },
             completed_at: new Date().toISOString(),
-            provider: settings.ai_provider,
-            provider_cost: providerCost,
-            display_cost: displayCost,
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-location") {
-          const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: ImageProvider }
+          const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: string }
           console.log(`[worker] generate-location ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const result = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -862,26 +764,21 @@ export function createVideoWorker() {
             progress: 100,
             output_data: { imageUrl: r2Url },
             completed_at: new Date().toISOString(),
-            provider: settings.ai_provider,
-            provider_cost: providerCost,
-            display_cost: displayCost,
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "generate-location-asset") {
-          const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: ImageProvider }
+          const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: string }
           console.log(`[worker] generate-location-asset ${jobId} (type: ${assetType}, provider: ${provider ?? "nano-banana"})`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const result = await generateImage(prompt, referenceImageUrls, provider)
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
           const r2Url = await uploadToR2(result.url, jobId, "image")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -891,16 +788,15 @@ export function createVideoWorker() {
             progress: 100,
             output_data: { imageUrl: r2Url, assetType },
             completed_at: new Date().toISOString(),
-            provider: settings.ai_provider,
-            provider_cost: providerCost,
-            display_cost: displayCost,
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${settings.ai_provider}, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "motion-transfer") {
           // Motion Transfer: Image + Video → Motion-Applied Video
-          // Uses Kling 2.6 Motion Control via KIE.ai
           const { imageUrl, videoUrl, prompt, characterOrientation, resolution } = job.data as {
             jobId: string
             imageUrl: string
@@ -917,23 +813,21 @@ export function createVideoWorker() {
             await supabase.from("jobs").update({ progress }).eq("id", jobId)
           }
 
-          const result = await motionTransferKie(
+          const result = await motionTransfer(
             imageUrl,
             videoUrl,
+            "kling",
             prompt,
-            characterOrientation ?? "image",
-            resolution ?? "720p",
-            onProgress
+            {
+              onProgress,
+              characterOrientation: characterOrientation ?? "image",
+              resolution: resolution ?? "720p",
+            }
           )
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(result.url, jobId, "video")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -943,16 +837,15 @@ export function createVideoWorker() {
             progress: 100,
             output_data: { videoUrl: r2Url },
             completed_at: new Date().toISOString(),
-            provider: "kie",
-            provider_cost: providerCost,
-            display_cost: displayCost,
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
         } else if (job.name === "video-upscale") {
           // Video Upscale: Video → Upscaled Video
-          // Uses Topaz Video Upscaler via KIE.ai
           const { videoUrl, upscaleFactor } = job.data as {
             jobId: string
             videoUrl: string
@@ -966,20 +859,16 @@ export function createVideoWorker() {
             await supabase.from("jobs").update({ progress }).eq("id", jobId)
           }
 
-          const result = await videoUpscaleKie(
+          const result = await videoUpscale(
             videoUrl,
+            "topaz",
             upscaleFactor ?? "2",
-            onProgress
+            { onProgress }
           )
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(result.url, jobId, "video")
           await job.updateProgress(100)
-
-          // Get settings and calculate costs
-          const settings = await getAppSettings()
-          const providerCost = result.cost
-          const displayCost = providerCost != null ? calculateDisplayCost(providerCost, settings.cost_markup_percent) : null
 
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -989,12 +878,12 @@ export function createVideoWorker() {
             progress: 100,
             output_data: { videoUrl: r2Url },
             completed_at: new Date().toISOString(),
-            provider: "kie",
-            provider_cost: providerCost,
-            display_cost: displayCost,
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
-          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: kie, cost: $${providerCost?.toFixed(6) ?? "N/A"})`)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
         } else {
           throw new Error(`Unknown job type: ${job.name}`)
