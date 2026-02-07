@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Cpu, Plus, Trash2, Loader2, AlertTriangle, Check, Pencil } from "lucide-react"
+import { Cpu, Loader2, Save, Check } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -13,15 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { createClient } from "@/lib/supabase"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 interface ModelPricing {
   readonly id: string
@@ -34,57 +28,339 @@ interface ModelPricing {
   readonly updated_at: string
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  image: "Image",
-  video: "Video",
-  tts: "Text-to-Speech",
-  music: "Music",
-  audio: "Audio",
+// ── Category detection by model ID pattern ──────────────────────────
+
+type Category = "image" | "video" | "audio" | "processing" | "other"
+
+const CATEGORY_PATTERNS: ReadonlyArray<readonly [Category, ReadonlyArray<string>]> = [
+  ["image", ["nano", "flux", "grok", "gpt-image", "recraft"]],
+  ["video", ["veo", "kling", "minimax", "wan", "sora", "grok-i2v", "runway", "pika"]],
+  ["audio", ["suno", "elevenlabs", "infinitalk", "tango", "musicgen", "audioldm", "bark"]],
+  ["processing", ["ffmpeg", "topaz"]],
+]
+
+function detectCategory(modelId: string): Category {
+  const lower = modelId.toLowerCase()
+  for (const [category, patterns] of CATEGORY_PATTERNS) {
+    if (patterns.some((p) => lower.includes(p))) return category
+  }
+  return "other"
+}
+
+const CATEGORY_LABELS: Record<Category, string> = {
+  image: "Image Generation",
+  video: "Video Generation",
+  audio: "Audio / TTS / Music",
   processing: "Processing",
-  script: "Script",
+  other: "Other",
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  image: "bg-blue-500/10 text-blue-500 border-blue-500/30",
-  video: "bg-purple-500/10 text-purple-500 border-purple-500/30",
-  tts: "bg-amber-500/10 text-amber-500 border-amber-500/30",
-  music: "bg-pink-500/10 text-pink-500 border-pink-500/30",
-  audio: "bg-cyan-500/10 text-cyan-500 border-cyan-500/30",
-  processing: "bg-slate-500/10 text-slate-500 border-slate-500/30",
-  script: "bg-green-500/10 text-green-500 border-green-500/30",
+const CATEGORY_HEADER_COLORS: Record<Category, string> = {
+  image: "text-blue-500",
+  video: "text-purple-500",
+  audio: "text-amber-500",
+  processing: "text-slate-500",
+  other: "text-gray-500",
 }
 
-const TIER_OPTIONS = ["free", "basic", "standard", "pro", "business"]
+const TIER_OPTIONS = [
+  { value: "none", label: "None" },
+  { value: "free", label: "Free" },
+  { value: "basic", label: "Basic" },
+  { value: "standard", label: "Standard" },
+  { value: "pro", label: "Pro" },
+  { value: "business", label: "Business" },
+]
+
+// ── Auth headers helper ──────────────────────────────────────────────
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) {
+    throw new Error("Not authenticated. Please sign in.")
+  }
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${session.access_token}`,
+  }
+}
+
+function parseResponse<T>(json: unknown): ReadonlyArray<T> {
+  if (Array.isArray(json)) return json as ReadonlyArray<T>
+  if (json && typeof json === "object" && "data" in json && Array.isArray((json as Record<string, unknown>).data)) {
+    return (json as Record<string, unknown>).data as ReadonlyArray<T>
+  }
+  return []
+}
+
+// ── Summary Cards ────────────────────────────────────────────────────
+
+function SummaryCards({ models }: { readonly models: ReadonlyArray<ModelPricing> }) {
+  const totalModels = models.length
+  const enabledModels = models.filter((m) => m.is_enabled).length
+  const avgCost =
+    totalModels > 0
+      ? (models.reduce((sum, m) => sum + m.credit_cost, 0) / totalModels).toFixed(1)
+      : "0"
+  const tierRestricted = models.filter(
+    (m) => m.tier_restriction && m.tier_restriction !== "none" && m.tier_restriction !== "free"
+  ).length
+
+  const cards = [
+    { label: "Total Models", value: totalModels, color: "text-foreground" },
+    { label: "Enabled", value: enabledModels, color: "text-green-500" },
+    { label: "Avg Credit Cost", value: avgCost, color: "text-blue-500" },
+    { label: "Tier-Restricted", value: tierRestricted, color: "text-amber-500" },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      {cards.map((c) => (
+        <div key={c.label} className="border rounded-lg p-4 bg-card">
+          <p className="text-xs text-muted-foreground">{c.label}</p>
+          <p className={`text-2xl font-bold font-mono ${c.color}`}>{c.value}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Toggle Switch (custom, no Switch component) ─────────────────────
+
+function ToggleSwitch({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  readonly checked: boolean
+  readonly onChange: (val: boolean) => void
+  readonly disabled?: boolean
+  readonly label?: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`
+        relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+        disabled:cursor-not-allowed disabled:opacity-50
+        ${checked ? "bg-green-500" : "bg-gray-400 dark:bg-gray-600"}
+      `}
+    >
+      <span
+        className={`
+          inline-block h-4 w-4 rounded-full bg-white transition-transform shadow-sm
+          ${checked ? "translate-x-6" : "translate-x-1"}
+        `}
+      />
+    </button>
+  )
+}
+
+// ── Inline Editable Cell ─────────────────────────────────────────────
+
+function InlineEditableCell({
+  value,
+  onSave,
+  disabled,
+}: {
+  readonly value: number
+  readonly onSave: (val: number) => void
+  readonly disabled?: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(value))
+
+  const MAX_CREDIT_COST = 10000
+
+  const commit = () => {
+    const num = Number(draft)
+    if (!Number.isNaN(num) && num >= 0 && num <= MAX_CREDIT_COST) {
+      onSave(num)
+    } else {
+      toast.error(`Credit cost must be between 0 and ${MAX_CREDIT_COST}`)
+      setDraft(String(value))
+    }
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <Input
+        type="number"
+        min={0}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit()
+          if (e.key === "Escape") {
+            setDraft(String(value))
+            setEditing(false)
+          }
+        }}
+        disabled={disabled}
+        className="h-7 w-20 text-sm font-mono"
+        autoFocus
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(String(value))
+        setEditing(true)
+      }}
+      disabled={disabled}
+      className="font-mono text-sm px-2 py-1 rounded hover:bg-muted transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+      title="Click to edit"
+      aria-label={`Edit credit cost, current value ${value}`}
+    >
+      {value}
+    </button>
+  )
+}
+
+// ── Model Row ────────────────────────────────────────────────────────
+
+interface PendingChange {
+  creditCost?: number
+  isEnabled?: boolean
+  tierRestriction?: string | null
+}
+
+function ModelRow({
+  model,
+  pending,
+  onFieldChange,
+  onSave,
+  saving,
+}: {
+  readonly model: ModelPricing
+  readonly pending: PendingChange | undefined
+  readonly onFieldChange: (identifier: string, field: keyof PendingChange, value: unknown) => void
+  readonly onSave: (identifier: string, model: ModelPricing) => void
+  readonly saving: boolean
+}) {
+  const hasPending = pending !== undefined
+  const currentCost = pending?.creditCost ?? model.credit_cost
+  const currentEnabled = pending?.isEnabled ?? model.is_enabled
+  const currentTier = pending?.tierRestriction !== undefined
+    ? (pending.tierRestriction ?? "none")
+    : (model.tier_restriction ?? "none")
+
+  return (
+    <tr className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+      {/* Model ID */}
+      <td className="py-3 px-4">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-sm">{model.model_identifier}</span>
+          {model.display_name && model.display_name !== model.model_identifier && (
+            <span className="text-xs text-muted-foreground">{model.display_name}</span>
+          )}
+        </div>
+      </td>
+
+      {/* Credit Cost (inline editable) */}
+      <td className="py-3 px-4">
+        <InlineEditableCell
+          value={currentCost}
+          onSave={(val) => onFieldChange(model.model_identifier, "creditCost", val)}
+          disabled={saving}
+        />
+      </td>
+
+      {/* Enabled toggle */}
+      <td className="py-3 px-4">
+        <ToggleSwitch
+          checked={currentEnabled}
+          onChange={(val) => onFieldChange(model.model_identifier, "isEnabled", val)}
+          disabled={saving}
+          label={`Enable ${model.model_identifier}`}
+        />
+      </td>
+
+      {/* Tier Restriction */}
+      <td className="py-3 px-4">
+        <Select
+          value={currentTier}
+          onValueChange={(val) => onFieldChange(model.model_identifier, "tierRestriction", val === "none" ? null : val)}
+          disabled={saving}
+        >
+          <SelectTrigger className="h-7 w-28 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIER_OPTIONS.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </td>
+
+      {/* Actions */}
+      <td className="py-3 px-4">
+        {hasPending ? (
+          <Button
+            size="sm"
+            onClick={() => onSave(model.model_identifier, model)}
+            disabled={saving}
+            className="h-7 px-3 text-xs"
+          >
+            {saving ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <>
+                <Save className="h-3 w-3 mr-1" />
+                Save
+              </>
+            )}
+          </Button>
+        ) : (
+          <Badge variant="outline" className="text-xs text-green-600 dark:text-green-400 border-green-500/30">
+            <Check className="h-3 w-3 mr-1" />
+            Saved
+          </Badge>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+// ── Main Page ────────────────────────────────────────────────────────
 
 export default function AdminModelPricingPage() {
   const [models, setModels] = useState<ReadonlyArray<ModelPricing>>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [editingModel, setEditingModel] = useState<ModelPricing | null>(null)
-
-  // Form state
-  const [formIdentifier, setFormIdentifier] = useState("")
-  const [formDisplayName, setFormDisplayName] = useState("")
-  const [formCategory, setFormCategory] = useState("image")
-  const [formCreditCost, setFormCreditCost] = useState("5")
-  const [formTierRestriction, setFormTierRestriction] = useState("free")
-  const [formIsEnabled, setFormIsEnabled] = useState(true)
+  const [pendingChanges, setPendingChanges] = useState<Record<string, PendingChange>>({})
+  const [savingId, setSavingId] = useState<string | null>(null)
 
   const fetchModels = useCallback(async () => {
     setLoading(true)
-    setError(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/admin/model-pricing`)
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${API}/v1/admin/models`, { headers })
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error?.message || `Request failed: ${res.status}`)
+        throw new Error(errData?.error ?? `Request failed: ${res.status}`)
       }
       const json = await res.json()
-      setModels(json.data ?? [])
+      const data = parseResponse<ModelPricing>(json)
+      setModels(data)
+      setPendingChanges({})
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch models")
+      toast.error(err instanceof Error ? err.message : "Failed to fetch models")
     } finally {
       setLoading(false)
     }
@@ -94,97 +370,70 @@ export default function AdminModelPricingPage() {
     fetchModels()
   }, [fetchModels])
 
-  const resetForm = () => {
-    setFormIdentifier("")
-    setFormDisplayName("")
-    setFormCategory("image")
-    setFormCreditCost("5")
-    setFormTierRestriction("free")
-    setFormIsEnabled(true)
-    setEditingModel(null)
-  }
+  const handleFieldChange = useCallback(
+    (identifier: string, field: keyof PendingChange, value: unknown) => {
+      setPendingChanges((prev) => ({
+        ...prev,
+        [identifier]: {
+          ...prev[identifier],
+          [field]: value,
+        },
+      }))
+    },
+    []
+  )
 
-  const openEditDialog = (model: ModelPricing) => {
-    setEditingModel(model)
-    setFormIdentifier(model.model_identifier)
-    setFormDisplayName(model.display_name)
-    setFormCategory(model.category)
-    setFormCreditCost(String(model.credit_cost))
-    setFormTierRestriction(model.tier_restriction ?? "free")
-    setFormIsEnabled(model.is_enabled)
-    setDialogOpen(true)
-  }
+  const handleSave = useCallback(
+    async (identifier: string, model: ModelPricing) => {
+      const changes = pendingChanges[identifier]
+      if (!changes) return
 
-  const handleSave = async () => {
-    setSaving(true)
-    setError(null)
-    try {
-      const res = await fetch(`${API_BASE_URL}/v1/admin/model-pricing`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          modelIdentifier: formIdentifier,
-          displayName: formDisplayName,
-          category: formCategory,
-          creditCost: Number(formCreditCost) || 0,
-          isEnabled: formIsEnabled,
-          tierRestriction: formTierRestriction,
-        }),
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error?.message || `Request failed: ${res.status}`)
+      setSavingId(identifier)
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(`${API}/v1/admin/models/${encodeURIComponent(identifier)}/pricing`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            creditCost: changes.creditCost ?? model.credit_cost,
+            isEnabled: changes.isEnabled ?? model.is_enabled,
+            tierRestriction: changes.tierRestriction !== undefined
+              ? changes.tierRestriction
+              : (model.tier_restriction ?? null),
+          }),
+        })
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null)
+          throw new Error(errData?.error ?? `Request failed: ${res.status}`)
+        }
+        toast.success(`Updated ${identifier}`)
+        setPendingChanges((prev) => {
+          const { [identifier]: _removed, ...rest } = prev
+          return rest
+        })
+        await fetchModels()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to save")
+      } finally {
+        setSavingId(null)
       }
-      setDialogOpen(false)
-      resetForm()
-      await fetchModels()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save model pricing")
-    } finally {
-      setSaving(false)
-    }
-  }
+    },
+    [pendingChanges, fetchModels]
+  )
 
-  const handleToggle = async (model: ModelPricing) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/v1/admin/model-pricing/${model.id}/toggle`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isEnabled: !model.is_enabled }),
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error?.message || `Request failed: ${res.status}`)
-      }
-      await fetchModels()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to toggle model")
-    }
-  }
+  // ── Group models by detected category ──────────────────────────────
 
-  const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/v1/admin/model-pricing/${id}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error?.message || `Request failed: ${res.status}`)
-      }
-      await fetchModels()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete model")
-    }
-  }
+  const groupedModels = models.reduce<Record<Category, ReadonlyArray<ModelPricing>>>(
+    (acc, model) => {
+      const cat = detectCategory(model.model_identifier)
+      return { ...acc, [cat]: [...(acc[cat] ?? []), model] }
+    },
+    { image: [], video: [], audio: [], processing: [], other: [] }
+  )
 
-  // Group models by category
-  const groupedModels = models.reduce<Record<string, ReadonlyArray<ModelPricing>>>((acc, model) => {
-    const category = model.category
-    return {
-      ...acc,
-      [category]: [...(acc[category] ?? []), model],
-    }
-  }, {})
+  const categoryOrder: ReadonlyArray<Category> = ["image", "video", "audio", "processing", "other"]
+
+  // ── Render ─────────────────────────────────────────────────────────
 
   if (loading && models.length === 0) {
     return (
@@ -195,206 +444,71 @@ export default function AdminModelPricingPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Cpu className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold">Model Pricing</h1>
-        </div>
-
-        <Dialog
-          open={dialogOpen}
-          onOpenChange={(open) => {
-            setDialogOpen(open)
-            if (!open) resetForm()
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Model
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editingModel ? "Edit Model Pricing" : "Add Model Pricing"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label htmlFor="model-id">Model Identifier</Label>
-                <Input
-                  id="model-id"
-                  placeholder="e.g. nano-banana, veo3, kling"
-                  value={formIdentifier}
-                  onChange={(e) => setFormIdentifier(e.target.value)}
-                  disabled={!!editingModel}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Must match the identifier used in API routes
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="display-name">Display Name</Label>
-                <Input
-                  id="display-name"
-                  placeholder="e.g. Nano Banana, VEO 3"
-                  value={formDisplayName}
-                  onChange={(e) => setFormDisplayName(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select value={formCategory} onValueChange={setFormCategory}>
-                    <SelectTrigger id="category">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="credit-cost">Credit Cost</Label>
-                  <Input
-                    id="credit-cost"
-                    type="number"
-                    min={0}
-                    value={formCreditCost}
-                    onChange={(e) => setFormCreditCost(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tier">Minimum Tier Required</Label>
-                <Select value={formTierRestriction} onValueChange={setFormTierRestriction}>
-                  <SelectTrigger id="tier">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIER_OPTIONS.map((tier) => (
-                      <SelectItem key={tier} value={tier}>
-                        {tier.charAt(0).toUpperCase() + tier.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                onClick={handleSave}
-                disabled={saving || !formIdentifier || !formDisplayName}
-                className="w-full"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : editingModel ? (
-                  "Update Model"
-                ) : (
-                  "Add Model"
-                )}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+    <div className="p-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-6">
+        <Cpu className="h-5 w-5 text-primary" />
+        <h1 className="text-xl font-bold">Model Pricing</h1>
+        <span className="text-xs text-muted-foreground ml-2">
+          {models.length} models
+        </span>
       </div>
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          {error}
-        </div>
-      )}
+      {/* Summary Cards */}
+      <SummaryCards models={models} />
 
-      {models.length === 0 ? (
+      {/* Empty state */}
+      {models.length === 0 && (
         <div className="border rounded-lg p-8 bg-card text-center">
           <Cpu className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground">No model pricing configured.</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Add models to configure their credit costs and availability.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {Object.entries(groupedModels).map(([category, categoryModels]) => (
-            <div key={category}>
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                {CATEGORY_LABELS[category] ?? category}
-              </h2>
-              <div className="space-y-2">
-                {categoryModels.map((model) => (
-                  <div
-                    key={model.id}
-                    className="border rounded-lg p-4 bg-card flex items-center gap-4"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{model.display_name}</span>
-                        <Badge
-                          variant="outline"
-                          className={CATEGORY_COLORS[model.category] ?? ""}
-                        >
-                          {model.category}
-                        </Badge>
-                        {!model.is_enabled && (
-                          <Badge variant="secondary">Disabled</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-4 mt-1">
-                        <p className="text-xs text-muted-foreground font-mono">
-                          {model.model_identifier}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Cost: <span className="font-semibold text-foreground">{model.credit_cost}</span> credits
-                        </p>
-                        {model.tier_restriction && model.tier_restriction !== "free" && (
-                          <p className="text-xs text-muted-foreground">
-                            Min tier: <span className="font-semibold text-foreground">{model.tier_restriction}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(model)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggle(model)}
-                        className="h-8"
-                      >
-                        {model.is_enabled ? "Disable" : "Enable"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(model.id)}
-                        className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
       )}
+
+      {/* Grouped tables */}
+      {categoryOrder.map((cat) => {
+        const group = groupedModels[cat]
+        if (!group || group.length === 0) return null
+
+        return (
+          <div key={cat} className="mb-8">
+            {/* Section header */}
+            <h2 className={`text-sm font-semibold uppercase tracking-wider mb-3 ${CATEGORY_HEADER_COLORS[cat]}`}>
+              {CATEGORY_LABELS[cat]}
+              <span className="ml-2 text-muted-foreground font-normal normal-case">
+                ({group.length})
+              </span>
+            </h2>
+
+            {/* Table */}
+            <div className="border rounded-lg bg-card overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40 text-xs text-muted-foreground uppercase tracking-wider">
+                    <th className="text-left py-2 px-4 font-medium">Model ID</th>
+                    <th className="text-left py-2 px-4 font-medium">Credit Cost</th>
+                    <th className="text-left py-2 px-4 font-medium">Enabled</th>
+                    <th className="text-left py-2 px-4 font-medium">Tier Restriction</th>
+                    <th className="text-left py-2 px-4 font-medium w-24">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.map((model) => (
+                    <ModelRow
+                      key={model.id}
+                      model={model}
+                      pending={pendingChanges[model.model_identifier]}
+                      onFieldChange={handleFieldChange}
+                      onSave={handleSave}
+                      saving={savingId === model.model_identifier}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

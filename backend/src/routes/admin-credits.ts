@@ -73,6 +73,81 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     return data
   })
 
+  // PUT /v1/admin/users/:id/tier - Admin change user tier
+  app.put("/v1/admin/users/:id/tier", async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { tier, adminUserId } = request.body as {
+      tier: string
+      adminUserId: string
+    }
+
+    const VALID_TIERS = ["free", "basic", "standard", "pro", "business"]
+    if (!tier || !VALID_TIERS.includes(tier)) {
+      return reply.code(400).send({ error: `Invalid tier. Must be one of: ${VALID_TIERS.join(", ")}` })
+    }
+    if (!adminUserId) {
+      return reply.code(400).send({ error: "Missing required field: adminUserId" })
+    }
+
+    const TIER_CREDITS: Record<string, number> = {
+      free: 50,
+      basic: 500,
+      standard: 1000,
+      pro: 2000,
+      business: 5000,
+    }
+
+    // Fetch current profile
+    const { data: profile, error: fetchError } = await supabase
+      .from("profiles")
+      .select("subscription_tier, subscription_credits, topup_credits")
+      .eq("id", id)
+      .single()
+
+    if (fetchError || !profile) {
+      return reply.code(404).send({ error: "User not found" })
+    }
+
+    const oldTier = profile.subscription_tier ?? "free"
+    if (oldTier === tier) {
+      return reply.code(200).send({ message: "Tier unchanged", tier })
+    }
+
+    const newCredits = TIER_CREDITS[tier] ?? 50
+
+    // Update tier + reset subscription credits
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({
+        subscription_tier: tier,
+        tier,
+        subscription_credits: newCredits,
+      })
+      .eq("id", id)
+
+    if (updateError) {
+      return reply.code(500).send({ error: updateError.message })
+    }
+
+    // Log transaction for the credit reset
+    const totalAfter = newCredits + (profile.topup_credits ?? 0)
+    const creditDelta = newCredits - (profile.subscription_credits ?? 0)
+
+    try {
+      await CreditsService.adminAdjustCredits({
+        userId: id,
+        amount: 0,
+        creditType: "subscription",
+        description: `Tier changed from ${oldTier} to ${tier} (credits reset to ${newCredits})`,
+        adminUserId,
+      })
+    } catch {
+      // Transaction log failure is non-critical; tier already updated
+    }
+
+    return { tier, subscription_credits: newCredits, total_credits: totalAfter, credit_delta: creditDelta }
+  })
+
   // GET /v1/admin/models - List all models with pricing
   app.get("/v1/admin/models", async (_request, reply) => {
     const { data, error } = await supabase

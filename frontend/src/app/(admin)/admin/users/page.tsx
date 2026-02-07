@@ -79,6 +79,7 @@ function UserExpandedRow({
   const [adjustType, setAdjustType] = useState<"subscription" | "topup">("topup")
   const [adjustDesc, setAdjustDesc] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [changingTier, setChangingTier] = useState(false)
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const supabase = createClient()
@@ -165,6 +166,42 @@ function UserExpandedRow({
     }
   }, [user.id, adjustAmount, adjustType, adjustDesc, onCreditsAdjusted, getAuthHeaders, fetchTransactions])
 
+  const handleTierChange = useCallback(async (newTier: string) => {
+    setChangingTier(true)
+    try {
+      const supabase = createClient()
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        toast.error("Not authenticated")
+        return
+      }
+
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${API}/v1/admin/users/${user.id}/tier`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          tier: newTier,
+          adminUserId: authUser.id,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || `Request failed (${res.status})`)
+      }
+
+      const result = await res.json()
+      toast.success(`Tier changed to ${newTier} (credits reset to ${result.subscription_credits ?? newTier})`)
+      onCreditsAdjusted()
+      fetchTransactions()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to change tier")
+    } finally {
+      setChangingTier(false)
+    }
+  }, [user.id, onCreditsAdjusted, getAuthHeaders, fetchTransactions])
+
   const total = user.subscription_credits + user.topup_credits
   const subPercent = total > 0 ? (user.subscription_credits / total) * 100 : 0
 
@@ -204,6 +241,33 @@ function UserExpandedRow({
                 <span>Subscription ({Math.round(subPercent)}%)</span>
                 <span>Top-up ({Math.round(100 - subPercent)}%)</span>
               </div>
+            </div>
+
+            {/* Change Tier */}
+            <div className="border rounded-lg p-3 bg-card space-y-2">
+              <div className="text-sm font-medium">Change Tier</div>
+              <Select
+                value={user.subscription_tier}
+                onValueChange={handleTierChange}
+                disabled={changingTier}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="basic">Basic</SelectItem>
+                  <SelectItem value="standard">Standard</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
+                </SelectContent>
+              </Select>
+              {changingTier && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Updating...
+                </div>
+              )}
             </div>
 
             {/* Adjust form */}
