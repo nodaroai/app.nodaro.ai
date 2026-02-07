@@ -1,0 +1,563 @@
+/**
+ * KIE.ai API Client - Core HTTP + polling logic
+ *
+ * Extracted from services/kie-ai.ts. Provides the low-level API client
+ * used by all KIE provider modules (image, video, audio).
+ *
+ * API docs: https://docs.kie.ai/
+ * Base URL: https://api.kie.ai
+ * Auth: Bearer token (KIE_API_KEY)
+ */
+
+import { config } from "../../lib/config.js"
+
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+export const KIE_API_BASE = "https://api.kie.ai"
+export const POLL_INTERVAL_MS = 2000 // Poll every 2 seconds
+export const MAX_POLL_ATTEMPTS = 150 // Max 5 minutes (150 * 2s)
+export const MAX_POLL_ATTEMPTS_VIDEO = 300 // Max 10 minutes for video (300 * 2s)
+
+// =============================================================================
+// ERROR SANITIZATION (Cloud edition: don't expose "KIE.ai" to customers)
+// =============================================================================
+
+/**
+ * Custom error class that carries both sanitized message (for UI) and internal details (for logs/debugging).
+ * The `message` property is user-friendly, while `internalDetails` contains the raw KIE.ai error.
+ */
+export class KieError extends Error {
+  public readonly internalDetails: string
+  public readonly context: string
+
+  constructor(
+    sanitizedMessage: string,
+    internalDetails: string,
+    context: string
+  ) {
+    super(sanitizedMessage)
+    this.name = "KieError"
+    this.internalDetails = internalDetails
+    this.context = context
+  }
+
+  /** Get full error message including internal details (for logging/debugging) */
+  getFullMessage(): string {
+    return `[${this.context}] ${this.message} | Internal: ${this.internalDetails}`
+  }
+}
+
+/**
+ * Create a sanitized error for user display while logging full details.
+ * In cloud edition, we don't want to expose "KIE.ai" provider name to customers.
+ * Returns a KieError that carries both the sanitized message and internal details.
+ */
+export function createSanitizedError(
+  internalMessage: string,
+  context: string
+): KieError {
+  // Log the full internal error for debugging (visible in Railway logs)
+  console.error(
+    `[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`
+  )
+
+  // Parse specific error patterns and return user-friendly messages
+  const lowerMsg = internalMessage.toLowerCase()
+
+  let sanitizedMessage: string
+
+  if (
+    lowerMsg.includes("aspect_ratio") ||
+    lowerMsg.includes("aspect ratio")
+  ) {
+    sanitizedMessage =
+      "Invalid aspect ratio setting. Please try a different option."
+  } else if (
+    lowerMsg.includes("timed out") ||
+    lowerMsg.includes("timeout")
+  ) {
+    sanitizedMessage = "Generation timed out. Please try again."
+  } else if (
+    lowerMsg.includes("not configured") ||
+    lowerMsg.includes("api_key")
+  ) {
+    sanitizedMessage =
+      "Service is not properly configured. Please contact support."
+  } else if (
+    lowerMsg.includes("rate limit") ||
+    lowerMsg.includes("quota") ||
+    lowerMsg.includes("429")
+  ) {
+    sanitizedMessage =
+      "Service is temporarily busy. Please try again in a moment."
+  } else if (
+    lowerMsg.includes("invalid") ||
+    lowerMsg.includes("validation")
+  ) {
+    sanitizedMessage =
+      "Invalid input parameters. Please check your settings and try again."
+  } else if (lowerMsg.includes("not support")) {
+    sanitizedMessage =
+      "This operation is not supported with the current provider."
+  } else {
+    // Generic fallback - hide all provider-specific details
+    sanitizedMessage = `${context} failed. Please try again or contact support if the issue persists.`
+  }
+
+  return new KieError(sanitizedMessage, internalMessage, context)
+}
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+export interface KieTaskResponse {
+  code: number
+  message: string
+  data: {
+    taskId: string
+    status?: string
+  }
+}
+
+export interface KieRecordInfoResponse {
+  code: number
+  message: string
+  data: {
+    taskId: string
+    // Valid states per docs.kie.ai/market/common/get-task-detail:
+    // - "waiting": Task is queued and waiting to be processed
+    // - "queuing": Task is in the processing queue
+    // - "generating": Task is currently being processed
+    // - "success": Task completed successfully
+    // - "fail": Task failed (NOTE: "fail" not "failed"!)
+    state: "waiting" | "queuing" | "generating" | "success" | "fail"
+    resultJson?: string // JSON string: {"resultUrls": ["url1", "url2"]}
+    failCode?: string
+    failMsg?: string
+    costTime?: number
+    completeTime?: string
+    createTime?: string
+    progress?: number // 0-100, available for sora2 models
+  }
+}
+
+export interface VeoRecordInfoResponse {
+  code: number
+  msg: string
+  data: {
+    taskId: string
+    paramJson?: string
+    createTime?: string
+    completeTime?: string
+    successFlag: number // 0=generating, 1=success, 2=failed, 3=generation failed
+    fallbackFlag?: boolean
+    errorCode?: number
+    errorMessage?: string
+    response?: {
+      taskId: string
+      resultUrls: string[]
+      originUrls?: string[]
+      resolution?: string
+    }
+  }
+}
+
+export interface KieResultJson {
+  resultUrls?: string[]
+  audioUrl?: string // For TTS/music
+  videoUrl?: string // For video
+}
+
+/** Progress callback type for real-time progress updates */
+export type ProgressCallback = (progress: number) => Promise<void>
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// =============================================================================
+// CORE API FUNCTIONS
+// =============================================================================
+
+/**
+ * Submit a task to KIE.ai and poll for completion
+ * @param onProgress - Optional callback called when progress updates (0-100)
+ */
+export async function runKieTask(
+  model: string,
+  input: Record<string, unknown>,
+  maxAttempts: number = MAX_POLL_ATTEMPTS,
+  onProgress?: ProgressCallback
+): Promise<{ resultJson: KieResultJson; costTime?: number }> {
+  const apiKey = config.KIE_API_KEY
+
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Image generation"
+    )
+  }
+
+  const requestBody = { model, input }
+
+  console.log(`[KIE.ai] >>>>>> SENDING TO KIE.AI API <<<<<<`)
+  console.log(
+    `[KIE.ai] Endpoint: ${KIE_API_BASE}/api/v1/jobs/createTask`
+  )
+  console.log(`[KIE.ai] Model: ${model}`)
+  console.log(`[KIE.ai] FULL REQUEST BODY:`)
+  console.log(JSON.stringify(requestBody, null, 2))
+  console.log(`[KIE.ai] >>>>>> END REQUEST BODY <<<<<<`)
+
+  // Step 1: Create task
+  const createResponse = await fetch(
+    `${KIE_API_BASE}/api/v1/jobs/createTask`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    }
+  )
+
+  const responseText = await createResponse.text()
+  console.log(`[KIE.ai] Response status: ${createResponse.status}`)
+  console.log(
+    `[KIE.ai] Response body (first 500 chars): ${responseText.substring(0, 500)}`
+  )
+
+  if (!createResponse.ok) {
+    console.error(
+      `[KIE.ai] createTask HTTP error - Status: ${createResponse.status}, Body: ${responseText}`
+    )
+    throw createSanitizedError(
+      `createTask failed: ${createResponse.status} - ${responseText}`,
+      "Generation"
+    )
+  }
+
+  let createData: KieTaskResponse
+  try {
+    createData = JSON.parse(responseText) as KieTaskResponse
+  } catch {
+    throw createSanitizedError(
+      `response is not valid JSON: ${responseText}`,
+      "Generation"
+    )
+  }
+
+  if (
+    createData.code !== 0 &&
+    createData.code !== 200 &&
+    createData.code !== undefined
+  ) {
+    console.error(
+      `[KIE.ai] createTask API error - Code: ${createData.code}, Message: ${createData.message}, Full: ${JSON.stringify(createData)}`
+    )
+    throw createSanitizedError(
+      `createTask error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`,
+      "Generation"
+    )
+  }
+
+  if (!createData.data?.taskId) {
+    throw createSanitizedError(
+      `createTask response missing taskId: ${JSON.stringify(createData)}`,
+      "Generation"
+    )
+  }
+
+  const taskId = createData.data.taskId
+  console.log(`[KIE.ai] Task created: ${taskId}`)
+
+  // Step 2: Poll for completion
+  let attempts = 0
+  while (attempts < maxAttempts) {
+    await sleep(POLL_INTERVAL_MS)
+    attempts++
+
+    const detailResponse = await fetch(
+      `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } }
+    )
+
+    if (!detailResponse.ok) {
+      console.warn(
+        `[KIE.ai] Poll attempt ${attempts} failed: ${detailResponse.status}`
+      )
+      continue
+    }
+
+    const detailText = await detailResponse.text()
+    let detailData: KieRecordInfoResponse
+    try {
+      detailData = JSON.parse(detailText) as KieRecordInfoResponse
+    } catch {
+      console.warn(
+        `[KIE.ai] Poll attempt ${attempts} invalid JSON`
+      )
+      continue
+    }
+
+    const state = detailData.data?.state
+    if (!state) {
+      console.warn(
+        `[KIE.ai] Poll attempt ${attempts} missing state`
+      )
+      continue
+    }
+
+    // Log progress for sora2 models (0-100) and call callback if provided
+    const progress = detailData.data.progress
+    console.log(
+      `[KIE.ai] Task ${taskId} state: ${state}${progress !== undefined ? ` (progress: ${progress}%)` : ""} (attempt ${attempts})`
+    )
+
+    // Call progress callback if we have progress data
+    if (progress !== undefined && onProgress) {
+      try {
+        await onProgress(progress)
+      } catch (e) {
+        console.warn(`[KIE.ai] Progress callback error:`, e)
+      }
+    }
+
+    if (state === "success") {
+      const resultJsonStr = detailData.data.resultJson
+      if (!resultJsonStr) {
+        throw createSanitizedError(
+          "task succeeded but no resultJson found",
+          "Generation"
+        )
+      }
+
+      let resultJson: KieResultJson
+      try {
+        resultJson = JSON.parse(resultJsonStr) as KieResultJson
+      } catch {
+        throw createSanitizedError(
+          `resultJson is not valid JSON: ${resultJsonStr}`,
+          "Generation"
+        )
+      }
+
+      return { resultJson, costTime: detailData.data.costTime }
+    }
+
+    // NOTE: KIE.ai API returns "fail" not "failed"!
+    if (state === "fail") {
+      const failMsg = detailData.data.failMsg ?? "Unknown error"
+      const failCode = detailData.data.failCode ?? "no_code"
+      console.error(`[KIE.ai] Task ${taskId} FAILED:`)
+      console.error(`  failCode: ${failCode}`)
+      console.error(`  failMsg: ${failMsg}`)
+      console.error(
+        `  Full response: ${JSON.stringify(detailData, null, 2)}`
+      )
+      throw createSanitizedError(
+        `task failed: [${failCode}] ${failMsg}`,
+        "Generation"
+      )
+    }
+
+    // States "waiting", "queuing", "generating" are all in-progress - continue polling
+  }
+
+  throw createSanitizedError(
+    `task timed out after ${(maxAttempts * POLL_INTERVAL_MS) / 1000} seconds`,
+    "Generation"
+  )
+}
+
+/**
+ * VEO3 uses a special API endpoint: /api/v1/veo/generate
+ * Polling uses: /api/v1/veo/record-info (NOT the standard /api/v1/jobs/recordInfo)
+ * Status is indicated by successFlag (not state):
+ *   0 = generating (still processing)
+ *   1 = success
+ *   2 = failed
+ *   3 = generation failed
+ */
+export async function runVeoTask(
+  model: string,
+  prompt: string,
+  imageUrls?: string[]
+): Promise<{ resultJson: KieResultJson; costTime?: number }> {
+  const apiKey = config.KIE_API_KEY
+
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Video generation"
+    )
+  }
+
+  const requestBody: Record<string, unknown> = {
+    model, // "veo3" or "veo3_fast"
+    prompt,
+  }
+
+  // Add image URLs for image-to-video mode
+  if (imageUrls?.length) {
+    requestBody.imageUrls = imageUrls
+    requestBody.generationType = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+  } else {
+    requestBody.generationType = "TEXT_2_VIDEO"
+  }
+
+  console.log(
+    `[KIE.ai VEO] Creating VEO task with model: ${model}`
+  )
+  console.log(
+    `[KIE.ai VEO] Request body:`,
+    JSON.stringify(requestBody, null, 2)
+  )
+
+  // Step 1: Create VEO task using special endpoint
+  const createResponse = await fetch(
+    `${KIE_API_BASE}/api/v1/veo/generate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    }
+  )
+
+  const responseText = await createResponse.text()
+  console.log(
+    `[KIE.ai VEO] Response status: ${createResponse.status}`
+  )
+  console.log(
+    `[KIE.ai VEO] Response body: ${responseText.substring(0, 500)}`
+  )
+
+  if (!createResponse.ok) {
+    throw createSanitizedError(
+      `VEO generate failed: ${createResponse.status} - ${responseText}`,
+      "Video generation"
+    )
+  }
+
+  let createData: KieTaskResponse
+  try {
+    createData = JSON.parse(responseText) as KieTaskResponse
+  } catch {
+    throw createSanitizedError(
+      `VEO response is not valid JSON: ${responseText}`,
+      "Video generation"
+    )
+  }
+
+  if (
+    createData.code !== 0 &&
+    createData.code !== 200 &&
+    createData.code !== undefined
+  ) {
+    throw createSanitizedError(
+      `VEO generate error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`,
+      "Video generation"
+    )
+  }
+
+  if (!createData.data?.taskId) {
+    throw createSanitizedError(
+      `VEO generate response missing taskId: ${JSON.stringify(createData)}`,
+      "Video generation"
+    )
+  }
+
+  const taskId = createData.data.taskId
+  console.log(`[KIE.ai VEO] Task created: ${taskId}`)
+
+  // Step 2: Poll for completion using VEO-specific endpoint (NOT the standard recordInfo!)
+  // VEO endpoint: /api/v1/veo/record-info (with hyphen)
+  // Status field: successFlag (0=generating, 1=success, 2=failed, 3=generation failed)
+  let attempts = 0
+  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    await sleep(POLL_INTERVAL_MS)
+    attempts++
+
+    const detailResponse = await fetch(
+      `${KIE_API_BASE}/api/v1/veo/record-info?taskId=${taskId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } }
+    )
+
+    if (!detailResponse.ok) {
+      console.warn(
+        `[KIE.ai VEO] Poll attempt ${attempts} failed: ${detailResponse.status}`
+      )
+      continue
+    }
+
+    const detailText = await detailResponse.text()
+    console.log(
+      `[KIE.ai VEO] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`
+    )
+
+    let detailData: VeoRecordInfoResponse
+    try {
+      detailData = JSON.parse(detailText) as VeoRecordInfoResponse
+    } catch {
+      console.warn(
+        `[KIE.ai VEO] Poll attempt ${attempts} invalid JSON`
+      )
+      continue
+    }
+
+    const successFlag = detailData.data?.successFlag
+    console.log(
+      `[KIE.ai VEO] Task ${taskId} successFlag: ${successFlag} (attempt ${attempts})`
+    )
+
+    // successFlag: 0=generating, 1=success, 2=failed, 3=generation failed
+    if (successFlag === 1) {
+      // Success - get result URLs from data.response.resultUrls
+      const resultUrls = detailData.data.response?.resultUrls
+      if (!resultUrls?.length) {
+        throw createSanitizedError(
+          "VEO task succeeded but no resultUrls found",
+          "Video generation"
+        )
+      }
+
+      console.log(
+        `[KIE.ai VEO] Video complete! URLs: ${resultUrls.join(", ")}`
+      )
+
+      return {
+        resultJson: { resultUrls },
+        costTime: undefined,
+      }
+    }
+
+    if (successFlag === 2 || successFlag === 3) {
+      // Failed
+      const errorMsg =
+        detailData.data.errorMessage ??
+        `Error code: ${detailData.data.errorCode ?? "unknown"}`
+      throw createSanitizedError(
+        `VEO task failed: ${errorMsg}`,
+        "Video generation"
+      )
+    }
+
+    // successFlag === 0 means still generating, continue polling
+  }
+
+  throw createSanitizedError(
+    `VEO task timed out after ${(MAX_POLL_ATTEMPTS_VIDEO * POLL_INTERVAL_MS) / 1000} seconds`,
+    "Video generation"
+  )
+}
