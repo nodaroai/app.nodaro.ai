@@ -145,6 +145,7 @@ export async function sunoGenerate(
     model,
     customMode: params.customMode ?? false,
     instrumental: params.instrumental ?? false,
+    callBackUrl: "https://callback.placeholder",
   }
 
   if (params.lyrics) body.lyrics = params.lyrics
@@ -233,6 +234,7 @@ export async function sunoCover(
     model,
     customMode: params.customMode ?? false,
     instrumental: params.instrumental ?? false,
+    callBackUrl: "https://callback.placeholder",
   }
 
   if (params.lyrics) body.lyrics = params.lyrics
