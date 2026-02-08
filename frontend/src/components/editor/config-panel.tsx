@@ -422,7 +422,7 @@ export function ConfigPanel() {
           </div>
         </div>
 
-      <ScrollArea className="flex-1 overflow-hidden min-h-0 bg-[#F8FAFC] dark:bg-[#121212]">
+      <ScrollArea className="flex-1 min-h-0 bg-[#F8FAFC] dark:bg-[#121212]">
         <div className="flex flex-col gap-5 p-4">
           <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
             <Label htmlFor="node-label" className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Label</Label>
@@ -613,7 +613,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover") && (
               <GenerateButton
                 onClick={() => runSingleNode?.(selectedNode.id)}
                 modelIdentifier={getModelIdentifier(selectedNode)}
@@ -645,7 +645,7 @@ export function ConfigPanel() {
               const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
               if (!activeUrl) return null
               const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync"])
-              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio"])
+              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover"])
               const mediaType: "image" | "video" | "audio" = videoTypes.has(selectedNode.type as string) ? "video" : audioTypes.has(selectedNode.type as string) ? "audio" : "image"
               return (
                 <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />
@@ -2701,6 +2701,16 @@ function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField
           className="w-full accent-[#ff0073]"
         />
       </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="suno-instrumental"
+          checked={data.instrumental ?? false}
+          onChange={(e) => onUpdate({ instrumental: e.target.checked })}
+          className="accent-[#ff0073]"
+        />
+        <label htmlFor="suno-instrumental" className="text-xs font-medium text-muted-foreground">Instrumental (no vocals)</label>
+      </div>
     </div>
   )
 }
@@ -2790,6 +2800,16 @@ function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField }:
           </SelectContent>
         </Select>
       </MappableField>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="suno-cover-instrumental"
+          checked={data.instrumental ?? false}
+          onChange={(e) => onUpdate({ instrumental: e.target.checked })}
+          className="accent-[#ff0073]"
+        />
+        <label htmlFor="suno-cover-instrumental" className="text-xs font-medium text-muted-foreground">Instrumental (no vocals)</label>
+      </div>
     </div>
   )
 }

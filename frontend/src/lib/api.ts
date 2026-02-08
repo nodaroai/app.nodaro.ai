@@ -1011,6 +1011,8 @@ export async function sunoGenerateApi(params: {
   styleWeight?: number
   weirdnessConstraint?: number
   audioWeight?: number
+  customMode?: boolean
+  instrumental?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt: params.prompt }
@@ -1023,6 +1025,8 @@ export async function sunoGenerateApi(params: {
   if (params.styleWeight != null) body.styleWeight = params.styleWeight
   if (params.weirdnessConstraint != null) body.weirdnessConstraint = params.weirdnessConstraint
   if (params.audioWeight != null) body.audioWeight = params.audioWeight
+  body.customMode = params.customMode ?? false
+  body.instrumental = params.instrumental ?? false
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/generate`, {
     method: "POST",
@@ -1045,6 +1049,8 @@ export async function sunoCoverApi(params: {
   title?: string
   negativeStyle?: string
   vocalGender?: string
+  customMode?: boolean
+  instrumental?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt: params.prompt, uploadUrl: params.uploadUrl }
@@ -1054,6 +1060,8 @@ export async function sunoCoverApi(params: {
   if (params.title) body.title = params.title
   if (params.negativeStyle) body.negativeStyle = params.negativeStyle
   if (params.vocalGender) body.vocalGender = params.vocalGender
+  body.customMode = params.customMode ?? false
+  body.instrumental = params.instrumental ?? false
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/cover`, {
     method: "POST",

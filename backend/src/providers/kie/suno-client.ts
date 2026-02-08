@@ -47,6 +47,10 @@ export interface SunoGenerateParams {
   weirdnessConstraint?: number
   /** Audio weight 0-100, default 50 */
   audioWeight?: number
+  /** Whether to use custom mode (true when style/title/lyrics provided) */
+  customMode?: boolean
+  /** Whether the song is instrumental (no vocals) */
+  instrumental?: boolean
 }
 
 export interface SunoCoverParams {
@@ -66,6 +70,10 @@ export interface SunoCoverParams {
   negativeStyle?: string
   /** Vocal gender */
   vocalGender?: string
+  /** Whether to use custom mode (true when style/title/lyrics provided) */
+  customMode?: boolean
+  /** Whether the song is instrumental (no vocals) */
+  instrumental?: boolean
 }
 
 export interface SunoTrack {
@@ -135,6 +143,8 @@ export async function sunoGenerate(
   const body: Record<string, unknown> = {
     prompt: params.prompt,
     model,
+    customMode: params.customMode ?? false,
+    instrumental: params.instrumental ?? false,
   }
 
   if (params.lyrics) body.lyrics = params.lyrics
@@ -221,6 +231,8 @@ export async function sunoCover(
     prompt: params.prompt,
     upload_url: params.uploadUrl,
     model,
+    customMode: params.customMode ?? false,
+    instrumental: params.instrumental ?? false,
   }
 
   if (params.lyrics) body.lyrics = params.lyrics

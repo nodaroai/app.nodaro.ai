@@ -17,6 +17,8 @@ const sunoGenerateBody = z.object({
   styleWeight: z.number().min(0).max(100).optional(),
   weirdnessConstraint: z.number().min(0).max(100).optional(),
   audioWeight: z.number().min(0).max(100).optional(),
+  customMode: z.boolean().optional().default(false),
+  instrumental: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),
 })
 
@@ -29,6 +31,8 @@ const sunoCoverBody = z.object({
   title: z.string().max(200).optional(),
   negativeStyle: z.string().max(500).optional(),
   vocalGender: z.enum(["male", "female"]).optional(),
+  customMode: z.boolean().optional().default(false),
+  instrumental: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),
 })
 
@@ -53,7 +57,8 @@ export async function sunoRoutes(app: FastifyInstance) {
       const {
         prompt, model, lyrics, style, title,
         negativeStyle, vocalGender, styleWeight,
-        weirdnessConstraint, audioWeight, userId,
+        weirdnessConstraint, audioWeight, customMode,
+        instrumental, userId,
       } = parsed.data
 
       if (!userId) {
@@ -80,6 +85,8 @@ export async function sunoRoutes(app: FastifyInstance) {
             styleWeight,
             weirdnessConstraint,
             audioWeight,
+            customMode,
+            instrumental,
           },
         })
         .select("id")
@@ -107,6 +114,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         styleWeight,
         weirdnessConstraint,
         audioWeight,
+        customMode,
+        instrumental,
         usageLogId,
       })
 
@@ -133,7 +142,8 @@ export async function sunoRoutes(app: FastifyInstance) {
 
       const {
         prompt, uploadUrl, model, lyrics, style,
-        title, negativeStyle, vocalGender, userId,
+        title, negativeStyle, vocalGender, customMode,
+        instrumental, userId,
       } = parsed.data
 
       if (!userId) {
@@ -158,6 +168,8 @@ export async function sunoRoutes(app: FastifyInstance) {
             title,
             negativeStyle,
             vocalGender,
+            customMode,
+            instrumental,
           },
         })
         .select("id")
@@ -183,6 +195,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         title,
         negativeStyle,
         vocalGender,
+        customMode,
+        instrumental,
         usageLogId,
       })
 

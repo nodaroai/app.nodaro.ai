@@ -653,6 +653,8 @@ export type SunoGenerateData = {
   styleWeight?: number
   weirdnessConstraint?: number
   audioWeight?: number
+  customMode?: boolean
+  instrumental?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -672,6 +674,8 @@ export type SunoCoverData = {
   title?: string
   negativeStyle?: string
   vocalGender?: "male" | "female"
+  customMode?: boolean
+  instrumental?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

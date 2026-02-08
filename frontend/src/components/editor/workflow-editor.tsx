@@ -1767,6 +1767,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${d.label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
       }
+      const hasCustomFields = !!(d.style || d.title || d.lyrics)
       return runProcessingNode(node.id, () => sunoGenerateApi({
         prompt,
         model: d.model || undefined,
@@ -1778,6 +1779,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         styleWeight: d.styleWeight,
         weirdnessConstraint: d.weirdnessConstraint,
         audioWeight: d.audioWeight,
+        customMode: d.customMode ?? hasCustomFields,
+        instrumental: d.instrumental ?? false,
         userId: user?.id,
       }), "generatedAudioUrl", "Suno Generate")
     }
@@ -1794,6 +1797,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${d.label}": no source audio URL found`)
         return Promise.reject(new Error("No upload URL"))
       }
+      const hasCoverCustomFields = !!(d.style || d.title || d.lyrics)
       return runProcessingNode(node.id, () => sunoCoverApi({
         prompt,
         uploadUrl,
@@ -1803,6 +1807,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         title: d.title || undefined,
         negativeStyle: d.negativeStyle || undefined,
         vocalGender: d.vocalGender || undefined,
+        customMode: d.customMode ?? hasCoverCustomFields,
+        instrumental: d.instrumental ?? false,
         userId: user?.id,
       }), "generatedAudioUrl", "Suno Cover")
     }
