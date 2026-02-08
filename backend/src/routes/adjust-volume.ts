@@ -5,12 +5,15 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const adjustVolumeBody = z.object({
-  audioUrl: z.string().url(),
+  audioUrl: z.string().url().optional(),
+  videoUrl: z.string().url().optional(),
   volume: z.number().min(0).max(200).optional().default(100),
   normalize: z.boolean().optional().default(false),
   fadeIn: z.number().min(0).max(10).optional().default(0),
   fadeOut: z.number().min(0).max(10).optional().default(0),
   userId: z.string().uuid().optional(),
+}).refine((data) => data.audioUrl || data.videoUrl, {
+  message: "Either audioUrl or videoUrl is required",
 })
 
 export async function adjustVolumeRoutes(app: FastifyInstance) {
@@ -33,13 +36,16 @@ export async function adjustVolumeRoutes(app: FastifyInstance) {
     // Model identifier for credit check (FFmpeg processing = 0 credits)
     const modelIdentifier = "ffmpeg"
 
+    // Determine input type for the job
+    const inputType = restData.videoUrl ? "video" : "audio"
+
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { ...restData, type: "adjust-volume" },
+        input_data: { ...restData, type: "adjust-volume", inputType },
       })
       .select("id")
       .single()
@@ -53,7 +59,7 @@ export async function adjustVolumeRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("adjust-volume", { jobId: job.id, ...restData, usageLogId })
+    await videoQueue.add("adjust-volume", { jobId: job.id, ...restData, inputType, usageLogId })
     return { jobId: job.id }
   })
 }

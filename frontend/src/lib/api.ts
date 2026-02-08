@@ -701,8 +701,14 @@ export async function combineVideos(
   return res.json()
 }
 
-export async function mergeVideoAudioApi(videoUrl: string, audioUrl: string, voiceoverVolume?: number, backgroundVolume?: number, keepOriginalAudio?: boolean, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio }
+export async function mergeVideoAudioApi(
+  videoUrl: string,
+  audioTracks: { url: string; startTime: number; volume?: number; sourceType?: "audio" | "video" }[],
+  backgroundVolume?: number,
+  keepOriginalAudio?: boolean,
+  userId?: string,
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, audioTracks, backgroundVolume, keepOriginalAudio }
   if (userId) {
     body.userId = userId
   }
@@ -769,8 +775,13 @@ export async function resizeVideoApi(videoUrl: string, targetAspect: string, met
   return res.json()
 }
 
-export async function adjustVolumeApi(audioUrl: string, volume?: number, normalize?: boolean, fadeIn?: number, fadeOut?: number, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { audioUrl, volume, normalize, fadeIn, fadeOut }
+export async function adjustVolumeApi(inputUrl: string, inputType: "audio" | "video", volume?: number, normalize?: boolean, fadeIn?: number, fadeOut?: number, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { volume, normalize, fadeIn, fadeOut }
+  if (inputType === "video") {
+    body.videoUrl = inputUrl
+  } else {
+    body.audioUrl = inputUrl
+  }
   if (userId) {
     body.userId = userId
   }

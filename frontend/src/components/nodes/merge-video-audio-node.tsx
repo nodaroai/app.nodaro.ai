@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Volume2, Loader2, AlertCircle, X } from "lucide-react"
+import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -11,9 +11,25 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { MergeVideoAudioData } from "@/types/nodes"
 
+const VIDEO_TYPES = new Set([
+  "image-to-video", "video-to-video", "text-to-video",
+  "lip-sync", "motion-transfer", "video-upscale",
+  "combine-videos", "add-captions", "resize-video", "trim-video",
+  "upload-video", "youtube-video",
+])
+
+function getSourceIcon(nodeType: string) {
+  if (VIDEO_TYPES.has(nodeType)) return Film
+  if (nodeType === "text-to-speech") return Mic
+  if (nodeType === "generate-music") return Music
+  if (nodeType === "text-to-audio") return AudioWaveform
+  return Volume2
+}
+
 function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   // Subscribe to nodes to ensure re-render when node data changes
   const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
   const currentNodeData = nodes.find((n) => n.id === id)?.data as MergeVideoAudioData | undefined
   const nodeData = currentNodeData ?? (data as MergeVideoAudioData)
   const credits = useModelCredits("ffmpeg", 0)
@@ -27,6 +43,20 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+
+  // Collect connected source info for display
+  const connectedSources = useMemo(() => {
+    const incoming = edges.filter((e) => e.target === id)
+    return incoming
+      .map((e) => nodes.find((n) => n.id === e.source))
+      .filter((n): n is typeof nodes[number] => n !== undefined)
+      .map((n) => ({
+        id: n.id,
+        type: n.type,
+        label: (n.data as Record<string, unknown>).label as string ?? n.type,
+        isVideo: VIDEO_TYPES.has(n.type),
+      }))
+  }, [edges, nodes, id])
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -135,8 +165,30 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        <div className="flex justify-between text-muted-foreground">
-          <span>{nodeData.audioType} ({nodeData.voiceoverVolume}%)</span>
+        {/* Connected sources display */}
+        {connectedSources.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {connectedSources.map((src) => {
+              const Icon = getSourceIcon(src.type)
+              return (
+                <div
+                  key={src.id}
+                  className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] ${src.isVideo ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"}`}
+                  title={src.label}
+                >
+                  <Icon className="w-2.5 h-2.5" />
+                  <span className="truncate max-w-[50px]">{src.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="flex justify-between text-muted-foreground text-[10px]">
+          <span>{nodeData.keepOriginalAudio !== false ? "Keep orig audio" : "No orig audio"}</span>
+          {Object.keys(nodeData.trackSettings ?? {}).length > 0 && (
+            <span>{Object.keys(nodeData.trackSettings ?? {}).length} tracks</span>
+          )}
         </div>
       </div>
     </BaseNode>

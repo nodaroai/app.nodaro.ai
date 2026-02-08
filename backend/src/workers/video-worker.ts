@@ -484,12 +484,13 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
         } else if (job.name === "merge-video-audio") {
-          const { videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio } = job.data as {
-            jobId: string; videoUrl: string; audioUrl: string
+          const { videoUrl, audioUrl, audioTracks, voiceoverVolume, backgroundVolume, keepOriginalAudio } = job.data as {
+            jobId: string; videoUrl: string; audioUrl?: string
+            audioTracks?: { url: string; startTime: number; volume?: number; sourceType?: "audio" | "video" }[]
             voiceoverVolume?: number; backgroundVolume?: number; keepOriginalAudio?: boolean
           }
           console.log(`[worker] merge-video-audio ${jobId}`)
-          const outputPath = await mergeVideoAudio({ videoUrl, audioUrl, voiceoverVolume, backgroundVolume, keepOriginalAudio })
+          const outputPath = await mergeVideoAudio({ videoUrl, audioUrl, audioTracks, voiceoverVolume, backgroundVolume, keepOriginalAudio })
           await job.updateProgress(80)
           const r2Url = await uploadFileToR2(outputPath, jobId, "video")
           await cleanupWorkDir(dirname(outputPath))
@@ -553,18 +554,19 @@ export function createVideoWorker() {
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "adjust-volume") {
-          const { audioUrl, volume, normalize, fadeIn, fadeOut } = job.data as {
-            jobId: string; audioUrl: string; volume?: number; normalize?: boolean; fadeIn?: number; fadeOut?: number
+          const { audioUrl, videoUrl, volume, normalize, fadeIn, fadeOut } = job.data as {
+            jobId: string; audioUrl?: string; videoUrl?: string; volume?: number; normalize?: boolean; fadeIn?: number; fadeOut?: number
           }
-          console.log(`[worker] adjust-volume ${jobId}`)
-          const outputPath = await adjustVolume({ audioUrl, volume, normalize, fadeIn, fadeOut })
+          console.log(`[worker] adjust-volume ${jobId} (${videoUrl ? "video" : "audio"} input)`)
+          const { outputPath, inputType } = await adjustVolume({ audioUrl, videoUrl, volume, normalize, fadeIn, fadeOut })
           await job.updateProgress(80)
-          const r2Url = await uploadFileToR2(outputPath, jobId, "audio")
+          const r2Url = await uploadFileToR2(outputPath, jobId, inputType)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          const outputData = inputType === "video" ? { videoUrl: r2Url } : { audioUrl: r2Url }
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { ...outputData, inputType }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 

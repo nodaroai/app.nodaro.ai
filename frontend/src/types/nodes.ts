@@ -657,12 +657,30 @@ export type CombineVideosData = {
   activeResultIndex?: number
 }
 
+export interface MergeAudioTrack {
+  readonly id: string
+  readonly sourceNodeId: string
+  readonly sourceNodeLabel: string
+  readonly sourceType: "audio" | "video"
+  readonly role: "dialogue" | "background" | "effect" | "narration"
+  readonly volume: number
+  readonly startTime: number
+}
+
 export type MergeVideoAudioData = {
   [key: string]: unknown
   label: string
+  // Main video's embedded audio
+  keepOriginalAudio?: boolean
+  originalAudioVolume?: number
+  originalAudioRole?: "background" | "effect" | "narration"
+  // Per-track settings keyed by source node ID
+  trackSettings?: Record<string, { role: string; volume: number; startTime: number }>
+  // Legacy fields (backward compat)
   audioType: "voiceover" | "background" | "both"
   voiceoverVolume: number
   backgroundVolume: number
+  audioOffsets?: Record<string, number>
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -737,6 +755,8 @@ export type AdjustVolumeData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
+  generatedVideoUrl?: string
+  lastInputType?: "audio" | "video"
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
 }
@@ -1385,7 +1405,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 1,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Merge Video & Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, fieldMappings: {} },
+    defaultData: { label: "Merge Video & Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, keepOriginalAudio: true, originalAudioVolume: 30, originalAudioRole: "background", trackSettings: {}, fieldMappings: {} },
   },
   {
     type: "add-captions",

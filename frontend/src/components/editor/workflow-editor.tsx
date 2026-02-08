@@ -293,10 +293,19 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
     }
-    if (type === "extract-audio" || type === "adjust-volume" || type === "mix-audio") {
+    if (type === "extract-audio" || type === "mix-audio") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined)
+    }
+    if (type === "adjust-volume") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      const lastInputType = (data.lastInputType as string | undefined) ?? "audio"
+      const fallbackUrl = lastInputType === "video"
+        ? (data.generatedVideoUrl as string | undefined)
+        : (data.generatedAudioUrl as string | undefined)
+      return results[activeIndex]?.url ?? fallbackUrl
     }
     if (type === "reference-audio") {
       return (data.extractedAudioUrl as string | undefined)?.trim()
@@ -338,7 +347,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => n !== undefined)
 
-    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; referenceImageUrls?: string[] } = {}
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; audioSources?: { url: string; sourceNodeId: string; sourceType?: "audio" | "video" }[]; referenceImageUrls?: string[] } = {}
 
     for (const src of sourceNodes) {
       const output = extractNodeOutput(src)
@@ -363,6 +372,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "upload-video" || src.type === "youtube-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+        } else if (node.type === "merge-video-audio") {
+          // First video → main video; additional videos → audio extraction sources
+          if (!inputs.videoUrl) {
+            inputs.videoUrl = output
+          } else {
+            inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id, sourceType: "video" as const }]
+          }
         } else {
           inputs.videoUrl = output
         }
@@ -391,6 +407,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "lip-sync" || src.type === "motion-transfer" || src.type === "video-upscale" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+        } else if (node.type === "merge-video-audio") {
+          // First video → main video; additional videos → audio extraction sources
+          if (!inputs.videoUrl) {
+            inputs.videoUrl = output
+          } else {
+            inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id, sourceType: "video" as const }]
+          }
         } else {
           inputs.videoUrl = output
         }
@@ -433,12 +456,28 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "upload-audio") {
         if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+        } else if (node.type === "merge-video-audio") {
+          inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
         } else {
           inputs.audioUrl = output
         }
-      } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "extract-audio" || src.type === "adjust-volume" || src.type === "mix-audio") {
+      } else if (src.type === "adjust-volume") {
+        const adjustData = src.data as AdjustVolumeData
+        const lastInputType = adjustData.lastInputType ?? "audio"
+        if (lastInputType === "video") {
+          inputs.videoUrl = output
+        } else if (node.type === "mix-audio") {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+        } else if (node.type === "merge-video-audio") {
+          inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
+        } else {
+          inputs.audioUrl = output
+        }
+      } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "extract-audio" || src.type === "mix-audio") {
         if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+        } else if (node.type === "merge-video-audio") {
+          inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
         } else {
           inputs.audioUrl = output
         }
@@ -1915,11 +1954,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     if (node.type === "merge-video-audio") {
       const videoUrl = inputs.videoUrl
-      const audioUrl = inputs.audioUrl
+      const audioSources = inputs.audioSources ?? []
       if (!videoUrl) { toast.error(`Node "${(node.data as MergeVideoAudioData).label}": no video input`); return Promise.reject(new Error("No video")) }
-      if (!audioUrl) { toast.error(`Node "${(node.data as MergeVideoAudioData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
+      if (audioSources.length === 0) { toast.error(`Node "${(node.data as MergeVideoAudioData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
       const d = node.data as MergeVideoAudioData
-      return runProcessingNode(node.id, () => mergeVideoAudioApi(videoUrl, audioUrl, d.voiceoverVolume, d.backgroundVolume, undefined, user?.id), "generatedVideoUrl", "Merge Video & Audio")
+      const ts = d.trackSettings ?? {}
+      const audioTracks = audioSources.map((s: { url: string; sourceNodeId: string; sourceType?: string }) => {
+        const setting = ts[s.sourceNodeId]
+        return {
+          url: s.url,
+          startTime: setting?.startTime ?? d.audioOffsets?.[s.sourceNodeId] ?? 0,
+          volume: setting?.volume ?? d.voiceoverVolume ?? 100,
+          sourceType: s.sourceType as "audio" | "video" | undefined,
+        }
+      })
+      const keepOrig = d.keepOriginalAudio ?? true
+      const origVol = d.originalAudioVolume ?? d.backgroundVolume ?? 30
+      return runProcessingNode(node.id, () => mergeVideoAudioApi(videoUrl, audioTracks, origVol, keepOrig, user?.id), "generatedVideoUrl", "Merge Video & Audio")
     }
 
     if (node.type === "extract-audio") {
@@ -1944,10 +1995,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "adjust-volume") {
+      const videoUrl = inputs.videoUrl
       const audioUrl = inputs.audioUrl
-      if (!audioUrl) { toast.error(`Node "${(node.data as AdjustVolumeData).label}": no audio input`); return Promise.reject(new Error("No audio")) }
+      const inputUrl = videoUrl ?? audioUrl
+      if (!inputUrl) { toast.error(`Node "${(node.data as AdjustVolumeData).label}": no audio or video input`); return Promise.reject(new Error("No input")) }
+      const inputType: "video" | "audio" = videoUrl ? "video" : "audio"
+      const outputKey: "generatedVideoUrl" | "generatedAudioUrl" = inputType === "video" ? "generatedVideoUrl" : "generatedAudioUrl"
       const d = node.data as AdjustVolumeData
-      return runProcessingNode(node.id, () => adjustVolumeApi(audioUrl, d.volume, d.normalize, d.fadeIn, d.fadeOut, user?.id), "generatedAudioUrl", "Adjust Volume")
+      const { updateNodeData } = useWorkflowStore.getState()
+      updateNodeData(node.id, { lastInputType: inputType })
+      return runProcessingNode(node.id, () => adjustVolumeApi(inputUrl, inputType, d.volume, d.normalize, d.fadeIn, d.fadeOut, user?.id), outputKey, "Adjust Volume")
     }
 
     if (node.type === "add-captions") {

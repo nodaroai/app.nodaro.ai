@@ -6,11 +6,19 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 
 const mergeVideoAudioBody = z.object({
   videoUrl: z.string().url(),
-  audioUrl: z.string().url(),
+  audioUrl: z.string().url().optional(),
+  audioTracks: z.array(z.object({
+    url: z.string().url(),
+    startTime: z.number().min(0).default(0),
+    volume: z.number().min(0).max(200).optional(),
+    sourceType: z.enum(["audio", "video"]).optional(),
+  })).optional(),
   voiceoverVolume: z.number().min(0).max(200).optional().default(100),
   backgroundVolume: z.number().min(0).max(200).optional().default(30),
   keepOriginalAudio: z.boolean().optional().default(true),
   userId: z.string().uuid().optional(),
+}).refine((data) => data.audioUrl || (data.audioTracks && data.audioTracks.length > 0), {
+  message: "Either audioUrl or audioTracks is required",
 })
 
 export async function mergeVideoAudioRoutes(app: FastifyInstance) {
