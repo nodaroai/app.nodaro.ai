@@ -28,6 +28,7 @@ import type {
   LipSyncProvider,
   MusicGenerationProvider,
   TextToSpeechProvider,
+  TextToSpeechOptions,
 } from "./provider.interface.js"
 import {
   buildRoutingDecision,
@@ -283,7 +284,8 @@ export async function generateMusic(
 export async function textToSpeech(
   text: string,
   model: string,
-  voice?: string
+  voice?: string,
+  options?: TextToSpeechOptions
 ): Promise<RouteResult> {
   return routeAndExecute(
     "text-to-speech",
@@ -291,7 +293,7 @@ export async function textToSpeech(
     "textToSpeech",
     async (instance) => {
       const p = resolveModule<TextToSpeechProvider>(instance, "audio")
-      return p.textToSpeech(text, voice, model)
+      return p.textToSpeech(text, voice, model, options)
     }
   )
 }

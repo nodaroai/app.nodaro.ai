@@ -643,11 +643,26 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   return res.json()
 }
 
-export async function textToSpeech(text: string, voice?: string, provider?: string, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { text, voice, provider }
-  if (userId) {
-    body.userId = userId
+export async function textToSpeech(
+  text: string,
+  voice?: string,
+  provider?: string,
+  userId?: string,
+  options?: {
+    stability?: number
+    similarityBoost?: number
+    style?: number
+    speed?: number
+    languageCode?: string
   }
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { text, voice, provider }
+  if (userId) body.userId = userId
+  if (options?.stability != null) body.stability = options.stability
+  if (options?.similarityBoost != null) body.similarityBoost = options.similarityBoost
+  if (options?.style != null) body.style = options.style
+  if (options?.speed != null) body.speed = options.speed
+  if (options?.languageCode) body.languageCode = options.languageCode
   const res = await fetch(`${API_BASE_URL}/v1/text-to-speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -966,11 +981,13 @@ export function subscribeToDownloadProgress(
   return () => eventSource.close()
 }
 
-export async function textToAudioApi(prompt: string, provider?: string, duration?: number, userId?: string): Promise<{ jobId: string }> {
+export async function textToAudioApi(prompt: string, provider?: string, duration?: number, userId?: string, options?: { loop?: boolean; promptInfluence?: number }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (provider) body.provider = provider
   if (duration !== undefined) body.duration = duration
   if (userId) body.userId = userId
+  if (options?.loop != null) body.loop = options.loop
+  if (options?.promptInfluence != null) body.promptInfluence = options.promptInfluence
   const res = await fetch(`${API_BASE_URL}/v1/text-to-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

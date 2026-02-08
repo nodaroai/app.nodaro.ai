@@ -373,12 +373,35 @@ export const KIE_MUSIC_MODELS: Record<string, KieModelConfig> = {
 
 // =============================================================================
 // TEXT-TO-SPEECH MODELS
+// Verified against docs.kie.ai - 2024
 // =============================================================================
 export const KIE_TTS_MODELS: Record<string, KieModelConfig> = {
-  "elevenlabs": {
-    model: "elevenlabs/text-to-speech",
+  "elevenlabs-turbo": {
+    model: "elevenlabs/text-to-speech-turbo-2-5",
     credits: 10,
-    cost: 0.05,  // 10 credits * $0.005
+    cost: 0.03,  // $0.03 per 1K chars
+  },
+  "elevenlabs-multilingual": {
+    model: "elevenlabs/text-to-speech-multilingual-v2",
+    credits: 10,
+    cost: 0.06,  // $0.06 per 1K chars
+  },
+  // Legacy alias — maps to turbo at runtime in audio.ts
+  "elevenlabs": {
+    model: "elevenlabs/text-to-speech-turbo-2-5",
+    credits: 10,
+    cost: 0.03,
+  },
+}
+
+// =============================================================================
+// SOUND EFFECT MODELS
+// =============================================================================
+export const KIE_SOUND_EFFECT_MODELS: Record<string, KieModelConfig> = {
+  "elevenlabs-sfx": {
+    model: "elevenlabs/sound-effect-v2",
+    credits: 10,
+    cost: 0.0012,  // $0.0012 per second of generated audio
   },
 }
 
@@ -398,7 +421,7 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "music" | "tts" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "music" | "tts" | "sound-effect" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -427,6 +450,8 @@ export function getKieModelConfig(
       return KIE_MUSIC_MODELS[provider] ?? null
     case "tts":
       return KIE_TTS_MODELS[provider] ?? null
+    case "sound-effect":
+      return KIE_SOUND_EFFECT_MODELS[provider] ?? null
     case "special":
       return KIE_SPECIAL_MODELS[provider] ?? null
     default:

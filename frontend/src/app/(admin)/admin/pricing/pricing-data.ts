@@ -153,7 +153,10 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
   "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },
   // ── Audio / TTS / Music ──
+  "elevenlabs-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
+  "elevenlabs-multilingual": { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "elevenlabs":        { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
+  "elevenlabs-sfx":    { provider: "KIE.ai",    providerCostUsd: 0.0012, markupPct: 25 },
   "suno":              { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "suno-v5":           { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "infinitalk":        { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },

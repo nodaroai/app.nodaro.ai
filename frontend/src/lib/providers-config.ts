@@ -51,17 +51,13 @@ export const PROVIDERS_CONFIG: Record<ProviderCategory, Record<string, ProviderI
     },
   },
   voice: {
-    elevenlabs: {
-      label: "ElevenLabs",
-      models: ["eleven_multilingual_v2", "eleven_turbo_v2"],
+    "elevenlabs-turbo": {
+      label: "ElevenLabs Turbo v2.5",
+      models: ["elevenlabs/text-to-speech-turbo-2-5"],
     },
-    playht: {
-      label: "PlayHT",
-      models: ["playht-2.0", "playht-2.0-turbo"],
-    },
-    azure: {
-      label: "Azure TTS",
-      models: ["azure-neural", "azure-standard"],
+    "elevenlabs-multilingual": {
+      label: "ElevenLabs Multilingual v2",
+      models: ["elevenlabs/text-to-speech-multilingual-v2"],
     },
   },
   script: {

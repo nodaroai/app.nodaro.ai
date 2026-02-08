@@ -2360,16 +2360,15 @@ function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField
           />
         </div>
       )}
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
+      <MappableField field="provider" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
         <Select
-          value={data.provider || "elevenlabs"}
+          value={data.provider === "elevenlabs" ? "elevenlabs-turbo" : (data.provider || "elevenlabs-turbo")}
           onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="elevenlabs">ElevenLabs (default)</SelectItem>
-            <SelectItem value="playht">PlayHT</SelectItem>
-            <SelectItem value="azure">Azure TTS</SelectItem>
+            <SelectItem value="elevenlabs-turbo">ElevenLabs Turbo v2.5 (fast)</SelectItem>
+            <SelectItem value="elevenlabs-multilingual">ElevenLabs Multilingual v2</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -2390,52 +2389,122 @@ function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField
         </Select>
       </div>
       <div>
-        <Label htmlFor="language">Language</Label>
-        <Input
-          id="language"
-          value={data.language}
-          onChange={(e) => onUpdate({ language: e.target.value })}
-          placeholder="e.g. en, es, fr"
-        />
+        <Label>Language</Label>
+        <Select
+          value={data.languageCode || "auto"}
+          onValueChange={(v) => onUpdate({ languageCode: v === "auto" ? "" : v })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto-detect</SelectItem>
+            <SelectItem value="en">English</SelectItem>
+            <SelectItem value="he">Hebrew</SelectItem>
+            <SelectItem value="es">Spanish</SelectItem>
+            <SelectItem value="fr">French</SelectItem>
+            <SelectItem value="de">German</SelectItem>
+            <SelectItem value="it">Italian</SelectItem>
+            <SelectItem value="pt">Portuguese</SelectItem>
+            <SelectItem value="ja">Japanese</SelectItem>
+            <SelectItem value="zh">Chinese</SelectItem>
+            <SelectItem value="ko">Korean</SelectItem>
+            <SelectItem value="ar">Arabic</SelectItem>
+            <SelectItem value="ru">Russian</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div>
-        <Label htmlFor="speed">Speed</Label>
+        <Label htmlFor="stability">Stability ({data.stability ?? 0.5})</Label>
+        <Input
+          id="stability"
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={data.stability ?? 0.5}
+          onChange={(e) => onUpdate({ stability: parseFloat(e.target.value) })}
+          className="h-2"
+        />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+          <span>Variable</span>
+          <span>Stable</span>
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="similarityBoost">Similarity ({data.similarityBoost ?? 0.75})</Label>
+        <Input
+          id="similarityBoost"
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={data.similarityBoost ?? 0.75}
+          onChange={(e) => onUpdate({ similarityBoost: parseFloat(e.target.value) })}
+          className="h-2"
+        />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+          <span>Low</span>
+          <span>High</span>
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="style">Style Exaggeration ({data.style ?? 0})</Label>
+        <Input
+          id="style"
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={data.style ?? 0}
+          onChange={(e) => onUpdate({ style: parseFloat(e.target.value) })}
+          className="h-2"
+        />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+          <span>None</span>
+          <span>Exaggerated</span>
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="speed">Speed ({data.speed ?? 1})</Label>
         <Input
           id="speed"
-          type="number"
-          min={0.5}
-          max={2}
-          step={0.1}
-          value={data.speed}
-          onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) || 1 })}
+          type="range"
+          min={0.7}
+          max={1.2}
+          step={0.05}
+          value={data.speed ?? 1}
+          onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) })}
+          className="h-2"
         />
-      </div>
-      <div>
-        <Label htmlFor="pitch">Pitch</Label>
-        <Input
-          id="pitch"
-          type="number"
-          min={0.5}
-          max={2}
-          step={0.1}
-          value={data.pitch}
-          onChange={(e) => onUpdate({ pitch: parseFloat(e.target.value) || 1 })}
-        />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+          <span>0.7x</span>
+          <span>1.2x</span>
+        </div>
       </div>
     </div>
   )
 }
 
 function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToAudioData>) {
+  const isSfx = data.provider === "elevenlabs-sfx"
+  const maxPromptLen = isSfx ? 450 : 2000
+  const minDuration = isSfx ? 0.5 : 1
+  const maxDuration = isSfx ? 22 : 30
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           rows={3}
           value={data.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Describe the sound effect (e.g. dog barking, rain on window)..."
+          onChange={(e) => {
+            const v = e.target.value
+            if (v.length <= maxPromptLen) onUpdate({ prompt: v })
+          }}
+          placeholder={isSfx ? "Describe the sound effect (max 450 chars)..." : "Describe the sound effect (e.g. dog barking, rain on window)..."}
         />
+        {isSfx && (
+          <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/{maxPromptLen}</p>
+        )}
       </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
@@ -2448,18 +2517,56 @@ function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField 
             <SelectItem value="tango">Tango</SelectItem>
             <SelectItem value="audioldm">AudioLDM</SelectItem>
             <SelectItem value="bark">Bark</SelectItem>
+            <SelectItem value="elevenlabs-sfx">ElevenLabs SFX v2</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           type="number"
-          min={1}
-          max={30}
+          min={minDuration}
+          max={maxDuration}
+          step={isSfx ? 0.5 : 1}
           value={data.duration}
-          onChange={(e) => onUpdate({ duration: parseInt(e.target.value, 10) || 10 })}
+          onChange={(e) => onUpdate({ duration: parseFloat(e.target.value) || 10 })}
         />
       </MappableField>
+      {isSfx && (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Loop</label>
+            <Select
+              value={data.loop ? "true" : "false"}
+              onValueChange={(v) => onUpdate({ loop: v === "true" })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="false">Off</SelectItem>
+                <SelectItem value="true">On (seamless loop)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">Prompt Influence</label>
+              <span className="text-xs text-muted-foreground">{(data.promptInfluence ?? 0.3).toFixed(1)}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.1}
+              value={data.promptInfluence ?? 0.3}
+              onChange={(e) => onUpdate({ promptInfluence: parseFloat(e.target.value) })}
+              className="w-full accent-[#ff0073]"
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>More random</span>
+              <span>More faithful</span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

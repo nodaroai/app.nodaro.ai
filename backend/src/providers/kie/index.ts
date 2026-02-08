@@ -20,6 +20,7 @@ import {
   KIE_LIP_SYNC_MODELS,
   KIE_MUSIC_MODELS,
   KIE_TTS_MODELS,
+  KIE_SOUND_EFFECT_MODELS,
 } from "./models.js"
 
 const kieInfo: ProviderInfo = {
@@ -50,6 +51,7 @@ const kieInfo: ProviderInfo = {
     "lip-sync": Object.keys(KIE_LIP_SYNC_MODELS),
     "music-generation": Object.keys(KIE_MUSIC_MODELS),
     "text-to-speech": Object.keys(KIE_TTS_MODELS),
+    "sound-effect": Object.keys(KIE_SOUND_EFFECT_MODELS),
     "transcription": [], // KIE doesn't support transcription
   },
 }

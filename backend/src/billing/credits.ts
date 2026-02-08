@@ -71,7 +71,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-avatar-pro": 0,
   "hailuo-avatar": 5,
   // ── Audio / TTS / Music ──
+  "elevenlabs-turbo": 1,
+  "elevenlabs-multilingual": 1,
   "elevenlabs": 1,
+  "elevenlabs-sfx": 1,
   "suno": 1,
   "suno-v5": 1,
   "infinitalk": 0,

@@ -7,12 +7,24 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 const textToSpeechBody = z.object({
   text: z.string().min(1).max(5000),
   voice: z.string().optional(),
-  provider: z.enum(["elevenlabs", "playht", "azure"]).optional(),
+  provider: z.enum(["elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs"]).optional(),
   userId: z.string().uuid().optional(),
+  stability: z.number().min(0).max(1).optional(),
+  similarityBoost: z.number().min(0).max(1).optional(),
+  style: z.number().min(0).max(1).optional(),
+  speed: z.number().min(0.7).max(1.2).optional(),
+  languageCode: z.string().optional(),
 })
 
 export async function textToSpeechRoutes(app: FastifyInstance) {
-  app.post("/v1/text-to-speech", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "elevenlabs" }) }, async (req, reply) => {
+  app.post("/v1/text-to-speech", {
+    preHandler: creditGuard((req) => {
+      const body = req.body as Record<string, unknown>
+      const provider = (body?.provider as string) ?? "elevenlabs-turbo"
+      // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit lookup
+      return provider === "elevenlabs" ? "elevenlabs-turbo" : provider
+    }),
+  }, async (req, reply) => {
     const parsed = textToSpeechBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -23,7 +35,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    const { text, voice, provider, userId } = parsed.data
+    const { text, voice, provider, userId, stability, similarityBoost, style, speed, languageCode } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -31,8 +43,9 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    // Determine model identifier for credit check (default to elevenlabs)
-    const modelIdentifier = provider ?? "elevenlabs"
+    // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check
+    const resolvedProvider = provider === "elevenlabs" ? "elevenlabs-turbo" : (provider ?? "elevenlabs-turbo")
+    const modelIdentifier = resolvedProvider
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -40,7 +53,11 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { text, voice, provider, type: "text-to-speech" },
+        input_data: {
+          text, voice, provider: resolvedProvider,
+          type: "text-to-speech",
+          stability, similarityBoost, style, speed, languageCode,
+        },
       })
       .select("id")
       .single()
@@ -60,8 +77,13 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       jobId: job.id,
       text,
       voice,
-      provider,
+      provider: resolvedProvider,
       usageLogId,
+      stability,
+      similarityBoost,
+      style,
+      speed,
+      languageCode,
     })
 
     return { jobId: job.id }

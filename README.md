@@ -33,9 +33,9 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | Image | nano-banana, nano-banana-pro, flux, grok, gpt-image |
 | Video | minimax, veo3, veo3.1, kling, kling-turbo, sora2-pro |
 | Script | google/gemini-2.5-flash |
-| TTS | elevenlabs/turbo-v2.5 (26 voices) |
+| TTS | ElevenLabs Turbo v2.5, Multilingual v2 (26 voices, KIE.ai) |
 | Music | MusicGen, MiniMax, Lyria, Bark |
-| Audio SFX | TangoFlux, Tango, AudioLDM, Bark |
+| Audio SFX | TangoFlux, Tango, AudioLDM, Bark, ElevenLabs SFX v2 |
 | Lip Sync | kling-avatar, hailuo-avatar (KIE.ai) |
 
 ## Editions
