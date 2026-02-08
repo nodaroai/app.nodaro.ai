@@ -104,15 +104,9 @@ interface SunoRecordInfoResponse {
   message?: string
   data?: {
     taskId: string
-    status: "SUCCESS" | "PENDING" | "PROCESSING" | "FAILED"
+    status: "SUCCESS" | "FIRST_SUCCESS" | "PENDING" | "PROCESSING" | "FAILED"
     response?: {
-      sunoData?: Array<{
-        id: string
-        audio_url: string
-        title?: string
-        duration?: number
-        image_url?: string
-      }>
+      sunoData?: Array<Record<string, unknown>>
     }
     failReason?: string
     errorMessage?: string
@@ -335,6 +329,11 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
       `[Suno] Task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
     )
 
+    if (status === "FIRST_SUCCESS") {
+      console.log(`[Suno] Task ${taskId} FIRST_SUCCESS — tracks still processing, continuing to poll`)
+      continue
+    }
+
     if (status === "SUCCESS") {
       const sunoData = detailData.data?.response?.sunoData
       if (!sunoData?.length) {
@@ -344,18 +343,38 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
         )
       }
 
-      const tracks: SunoTrack[] = sunoData.map((t) => ({
-        id: t.id,
-        audioUrl: t.audio_url,
-        title: t.title,
-        duration: t.duration,
-        imageUrl: t.image_url,
-      }))
+      // Log raw track data for debugging
+      console.log(`[Suno] Raw track data:`, JSON.stringify(sunoData[0], null, 2))
+
+      const tracks: SunoTrack[] = sunoData.map((t) => {
+        // Handle both audio_url and audioUrl field names
+        const audioUrl = (t.audio_url ?? t.audioUrl ?? t.song_url ?? t.songUrl ?? t.url) as string | undefined
+        if (!audioUrl) {
+          console.error(`[Suno] Track missing audio URL. Keys: ${Object.keys(t).join(", ")}`)
+          console.error(`[Suno] Full track object:`, JSON.stringify(t))
+        }
+        return {
+          id: (t.id ?? t.taskId ?? "") as string,
+          audioUrl: audioUrl ?? "",
+          title: (t.title ?? t.song_name) as string | undefined,
+          duration: (t.duration ?? t.song_duration) as number | undefined,
+          imageUrl: (t.image_url ?? t.imageUrl ?? t.image_large_url ?? t.cover_url) as string | undefined,
+        }
+      })
+
+      // Validate at least one track has a URL
+      const validTracks = tracks.filter((t) => t.audioUrl)
+      if (validTracks.length === 0) {
+        throw createSanitizedError(
+          `Suno tracks returned but none have audio URLs. Keys: ${Object.keys(sunoData[0]).join(", ")}`,
+          "Music generation"
+        )
+      }
 
       console.log(
-        `[Suno] Task ${taskId} completed with ${tracks.length} track(s)`
+        `[Suno] Task ${taskId} completed with ${validTracks.length} valid track(s) of ${tracks.length} total`
       )
-      return { taskId, tracks }
+      return { taskId, tracks: validTracks }
     }
 
     if (status === "FAILED") {

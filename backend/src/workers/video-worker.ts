@@ -668,12 +668,13 @@ export function createVideoWorker() {
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "suno-generate") {
-          const { prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight } = job.data as {
+          const { prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental } = job.data as {
             jobId: string; prompt: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
             negativeStyle?: string; vocalGender?: string; styleWeight?: number; weirdnessConstraint?: number; audioWeight?: number
+            customMode?: boolean; instrumental?: boolean
           }
-          console.log(`[worker] suno-generate ${jobId} (model: ${model ?? "V5"})`)
-          const result = await sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight })
+          console.log(`[worker] suno-generate ${jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental})`)
+          const result = await sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental })
           await job.updateProgress(50)
           // Upload first track to R2 for permanent storage (Suno URLs expire in 14 days)
           const firstTrack = result.tracks[0]
@@ -690,12 +691,12 @@ export function createVideoWorker() {
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 
         } else if (job.name === "suno-cover") {
-          const { prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender } = job.data as {
+          const { prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental } = job.data as {
             jobId: string; prompt: string; uploadUrl: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
-            negativeStyle?: string; vocalGender?: string
+            negativeStyle?: string; vocalGender?: string; customMode?: boolean; instrumental?: boolean
           }
-          console.log(`[worker] suno-cover ${jobId} (model: ${model ?? "V5"})`)
-          const result = await sunoCover({ prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender })
+          console.log(`[worker] suno-cover ${jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental})`)
+          const result = await sunoCover({ prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental })
           await job.updateProgress(50)
           const firstTrack = result.tracks[0]
           if (!firstTrack) throw new Error("Suno cover returned no tracks")
