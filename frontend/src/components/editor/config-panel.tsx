@@ -2645,12 +2645,12 @@ function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
-          value={data.vocalGender ?? ""}
-          onValueChange={(v) => onUpdate({ vocalGender: v || undefined })}
+          value={data.vocalGender ?? "auto"}
+          onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? undefined : v })}
         >
           <SelectTrigger><SelectValue placeholder="Auto" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Auto</SelectItem>
+            <SelectItem value="auto">Auto</SelectItem>
             <SelectItem value="male">Male</SelectItem>
             <SelectItem value="female">Female</SelectItem>
           </SelectContent>
@@ -2779,12 +2779,12 @@ function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField }:
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
-          value={data.vocalGender ?? ""}
-          onValueChange={(v) => onUpdate({ vocalGender: v || undefined })}
+          value={data.vocalGender ?? "auto"}
+          onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? undefined : v })}
         >
           <SelectTrigger><SelectValue placeholder="Auto" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Auto</SelectItem>
+            <SelectItem value="auto">Auto</SelectItem>
             <SelectItem value="male">Male</SelectItem>
             <SelectItem value="female">Female</SelectItem>
           </SelectContent>
