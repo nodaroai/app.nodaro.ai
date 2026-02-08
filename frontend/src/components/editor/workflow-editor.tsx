@@ -1689,6 +1689,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         if (audioNode) audioUrl = extractNodeOutput(audioNode)
       }
 
+      if (audioUrl && !audioUrl.startsWith("http")) audioUrl = undefined
+
       // Use connected Text Prompt (inputs.prompt) OR direct motionPrompt field
       const prompt = inputs.prompt ?? i2vData.motionPrompt
       return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt)
