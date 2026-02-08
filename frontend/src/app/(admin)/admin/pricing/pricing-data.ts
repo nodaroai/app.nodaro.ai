@@ -106,6 +106,10 @@ export interface ModelReferenceData {
 /** [comment removed] */
 export const CREDIT_VALUE_USD = 0.10
 
+/** [comment removed] */
+export const SELL_PRICE_PER_CREDIT_MAX = 0.20   // Basic tier
+export const SELL_PRICE_PER_CREDIT_MIN = 0.133  // Business tier
+
 /**
  * [comment removed]
  * KIE.ai costs from https://docs.kie.ai pricing tables.

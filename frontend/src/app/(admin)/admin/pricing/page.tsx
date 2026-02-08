@@ -30,6 +30,8 @@ import {
   CATEGORY_COLORS,
   MODEL_REFERENCE,
   CREDIT_VALUE_USD,
+  SELL_PRICE_PER_CREDIT_MIN,
+  SELL_PRICE_PER_CREDIT_MAX,
   type DBCategory,
   type LLMPricing,
 } from "./pricing-data"
@@ -113,7 +115,7 @@ function computeQuickStats(models: ReadonlyArray<DBModelPricing>) {
     { label: "All images", value: imageRange },
     { label: "FFmpeg nodes", value: "Always free" },
     { label: "Markup", value: "KIE 25% / Replicate 10%" },
-    { label: "Credit value", value: "1 credit = $0.10 cost" },
+    { label: "Sell price / credit", value: `$${SELL_PRICE_PER_CREDIT_MIN} - $${SELL_PRICE_PER_CREDIT_MAX}` },
   ] as const
 }
 
@@ -377,6 +379,7 @@ function DetailedModelTable({
                     <th className="text-right px-3 py-2 font-medium">Markup</th>
                     <th className="text-right px-3 py-2 font-medium">+Markup</th>
                     <th className="text-right px-3 py-2 font-medium">Credits</th>
+                    <th className="text-right px-3 py-2 font-medium">Sell Price</th>
                     <th className="text-right px-3 py-2 font-medium">Margin</th>
                     <th className="px-3 py-2 w-12" />
                   </tr>
@@ -388,9 +391,12 @@ function DetailedModelTable({
                     const markup = ref?.markupPct ?? 0
                     const costWithMarkup = providerCost != null ? providerCost * (1 + markup / 100) : null
                     const creditCost = pendingCosts[m.model_identifier] ?? m.credit_cost
-                    const revenue = creditCost * CREDIT_VALUE_USD
-                    const margin = providerCost != null && revenue > 0
-                      ? ((revenue - providerCost) / revenue * 100)
+                    // Sell price range across tiers
+                    const sellMin = creditCost * SELL_PRICE_PER_CREDIT_MIN  // Business tier (worst)
+                    const sellMax = creditCost * SELL_PRICE_PER_CREDIT_MAX  // Basic tier (best)
+                    // Margin based on worst-case sell price (Business tier)
+                    const margin = providerCost != null && sellMin > 0
+                      ? ((sellMin - providerCost) / sellMin * 100)
                       : null
                     const hasPending = m.model_identifier in pendingCosts
                     const isSaving = savingId === m.model_identifier
@@ -438,7 +444,15 @@ function DetailedModelTable({
                             disabled={isSaving}
                           />
                         </td>
-                        {/* Margin */}
+                        {/* Sell price range */}
+                        <td className="px-3 py-2.5 text-right font-mono text-xs">
+                          {creditCost > 0
+                            ? <span title={`Basic: $${sellMax.toFixed(2)} / Business: $${sellMin.toFixed(2)}`}>
+                                ${sellMin.toFixed(2)} - ${sellMax.toFixed(2)}
+                              </span>
+                            : <span className="text-muted-foreground">$0</span>}
+                        </td>
+                        {/* Margin (worst case = Business tier) */}
                         <td className={`px-3 py-2.5 text-right font-mono text-xs font-semibold ${marginColor(margin)}`}>
                           {margin != null ? `${margin.toFixed(0)}%` : "--"}
                         </td>
@@ -659,7 +673,7 @@ function AIModelsSection({
             savingId={savingId}
           />
           <div className="px-4 py-2.5 text-xs text-muted-foreground border-t bg-muted/20">
-            Margin = (credits x $0.10 - provider cost) / (credits x $0.10). Click any credit value to edit.
+            Sell Price = credits x $/credit (Basic $0.20 - Business $0.133). Margin = worst case (Business tier): (sell - cost) / sell. Click any credit value to edit.
           </div>
         </>
       )}
