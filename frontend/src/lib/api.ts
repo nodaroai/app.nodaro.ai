@@ -918,7 +918,7 @@ export async function downloadYouTubeAudio(url: string): Promise<{ url: string; 
   return res.json()
 }
 
-export async function downloadVideo(url: string): Promise<{ videoUrl: string; thumbnailUrl: string | null }> {
+export async function startVideoDownload(url: string): Promise<{ downloadId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/download-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -926,9 +926,44 @@ export async function downloadVideo(url: string): Promise<{ videoUrl: string; th
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to download video. It may be private or require login.")
+    throw new Error(err?.error?.message ?? "Failed to start download. The video may be private or require login.")
   }
   return res.json()
+}
+
+export interface DownloadProgressEvent {
+  phase: "downloading" | "uploading" | "completed" | "failed"
+  percent: number
+  videoUrl?: string
+  thumbnailUrl?: string
+  error?: string
+}
+
+export function subscribeToDownloadProgress(
+  downloadId: string,
+  onProgress: (event: DownloadProgressEvent) => void,
+): () => void {
+  const url = `${API_BASE_URL}/v1/download-video/progress/${downloadId}`
+  const eventSource = new EventSource(url)
+
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data) as DownloadProgressEvent
+      onProgress(data)
+      if (data.phase === "completed" || data.phase === "failed") {
+        eventSource.close()
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  eventSource.onerror = () => {
+    eventSource.close()
+    onProgress({ phase: "failed", percent: 0, error: "Connection lost" })
+  }
+
+  return () => eventSource.close()
 }
 
 export async function textToAudioApi(prompt: string, provider?: string, duration?: number, userId?: string): Promise<{ jobId: string }> {

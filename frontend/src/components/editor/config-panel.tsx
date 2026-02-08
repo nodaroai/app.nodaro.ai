@@ -26,7 +26,8 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { GenerateButton } from "@/components/credits/GenerateButton"
 import { createClient } from "@/lib/supabase"
-import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, downloadVideo } from "@/lib/api"
+import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
+import type { DownloadProgressEvent } from "@/lib/api"
 import {
   getProviders,
   getProviderLabel,
@@ -817,6 +818,7 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
       downloadedThumbnailUrl: "",
       downloadStatus: "idle",
       downloadError: "",
+      downloadPercent: 0,
     })
 
     const videoId = extractVideoUrlId(url)
@@ -851,23 +853,38 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
     if (!url) return
     onUpdate({
       downloadStatus: "downloading",
+      downloadPercent: 0,
       downloadError: "",
       downloadedVideoUrl: "",
       downloadedThumbnailUrl: "",
     })
     try {
-      const result = await downloadVideo(url)
-      onUpdate({
-        downloadedVideoUrl: result.videoUrl,
-        downloadedThumbnailUrl: result.thumbnailUrl ?? "",
-        downloadStatus: "completed",
-        thumbnailUrl: result.thumbnailUrl ?? data.thumbnailUrl,
+      const { downloadId } = await startVideoDownload(url)
+      subscribeToDownloadProgress(downloadId, (event: DownloadProgressEvent) => {
+        if (event.phase === "completed" && event.videoUrl) {
+          onUpdate({
+            downloadedVideoUrl: event.videoUrl,
+            downloadedThumbnailUrl: event.thumbnailUrl ?? "",
+            downloadStatus: "completed",
+            downloadPercent: 100,
+            thumbnailUrl: event.thumbnailUrl ?? data.thumbnailUrl,
+          })
+        } else if (event.phase === "failed") {
+          onUpdate({
+            downloadStatus: "failed",
+            downloadError: event.error ?? "Download failed",
+            downloadPercent: 0,
+          })
+        } else {
+          onUpdate({ downloadPercent: event.percent })
+        }
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Download failed"
       onUpdate({
         downloadStatus: "failed",
         downloadError: message,
+        downloadPercent: 0,
       })
     }
   }, [data.youtubeUrl, data.thumbnailUrl, onUpdate])
@@ -927,11 +944,20 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
             </>
           )}
 
-          {/* Downloading state */}
+          {/* Downloading state with progress */}
           {isDownloading && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ff0073]" />
-              <span>Downloading video...</span>
+            <div className="flex flex-col gap-1.5 p-2 bg-muted/30 rounded-md">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ff0073]" />
+                <span>{(data.downloadPercent ?? 0) >= 95 ? "Uploading..." : "Downloading video..."}</span>
+                <span className="ml-auto font-mono text-[#ff0073]">{data.downloadPercent ?? 0}%</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden">
+                <div
+                  className="h-full bg-[#ff0073] rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${data.downloadPercent ?? 0}%` }}
+                />
+              </div>
             </div>
           )}
 

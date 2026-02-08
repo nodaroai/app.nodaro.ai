@@ -102,6 +102,7 @@ export type YouTubeVideoData = {
   downloadedThumbnailUrl?: string
   downloadStatus?: "idle" | "downloading" | "completed" | "failed"
   downloadError?: string
+  downloadPercent?: number
 }
 
 export type ReferenceAudioData = {

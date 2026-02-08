@@ -6,7 +6,8 @@ import { Link, X, Play, Video, Music2, Camera, Hash, Download, AlertCircle, Chec
 import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { fetchYouTubeOEmbed, downloadVideo } from "@/lib/api"
+import { fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
+import type { DownloadProgressEvent } from "@/lib/api"
 import type { YouTubeVideoData } from "@/types/nodes"
 
 type VideoPlatform = "youtube" | "facebook" | "tiktok" | "instagram" | "twitter" | "unknown"
@@ -161,24 +162,39 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const handleDownloadVideo = async (url: string) => {
     updateNodeData(id, {
       downloadStatus: "downloading",
+      downloadPercent: 0,
       downloadError: "",
       downloadedVideoUrl: "",
       downloadedThumbnailUrl: "",
     })
 
     try {
-      const result = await downloadVideo(url)
-      updateNodeData(id, {
-        downloadedVideoUrl: result.videoUrl,
-        downloadedThumbnailUrl: result.thumbnailUrl ?? "",
-        downloadStatus: "completed",
-        thumbnailUrl: result.thumbnailUrl ?? nodeData.thumbnailUrl,
+      const { downloadId } = await startVideoDownload(url)
+      subscribeToDownloadProgress(downloadId, (event: DownloadProgressEvent) => {
+        if (event.phase === "completed" && event.videoUrl) {
+          updateNodeData(id, {
+            downloadedVideoUrl: event.videoUrl,
+            downloadedThumbnailUrl: event.thumbnailUrl ?? "",
+            downloadStatus: "completed",
+            downloadPercent: 100,
+            thumbnailUrl: event.thumbnailUrl ?? nodeData.thumbnailUrl,
+          })
+        } else if (event.phase === "failed") {
+          updateNodeData(id, {
+            downloadStatus: "failed",
+            downloadError: event.error ?? "Download failed",
+            downloadPercent: 0,
+          })
+        } else {
+          updateNodeData(id, { downloadPercent: event.percent })
+        }
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Download failed"
       updateNodeData(id, {
         downloadStatus: "failed",
         downloadError: message,
+        downloadPercent: 0,
       })
     }
   }
@@ -190,6 +206,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
       downloadedThumbnailUrl: "",
       downloadStatus: "idle",
       downloadError: "",
+      downloadPercent: 0,
     })
 
     const videoId = extractVideoId(url)
@@ -243,6 +260,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
       downloadedThumbnailUrl: "",
       downloadStatus: "idle",
       downloadError: "",
+      downloadPercent: 0,
     })
   }
 
@@ -289,15 +307,21 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           )}
 
-          {/* Downloading video state (non-YouTube) */}
+          {/* Downloading video state (non-YouTube) with real progress */}
           {!loading && isDownloading && (
-            <div className="flex flex-col items-center justify-center gap-1.5 h-20 rounded-md bg-muted/30">
+            <div className="flex flex-col items-center justify-center gap-1.5 h-20 rounded-md bg-muted/30 px-3">
               <div className="flex items-center gap-2">
                 <Loader2 className="w-4 h-4 text-[#ff0073] animate-spin" />
-                <span className="text-xs text-muted-foreground">Downloading video...</span>
+                <span className="text-xs text-muted-foreground">
+                  {(nodeData.downloadPercent ?? 0) >= 95 ? "Uploading..." : "Downloading video..."}
+                </span>
+                <span className="text-xs font-mono text-[#ff0073]">{nodeData.downloadPercent ?? 0}%</span>
               </div>
-              <div className="w-3/4 h-1 rounded-full bg-muted-foreground/20 overflow-hidden">
-                <div className="h-full bg-[#ff0073] rounded-full animate-pulse w-2/3" />
+              <div className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden">
+                <div
+                  className="h-full bg-[#ff0073] rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${nodeData.downloadPercent ?? 0}%` }}
+                />
               </div>
             </div>
           )}
