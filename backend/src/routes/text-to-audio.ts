@@ -6,7 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 
 const textToAudioBody = z.object({
   prompt: z.string().min(1).max(2000),
-  provider: z.enum(["tangoflux", "tango", "audioldm", "bark", "elevenlabs-sfx"]).optional(),
+  provider: z.enum(["tangoflux", "elevenlabs-sfx"]).optional(),
   duration: z.number().min(0.5).max(30).optional(),
   loop: z.boolean().optional(),
   promptInfluence: z.number().min(0).max(1).optional(),

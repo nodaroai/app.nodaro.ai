@@ -2514,9 +2514,6 @@ function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField 
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="tangoflux">TangoFlux (default)</SelectItem>
-            <SelectItem value="tango">Tango</SelectItem>
-            <SelectItem value="audioldm">AudioLDM</SelectItem>
-            <SelectItem value="bark">Bark</SelectItem>
             <SelectItem value="elevenlabs-sfx">ElevenLabs SFX v2</SelectItem>
           </SelectContent>
         </Select>

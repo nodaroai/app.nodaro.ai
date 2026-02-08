@@ -628,7 +628,7 @@ export type TextToAudioData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "tangoflux" | "tango" | "audioldm" | "bark" | "elevenlabs-sfx"
+  provider: "tangoflux" | "elevenlabs-sfx"
   duration: number
   loop?: boolean
   promptInfluence?: number
