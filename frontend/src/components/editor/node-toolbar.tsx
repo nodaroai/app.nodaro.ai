@@ -6,7 +6,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin, Wand2, Layers,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin, Wand2, Layers, Disc3,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -51,6 +51,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI" },
   { type: "generate-music", label: "Generate Music", icon: <Music className="h-4 w-4" />, category: "AI" },
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI" },
+  { type: "suno-generate", label: "Suno Generate", icon: <Music className="h-4 w-4" />, category: "AI" },
+  { type: "suno-cover", label: "Suno Cover", icon: <Disc3 className="h-4 w-4" />, category: "AI" },
   // Processing
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing" },
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing" },

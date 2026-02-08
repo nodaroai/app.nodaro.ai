@@ -64,6 +64,8 @@ import type {
   QACheckData,
   GenerateMusicData,
   TextToAudioData,
+  SunoGenerateData,
+  SunoCoverData,
   TranscribeData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -365,6 +367,8 @@ export function ConfigPanel() {
       "qa-check": "QA Check",
       "generate-music": "Generate Music",
       "text-to-audio": "Text to Audio",
+      "suno-generate": "Suno Generate",
+      "suno-cover": "Suno Cover",
       "transcribe": "Transcribe",
       "combine-videos": "Combine Videos",
       "merge-video-audio": "Merge Video & Audio",
@@ -522,6 +526,12 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "text-to-audio" && (
             <TextToAudioConfig data={selectedNode.data as TextToAudioData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "suno-generate" && (
+            <SunoGenerateConfig data={selectedNode.data as SunoGenerateData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "suno-cover" && (
+            <SunoCoverConfig data={selectedNode.data as SunoCoverData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "lip-sync" && (
             <LipSyncConfig data={selectedNode.data as LipSyncData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -2564,6 +2574,222 @@ function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField 
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoGenerateData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          value={data.prompt}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v.length <= 3000) onUpdate({ prompt: v })
+          }}
+          placeholder="Describe the song you want to generate..."
+        />
+        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
+      </MappableField>
+      <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.model || "V5"}
+          onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
+            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          value={data.title ?? ""}
+          maxLength={200}
+          onChange={(e) => onUpdate({ title: e.target.value })}
+          placeholder="Song title"
+        />
+      </MappableField>
+      <MappableField field="lyrics" label="Lyrics (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={4}
+          value={data.lyrics ?? ""}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v.length <= 3000) onUpdate({ lyrics: v })
+          }}
+          placeholder="Write custom lyrics..."
+        />
+      </MappableField>
+      <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          value={data.style ?? ""}
+          maxLength={500}
+          onChange={(e) => onUpdate({ style: e.target.value })}
+          placeholder="e.g. pop, rock, jazz, lo-fi..."
+        />
+      </MappableField>
+      <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          value={data.negativeStyle ?? ""}
+          maxLength={500}
+          onChange={(e) => onUpdate({ negativeStyle: e.target.value })}
+          placeholder="Styles to avoid..."
+        />
+      </MappableField>
+      <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.vocalGender ?? ""}
+          onValueChange={(v) => onUpdate({ vocalGender: v || undefined })}
+        >
+          <SelectTrigger><SelectValue placeholder="Auto" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Auto</SelectItem>
+            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-muted-foreground">Style Weight</label>
+          <span className="text-xs text-muted-foreground">{data.styleWeight ?? 50}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={data.styleWeight ?? 50}
+          onChange={(e) => onUpdate({ styleWeight: parseInt(e.target.value) })}
+          className="w-full accent-[#ff0073]"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-muted-foreground">Weirdness</label>
+          <span className="text-xs text-muted-foreground">{data.weirdnessConstraint ?? 0}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={data.weirdnessConstraint ?? 0}
+          onChange={(e) => onUpdate({ weirdnessConstraint: parseInt(e.target.value) })}
+          className="w-full accent-[#ff0073]"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-muted-foreground">Audio Weight</label>
+          <span className="text-xs text-muted-foreground">{data.audioWeight ?? 50}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={data.audioWeight ?? 50}
+          onChange={(e) => onUpdate({ audioWeight: parseInt(e.target.value) })}
+          className="w-full accent-[#ff0073]"
+        />
+      </div>
+    </div>
+  )
+}
+
+function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoCoverData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          value={data.prompt}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v.length <= 3000) onUpdate({ prompt: v })
+          }}
+          placeholder="Describe the cover style..."
+        />
+        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
+      </MappableField>
+      <MappableField field="uploadUrl" label="Source Audio URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          value={data.uploadUrl ?? ""}
+          onChange={(e) => onUpdate({ uploadUrl: e.target.value })}
+          placeholder="URL of the audio to cover (or connect an audio node)"
+        />
+      </MappableField>
+      <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.model || "V5"}
+          onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
+            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          value={data.title ?? ""}
+          maxLength={200}
+          onChange={(e) => onUpdate({ title: e.target.value })}
+          placeholder="Cover title"
+        />
+      </MappableField>
+      <MappableField field="lyrics" label="Lyrics (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={4}
+          value={data.lyrics ?? ""}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v.length <= 3000) onUpdate({ lyrics: v })
+          }}
+          placeholder="Write custom lyrics for the cover..."
+        />
+      </MappableField>
+      <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          value={data.style ?? ""}
+          maxLength={500}
+          onChange={(e) => onUpdate({ style: e.target.value })}
+          placeholder="e.g. pop, rock, jazz, lo-fi..."
+        />
+      </MappableField>
+      <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          value={data.negativeStyle ?? ""}
+          maxLength={500}
+          onChange={(e) => onUpdate({ negativeStyle: e.target.value })}
+          placeholder="Styles to avoid..."
+        />
+      </MappableField>
+      <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.vocalGender ?? ""}
+          onValueChange={(v) => onUpdate({ vocalGender: v || undefined })}
+        >
+          <SelectTrigger><SelectValue placeholder="Auto" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Auto</SelectItem>
+            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
     </div>
   )
 }

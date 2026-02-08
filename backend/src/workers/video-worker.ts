@@ -34,6 +34,7 @@ import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audi
 import { KieAudioProvider } from "../providers/kie/audio.js"
 import { transcribe, type TranscribeProvider } from "../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
+import { sunoGenerate, sunoCover, type SunoModel } from "../providers/kie/suno-client.js"
 import { promises as fs } from "node:fs"
 import { dirname } from "node:path"
 
@@ -665,6 +666,49 @@ export function createVideoWorker() {
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { audioUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "suno-generate") {
+          const { prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight } = job.data as {
+            jobId: string; prompt: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
+            negativeStyle?: string; vocalGender?: string; styleWeight?: number; weirdnessConstraint?: number; audioWeight?: number
+          }
+          console.log(`[worker] suno-generate ${jobId} (model: ${model ?? "V5"})`)
+          const result = await sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight })
+          await job.updateProgress(50)
+          // Upload first track to R2 for permanent storage (Suno URLs expire in 14 days)
+          const firstTrack = result.tracks[0]
+          if (!firstTrack) throw new Error("Suno returned no tracks")
+          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio")
+          await job.updateProgress(100)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({
+            status: "completed", progress: 100,
+            output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
+            completed_at: new Date().toISOString(),
+          }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
+
+        } else if (job.name === "suno-cover") {
+          const { prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender } = job.data as {
+            jobId: string; prompt: string; uploadUrl: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
+            negativeStyle?: string; vocalGender?: string
+          }
+          console.log(`[worker] suno-cover ${jobId} (model: ${model ?? "V5"})`)
+          const result = await sunoCover({ prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender })
+          await job.updateProgress(50)
+          const firstTrack = result.tracks[0]
+          if (!firstTrack) throw new Error("Suno cover returned no tracks")
+          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio")
+          await job.updateProgress(100)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({
+            status: "completed", progress: 100,
+            output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
+            completed_at: new Date().toISOString(),
+          }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
 
         } else if (job.name === "transcribe") {
           const { audioUrl, provider, language } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string }

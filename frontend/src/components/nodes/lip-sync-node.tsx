@@ -35,6 +35,8 @@ const AUDIO_OUTPUT_TYPES = [
   "text-to-speech",
   "generate-music",
   "text-to-audio",
+  "suno-generate",
+  "suno-cover",
   "upload-audio",
   "reference-audio",
   "extract-audio",

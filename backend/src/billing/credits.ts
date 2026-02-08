@@ -77,6 +77,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-sfx": 1,
   "suno": 1,
   "suno-v5": 1,
+  "suno-generate": 3,
+  "suno-cover": 3,
   "infinitalk": 0,
   // ── Processing ──
   "topaz": 0,

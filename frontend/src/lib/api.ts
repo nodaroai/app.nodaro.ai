@@ -1000,6 +1000,73 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   return res.json()
 }
 
+export async function sunoGenerateApi(params: {
+  prompt: string
+  model?: string
+  lyrics?: string
+  style?: string
+  title?: string
+  negativeStyle?: string
+  vocalGender?: string
+  styleWeight?: number
+  weirdnessConstraint?: number
+  audioWeight?: number
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt: params.prompt }
+  if (params.model) body.model = params.model
+  if (params.lyrics) body.lyrics = params.lyrics
+  if (params.style) body.style = params.style
+  if (params.title) body.title = params.title
+  if (params.negativeStyle) body.negativeStyle = params.negativeStyle
+  if (params.vocalGender) body.vocalGender = params.vocalGender
+  if (params.styleWeight != null) body.styleWeight = params.styleWeight
+  if (params.weirdnessConstraint != null) body.weirdnessConstraint = params.weirdnessConstraint
+  if (params.audioWeight != null) body.audioWeight = params.audioWeight
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start Suno generation")
+  }
+  return res.json()
+}
+
+export async function sunoCoverApi(params: {
+  prompt: string
+  uploadUrl: string
+  model?: string
+  lyrics?: string
+  style?: string
+  title?: string
+  negativeStyle?: string
+  vocalGender?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt: params.prompt, uploadUrl: params.uploadUrl }
+  if (params.model) body.model = params.model
+  if (params.lyrics) body.lyrics = params.lyrics
+  if (params.style) body.style = params.style
+  if (params.title) body.title = params.title
+  if (params.negativeStyle) body.negativeStyle = params.negativeStyle
+  if (params.vocalGender) body.vocalGender = params.vocalGender
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/cover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start Suno cover")
+  }
+  return res.json()
+}
+
 export async function transcribeApi(audioUrl: string, provider?: string, language?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl }
   if (provider) body.provider = provider

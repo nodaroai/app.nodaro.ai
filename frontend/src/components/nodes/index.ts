@@ -24,6 +24,8 @@ import { TextToSpeechNode } from "./text-to-speech-node"
 import { QACheckNode } from "./qa-check-node"
 import { GenerateMusicNode } from "./generate-music-node"
 import { TextToAudioNode } from "./text-to-audio-node"
+import { SunoGenerateNode } from "./suno-generate-node"
+import { SunoCoverNode } from "./suno-cover-node"
 import { TranscribeNode } from "./transcribe-node"
 import { CombineVideosNode } from "./combine-videos-node"
 import { MergeVideoAudioNode } from "./merge-video-audio-node"
@@ -75,6 +77,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "qa-check": QACheckNode,
   "generate-music": GenerateMusicNode,
   "text-to-audio": TextToAudioNode,
+  "suno-generate": SunoGenerateNode,
+  "suno-cover": SunoCoverNode,
   "lip-sync": LipSyncNode,
   "motion-transfer": MotionTransferNode,
   "transcribe": TranscribeNode,

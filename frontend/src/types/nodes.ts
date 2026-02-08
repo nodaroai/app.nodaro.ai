@@ -640,6 +640,46 @@ export type TextToAudioData = {
   activeResultIndex?: number
 }
 
+export type SunoGenerateData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  model: "V4" | "V4_5" | "V4_5PLUS" | "V4_5ALL" | "V5"
+  lyrics?: string
+  style?: string
+  title?: string
+  negativeStyle?: string
+  vocalGender?: "male" | "female"
+  styleWeight?: number
+  weirdnessConstraint?: number
+  audioWeight?: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+}
+
+export type SunoCoverData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  model: "V4" | "V4_5" | "V4_5PLUS" | "V4_5ALL" | "V5"
+  uploadUrl?: string
+  lyrics?: string
+  style?: string
+  title?: string
+  negativeStyle?: string
+  vocalGender?: "male" | "female"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type TranscribeData = {
   [key: string]: unknown
   label: string
@@ -1071,6 +1111,8 @@ export type SceneNodeData =
   | QACheckData
   | GenerateMusicData
   | TextToAudioData
+  | SunoGenerateData
+  | SunoCoverData
   | TranscribeData
   | CombineVideosData
   | MergeVideoAudioData
@@ -1118,6 +1160,8 @@ export type SceneNodeType =
   | "qa-check"
   | "generate-music"
   | "text-to-audio"
+  | "suno-generate"
+  | "suno-cover"
   | "transcribe"
   | "combine-videos"
   | "merge-video-audio"
@@ -1389,6 +1433,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Text to Audio", prompt: "", provider: "tangoflux", duration: 10, fieldMappings: {} },
+  },
+  {
+    type: "suno-generate",
+    label: "Suno Generate",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Generate", prompt: "", model: "V5", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
+  },
+  {
+    type: "suno-cover",
+    label: "Suno Cover",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Cover", prompt: "", model: "V5", uploadUrl: "", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoCoverData,
   },
   {
     type: "transcribe",

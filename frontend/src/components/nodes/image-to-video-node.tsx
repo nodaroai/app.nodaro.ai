@@ -30,6 +30,7 @@ const IMAGE_OUTPUT_TYPES = new Set([
 // Node types that output audio
 const AUDIO_OUTPUT_TYPES = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
+  "suno-generate", "suno-cover",
   "upload-audio", "reference-audio", "extract-audio",
   "adjust-volume", "mix-audio",
 ])

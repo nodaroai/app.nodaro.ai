@@ -18,11 +18,11 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -37,6 +37,8 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "text-to-speech": 3,
   "generate-music": 5,
   "text-to-audio": 3,
+  "suno-generate": 3,
+  "suno-cover": 3,
   "lip-sync": 40,
   "motion-transfer": 30,
   "video-upscale": 20,
@@ -83,7 +85,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const storeNodes = useWorkflowStore((s) => s.nodes)
   useEffect(() => {
     if (!hasCredits()) return
-    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
     const executableNodes = storeNodes.filter((n) => execTypes.has(n.type ?? ""))
     const total = executableNodes.reduce((sum, node) => {
       const data = node.data as Record<string, unknown>
@@ -175,7 +177,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -273,7 +275,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
     }
-    if (type === "text-to-speech" || type === "generate-music" || type === "text-to-audio") {
+    if (type === "text-to-speech" || type === "generate-music" || type === "text-to-audio" || type === "suno-generate" || type === "suno-cover") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined)
@@ -476,7 +478,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.audioUrl = output
         }
-      } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "extract-audio" || src.type === "mix-audio") {
+      } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "suno-generate" || src.type === "suno-cover" || src.type === "extract-audio" || src.type === "mix-audio") {
         if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
         } else if (node.type === "merge-video-audio") {
@@ -1756,6 +1758,53 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const d = node.data as TextToAudioData
       const sfxOptions = d.provider === "elevenlabs-sfx" ? { loop: d.loop, promptInfluence: d.promptInfluence } : undefined
       return runProcessingNode(node.id, () => textToAudioApi(prompt, d.provider || undefined, d.duration || undefined, user?.id, sfxOptions), "generatedAudioUrl", "Text to Audio")
+    }
+
+    if (node.type === "suno-generate") {
+      const d = node.data as SunoGenerateData
+      const prompt = inputs.prompt ?? d.prompt?.trim()
+      if (!prompt) {
+        toast.error(`Node "${d.label}": no prompt found`)
+        return Promise.reject(new Error("No prompt"))
+      }
+      return runProcessingNode(node.id, () => sunoGenerateApi({
+        prompt,
+        model: d.model || undefined,
+        lyrics: d.lyrics || undefined,
+        style: d.style || undefined,
+        title: d.title || undefined,
+        negativeStyle: d.negativeStyle || undefined,
+        vocalGender: d.vocalGender || undefined,
+        styleWeight: d.styleWeight,
+        weirdnessConstraint: d.weirdnessConstraint,
+        audioWeight: d.audioWeight,
+        userId: user?.id,
+      }), "generatedAudioUrl", "Suno Generate")
+    }
+
+    if (node.type === "suno-cover") {
+      const d = node.data as SunoCoverData
+      const prompt = inputs.prompt ?? d.prompt?.trim()
+      if (!prompt) {
+        toast.error(`Node "${d.label}": no prompt found`)
+        return Promise.reject(new Error("No prompt"))
+      }
+      const uploadUrl = inputs.audioUrl ?? d.uploadUrl?.trim()
+      if (!uploadUrl) {
+        toast.error(`Node "${d.label}": no source audio URL found`)
+        return Promise.reject(new Error("No upload URL"))
+      }
+      return runProcessingNode(node.id, () => sunoCoverApi({
+        prompt,
+        uploadUrl,
+        model: d.model || undefined,
+        lyrics: d.lyrics || undefined,
+        style: d.style || undefined,
+        title: d.title || undefined,
+        negativeStyle: d.negativeStyle || undefined,
+        vocalGender: d.vocalGender || undefined,
+        userId: user?.id,
+      }), "generatedAudioUrl", "Suno Cover")
     }
 
     if (node.type === "transcribe") {

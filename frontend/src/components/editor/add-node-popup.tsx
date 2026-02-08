@@ -6,7 +6,7 @@ import {
   Hash, Clock, RatioIcon, Mic, ShieldCheck, Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin,
   ChevronRight, Search, Download, ArrowLeft, Wand2, Layers, Users, Waypoints, ArrowUpFromLine,
-  FileText,
+  FileText, Disc3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SceneNodeType } from "@/types/nodes"
@@ -48,6 +48,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI" },
   { type: "generate-music", label: "Generate Music", icon: <Music className="h-4 w-4" />, category: "AI" },
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI" },
+  { type: "suno-generate", label: "Suno Generate", icon: <Music className="h-4 w-4" />, category: "AI" },
+  { type: "suno-cover", label: "Suno Cover", icon: <Disc3 className="h-4 w-4" />, category: "AI" },
   { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI" },
   { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI" },
   { type: "transcribe", label: "Transcribe", icon: <FileText className="h-4 w-4" />, category: "AI" },
