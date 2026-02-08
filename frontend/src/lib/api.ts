@@ -918,6 +918,19 @@ export async function downloadYouTubeAudio(url: string): Promise<{ url: string; 
   return res.json()
 }
 
+export async function downloadVideo(url: string): Promise<{ videoUrl: string; thumbnailUrl: string | null }> {
+  const res = await fetch(`${API_BASE_URL}/v1/download-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to download video. It may be private or require login.")
+  }
+  return res.json()
+}
+
 export async function textToAudioApi(prompt: string, provider?: string, duration?: number, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (provider) body.provider = provider

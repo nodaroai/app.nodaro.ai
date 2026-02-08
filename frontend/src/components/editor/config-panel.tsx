@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -26,7 +26,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { GenerateButton } from "@/components/credits/GenerateButton"
 import { createClient } from "@/lib/supabase"
-import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus } from "@/lib/api"
+import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, downloadVideo } from "@/lib/api"
 import {
   getProviders,
   getProviderLabel,
@@ -754,6 +754,15 @@ function RSSFeedConfig({ data, onUpdate }: ConfigProps<RSSFeedData>) {
   )
 }
 
+function detectVideoPlatform(url: string): string {
+  if (/youtube\.com|youtu\.be/.test(url)) return "youtube"
+  if (/facebook\.com|fb\.watch|fb\.com/.test(url)) return "facebook"
+  if (/tiktok\.com/.test(url)) return "tiktok"
+  if (/instagram\.com/.test(url)) return "instagram"
+  if (/(?:twitter\.com|x\.com)/.test(url)) return "twitter"
+  return "unknown"
+}
+
 function extractVideoUrlId(url: string): string | null {
   // YouTube
   const ytMatch = url.match(
@@ -769,19 +778,23 @@ function extractVideoUrlId(url: string): string | null {
   // Twitter/X
   const twMatch = url.match(/(?:twitter\.com|x\.com)\/[\w]+\/status\/(\d+)/)
   if (twMatch) return twMatch[1]
+  // Facebook - multiple URL formats
+  const fbMatch = url.match(/facebook\.com\/.*\/videos\/(\d+)/)
+  if (fbMatch) return fbMatch[1]
+  const fbShareMatch = url.match(/facebook\.com\/share\/(?:v|r)\/([A-Za-z0-9_-]+)/)
+  if (fbShareMatch) return fbShareMatch[1]
+  const fbReelMatch = url.match(/facebook\.com\/reel\/([A-Za-z0-9_-]+)/)
+  if (fbReelMatch) return fbReelMatch[1]
+  if (/fb\.watch/.test(url)) return url
+  // Fallback for recognized non-YouTube platforms
+  const platform = detectVideoPlatform(url)
+  if (platform !== "unknown" && platform !== "youtube") return url
   return null
-}
-
-function detectVideoPlatform(url: string): string {
-  if (/youtube\.com|youtu\.be/.test(url)) return "youtube"
-  if (/tiktok\.com/.test(url)) return "tiktok"
-  if (/instagram\.com/.test(url)) return "instagram"
-  if (/(?:twitter\.com|x\.com)/.test(url)) return "twitter"
-  return "unknown"
 }
 
 const VIDEO_PLATFORM_LABELS: Record<string, string> = {
   youtube: "YouTube",
+  facebook: "Facebook",
   tiktok: "TikTok",
   instagram: "Instagram",
   twitter: "Twitter/X",
@@ -791,8 +804,20 @@ const VIDEO_PLATFORM_LABELS: Record<string, string> = {
 function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
   const [loading, setLoading] = useState(false)
 
+  const platform = detectVideoPlatform(data.youtubeUrl || "")
+  const isYouTube = platform === "youtube"
+  const downloadStatus = data.downloadStatus ?? "idle"
+  const isDownloading = downloadStatus === "downloading"
+  const displayThumbnail = data.downloadedThumbnailUrl || data.thumbnailUrl
+
   const handleUrlChange = useCallback(async (url: string) => {
-    onUpdate({ youtubeUrl: url })
+    onUpdate({
+      youtubeUrl: url,
+      downloadedVideoUrl: "",
+      downloadedThumbnailUrl: "",
+      downloadStatus: "idle",
+      downloadError: "",
+    })
 
     const videoId = extractVideoUrlId(url)
     if (!videoId) {
@@ -800,26 +825,52 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
       return
     }
 
-    const platform = detectVideoPlatform(url)
+    const detectedPlatform = detectVideoPlatform(url)
     onUpdate({ videoId })
     setLoading(true)
     try {
-      if (platform === "youtube") {
+      if (detectedPlatform === "youtube") {
         const meta = await fetchYouTubeOEmbed(url)
         onUpdate({ title: meta.title, thumbnailUrl: meta.thumbnail_url })
       } else {
-        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[platform]} Video`, thumbnailUrl: "" })
+        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[detectedPlatform]} Video`, thumbnailUrl: "" })
       }
     } catch {
-      if (platform === "youtube") {
+      if (detectedPlatform === "youtube") {
         onUpdate({ title: "", thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` })
       } else {
-        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[platform]} Video`, thumbnailUrl: "" })
+        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[detectedPlatform]} Video`, thumbnailUrl: "" })
       }
     } finally {
       setLoading(false)
     }
   }, [onUpdate])
+
+  const handleDownload = useCallback(async () => {
+    const url = data.youtubeUrl?.trim()
+    if (!url) return
+    onUpdate({
+      downloadStatus: "downloading",
+      downloadError: "",
+      downloadedVideoUrl: "",
+      downloadedThumbnailUrl: "",
+    })
+    try {
+      const result = await downloadVideo(url)
+      onUpdate({
+        downloadedVideoUrl: result.videoUrl,
+        downloadedThumbnailUrl: result.thumbnailUrl ?? "",
+        downloadStatus: "completed",
+        thumbnailUrl: result.thumbnailUrl ?? data.thumbnailUrl,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Download failed"
+      onUpdate({
+        downloadStatus: "failed",
+        downloadError: message,
+      })
+    }
+  }, [data.youtubeUrl, data.thumbnailUrl, onUpdate])
 
   return (
     <div className="flex flex-col gap-3">
@@ -829,7 +880,7 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
           id="video-url"
           value={data.youtubeUrl}
           onChange={(e) => handleUrlChange(e.target.value)}
-          placeholder="YouTube, TikTok, Instagram, or X URL"
+          placeholder="YouTube, Facebook, TikTok, Instagram, or X URL"
         />
       </div>
       {loading && (
@@ -838,10 +889,10 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
           <span>Fetching metadata...</span>
         </div>
       )}
-      {!loading && data.thumbnailUrl && (
+      {!loading && displayThumbnail && (
         <div className="rounded-md overflow-hidden">
           <img
-            src={data.thumbnailUrl}
+            src={displayThumbnail}
             alt={data.title || "Video"}
             className="w-full rounded-md"
           />
@@ -850,6 +901,55 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
       {data.title && (
         <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
           <span className="font-medium">Title:</span> {data.title}
+        </div>
+      )}
+
+      {/* Download status for non-YouTube platforms */}
+      {!loading && data.videoId && !isYouTube && (
+        <div className="flex flex-col gap-2">
+          {/* Download button - show when idle or failed */}
+          {(downloadStatus === "idle" || downloadStatus === "failed") && (
+            <>
+              {downloadStatus === "failed" && data.downloadError && (
+                <div className="flex items-center gap-1.5 p-2 rounded-md bg-red-500/10 text-red-500 text-xs">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span className="line-clamp-2">{data.downloadError}</span>
+                </div>
+              )}
+              <Button
+                size="sm"
+                onClick={handleDownload}
+                className="w-full bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              >
+                <Download className="w-3.5 h-3.5 mr-1.5" />
+                {downloadStatus === "failed" ? "Retry Download" : "Download Video"}
+              </Button>
+            </>
+          )}
+
+          {/* Downloading state */}
+          {isDownloading && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ff0073]" />
+              <span>Downloading video...</span>
+            </div>
+          )}
+
+          {/* Completed state */}
+          {downloadStatus === "completed" && (
+            <div className="flex items-center gap-2 text-xs text-green-500 p-2 bg-green-500/10 rounded-md">
+              <Check className="w-3.5 h-3.5" />
+              <span>Downloaded and ready</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* YouTube direct streaming badge */}
+      {!loading && data.videoId && isYouTube && (
+        <div className="flex items-center gap-2 text-xs text-green-500 p-2 bg-green-500/10 rounded-md">
+          <Check className="w-3.5 h-3.5" />
+          <span>Direct streaming</span>
         </div>
       )}
     </div>

@@ -98,6 +98,10 @@ export type YouTubeVideoData = {
   videoId: string
   title: string
   thumbnailUrl: string
+  downloadedVideoUrl?: string
+  downloadedThumbnailUrl?: string
+  downloadStatus?: "idle" | "downloading" | "completed" | "failed"
+  downloadError?: string
 }
 
 export type ReferenceAudioData = {

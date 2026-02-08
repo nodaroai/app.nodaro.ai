@@ -237,7 +237,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return (data.url as string | undefined)?.trim()
     }
     if (type === "youtube-video") {
-      return (data.youtubeUrl as string | undefined)?.trim()
+      // Prefer downloaded R2 URL for non-YouTube platforms; fall back to raw URL for YouTube
+      return (data.downloadedVideoUrl as string | undefined)?.trim()
+        || (data.youtubeUrl as string | undefined)?.trim()
     }
     if (type === "upload-audio") {
       return (data.r2Url as string | undefined)?.trim() || (data.url as string | undefined)?.trim()

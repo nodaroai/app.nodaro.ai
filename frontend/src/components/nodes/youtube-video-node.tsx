@@ -2,11 +2,11 @@
 
 import { memo, useState, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Link, X, Play, Video, Music2, Camera, Hash } from "lucide-react"
+import { Link, X, Play, Video, Music2, Camera, Hash, Download, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { fetchYouTubeOEmbed } from "@/lib/api"
+import { fetchYouTubeOEmbed, downloadVideo } from "@/lib/api"
 import type { YouTubeVideoData } from "@/types/nodes"
 
 type VideoPlatform = "youtube" | "facebook" | "tiktok" | "instagram" | "twitter" | "unknown"
@@ -39,10 +39,18 @@ function extractVideoId(url: string): string | null {
   const twMatch = url.match(/(?:twitter\.com|x\.com)\/[\w]+\/status\/(\d+)/)
   if (twMatch) return twMatch[1]
 
-  // Facebook
+  // Facebook - multiple URL formats
   const fbMatch = url.match(/facebook\.com\/.*\/videos\/(\d+)/)
   if (fbMatch) return fbMatch[1]
+  const fbShareMatch = url.match(/facebook\.com\/share\/(?:v|r)\/([A-Za-z0-9_-]+)/)
+  if (fbShareMatch) return fbShareMatch[1]
+  const fbReelMatch = url.match(/facebook\.com\/reel\/([A-Za-z0-9_-]+)/)
+  if (fbReelMatch) return fbReelMatch[1]
   if (/fb\.watch/.test(url)) return url
+
+  // Fallback for recognized non-YouTube platforms: use URL as ID (yt-dlp resolves internally)
+  const platform = detectPlatform(url)
+  if (platform !== "unknown" && platform !== "youtube") return url
 
   return null
 }
@@ -71,11 +79,13 @@ function VideoPlayerModal({
   onClose,
   videoId,
   platform,
+  downloadedVideoUrl,
 }: {
   readonly isOpen: boolean
   readonly onClose: () => void
   readonly videoId: string
   readonly platform: VideoPlatform
+  readonly downloadedVideoUrl?: string
 }) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -92,8 +102,12 @@ function VideoPlayerModal({
 
   if (!isOpen || !videoId) return null
 
-  // Only YouTube supports iframe embed
-  if (platform !== "youtube") return null
+  // Non-YouTube with downloaded video: show video player
+  const showDownloadedPlayer = platform !== "youtube" && downloadedVideoUrl
+  // YouTube: show iframe embed
+  const showYouTubeEmbed = platform === "youtube"
+
+  if (!showDownloadedPlayer && !showYouTubeEmbed) return null
 
   return createPortal(
     <div
@@ -111,13 +125,23 @@ function VideoPlayerModal({
         >
           <X className="w-7 h-7" />
         </button>
-        <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
-          className="w-full h-full rounded-lg"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          title="YouTube video player"
-        />
+        {showYouTubeEmbed && (
+          <iframe
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+            className="w-full h-full rounded-lg"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title="YouTube video player"
+          />
+        )}
+        {showDownloadedPlayer && (
+          <video
+            src={downloadedVideoUrl}
+            className="w-full h-full rounded-lg"
+            controls
+            autoPlay
+          />
+        )}
       </div>
     </div>,
     document.body
@@ -131,9 +155,42 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [loading, setLoading] = useState(false)
 
   const platform = detectPlatform(nodeData.youtubeUrl || "")
+  const downloadStatus = nodeData.downloadStatus ?? "idle"
+  const isDownloading = downloadStatus === "downloading"
+
+  const handleDownloadVideo = async (url: string) => {
+    updateNodeData(id, {
+      downloadStatus: "downloading",
+      downloadError: "",
+      downloadedVideoUrl: "",
+      downloadedThumbnailUrl: "",
+    })
+
+    try {
+      const result = await downloadVideo(url)
+      updateNodeData(id, {
+        downloadedVideoUrl: result.videoUrl,
+        downloadedThumbnailUrl: result.thumbnailUrl ?? "",
+        downloadStatus: "completed",
+        thumbnailUrl: result.thumbnailUrl ?? nodeData.thumbnailUrl,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Download failed"
+      updateNodeData(id, {
+        downloadStatus: "failed",
+        downloadError: message,
+      })
+    }
+  }
 
   const handleUrlChange = async (url: string) => {
-    updateNodeData(id, { youtubeUrl: url })
+    updateNodeData(id, {
+      youtubeUrl: url,
+      downloadedVideoUrl: "",
+      downloadedThumbnailUrl: "",
+      downloadStatus: "idle",
+      downloadError: "",
+    })
 
     const videoId = extractVideoId(url)
     if (!videoId) {
@@ -153,7 +210,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
           thumbnailUrl: meta.thumbnail_url,
         })
       } else {
-        // Non-YouTube platforms: no oEmbed, use platform name as title
+        // Non-YouTube platforms: set title, user clicks Download button
         updateNodeData(id, {
           title: `${PLATFORM_LABELS[detectedPlatform]} Video`,
           thumbnailUrl: "",
@@ -182,10 +239,17 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
       videoId: "",
       title: "",
       thumbnailUrl: "",
+      downloadedVideoUrl: "",
+      downloadedThumbnailUrl: "",
+      downloadStatus: "idle",
+      downloadError: "",
     })
   }
 
   const canEmbed = platform === "youtube"
+  const needsDownload = !canEmbed && nodeData.videoId
+  const canPlay = canEmbed || !!nodeData.downloadedVideoUrl
+  const displayThumbnail = nodeData.downloadedThumbnailUrl || nodeData.thumbnailUrl
 
   return (
     <>
@@ -218,26 +282,62 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             />
           </div>
 
-          {/* Loading state */}
+          {/* Loading metadata state */}
           {loading && (
             <div className="flex items-center justify-center h-16 rounded-md bg-muted/30">
               <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-[#ff0073] rounded-full animate-spin" />
             </div>
           )}
 
-          {/* Thumbnail preview (all platforms) */}
-          {!loading && nodeData.videoId && nodeData.thumbnailUrl && (
+          {/* Downloading video state (non-YouTube) */}
+          {!loading && isDownloading && (
+            <div className="flex flex-col items-center justify-center gap-1.5 h-20 rounded-md bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 text-[#ff0073] animate-spin" />
+                <span className="text-xs text-muted-foreground">Downloading video...</span>
+              </div>
+              <div className="w-3/4 h-1 rounded-full bg-muted-foreground/20 overflow-hidden">
+                <div className="h-full bg-[#ff0073] rounded-full animate-pulse w-2/3" />
+              </div>
+            </div>
+          )}
+
+          {/* Download failed state */}
+          {!loading && !isDownloading && downloadStatus === "failed" && nodeData.videoId && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 p-2 rounded-md bg-red-500/5 text-red-500">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <p className="text-[10px] line-clamp-2" title={nodeData.downloadError}>
+                  {nodeData.downloadError || "Download failed"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-[#ff0073] hover:bg-[#ff0073]/90 text-white text-xs font-medium transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDownloadVideo(nodeData.youtubeUrl)
+                }}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Retry Download
+              </button>
+            </div>
+          )}
+
+          {/* Thumbnail preview with downloaded video (YouTube or downloaded non-YouTube) */}
+          {!loading && !isDownloading && nodeData.videoId && displayThumbnail && downloadStatus !== "failed" && (
             <div className="relative group">
               <div
-                className={`w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative ${canEmbed ? "cursor-pointer hover:opacity-90" : ""} transition-opacity`}
+                className={`w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative ${canPlay ? "cursor-pointer hover:opacity-90" : ""} transition-opacity`}
                 onClick={(e) => {
-                  if (!canEmbed) return
+                  if (!canPlay) return
                   e.stopPropagation()
                   setPlayerOpen(true)
                 }}
               >
                 <img
-                  src={nodeData.thumbnailUrl}
+                  src={displayThumbnail}
                   alt={nodeData.title || "Video"}
                   className="w-full h-full object-cover"
                 />
@@ -248,10 +348,17 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                     <span>{PLATFORM_LABELS[platform]}</span>
                   </div>
                 )}
-                {/* Play button (YouTube only) */}
-                {canEmbed && (
+                {/* Downloaded badge */}
+                {downloadStatus === "completed" && !canEmbed && (
+                  <div className="absolute bottom-1.5 left-1.5 bg-green-600/80 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Ready</span>
+                  </div>
+                )}
+                {/* Play button */}
+                {canPlay && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-10 h-10 rounded-full bg-red-600/90 flex items-center justify-center shadow-lg">
+                    <div className={`w-10 h-10 rounded-full ${canEmbed ? "bg-red-600/90" : "bg-[#ff0073]/90"} flex items-center justify-center shadow-lg`}>
                       <Play className="w-5 h-5 text-white ml-0.5" />
                     </div>
                   </div>
@@ -276,18 +383,55 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           )}
 
-          {/* Video detected but no thumbnail yet */}
-          {!loading && nodeData.videoId && !nodeData.thumbnailUrl && (
+          {/* Non-YouTube: video detected but not downloaded yet - show Download button */}
+          {!loading && !isDownloading && needsDownload && !displayThumbnail && downloadStatus !== "failed" && downloadStatus !== "completed" && (
+            <div className="relative group">
+              <div className="w-full rounded-md bg-muted/30 p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center shrink-0">
+                    <PlatformIcon platform={platform} className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate">{nodeData.title || "Video"}</p>
+                    <p className="text-[10px] text-orange-400 truncate">Not downloaded</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-[#ff0073] hover:bg-[#ff0073]/90 text-white text-xs font-medium transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDownloadVideo(nodeData.youtubeUrl)
+                  }}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download Video
+                </button>
+              </div>
+              <button
+                type="button"
+                className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleClear()
+                }}
+                title="Remove"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* YouTube: video detected but no thumbnail yet */}
+          {!loading && !isDownloading && canEmbed && nodeData.videoId && !displayThumbnail && (
             <div className="relative group">
               <div className="w-full rounded-md bg-muted/30 p-3 flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center shrink-0">
-                  <PlatformIcon platform={platform} className="w-4 h-4 text-muted-foreground" />
+                  <Video className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-medium truncate">{nodeData.title || "Video"}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    {platform === "youtube" ? "Loading thumbnail..." : "Thumbnail appears after extraction"}
-                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate">Loading thumbnail...</p>
                 </div>
               </div>
               <button
@@ -305,7 +449,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {/* Empty state */}
-          {!loading && !nodeData.videoId && (
+          {!loading && !isDownloading && !nodeData.videoId && (
             <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
               <Video className="w-5 h-5" />
             </div>
@@ -317,6 +461,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
         onClose={() => setPlayerOpen(false)}
         videoId={nodeData.videoId || ""}
         platform={platform}
+        downloadedVideoUrl={nodeData.downloadedVideoUrl}
       />
     </>
   )

@@ -25,6 +25,7 @@ import { mixAudioRoutes } from "./routes/mix-audio.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
 import { youtubeAudioRoutes } from "./routes/youtube-audio.js"
+import { downloadVideoRoutes } from "./routes/download-video.js"
 import { extractYouTubeAudioRoutes } from "./routes/extract-youtube-audio.js"
 import { textToAudioRoutes } from "./routes/text-to-audio.js"
 import { imageProxyRoutes } from "./routes/image-proxy.js"
@@ -85,6 +86,7 @@ export async function buildApp() {
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)
   await app.register(youtubeAudioRoutes)
+  await app.register(downloadVideoRoutes)
   await app.register(extractYouTubeAudioRoutes)
   await app.register(textToAudioRoutes)
   await app.register(imageProxyRoutes)
