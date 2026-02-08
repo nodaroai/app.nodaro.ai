@@ -14,6 +14,7 @@ import {
   Loader2,
   ExternalLink,
   Brain,
+  Save,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +28,8 @@ import {
   detectCategory,
   CATEGORY_LABELS,
   CATEGORY_COLORS,
+  MODEL_REFERENCE,
+  CREDIT_VALUE_USD,
   type DBCategory,
   type LLMPricing,
 } from "./pricing-data"
@@ -227,14 +230,102 @@ function TopUpSection() {
   )
 }
 
-// ── AI Models from DB (grouped by category) ─────────────────────────
+// ── Inline Editable Credit Cost Cell ────────────────────────────────
 
-function DBModelTable({
+function InlineEditableCell({
+  value,
+  onSave,
+  disabled,
+}: {
+  readonly value: number
+  readonly onSave: (val: number) => void
+  readonly disabled?: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(value))
+
+  const commit = () => {
+    const num = Number(draft)
+    if (!Number.isNaN(num) && num >= 0 && num <= 10000) {
+      onSave(num)
+    } else {
+      toast.error("Credit cost must be 0-10000")
+      setDraft(String(value))
+    }
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <Input
+        type="number"
+        min={0}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit()
+          if (e.key === "Escape") {
+            setDraft(String(value))
+            setEditing(false)
+          }
+        }}
+        disabled={disabled}
+        className="h-7 w-20 text-sm font-mono"
+        autoFocus
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(String(value))
+        setEditing(true)
+      }}
+      disabled={disabled}
+      className="font-mono text-sm font-semibold px-2 py-1 rounded hover:bg-muted transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+      title="Click to edit"
+    >
+      {value}
+    </button>
+  )
+}
+
+// ── Provider Badge ──────────────────────────────────────────────────
+
+const PROVIDER_BADGE_COLORS: Readonly<Record<string, string>> = {
+  "KIE.ai": "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  "Replicate": "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  "Self": "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+}
+
+function ProviderBadge({ provider }: { readonly provider?: string }) {
+  if (!provider) return <span className="text-[10px] text-muted-foreground italic">unknown</span>
+  return (
+    <Badge className={`text-[10px] border-0 ${PROVIDER_BADGE_COLORS[provider] ?? "bg-muted text-muted-foreground"}`}>
+      {provider}
+    </Badge>
+  )
+}
+
+// ── Detailed Model Table (with provider cost, markup, margin) ───────
+
+function DetailedModelTable({
   models,
   search,
+  pendingCosts,
+  onCostChange,
+  onSave,
+  savingId,
 }: {
   readonly models: ReadonlyArray<DBModelPricing>
   readonly search: string
+  readonly pendingCosts: Readonly<Record<string, number>>
+  readonly onCostChange: (id: string, cost: number) => void
+  readonly onSave: (id: string) => void
+  readonly savingId: string | null
 }) {
   const filtered = search.trim()
     ? models.filter((m) => {
@@ -272,46 +363,108 @@ function DBModelTable({
 
         return (
           <div key={cat}>
-            {/* Category subheader */}
-            <div className={`px-4 py-2 bg-muted/30 text-xs font-semibold uppercase tracking-wider ${CATEGORY_COLORS[cat]}`}>
+            <div className={`px-3 py-2 bg-muted/30 text-xs font-semibold uppercase tracking-wider ${CATEGORY_COLORS[cat]}`}>
               {CATEGORY_LABELS[cat]}
               <span className="ml-1.5 text-muted-foreground font-normal">({group.length})</span>
             </div>
-            <table className="w-full text-sm">
-              <tbody>
-                {group.map((m) => (
-                  <tr key={m.id} className="border-t hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-2.5 w-2/5">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-mono text-xs">{m.model_identifier}</span>
-                        {m.display_name && m.display_name !== m.model_identifier && (
-                          <span className="text-xs text-muted-foreground">{m.display_name}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs font-semibold w-24">
-                      {m.credit_cost} cr
-                    </td>
-                    <td className="px-4 py-2.5 w-20">
-                      {m.is_enabled ? (
-                        <Badge variant="outline" className="text-xs text-green-600 dark:text-green-400 border-green-500/30">
-                          On
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs text-zinc-400 border-zinc-400/30">
-                          Off
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground w-24">
-                      {m.tier_restriction && m.tier_restriction !== "none" && m.tier_restriction !== "free"
-                        ? <Badge variant="secondary" className="text-xs">{m.tier_restriction}+</Badge>
-                        : null}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/20">
+                  <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="text-left px-3 py-2 font-medium">Model</th>
+                    <th className="text-left px-3 py-2 font-medium">Provider</th>
+                    <th className="text-right px-3 py-2 font-medium">Our Cost</th>
+                    <th className="text-right px-3 py-2 font-medium">Markup</th>
+                    <th className="text-right px-3 py-2 font-medium">+Markup</th>
+                    <th className="text-right px-3 py-2 font-medium">Credits</th>
+                    <th className="text-right px-3 py-2 font-medium">Margin</th>
+                    <th className="px-3 py-2 w-12" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {group.map((m) => {
+                    const ref = MODEL_REFERENCE[m.model_identifier] ?? null
+                    const providerCost = ref?.providerCostUsd ?? null
+                    const markup = ref?.markupPct ?? 0
+                    const costWithMarkup = providerCost != null ? providerCost * (1 + markup / 100) : null
+                    const creditCost = pendingCosts[m.model_identifier] ?? m.credit_cost
+                    const revenue = creditCost * CREDIT_VALUE_USD
+                    const margin = providerCost != null && revenue > 0
+                      ? ((revenue - providerCost) / revenue * 100)
+                      : null
+                    const hasPending = m.model_identifier in pendingCosts
+                    const isSaving = savingId === m.model_identifier
+
+                    return (
+                      <tr key={m.id} className="border-t hover:bg-muted/30 transition-colors">
+                        {/* Model ID + enabled dot */}
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${m.is_enabled ? "bg-green-500" : "bg-zinc-400"}`}
+                              title={m.is_enabled ? "Enabled" : "Disabled"}
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-mono text-xs">{m.model_identifier}</span>
+                              {m.display_name && m.display_name !== m.model_identifier && (
+                                <span className="text-[10px] text-muted-foreground leading-tight">{m.display_name}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        {/* Provider */}
+                        <td className="px-3 py-2.5">
+                          <ProviderBadge provider={ref?.provider} />
+                        </td>
+                        {/* Provider cost */}
+                        <td className="px-3 py-2.5 text-right font-mono text-xs">
+                          {providerCost != null
+                            ? `$${providerCost.toFixed(3)}`
+                            : <span className="text-muted-foreground italic text-[10px]">dynamic</span>}
+                        </td>
+                        {/* Markup % */}
+                        <td className="px-3 py-2.5 text-right font-mono text-xs text-muted-foreground">
+                          {markup}%
+                        </td>
+                        {/* Cost + Markup */}
+                        <td className="px-3 py-2.5 text-right font-mono text-xs">
+                          {costWithMarkup != null ? `$${costWithMarkup.toFixed(3)}` : "--"}
+                        </td>
+                        {/* Credit cost (editable) */}
+                        <td className="px-3 py-2.5 text-right">
+                          <InlineEditableCell
+                            value={creditCost}
+                            onSave={(val) => onCostChange(m.model_identifier, val)}
+                            disabled={isSaving}
+                          />
+                        </td>
+                        {/* Margin */}
+                        <td className={`px-3 py-2.5 text-right font-mono text-xs font-semibold ${marginColor(margin)}`}>
+                          {margin != null ? `${margin.toFixed(0)}%` : "--"}
+                        </td>
+                        {/* Save */}
+                        <td className="px-3 py-2.5">
+                          {hasPending && (
+                            <button
+                              type="button"
+                              onClick={() => onSave(m.model_identifier)}
+                              disabled={isSaving}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                            >
+                              {isSaving ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Save className="h-3 w-3" />
+                              )}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       })}
@@ -364,20 +517,79 @@ function LLMTable({ search }: { readonly search: string }) {
   )
 }
 
-// ── AI Models Section ───────────────────────────────────────────────
+// ── AI Models Section (with inline edit + save) ─────────────────────
 
 type ViewMode = "db" | "llm"
 
-function AIModelsSection({ models, loading }: { readonly models: ReadonlyArray<DBModelPricing>; readonly loading: boolean }) {
+function AIModelsSection({
+  models,
+  loading,
+  onRefresh,
+}: {
+  readonly models: ReadonlyArray<DBModelPricing>
+  readonly loading: boolean
+  readonly onRefresh: () => void
+}) {
   const [viewMode, setViewMode] = useState<ViewMode>("db")
   const [search, setSearch] = useState("")
+  const [pendingCosts, setPendingCosts] = useState<Record<string, number>>({})
+  const [savingId, setSavingId] = useState<string | null>(null)
+
+  const handleCostChange = useCallback((identifier: string, cost: number) => {
+    setPendingCosts((prev) => ({ ...prev, [identifier]: cost }))
+  }, [])
+
+  const handleSave = useCallback(
+    async (identifier: string) => {
+      const model = models.find((m) => m.model_identifier === identifier)
+      if (!model) return
+
+      const newCost = pendingCosts[identifier]
+      if (newCost === undefined) return
+
+      setSavingId(identifier)
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(`${API}/v1/admin/models/${encodeURIComponent(identifier)}/pricing`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            creditCost: newCost,
+            isEnabled: model.is_enabled,
+            tierRestriction: model.tier_restriction ?? null,
+          }),
+        })
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null)
+          throw new Error(errData?.error ?? `Request failed: ${res.status}`)
+        }
+        toast.success(`Updated ${identifier} to ${newCost} credits`)
+        setPendingCosts((prev) => {
+          const { [identifier]: _removed, ...rest } = prev
+          return rest
+        })
+        onRefresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to save")
+      } finally {
+        setSavingId(null)
+      }
+    },
+    [models, pendingCosts, onRefresh],
+  )
+
+  const pendingCount = Object.keys(pendingCosts).length
 
   return (
     <div className="border rounded-lg bg-card overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-4 border-b">
         <DollarSign className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">AI Model Pricing</h2>
-        <span className="text-xs text-muted-foreground ml-1">from DB</span>
+        {pendingCount > 0 && (
+          <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 text-[10px]">
+            {pendingCount} unsaved
+          </Badge>
+        )}
         <Link
           href="/admin/models"
           className="ml-auto text-xs text-[#ff0073] hover:underline inline-flex items-center gap-1"
@@ -437,7 +649,19 @@ function AIModelsSection({ models, loading }: { readonly models: ReadonlyArray<D
           </div>
         </>
       ) : (
-        <DBModelTable models={models} search={search} />
+        <>
+          <DetailedModelTable
+            models={models}
+            search={search}
+            pendingCosts={pendingCosts}
+            onCostChange={handleCostChange}
+            onSave={handleSave}
+            savingId={savingId}
+          />
+          <div className="px-4 py-2.5 text-xs text-muted-foreground border-t bg-muted/20">
+            Margin = (credits x $0.10 - provider cost) / (credits x $0.10). Click any credit value to edit.
+          </div>
+        </>
       )}
     </div>
   )
@@ -551,8 +775,8 @@ export default function AdminPricingPage() {
       {/* 3. Top-Up Credits (static) */}
       <TopUpSection />
 
-      {/* 4. AI Model Pricing (from DB) */}
-      <AIModelsSection models={models} loading={loading} />
+      {/* 4. AI Model Pricing (from DB + reference data) */}
+      <AIModelsSection models={models} loading={loading} onRefresh={fetchModels} />
 
       {/* 5. FFmpeg Post-Processing (static) */}
       <FFmpegSection />

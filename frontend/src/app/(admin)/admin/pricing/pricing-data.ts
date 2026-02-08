@@ -94,3 +94,60 @@ export const CATEGORY_COLORS: Record<DBCategory, string> = {
   processing: "text-slate-500",
   other: "text-gray-500",
 }
+
+// ── Provider reference data (hardcoded costs from provider docs) ────
+
+export interface ModelReferenceData {
+  readonly provider: string
+  readonly providerCostUsd: number | null  // null = dynamic (Replicate predict_time based)
+  readonly markupPct: number
+}
+
+/** [comment removed] */
+export const CREDIT_VALUE_USD = 0.10
+
+/**
+ * [comment removed]
+ * KIE.ai costs from https://docs.kie.ai pricing tables.
+ * Replicate costs are dynamic (predict_time * $0.000225/s) so marked null.
+ */
+export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
+  // ── Image Generation ──
+  "nano-banana":       { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },
+  "nano-banana-pro":   { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },
+  "flux":              { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
+  "grok":              { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
+  "gpt-image":         { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },
+  // ── Image Editing ──
+  "recraft-upscale":   { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
+  "recraft-remove-bg": { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },
+  "nano-banana-edit":  { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },
+  // ── Image-to-Image ──
+  "flux-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
+  "flux-pro-i2i":      { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },
+  "grok-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
+  "gpt-image-i2i":     { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },
+  // ── Video Generation (I2V / T2V) ──
+  "minimax":           { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },
+  "veo3":              { provider: "KIE.ai",    providerCostUsd: 2.000, markupPct: 25 },
+  "veo3.1":            { provider: "KIE.ai",    providerCostUsd: 1.250, markupPct: 25 },
+  "kling":             { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },
+  "kling-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.250, markupPct: 25 },
+  "grok-i2v":          { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },
+  "sora2-pro":         { provider: "KIE.ai",    providerCostUsd: 1.000, markupPct: 25 },
+  "runway":            { provider: "Replicate", providerCostUsd: null,  markupPct: 10 },
+  "pika":              { provider: "Replicate", providerCostUsd: null,  markupPct: 10 },
+  "sora":              { provider: "Replicate", providerCostUsd: null,  markupPct: 10 },
+  // ── Video-to-Video / Motion ──
+  "wan":               { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },
+  "topaz-video":       { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },
+  "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },
+  // ── Lip Sync ──
+  "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },
+  "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },
+  // ── Audio / TTS / Music ──
+  "elevenlabs":        { provider: "Replicate", providerCostUsd: 0.010, markupPct: 10 },
+  "suno":              { provider: "KIE.ai",    providerCostUsd: 0.050, markupPct: 25 },
+  // ── Processing (FFmpeg — free) ──
+  "ffmpeg":            { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
+}
