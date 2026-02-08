@@ -38,37 +38,68 @@ export interface ReserveResult {
 // ============================================================
 
 const STATIC_CREDIT_COSTS: Record<string, number> = {
-  // Image models
-  "nano-banana": 5,
-  "flux": 8,
-  "grok": 10,
-  "gpt-image": 15,
-  // Video models
-  "veo3": 50,
-  "veo3.1": 75,
-  "kling": 30,
-  "kling-turbo": 20,
-  "minimax": 20,
-  // TTS
-  "elevenlabs": 3,
-  // Node types (legacy)
+  // ── Image Generation ── (formula: ceil(providerCost * 1.25 / 0.10))
+  "nano-banana": 1,
+  "nano-banana-pro": 2,
+  "flux": 1,
+  "grok": 1,
+  "gpt-image": 1,
+  // ── Image Editing ──
+  "recraft-upscale": 1,
+  "recraft-remove-bg": 0,
+  "nano-banana-edit": 1,
+  // ── Image-to-Image ──
+  "flux-i2i": 1,
+  "flux-pro-i2i": 1,
+  "grok-i2i": 1,
+  "gpt-image-i2i": 1,
+  // ── Video Generation (I2V / T2V) ──
+  "minimax": 1,
+  "veo3": 25,
+  "veo3.1": 16,
+  "kling": 4,
+  "kling-turbo": 3,
+  "grok-i2v": 1,
+  "sora2-pro": 10,
+  // ── Video-to-Video / Motion ──
+  "wan": 5,
+  "topaz-video": 0,
+  "motion-transfer": 7,
+  "kling-motion": 0,
+  // ── Lip Sync ──
+  "kling-avatar": 0,
+  "kling-avatar-pro": 0,
+  "hailuo-avatar": 5,
+  // ── Audio / TTS / Music ──
+  "elevenlabs": 1,
+  "suno": 1,
+  "suno-v5": 1,
+  "infinitalk": 0,
+  // ── Processing ──
+  "topaz": 0,
+  "ffmpeg": 0,
+  // ── Replicate (dynamic per-second) ──
+  "runway": 0,
+  "pika": 0,
+  "sora": 0,
+  // ── Node types (legacy fallback for workflow estimation) ──
   "generate-script": 2,
-  "generate-image": 5,
-  "image-to-video": 20,
-  "video-to-video": 25,
-  "text-to-video": 25,
-  "text-to-speech": 3,
+  "generate-image": 1,
+  "image-to-video": 4,
+  "video-to-video": 5,
+  "text-to-video": 4,
+  "text-to-speech": 1,
   "qa-check": 1,
-  "combine-videos": 2,
-  "merge-video-audio": 1,
-  "add-captions": 2,
-  "resize-video": 1,
-  "extract-audio": 1,
-  "mix-audio": 1,
+  "combine-videos": 0,
+  "merge-video-audio": 0,
+  "add-captions": 0,
+  "resize-video": 0,
+  "extract-audio": 0,
+  "mix-audio": 0,
   "adjust-volume": 0,
   "trim-video": 0,
-  "generate-music": 3,
-  "text-to-audio": 3,
+  "generate-music": 1,
+  "text-to-audio": 1,
 }
 
 // Tier order for restriction checks
