@@ -1324,6 +1324,41 @@ export async function getStats(scope: "user" | "platform" = "user", userId?: str
   return res.json()
 }
 
+// Cost summary types
+export interface CostBreakdownItem {
+  readonly node_type: string
+  readonly model: string
+  readonly runs: number
+  readonly successful: number
+  readonly failed: number
+  readonly total_credits: number
+  readonly total_cost_usd: number
+  readonly avg_credits_per_run: number
+}
+
+export interface CostSummary {
+  readonly total_credits: number
+  readonly total_cost_usd: number
+  readonly total_jobs: number
+  readonly breakdown: readonly CostBreakdownItem[]
+}
+
+export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise<{ data: CostSummary }> {
+  if (jobIds.length === 0) {
+    return { data: { total_credits: 0, total_cost_usd: 0, total_jobs: 0, breakdown: [] } }
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/cost-summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobIds }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch cost summary")
+  }
+  return res.json()
+}
+
 // Cancel job functions
 export async function cancelJob(jobId: string, userId?: string): Promise<{ success: boolean; cancelled: number }> {
   const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}/cancel`, {
