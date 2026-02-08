@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -309,6 +309,7 @@ export function ConfigPanel() {
   }, [selectedNode])
 
   const [expandSceneOpen, setExpandSceneOpen] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   if (!selectedNode) return null
 
@@ -382,18 +383,41 @@ export function ConfigPanel() {
     return names[type] || type.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
   }
 
-  return (
-    <div className="absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D]">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
-          {getNodeTypeDisplayName(selectedNode.type as string)} Node Settings
-        </h3>
-        <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => selectNode(null)}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
+  const panelContent = (
+    <div className={isExpanded
+      ? "fixed inset-0 z-50 flex items-center justify-center"
+      : "absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D]"
+    }>
+      {/* Backdrop (expanded mode only) */}
+      {isExpanded && (
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsExpanded(false)} />
+      )}
+      <div className={isExpanded
+        ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
+        : "flex flex-col h-full min-h-0"
+      }>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
+            {getNodeTypeDisplayName(selectedNode.type as string)} Node Settings
+          </h3>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
+              onClick={() => setIsExpanded((v) => !v)}
+              title={isExpanded ? "Collapse to side panel" : "Expand to full screen"}
+            >
+              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+            <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setIsExpanded(false); selectNode(null) }}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
-      <ScrollArea className="flex-1 overflow-hidden bg-[#F8FAFC] dark:bg-[#121212]">
+      <ScrollArea className="flex-1 overflow-hidden min-h-0 bg-[#F8FAFC] dark:bg-[#121212]">
         <div className="flex flex-col gap-5 p-4">
           <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
             <Label htmlFor="node-label" className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Label</Label>
@@ -630,8 +654,11 @@ export function ConfigPanel() {
           nodeId={selectedNode.id}
         />
       )}
+      </div>
     </div>
   )
+
+  return panelContent
 }
 
 /* ── Input Node Configs ── */
