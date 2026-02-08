@@ -31,6 +31,7 @@ import { mixAudio } from "../providers/video/mix-audio.js"
 import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
+import { KieAudioProvider } from "../providers/kie/audio.js"
 import { transcribe, type TranscribeProvider } from "../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
 import { promises as fs } from "node:fs"
@@ -389,15 +390,27 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-speech") {
-          const { text, voice, provider } = job.data as {
+          const { text, voice, provider, stability, similarityBoost, style, speed, languageCode } = job.data as {
             jobId: string
             text: string
             voice?: string
             provider?: string
+            stability?: number
+            similarityBoost?: number
+            style?: number
+            speed?: number
+            languageCode?: string
           }
-          console.log(`[worker] text-to-speech ${jobId} (provider: ${provider ?? "elevenlabs"})`)
+          console.log(`[worker] text-to-speech ${jobId} (provider: ${provider ?? "elevenlabs-turbo"})`)
 
-          const result = await routedTextToSpeech(text, provider ?? "elevenlabs", voice)
+          const ttsOptions = {
+            ...(stability != null && { stability }),
+            ...(similarityBoost != null && { similarityBoost }),
+            ...(style != null && { style }),
+            ...(speed != null && { speed }),
+            ...(languageCode && { languageCode }),
+          }
+          const result = await routedTextToSpeech(text, provider ?? "elevenlabs-turbo", voice, Object.keys(ttsOptions).length > 0 ? ttsOptions : undefined)
           await job.updateProgress(50)
 
           const r2Url = await uploadToR2(result.url, jobId, "audio")
@@ -625,11 +638,27 @@ export function createVideoWorker() {
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "text-to-audio") {
-          const { prompt, provider, duration } = job.data as { jobId: string; prompt: string; provider?: AudioProvider; duration?: number }
+          const { prompt, provider, duration, loop, promptInfluence } = job.data as {
+            jobId: string; prompt: string; provider?: AudioProvider | "elevenlabs-sfx"
+            duration?: number; loop?: boolean; promptInfluence?: number
+          }
           console.log(`[worker] text-to-audio ${jobId} (provider: ${provider ?? "tangoflux"})`)
-          const replicateUrl = await textToAudio(prompt, provider, duration)
+
+          let audioUrl: string
+          if (provider === "elevenlabs-sfx") {
+            const kieAudio = new KieAudioProvider()
+            const result = await kieAudio.generateSoundEffect(prompt, {
+              duration,
+              loop,
+              promptInfluence,
+            })
+            audioUrl = result.url
+          } else {
+            audioUrl = await textToAudio(prompt, provider as AudioProvider | undefined, duration)
+          }
+
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
+          const r2Url = await uploadToR2(audioUrl, jobId, "audio")
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return

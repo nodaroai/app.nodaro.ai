@@ -6,8 +6,10 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 
 const textToAudioBody = z.object({
   prompt: z.string().min(1).max(2000),
-  provider: z.enum(["tangoflux", "tango", "audioldm", "bark"]).optional(),
-  duration: z.number().min(1).max(30).optional(),
+  provider: z.enum(["tangoflux", "tango", "audioldm", "bark", "elevenlabs-sfx"]).optional(),
+  duration: z.number().min(0.5).max(30).optional(),
+  loop: z.boolean().optional(),
+  promptInfluence: z.number().min(0).max(1).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -23,7 +25,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, userId } = parsed.data
+    const { prompt, provider, duration, loop, promptInfluence, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -40,7 +42,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, provider, duration, type: "text-to-audio" },
+        input_data: { prompt, provider, duration, loop, promptInfluence, type: "text-to-audio" },
       })
       .select("id")
       .single()
@@ -61,6 +63,8 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       prompt,
       provider,
       duration,
+      loop,
+      promptInfluence,
       usageLogId,
     })
 

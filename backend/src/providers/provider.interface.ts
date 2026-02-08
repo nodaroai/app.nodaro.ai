@@ -16,6 +16,7 @@ export type ProviderCapability =
   | "lip-sync" // image + audio -> talking video
   | "music-generation" // text -> music
   | "text-to-speech" // text -> speech audio
+  | "sound-effect" // text -> sound effect audio
   | "transcription" // audio -> text
 
 // Progress callback for long-running tasks
@@ -113,11 +114,20 @@ export interface MusicGenerationProvider {
   ): Promise<ProviderResult>
 }
 
+export interface TextToSpeechOptions {
+  stability?: number       // 0-1
+  similarityBoost?: number // 0-1
+  style?: number           // 0-1
+  speed?: number           // 0.7-1.2
+  languageCode?: string    // e.g. "en", "he", "es"
+}
+
 export interface TextToSpeechProvider {
   textToSpeech(
     text: string,
     voice?: string,
-    model?: string
+    model?: string,
+    options?: TextToSpeechOptions
   ): Promise<ProviderResult>
 }
 

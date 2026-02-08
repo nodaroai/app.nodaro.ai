@@ -486,11 +486,14 @@ export type ImageToVideoData = {
 export type TextToSpeechData = {
   [key: string]: unknown
   label: string
-  provider: "elevenlabs" | "playht" | "azure"
+  provider: "elevenlabs-turbo" | "elevenlabs-multilingual" | "elevenlabs"
   voiceId: string
   language: string
   speed: number
-  pitch: number
+  stability: number
+  similarityBoost: number
+  style: number
+  languageCode: string
   textSource: "connected" | "direct"
   directText: string
   fieldMappings: FieldMappings
@@ -625,8 +628,10 @@ export type TextToAudioData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "tangoflux" | "tango" | "audioldm" | "bark"
+  provider: "tangoflux" | "tango" | "audioldm" | "bark" | "elevenlabs-sfx"
   duration: number
+  loop?: boolean
+  promptInfluence?: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1356,7 +1361,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Text to Speech", provider: "elevenlabs", voiceId: "Rachel", language: "en", speed: 1, pitch: 1, textSource: "connected", directText: "", fieldMappings: {} },
+    defaultData: { label: "Text to Speech", provider: "elevenlabs-turbo", voiceId: "Rachel", language: "en", speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
   },
   {
     type: "qa-check",

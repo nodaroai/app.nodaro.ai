@@ -1357,12 +1357,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runTextToSpeechGeneration(nodeId: string, text: string, voice?: string, provider?: string): Promise<void> {
+  function runTextToSpeechGeneration(nodeId: string, text: string, voice?: string, provider?: string, options?: { stability?: number; similarityBoost?: number; style?: number; speed?: number; languageCode?: string }): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running" })
 
     return new Promise((resolve, reject) => {
-      textToSpeech(text, voice, provider, user?.id).then(({ jobId }) => {
+      textToSpeech(text, voice, provider, user?.id, options).then(({ jobId }) => {
         toast.info("Text-to-speech generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -1726,7 +1726,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No text"))
       }
       const voice = ttsData.voiceId
-      return runTextToSpeechGeneration(node.id, text, voice || undefined, ttsData.provider || undefined)
+      const ttsOptions = {
+        ...(ttsData.stability != null && { stability: ttsData.stability }),
+        ...(ttsData.similarityBoost != null && { similarityBoost: ttsData.similarityBoost }),
+        ...(ttsData.style != null && { style: ttsData.style }),
+        ...(ttsData.speed != null && { speed: ttsData.speed }),
+        ...(ttsData.languageCode && { languageCode: ttsData.languageCode }),
+      }
+      return runTextToSpeechGeneration(node.id, text, voice || undefined, ttsData.provider || undefined, Object.keys(ttsOptions).length > 0 ? ttsOptions : undefined)
     }
 
     if (node.type === "generate-music") {
@@ -1747,7 +1754,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No prompt"))
       }
       const d = node.data as TextToAudioData
-      return runProcessingNode(node.id, () => textToAudioApi(prompt, d.provider || undefined, d.duration || undefined, user?.id), "generatedAudioUrl", "Text to Audio")
+      const sfxOptions = d.provider === "elevenlabs-sfx" ? { loop: d.loop, promptInfluence: d.promptInfluence } : undefined
+      return runProcessingNode(node.id, () => textToAudioApi(prompt, d.provider || undefined, d.duration || undefined, user?.id, sfxOptions), "generatedAudioUrl", "Text to Audio")
     }
 
     if (node.type === "transcribe") {
@@ -2557,11 +2565,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         position: { x: ttsX, y: ttsY },
         data: {
           label: `Scene ${scene.sceneNumber} Voice`,
-          provider: "elevenlabs",
+          provider: "elevenlabs-turbo",
           voiceId: "Rachel",
           language: "en",
           speed: 1,
-          pitch: 1,
+          stability: 0.5,
+          similarityBoost: 0.75,
+          style: 0,
+          languageCode: "",
           fieldMappings: {},
         },
       } as WorkflowNode)
