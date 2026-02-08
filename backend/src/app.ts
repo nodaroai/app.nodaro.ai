@@ -50,6 +50,7 @@ import { adminRoutes } from "./routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { transcribeRoutes } from "./routes/transcribe.js"
 import { adminCreditsRoutes } from "./routes/admin-credits.js"
+import { workflowCostRoutes } from "./routes/workflow-costs.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -111,6 +112,7 @@ export async function buildApp() {
   await app.register(libraryRoutes)
   await app.register(transcribeRoutes)
   await app.register(adminCreditsRoutes)
+  await app.register(workflowCostRoutes)
 
   return app
 }

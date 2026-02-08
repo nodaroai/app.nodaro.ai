@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Cpu, Loader2, Save, Check } from "lucide-react"
+import Link from "next/link"
+import { Cpu, Loader2, Save, Check, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -452,6 +453,13 @@ export default function AdminModelPricingPage() {
         <span className="text-xs text-muted-foreground ml-2">
           {models.length} models
         </span>
+        <Link
+          href="/admin/pricing"
+          className="ml-auto text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-colors"
+        >
+          <ArrowLeft className="h-3 w-3" />
+          Pricing overview
+        </Link>
       </div>
 
       {/* Summary Cards */}

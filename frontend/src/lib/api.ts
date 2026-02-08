@@ -1110,6 +1110,8 @@ export interface Job {
   provider_cost?: number         // Actual cost from API response (self-hosted/admin only)
   display_cost?: number          // provider_cost with markup (self-hosted/admin only)
   cost?: number                  // What user pays (cloud edition regular users)
+  credits_used?: number | null   // Credits consumed (all editions)
+  credits_estimated?: number | null // Estimated credits before completion
 }
 
 export async function getJobStatus(jobId: string): Promise<Job> {
@@ -1318,6 +1320,41 @@ export async function getStats(scope: "user" | "platform" = "user", userId?: str
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throw new Error(err?.error?.message ?? "Failed to fetch stats")
+  }
+  return res.json()
+}
+
+// Cost summary types
+export interface CostBreakdownItem {
+  readonly node_type: string
+  readonly model: string
+  readonly runs: number
+  readonly successful: number
+  readonly failed: number
+  readonly total_credits: number
+  readonly total_cost_usd: number
+  readonly avg_credits_per_run: number
+}
+
+export interface CostSummary {
+  readonly total_credits: number
+  readonly total_cost_usd: number
+  readonly total_jobs: number
+  readonly breakdown: readonly CostBreakdownItem[]
+}
+
+export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise<{ data: CostSummary }> {
+  if (jobIds.length === 0) {
+    return { data: { total_credits: 0, total_cost_usd: 0, total_jobs: 0, breakdown: [] } }
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/cost-summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobIds }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch cost summary")
   }
   return res.json()
 }

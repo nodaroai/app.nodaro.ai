@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, Clock, Zap } from "lucide-react"
+import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, Clock, Zap, DollarSign, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getJobs, getStats, cancelJob, cancelAllJobs, type Job, type StatsResponse } from "@/lib/api"
 import { ExecutionDetailModal } from "./execution-detail-modal"
 import { useAuth } from "@/hooks/use-auth"
+import { isCloud } from "@/lib/edition"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,31 +52,21 @@ function formatDuration(startedAt: string | undefined, completedAt: string | und
   return `${mins}m ${secs.toFixed(0)}s`
 }
 
-function getCostDisplay(job: Job): string {
-  // Cloud edition: API returns `cost` field (= display_cost with markup)
-  // This field is sanitized at the backend to hide provider details
-  if (job.cost != null) {
-    const cost = job.cost
-    if (cost < 0.01) return `$${cost.toFixed(4)}`
-    return `$${cost.toFixed(3)}`
-  }
+function getDollarDisplay(job: Job): string {
+  const cost = job.cost ?? job.display_cost ?? job.provider_cost
+  if (cost == null) return "-"
+  if (cost < 0.01) return `$${cost.toFixed(4)}`
+  return `$${cost.toFixed(3)}`
+}
 
-  // Self-hosted edition or admin: API returns full cost breakdown
-  // Show display_cost if available (CLOUD edition admin), otherwise provider_cost
-  if (job.display_cost != null) {
-    const cost = job.display_cost
-    if (cost < 0.01) return `$${cost.toFixed(4)}`
-    return `$${cost.toFixed(3)}`
-  }
+function getCreditsDisplay(job: Job): string {
+  const credits = job.credits_used ?? job.credits_estimated
+  if (credits == null) return "-"
+  return `${credits} CR`
+}
 
-  if (job.provider_cost != null) {
-    const cost = job.provider_cost
-    if (cost < 0.01) return `$${cost.toFixed(4)}`
-    return `$${cost.toFixed(3)}`
-  }
-
-  // No cost data available
-  return "-"
+function getCostDisplay(job: Job, showDollars: boolean): string {
+  return showDollars ? getDollarDisplay(job) : getCreditsDisplay(job)
 }
 
 function getQueueTime(createdAt: string, startedAt: string | undefined): string {
@@ -149,7 +140,7 @@ interface ExecutionsTabProps {
 }
 
 export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -160,6 +151,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [cancelAllDialogOpen, setCancelAllDialogOpen] = useState(false)
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
+  const [showDollars, setShowDollars] = useState(!isCloud())
 
   const userId = user?.id
 
@@ -321,6 +313,33 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Admin toggle: credits vs dollars */}
+          {isAdmin && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDollars(prev => !prev)}
+                    className={`h-8 px-2.5 dark:border-[#2D2D2D] ${showDollars ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30" : ""}`}
+                  >
+                    {showDollars ? (
+                      <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <Coins className="w-4 h-4 text-[#ff0073]" />
+                    )}
+                    <span className="ml-1.5 text-xs font-medium">
+                      {showDollars ? "$" : "CR"}
+                    </span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>{showDollars ? "Showing dollars -- click for credits" : "Showing credits -- click for dollars"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {/* Cancel All button */}
           {stats && (stats.pending + stats.processing > 0) && (
             <Button
@@ -394,7 +413,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                   Duration
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Cost
+                  {showDollars ? "Cost" : "Credits"}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Created
@@ -473,7 +492,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-[#ff0073] font-mono">
-                        {getCostDisplay(job)}
+                        {getCostDisplay(job, showDollars)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -524,6 +543,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
           setJobs(prev => prev.filter(j => j.id !== jobId))
           setSelectedJob(null)
         }}
+        showDollars={showDollars}
       />
 
       {/* Cancel All Confirmation Dialog */}

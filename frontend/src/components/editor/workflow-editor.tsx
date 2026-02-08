@@ -10,6 +10,7 @@ import { ConfigPanel } from "./config-panel"
 import { EditorToolbar } from "./editor-toolbar"
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog"
 import { ExecutionsTab } from "./executions-tab"
+import { CostTab } from "./cost-tab"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence"
@@ -3013,13 +3014,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         )}
 
         {activeTab === "cost" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212]">
-            <DollarSign className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />
-            <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Cost & Credits</h3>
-            <p className="text-sm text-gray-500 dark:text-[#94A3B8] text-center max-w-md">
-              Track credit usage across all nodes, view cost breakdown by node type, and monitor spending.
-            </p>
-            <p className="text-xs text-gray-400 dark:text-[#64748B] mt-4">Coming soon</p>
+          <div className="absolute inset-0">
+            <CostTab className="h-full" />
           </div>
         )}
       </div>

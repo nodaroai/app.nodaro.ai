@@ -120,10 +120,13 @@ export async function reserveCreditsForJob(
       0  // display cost calculated in worker
     )
 
-    // Store usageLogId in dedicated column for worker to access
+    // Store usageLogId and estimated credits on the job
     await supabase
       .from("jobs")
-      .update({ usage_log_id: reservation.usageLogId })
+      .update({
+        usage_log_id: reservation.usageLogId,
+        credits_estimated: reservation.creditsReserved,
+      })
       .eq("id", jobId)
 
     // Update request with actual reservation
