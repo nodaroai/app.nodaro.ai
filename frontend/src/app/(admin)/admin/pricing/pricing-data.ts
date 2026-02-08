@@ -1,5 +1,6 @@
 // Static pricing configuration for admin overview
-// All costs in USD, credits as integers
+// Subscription tiers, top-ups, FFmpeg, and LLM are hardcoded (don't change per-model).
+// AI model pricing (image, video, audio) comes from the model_pricing DB table.
 
 export interface SubscriptionTier {
   readonly name: string
@@ -33,76 +34,11 @@ export const TOPUP_PACKAGES: readonly TopUpPackage[] = [
   { name: "Large", price: 50, credits: 275, perCredit: 0.18 },
 ] as const
 
-export type ModelCategory = "video" | "lip-sync" | "image" | "audio" | "llm"
-
-export interface ModelPricing {
-  readonly model: string
-  readonly variant: string
-  readonly provider: "KIE.ai" | "Replicate"
-  readonly providerCost: string
-  readonly credits: string
-  readonly notes?: string
-}
-
-export const VIDEO_MODELS: readonly ModelPricing[] = [
-  { model: "VEO 3.1", variant: "Quality", provider: "KIE.ai", providerCost: "$1.25", credits: "16" },
-  { model: "VEO 3.1", variant: "Fast", provider: "KIE.ai", providerCost: "$0.30", credits: "4" },
-  { model: "VEO 3.1", variant: "4K Output", provider: "KIE.ai", providerCost: "$0.60", credits: "8" },
-  { model: "Sora 2", variant: "Standard 10s", provider: "KIE.ai", providerCost: "$0.15", credits: "2" },
-  { model: "Sora 2", variant: "Standard 15s", provider: "KIE.ai", providerCost: "$0.25", credits: "4" },
-  { model: "Sora 2", variant: "Pro Standard 10s", provider: "KIE.ai", providerCost: "$0.65", credits: "9" },
-  { model: "Sora 2", variant: "Pro Standard 15s", provider: "KIE.ai", providerCost: "$1.05", credits: "14" },
-  { model: "Sora 2", variant: "Pro High 10s", provider: "KIE.ai", providerCost: "$2.10", credits: "27" },
-  { model: "Sora 2", variant: "Pro High 15s", provider: "KIE.ai", providerCost: "$3.15", credits: "40", notes: "Most expensive" },
-  { model: "Kling 2.6", variant: "5s no audio", provider: "KIE.ai", providerCost: "$0.275", credits: "4" },
-  { model: "Kling 2.6", variant: "5s + audio", provider: "KIE.ai", providerCost: "$0.55", credits: "7" },
-  { model: "Kling 2.6", variant: "10s no audio", provider: "KIE.ai", providerCost: "$0.55", credits: "7" },
-  { model: "Kling 2.6", variant: "10s + audio", provider: "KIE.ai", providerCost: "$1.10", credits: "14" },
-  { model: "Kling 2.5 Turbo", variant: "5s", provider: "KIE.ai", providerCost: "$0.21", credits: "3" },
-  { model: "Kling 2.5 Turbo", variant: "10s", provider: "KIE.ai", providerCost: "$0.42", credits: "6" },
-  { model: "Wan 2.6", variant: "5s 720p", provider: "KIE.ai", providerCost: "$0.35", credits: "5" },
-  { model: "Wan 2.6", variant: "5s 1080p", provider: "KIE.ai", providerCost: "$0.525", credits: "7" },
-  { model: "Wan 2.6", variant: "10s 720p", provider: "KIE.ai", providerCost: "$0.70", credits: "9" },
-  { model: "Wan 2.6", variant: "15s 1080p", provider: "KIE.ai", providerCost: "$1.575", credits: "20" },
-  { model: "Runway Aleph", variant: "5s", provider: "KIE.ai", providerCost: "$0.55", credits: "7" },
-  { model: "Runway", variant: "5s 720p", provider: "KIE.ai", providerCost: "$0.06", credits: "1", notes: "Cheapest video" },
-  { model: "Runway", variant: "10s 720p", provider: "KIE.ai", providerCost: "$0.12", credits: "2" },
-  { model: "minimax video-01", variant: "Standard", provider: "KIE.ai", providerCost: "$0.04", credits: "1" },
-  { model: "Hailuo", variant: "Standard", provider: "KIE.ai", providerCost: "$0.04", credits: "1" },
-  { model: "Topaz Video Upscale", variant: "per second", provider: "KIE.ai", providerCost: "$0.06/sec", credits: "1/sec", notes: "5s=$0.30 (4cr), 10s=$0.60 (8cr)" },
-  { model: "Motion Transfer", variant: "Kling 2.6 Motion Control", provider: "KIE.ai", providerCost: "$0.50/job", credits: "7" },
-] as const
-
-export const LIP_SYNC_MODELS: readonly ModelPricing[] = [
-  { model: "Kling Avatar", variant: "per second", provider: "KIE.ai", providerCost: "$0.04-$0.08/s", credits: "1/sec" },
-  { model: "InfiniteTalk", variant: "per second", provider: "KIE.ai", providerCost: "$0.015-$0.06/s", credits: "1/sec" },
-] as const
-
-export const IMAGE_MODELS: readonly ModelPricing[] = [
-  { model: "Google nano-banana", variant: "Standard", provider: "KIE.ai", providerCost: "$0.02", credits: "1" },
-  { model: "FLUX 2 Pro", variant: "Standard", provider: "KIE.ai", providerCost: "$0.025-$0.035", credits: "1" },
-  { model: "Ideogram v3", variant: "Standard", provider: "KIE.ai", providerCost: "$0.0175-$0.05", credits: "1" },
-  { model: "Midjourney", variant: "Standard", provider: "KIE.ai", providerCost: "$0.015-$0.08", credits: "1" },
-  { model: "Topaz Image 2K", variant: "Upscale", provider: "KIE.ai", providerCost: "$0.05", credits: "1" },
-  { model: "Topaz Image 4K", variant: "Upscale", provider: "KIE.ai", providerCost: "$0.10", credits: "2" },
-  { model: "Topaz Image 8K", variant: "Upscale", provider: "KIE.ai", providerCost: "$0.20", credits: "3" },
-  { model: "Recraft Remove BG", variant: "Background removal", provider: "KIE.ai", providerCost: "FREE", credits: "0" },
-] as const
-
-export const AUDIO_MODELS: readonly ModelPricing[] = [
-  { model: "Suno Generate", variant: "Music generation", provider: "KIE.ai", providerCost: "$0.06", credits: "1" },
-  { model: "Suno Extend", variant: "Music extension", provider: "KIE.ai", providerCost: "$0.06", credits: "1" },
-  { model: "Suno Vocals", variant: "Vocal generation", provider: "KIE.ai", providerCost: "$0.06", credits: "1" },
-  { model: "Suno Multi-Stem", variant: "Stem separation", provider: "KIE.ai", providerCost: "$0.25", credits: "4" },
-  { model: "ElevenLabs TTS", variant: "Text to Speech", provider: "KIE.ai", providerCost: "$0.03-$0.07/1K chars", credits: "1" },
-] as const
-
 export interface LLMPricing {
   readonly model: string
   readonly inputCost: string
   readonly outputCost: string
   readonly perRequest: string
-  readonly notes?: string
 }
 
 export const LLM_MODELS: readonly LLMPricing[] = [
@@ -125,17 +61,36 @@ export const FFMPEG_NODES: readonly FFmpegNode[] = [
   { name: "Download Video", description: "Download + re-encode to h264" },
 ] as const
 
-export interface QuickStat {
-  readonly label: string
-  readonly value: string
+// Category detection shared with /admin/models (same logic)
+export type DBCategory = "image" | "video" | "audio" | "processing" | "other"
+
+const CATEGORY_PATTERNS: ReadonlyArray<readonly [DBCategory, ReadonlyArray<string>]> = [
+  ["image", ["nano", "flux", "grok", "gpt-image", "recraft", "ideogram", "midjourney"]],
+  ["video", ["veo", "kling", "minimax", "wan", "sora", "grok-i2v", "runway", "pika", "hailuo", "topaz-video", "motion-transfer"]],
+  ["audio", ["suno", "elevenlabs", "infinitalk", "tango", "musicgen", "audioldm", "bark"]],
+  ["processing", ["ffmpeg", "topaz"]],
+]
+
+export function detectCategory(modelId: string): DBCategory {
+  const lower = modelId.toLowerCase()
+  for (const [category, patterns] of CATEGORY_PATTERNS) {
+    if (patterns.some((p) => lower.includes(p))) return category
+  }
+  return "other"
 }
 
-export const QUICK_STATS: readonly QuickStat[] = [
-  { label: "Cheapest video", value: "Runway 5s 720p = 1 credit" },
-  { label: "Most expensive video", value: "Sora 2 Pro High 15s = 40 credits" },
-  { label: "Popular range", value: "2-16 credits" },
-  { label: "All images", value: "1-3 credits" },
-  { label: "FFmpeg nodes", value: "Always free" },
-  { label: "Markup", value: "KIE 25% / Replicate 10%" },
-  { label: "Credit value", value: "1 credit = $0.10 cost" },
-] as const
+export const CATEGORY_LABELS: Record<DBCategory, string> = {
+  image: "Image Generation",
+  video: "Video Generation",
+  audio: "Audio / TTS / Music",
+  processing: "Processing",
+  other: "Other",
+}
+
+export const CATEGORY_COLORS: Record<DBCategory, string> = {
+  image: "text-blue-500",
+  video: "text-purple-500",
+  audio: "text-amber-500",
+  processing: "text-slate-500",
+  other: "text-gray-500",
+}

@@ -1,12 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
 import {
   DollarSign,
-  Video,
-  Image,
-  Music,
-  Brain,
   Wrench,
   CreditCard,
   ShoppingCart,
@@ -14,56 +11,112 @@ import {
   ChevronDown,
   ChevronRight,
   Search,
-  Mic,
+  Loader2,
+  ExternalLink,
+  Brain,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
+import { createClient } from "@/lib/supabase"
 import {
-  QUICK_STATS,
   SUBSCRIPTION_TIERS,
   TOPUP_PACKAGES,
-  VIDEO_MODELS,
-  LIP_SYNC_MODELS,
-  IMAGE_MODELS,
-  AUDIO_MODELS,
   LLM_MODELS,
   FFMPEG_NODES,
-  type ModelPricing,
+  detectCategory,
+  CATEGORY_LABELS,
+  CATEGORY_COLORS,
+  type DBCategory,
   type LLMPricing,
 } from "./pricing-data"
 
-type ModelTab = "video" | "lip-sync" | "image" | "audio" | "llm"
+// ── DB model type (same shape as /admin/models) ─────────────────────
 
-const MODEL_TABS: readonly { readonly id: ModelTab; readonly label: string; readonly icon: typeof Video }[] = [
-  { id: "video", label: "Video", icon: Video },
-  { id: "lip-sync", label: "Lip Sync", icon: Mic },
-  { id: "image", label: "Image", icon: Image },
-  { id: "audio", label: "Audio / Music", icon: Music },
-  { id: "llm", label: "LLM", icon: Brain },
-] as const
-
-function marginColor(margin: number | null): string {
-  if (margin === null) return "text-zinc-400"
-  if (margin > 40) return "text-green-600 dark:text-green-400"
-  if (margin >= 25) return "text-yellow-600 dark:text-yellow-400"
-  return "text-red-600 dark:text-red-400"
+interface DBModelPricing {
+  readonly id: string
+  readonly model_identifier: string
+  readonly display_name: string
+  readonly category: string
+  readonly credit_cost: number
+  readonly is_enabled: boolean
+  readonly tier_restriction: string | null
 }
 
-function filterModels(models: readonly ModelPricing[], query: string): readonly ModelPricing[] {
-  if (!query.trim()) return models
-  const q = query.toLowerCase()
-  return models.filter(
-    (m) => m.model.toLowerCase().includes(q) || m.variant.toLowerCase().includes(q),
-  )
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) {
+    throw new Error("Not authenticated")
+  }
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${session.access_token}`,
+  }
 }
 
-function filterLLMs(models: readonly LLMPricing[], query: string): readonly LLMPricing[] {
-  if (!query.trim()) return models
-  const q = query.toLowerCase()
-  return models.filter((m) => m.model.toLowerCase().includes(q))
+function parseResponse<T>(json: unknown): ReadonlyArray<T> {
+  if (Array.isArray(json)) return json as ReadonlyArray<T>
+  if (json && typeof json === "object" && "data" in json && Array.isArray((json as Record<string, unknown>).data)) {
+    return (json as Record<string, unknown>).data as ReadonlyArray<T>
+  }
+  return []
 }
 
-function QuickStatsCard() {
+// ── Dynamic Quick Stats ─────────────────────────────────────────────
+
+function computeQuickStats(models: ReadonlyArray<DBModelPricing>) {
+  const videoModels = models.filter((m) => detectCategory(m.model_identifier) === "video" && m.is_enabled)
+  const imageModels = models.filter((m) => detectCategory(m.model_identifier) === "image" && m.is_enabled)
+  const enabledModels = models.filter((m) => m.is_enabled)
+
+  const cheapestVideo = videoModels.length > 0
+    ? videoModels.reduce((min, m) => m.credit_cost < min.credit_cost ? m : min, videoModels[0])
+    : null
+  const mostExpensiveVideo = videoModels.length > 0
+    ? videoModels.reduce((max, m) => m.credit_cost > max.credit_cost ? m : max, videoModels[0])
+    : null
+
+  const imageRange = imageModels.length > 0
+    ? (() => {
+        const costs = imageModels.map((m) => m.credit_cost)
+        const min = Math.min(...costs)
+        const max = Math.max(...costs)
+        return min === max ? `${min} credit${min !== 1 ? "s" : ""}` : `${min}-${max} credits`
+      })()
+    : "N/A"
+
+  const avgCost = enabledModels.length > 0
+    ? (enabledModels.reduce((sum, m) => sum + m.credit_cost, 0) / enabledModels.length).toFixed(1)
+    : "0"
+
+  return [
+    {
+      label: "Cheapest video",
+      value: cheapestVideo
+        ? `${cheapestVideo.display_name || cheapestVideo.model_identifier} = ${cheapestVideo.credit_cost} cr`
+        : "N/A",
+    },
+    {
+      label: "Most expensive video",
+      value: mostExpensiveVideo
+        ? `${mostExpensiveVideo.display_name || mostExpensiveVideo.model_identifier} = ${mostExpensiveVideo.credit_cost} cr`
+        : "N/A",
+    },
+    { label: "Avg credit cost", value: `${avgCost} credits` },
+    { label: "Enabled models", value: `${enabledModels.length} / ${models.length}` },
+    { label: "All images", value: imageRange },
+    { label: "FFmpeg nodes", value: "Always free" },
+    { label: "Markup", value: "KIE 25% / Replicate 10%" },
+    { label: "Credit value", value: "1 credit = $0.10 cost" },
+  ] as const
+}
+
+function QuickStatsCard({ models }: { readonly models: ReadonlyArray<DBModelPricing> }) {
+  const stats = computeQuickStats(models)
+
   return (
     <div className="border rounded-lg bg-card p-5">
       <div className="flex items-center gap-2 mb-4">
@@ -73,7 +126,7 @@ function QuickStatsCard() {
         <h2 className="text-sm font-semibold uppercase tracking-wider">Quick Stats</h2>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {QUICK_STATS.map((stat) => (
+        {stats.map((stat) => (
           <div key={stat.label} className="rounded-md bg-muted/40 px-3 py-2">
             <p className="text-xs text-muted-foreground">{stat.label}</p>
             <p className="text-sm font-medium mt-0.5">{stat.value}</p>
@@ -83,6 +136,17 @@ function QuickStatsCard() {
     </div>
   )
 }
+
+// ── Margin color helper ─────────────────────────────────────────────
+
+function marginColor(margin: number | null): string {
+  if (margin === null) return "text-zinc-400"
+  if (margin > 40) return "text-green-600 dark:text-green-400"
+  if (margin >= 25) return "text-yellow-600 dark:text-yellow-400"
+  return "text-red-600 dark:text-red-400"
+}
+
+// ── Subscription Tiers (static) ─────────────────────────────────────
 
 function SubscriptionTiersSection() {
   return (
@@ -127,6 +191,8 @@ function SubscriptionTiersSection() {
   )
 }
 
+// ── Top-Up Credits (static) ─────────────────────────────────────────
+
 function TopUpSection() {
   return (
     <div className="border rounded-lg bg-card overflow-hidden">
@@ -161,10 +227,36 @@ function TopUpSection() {
   )
 }
 
-function ModelTable({ models, search }: { readonly models: readonly ModelPricing[]; readonly search: string }) {
-  const filtered = filterModels(models, search)
+// ── AI Models from DB (grouped by category) ─────────────────────────
 
-  if (filtered.length === 0) {
+function DBModelTable({
+  models,
+  search,
+}: {
+  readonly models: ReadonlyArray<DBModelPricing>
+  readonly search: string
+}) {
+  const filtered = search.trim()
+    ? models.filter((m) => {
+        const q = search.toLowerCase()
+        return m.model_identifier.toLowerCase().includes(q) ||
+          (m.display_name && m.display_name.toLowerCase().includes(q))
+      })
+    : models
+
+  const categoryOrder: ReadonlyArray<DBCategory> = ["image", "video", "audio", "processing", "other"]
+
+  const grouped = filtered.reduce<Record<DBCategory, ReadonlyArray<DBModelPricing>>>(
+    (acc, model) => {
+      const cat = detectCategory(model.model_identifier)
+      return { ...acc, [cat]: [...(acc[cat] ?? []), model] }
+    },
+    { image: [], video: [], audio: [], processing: [], other: [] },
+  )
+
+  const hasResults = categoryOrder.some((cat) => (grouped[cat]?.length ?? 0) > 0)
+
+  if (!hasResults) {
     return (
       <div className="px-4 py-8 text-center text-sm text-muted-foreground">
         No models match &quot;{search}&quot;
@@ -173,37 +265,66 @@ function ModelTable({ models, search }: { readonly models: readonly ModelPricing
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50">
-          <tr>
-            <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Model</th>
-            <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Variant</th>
-            <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Provider</th>
-            <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Provider Cost</th>
-            <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Credits</th>
-            <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((m, i) => (
-            <tr key={`${m.model}-${m.variant}-${i}`} className="border-t hover:bg-muted/30 transition-colors">
-              <td className="px-4 py-2.5 font-medium">{m.model}</td>
-              <td className="px-4 py-2.5 text-xs text-muted-foreground">{m.variant}</td>
-              <td className="px-4 py-2.5">
-                <Badge variant="outline" className="text-xs font-normal">
-                  {m.provider}
-                </Badge>
-              </td>
-              <td className="px-4 py-2.5 text-right font-mono text-xs">{m.providerCost}</td>
-              <td className="px-4 py-2.5 text-right font-mono text-xs font-semibold">{m.credits}</td>
-              <td className="px-4 py-2.5 text-xs text-muted-foreground">{m.notes ?? ""}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="divide-y">
+      {categoryOrder.map((cat) => {
+        const group = grouped[cat]
+        if (!group || group.length === 0) return null
+
+        return (
+          <div key={cat}>
+            {/* Category subheader */}
+            <div className={`px-4 py-2 bg-muted/30 text-xs font-semibold uppercase tracking-wider ${CATEGORY_COLORS[cat]}`}>
+              {CATEGORY_LABELS[cat]}
+              <span className="ml-1.5 text-muted-foreground font-normal">({group.length})</span>
+            </div>
+            <table className="w-full text-sm">
+              <tbody>
+                {group.map((m) => (
+                  <tr key={m.id} className="border-t hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-2.5 w-2/5">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono text-xs">{m.model_identifier}</span>
+                        {m.display_name && m.display_name !== m.model_identifier && (
+                          <span className="text-xs text-muted-foreground">{m.display_name}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs font-semibold w-24">
+                      {m.credit_cost} cr
+                    </td>
+                    <td className="px-4 py-2.5 w-20">
+                      {m.is_enabled ? (
+                        <Badge variant="outline" className="text-xs text-green-600 dark:text-green-400 border-green-500/30">
+                          On
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-zinc-400 border-zinc-400/30">
+                          Off
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground w-24">
+                      {m.tier_restriction && m.tier_restriction !== "none" && m.tier_restriction !== "free"
+                        ? <Badge variant="secondary" className="text-xs">{m.tier_restriction}+</Badge>
+                        : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      })}
     </div>
   )
+}
+
+// ── LLM Table (static) ──────────────────────────────────────────────
+
+function filterLLMs(models: readonly LLMPricing[], query: string): readonly LLMPricing[] {
+  if (!query.trim()) return models
+  const q = query.toLowerCase()
+  return models.filter((m) => m.model.toLowerCase().includes(q))
 }
 
 function LLMTable({ search }: { readonly search: string }) {
@@ -243,18 +364,12 @@ function LLMTable({ search }: { readonly search: string }) {
   )
 }
 
-function getModelsForTab(tab: ModelTab): readonly ModelPricing[] {
-  switch (tab) {
-    case "video": return VIDEO_MODELS
-    case "lip-sync": return LIP_SYNC_MODELS
-    case "image": return IMAGE_MODELS
-    case "audio": return AUDIO_MODELS
-    default: return []
-  }
-}
+// ── AI Models Section ───────────────────────────────────────────────
 
-function AIModelsSection() {
-  const [activeTab, setActiveTab] = useState<ModelTab>("video")
+type ViewMode = "db" | "llm"
+
+function AIModelsSection({ models, loading }: { readonly models: ReadonlyArray<DBModelPricing>; readonly loading: boolean }) {
+  const [viewMode, setViewMode] = useState<ViewMode>("db")
   const [search, setSearch] = useState("")
 
   return (
@@ -262,28 +377,41 @@ function AIModelsSection() {
       <div className="flex items-center gap-2 px-5 py-4 border-b">
         <DollarSign className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">AI Model Pricing</h2>
+        <span className="text-xs text-muted-foreground ml-1">from DB</span>
+        <Link
+          href="/admin/models"
+          className="ml-auto text-xs text-[#ff0073] hover:underline inline-flex items-center gap-1"
+        >
+          Edit model pricing
+          <ExternalLink className="h-3 w-3" />
+        </Link>
       </div>
 
-      {/* Tab bar + search */}
+      {/* View toggle + search */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 px-4 py-3 border-b bg-muted/20">
-        <div className="flex flex-wrap gap-1">
-          {MODEL_TABS.map((tab) => {
-            const Icon = tab.icon
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
-                    : "text-muted-foreground hover:bg-muted/50 border border-transparent"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {tab.label}
-              </button>
-            )
-          })}
+        <div className="flex gap-1">
+          <button
+            onClick={() => setViewMode("db")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              viewMode === "db"
+                ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
+                : "text-muted-foreground hover:bg-muted/50 border border-transparent"
+            }`}
+          >
+            <DollarSign className="h-3.5 w-3.5" />
+            All Models ({models.length})
+          </button>
+          <button
+            onClick={() => setViewMode("llm")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              viewMode === "llm"
+                ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
+                : "text-muted-foreground hover:bg-muted/50 border border-transparent"
+            }`}
+          >
+            <Brain className="h-3.5 w-3.5" />
+            LLM
+          </button>
         </div>
         <div className="relative sm:ml-auto w-full sm:w-56">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -296,8 +424,12 @@ function AIModelsSection() {
         </div>
       </div>
 
-      {/* Table content */}
-      {activeTab === "llm" ? (
+      {/* Content */}
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : viewMode === "llm" ? (
         <>
           <LLMTable search={search} />
           <div className="px-4 py-2.5 text-xs text-muted-foreground border-t bg-muted/20">
@@ -305,11 +437,13 @@ function AIModelsSection() {
           </div>
         </>
       ) : (
-        <ModelTable models={getModelsForTab(activeTab)} search={search} />
+        <DBModelTable models={models} search={search} />
       )}
     </div>
   )
 }
+
+// ── FFmpeg Section (static) ─────────────────────────────────────────
 
 function FFmpegSection() {
   const [expanded, setExpanded] = useState(true)
@@ -367,7 +501,34 @@ function FFmpegSection() {
   )
 }
 
+// ── Main Page ───────────────────────────────────────────────────────
+
 export default function AdminPricingPage() {
+  const [models, setModels] = useState<ReadonlyArray<DBModelPricing>>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchModels = useCallback(async () => {
+    setLoading(true)
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${API}/v1/admin/models`, { headers })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.error ?? `Request failed: ${res.status}`)
+      }
+      const json = await res.json()
+      setModels(parseResponse<DBModelPricing>(json))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to fetch model pricing")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchModels()
+  }, [fetchModels])
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Header */}
@@ -381,19 +542,19 @@ export default function AdminPricingPage() {
         </div>
       </div>
 
-      {/* 1. Quick Stats */}
-      <QuickStatsCard />
+      {/* 1. Quick Stats (dynamic from DB) */}
+      <QuickStatsCard models={models} />
 
-      {/* 2. Subscription Tiers */}
+      {/* 2. Subscription Tiers (static) */}
       <SubscriptionTiersSection />
 
-      {/* 3. Top-Up Credits */}
+      {/* 3. Top-Up Credits (static) */}
       <TopUpSection />
 
-      {/* 4. AI Model Pricing */}
-      <AIModelsSection />
+      {/* 4. AI Model Pricing (from DB) */}
+      <AIModelsSection models={models} loading={loading} />
 
-      {/* 5. FFmpeg Post-Processing */}
+      {/* 5. FFmpeg Post-Processing (static) */}
       <FFmpegSection />
     </div>
   )
