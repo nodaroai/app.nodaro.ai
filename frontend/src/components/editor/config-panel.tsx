@@ -1975,8 +1975,8 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
             Motion Prompt (from connected node)
           </Label>
-          {connectedTextPrompts.map((prompt) => (
-            <div key={prompt.id} className="flex flex-col gap-1.5">
+          {connectedTextPrompts.map((prompt, idx) => (
+            <div key={`${prompt.id}-${idx}`} className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5 mb-1">
                 <FileText className="w-3 h-3 text-[#ff0073]" />
                 <span className="text-[10px] text-[#ff0073] font-medium">{prompt.label}</span>
