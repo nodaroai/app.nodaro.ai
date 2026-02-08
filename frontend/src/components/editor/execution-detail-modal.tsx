@@ -1,17 +1,30 @@
 "use client"
 
 import { useState } from "react"
-import { X, Download, Copy, Check, ChevronDown, ChevronRight, Loader2, Clock, Zap, Share2, Trash2, Sliders } from "lucide-react"
+import { X, Download, Copy, Check, ChevronDown, ChevronRight, Loader2, Clock, Zap, Share2, Trash2, Sliders, Coins, DollarSign } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Job } from "@/lib/api"
 import { deleteJob } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
+
+function getCostDisplayForModal(job: Job, showDollars: boolean): string {
+  if (showDollars) {
+    const cost = job.cost ?? job.display_cost ?? job.provider_cost
+    if (cost == null) return "-"
+    if (cost < 0.01) return `$${cost.toFixed(4)}`
+    return `$${cost.toFixed(3)}`
+  }
+  const credits = job.credits_used ?? job.credits_estimated
+  if (credits == null) return "-"
+  return `${credits} CR`
+}
 
 interface ExecutionDetailModalProps {
   readonly job: Job | null
   readonly open: boolean
   readonly onClose: () => void
   readonly onDeleted?: (jobId: string) => void
+  readonly showDollars?: boolean
 }
 
 type InputTabType = "form" | "json"
@@ -199,7 +212,7 @@ function InputField({ name, value }: InputFieldProps) {
   )
 }
 
-export function ExecutionDetailModal({ job, open, onClose, onDeleted }: ExecutionDetailModalProps) {
+export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollars = !isCloud() }: ExecutionDetailModalProps) {
   const [inputTab, setInputTab] = useState<InputTabType>("form")
   const [outputTab, setOutputTab] = useState<OutputTabType>("preview")
   const [copiedId, setCopiedId] = useState(false)
@@ -304,6 +317,12 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted }: Executio
             <span className="text-sm text-[#ff0073] font-mono">
               {provider ? `${jobType} (${provider})` : jobType}
             </span>
+
+            {/* Cost */}
+            <div className="flex items-center gap-1.5 text-sm text-[#ff0073] font-mono">
+              {showDollars ? <DollarSign className="w-4 h-4" /> : <Coins className="w-4 h-4" />}
+              {getCostDisplayForModal(job, showDollars)}
+            </div>
 
             {/* Duration */}
             <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-[#94A3B8]">

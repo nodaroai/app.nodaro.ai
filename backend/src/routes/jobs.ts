@@ -17,6 +17,8 @@ interface JobRecord {
   provider: string | null
   provider_cost: number | null
   display_cost: number | null
+  credits_used: number | null
+  credits_estimated: number | null
 }
 
 // Public job type (for cloud edition regular users)
@@ -32,6 +34,8 @@ interface PublicJob {
   completed_at: string | null
   user_id: string
   cost: number | null
+  credits_used: number | null
+  credits_estimated: number | null
 }
 
 /**
@@ -52,6 +56,8 @@ function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | Pub
   return {
     ...rest,
     cost: display_cost,
+    credits_used: job.credits_used,
+    credits_estimated: job.credits_estimated,
   }
 }
 
@@ -62,7 +68,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     const { data: job, error } = await supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost")
+      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits_used, credits_estimated")
       .eq("id", id)
       .single()
 
@@ -82,7 +88,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost")
+      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits_used, credits_estimated")
       .order("created_at", { ascending: false })
       .limit(limitNum)
 

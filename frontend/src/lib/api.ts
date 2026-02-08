@@ -1110,6 +1110,8 @@ export interface Job {
   provider_cost?: number         // Actual cost from API response (self-hosted/admin only)
   display_cost?: number          // provider_cost with markup (self-hosted/admin only)
   cost?: number                  // What user pays (cloud edition regular users)
+  credits_used?: number | null   // Credits consumed (all editions)
+  credits_estimated?: number | null // Estimated credits before completion
 }
 
 export async function getJobStatus(jobId: string): Promise<Job> {
