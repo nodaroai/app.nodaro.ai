@@ -876,7 +876,7 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
             downloadPercent: 0,
           })
         } else {
-          onUpdate({ downloadPercent: event.percent })
+          onUpdate({ downloadPercent: event.percent, downloadPhase: event.phase })
         }
       })
     } catch (err) {
@@ -949,7 +949,7 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
             <div className="flex flex-col gap-1.5 p-2 bg-muted/30 rounded-md">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ff0073]" />
-                <span>{(data.downloadPercent ?? 0) >= 95 ? "Uploading..." : "Downloading video..."}</span>
+                <span>{data.downloadPhase === "uploading" ? "Uploading..." : data.downloadPhase === "processing" ? "Processing..." : "Downloading video..."}</span>
                 <span className="ml-auto font-mono text-[#ff0073]">{data.downloadPercent ?? 0}%</span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden">

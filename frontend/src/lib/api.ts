@@ -932,7 +932,7 @@ export async function startVideoDownload(url: string): Promise<{ downloadId: str
 }
 
 export interface DownloadProgressEvent {
-  phase: "downloading" | "uploading" | "completed" | "failed"
+  phase: "downloading" | "processing" | "uploading" | "completed" | "failed"
   percent: number
   videoUrl?: string
   thumbnailUrl?: string

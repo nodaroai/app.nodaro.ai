@@ -32,7 +32,7 @@ const downloadVideoBody = z.object({
 
 interface ActiveDownload {
   percent: number
-  phase: "downloading" | "uploading" | "completed" | "failed"
+  phase: "downloading" | "processing" | "uploading" | "completed" | "failed"
   videoUrl?: string
   thumbnailUrl?: string
   error?: string
@@ -93,6 +93,48 @@ function cleanupFiles(baseName: string): void {
   for (const ext of [...videoExts, ...thumbExts]) {
     fs.unlink(join(tmpdir(), `${baseName}${ext}`)).catch(() => {})
   }
+}
+
+function isH264(filePath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const proc = spawn("ffprobe", [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=codec_name",
+      "-of", "csv=p=0",
+      filePath,
+    ], { stdio: ["ignore", "pipe", "pipe"] })
+
+    let stdout = ""
+    proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString() })
+    proc.on("close", (code) => {
+      resolve(code === 0 && stdout.trim() === "h264")
+    })
+    proc.on("error", () => resolve(false))
+  })
+}
+
+function reencodeToH264(inputPath: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("ffmpeg", [
+      "-i", inputPath,
+      "-c:v", "libx264",
+      "-preset", "fast",
+      "-crf", "23",
+      "-c:a", "aac",
+      "-movflags", "+faststart",
+      "-y",
+      outputPath,
+    ], { stdio: ["ignore", "ignore", "pipe"] })
+
+    let stderrBuf = ""
+    proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
+    proc.on("close", (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`ffmpeg re-encode exited with code ${code}: ${stderrBuf.trim().split("\n").pop()}`))
+    })
+    proc.on("error", reject)
+  })
 }
 
 function runDownloadWithProgress(
@@ -158,17 +200,29 @@ function runDownloadWithProgress(
     }
 
     try {
-      state.phase = "uploading"
-      state.percent = 95
-
       const actualPath = await findVideoFile(baseName, expectedPath)
       const stat = await fs.stat(actualPath)
       if (stat.size === 0) throw new Error("Downloaded video file is empty")
 
-      const buffer = await fs.readFile(actualPath)
+      // Re-encode to h264/aac if needed for downstream compatibility
+      let uploadPath = actualPath
+      const normalizedPath = join(tmpdir(), `normalized-${outputId}.mp4`)
+      const alreadyH264 = await isH264(actualPath)
+      if (!alreadyH264) {
+        state.phase = "processing"
+        state.percent = 90
+        await reencodeToH264(actualPath, normalizedPath)
+        await fs.unlink(actualPath).catch(() => {})
+        uploadPath = normalizedPath
+      }
+
+      state.phase = "uploading"
+      state.percent = 95
+
+      const buffer = await fs.readFile(uploadPath)
       const r2Key = `videos/yt-${outputId}.mp4`
       const videoR2Url = await uploadBufferToR2(buffer, r2Key, "video/mp4")
-      await fs.unlink(actualPath).catch(() => {})
+      await fs.unlink(uploadPath).catch(() => {})
 
       const thumbnailUrl = await findAndUploadThumbnail(baseName, outputId)
 

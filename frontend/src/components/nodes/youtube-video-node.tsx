@@ -186,7 +186,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             downloadPercent: 0,
           })
         } else {
-          updateNodeData(id, { downloadPercent: event.percent })
+          updateNodeData(id, { downloadPercent: event.percent, downloadPhase: event.phase })
         }
       })
     } catch (err) {
@@ -313,7 +313,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center gap-2">
                 <Loader2 className="w-4 h-4 text-[#ff0073] animate-spin" />
                 <span className="text-xs text-muted-foreground">
-                  {(nodeData.downloadPercent ?? 0) >= 95 ? "Uploading..." : "Downloading video..."}
+                  {nodeData.downloadPhase === "uploading" ? "Uploading..." : nodeData.downloadPhase === "processing" ? "Processing..." : "Downloading video..."}
                 </span>
                 <span className="text-xs font-mono text-[#ff0073]">{nodeData.downloadPercent ?? 0}%</span>
               </div>

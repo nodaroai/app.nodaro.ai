@@ -103,6 +103,7 @@ export type YouTubeVideoData = {
   downloadStatus?: "idle" | "downloading" | "completed" | "failed"
   downloadError?: string
   downloadPercent?: number
+  downloadPhase?: "downloading" | "processing" | "uploading"
 }
 
 export type ReferenceAudioData = {
