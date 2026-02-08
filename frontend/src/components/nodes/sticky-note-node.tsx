@@ -27,13 +27,13 @@ function isLightColor(color: string): boolean {
   return brightness > 128
 }
 
-// Font size mapping
+// Font size mapping (5x larger than standard: sm=60, base=70, lg=90, xl=120)
 function getFontSize(size?: string): string {
   switch (size) {
-    case "sm": return "12px"
-    case "lg": return "18px"
-    case "xl": return "24px"
-    default: return "14px"
+    case "sm": return "60px"
+    case "lg": return "90px"
+    case "xl": return "120px"
+    default: return "70px"
   }
 }
 
@@ -166,8 +166,8 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
       {/* Resizer */}
       <NodeResizer
         isVisible={selected}
-        minWidth={280}
-        minHeight={120}
+        minWidth={420}
+        minHeight={270}
         onResize={handleResize}
         lineClassName="!border-violet-400"
         handleClassName="!w-3 !h-3 !bg-violet-500 !border-white !rounded"
@@ -179,47 +179,47 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         style={{
           backgroundColor: bgColor,
           border: `1px solid ${adjustColor(bgColor, isLightColor(bgColor) ? -20 : 20)}`,
-          width: nodeData.width || 280,
-          height: nodeData.height || 180,
+          width: nodeData.width || 840,
+          height: nodeData.height || 540,
         }}
       >
-        {/* Toolbar - only when selected, INSIDE the note */}
+        {/* Toolbar - only when selected, INSIDE the note (scaled 3x to match note size) */}
         {selected && (
-          <div className={`flex items-center justify-center gap-4 px-4 py-3 ${toolbarBg} border-b ${toolbarBorder}`}>
+          <div className={`flex items-center justify-center gap-10 px-10 py-8 ${toolbarBg} border-b-2 ${toolbarBorder}`}>
 
             {/* Colors */}
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-center">
+            <div className="flex items-center gap-8">
+              <div className="flex flex-col items-center gap-1">
                 <input
                   type="color"
                   value={bgColor}
                   onChange={handleBgColorChange}
-                  className="w-10 h-10 rounded cursor-pointer border-2 border-white/50"
+                  className="w-28 h-28 rounded-lg cursor-pointer border-4 border-white/50"
                   title="Background color"
                 />
-                <span className={`text-xs ${labelText} opacity-70`}>BG</span>
+                <span className={`text-2xl ${labelText} opacity-70`}>BG</span>
               </div>
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center gap-1">
                 <input
                   type="color"
                   value={textColor}
                   onChange={handleTextColorChange}
-                  className="w-10 h-10 rounded cursor-pointer border-2 border-white/50"
+                  className="w-28 h-28 rounded-lg cursor-pointer border-4 border-white/50"
                   title="Text color"
                 />
-                <span className={`text-xs ${labelText} opacity-70`}>Text</span>
+                <span className={`text-2xl ${labelText} opacity-70`}>Text</span>
               </div>
             </div>
 
             {/* Separator */}
-            <div className={`w-px h-10 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
+            <div className={`w-px h-28 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
 
             {/* Font & Format */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-5">
               <select
                 value={nodeData.fontSize || "base"}
                 onChange={handleFontSizeChange}
-                className="text-base bg-white/80 text-gray-800 rounded px-3 py-2 border-none cursor-pointer"
+                className="text-3xl bg-white/80 text-gray-800 rounded-lg px-8 py-5 border-none cursor-pointer"
                 title="Font size"
               >
                 <option value="sm">Small</option>
@@ -230,83 +230,84 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
 
               <button
                 onClick={toggleBold}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${isBold ? activeButtonBg : ""}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg} ${isBold ? activeButtonBg : ""}`}
                 title="Bold"
               >
-                <Bold className="w-5 h-5" />
+                <Bold className="w-14 h-14" />
               </button>
 
               <button
                 onClick={toggleItalic}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${isItalic ? activeButtonBg : ""}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg} ${isItalic ? activeButtonBg : ""}`}
                 title="Italic"
               >
-                <Italic className="w-5 h-5" />
+                <Italic className="w-14 h-14" />
               </button>
             </div>
 
             {/* Separator */}
-            <div className={`w-px h-10 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
+            <div className={`w-px h-28 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
 
             {/* Alignment */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => setAlignment("left")}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${alignment === "left" ? activeButtonBg : ""}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg} ${alignment === "left" ? activeButtonBg : ""}`}
                 title="Align left"
               >
-                <AlignLeft className="w-5 h-5" />
+                <AlignLeft className="w-14 h-14" />
               </button>
               <button
                 onClick={() => setAlignment("center")}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${alignment === "center" ? activeButtonBg : ""}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg} ${alignment === "center" ? activeButtonBg : ""}`}
                 title="Align center"
               >
-                <AlignCenter className="w-5 h-5" />
+                <AlignCenter className="w-14 h-14" />
               </button>
               <button
                 onClick={() => setAlignment("right")}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg} ${alignment === "right" ? activeButtonBg : ""}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg} ${alignment === "right" ? activeButtonBg : ""}`}
                 title="Align right"
               >
-                <AlignRight className="w-5 h-5" />
+                <AlignRight className="w-14 h-14" />
               </button>
             </div>
 
             {/* Separator */}
-            <div className={`w-px h-10 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
+            <div className={`w-px h-28 ${isLightColor(bgColor) ? "bg-black/20" : "bg-white/20"}`} />
 
             {/* Insert tools */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleInsertLink}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg}`}
                 title="Insert link"
               >
-                <Link className="w-5 h-5" />
+                <Link className="w-14 h-14" />
               </button>
               <button
                 onClick={handleImageUpload}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg}`}
                 title="Insert image"
               >
-                <ImageIcon className="w-5 h-5" />
+                <ImageIcon className="w-14 h-14" />
               </button>
               <button
                 onClick={handleInsertTable}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg}`}
                 title="Insert table"
               >
-                <Table className="w-5 h-5" />
+                <Table className="w-14 h-14" />
               </button>
               <button
                 onClick={handleInsertBulletList}
-                className={`p-2.5 rounded ${buttonText} ${buttonBg}`}
+                className={`p-7 rounded-lg ${buttonText} ${buttonBg}`}
                 title="Bullet list"
               >
-                <List className="w-5 h-5" />
+                <List className="w-14 h-14" />
               </button>
             </div>
+
           </div>
         )}
 
@@ -316,7 +317,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
           value={nodeData.text || ""}
           onChange={handleTextChange}
           placeholder="Write notes here..."
-          className="nodrag nowheel flex-1 w-full p-3 bg-transparent border-none outline-none resize-none"
+          className="nodrag nowheel flex-1 w-full p-8 bg-transparent border-none outline-none resize-none"
           style={{
             color: textColor,
             fontSize: fontSize,

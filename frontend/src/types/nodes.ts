@@ -1780,8 +1780,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       text: "I'm a note\nDouble click to customize",
       color: "#2d2d44", // Dark background
       textColor: "#ffffff", // White text
-      width: 280,
-      height: 180,
+      width: 840,
+      height: 540,
       fontSize: "base",
       bold: false,
       italic: false,
