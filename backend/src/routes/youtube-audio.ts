@@ -13,6 +13,7 @@ const SUPPORTED_HOSTNAMES = [
   "tiktok.com",
   "instagram.com",
   "twitter.com", "x.com",
+  "facebook.com", "fb.watch", "fb.com",
 ]
 
 const videoAudioBody = z.object({
@@ -25,7 +26,7 @@ const videoAudioBody = z.object({
         return false
       }
     },
-    { message: "Must be a valid video URL (YouTube, TikTok, Instagram, or X)" },
+    { message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)" },
   ),
 })
 

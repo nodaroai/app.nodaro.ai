@@ -9,10 +9,11 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { fetchYouTubeOEmbed } from "@/lib/api"
 import type { YouTubeVideoData } from "@/types/nodes"
 
-type VideoPlatform = "youtube" | "tiktok" | "instagram" | "twitter" | "unknown"
+type VideoPlatform = "youtube" | "facebook" | "tiktok" | "instagram" | "twitter" | "unknown"
 
 function detectPlatform(url: string): VideoPlatform {
   if (/youtube\.com|youtu\.be/.test(url)) return "youtube"
+  if (/facebook\.com|fb\.watch|fb\.com/.test(url)) return "facebook"
   if (/tiktok\.com/.test(url)) return "tiktok"
   if (/instagram\.com/.test(url)) return "instagram"
   if (/(?:twitter\.com|x\.com)/.test(url)) return "twitter"
@@ -38,11 +39,17 @@ function extractVideoId(url: string): string | null {
   const twMatch = url.match(/(?:twitter\.com|x\.com)\/[\w]+\/status\/(\d+)/)
   if (twMatch) return twMatch[1]
 
+  // Facebook
+  const fbMatch = url.match(/facebook\.com\/.*\/videos\/(\d+)/)
+  if (fbMatch) return fbMatch[1]
+  if (/fb\.watch/.test(url)) return url
+
   return null
 }
 
 const PLATFORM_LABELS: Record<VideoPlatform, string> = {
   youtube: "YouTube",
+  facebook: "Facebook",
   tiktok: "TikTok",
   instagram: "Instagram",
   twitter: "Twitter/X",
@@ -51,6 +58,7 @@ const PLATFORM_LABELS: Record<VideoPlatform, string> = {
 
 function PlatformIcon({ platform, className }: { readonly platform: VideoPlatform; readonly className?: string }) {
   switch (platform) {
+    case "facebook": return <Video className={className} />
     case "tiktok": return <Music2 className={className} />
     case "instagram": return <Camera className={className} />
     case "twitter": return <Hash className={className} />
@@ -205,7 +213,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
-              placeholder="YouTube, TikTok, Instagram, or X URL"
+              placeholder="YouTube, Facebook, TikTok, Instagram, or X URL"
               className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#ff0073] transition-colors placeholder:text-muted-foreground/30"
             />
           </div>
