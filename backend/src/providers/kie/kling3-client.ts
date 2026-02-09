@@ -1,11 +1,10 @@
 /**
  * Kling 3.0 Video Generation Client
  *
- * Uses the UNIFIED KIE endpoints (createTask / getTaskDetail) which differ
- * from the older Kling models that use recordInfo for polling.
+ * Uses the KIE createTask endpoint with recordInfo polling.
  *
  * API: POST /api/v1/jobs/createTask  (model: "kling-3.0/video")
- * Poll: GET /api/v1/jobs/getTaskDetail?taskId=...
+ * Poll: GET /api/v1/jobs/recordInfo?taskId=...
  */
 
 import { config } from "../../lib/config.js"
@@ -48,14 +47,11 @@ export async function kling3Generate(
     duration: params.duration ?? "5",
     mode: params.mode ?? "pro",
     multi_shots: false,
+    aspect_ratio: params.aspectRatio ?? "16:9",
   }
 
   if (params.imageUrls && params.imageUrls.length > 0) {
     input.image_urls = params.imageUrls
-  }
-
-  if (params.aspectRatio) {
-    input.aspect_ratio = params.aspectRatio
   }
 
   const requestBody = {
@@ -134,7 +130,7 @@ async function pollKling3Task(
     attempts++
 
     const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/jobs/getTaskDetail?taskId=${taskId}`,
+      `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
       { headers: { Authorization: `Bearer ${apiKey}` } }
     )
 
