@@ -12,6 +12,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Model Agnostic**: Swap AI providers without changing workflows
 - **45 Node Types**: Input (5), Parameter (8), AI (16), Scene (1), Assets (3), Processing (9), Output (2), Utility (1)
 - **Light/Dark Mode**: Premium styling with glassmorphism effects
+- **Organized Node Menus**: Sub-group headers in sidebar and popup (AI: Script & Text, Image, Video, Audio & Speech, Suno Music, Quality; Processing: Video, Audio)
 - **Keyboard Shortcuts**: Tab (add node), Ctrl+K (search), Ctrl+L (assets), Shift+S (sticky note)
 
 ## Tech Stack
