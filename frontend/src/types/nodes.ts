@@ -1560,7 +1560,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-separate",
     label: "Suno Separate",
     category: "ai",
-    creditCost: 4,
+    creditCost: 2,
     inputs: ["audio"],
     outputs: ["audio"],
     defaultData: { label: "Suno Separate", type: "separate_vocal", taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,

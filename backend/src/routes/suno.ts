@@ -383,7 +383,10 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/separate",
     {
-      preHandler: creditGuard(() => "suno-separate"),
+      preHandler: creditGuard((req) => {
+        const body = req.body as { type?: string }
+        return body.type === "split_stem" ? "suno-separate-stem" : "suno-separate"
+      }),
     },
     async (req, reply) => {
       const parsed = sunoSeparateBody.safeParse(req.body)
@@ -421,7 +424,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-separate")
+      const creditType = type === "split_stem" ? "suno-separate-stem" : "suno-separate"
+      const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
