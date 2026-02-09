@@ -66,6 +66,9 @@ import type {
   TextToAudioData,
   SunoGenerateData,
   SunoCoverData,
+  SunoExtendData,
+  SunoLyricsData,
+  SunoSeparateData,
   TranscribeData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -369,6 +372,9 @@ export function ConfigPanel() {
       "text-to-audio": "Text to Audio",
       "suno-generate": "Suno Generate",
       "suno-cover": "Suno Cover",
+      "suno-extend": "Suno Extend",
+      "suno-lyrics": "Suno Lyrics",
+      "suno-separate": "Suno Separate",
       "transcribe": "Transcribe",
       "combine-videos": "Combine Videos",
       "merge-video-audio": "Merge Video & Audio",
@@ -533,6 +539,15 @@ export function ConfigPanel() {
           {selectedNode.type === "suno-cover" && (
             <SunoCoverConfig data={selectedNode.data as SunoCoverData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "suno-extend" && (
+            <SunoExtendConfig data={selectedNode.data as SunoExtendData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "suno-lyrics" && (
+            <SunoLyricsConfig data={selectedNode.data as SunoLyricsData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "suno-separate" && (
+            <SunoSeparateConfig data={selectedNode.data as SunoSeparateData} onUpdate={update} />
+          )}
           {selectedNode.type === "lip-sync" && (
             <LipSyncConfig data={selectedNode.data as LipSyncData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
@@ -613,7 +628,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover" || selectedNode.type === "suno-extend" || selectedNode.type === "suno-lyrics" || selectedNode.type === "suno-separate") && (
               <GenerateButton
                 onClick={() => runSingleNode?.(selectedNode.id)}
                 modelIdentifier={getModelIdentifier(selectedNode)}
@@ -645,7 +660,7 @@ export function ConfigPanel() {
               const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
               if (!activeUrl) return null
               const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync"])
-              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover"])
+              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
               const mediaType: "image" | "video" | "audio" = videoTypes.has(selectedNode.type as string) ? "video" : audioTypes.has(selectedNode.type as string) ? "audio" : "image"
               return (
                 <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />
@@ -2810,6 +2825,136 @@ function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField }:
         />
         <label htmlFor="suno-cover-instrumental" className="text-xs font-medium text-muted-foreground">Instrumental (no vocals)</label>
       </div>
+    </div>
+  )
+}
+
+function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoExtendData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="audioId" label="Audio ID (from Suno node)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          value={data.audioId ?? ""}
+          onChange={(e) => onUpdate({ audioId: e.target.value })}
+          placeholder="Suno track ID (auto-filled from connected node)"
+        />
+      </MappableField>
+      <MappableField field="continueAt" label="Continue From (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          type="number"
+          min={0}
+          value={data.continueAt ?? 0}
+          onChange={(e) => onUpdate({ continueAt: Number(e.target.value) })}
+          placeholder="0"
+        />
+      </MappableField>
+      <MappableField field="prompt" label="Extension Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          value={data.prompt ?? ""}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v.length <= 5000) onUpdate({ prompt: v })
+          }}
+          placeholder="Describe how the music should continue..."
+        />
+        <p className="text-xs text-muted-foreground mt-1">{(data.prompt ?? "").length}/5000</p>
+      </MappableField>
+      <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
+            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input value={data.title ?? ""} maxLength={80} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Extended track title" />
+      </MappableField>
+      <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input value={data.style ?? ""} maxLength={1000} onChange={(e) => onUpdate({ style: e.target.value })} placeholder="e.g. pop, rock, jazz..." />
+      </MappableField>
+      <div className="flex items-center gap-2">
+        <input type="checkbox" id="suno-extend-customParams" checked={data.defaultParamFlag ?? true} onChange={(e) => onUpdate({ defaultParamFlag: e.target.checked })} className="accent-[#ff0073]" />
+        <label htmlFor="suno-extend-customParams" className="text-xs font-medium text-muted-foreground">Use default parameters (uncheck to customize)</label>
+      </div>
+    </div>
+  )
+}
+
+function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoLyricsData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          value={data.prompt}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v.length <= 1000) onUpdate({ prompt: v })
+          }}
+          placeholder="Describe the lyrics you want (theme, mood, style)..."
+        />
+        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/1000</p>
+      </MappableField>
+      {data.generatedText && (
+        <div className="rounded-md border bg-muted/30 p-2 text-xs max-h-40 overflow-y-auto whitespace-pre-wrap">
+          {data.generatedTitle && <p className="font-medium mb-1">{data.generatedTitle}</p>}
+          {data.generatedText}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSeparateData; readonly onUpdate: (updates: Partial<SunoSeparateData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Separation Type</label>
+        <Select value={data.type} onValueChange={(v) => onUpdate({ type: v as SunoSeparateData["type"] })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="separate_vocal">Vocal / Instrumental</SelectItem>
+            <SelectItem value="split_stem">12 Stems</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Task ID</label>
+        <Input value={data.taskId} onChange={(e) => onUpdate({ taskId: e.target.value })} placeholder="Suno task ID" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Audio ID</label>
+        <Input value={data.audioId} onChange={(e) => onUpdate({ audioId: e.target.value })} placeholder="Suno audio ID" />
+      </div>
+      {data.vocalUrl && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Vocal</label>
+          <audio src={data.vocalUrl} controls className="w-full h-8" preload="none" />
+        </div>
+      )}
+      {data.instrumentalUrl && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Instrumental</label>
+          <audio src={data.instrumentalUrl} controls className="w-full h-8" preload="none" />
+        </div>
+      )}
+      {data.stems && Object.keys(data.stems).length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Stems</label>
+          {Object.entries(data.stems).map(([name, url]) => (
+            <div key={name} className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-muted-foreground capitalize">{name.replace(/_/g, " ")}</span>
+              <audio src={url} controls className="w-full h-8" preload="none" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

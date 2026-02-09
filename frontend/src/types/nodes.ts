@@ -104,6 +104,9 @@ export type YouTubeVideoData = {
   downloadError?: string
   downloadPercent?: number
   downloadPhase?: "downloading" | "processing" | "uploading"
+  downloadedAudioUrl?: string
+  audioDownloadStatus?: "idle" | "downloading" | "completed" | "failed"
+  audioDownloadError?: string
 }
 
 export type ReferenceAudioData = {
@@ -684,6 +687,64 @@ export type SunoCoverData = {
   activeResultIndex?: number
 }
 
+export type SunoExtendData = {
+  [key: string]: unknown
+  label: string
+  audioId: string
+  defaultParamFlag: boolean
+  prompt: string
+  model: "V4" | "V4_5" | "V4_5PLUS" | "V4_5ALL" | "V5"
+  style?: string
+  title?: string
+  continueAt?: number
+  negativeStyle?: string
+  vocalGender?: "male" | "female"
+  styleWeight?: number
+  weirdnessConstraint?: number
+  audioWeight?: number
+  instrumental?: boolean
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  fieldMappings?: FieldMappings
+}
+
+export type SunoLyricsData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedText?: string
+  generatedTitle?: string
+  generatedResults?: Array<{ text: string; title: string; jobId?: string }>
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  fieldMappings?: FieldMappings
+}
+
+export type SunoSeparateData = {
+  [key: string]: unknown
+  label: string
+  type: "separate_vocal" | "split_stem"
+  taskId: string
+  audioId: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  vocalUrl?: string
+  instrumentalUrl?: string
+  stems?: Record<string, string>
+  currentJobId?: string
+  currentJobProgress?: number
+  fieldMappings?: FieldMappings
+}
+
 export type TranscribeData = {
   [key: string]: unknown
   label: string
@@ -1117,6 +1178,9 @@ export type SceneNodeData =
   | TextToAudioData
   | SunoGenerateData
   | SunoCoverData
+  | SunoExtendData
+  | SunoLyricsData
+  | SunoSeparateData
   | TranscribeData
   | CombineVideosData
   | MergeVideoAudioData
@@ -1166,6 +1230,9 @@ export type SceneNodeType =
   | "text-to-audio"
   | "suno-generate"
   | "suno-cover"
+  | "suno-extend"
+  | "suno-lyrics"
+  | "suno-separate"
   | "transcribe"
   | "combine-videos"
   | "merge-video-audio"
@@ -1455,6 +1522,33 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Suno Cover", prompt: "", model: "V5", uploadUrl: "", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoCoverData,
+  },
+  {
+    type: "suno-extend",
+    label: "Suno Extend",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Extend", audioId: "", defaultParamFlag: true, prompt: "", model: "V5", style: "", title: "", continueAt: 0, negativeStyle: "", fieldMappings: {} } as SunoExtendData,
+  },
+  {
+    type: "suno-lyrics",
+    label: "Suno Lyrics",
+    category: "ai",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: ["text"],
+    defaultData: { label: "Suno Lyrics", prompt: "", fieldMappings: {} } as SunoLyricsData,
+  },
+  {
+    type: "suno-separate",
+    label: "Suno Separate",
+    category: "ai",
+    creditCost: 2,
+    inputs: ["audio"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Separate", type: "separate_vocal", taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
   },
   {
     type: "transcribe",

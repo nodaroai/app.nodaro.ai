@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface ApiResponse<T> {
   success: boolean
@@ -1071,6 +1071,87 @@ export async function sunoCoverApi(params: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throw new Error(err?.error?.message ?? "Failed to start Suno cover")
+  }
+  return res.json()
+}
+
+export async function sunoExtendApi(params: {
+  audioId: string
+  defaultParamFlag?: boolean
+  prompt?: string
+  model?: string
+  style?: string
+  title?: string
+  continueAt?: number
+  negativeStyle?: string
+  vocalGender?: string
+  styleWeight?: number
+  weirdnessConstraint?: number
+  audioWeight?: number
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {
+    audioId: params.audioId,
+    defaultParamFlag: params.defaultParamFlag ?? true,
+    model: params.model || "V5",
+  }
+  if (params.prompt) body.prompt = params.prompt
+  if (params.style) body.style = params.style
+  if (params.title) body.title = params.title
+  if (params.continueAt != null) body.continueAt = params.continueAt
+  if (params.negativeStyle) body.negativeStyle = params.negativeStyle
+  if (params.vocalGender) body.vocalGender = params.vocalGender
+  if (params.styleWeight != null) body.styleWeight = params.styleWeight
+  if (params.weirdnessConstraint != null) body.weirdnessConstraint = params.weirdnessConstraint
+  if (params.audioWeight != null) body.audioWeight = params.audioWeight
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/extend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start Suno extend")
+  }
+  return res.json()
+}
+
+export async function sunoLyricsApi(params: {
+  prompt: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt: params.prompt }
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/lyrics`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start Suno lyrics generation")
+  }
+  return res.json()
+}
+
+export async function sunoSeparateApi(params: {
+  taskId: string
+  audioId: string
+  type?: "separate_vocal" | "split_stem"
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
+  if (params.type) body.type = params.type
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/separate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start Suno separate")
   }
   return res.json()
 }

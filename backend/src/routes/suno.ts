@@ -36,6 +36,34 @@ const sunoCoverBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
+const sunoExtendBody = z.object({
+  audioId: z.string().min(1),
+  defaultParamFlag: z.boolean().optional().default(true),
+  prompt: z.string().max(5000).optional(),
+  model: sunoModelEnum,
+  style: z.string().max(1000).optional(),
+  title: z.string().max(80).optional(),
+  continueAt: z.number().min(0).optional(),
+  negativeStyle: z.string().max(500).optional(),
+  vocalGender: z.enum(["male", "female"]).optional(),
+  styleWeight: z.number().min(0).max(100).optional(),
+  weirdnessConstraint: z.number().min(0).max(100).optional(),
+  audioWeight: z.number().min(0).max(100).optional(),
+  userId: z.string().uuid().optional(),
+})
+
+const sunoLyricsBody = z.object({
+  prompt: z.string().min(1).max(1000),
+  userId: z.string().uuid().optional(),
+})
+
+const sunoSeparateBody = z.object({
+  taskId: z.string().min(1),
+  audioId: z.string().min(1),
+  type: z.enum(["separate_vocal", "split_stem"]).optional().default("separate_vocal"),
+  userId: z.string().uuid().optional(),
+})
+
 export async function sunoRoutes(app: FastifyInstance) {
   // ── Generate Song ──
   app.post(
@@ -197,6 +225,205 @@ export async function sunoRoutes(app: FastifyInstance) {
         vocalGender,
         customMode,
         instrumental,
+        usageLogId,
+      })
+
+      return { jobId: job.id }
+    }
+  )
+
+  // ── Extend Song ──
+  app.post(
+    "/v1/suno/extend",
+    {
+      preHandler: creditGuard(() => "suno-extend"),
+    },
+    async (req, reply) => {
+      const parsed = sunoExtendBody.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: parsed.error.issues[0]?.message ?? "Invalid request",
+          },
+        })
+      }
+
+      const {
+        audioId, defaultParamFlag, prompt, model, style,
+        title, continueAt, negativeStyle, vocalGender,
+        styleWeight, weirdnessConstraint, audioWeight, userId,
+      } = parsed.data
+
+      if (!userId) {
+        return reply.status(401).send({
+          error: { code: "unauthorized", message: "userId is required" },
+        })
+      }
+
+      const { data: job, error } = await supabase
+        .from("jobs")
+        .insert({
+          workflow_id: null,
+          user_id: userId,
+          status: "pending",
+          input_data: {
+            type: "suno-extend",
+            audioId,
+            defaultParamFlag,
+            prompt,
+            model,
+            style,
+            title,
+            continueAt,
+            negativeStyle,
+            vocalGender,
+            styleWeight,
+            weirdnessConstraint,
+            audioWeight,
+          },
+        })
+        .select("id")
+        .single()
+
+      if (error) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: error.message },
+        })
+      }
+
+      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-extend")
+      if (reply.sent) return
+      const usageLogId = reservation?.usageLogId
+
+      await videoQueue.add("suno-extend", {
+        jobId: job.id,
+        audioId,
+        defaultParamFlag,
+        prompt,
+        model,
+        style,
+        title,
+        continueAt,
+        negativeStyle,
+        vocalGender,
+        styleWeight,
+        weirdnessConstraint,
+        audioWeight,
+        usageLogId,
+      })
+
+      return { jobId: job.id }
+    }
+  )
+
+  // ── Generate Lyrics ──
+  app.post(
+    "/v1/suno/lyrics",
+    {
+      preHandler: creditGuard(() => "suno-lyrics"),
+    },
+    async (req, reply) => {
+      const parsed = sunoLyricsBody.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: parsed.error.issues[0]?.message ?? "Invalid request",
+          },
+        })
+      }
+
+      const { prompt, userId } = parsed.data
+
+      if (!userId) {
+        return reply.status(401).send({
+          error: { code: "unauthorized", message: "userId is required" },
+        })
+      }
+
+      const { data: job, error } = await supabase
+        .from("jobs")
+        .insert({
+          workflow_id: null,
+          user_id: userId,
+          status: "pending",
+          input_data: { type: "suno-lyrics", prompt },
+        })
+        .select("id")
+        .single()
+
+      if (error) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: error.message },
+        })
+      }
+
+      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-lyrics")
+      if (reply.sent) return
+      const usageLogId = reservation?.usageLogId
+
+      await videoQueue.add("suno-lyrics", {
+        jobId: job.id,
+        prompt,
+        usageLogId,
+      })
+
+      return { jobId: job.id }
+    }
+  )
+
+  // ── Separate / Stem Split ──
+  app.post(
+    "/v1/suno/separate",
+    {
+      preHandler: creditGuard(() => "suno-separate"),
+    },
+    async (req, reply) => {
+      const parsed = sunoSeparateBody.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: parsed.error.issues[0]?.message ?? "Invalid request",
+          },
+        })
+      }
+
+      const { taskId, audioId, type, userId } = parsed.data
+
+      if (!userId) {
+        return reply.status(401).send({
+          error: { code: "unauthorized", message: "userId is required" },
+        })
+      }
+
+      const { data: job, error } = await supabase
+        .from("jobs")
+        .insert({
+          workflow_id: null,
+          user_id: userId,
+          status: "pending",
+          input_data: { type: "suno-separate", taskId, audioId, separateType: type },
+        })
+        .select("id")
+        .single()
+
+      if (error) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: error.message },
+        })
+      }
+
+      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-separate")
+      if (reply.sent) return
+      const usageLogId = reservation?.usageLogId
+
+      await videoQueue.add("suno-separate", {
+        jobId: job.id,
+        taskId,
+        audioId,
+        separateType: type,
         usageLogId,
       })
 

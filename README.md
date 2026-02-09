@@ -10,7 +10,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Asset Management**: Characters, locations, objects with reference images for visual consistency
 - **Scene Node**: Cinematic control center combining characters, cinematography, mood, and dialogue
 - **Model Agnostic**: Swap AI providers without changing workflows
-- **39 Node Types**: Input (5), Parameter (8), AI (10), Scene (1), Assets (3), Processing (9), Output (2), Utility (1)
+- **44 Node Types**: Input (5), Parameter (8), AI (15), Scene (1), Assets (3), Processing (9), Output (2), Utility (1)
 - **Light/Dark Mode**: Premium styling with glassmorphism effects
 - **Keyboard Shortcuts**: Tab (add node), Ctrl+K (search), Ctrl+L (assets), Shift+S (sticky note)
 
@@ -36,6 +36,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | TTS | ElevenLabs Turbo v2.5, Multilingual v2 (26 voices, KIE.ai) |
 | Music | MusicGen, MiniMax, Lyria, Bark |
 | Audio SFX | TangoFlux, Tango, AudioLDM, Bark, ElevenLabs SFX v2 |
+| Suno | Generate, Cover, Extend, Lyrics, Separate (KIE.ai) |
 | Lip Sync | kling-avatar, hailuo-avatar (KIE.ai) |
 
 ## Editions
@@ -45,6 +46,18 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 | Community | `community` | No | No | Open-source self-hosted |
 | Business | `business` | Yes | No | Self-hosted with admin |
 | Cloud | `cloud` | Yes | Yes | Managed SaaS |
+
+## Suno Music Integration
+
+Full Suno music pipeline via KIE.ai API:
+
+- **Suno Generate** (3 credits) -- Generate songs from text prompts with style, genre, and vocal options
+- **Suno Cover** (3 credits) -- Create covers from audio files or social media URLs (YouTube, TikTok, Instagram, Facebook, X)
+- **Suno Extend** (3 credits) -- Continue/extend existing tracks from a specific timestamp
+- **Suno Lyrics** (1 credit) -- AI-generated lyrics from a text prompt
+- **Suno Separate** (2 credits) -- Split tracks into Vocal + Instrumental, or up to 12 individual stems (drums, bass, guitar, piano, etc.)
+
+Video URL nodes automatically download audio for Suno Cover compatibility. Social media URLs are resolved to direct audio files via yt-dlp before sending to the API.
 
 ## Quick Start
 
@@ -149,6 +162,11 @@ REST API at `http://localhost:8000`. Key endpoints:
 | `POST /v1/text-to-speech` | TTS via ElevenLabs |
 | `POST /v1/text-to-video` | Text-to-video generation |
 | `POST /v1/generate-music` | Music generation |
+| `POST /v1/suno/generate` | Suno music generation |
+| `POST /v1/suno/cover` | Suno cover from audio/URL |
+| `POST /v1/suno/extend` | Extend/continue Suno tracks |
+| `POST /v1/suno/lyrics` | AI-generated lyrics |
+| `POST /v1/suno/separate` | Vocal/instrumental stem separation |
 | `POST /v1/combine-videos` | FFmpeg video concatenation |
 | `POST /v1/workflows/:id/run` | Execute workflow |
 

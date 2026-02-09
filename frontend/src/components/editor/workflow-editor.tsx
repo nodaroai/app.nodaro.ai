@@ -18,11 +18,11 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
@@ -39,6 +39,9 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "text-to-audio": 3,
   "suno-generate": 3,
   "suno-cover": 3,
+  "suno-extend": 3,
+  "suno-lyrics": 1,
+  "suno-separate": 2,
   "lip-sync": 40,
   "motion-transfer": 30,
   "video-upscale": 20,
@@ -85,7 +88,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const storeNodes = useWorkflowStore((s) => s.nodes)
   useEffect(() => {
     if (!hasCredits()) return
-    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
     const executableNodes = storeNodes.filter((n) => execTypes.has(n.type ?? ""))
     const total = executableNodes.reduce((sum, node) => {
       const data = node.data as Record<string, unknown>
@@ -177,7 +180,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -275,10 +278,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
     }
-    if (type === "text-to-speech" || type === "generate-music" || type === "text-to-audio" || type === "suno-generate" || type === "suno-cover") {
+    if (type === "text-to-speech" || type === "generate-music" || type === "text-to-audio" || type === "suno-generate" || type === "suno-cover" || type === "suno-extend" || type === "suno-separate") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined)
+    }
+    if (type === "suno-lyrics") {
+      return (data.generatedText as string | undefined)
     }
     if (type === "transcribe") {
       const tResults = (data.generatedResults as Array<{ text: string }> | undefined) ?? []
@@ -352,7 +358,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => n !== undefined)
 
-    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; audioSources?: { url: string; sourceNodeId: string; sourceType?: "audio" | "video" }[]; referenceImageUrls?: string[] } = {}
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; audioSources?: { url: string; sourceNodeId: string; sourceType?: "audio" | "video" }[]; referenceImageUrls?: string[]; sunoTrackId?: string; sunoTaskId?: string; uploadUrl?: string } = {}
 
     for (const src of sourceNodes) {
       const output = extractNodeOutput(src)
@@ -375,7 +381,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Multiple Location nodes can be connected - all their images become references
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else if (src.type === "upload-video" || src.type === "youtube-video") {
-        if (node.type === "combine-videos") {
+        if (node.type === "suno-cover" && src.type === "youtube-video") {
+          // For suno-cover, prefer downloaded audio URL over raw YouTube URL
+          const srcData = src.data as Record<string, unknown>
+          const audioUrl = (srcData.downloadedAudioUrl as string | undefined)?.trim()
+          inputs.uploadUrl = audioUrl || output
+        } else if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
         } else if (node.type === "merge-video-audio") {
           // First video → main video; additional videos → audio extraction sources
@@ -478,7 +489,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.audioUrl = output
         }
-      } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "suno-generate" || src.type === "suno-cover" || src.type === "extract-audio" || src.type === "mix-audio") {
+      } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "suno-generate" || src.type === "suno-cover" || src.type === "suno-extend" || src.type === "suno-separate" || src.type === "extract-audio" || src.type === "mix-audio") {
         if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
         } else if (node.type === "merge-video-audio") {
@@ -486,8 +497,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.audioUrl = output
         }
-      } else if (src.type === "transcribe") {
-        // Transcribe outputs text - can feed into add-captions, text-prompt downstream, etc.
+        // Pass sunoTrackId + sunoTaskId from suno nodes to downstream suno-extend/separate
+        if (src.type === "suno-generate" || src.type === "suno-cover" || src.type === "suno-extend") {
+          const srcData = src.data as Record<string, unknown>
+          if (srcData.sunoTrackId) {
+            inputs.sunoTrackId = srcData.sunoTrackId as string
+          }
+          if (srcData.sunoTaskId) {
+            inputs.sunoTaskId = srcData.sunoTaskId as string
+          }
+        }
+      } else if (src.type === "transcribe" || src.type === "suno-lyrics") {
+        // Transcribe / lyrics output text - can feed into add-captions, text-prompt downstream, etc.
         inputs.prompt = output
       }
     }
@@ -1503,7 +1524,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runProcessingNode(nodeId: string, apiCall: () => Promise<{ jobId: string }>, outputKey: "generatedVideoUrl" | "generatedAudioUrl", label: string): Promise<void> {
+  function runProcessingNode(nodeId: string, apiCall: () => Promise<{ jobId: string }>, outputKey: "generatedVideoUrl" | "generatedAudioUrl", label: string, extraOutputFields?: (outputData: Record<string, unknown>) => Record<string, unknown>): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", [outputKey]: undefined, currentJobId: undefined, currentJobProgress: 0 })
 
@@ -1537,6 +1558,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
               const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data) as Record<string, unknown>)?.generatedResults as readonly GeneratedResult[] | undefined ?? []
               const newResult: GeneratedResult = { url: url as string, timestamp: new Date().toISOString(), jobId }
+              const extraFields = extraOutputFields && job.output_data ? extraOutputFields(job.output_data as Record<string, unknown>) : {}
               updateNodeData(nodeId, {
                 executionStatus: "completed",
                 [outputKey]: url,
@@ -1544,6 +1566,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 activeResultIndex: 0,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
+                ...extraFields,
               })
               toast.success(`${label} complete`)
               resolve()
@@ -1784,7 +1807,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         customMode: d.customMode ?? hasCustomFields,
         instrumental: d.instrumental ?? false,
         userId: user?.id,
-      }), "generatedAudioUrl", "Suno Generate")
+      }), "generatedAudioUrl", "Suno Generate", (od) => ({ sunoTrackId: od.sunoTrackId as string | undefined, sunoTaskId: od.sunoTaskId as string | undefined }))
     }
 
     if (node.type === "suno-cover") {
@@ -1794,7 +1817,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${d.label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
       }
-      const uploadUrl = inputs.audioUrl ?? d.uploadUrl?.trim()
+      const uploadUrl = inputs.uploadUrl ?? inputs.audioUrl ?? d.uploadUrl?.trim()
       if (!uploadUrl) {
         toast.error(`Node "${d.label}": no source audio URL found`)
         return Promise.reject(new Error("No upload URL"))
@@ -1812,7 +1835,110 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         customMode: d.customMode ?? hasCoverCustomFields,
         instrumental: d.instrumental ?? false,
         userId: user?.id,
-      }), "generatedAudioUrl", "Suno Cover")
+      }), "generatedAudioUrl", "Suno Cover", (od) => ({ sunoTrackId: od.sunoTrackId as string | undefined, sunoTaskId: od.sunoTaskId as string | undefined }))
+    }
+
+    if (node.type === "suno-extend") {
+      const d = node.data as SunoExtendData
+      const audioId = inputs.sunoTrackId ?? d.audioId?.trim()
+      if (!audioId) {
+        toast.error(`Node "${d.label}": no audio ID found (connect a Suno Generate/Cover node or enter manually)`)
+        return Promise.reject(new Error("No audio ID"))
+      }
+      return runProcessingNode(node.id, () => sunoExtendApi({
+        audioId,
+        defaultParamFlag: d.defaultParamFlag ?? true,
+        prompt: d.prompt?.trim() || undefined,
+        model: d.model || undefined,
+        style: d.style || undefined,
+        title: d.title || undefined,
+        continueAt: d.continueAt ?? undefined,
+        negativeStyle: d.negativeStyle || undefined,
+        vocalGender: d.vocalGender || undefined,
+        styleWeight: d.styleWeight,
+        weirdnessConstraint: d.weirdnessConstraint,
+        audioWeight: d.audioWeight,
+        userId: user?.id,
+      }), "generatedAudioUrl", "Suno Extend", (od) => ({ sunoTrackId: od.sunoTrackId as string | undefined, sunoTaskId: od.sunoTaskId as string | undefined }))
+    }
+
+    if (node.type === "suno-lyrics") {
+      const d = node.data as SunoLyricsData
+      const prompt = inputs.prompt ?? d.prompt?.trim()
+      if (!prompt) {
+        toast.error(`Node "${d.label}": no prompt found`)
+        return Promise.reject(new Error("No prompt"))
+      }
+      const { updateNodeData } = useWorkflowStore.getState()
+      updateNodeData(node.id, { executionStatus: "running", generatedText: undefined, generatedTitle: undefined, currentJobId: undefined })
+
+      return new Promise<void>((resolve, reject) => {
+        sunoLyricsApi({ prompt, userId: user?.id }).then(({ jobId }) => {
+          toast.info("Lyrics generation started", { description: `Job ID: ${jobId}` })
+          updateNodeData(node.id, { currentJobId: jobId })
+
+          const poll = trackInterval(setInterval(async () => {
+            try {
+              const job = await getJobStatus(jobId)
+              if (job.progress) updateNodeData(node.id, { currentJobProgress: job.progress })
+
+              if (job.status === "completed") {
+                untrackInterval(poll)
+                const lyrics = (job.output_data as Record<string, unknown>)?.lyrics as Array<{ text: string; title: string }> | undefined
+                const first = lyrics?.[0]
+                updateNodeData(node.id, {
+                  executionStatus: "completed",
+                  generatedText: first?.text ?? "",
+                  generatedTitle: first?.title ?? "",
+                  generatedResults: lyrics?.map(l => ({ text: l.text, title: l.title, jobId })),
+                  activeResultIndex: 0,
+                  currentJobId: undefined,
+                  currentJobProgress: undefined,
+                })
+                toast.success("Lyrics generation complete")
+                resolve()
+              } else if (job.status === "failed") {
+                untrackInterval(poll)
+                const errMsg = job.error_message ?? "Lyrics generation failed"
+                updateNodeData(node.id, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
+                toast.error("Lyrics generation failed", { description: errMsg })
+                reject(new Error(errMsg))
+              }
+            } catch (err) {
+              untrackInterval(poll)
+              updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
+              toast.error("Failed to check lyrics status")
+              reject(err)
+            }
+          }, 3000))
+        }).catch((err) => {
+          updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
+          toast.error("Failed to start lyrics generation", { description: err instanceof Error ? err.message : "Unknown error" })
+          reject(err)
+        })
+      })
+    }
+
+    if (node.type === "suno-separate") {
+      const d = node.data as SunoSeparateData
+      const taskId = inputs.sunoTaskId ?? d.taskId?.trim()
+      const audioId = inputs.sunoTrackId ?? d.audioId?.trim()
+      if (!taskId) {
+        toast.error(`Node "${d.label}": no task ID found (connect a Suno Generate/Cover/Extend node or enter manually)`)
+        return Promise.reject(new Error("No task ID"))
+      }
+      return runProcessingNode(node.id, () => sunoSeparateApi({
+        taskId,
+        audioId: audioId ?? taskId,
+        type: d.type || "separate_vocal",
+        userId: user?.id,
+      }), "generatedAudioUrl", "Suno Separate", (od) => {
+        const extra: Record<string, unknown> = {}
+        if (od.vocalUrl) extra.vocalUrl = od.vocalUrl
+        if (od.instrumentalUrl) extra.instrumentalUrl = od.instrumentalUrl
+        if (od.stems) extra.stems = od.stems
+        return extra
+      })
     }
 
     if (node.type === "transcribe") {

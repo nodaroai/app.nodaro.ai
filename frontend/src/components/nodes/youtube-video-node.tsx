@@ -6,7 +6,7 @@ import { Link, X, Play, Video, Music2, Camera, Hash, Download, AlertCircle, Chec
 import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
+import { fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress, API_BASE_URL } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import type { YouTubeVideoData } from "@/types/nodes"
 
@@ -248,6 +248,25 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
     } finally {
       setLoading(false)
     }
+
+    // Auto-download audio for Suno Cover compatibility
+    if (videoId && url) {
+      updateNodeData(id, { audioDownloadStatus: "downloading", downloadedAudioUrl: "", audioDownloadError: "" })
+      try {
+        const res = await fetch(`${API_BASE_URL}/v1/youtube-audio`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        })
+        if (!res.ok) throw new Error("Audio download failed")
+        const json = await res.json()
+        const audioUrl = json.data?.url ?? json.url
+        updateNodeData(id, { downloadedAudioUrl: audioUrl, audioDownloadStatus: "completed" })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Audio download failed"
+        updateNodeData(id, { audioDownloadStatus: "failed", audioDownloadError: msg })
+      }
+    }
   }
 
   const handleClear = () => {
@@ -261,6 +280,9 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
       downloadStatus: "idle",
       downloadError: "",
       downloadPercent: 0,
+      downloadedAudioUrl: "",
+      audioDownloadStatus: "idle",
+      audioDownloadError: "",
     })
   }
 
@@ -469,6 +491,26 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
               >
                 <X className="w-3 h-3" />
               </button>
+            </div>
+          )}
+
+          {/* Audio download status indicator */}
+          {nodeData.videoId && nodeData.audioDownloadStatus === "downloading" && (
+            <div className="flex items-center gap-1.5 px-1 py-0.5">
+              <Loader2 className="w-3 h-3 text-[#ff0073] animate-spin" />
+              <span className="text-[10px] text-muted-foreground">Downloading audio...</span>
+            </div>
+          )}
+          {nodeData.videoId && nodeData.audioDownloadStatus === "completed" && (
+            <div className="flex items-center gap-1.5 px-1 py-0.5">
+              <CheckCircle2 className="w-3 h-3 text-green-500" />
+              <span className="text-[10px] text-green-600 dark:text-green-400">Audio ready</span>
+            </div>
+          )}
+          {nodeData.videoId && nodeData.audioDownloadStatus === "failed" && (
+            <div className="flex items-center gap-1.5 px-1 py-0.5">
+              <AlertCircle className="w-3 h-3 text-orange-500" />
+              <span className="text-[10px] text-orange-500" title={nodeData.audioDownloadError}>Audio failed</span>
             </div>
           )}
 

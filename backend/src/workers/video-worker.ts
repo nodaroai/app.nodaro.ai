@@ -19,7 +19,7 @@ import {
 import { KieError } from "../providers/kie/client.js"
 import type { ProgressCallback } from "../providers/provider.interface.js"
 import { generateScript, type ScriptProvider } from "../providers/script/script-generator.js"
-import { uploadToR2, uploadFileToR2 } from "../lib/storage.js"
+import { uploadToR2, uploadFileToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { combineVideos } from "../providers/video/combine-videos.js"
 import { mergeVideoAudio } from "../providers/video/merge-video-audio.js"
 import { extractAudio } from "../providers/video/extract-audio.js"
@@ -34,9 +34,83 @@ import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audi
 import { KieAudioProvider } from "../providers/kie/audio.js"
 import { transcribe, type TranscribeProvider } from "../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../providers/audio/youtube-extractor.js"
-import { sunoGenerate, sunoCover, type SunoModel } from "../providers/kie/suno-client.js"
+import { sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoSeparate, type SunoModel, type SunoSeparateType } from "../providers/kie/suno-client.js"
 import { promises as fs } from "node:fs"
-import { dirname } from "node:path"
+import { dirname, join } from "node:path"
+import { tmpdir } from "node:os"
+import { randomUUID } from "node:crypto"
+import youtubedl from "youtube-dl-exec"
+
+const SOCIAL_HOSTNAMES = [
+  "youtube.com", "youtu.be",
+  "tiktok.com",
+  "instagram.com",
+  "twitter.com", "x.com",
+  "facebook.com", "fb.watch", "fb.com",
+]
+
+function isSocialUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return SOCIAL_HOSTNAMES.some((h) => parsed.hostname.includes(h))
+  } catch {
+    return false
+  }
+}
+
+async function downloadAudioToR2(url: string): Promise<string> {
+  const outputId = randomUUID()
+  const baseName = `yt-audio-${outputId}`
+  const outputTemplate = join(tmpdir(), `${baseName}.%(ext)s`)
+  const expectedPath = join(tmpdir(), `${baseName}.mp3`)
+
+  console.log(`[worker] Downloading audio from social URL: ${url}`)
+
+  await youtubedl(url, {
+    extractAudio: true,
+    audioFormat: "mp3",
+    audioQuality: 0,
+    output: outputTemplate,
+    noPlaylist: true,
+    noCheckCertificates: true,
+    preferFreeFormats: true,
+    extractorArgs: "youtube:player_client=android",
+    addHeader: [
+      "referer:youtube.com",
+      "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    ],
+  } as Record<string, unknown>)
+
+  // Find the actual audio file
+  let actualPath = expectedPath
+  try {
+    await fs.access(expectedPath)
+  } catch {
+    const alternatives = [".m4a", ".webm", ".opus", ".ogg", ".wav"]
+    let found = false
+    for (const ext of alternatives) {
+      const altPath = join(tmpdir(), `${baseName}${ext}`)
+      try {
+        await fs.access(altPath)
+        actualPath = altPath
+        found = true
+        break
+      } catch { continue }
+    }
+    if (!found) throw new Error("yt-dlp did not produce an output file")
+  }
+
+  const stat = await fs.stat(actualPath)
+  if (stat.size === 0) throw new Error("Downloaded audio file is empty")
+
+  const buffer = await fs.readFile(actualPath)
+  const r2Key = `audios/cover-src-${outputId}.mp3`
+  const r2Url = await uploadBufferToR2(buffer, r2Key, "audio/mpeg")
+  await fs.unlink(actualPath).catch(() => {})
+
+  console.log(`[worker] Audio downloaded and uploaded to R2: ${r2Url}`)
+  return r2Url
+}
 
 /**
  * Check if job was cancelled before saving completion result.
@@ -696,7 +770,13 @@ export function createVideoWorker() {
             negativeStyle?: string; vocalGender?: string; customMode?: boolean; instrumental?: boolean
           }
           console.log(`[worker] suno-cover ${jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental})`)
-          const result = await sunoCover({ prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental })
+          // If upload_url is a social media URL, download audio to R2 first
+          let resolvedUploadUrl = uploadUrl
+          if (isSocialUrl(uploadUrl)) {
+            console.log(`[worker] Social URL detected for cover, downloading audio first...`)
+            resolvedUploadUrl = await downloadAudioToR2(uploadUrl)
+          }
+          const result = await sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental })
           await job.updateProgress(50)
           const firstTrack = result.tracks[0]
           if (!firstTrack) throw new Error("Suno cover returned no tracks")
@@ -710,6 +790,89 @@ export function createVideoWorker() {
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
+
+        } else if (job.name === "suno-extend") {
+          const { audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight } = job.data as {
+            jobId: string; audioId: string; defaultParamFlag?: boolean; prompt?: string; model?: SunoModel; style?: string; title?: string
+            continueAt?: number; negativeStyle?: string; vocalGender?: string; styleWeight?: number; weirdnessConstraint?: number; audioWeight?: number
+          }
+          console.log(`[worker] suno-extend ${jobId} (model: ${model ?? "V5"}, audioId: ${audioId})`)
+          const result = await sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight })
+          await job.updateProgress(50)
+          const firstTrack = result.tracks[0]
+          if (!firstTrack) throw new Error("Suno extend returned no tracks")
+          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio")
+          await job.updateProgress(100)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({
+            status: "completed", progress: 100,
+            output_data: { audioUrl: r2Url, sunoTrackId: firstTrack.id, sunoTitle: firstTrack.title, sunoDuration: firstTrack.duration, sunoImageUrl: firstTrack.imageUrl, sunoTaskId: result.taskId, trackCount: result.tracks.length },
+            completed_at: new Date().toISOString(),
+          }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (${result.tracks.length} tracks)`)
+
+        } else if (job.name === "suno-lyrics") {
+          const { prompt } = job.data as { jobId: string; prompt: string; usageLogId?: string }
+          console.log(`[worker] suno-lyrics ${jobId}`)
+          const result = await sunoLyrics({ prompt })
+          await job.updateProgress(100)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { lyrics: result.lyrics, sunoTaskId: result.taskId },
+            completed_at: new Date().toISOString(),
+          }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${result.lyrics.length} lyrics generated`)
+
+        } else if (job.name === "suno-separate") {
+          const { taskId: sunoTaskId, audioId, separateType } = job.data as {
+            jobId: string; taskId: string; audioId: string; separateType?: SunoSeparateType; usageLogId?: string
+          }
+          const sepType = separateType ?? "separate_vocal"
+          console.log(`[worker] suno-separate ${jobId} (type: ${sepType}, audioId: ${audioId})`)
+          const result = await sunoSeparate({ taskId: sunoTaskId, audioId, type: sepType })
+          await job.updateProgress(50)
+
+          // Upload available stems to R2
+          const outputData: Record<string, unknown> = {
+            separateType: sepType,
+            sunoTaskId: result.taskId,
+          }
+
+          const stemFields = [
+            "vocalUrl", "instrumentalUrl", "backingVocalsUrl", "drumsUrl",
+            "bassUrl", "guitarUrl", "pianoUrl", "keyboardUrl",
+            "percussionUrl", "stringsUrl", "synthUrl", "fxUrl",
+            "brassUrl", "woodwindsUrl",
+          ] as const
+
+          let uploadedCount = 0
+          for (const field of stemFields) {
+            const url = result[field]
+            if (url) {
+              const stemName = field.replace("Url", "")
+              const r2Url = await uploadToR2(url, `${jobId}-${stemName}`, "audio")
+              outputData[field] = r2Url
+              uploadedCount++
+            }
+          }
+
+          // Set primary audioUrl for downstream routing
+          outputData.audioUrl = outputData.vocalUrl ?? outputData.instrumentalUrl
+
+          await job.updateProgress(100)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: outputData,
+            completed_at: new Date().toISOString(),
+          }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${uploadedCount} stem(s) uploaded`)
 
         } else if (job.name === "transcribe") {
           const { audioUrl, provider, language } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string }

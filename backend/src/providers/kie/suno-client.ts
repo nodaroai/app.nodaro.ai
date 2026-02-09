@@ -76,6 +76,68 @@ export interface SunoCoverParams {
   instrumental?: boolean
 }
 
+export interface SunoExtendParams {
+  /** Suno audio ID of the track to extend */
+  audioId: string
+  /** Whether to use default parameters (default true) */
+  defaultParamFlag?: boolean
+  /** Song description / prompt */
+  prompt?: string
+  /** Suno model version */
+  model?: SunoModel
+  /** Music style tags */
+  style?: string
+  /** Song title */
+  title?: string
+  /** Timestamp (in seconds) to continue from */
+  continueAt?: number
+  /** Negative style tags to avoid */
+  negativeStyle?: string
+  /** Vocal gender: "male" or "female" */
+  vocalGender?: string
+  /** Style weight 0-100 */
+  styleWeight?: number
+  /** Weirdness constraint 0-100 */
+  weirdnessConstraint?: number
+  /** Audio weight 0-100 */
+  audioWeight?: number
+}
+
+export interface SunoLyricsParams {
+  prompt: string
+}
+
+export interface SunoLyricsResult {
+  taskId: string
+  lyrics: Array<{ text: string; title: string }>
+}
+
+export type SunoSeparateType = "separate_vocal" | "split_stem"
+
+export interface SunoSeparateParams {
+  taskId: string
+  audioId: string
+  type: SunoSeparateType
+}
+
+export interface SunoSeparateResult {
+  taskId: string
+  vocalUrl?: string
+  instrumentalUrl?: string
+  backingVocalsUrl?: string
+  drumsUrl?: string
+  bassUrl?: string
+  guitarUrl?: string
+  pianoUrl?: string
+  keyboardUrl?: string
+  percussionUrl?: string
+  stringsUrl?: string
+  synthUrl?: string
+  fxUrl?: string
+  brassUrl?: string
+  woodwindsUrl?: string
+}
+
 export interface SunoTrack {
   id: string
   audioUrl: string
@@ -293,6 +355,168 @@ export async function sunoCover(
 }
 
 /**
+ * Extend an existing Suno track from a specific timestamp
+ */
+export async function sunoExtend(
+  params: SunoExtendParams
+): Promise<SunoTaskResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Music generation"
+    )
+  }
+
+  const model = params.model ?? "V5"
+
+  const body: Record<string, unknown> = {
+    audioId: params.audioId,
+    defaultParamFlag: params.defaultParamFlag ?? true,
+    model,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  if (params.prompt) body.prompt = params.prompt
+  if (params.style) body.style = params.style
+  if (params.title) body.title = params.title
+  if (params.continueAt != null) body.continueAt = params.continueAt
+  if (params.negativeStyle) body.negativeTags = params.negativeStyle
+  if (params.vocalGender) body.vocal_gender = params.vocalGender
+  if (params.styleWeight != null) body.style_weight = params.styleWeight
+  if (params.weirdnessConstraint != null) body.weirdness_constraint = params.weirdnessConstraint
+  if (params.audioWeight != null) body.audio_weight = params.audioWeight
+
+  console.log(`[Suno] Extending track ${params.audioId} with model ${model}`)
+  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/generate/extend`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    }
+  )
+
+  const responseText = await response.text()
+  console.log(`[Suno] Extend response status: ${response.status}`)
+  console.log(`[Suno] Extend response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno extend failed: ${response.status} - ${responseText}`,
+      "Music generation"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno extend response is not valid JSON: ${responseText}`,
+      "Music generation"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno extend error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Music generation"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno extend response missing taskId: ${JSON.stringify(createData)}`,
+      "Music generation"
+    )
+  }
+
+  console.log(`[Suno] Extend task created: ${taskId}`)
+  return pollSunoTask(taskId)
+}
+
+/**
+ * Generate lyrics from a prompt via Suno (text only, not audio)
+ */
+export async function sunoLyrics(
+  params: SunoLyricsParams
+): Promise<SunoLyricsResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Lyrics generation"
+    )
+  }
+
+  const body: Record<string, unknown> = {
+    prompt: params.prompt,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  console.log(`[Suno] Generating lyrics`)
+  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/lyrics`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    }
+  )
+
+  const responseText = await response.text()
+  console.log(`[Suno] Lyrics response status: ${response.status}`)
+  console.log(`[Suno] Lyrics response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno lyrics failed: ${response.status} - ${responseText}`,
+      "Lyrics generation"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno lyrics response is not valid JSON: ${responseText}`,
+      "Lyrics generation"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno lyrics error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Lyrics generation"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno lyrics response missing taskId: ${JSON.stringify(createData)}`,
+      "Lyrics generation"
+    )
+  }
+
+  console.log(`[Suno] Lyrics task created: ${taskId}`)
+  return pollSunoLyricsTask(taskId)
+}
+
+/**
  * Poll a Suno task until completion
  */
 async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
@@ -377,7 +601,7 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
       return { taskId, tracks: validTracks }
     }
 
-    if (status === "FAILED") {
+    if (status === "FAILED" || status?.includes("FAILED") || status?.includes("ERROR")) {
       const reason =
         detailData.data?.failReason ??
         detailData.data?.errorMessage ??
@@ -394,5 +618,263 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
   throw createSanitizedError(
     `Suno task timed out after ${(SUNO_MAX_POLL_ATTEMPTS * SUNO_POLL_INTERVAL_MS) / 1000} seconds`,
     "Music generation"
+  )
+}
+
+/**
+ * Poll a Suno lyrics task until completion.
+ * Different endpoint and response structure from pollSunoTask.
+ */
+async function pollSunoLyricsTask(taskId: string): Promise<SunoLyricsResult> {
+  const apiKey = config.KIE_API_KEY!
+
+  let attempts = 0
+  while (attempts < SUNO_MAX_POLL_ATTEMPTS) {
+    await sleep(SUNO_POLL_INTERVAL_MS)
+    attempts++
+
+    const detailResponse = await fetch(
+      `${KIE_API_BASE}/api/v1/lyrics/record-info?taskId=${taskId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } }
+    )
+
+    if (!detailResponse.ok) {
+      console.warn(
+        `[Suno] Lyrics poll attempt ${attempts} failed: ${detailResponse.status}`
+      )
+      continue
+    }
+
+    const detailText = await detailResponse.text()
+    let detailData: SunoRecordInfoResponse
+    try {
+      detailData = JSON.parse(detailText) as SunoRecordInfoResponse
+    } catch {
+      console.warn(`[Suno] Lyrics poll attempt ${attempts} invalid JSON`)
+      continue
+    }
+
+    const status = detailData.data?.status
+    console.log(
+      `[Suno] Lyrics task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
+    )
+
+    if (status === "SUCCESS" || status === "FIRST_SUCCESS") {
+      const responseData = (detailData.data?.response as Record<string, unknown>)?.data as Array<Record<string, unknown>> | undefined
+      if (!responseData?.length) {
+        throw createSanitizedError(
+          "Suno lyrics task succeeded but no lyrics returned",
+          "Lyrics generation"
+        )
+      }
+
+      const lyrics = responseData.map((d) => ({
+        text: (d.text ?? "") as string,
+        title: (d.title ?? "") as string,
+      }))
+
+      console.log(
+        `[Suno] Lyrics task ${taskId} completed with ${lyrics.length} result(s)`
+      )
+      return { taskId, lyrics }
+    }
+
+    if (status === "FAILED" || status?.includes("FAILED") || status?.includes("ERROR")) {
+      const reason =
+        detailData.data?.failReason ??
+        detailData.data?.errorMessage ??
+        "Unknown error"
+      throw createSanitizedError(
+        `Suno lyrics task failed: ${reason}`,
+        "Lyrics generation"
+      )
+    }
+
+    // PENDING / PROCESSING — continue polling
+  }
+
+  throw createSanitizedError(
+    `Suno lyrics task timed out after ${(SUNO_MAX_POLL_ATTEMPTS * SUNO_POLL_INTERVAL_MS) / 1000} seconds`,
+    "Lyrics generation"
+  )
+}
+
+/**
+ * Separate a Suno track into stems (vocal + instrumental, or up to 12 stems)
+ */
+export async function sunoSeparate(
+  params: SunoSeparateParams
+): Promise<SunoSeparateResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Stem separation"
+    )
+  }
+
+  const body: Record<string, unknown> = {
+    taskId: params.taskId,
+    audioId: params.audioId,
+    type: params.type,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  console.log(`[Suno] Separating audio (type: ${params.type})`)
+  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/vocal-removal/generate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    }
+  )
+
+  const responseText = await response.text()
+  console.log(`[Suno] Separate response status: ${response.status}`)
+  console.log(`[Suno] Separate response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno separate failed: ${response.status} - ${responseText}`,
+      "Stem separation"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno separate response is not valid JSON: ${responseText}`,
+      "Stem separation"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno separate error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Stem separation"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno separate response missing taskId: ${JSON.stringify(createData)}`,
+      "Stem separation"
+    )
+  }
+
+  console.log(`[Suno] Separate task created: ${taskId}`)
+  return pollSunoSeparateTask(taskId)
+}
+
+/**
+ * Poll a Suno separate/stem-split task until completion.
+ * Uses vocal-removal/record-info endpoint.
+ * Response contains originData array with stem_type_group_name + audio_url per stem.
+ */
+async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult> {
+  const apiKey = config.KIE_API_KEY!
+
+  const STEM_NAME_MAP: Record<string, keyof SunoSeparateResult> = {
+    vocals: "vocalUrl",
+    instrumental: "instrumentalUrl",
+    "backing vocals": "backingVocalsUrl",
+    drums: "drumsUrl",
+    bass: "bassUrl",
+    guitar: "guitarUrl",
+    piano: "pianoUrl",
+    keyboard: "keyboardUrl",
+    percussion: "percussionUrl",
+    strings: "stringsUrl",
+    synth: "synthUrl",
+    fx: "fxUrl",
+    brass: "brassUrl",
+    woodwinds: "woodwindsUrl",
+  }
+
+  let attempts = 0
+  while (attempts < SUNO_MAX_POLL_ATTEMPTS) {
+    await sleep(SUNO_POLL_INTERVAL_MS)
+    attempts++
+
+    const detailResponse = await fetch(
+      `${KIE_API_BASE}/api/v1/vocal-removal/record-info?taskId=${taskId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } }
+    )
+
+    if (!detailResponse.ok) {
+      console.warn(
+        `[Suno] Separate poll attempt ${attempts} failed: ${detailResponse.status}`
+      )
+      continue
+    }
+
+    const detailText = await detailResponse.text()
+    let detailData: Record<string, unknown>
+    try {
+      detailData = JSON.parse(detailText) as Record<string, unknown>
+    } catch {
+      console.warn(`[Suno] Separate poll attempt ${attempts} invalid JSON`)
+      continue
+    }
+
+    const data = detailData.data as Record<string, unknown> | undefined
+    const status = data?.status as string | undefined
+    const resp = data?.response as Record<string, unknown> | undefined
+    const originData = resp?.originData as Array<Record<string, unknown>> | undefined
+
+    console.log(
+      `[Suno] Separate task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
+    )
+    console.log(`[Suno] Separate raw response:`, JSON.stringify(detailData).substring(0, 500))
+
+    // Check for failure statuses
+    if (status === "FAILED" || status?.includes("FAILED") || status?.includes("ERROR")) {
+      const reason =
+        data?.failReason ??
+        data?.errorMessage ??
+        "Unknown error"
+      throw createSanitizedError(
+        `Suno separate task failed: ${reason}`,
+        "Stem separation"
+      )
+    }
+
+    // Success: originData is a non-empty array of stems
+    if (originData && originData.length > 0) {
+      const result: SunoSeparateResult = { taskId }
+
+      for (const stem of originData) {
+        const stemName = (stem.stem_type_group_name as string | undefined)?.toLowerCase()
+        const audioUrl = stem.audio_url as string | undefined
+        if (!stemName || !audioUrl) continue
+
+        const resultKey = STEM_NAME_MAP[stemName]
+        if (resultKey) {
+          ;(result as unknown as Record<string, unknown>)[resultKey] = audioUrl
+        }
+      }
+
+      const stemCount = Object.values(result).filter((v) => typeof v === "string" && v.startsWith("http")).length
+      console.log(
+        `[Suno] Separate task ${taskId} completed with ${stemCount} stem(s)`
+      )
+      return result
+    }
+
+    // originData missing or empty — still pending, continue polling
+  }
+
+  throw createSanitizedError(
+    `Suno separate task timed out after ${(SUNO_MAX_POLL_ATTEMPTS * SUNO_POLL_INTERVAL_MS) / 1000} seconds`,
+    "Stem separation"
   )
 }

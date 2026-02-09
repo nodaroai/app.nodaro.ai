@@ -6,7 +6,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin, Wand2, Layers, Disc3,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -53,6 +53,9 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI" },
   { type: "suno-generate", label: "Suno Generate", icon: <Music className="h-4 w-4" />, category: "AI" },
   { type: "suno-cover", label: "Suno Cover", icon: <Disc3 className="h-4 w-4" />, category: "AI" },
+  { type: "suno-extend", label: "Suno Extend", icon: <FastForward className="h-4 w-4" />, category: "AI" },
+  { type: "suno-lyrics", label: "Suno Lyrics", icon: <FileText className="h-4 w-4" />, category: "AI" },
+  { type: "suno-separate", label: "Suno Separate", icon: <Scissors className="h-4 w-4" />, category: "AI" },
   // Processing
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing" },
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing" },
