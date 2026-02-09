@@ -64,6 +64,12 @@ const sunoSeparateBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
+const sunoMusicVideoBody = z.object({
+  taskId: z.string().min(1),
+  audioId: z.string().min(1),
+  userId: z.string().uuid().optional(),
+})
+
 export async function sunoRoutes(app: FastifyInstance) {
   // ── Generate Song ──
   app.post(
@@ -424,6 +430,63 @@ export async function sunoRoutes(app: FastifyInstance) {
         taskId,
         audioId,
         separateType: type,
+        usageLogId,
+      })
+
+      return { jobId: job.id }
+    }
+  )
+
+  // ── Music Video ──
+  app.post(
+    "/v1/suno/music-video",
+    {
+      preHandler: creditGuard(() => "suno-music-video"),
+    },
+    async (req, reply) => {
+      const parsed = sunoMusicVideoBody.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: parsed.error.issues[0]?.message ?? "Invalid request",
+          },
+        })
+      }
+
+      const { taskId, audioId, userId } = parsed.data
+
+      if (!userId) {
+        return reply.status(401).send({
+          error: { code: "unauthorized", message: "userId is required" },
+        })
+      }
+
+      const { data: job, error } = await supabase
+        .from("jobs")
+        .insert({
+          workflow_id: null,
+          user_id: userId,
+          status: "pending",
+          input_data: { type: "suno-music-video", taskId, audioId },
+        })
+        .select("id")
+        .single()
+
+      if (error) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: error.message },
+        })
+      }
+
+      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-music-video")
+      if (reply.sent) return
+      const usageLogId = reservation?.usageLogId
+
+      await videoQueue.add("suno-music-video", {
+        jobId: job.id,
+        taskId,
+        audioId,
         usageLogId,
       })
 

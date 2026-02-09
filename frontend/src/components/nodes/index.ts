@@ -29,6 +29,7 @@ import { SunoCoverNode } from "./suno-cover-node"
 import { SunoExtendNode } from "./suno-extend-node"
 import { SunoLyricsNode } from "./suno-lyrics-node"
 import { SunoSeparateNode } from "./suno-separate-node"
+import { SunoMusicVideoNode } from "./suno-music-video-node"
 import { TranscribeNode } from "./transcribe-node"
 import { CombineVideosNode } from "./combine-videos-node"
 import { MergeVideoAudioNode } from "./merge-video-audio-node"
@@ -85,6 +86,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "suno-extend": SunoExtendNode,
   "suno-lyrics": SunoLyricsNode,
   "suno-separate": SunoSeparateNode,
+  "suno-music-video": SunoMusicVideoNode,
   "lip-sync": LipSyncNode,
   "motion-transfer": MotionTransferNode,
   "transcribe": TranscribeNode,

@@ -69,6 +69,7 @@ import type {
   SunoExtendData,
   SunoLyricsData,
   SunoSeparateData,
+  SunoMusicVideoData,
   TranscribeData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -375,6 +376,7 @@ export function ConfigPanel() {
       "suno-extend": "Suno Extend",
       "suno-lyrics": "Suno Lyrics",
       "suno-separate": "Suno Separate",
+      "suno-music-video": "Suno Music Video",
       "transcribe": "Transcribe",
       "combine-videos": "Combine Videos",
       "merge-video-audio": "Merge Video & Audio",
@@ -548,6 +550,9 @@ export function ConfigPanel() {
           {selectedNode.type === "suno-separate" && (
             <SunoSeparateConfig data={selectedNode.data as SunoSeparateData} onUpdate={update} />
           )}
+          {selectedNode.type === "suno-music-video" && (
+            <SunoMusicVideoConfig data={selectedNode.data as SunoMusicVideoData} onUpdate={update} />
+          )}
           {selectedNode.type === "lip-sync" && (
             <LipSyncConfig data={selectedNode.data as LipSyncData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
@@ -628,7 +633,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover" || selectedNode.type === "suno-extend" || selectedNode.type === "suno-lyrics" || selectedNode.type === "suno-separate") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover" || selectedNode.type === "suno-extend" || selectedNode.type === "suno-lyrics" || selectedNode.type === "suno-separate" || selectedNode.type === "suno-music-video") && (
               <GenerateButton
                 onClick={() => runSingleNode?.(selectedNode.id)}
                 modelIdentifier={getModelIdentifier(selectedNode)}
@@ -2953,6 +2958,28 @@ function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSeparateDat
               <audio src={url} controls className="w-full h-8" preload="none" />
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SunoMusicVideoConfig({ data, onUpdate }: { readonly data: SunoMusicVideoData; readonly onUpdate: (updates: Partial<SunoMusicVideoData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Task ID</label>
+        <Input value={data.taskId} onChange={(e) => onUpdate({ taskId: e.target.value })} placeholder="From upstream Suno node" />
+        <p className="text-[10px] text-muted-foreground mt-1">Auto-filled when connected to a Suno node</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Audio ID</label>
+        <Input value={data.audioId} onChange={(e) => onUpdate({ audioId: e.target.value })} placeholder="From upstream Suno node" />
+        <p className="text-[10px] text-muted-foreground mt-1">Auto-filled when connected to a Suno node</p>
+      </div>
+      {data.generatedVideoUrl && (
+        <div className="rounded-md border overflow-hidden">
+          <video src={data.generatedVideoUrl} controls className="w-full" />
         </div>
       )}
     </div>

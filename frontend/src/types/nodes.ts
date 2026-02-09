@@ -745,6 +745,19 @@ export type SunoSeparateData = {
   fieldMappings?: FieldMappings
 }
 
+export type SunoMusicVideoData = {
+  [key: string]: unknown
+  label: string
+  taskId: string
+  audioId: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  fieldMappings?: FieldMappings
+}
+
 export type TranscribeData = {
   [key: string]: unknown
   label: string
@@ -1181,6 +1194,7 @@ export type SceneNodeData =
   | SunoExtendData
   | SunoLyricsData
   | SunoSeparateData
+  | SunoMusicVideoData
   | TranscribeData
   | CombineVideosData
   | MergeVideoAudioData
@@ -1233,6 +1247,7 @@ export type SceneNodeType =
   | "suno-extend"
   | "suno-lyrics"
   | "suno-separate"
+  | "suno-music-video"
   | "transcribe"
   | "combine-videos"
   | "merge-video-audio"
@@ -1549,6 +1564,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["audio"],
     outputs: ["audio"],
     defaultData: { label: "Suno Separate", type: "separate_vocal", taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
+  },
+  {
+    type: "suno-music-video",
+    label: "Suno Music Video",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["audio"],
+    outputs: ["video"],
+    defaultData: { label: "Suno Music Video", taskId: "", audioId: "", fieldMappings: {} } as SunoMusicVideoData,
   },
   {
     type: "transcribe",

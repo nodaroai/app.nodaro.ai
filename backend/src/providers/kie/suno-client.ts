@@ -138,6 +138,16 @@ export interface SunoSeparateResult {
   woodwindsUrl?: string
 }
 
+export interface SunoMusicVideoParams {
+  taskId: string
+  audioId: string
+}
+
+export interface SunoMusicVideoResult {
+  taskId: string
+  videoUrl: string
+}
+
 export interface SunoTrack {
   id: string
   audioUrl: string
@@ -876,5 +886,158 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
   throw createSanitizedError(
     `Suno separate task timed out after ${(SUNO_MAX_POLL_ATTEMPTS * SUNO_POLL_INTERVAL_MS) / 1000} seconds`,
     "Stem separation"
+  )
+}
+
+// =============================================================================
+// MUSIC VIDEO
+// =============================================================================
+
+/**
+ * Generate a music video from a Suno track via KIE.ai.
+ * Endpoint: POST /api/v1/mp4/generate
+ */
+export async function sunoMusicVideo(
+  params: SunoMusicVideoParams
+): Promise<SunoMusicVideoResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Music video generation"
+    )
+  }
+
+  const body: Record<string, unknown> = {
+    taskId: params.taskId,
+    audioId: params.audioId,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  console.log(`[Suno] Generating music video for task ${params.taskId}`)
+  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/mp4/generate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    }
+  )
+
+  const responseText = await response.text()
+  console.log(`[Suno] Music video response status: ${response.status}`)
+  console.log(`[Suno] Music video response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno music video failed: ${response.status} - ${responseText}`,
+      "Music video generation"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno music video response is not valid JSON: ${responseText}`,
+      "Music video generation"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno music video error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Music video generation"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno music video response missing taskId: ${JSON.stringify(createData)}`,
+      "Music video generation"
+    )
+  }
+
+  console.log(`[Suno] Music video task created: ${taskId}`)
+  return pollSunoMusicVideoTask(taskId)
+}
+
+/**
+ * Poll a Suno music video task until completion.
+ * Uses mp4/record-info endpoint.
+ */
+async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoResult> {
+  const apiKey = config.KIE_API_KEY!
+
+  for (let attempts = 1; attempts <= SUNO_MAX_POLL_ATTEMPTS; attempts++) {
+    await sleep(SUNO_POLL_INTERVAL_MS)
+
+    const detailResponse = await fetch(
+      `${KIE_API_BASE}/api/v1/mp4/record-info?taskId=${taskId}`,
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      }
+    )
+
+    const detailText = await detailResponse.text()
+    let detailData: Record<string, unknown>
+    try {
+      detailData = JSON.parse(detailText) as Record<string, unknown>
+    } catch {
+      console.warn(`[Suno] Music video poll attempt ${attempts} invalid JSON`)
+      continue
+    }
+
+    const data = detailData.data as Record<string, unknown> | undefined
+    const status = data?.status as string | undefined
+    const resp = data?.response as Record<string, unknown> | undefined
+
+    console.log(
+      `[Suno] Music video task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
+    )
+    console.log(`[Suno] Music video raw response:`, JSON.stringify(detailData).substring(0, 500))
+
+    // Check for failure statuses
+    if (status === "FAILED" || status?.includes("FAILED") || status?.includes("ERROR")) {
+      const reason =
+        data?.failReason ??
+        data?.errorMessage ??
+        "Unknown error"
+      throw createSanitizedError(
+        `Suno music video task failed: ${reason}`,
+        "Music video generation"
+      )
+    }
+
+    // Success: look for videoUrl in response
+    const videoUrl = (resp?.videoUrl ?? resp?.video_url ?? resp?.mp4Url ?? resp?.mp4_url) as string | undefined
+    if (videoUrl) {
+      console.log(`[Suno] Music video task ${taskId} completed`)
+      return { taskId, videoUrl }
+    }
+
+    // Check top-level success status with response data
+    if ((status === "SUCCESS" || status === "FIRST_SUCCESS") && resp) {
+      // Try to find a video URL in any field
+      const possibleUrl = Object.values(resp).find(
+        (v) => typeof v === "string" && (v.endsWith(".mp4") || v.includes("mp4"))
+      ) as string | undefined
+      if (possibleUrl) {
+        console.log(`[Suno] Music video task ${taskId} completed (from status)`)
+        return { taskId, videoUrl: possibleUrl }
+      }
+    }
+  }
+
+  throw createSanitizedError(
+    `Suno music video task timed out after ${(SUNO_MAX_POLL_ATTEMPTS * SUNO_POLL_INTERVAL_MS) / 1000} seconds`,
+    "Music video generation"
   )
 }

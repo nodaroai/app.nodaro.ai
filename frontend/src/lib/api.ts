@@ -1156,6 +1156,25 @@ export async function sunoSeparateApi(params: {
   return res.json()
 }
 
+export async function sunoMusicVideoApi(params: {
+  taskId: string
+  audioId: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/music-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start Suno music video")
+  }
+  return res.json()
+}
+
 export async function transcribeApi(audioUrl: string, provider?: string, language?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl }
   if (provider) body.provider = provider
