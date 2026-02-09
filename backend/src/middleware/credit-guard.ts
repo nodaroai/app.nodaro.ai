@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabase.js"
 export interface CreditReservation {
   usageLogId: string
   creditsReserved: number
+  watermark: boolean
 }
 
 /**
@@ -37,8 +38,8 @@ declare module "fastify" {
  * - business: skips entirely (users pay providers directly)
  * - cloud: checks credits, reserves them, attaches reservation to request
  *
- * On success: request.creditReservation is set with { usageLogId, creditsReserved }
- * On failure: returns 402 (insufficient credits) or 500 (system error)
+ * On success: request.creditReservation is set with { usageLogId, creditsReserved, watermark }
+ * On failure: returns 402 (insufficient credits), 413 (storage limit), or 500 (system error)
  */
 export function creditGuard(
   modelResolver: (req: FastifyRequest) => string
@@ -62,7 +63,27 @@ export function creditGuard(
     const modelIdentifier = modelResolver(req)
     const routeName = req.url.split("?")[0] ?? "unknown"
 
-    // Step 1: Check if user has enough credits
+    // Step 1: Check storage limit BEFORE credit check (for routes that produce output files)
+    try {
+      const storageCheck = await CreditsService.checkStorageLimit(userId)
+
+      if (!storageCheck.allowed) {
+        reply.status(413).send({
+          error: {
+            code: "storage_limit_exceeded",
+            message: storageCheck.error ?? "Storage limit exceeded",
+          },
+          usedBytes: storageCheck.usedBytes,
+          limitBytes: storageCheck.limitBytes,
+        })
+        return
+      }
+    } catch (err) {
+      console.error(`[credit-guard] ${routeName} storage check failed:`, err)
+      // Non-fatal: allow the request to proceed if storage check fails
+    }
+
+    // Step 2: Check if user has enough credits
     try {
       const creditCheck = await CreditsService.checkCredits(userId, modelIdentifier)
 
@@ -85,9 +106,9 @@ export function creditGuard(
       return
     }
 
-    // Step 2: Reserve credits (actual reservation happens after job creation in the route)
+    // Step 3: Reserve credits (actual reservation happens after job creation in the route)
     // We store a "pending" reservation marker so the route knows to reserve after job insert
-    req.creditReservation = { usageLogId: "", creditsReserved: 0 }
+    req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: false }
   }
 }
 
@@ -129,10 +150,11 @@ export async function reserveCreditsForJob(
       })
       .eq("id", jobId)
 
-    // Update request with actual reservation
+    // Update request with actual reservation (including watermark flag)
     req.creditReservation = {
       usageLogId: reservation.usageLogId,
       creditsReserved: reservation.creditsReserved,
+      watermark: reservation.watermark,
     }
 
     return reservation

@@ -184,13 +184,14 @@ export function createVideoWorker() {
     async (job) => {
       const { jobId } = job.data as { jobId: string }
 
-      // Fetch usage_log_id for credit tracking (cloud edition)
+      // Fetch usage_log_id and user_id for credit/storage tracking (cloud edition)
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id")
+        .select("usage_log_id, user_id")
         .eq("id", jobId)
         .single()
       const usageLogId = jobRecord?.usage_log_id
+      const jobUserId = (jobRecord?.user_id as string) ?? undefined
 
       try {
         await supabase
@@ -208,7 +209,7 @@ export function createVideoWorker() {
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -242,7 +243,7 @@ export function createVideoWorker() {
           const result = await editImage(imageUrl, resolvedProvider, prompt)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -279,7 +280,7 @@ export function createVideoWorker() {
           const result = await generateImage(prompt, resolvedProvider, allImages)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -325,7 +326,7 @@ export function createVideoWorker() {
           await job.updateProgress(40)
 
           // Upload the generated video to R2
-          let finalVideoUrl = await uploadToR2(result.url, jobId, "video")
+          let finalVideoUrl = await uploadToR2(result.url, jobId, "video", jobUserId)
           await job.updateProgress(70)
 
           // If audio URL is provided, merge it with the video
@@ -341,7 +342,7 @@ export function createVideoWorker() {
             await job.updateProgress(90)
 
             // Upload merged video
-            finalVideoUrl = await uploadFileToR2(mergedPath, `${jobId}-merged`, "video")
+            finalVideoUrl = await uploadFileToR2(mergedPath, `${jobId}-merged`, "video", jobUserId)
             await cleanupWorkDir(dirname(mergedPath))
           }
 
@@ -377,7 +378,7 @@ export function createVideoWorker() {
           const result = await videoToVideo(videoUrl, provider ?? "wan", prompt)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video")
+          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -410,7 +411,7 @@ export function createVideoWorker() {
           const result = await textToVideo(prompt, provider ?? "minimax", duration)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video")
+          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -445,7 +446,7 @@ export function createVideoWorker() {
           const result = await lipSync(imageUrl, audioUrl, provider ?? "kling-avatar", prompt, resolution)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video")
+          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -490,7 +491,7 @@ export function createVideoWorker() {
           const result = await routedTextToSpeech(text, provider ?? "elevenlabs-turbo", voice, Object.keys(ttsOptions).length > 0 ? ttsOptions : undefined)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "audio")
+          const r2Url = await uploadToR2(result.url, jobId, "audio", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -522,6 +523,13 @@ export function createVideoWorker() {
           }
           console.log(`[worker] generate-script ${jobId} (provider: ${provider ?? "gemini"})`)
 
+          // Track LLM request for script generation (cloud edition)
+          if (hasCredits() && jobUserId) {
+            CreditsService.trackLlmRequest(jobUserId).catch((err) =>
+              console.error(`[worker] LLM tracking failed for job ${jobId}:`, err)
+            )
+          }
+
           const script = await generateScript(prompt, sceneCount, tone, targetDuration, provider)
           await job.updateProgress(100)
 
@@ -552,7 +560,7 @@ export function createVideoWorker() {
           const outputPath = await combineVideos({ videoUrls, transition, transitionDuration })
           await job.updateProgress(80)
 
-          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await job.updateProgress(100)
 
           // Cleanup temp files
@@ -582,7 +590,7 @@ export function createVideoWorker() {
           console.log(`[worker] merge-video-audio ${jobId}`)
           const outputPath = await mergeVideoAudio({ videoUrl, audioUrl, audioTracks, voiceoverVolume, backgroundVolume, keepOriginalAudio })
           await job.updateProgress(80)
-          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
@@ -598,10 +606,10 @@ export function createVideoWorker() {
           console.log(`[worker] extract-audio ${jobId}`)
           const result = await extractAudio({ videoUrl, audioFormat, outputSilentVideo })
           await job.updateProgress(80)
-          const audioR2Url = await uploadFileToR2(result.audioPath, jobId, "audio")
+          const audioR2Url = await uploadFileToR2(result.audioPath, jobId, "audio", jobUserId)
           let silentVideoR2Url: string | undefined
           if (result.silentVideoPath) {
-            silentVideoR2Url = await uploadFileToR2(result.silentVideoPath, `${jobId}-silent`, "video")
+            silentVideoR2Url = await uploadFileToR2(result.silentVideoPath, `${jobId}-silent`, "video", jobUserId)
           }
           await cleanupWorkDir(dirname(result.audioPath))
           await job.updateProgress(100)
@@ -618,7 +626,7 @@ export function createVideoWorker() {
           console.log(`[worker] trim-video ${jobId}`)
           const outputPath = await trimVideo({ videoUrl, startTime, endTime })
           await job.updateProgress(80)
-          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
@@ -634,7 +642,7 @@ export function createVideoWorker() {
           console.log(`[worker] resize-video ${jobId}`)
           const outputPath = await resizeVideo({ videoUrl, targetAspect, method, padColor })
           await job.updateProgress(80)
-          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
@@ -650,7 +658,7 @@ export function createVideoWorker() {
           console.log(`[worker] adjust-volume ${jobId} (${videoUrl ? "video" : "audio"} input)`)
           const { outputPath, inputType } = await adjustVolume({ audioUrl, videoUrl, volume, normalize, fadeIn, fadeOut })
           await job.updateProgress(80)
-          const r2Url = await uploadFileToR2(outputPath, jobId, inputType)
+          const r2Url = await uploadFileToR2(outputPath, jobId, inputType, jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
@@ -667,7 +675,7 @@ export function createVideoWorker() {
           console.log(`[worker] add-captions ${jobId}`)
           const outputPath = await addCaptions({ videoUrl, text, style: style as "subtitle" | "word-highlight" | "karaoke" | undefined, position: position as "bottom" | "top" | "center" | undefined, fontSize, color, backgroundColor })
           await job.updateProgress(80)
-          const r2Url = await uploadFileToR2(outputPath, jobId, "video")
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
@@ -681,7 +689,7 @@ export function createVideoWorker() {
           console.log(`[worker] mix-audio ${jobId}: ${audioUrls.length} tracks`)
           const outputPath = await mixAudio({ audioUrls })
           await job.updateProgress(80)
-          const r2Url = await uploadFileToR2(outputPath, jobId, "audio")
+          const r2Url = await uploadFileToR2(outputPath, jobId, "audio", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
@@ -706,7 +714,7 @@ export function createVideoWorker() {
           console.log(`[worker] generate-music ${jobId} (provider: ${provider ?? "musicgen"})`)
           const replicateUrl = await generateMusic(prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(replicateUrl, jobId, "audio")
+          const r2Url = await uploadToR2(replicateUrl, jobId, "audio", jobUserId)
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -735,7 +743,7 @@ export function createVideoWorker() {
           }
 
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(audioUrl, jobId, "audio")
+          const r2Url = await uploadToR2(audioUrl, jobId, "audio", jobUserId)
           await job.updateProgress(100)
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
@@ -755,7 +763,7 @@ export function createVideoWorker() {
           // Upload first track to R2 for permanent storage (Suno URLs expire in 14 days)
           const firstTrack = result.tracks[0]
           if (!firstTrack) throw new Error("Suno returned no tracks")
-          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio")
+          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio", jobUserId)
           await job.updateProgress(100)
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({
@@ -782,7 +790,7 @@ export function createVideoWorker() {
           await job.updateProgress(50)
           const firstTrack = result.tracks[0]
           if (!firstTrack) throw new Error("Suno cover returned no tracks")
-          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio")
+          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio", jobUserId)
           await job.updateProgress(100)
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({
@@ -803,7 +811,7 @@ export function createVideoWorker() {
           await job.updateProgress(50)
           const firstTrack = result.tracks[0]
           if (!firstTrack) throw new Error("Suno extend returned no tracks")
-          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio")
+          const r2Url = await uploadToR2(firstTrack.audioUrl, jobId, "audio", jobUserId)
           await job.updateProgress(100)
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({
@@ -856,7 +864,7 @@ export function createVideoWorker() {
             const url = result[field]
             if (url) {
               const stemName = field.replace("Url", "")
-              const r2Url = await uploadToR2(url, `${jobId}-${stemName}`, "audio")
+              const r2Url = await uploadToR2(url, `${jobId}-${stemName}`, "audio", jobUserId)
               outputData[field] = r2Url
               uploadedCount++
             }
@@ -881,7 +889,7 @@ export function createVideoWorker() {
           console.log(`[worker] suno-music-video ${jobId}`)
           const result = await sunoMusicVideo({ taskId: sunoTaskId, audioId })
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.videoUrl, jobId, "video")
+          const r2Url = await uploadToR2(result.videoUrl, jobId, "video", jobUserId)
           await job.updateProgress(100)
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({
@@ -915,7 +923,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -939,7 +947,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -963,7 +971,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -987,7 +995,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -1011,7 +1019,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -1035,7 +1043,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image")
+          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -1084,7 +1092,7 @@ export function createVideoWorker() {
           )
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video")
+          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -1125,7 +1133,7 @@ export function createVideoWorker() {
           )
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video")
+          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result

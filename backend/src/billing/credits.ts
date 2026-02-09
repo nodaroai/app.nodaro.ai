@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
+import { FREE_TIER_RESTRICTIONS, TIER_LLM_LIMITS } from "./paddle-config.js"
 
 // ============================================================
 // Types
@@ -14,6 +15,7 @@ export interface CreditCheckResult {
   dailySpent?: number
   subscriptionCredits?: number
   topupCredits?: number
+  watermark?: boolean
 }
 
 export interface UserBalance {
@@ -31,6 +33,22 @@ export interface UserBalance {
 export interface ReserveResult {
   usageLogId: string
   creditsReserved: number
+  watermark: boolean
+}
+
+export interface StorageLimitResult {
+  allowed: boolean
+  error?: string
+  usedBytes: number
+  limitBytes: number
+}
+
+export interface LlmLimitResult {
+  allowed: boolean
+  freeRequest: boolean
+  error?: string
+  used: number
+  limit: number | null
 }
 
 // ============================================================
@@ -125,6 +143,41 @@ const TIER_ORDER = ["free", "basic", "standard", "pro", "business"]
  */
 function creditsDisabled(): boolean {
   return !hasCredits()
+}
+
+/**
+ * Resolve the user's tier from profile, checking both `tier` and `subscription_tier`
+ * columns for backward compatibility.
+ */
+function resolveTier(profile: Record<string, unknown>): string {
+  return (profile.tier as string) ?? (profile.subscription_tier as string) ?? "free"
+}
+
+/**
+ * Check if daily_spent_credits needs resetting (new UTC day).
+ * Returns the effective daily spent value (0 if reset needed).
+ */
+async function getEffectiveDailySpent(
+  userId: string,
+  currentDailySpent: number,
+  lastReset: string | null
+): Promise<number> {
+  const todayUTC = new Date().toISOString().slice(0, 10)
+  const lastResetDay = lastReset ? lastReset.slice(0, 10) : null
+
+  if (lastResetDay !== todayUTC) {
+    // Reset daily counter
+    await supabase
+      .from("profiles")
+      .update({
+        daily_spent_credits: 0,
+        last_daily_reset: new Date().toISOString(),
+      })
+      .eq("id", userId)
+    return 0
+  }
+
+  return currentDailySpent
 }
 
 /**
@@ -255,8 +308,9 @@ export class CreditsService {
   }
 
   /**
-   * Check if user has sufficient credits (read-only check)
-   * Returns allowed: true for self-hosted mode
+   * Check if user has sufficient credits (read-only check).
+   * Enforces free tier restrictions: blocked models, daily credit cap.
+   * Returns allowed: true for self-hosted mode.
    */
   static async checkCredits(
     userId: string,
@@ -264,7 +318,7 @@ export class CreditsService {
   ): Promise<CreditCheckResult> {
     // Self-hosted: always allow
     if (creditsDisabled()) {
-      return { allowed: true, balance: 999999 }
+      return { allowed: true, balance: 999999, watermark: false }
     }
 
     // Get model pricing
@@ -280,7 +334,7 @@ export class CreditsService {
     // Get user's profile
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("subscription_tier, subscription_credits, topup_credits, daily_spent_credits")
+      .select("tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset")
       .eq("id", userId)
       .single()
 
@@ -291,15 +345,32 @@ export class CreditsService {
       }
     }
 
-    // Check tier restriction
+    const userTier = resolveTier(profile as Record<string, unknown>)
+    const isFree = userTier === "free"
+    const watermark = isFree && FREE_TIER_RESTRICTIONS.watermark
+
+    // Check tier restriction (from model_pricing table)
     if (pricing.tierRestriction) {
-      const userTierIndex = TIER_ORDER.indexOf(profile.subscription_tier || "free")
+      const userTierIndex = TIER_ORDER.indexOf(userTier)
       const requiredTierIndex = TIER_ORDER.indexOf(pricing.tierRestriction)
 
       if (userTierIndex < requiredTierIndex) {
         return {
           allowed: false,
           error: `This model requires ${pricing.tierRestriction} tier or higher. Please upgrade your plan.`,
+          watermark,
+        }
+      }
+    }
+
+    // Free tier: blocked models
+    if (isFree) {
+      const blockedModels = FREE_TIER_RESTRICTIONS.blockedModels as readonly string[]
+      if (blockedModels.includes(modelIdentifier)) {
+        return {
+          allowed: false,
+          error: "This model requires a paid subscription. Upgrade to Basic or higher.",
+          watermark,
         }
       }
     }
@@ -318,20 +389,53 @@ export class CreditsService {
         required: pricing.creditCost,
         subscriptionCredits,
         topupCredits,
+        watermark,
       }
     }
 
-    // Get daily limit from tier config (optional)
+    // Free tier: daily credit cap
+    if (isFree) {
+      const dailyCap = FREE_TIER_RESTRICTIONS.dailyCreditCap
+      const dailySpent = await getEffectiveDailySpent(
+        userId,
+        profile.daily_spent_credits ?? 0,
+        profile.last_daily_reset ?? null
+      )
+
+      if (dailySpent + pricing.creditCost > dailyCap) {
+        return {
+          allowed: false,
+          error: `Daily credit limit reached for free tier. Limit: ${dailyCap}, Spent today: ${dailySpent}. Upgrade for higher limits.`,
+          balance: totalBalance,
+          required: pricing.creditCost,
+          dailyLimit: dailyCap,
+          dailySpent,
+          watermark,
+        }
+      }
+
+      return {
+        allowed: true,
+        balance: totalBalance,
+        required: pricing.creditCost,
+        subscriptionCredits,
+        topupCredits,
+        dailyLimit: dailyCap,
+        dailySpent,
+        watermark,
+      }
+    }
+
+    // Paid tiers: check daily limit from tier_config if configured
     const { data: tierConfig } = await supabase
       .from("tier_config")
       .select("daily_credit_limit")
-      .eq("tier", profile.subscription_tier)
+      .eq("tier", userTier)
       .single()
 
     const dailyLimit = tierConfig?.daily_credit_limit ?? null
     const dailySpent = profile.daily_spent_credits ?? 0
 
-    // Check daily limit if configured
     if (dailyLimit !== null && dailySpent + pricing.creditCost > dailyLimit) {
       return {
         allowed: false,
@@ -340,6 +444,7 @@ export class CreditsService {
         required: pricing.creditCost,
         dailyLimit,
         dailySpent,
+        watermark,
       }
     }
 
@@ -351,12 +456,15 @@ export class CreditsService {
       topupCredits,
       dailyLimit,
       dailySpent,
+      watermark,
     }
   }
 
   /**
-   * Reserve credits atomically before job creation
-   * Creates a usage_log entry with status 'reserved'
+   * Reserve credits atomically using deduct_credits RPC.
+   * Uses FOR UPDATE row lock in the RPC to prevent race conditions.
+   * Deducts from subscription_credits first, then topup_credits.
+   * Creates a usage_log entry with status 'reserved'.
    */
   static async reserveCredits(
     userId: string,
@@ -367,94 +475,105 @@ export class CreditsService {
   ): Promise<ReserveResult> {
     // Self-hosted: skip reservation
     if (creditsDisabled()) {
-      return { usageLogId: "self-hosted-skip", creditsReserved: 0 }
+      return { usageLogId: "self-hosted-skip", creditsReserved: 0, watermark: false }
     }
 
     // Get credit cost for this model
     const pricing = await getModelCreditCostFromDB(modelIdentifier)
 
-    // Try to call RPC function for atomic reservation
-    const { data: rpcResult, error: rpcError } = await supabase.rpc("reserve_credits", {
-      p_user_id: userId,
-      p_job_id: jobId,
-      p_model_identifier: modelIdentifier,
-      p_credits: pricing.creditCost,
-      p_provider_cost_usd: providerCostUsd,
-      p_display_cost_usd: displayCostUsd,
-    })
+    // Get tier for watermark determination
+    const { data: tierProfile } = await supabase
+      .from("profiles")
+      .select("tier, subscription_tier")
+      .eq("id", userId)
+      .single()
 
-    if (!rpcError && rpcResult) {
-      return { usageLogId: rpcResult, creditsReserved: pricing.creditCost }
+    const userTier = tierProfile ? resolveTier(tierProfile as Record<string, unknown>) : "free"
+    const watermark = userTier === "free" && FREE_TIER_RESTRICTIONS.watermark
+
+    // Skip deduction for zero-cost models
+    if (pricing.creditCost === 0) {
+      const { data: usageLog } = await supabase
+        .from("usage_logs")
+        .insert({
+          user_id: userId,
+          job_id: jobId,
+          action: modelIdentifier,
+          provider: "reserved",
+          credits_used: 0,
+          cost_usd: providerCostUsd,
+          metadata: { status: "reserved", display_cost_usd: displayCostUsd },
+        })
+        .select("id")
+        .single()
+
+      return {
+        usageLogId: usageLog?.id ?? "log-failed",
+        creditsReserved: 0,
+        watermark,
+      }
     }
 
-    // Fallback: manual reservation if RPC doesn't exist
-    console.warn("[credits] reserve_credits RPC not found, using fallback")
+    // Atomic deduction via RPC (FOR UPDATE row lock, subscription-first)
+    const { data: deductResult, error: deductError } = await supabase.rpc("deduct_credits", {
+      p_user_id: userId,
+      p_amount: pricing.creditCost,
+    })
 
-    // Get current balance
-    const { data: profile } = await supabase
+    if (deductError) {
+      console.error("[credits] deduct_credits RPC failed:", deductError.message)
+      throw new Error(`Credit deduction failed: ${deductError.message}`)
+    }
+
+    if (deductResult === false) {
+      throw new Error(`Insufficient credits: need ${pricing.creditCost}`)
+    }
+
+    // Increment daily spent counter
+    const { error: dailyError } = await supabase.rpc("increment_daily_spent", {
+      p_user_id: userId,
+      p_amount: pricing.creditCost,
+    })
+
+    if (dailyError) {
+      // Fallback: direct update if RPC doesn't exist
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("daily_spent_credits")
+        .eq("id", userId)
+        .single()
+
+      if (p) {
+        await supabase
+          .from("profiles")
+          .update({ daily_spent_credits: (p.daily_spent_credits ?? 0) + pricing.creditCost })
+          .eq("id", userId)
+      }
+    }
+
+    // Read updated balances for logging
+    const { data: updatedProfile } = await supabase
       .from("profiles")
       .select("subscription_credits, topup_credits")
       .eq("id", userId)
       .single()
 
-    if (!profile) {
-      throw new Error("User profile not found")
-    }
+    const subRemaining = updatedProfile?.subscription_credits ?? 0
+    const topRemaining = updatedProfile?.topup_credits ?? 0
+    const newTotal = subRemaining + topRemaining
 
-    const subscriptionCredits = profile.subscription_credits ?? 0
-    const topupCredits = profile.topup_credits ?? 0
-    const totalBalance = subscriptionCredits + topupCredits
+    console.log(`[credits] user=${userId} deducted=${pricing.creditCost} sub_remaining=${subRemaining} topup_remaining=${topRemaining}`)
 
-    if (totalBalance < pricing.creditCost) {
-      throw new Error(`Insufficient credits: need ${pricing.creditCost}, have ${totalBalance}`)
-    }
-
-    // Deduct from subscription first, then topup
-    let remaining = pricing.creditCost
-    let newSubscription = subscriptionCredits
-    let newTopup = topupCredits
-
-    if (newSubscription >= remaining) {
-      newSubscription -= remaining
-      remaining = 0
-    } else {
-      remaining -= newSubscription
-      newSubscription = 0
-      newTopup -= remaining
-    }
-
-    // Update profile
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({
-        subscription_credits: newSubscription,
-        topup_credits: newTopup,
-      })
-      .eq("id", userId)
-
-    if (updateError) {
-      throw new Error(`Failed to update credits: ${updateError.message}`)
-    }
-
-    // Log the deduction as credit transactions
-    const subDeducted = subscriptionCredits - newSubscription
-    const topDeducted = topupCredits - newTopup
-    const newTotal = newSubscription + newTopup
-
-    if (subDeducted > 0) {
-      await CreditsService.logTransaction({
-        userId, amount: -subDeducted, creditType: "subscription",
-        source: "usage", description: `Job ${jobId}: ${modelIdentifier}`,
-        jobId, balanceAfter: newTotal,
-      })
-    }
-    if (topDeducted > 0) {
-      await CreditsService.logTransaction({
-        userId, amount: -topDeducted, creditType: "topup",
-        source: "usage", description: `Job ${jobId}: ${modelIdentifier}`,
-        jobId, balanceAfter: newTotal,
-      })
-    }
+    // Log credit transaction
+    await CreditsService.logTransaction({
+      userId,
+      amount: -pricing.creditCost,
+      creditType: "subscription",
+      source: "usage",
+      description: `Job ${jobId}: ${modelIdentifier}`,
+      jobId,
+      balanceAfter: newTotal,
+    })
 
     // Create usage log entry
     const { data: usageLog, error: logError } = await supabase
@@ -476,10 +595,10 @@ export class CreditsService {
 
     if (logError || !usageLog) {
       console.error("[credits] Failed to create usage log:", logError)
-      return { usageLogId: "log-failed", creditsReserved: pricing.creditCost }
+      return { usageLogId: "log-failed", creditsReserved: pricing.creditCost, watermark }
     }
 
-    return { usageLogId: usageLog.id, creditsReserved: pricing.creditCost }
+    return { usageLogId: usageLog.id, creditsReserved: pricing.creditCost, watermark }
   }
 
   /**
@@ -551,9 +670,9 @@ export class CreditsService {
     }
 
     // Restore credits to topup balance (simpler than tracking source)
-    const { error: updateError } = await supabase.rpc("increment_topup_credits", {
+    const { error: updateError } = await supabase.rpc("add_topup_credits", {
       p_user_id: usageLog.user_id,
-      p_amount: usageLog.credits_used,
+      p_credits: usageLog.credits_used,
     })
 
     if (updateError) {
@@ -599,6 +718,118 @@ export class CreditsService {
   }
 
   /**
+   * Check if user is within their storage limit.
+   * Returns allowed: true for self-hosted mode.
+   */
+  static async checkStorageLimit(userId: string): Promise<StorageLimitResult> {
+    if (creditsDisabled()) {
+      return { allowed: true, usedBytes: 0, limitBytes: Number.MAX_SAFE_INTEGER }
+    }
+
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("storage_used_bytes, storage_limit_bytes")
+      .eq("id", userId)
+      .single()
+
+    if (error || !profile) {
+      return { allowed: false, error: "User profile not found", usedBytes: 0, limitBytes: 0 }
+    }
+
+    const usedBytes = profile.storage_used_bytes ?? 0
+    const limitBytes = profile.storage_limit_bytes ?? 500 * 1024 * 1024 // 500 MB default
+
+    if (usedBytes >= limitBytes) {
+      const usedGB = (usedBytes / (1024 * 1024 * 1024)).toFixed(1)
+      const limitGB = (limitBytes / (1024 * 1024 * 1024)).toFixed(1)
+      return {
+        allowed: false,
+        error: `Storage limit reached (${usedGB} GB of ${limitGB} GB used). Delete files or upgrade your plan.`,
+        usedBytes,
+        limitBytes,
+      }
+    }
+
+    return { allowed: true, usedBytes, limitBytes }
+  }
+
+  /**
+   * Check if user has remaining LLM requests for their tier.
+   * If under limit, the request is free (no credit deduction).
+   * If over limit, falls back to normal credit deduction.
+   */
+  static async checkLlmLimit(userId: string): Promise<LlmLimitResult> {
+    if (creditsDisabled()) {
+      return { allowed: true, freeRequest: true, used: 0, limit: null }
+    }
+
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("tier, subscription_tier, llm_requests_used, llm_requests_reset_at")
+      .eq("id", userId)
+      .single()
+
+    if (error || !profile) {
+      return { allowed: true, freeRequest: false, used: 0, limit: null }
+    }
+
+    const userTier = resolveTier(profile as Record<string, unknown>)
+    const limit = TIER_LLM_LIMITS[userTier] ?? TIER_LLM_LIMITS.free
+
+    // Check if counter needs reset (new billing period)
+    let used = profile.llm_requests_used ?? 0
+    const resetAt = profile.llm_requests_reset_at
+
+    if (resetAt) {
+      const resetDate = new Date(resetAt)
+      if (resetDate < new Date()) {
+        // Reset counter — the next subscription renewal will update llm_requests_reset_at
+        await supabase
+          .from("profiles")
+          .update({ llm_requests_used: 0 })
+          .eq("id", userId)
+        used = 0
+      }
+    }
+
+    if (used < limit) {
+      return { allowed: true, freeRequest: true, used, limit: limit === Infinity ? null : limit }
+    }
+
+    // Over limit: still allowed but not free (will cost credits)
+    return { allowed: true, freeRequest: false, used, limit: limit === Infinity ? null : limit }
+  }
+
+  /**
+   * Increment LLM request counter after a successful LLM call.
+   */
+  static async trackLlmRequest(userId: string): Promise<void> {
+    if (creditsDisabled()) return
+
+    // REQUIRES SQL: CREATE OR REPLACE FUNCTION increment_llm_requests(p_user_id UUID)
+    // RETURNS VOID AS $$ UPDATE profiles SET llm_requests_used = COALESCE(llm_requests_used, 0) + 1 WHERE id = p_user_id; $$ LANGUAGE sql SECURITY DEFINER;
+    const { error } = await supabase.rpc("increment_llm_requests", {
+      p_user_id: userId,
+    })
+
+    if (error) {
+      // Fallback: direct update
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("llm_requests_used")
+        .eq("id", userId)
+        .single()
+
+      if (profile) {
+        await supabase
+          .from("profiles")
+          .update({ llm_requests_used: (profile.llm_requests_used ?? 0) + 1 })
+          .eq("id", userId)
+      }
+    }
+  }
+
+  /**
    * Get user's current balance and tier info
    */
   static async getBalance(userId: string): Promise<UserBalance> {
@@ -607,6 +838,7 @@ export class CreditsService {
       .select(`
         subscription_credits,
         topup_credits,
+        tier,
         subscription_tier,
         daily_spent_credits,
         last_daily_reset,
@@ -630,24 +862,31 @@ export class CreditsService {
       }
     }
 
+    const userTier = resolveTier(profile as Record<string, unknown>)
+
     // Get tier configuration
     const { data: tierConfig } = await supabase
       .from("tier_config")
       .select("daily_credit_limit, monthly_credits, features")
-      .eq("tier", profile.subscription_tier)
+      .eq("tier", userTier)
       .single()
 
     const subscriptionCredits = profile.subscription_credits ?? 0
     const topupCredits = profile.topup_credits ?? 0
+
+    // For free tier, use FREE_TIER_RESTRICTIONS.dailyCreditCap
+    const dailyLimit = userTier === "free"
+      ? FREE_TIER_RESTRICTIONS.dailyCreditCap
+      : (tierConfig?.daily_credit_limit ?? null)
 
     return {
       total: subscriptionCredits + topupCredits,
       subscription: subscriptionCredits,
       topup: topupCredits,
       dailySpent: profile.daily_spent_credits ?? 0,
-      dailyLimit: tierConfig?.daily_credit_limit ?? null,
+      dailyLimit,
       monthlyAllocation: tierConfig?.monthly_credits ?? 0,
-      tier: profile.subscription_tier ?? "free",
+      tier: userTier,
       features: (tierConfig?.features as Record<string, unknown>) ?? {},
       periodEnd: profile.current_period_end ?? null,
     }
