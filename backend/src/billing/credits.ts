@@ -81,8 +81,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-cover": 3,
   "suno-extend": 3,
   "suno-lyrics": 1,
-  "suno-separate": 2,
-  "suno-music-video": 3,
+  "suno-separate": 4,
+  "suno-music-video": 1,
   "infinitalk": 0,
   // ── Processing ──
   "topaz": 0,

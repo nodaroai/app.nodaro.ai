@@ -14,7 +14,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const videoUrl = nodeData.generatedVideoUrl
-  const credits = useModelCredits("suno-music-video", 3)
+  const credits = useModelCredits("suno-music-video", 1)
 
   return (
     <div className="relative group/run">

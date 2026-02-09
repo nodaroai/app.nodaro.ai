@@ -41,8 +41,8 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "suno-cover": 3,
   "suno-extend": 3,
   "suno-lyrics": 1,
-  "suno-separate": 2,
-  "suno-music-video": 3,
+  "suno-separate": 4,
+  "suno-music-video": 1,
   "lip-sync": 40,
   "motion-transfer": 30,
   "video-upscale": 20,
@@ -2086,7 +2086,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       return runProcessingNode(
         node.id,
-        () => lipSyncApi(imageUrl!, audioUrl!, lsData.prompt || undefined, lsData.provider || undefined, lsData.resolution || undefined, user?.id),
+        () => lipSyncApi(imageUrl!, audioUrl!, lsData.prompt || "A person talking naturally", lsData.provider || undefined, lsData.resolution || undefined, user?.id),
         "generatedVideoUrl",
         "Lip Sync"
       )
