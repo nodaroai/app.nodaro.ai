@@ -59,6 +59,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "veo3.1": 16,
   "kling": 4,
   "kling-turbo": 3,
+  "kling-3.0": 10,
   "grok-i2v": 1,
   "sora2-pro": 10,
   // ── Video-to-Video / Motion ──

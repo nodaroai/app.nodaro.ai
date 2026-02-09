@@ -22,6 +22,7 @@ import {
   runVeoTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
+import { kling3Generate } from "./kling3-client.js"
 import {
   KIE_VIDEO_MODELS,
   KIE_TEXT_TO_VIDEO_MODELS,
@@ -92,6 +93,24 @@ export class KieVideoProvider
     console.log(
       `[KIE.ai] ==============================================`
     )
+
+    // Kling 3.0 uses the unified createTask/getTaskDetail endpoints
+    if (provider === "kling-3.0") {
+      const imageUrls = endFrameUrl
+        ? [imageUrl, endFrameUrl]
+        : [imageUrl]
+      const result = await kling3Generate({
+        prompt: prompt ?? "smooth cinematic motion",
+        imageUrls,
+        sound: options?.sound ?? true,
+        duration: duration ? String(duration) : "5",
+        mode: (options?.mode as "std" | "pro") ?? "pro",
+      })
+      console.log(
+        `[KIE.ai] Kling 3.0 completed: ${result.videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+      return { url: result.videoUrl, cost: modelConfig.cost }
+    }
 
     // VEO3 uses a special API endpoint
     if (provider === "veo3" || provider === "veo3.1") {

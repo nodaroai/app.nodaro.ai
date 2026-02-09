@@ -25,6 +25,8 @@ export type ProgressCallback = (progress: number) => Promise<void>
 // Standard options passed to all operations
 export interface ProviderOptions {
   onProgress?: ProgressCallback
+  mode?: string   // Provider-specific quality mode (e.g. "pro" | "std" for Kling 3.0)
+  sound?: boolean // Enable sound effects (Kling 3.0)
 }
 
 // Each provider implements the capabilities it supports

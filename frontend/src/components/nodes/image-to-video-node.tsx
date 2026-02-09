@@ -17,6 +17,7 @@ const END_FRAME_SUPPORTED_PROVIDERS = [
   "veo3", "veo3.1",
   "minimax",
   "kling-turbo",
+  "kling-3.0",
   "runway", "pika",
 ]
 

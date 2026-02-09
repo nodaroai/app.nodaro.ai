@@ -301,7 +301,7 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-video") {
-          const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration } = job.data as {
+          const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound } = job.data as {
             jobId: string
             imageUrl: string
             endFrameUrl?: string      // Optional end frame for supported providers
@@ -310,6 +310,8 @@ export function createVideoWorker() {
             provider?: string
             generateAudio?: boolean
             duration?: number
+            mode?: string             // Kling 3.0 quality mode (pro/std)
+            sound?: boolean           // Kling 3.0 sound effects
           }
           console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
@@ -319,7 +321,7 @@ export function createVideoWorker() {
             await supabase.from("jobs").update({ progress }).eq("id", jobId)
           }
 
-          const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress })
+          const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound })
           await job.updateProgress(40)
 
           // Upload the generated video to R2

@@ -191,6 +191,17 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     endFrameParam: "tail_image_url",  // End frame parameter
   },
 
+  // Kling 3.0 - uses unified createTask/getTaskDetail (NOT recordInfo)
+  "kling-3.0": {
+    model: "kling-3.0/video",
+    credits: 10,
+    cost: 0.50,
+    imageParam: "image_urls",
+    extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 15],
+    supportsEndFrame: true,
+  },
+
   // Grok - VERIFIED: docs.kie.ai/market/grok-imagine/image-to-video
   "grok-i2v": {
     model: "grok-imagine/image-to-video",

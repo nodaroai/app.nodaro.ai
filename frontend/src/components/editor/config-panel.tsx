@@ -1867,6 +1867,7 @@ const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "veo3.1": [8],
   "kling": [5, 10],
   "kling-turbo": [5, 10],
+  "kling-3.0": [3, 4, 5, 6, 7, 8, 9, 10, 15],
   "grok-i2v": [6, 10],
   "sora2-pro": [5, 10],
 }
@@ -1878,6 +1879,7 @@ const PROVIDERS_WITH_END_FRAME: string[] = [
   "veo3",        // KIE: imageUrls array with 2 images
   "veo3.1",      // KIE: imageUrls array with 2 images
   "kling-turbo", // KIE: tail_image_url parameter
+  "kling-3.0",   // KIE: image_urls array with 2 images
   "runway",      // Replicate
   "pika",        // Replicate
 ]
@@ -2044,6 +2046,7 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             <SelectItem value="veo3.1">VEO 3.1 (Fast)</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
+            <SelectItem value="kling-3.0">Kling 3.0 (10 credits)</SelectItem>
             <SelectItem value="veo">VEO 2</SelectItem>
             <SelectItem value="grok-i2v">Grok</SelectItem>
             <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
@@ -2066,6 +2069,34 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             <label htmlFor="generateAudio" className="text-xs">Generate Audio</label>
           </div>
           <p className="text-xs text-muted-foreground px-1">VEO 3/3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
+        </div>
+      )}
+      {data.provider === "kling-3.0" && (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Mode</Label>
+            <Select
+              value={(data as Record<string, unknown>).kling3Mode as string ?? "pro"}
+              onValueChange={(v) => onUpdate({ kling3Mode: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pro">Pro (higher quality)</SelectItem>
+                <SelectItem value="std">Standard (faster)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="kling3Sound"
+              checked={(data as Record<string, unknown>).kling3Sound !== false}
+              onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="kling3Sound" className="text-xs">Enable Sound Effects</label>
+          </div>
+          <p className="text-xs text-muted-foreground px-1">Kling 3.0 generates AI sound effects from the prompt.</p>
         </div>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

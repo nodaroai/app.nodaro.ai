@@ -16,10 +16,12 @@ const generateVideoBody = z.object({
     // Replicate only
     "veo", "runway", "pika", "sora",
     // KIE only
-    "kling-turbo", "grok-i2v", "sora2-pro"
+    "kling-turbo", "kling-3.0", "grok-i2v", "sora2-pro"
   ]).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
+  mode: z.enum(["pro", "std"]).optional(),       // Kling 3.0 quality mode
+  sound: z.boolean().optional(),                  // Kling 3.0 sound effects
   userId: z.string().uuid().optional(),
 })
 
@@ -35,7 +37,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, userId } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -52,7 +54,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, type: "image-to-video" },
+        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, type: "image-to-video" },
       })
       .select("id")
       .single()
@@ -77,6 +79,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       provider,
       generateAudio,
       duration,
+      mode,
+      sound,
       usageLogId,
     })
 

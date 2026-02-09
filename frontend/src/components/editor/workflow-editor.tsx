@@ -1198,7 +1198,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
-  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number, prompt?: string): Promise<void> {
+  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number, prompt?: string, mode?: string, sound?: boolean): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined, currentJobId: undefined, currentJobProgress: undefined })
 
@@ -1211,6 +1211,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         provider,
         generateAudio,
         duration,
+        mode,
+        sound,
         userId: user?.id,
       }).then(({ jobId }) => {
         toast.info("Video generation started", { description: `Job ID: ${jobId}` })
@@ -1717,7 +1719,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       // Use connected Text Prompt (inputs.prompt) OR direct motionPrompt field
       const prompt = inputs.prompt ?? i2vData.motionPrompt
-      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt)
+      const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as string | undefined
+      const kling3Sound = (i2vData as Record<string, unknown>).kling3Sound as boolean | undefined
+      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt, kling3Mode, kling3Sound)
     }
 
     if (node.type === "video-to-video") {

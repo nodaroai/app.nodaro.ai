@@ -557,6 +557,8 @@ export interface GenerateVideoOptions {
   provider?: string
   generateAudio?: boolean
   duration?: number
+  mode?: string            // Kling 3.0 quality mode (pro/std)
+  sound?: boolean          // Kling 3.0 sound effects
   userId?: string
 }
 
@@ -584,6 +586,8 @@ export async function generateVideo(
       provider: opts.provider,
       generateAudio: opts.generateAudio,
       duration: opts.duration,
+      mode: opts.mode,
+      sound: opts.sound,
     }
     if (opts.userId) {
       body.userId = opts.userId

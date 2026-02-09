@@ -464,7 +464,7 @@ export type ImageToImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro"
+  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro"
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
