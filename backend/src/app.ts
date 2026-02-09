@@ -53,6 +53,7 @@ import { adminCreditsRoutes } from "./routes/admin-credits.js"
 import { workflowCostRoutes } from "./routes/workflow-costs.js"
 import { sunoRoutes } from "./routes/suno.js"
 import { paddleWebhookRoutes } from "./routes/paddle-webhook.js"
+import { billingRoutes } from "./routes/billing.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -117,6 +118,7 @@ export async function buildApp() {
   await app.register(workflowCostRoutes)
   await app.register(sunoRoutes)
   await app.register(paddleWebhookRoutes)
+  await app.register(billingRoutes)
 
   return app
 }

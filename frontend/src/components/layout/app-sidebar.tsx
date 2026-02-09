@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Menu,
   X,
+  CreditCard,
+  Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -34,10 +36,13 @@ interface NavItem {
   readonly label: string
   readonly icon: React.ComponentType<{ className?: string }>
   readonly adminOnly?: boolean
+  readonly billingOnly?: boolean
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/projects", label: "Projects", icon: FolderOpen },
+  { href: "/pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
+  { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ]
@@ -159,6 +164,10 @@ export function AppSidebar({
           {NAV_ITEMS.map((item) => {
             // Skip admin item if not admin or feature not enabled
             if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) {
+              return null
+            }
+            // Skip billing items if billing feature not enabled
+            if (item.billingOnly && !isFeatureEnabled("billing")) {
               return null
             }
 

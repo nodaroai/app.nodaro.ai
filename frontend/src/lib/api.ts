@@ -1747,6 +1747,60 @@ export async function getModelCreditCost(model: string): Promise<{ data: { model
   return res.json()
 }
 
+// ============================================================
+// Billing API
+// ============================================================
+
+export interface SubscriptionInfo {
+  id: string
+  paddle_subscription_id: string
+  tier: string
+  status: string
+  paddle_price_id: string
+  current_period_start: string | null
+  current_period_end: string | null
+  canceled_at: string | null
+}
+
+export interface TransactionRecord {
+  id: string
+  paddle_transaction_id: string
+  type: "subscription" | "topup"
+  amount_usd: number
+  credits_granted: number
+  tier: string | null
+  created_at: string
+}
+
+export async function getSubscription(userId: string): Promise<SubscriptionInfo | null> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/billing/subscription?userId=${encodeURIComponent(userId)}`
+  )
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data ?? json ?? null
+}
+
+export async function getTransactions(userId: string): Promise<TransactionRecord[]> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/billing/transactions?userId=${encodeURIComponent(userId)}`
+  )
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.data ?? json ?? []
+}
+
+export async function getManageSubscriptionUrl(userId: string): Promise<string | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/billing/manage-subscription`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  })
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data?.url ?? json.url ?? null
+}
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),
