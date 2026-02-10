@@ -272,14 +272,15 @@ export async function handleSubscriptionCanceled(
   data: SubscriptionCanceledData
 ): Promise<void> {
   const userId = await resolveUserId(data.paddleCustomerId, data.customData)
+  const now = new Date().toISOString()
 
   // Update subscription status
   const { error: subError } = await supabase
     .from("subscriptions")
     .update({
       status: "canceled",
-      canceled_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      canceled_at: now,
+      updated_at: now,
     })
     .eq("paddle_subscription_id", data.subscriptionId)
 
@@ -287,19 +288,44 @@ export async function handleSubscriptionCanceled(
     console.error("[paddle] subscription.canceled: update failed:", subError.message)
   }
 
-  // Set subscription_ended_at to period end (user keeps access until then)
-  if (userId && data.currentPeriodEnd) {
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ subscription_ended_at: data.currentPeriodEnd })
-      .eq("id", userId)
-
-    if (profileError) {
-      console.error("[paddle] subscription.canceled: profile update failed:", profileError.message)
-    }
+  if (!userId) {
+    console.error("[paddle] subscription.canceled: cannot resolve userId for customer", data.paddleCustomerId)
+    return
   }
 
-  console.log(`[paddle] subscription.canceled: sub=${data.subscriptionId} ends=${data.currentPeriodEnd}`)
+  // When subscription.canceled fires, the subscription is definitively over:
+  // - Immediate cancellations: Paddle fires this right away
+  // - End-of-period cancellations: Paddle fires this when the period ends
+  // In both cases, downgrade the user to free tier now.
+
+  // Get current subscription credits to cap at free tier limit
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("subscription_credits")
+    .eq("id", userId)
+    .single()
+
+  const currentSubCredits = profile?.subscription_credits ?? 0
+  const freeCredits = TIER_CREDITS.free ?? 50
+  const cappedCredits = Math.min(currentSubCredits, freeCredits)
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({
+      tier: "free",
+      subscription_credits: cappedCredits,
+      storage_limit_bytes: TIER_STORAGE_LIMITS.free,
+      subscription_ended_at: now,
+    })
+    .eq("id", userId)
+
+  if (profileError) {
+    console.error("[paddle] subscription.canceled: profile downgrade failed:", profileError.message)
+  }
+
+  console.log(
+    `[paddle] subscription.canceled: sub=${data.subscriptionId} user=${userId} downgraded to free (credits: ${cappedCredits})`
+  )
 }
 
 // ── Subscription Status Updates (past_due, paused, resumed) ──────

@@ -106,11 +106,17 @@ Top-up credits never expire and are deducted after subscription credits.
 2. `handleSubscriptionUpdated()` detects `currentPeriodStart` changed (renewal)
 3. Resets `subscription_credits` to tier allocation, resets `llm_requests_used` to 0
 
-### Cancellation
+### Cancellation (Immediate Downgrade)
 1. User cancels via Paddle customer portal (accessed via `POST /v1/billing/manage-subscription`)
-2. Paddle fires `subscription.canceled` webhook
-3. `handleSubscriptionCanceled()`: sets `canceled_at`, keeps access until `current_period_end`
-4. After grace period (60 days past `subscription_ended_at`): R2 media cleanup cron deletes stored files
+2. Paddle fires `subscription.canceled` webhook (fires immediately for instant cancel, or at period end for scheduled cancel)
+3. `handleSubscriptionCanceled()` always downgrades the user immediately:
+   - Sets subscription status to `canceled` with `canceled_at` timestamp
+   - Downgrades profile: `tier = "free"`, `subscription_credits = min(current, 50)`, `storage_limit_bytes = 500 MB`
+   - Sets `subscription_ended_at = now` (starts 60-day media grace period)
+4. Topup credits are NOT affected (they never expire)
+5. After 60 days past `subscription_ended_at`: R2 media cleanup cron deletes stored files
+
+**Safety net**: The `expireSubscriptions` cron (hourly) catches any canceled subscriptions where the webhook-based downgrade failed. It checks if the user is still on a paid tier and downgrades if so, then marks the subscription as `expired` to prevent reprocessing.
 
 ### Other Status Events
 - `subscription.past_due`: updates status, logs warning
@@ -158,7 +164,7 @@ All webhook handlers check for existing records before inserting:
 |-------|---------|--------|
 | `subscription.created` | `handleSubscriptionCreated` | Create sub row, update profile |
 | `subscription.updated` | `handleSubscriptionUpdated` | Tier change or renewal |
-| `subscription.canceled` | `handleSubscriptionCanceled` | Set canceled_at, schedule cleanup |
+| `subscription.canceled` | `handleSubscriptionCanceled` | Downgrade to free tier immediately |
 | `subscription.past_due` | `updateSubscriptionStatus` | Update status to past_due |
 | `subscription.paused` | `updateSubscriptionStatus` | Update status to paused |
 | `subscription.resumed` | `updateSubscriptionStatus` | Update status to active |
@@ -209,7 +215,7 @@ Handled atomically by the `deduct_credits` PostgreSQL RPC function with `FOR UPD
 | paddle_subscription_id | TEXT | Paddle sub ID |
 | paddle_price_id | TEXT | Current price ID |
 | tier | TEXT | basic/standard/pro/business |
-| status | TEXT | active/past_due/paused/canceled |
+| status | TEXT | active/past_due/paused/canceled/expired |
 | current_period_start | TIMESTAMPTZ | |
 | current_period_end | TIMESTAMPTZ | |
 | canceled_at | TIMESTAMPTZ | When user canceled |
@@ -291,6 +297,7 @@ so it redirects back to the ngrok URL after login.
 - **Active subscribers**: media files kept indefinitely
 - **Free/canceled users**: 60-day grace period, then R2 media cleanup
 - **Workflows**: never deleted (only media files)
-- **Cleanup cron**: runs hourly (expire subscriptions) + daily 3AM UTC (R2 media)
+- **Cleanup cron**: runs hourly (expire subscriptions safety net) + daily 3AM UTC (R2 media)
+- **Subscription statuses**: `active` -> `canceled` (webhook downgrade) -> `expired` (cron marks processed)
 - **Storage tracking**: `profiles.storage_used_bytes` updated on file upload/delete
 - **Storage limit**: enforced at upload time, limit set per tier in `TIER_STORAGE_LIMITS`

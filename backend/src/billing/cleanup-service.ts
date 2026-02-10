@@ -365,8 +365,13 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
 }
 
 // ============================================================
-// C) Expire subscriptions (paid period ended)
+// C) Expire subscriptions (safety net for webhook failures)
 // ============================================================
+//
+// The primary downgrade happens in handleSubscriptionCanceled (webhook).
+// This cron catches edge cases where the webhook failed or wasn't received.
+// It finds "canceled" subscriptions whose paid period has ended and whose
+// user profile hasn't been downgraded yet, then downgrades them.
 
 export async function expireSubscriptions(): Promise<ExpiryResult> {
   let usersDowngraded = 0
@@ -393,31 +398,41 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
 
   for (const sub of subs) {
     try {
-      // Downgrade user to free tier
-      await supabase
+      // Only downgrade if user is still on a paid tier (webhook may have already handled this)
+      const { data: profile } = await supabase
         .from("profiles")
-        .update({
-          tier: FREE_TIER_DEFAULTS.tier,
-          subscription_credits: FREE_TIER_DEFAULTS.subscription_credits,
-          storage_limit_bytes: FREE_TIER_DEFAULTS.storage_limit_bytes,
-          subscription_ended_at: now, // Starts the 60-day grace period for media
-        })
+        .select("tier")
         .eq("id", sub.user_id)
+        .single()
 
-      // Mark subscription as fully expired
+      if (profile && profile.tier !== "free") {
+        await supabase
+          .from("profiles")
+          .update({
+            tier: FREE_TIER_DEFAULTS.tier,
+            subscription_credits: FREE_TIER_DEFAULTS.subscription_credits,
+            storage_limit_bytes: FREE_TIER_DEFAULTS.storage_limit_bytes,
+            subscription_ended_at: now,
+          })
+          .eq("id", sub.user_id)
+
+        usersDowngraded++
+      }
+
+      // Mark subscription as "expired" so it's not reprocessed
       await supabase
         .from("subscriptions")
-        .update({ status: "canceled", updated_at: now })
+        .update({ status: "expired", updated_at: now })
         .eq("id", sub.id)
-
-      usersDowngraded++
     } catch (err) {
       console.error(`[cleanup] Failed to expire subscription ${sub.id}:`, err)
       errors++
     }
   }
 
-  console.log(`[cleanup] Expired ${usersDowngraded} subscriptions, users downgraded to free (${errors} errors)`)
+  if (usersDowngraded > 0) {
+    console.log(`[cleanup] Expired ${usersDowngraded} subscriptions, users downgraded to free (${errors} errors)`)
+  }
   return { usersDowngraded, errors }
 }
 
