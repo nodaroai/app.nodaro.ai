@@ -1792,6 +1792,23 @@ export async function getManageSubscriptionUrl(userId: string): Promise<string |
   return json.data?.url ?? json.url ?? null
 }
 
+export async function changePlan(
+  userId: string,
+  newPriceId: string
+): Promise<{ subscriptionId: string; tier: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/billing/change-plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, newPriceId }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as Record<string, string>).error ?? "Failed to change plan")
+  }
+  const json = await res.json()
+  return (json as Record<string, unknown>).data as { subscriptionId: string; tier: string }
+}
+
 export const api = {
   get: <T>(path: string, headers?: HeadersInit) =>
     request<T>(path, { method: 'GET', headers }),

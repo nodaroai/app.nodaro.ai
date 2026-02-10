@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Check, ArrowLeft, Zap } from "lucide-react"
@@ -8,13 +8,33 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { openCheckout } from "@/lib/paddle"
+import { getSubscription, changePlan, type SubscriptionInfo } from "@/lib/api"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { toast } from "sonner"
 
 export default function PricingPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
+  const [subLoading, setSubLoading] = useState(false)
+
+  // Fetch current subscription when user is available
+  useEffect(() => {
+    if (!user?.id) return
+    setSubLoading(true)
+    getSubscription(user.id)
+      .then((sub) => setSubscription(sub))
+      .finally(() => setSubLoading(false))
+  }, [user?.id])
+
+  // Derive current tier from active subscription
+  const isActiveSub = subscription &&
+    (subscription.status === "active" || subscription.status === "past_due")
+  const currentTierId = isActiveSub
+    ? PRICING_TIERS.find((t) => t.priceId === subscription.paddle_price_id)?.id ?? null
+    : null
 
   async function handleSubscribe(tierId: string, priceId: string | null) {
     if (!priceId) {
@@ -29,16 +49,30 @@ export default function PricingPage() {
 
     setLoadingTier(tierId)
     try {
-      await openCheckout({
-        priceId,
-        userId: user.id,
-        userEmail: user.email ?? undefined,
-      })
+      if (isActiveSub) {
+        await changePlan(user.id, priceId)
+        toast.success("Plan changed successfully! Changes will apply shortly.")
+        router.push("/billing?success=true")
+      } else {
+        await openCheckout({
+          priceId,
+          userId: user.id,
+          userEmail: user.email ?? undefined,
+        })
+      }
     } catch (err) {
-      console.error("[pricing] Checkout error:", err)
+      const message = err instanceof Error ? err.message : "Something went wrong"
+      toast.error(message)
     } finally {
       setLoadingTier(null)
     }
+  }
+
+  function getButtonLabel(tierId: string): string {
+    if (loadingTier === tierId) return "Processing..."
+    if (tierId === currentTierId) return "Current Plan"
+    if (currentTierId) return "Switch Plan"
+    return PRICING_TIERS.find((t) => t.id === tierId)?.cta ?? "Subscribe"
   }
 
   return (
@@ -81,63 +115,75 @@ export default function PricingPage() {
       {/* Tier Cards */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
-          {PRICING_TIERS.map((tier) => (
-            <div
-              key={tier.id}
-              className={cn(
-                "relative flex flex-col rounded-xl border p-6",
-                "bg-card text-card-foreground",
-                tier.highlighted
-                  ? "border-[#ff0073] ring-2 ring-[#ff0073]/20 dark:ring-[#ff0073]/30"
-                  : "border-zinc-200 dark:border-zinc-800",
-              )}
-            >
-              {tier.highlighted && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#ff0073] px-3 py-1 text-xs font-medium text-white">
-                    <Zap className="h-3 w-3" />
-                    Most Popular
-                  </span>
-                </div>
-              )}
-
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold">{tier.name}</h3>
-                <div className="mt-3 flex items-baseline gap-1">
-                  <span className="text-3xl font-bold">
-                    ${tier.priceMonthly}
-                  </span>
-                  <span className="text-sm text-muted-foreground">/month</span>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {tier.credits} credits / month
-                </p>
-              </div>
-
-              <ul className="flex-1 space-y-2.5 mb-6">
-                {tier.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm">
-                    <Check className="h-4 w-4 text-[#ff0073] flex-shrink-0 mt-0.5" />
-                    <span className="text-muted-foreground">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button
+          {PRICING_TIERS.map((tier) => {
+            const isCurrent = tier.id === currentTierId
+            return (
+              <div
+                key={tier.id}
                 className={cn(
-                  "w-full",
-                  tier.highlighted
-                    ? "bg-[#ff0073] text-white hover:bg-[#ff0073]/90"
-                    : "",
+                  "relative flex flex-col rounded-xl border p-6",
+                  "bg-card text-card-foreground",
+                  isCurrent
+                    ? "border-green-500 ring-2 ring-green-500/20"
+                    : tier.highlighted
+                      ? "border-[#ff0073] ring-2 ring-[#ff0073]/20 dark:ring-[#ff0073]/30"
+                      : "border-zinc-200 dark:border-zinc-800",
                 )}
-                variant={tier.highlighted ? "default" : "outline"}
-                disabled={loadingTier === tier.id}
-                onClick={() => handleSubscribe(tier.id, tier.priceId)}
               >
-                {loadingTier === tier.id ? "Loading..." : tier.cta}
-              </Button>
-            </div>
-          ))}
+                {isCurrent && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center rounded-full bg-green-500 px-3 py-1 text-xs font-medium text-white">
+                      Current Plan
+                    </span>
+                  </div>
+                )}
+                {!isCurrent && tier.highlighted && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#ff0073] px-3 py-1 text-xs font-medium text-white">
+                      <Zap className="h-3 w-3" />
+                      Most Popular
+                    </span>
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold">{tier.name}</h3>
+                  <div className="mt-3 flex items-baseline gap-1">
+                    <span className="text-3xl font-bold">
+                      ${tier.priceMonthly}
+                    </span>
+                    <span className="text-sm text-muted-foreground">/month</span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {tier.credits} credits / month
+                  </p>
+                </div>
+
+                <ul className="flex-1 space-y-2.5 mb-6">
+                  {tier.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2 text-sm">
+                      <Check className="h-4 w-4 text-[#ff0073] flex-shrink-0 mt-0.5" />
+                      <span className="text-muted-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  className={cn(
+                    "w-full",
+                    !isCurrent && tier.highlighted
+                      ? "bg-[#ff0073] text-white hover:bg-[#ff0073]/90"
+                      : "",
+                  )}
+                  variant={!isCurrent && tier.highlighted ? "default" : "outline"}
+                  disabled={isCurrent || loadingTier === tier.id || subLoading}
+                  onClick={() => handleSubscribe(tier.id, tier.priceId)}
+                >
+                  {getButtonLabel(tier.id)}
+                </Button>
+              </div>
+            )
+          })}
         </div>
 
         {/* FAQ / Extra info */}

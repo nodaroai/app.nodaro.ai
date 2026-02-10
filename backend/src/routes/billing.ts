@@ -4,11 +4,13 @@
  * GET  /v1/billing/subscription?userId=...      - Get current subscription
  * GET  /v1/billing/transactions?userId=...      - Get transaction history
  * POST /v1/billing/manage-subscription          - Get Paddle portal URL
+ * POST /v1/billing/change-plan                  - Change subscription tier
  */
 
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { paddle } from "../billing/paddle-client.js"
+import { PRICE_TO_TIER, getTierFromPriceId } from "../billing/paddle-config.js"
 
 export async function billingRoutes(app: FastifyInstance) {
   // Get current subscription for a user
@@ -96,6 +98,59 @@ export async function billingRoutes(app: FastifyInstance) {
     } catch (err) {
       console.error("[billing] Failed to create portal session:", (err as Error).message)
       return reply.status(500).send({ error: "Failed to create portal session" })
+    }
+  })
+
+  // Change subscription plan (upgrade/downgrade via Paddle API)
+  app.post("/v1/billing/change-plan", async (req, reply) => {
+    const { userId, newPriceId } = req.body as {
+      userId?: string
+      newPriceId?: string
+    }
+
+    if (!userId || !newPriceId) {
+      return reply.status(400).send({ error: "userId and newPriceId are required" })
+    }
+
+    // Only allow known subscription price IDs (reject topup IDs)
+    if (!PRICE_TO_TIER[newPriceId]) {
+      return reply.status(400).send({ error: "Invalid price ID" })
+    }
+
+    // Find active subscription
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("paddle_subscription_id, paddle_price_id, status")
+      .eq("user_id", userId)
+      .in("status", ["active", "past_due"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!sub) {
+      return reply.status(404).send({ error: "No active subscription found" })
+    }
+
+    if (sub.paddle_price_id === newPriceId) {
+      return reply.status(400).send({ error: "Already on this plan" })
+    }
+
+    try {
+      const updated = await paddle.subscriptions.update(
+        sub.paddle_subscription_id,
+        {
+          items: [{ priceId: newPriceId, quantity: 1 }],
+          prorationBillingMode: "prorated_immediately",
+        }
+      )
+
+      const newTier = getTierFromPriceId(newPriceId)
+      return reply.send({
+        data: { subscriptionId: updated.id, tier: newTier },
+      })
+    } catch (err) {
+      console.error("[billing] Failed to change plan:", (err as Error).message)
+      return reply.status(500).send({ error: "Failed to change plan" })
     }
   })
 }
