@@ -6,14 +6,14 @@
  */
 
 export const PADDLE_PRICES = {
-  basic_monthly: process.env.PADDLE_PRICE_BASIC || "pri_basic_monthly",
-  standard_monthly: process.env.PADDLE_PRICE_STANDARD || "pri_standard_monthly",
-  pro_monthly: process.env.PADDLE_PRICE_PRO || "pri_pro_monthly",
-  business_monthly: process.env.PADDLE_PRICE_BUSINESS || "pri_business_monthly",
-  topup_10: process.env.PADDLE_PRICE_TOPUP_10 || "pri_topup_10",
-  topup_25: process.env.PADDLE_PRICE_TOPUP_25 || "pri_topup_25",
-  topup_50: process.env.PADDLE_PRICE_TOPUP_50 || "pri_topup_50",
-  topup_100: process.env.PADDLE_PRICE_TOPUP_100 || "pri_topup_100",
+  basic_monthly: process.env.PADDLE_PRICE_BASIC || "pri_01kh3bsqwcvna2shws5ee1fzek",
+  standard_monthly: process.env.PADDLE_PRICE_STANDARD || "pri_01kh3btfezxg529x44qknn5h1q",
+  pro_monthly: process.env.PADDLE_PRICE_PRO || "pri_01kh3bvg0gjkhnydp175zyzzd6",
+  business_monthly: process.env.PADDLE_PRICE_BUSINESS || "pri_01kh3bwnatzcgmj55pxdrkhap7",
+  credits_55: process.env.PADDLE_PRICE_CREDITS_55 || "pri_01kh3bxzszyn16c2mzsyyz4105",
+  credits_150: process.env.PADDLE_PRICE_CREDITS_150 || "pri_01kh3bympxgkk83md78ey177bt",
+  credits_330: process.env.PADDLE_PRICE_CREDITS_330 || "pri_01kh3bz8shkvr7vrq65zpfdfn6",
+  credits_700: process.env.PADDLE_PRICE_CREDITS_700 || "pri_01kh3bzr8tq1jbnkg2arkng5n9",
 } as const
 
 export const PRICE_TO_TIER: Record<string, string> = {
@@ -40,10 +40,10 @@ export const TIER_LLM_LIMITS: Record<string, number> = {
 }
 
 export const TOPUP_CREDITS: Record<string, number> = {
-  [PADDLE_PRICES.topup_10]: 55,
-  [PADDLE_PRICES.topup_25]: 150,
-  [PADDLE_PRICES.topup_50]: 330,
-  [PADDLE_PRICES.topup_100]: 700,
+  [PADDLE_PRICES.credits_55]: 55,
+  [PADDLE_PRICES.credits_150]: 150,
+  [PADDLE_PRICES.credits_330]: 330,
+  [PADDLE_PRICES.credits_700]: 700,
 }
 
 export const TIER_STORAGE_LIMITS: Record<string, number> = {

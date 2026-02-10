@@ -1,7 +1,7 @@
 /**
  * Paddle Webhook Handler
  *
- * POST /api/webhooks/paddle
+ * POST /v1/billing/paddle-webhook
  *
  * Receives Paddle webhook events, verifies signatures, and dispatches
  * to the appropriate credit provisioning handler.
@@ -38,7 +38,7 @@ export async function paddleWebhookRoutes(app: FastifyInstance) {
     }
   )
 
-  app.post("/api/webhooks/paddle", async (req, reply) => {
+  app.post("/v1/billing/paddle-webhook", async (req, reply) => {
     const rawBody = (req as unknown as Record<string, unknown>).rawBody as string | undefined
     const signature = req.headers["paddle-signature"] as string | undefined
 

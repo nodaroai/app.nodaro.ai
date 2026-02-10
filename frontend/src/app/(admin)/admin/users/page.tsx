@@ -43,7 +43,7 @@ interface CreditTransaction {
 // Constants
 // ---------------------------------------------------------------------------
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API = ""
 
 const TIER_COLORS: Record<string, string> = {
   free: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",

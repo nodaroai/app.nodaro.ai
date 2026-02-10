@@ -48,7 +48,7 @@ interface DBModelPricing {
   readonly tier_restriction: string | null
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API = ""
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const supabase = createClient()

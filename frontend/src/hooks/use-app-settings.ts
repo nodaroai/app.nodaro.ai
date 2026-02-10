@@ -24,8 +24,7 @@ async function fetchAppSettings(): Promise<AppSettings> {
   }
 
   try {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-    const response = await fetch(`${API_BASE_URL}/v1/admin/settings`)
+    const response = await fetch(`/v1/admin/settings`)
     if (!response.ok) {
       console.warn("[useAppSettings] Failed to fetch settings, using defaults")
       return DEFAULT_SETTINGS

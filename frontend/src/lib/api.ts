@@ -1,4 +1,4 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+export const API_BASE_URL = ''
 
 interface ApiResponse<T> {
   success: boolean
@@ -236,14 +236,11 @@ export interface DbCharacter {
 }
 
 export async function getCharacters(projectId?: string, userId?: string): Promise<{ characters: DbCharacter[] }> {
-  const url = new URL(`${API_BASE_URL}/v1/characters`)
-  if (projectId) {
-    url.searchParams.set("projectId", projectId)
-  }
-  if (userId) {
-    url.searchParams.set("userId", userId)
-  }
-  const res = await fetch(url.toString(), {
+  const params = new URLSearchParams()
+  if (projectId) params.set("projectId", projectId)
+  if (userId) params.set("userId", userId)
+  const qs = params.toString()
+  const res = await fetch(`${API_BASE_URL}/v1/characters${qs ? `?${qs}` : ""}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   })
@@ -367,14 +364,11 @@ export interface DbObject {
 }
 
 export async function getObjects(projectId?: string, userId?: string): Promise<{ objects: DbObject[] }> {
-  const url = new URL(`${API_BASE_URL}/v1/objects`)
-  if (projectId) {
-    url.searchParams.set("projectId", projectId)
-  }
-  if (userId) {
-    url.searchParams.set("userId", userId)
-  }
-  const res = await fetch(url.toString(), {
+  const params = new URLSearchParams()
+  if (projectId) params.set("projectId", projectId)
+  if (userId) params.set("userId", userId)
+  const qs = params.toString()
+  const res = await fetch(`${API_BASE_URL}/v1/objects${qs ? `?${qs}` : ""}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   })
@@ -498,14 +492,11 @@ export interface DbLocation {
 }
 
 export async function getLocations(projectId?: string, userId?: string): Promise<{ locations: DbLocation[] }> {
-  const url = new URL(`${API_BASE_URL}/v1/locations`)
-  if (projectId) {
-    url.searchParams.set("projectId", projectId)
-  }
-  if (userId) {
-    url.searchParams.set("userId", userId)
-  }
-  const res = await fetch(url.toString(), {
+  const params = new URLSearchParams()
+  if (projectId) params.set("projectId", projectId)
+  if (userId) params.set("userId", userId)
+  const qs = params.toString()
+  const res = await fetch(`${API_BASE_URL}/v1/locations${qs ? `?${qs}` : ""}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   })

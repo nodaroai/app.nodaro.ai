@@ -40,8 +40,8 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   {
     id: "basic",
     name: "Basic",
-    priceMonthly: 9,
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_BASIC || "pri_basic_monthly",
+    priceMonthly: 19,
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_BASIC || "pri_01kh3bsqwcvna2shws5ee1fzek",
     credits: 95,
     llmRequests: 100,
     storage: "5 GB",
@@ -58,8 +58,8 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   {
     id: "standard",
     name: "Standard",
-    priceMonthly: 24,
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_STANDARD || "pri_standard_monthly",
+    priceMonthly: 39,
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_STANDARD || "pri_01kh3btfezxg529x44qknn5h1q",
     credits: 235,
     llmRequests: 300,
     storage: "15 GB",
@@ -77,8 +77,8 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   {
     id: "pro",
     name: "Pro",
-    priceMonthly: 49,
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_PRO || "pri_pro_monthly",
+    priceMonthly: 79,
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_PRO || "pri_01kh3bvg0gjkhnydp175zyzzd6",
     credits: 530,
     llmRequests: 1000,
     storage: "50 GB",
@@ -95,8 +95,8 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   {
     id: "business",
     name: "Business",
-    priceMonthly: 99,
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_BUSINESS || "pri_business_monthly",
+    priceMonthly: 149,
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_BUSINESS || "pri_01kh3bwnatzcgmj55pxdrkhap7",
     credits: 1120,
     llmRequests: null,
     storage: "100 GB",
@@ -124,14 +124,14 @@ export interface TopupPackage {
 export const TOPUP_PACKAGES: readonly TopupPackage[] = [
   {
     id: "topup_10",
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_TOPUP_10 || "pri_topup_10",
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_TOPUP_10 || "pri_01kh3bxzszyn16c2mzsyyz4105",
     credits: 55,
     price: 10,
     perCredit: "$0.18",
   },
   {
     id: "topup_25",
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_TOPUP_25 || "pri_topup_25",
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_TOPUP_25 || "pri_01kh3bympxgkk83md78ey177bt",
     credits: 150,
     price: 25,
     perCredit: "$0.17",
@@ -139,14 +139,14 @@ export const TOPUP_PACKAGES: readonly TopupPackage[] = [
   },
   {
     id: "topup_50",
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_TOPUP_50 || "pri_topup_50",
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_TOPUP_50 || "pri_01kh3bz8shkvr7vrq65zpfdfn6",
     credits: 330,
     price: 50,
     perCredit: "$0.15",
   },
   {
     id: "topup_100",
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_TOPUP_100 || "pri_topup_100",
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_TOPUP_100 || "pri_01kh3bzr8tq1jbnkg2arkng5n9",
     credits: 700,
     price: 100,
     perCredit: "$0.14",

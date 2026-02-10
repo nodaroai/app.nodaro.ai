@@ -216,8 +216,7 @@ export function useAdmin() {
     setLoading(true)
     setError(null)
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${API_BASE_URL}/v1/admin/settings`)
+      const response = await fetch(`/v1/admin/settings`)
       if (!response.ok) {
         const errorData = await response.json().catch(() => null)
         throw new Error(errorData?.error?.message || `Request failed with status ${response.status}`)
@@ -240,8 +239,7 @@ export function useAdmin() {
     setLoading(true)
     setError(null)
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${API_BASE_URL}/v1/admin/settings/${key}`, {
+      const response = await fetch(`/v1/admin/settings/${key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value }),

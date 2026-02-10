@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API = ""
 
 interface ModelPricing {
   readonly id: string
