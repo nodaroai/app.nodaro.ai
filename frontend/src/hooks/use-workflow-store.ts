@@ -171,14 +171,20 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   },
 
   updateNodeData: (nodeId, data) =>
-    set((state) => ({
-      nodes: state.nodes.map((node) =>
-        node.id === nodeId
-          ? { ...node, data: { ...node.data, ...data } as SceneNodeData }
-          : node,
-      ),
-      isDirty: true,
-    })),
+    set((state) => {
+      // Only dirty the store when the node actually exists. This prevents
+      // stale polling callbacks (from a previously loaded workflow) from
+      // falsely marking the current workflow as unsaved.
+      if (!state.nodes.some((n) => n.id === nodeId)) return state
+      return {
+        nodes: state.nodes.map((node) =>
+          node.id === nodeId
+            ? { ...node, data: { ...node.data, ...data } as SceneNodeData }
+            : node,
+        ),
+        isDirty: true,
+      }
+    }),
 
   duplicateNode: (nodeId) =>
     set((state) => {

@@ -26,6 +26,12 @@ import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, Uploa
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 
+/** Sentinel error thrown when a polling callback detects that the active
+ *  workflow has changed. Callers should catch this silently (no error toast). */
+class WorkflowStaleError extends Error {
+  constructor() { super("Workflow changed during execution") }
+}
+
 const NODE_CREDIT_COSTS: Record<string, number> = {
   "generate-script": 2,
   "generate-image": 5,
@@ -76,6 +82,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const pendingNavRef = useRef<string | null>(null)
   const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(new Set())
+  // Track the workflow ID this component instance owns. Polling callbacks
+  // compare against this to avoid writing results into the wrong workflow.
+  const ownerWorkflowIdRef = useRef<string | null>(workflowId ?? null)
   const [activeJobCount, setActiveJobCount] = useState(0)
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false)
   const [insufficientCreditsData, setInsufficientCreditsData] = useState<{
@@ -131,9 +140,29 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     if (workflowId) {
+      // Stop any in-flight polls from a previously loaded workflow
+      for (const interval of pollIntervalsRef.current) {
+        clearInterval(interval)
+      }
+      pollIntervalsRef.current.clear()
+      setIsRunning(false)
+
+      ownerWorkflowIdRef.current = workflowId
       load(workflowId)
     }
   }, [workflowId, load])
+
+  // Cleanup all polling intervals when the component unmounts so stale
+  // callbacks cannot write results into a different workflow's nodes.
+  useEffect(() => {
+    return () => {
+      ownerWorkflowIdRef.current = null
+      for (const interval of pollIntervalsRef.current) {
+        clearInterval(interval)
+      }
+      pollIntervalsRef.current.clear()
+    }
+  }, [])
 
   useEffect(() => {
     fetchProjects()
@@ -149,6 +178,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       await save(projectId)
     }
   }, [projectId, save])
+
+  /**
+   * Returns true when the store's active workflow no longer matches the
+   * workflow that this component instance owns.  Polling callbacks should
+   * call this before writing results to avoid cross-workflow contamination.
+   */
+  function isWorkflowStale(): boolean {
+    const currentId = useWorkflowStore.getState().workflowId
+    return currentId !== ownerWorkflowIdRef.current
+  }
 
   function trackInterval(interval: ReturnType<typeof setInterval>) {
     pollIntervalsRef.current.add(interval)
@@ -528,6 +567,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Image generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -576,6 +616,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Image editing started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -624,6 +665,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Image transformation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -680,6 +722,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Character generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -765,6 +808,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Object generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -845,6 +889,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Location generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -931,6 +976,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   function pollJobToCompletion(jobId: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const poll = trackInterval(setInterval(async () => {
+        if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
         try {
           const job = await getJobStatus(jobId)
           if (job.status === "completed") {
@@ -1024,6 +1070,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         })
       }
     } catch (err) {
+      if (err instanceof WorkflowStaleError) return
       // Keep any results generated so far
       updateNodeData(nodeId, { [statusKey]: "failed" })
       toast.error(`Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`, {
@@ -1107,6 +1154,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         })
       }
     } catch (err) {
+      if (err instanceof WorkflowStaleError) return
       // Keep any results generated so far
       updateNodeData(nodeId, { [statusKey]: "failed" })
       toast.error(`Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`, {
@@ -1190,6 +1238,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         })
       }
     } catch (err) {
+      if (err instanceof WorkflowStaleError) return
       // Keep any results generated so far
       updateNodeData(nodeId, { [statusKey]: "failed" })
       toast.error(`Failed to generate ${assetType} (${results.length}/${config.variants.length} completed)`, {
@@ -1220,6 +1269,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         updateNodeData(nodeId, { currentJobId: jobId })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
 
@@ -1278,6 +1328,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         updateNodeData(nodeId, { currentJobId: jobId })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
 
@@ -1336,6 +1387,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         updateNodeData(nodeId, { currentJobId: jobId })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
 
@@ -1392,6 +1444,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Text-to-speech generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -1440,6 +1493,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Script generation started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -1488,6 +1542,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.info("Combine videos started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -1538,6 +1593,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         updateNodeData(nodeId, { currentJobId: jobId })
 
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
 
@@ -1883,6 +1939,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           updateNodeData(node.id, { currentJobId: jobId })
 
           const poll = trackInterval(setInterval(async () => {
+            if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
             try {
               const job = await getJobStatus(jobId)
               if (job.progress) updateNodeData(node.id, { currentJobProgress: job.progress })
@@ -2003,6 +2060,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           updateNodeData(node.id, { currentJobId: jobId })
 
           const poll = trackInterval(setInterval(async () => {
+            if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
             try {
               const job = await getJobStatus(jobId)
               if (job.status === "processing" && job.progress != null) {
@@ -2367,7 +2425,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toRun.map((node) => executeNode(node))
       )
 
-      if (results.some((r) => r.status === "rejected")) {
+      const hasRealError = results.some(
+        (r) => r.status === "rejected" && !(r.reason instanceof WorkflowStaleError)
+      )
+      const hasStaleError = results.some(
+        (r) => r.status === "rejected" && r.reason instanceof WorkflowStaleError
+      )
+      if (hasStaleError) break // Workflow changed -- stop silently
+      if (hasRealError) {
         failed = true
       }
     }
@@ -2378,7 +2443,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     if (failed) {
       toast.error("Workflow execution stopped due to errors")
-    } else {
+    } else if (!isWorkflowStale()) {
       toast.success("Workflow execution complete")
     }
   }
@@ -2487,6 +2552,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       await new Promise<void>((resolve, reject) => {
         const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
             if (job.status === "completed") {
@@ -2519,6 +2585,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       })
     } catch (err) {
+      if (err instanceof WorkflowStaleError) return
       // Mark scene as failed if still running
       const latestNode = useWorkflowStore.getState().nodes.find((n) => n.id === scriptNodeId)
       const latestScene = (latestNode?.data as GenerateScriptData | undefined)?.generatedScript?.scenes[sceneIndex]

@@ -275,6 +275,13 @@ export function useWorkflowPersistence(projectId?: string) {
   const load = useCallback(
     async (id: string): Promise<SaveResult> => {
       setLoading(true)
+
+      // Immediately clear old workflow data so the canvas doesn't flash
+      // the previous workflow while the new one is being fetched.
+      // The empty nodes array also prevents save() from persisting stale data
+      // (save bails out when nodes.length === 0).
+      loadWorkflow(id, "", [], [], [])
+
       try {
         const supabase = createClient()
 
