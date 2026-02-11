@@ -46,6 +46,7 @@ import { SaveToStorageNode } from "./save-to-storage-node"
 import { WebhookOutputNode } from "./webhook-output-node"
 import { SceneNode } from "./scene-node"
 import { CharacterNode } from "./character-node"
+import { FaceNode } from "./face-node"
 import { ObjectNode } from "./object-node"
 import { LocationNode } from "./location-node"
 import { StickyNoteNode } from "./sticky-note-node"
@@ -107,6 +108,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "scene": SceneNode,
   // Character
   "character": CharacterNode,
+  // Face
+  "face": FaceNode,
   // Object
   "object": ObjectNode,
   // Location

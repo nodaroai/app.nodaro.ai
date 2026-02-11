@@ -6,7 +6,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -78,6 +78,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
   // Character
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
+  // Face
+  { type: "face", label: "Create Face", icon: <SmilePlus className="h-4 w-4" />, category: "Face" },
   // Object
   { type: "object", label: "Create Object", icon: <Package className="h-4 w-4" />, category: "Object" },
   // Location
@@ -98,6 +100,7 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
   AI: "group-hover:text-[#ff0073]",
   Processing: "group-hover:text-[#475569]",
   Character: "group-hover:text-[#EC4899]",
+  Face: "group-hover:text-[#F97316]",
   Object: "group-hover:text-[#10B981]",
   Location: "group-hover:text-[#06B6D4]",
   Scene: "group-hover:text-[#8B5CF6]",

@@ -18,7 +18,7 @@ interface BaseNodeProps {
   readonly id: string
   readonly label: string
   readonly icon: ReactNode
-  readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "object" | "location" | "script" | "i2v"
+  readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "script" | "i2v"
   readonly credits?: number
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode
@@ -37,6 +37,7 @@ const CATEGORY_STYLES: Record<string, string> = {
   output: "bg-white border-[#E2E8F0] dark:border-green-500 dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   scene: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   character: "bg-white border-[#E2E8F0] dark:border-[#F472B6] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  face: "bg-white border-[#E2E8F0] dark:border-[#FB923C] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   object: "bg-white border-[#E2E8F0] dark:border-[#34D399] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   location: "bg-white border-[#E2E8F0] dark:border-[#22D3EE] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   script: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
@@ -53,6 +54,7 @@ const CATEGORY_HEADER: Record<string, string> = {
   output: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#22C55E] dark:bg-green-600 dark:text-white dark:border-t-0",
   scene: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   character: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#EC4899] dark:bg-[#F472B6] dark:text-white dark:border-t-0",
+  face: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#F97316] dark:bg-[#FB923C] dark:text-white dark:border-t-0",
   object: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#10B981] dark:bg-[#34D399] dark:text-white dark:border-t-0",
   location: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#06B6D4] dark:bg-[#22D3EE] dark:text-white dark:border-t-0",
   script: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
@@ -68,6 +70,7 @@ const CATEGORY_ICON_COLOR: Record<string, string> = {
   output: "text-[#22C55E] dark:text-white",
   scene: "text-white",
   character: "text-[#EC4899] dark:text-white",
+  face: "text-[#F97316] dark:text-white",
   object: "text-[#10B981] dark:text-white",
   location: "text-[#06B6D4] dark:text-white",
   script: "text-white",

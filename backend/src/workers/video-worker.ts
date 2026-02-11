@@ -1040,6 +1040,30 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 
+        } else if (job.name === "generate-face") {
+          const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: string }
+          console.log(`[worker] generate-face ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
+          const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
+          await job.updateProgress(50)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
+          await job.updateProgress(100)
+
+          // Check if job was cancelled before saving result
+          if (!await shouldSaveJobResult(jobId)) return
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            progress: 100,
+            output_data: { imageUrl: r2Url },
+            completed_at: new Date().toISOString(),
+            provider: result.providerUsed,
+            provider_cost: result.cost,
+            display_cost: result.displayCost,
+          }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+
         } else if (job.name === "generate-character-asset") {
           const { prompt, sourceImageUrl, assetType, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; assetType: string; provider?: string }
           console.log(`[worker] generate-character-asset ${jobId} (type: ${assetType}, provider: ${provider ?? "nano-banana"})`)

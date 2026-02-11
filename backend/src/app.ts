@@ -30,6 +30,7 @@ import { extractYouTubeAudioRoutes } from "./routes/extract-youtube-audio.js"
 import { textToAudioRoutes } from "./routes/text-to-audio.js"
 import { imageProxyRoutes } from "./routes/image-proxy.js"
 import { generateCharacterRoutes } from "./routes/generate-character.js"
+import { generateFaceRoutes } from "./routes/generate-face.js"
 import { generateCharacterAssetRoutes } from "./routes/generate-character-asset.js"
 import { splitImageRoutes } from "./routes/split-image.js"
 import { characterRoutes } from "./routes/characters.js"
@@ -98,6 +99,7 @@ export async function buildApp() {
   await app.register(textToAudioRoutes)
   await app.register(imageProxyRoutes)
   await app.register(generateCharacterRoutes)
+  await app.register(generateFaceRoutes)
   await app.register(generateCharacterAssetRoutes)
   await app.register(splitImageRoutes)
   await app.register(characterRoutes)

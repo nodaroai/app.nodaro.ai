@@ -481,6 +481,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
                 const nodeType = node.type as string
                 // Character nodes - bubblegum pink
                 if (nodeType === 'character') return '#F472B6'
+                // Face nodes - warm orange
+                if (nodeType === 'face') return '#FB923C'
                 // Object nodes - mint green
                 if (nodeType === 'object') return '#34D399'
                 // Location nodes - cyan/turquoise

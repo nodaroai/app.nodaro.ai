@@ -18,11 +18,11 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
@@ -221,7 +221,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -368,6 +368,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
     }
+    if (type === "face") {
+      // Return the face's portrait or reference image for facial identity
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+      return results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
+    }
     if (type === "object") {
       // Return the object's main image for use as reference
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
@@ -412,6 +418,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "character") {
         // Character node provides its portrait as a reference image
         // Multiple Character nodes can be connected - all their portraits become references
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+      } else if (src.type === "face") {
+        // Face node provides its portrait as a reference image for facial identity
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else if (src.type === "object") {
         // Object node provides its main image as a reference image
@@ -788,6 +797,63 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
         toast.error("Failed to start character generation", { description: errMsg })
+        reject(err)
+      })
+    })
+  }
+
+  function runFaceGeneration(nodeId: string, data: FaceNodeData): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    updateNodeData(nodeId, { executionStatus: "running" })
+
+    return new Promise((resolve, reject) => {
+      generateFace({
+        name: data.faceName,
+        description: data.description || undefined,
+        style: data.style || undefined,
+        sourceImageUrl: data.sourceImageUrl || undefined,
+        userId: user?.id,
+      }).then(({ jobId }) => {
+        toast.info("Face headshot generation started", { description: `Job ID: ${jobId}` })
+
+        const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const imageUrl = job.output_data?.imageUrl
+              const currentNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+              const currentData = currentNode?.data as FaceNodeData | undefined
+              const existingResults = currentData?.generatedResults ?? []
+              const newResult: GeneratedResult = { url: imageUrl ?? "", timestamp: new Date().toISOString(), jobId }
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                sourceImageUrl: data.sourceImageUrl || imageUrl,
+                generatedResults: [newResult, ...existingResults],
+                activeResultIndex: 0,
+              })
+              toast.success("Face headshot generated")
+              resolve()
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              const errMsg = job.error_message ?? "Unknown error"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Face headshot generation failed", { description: errMsg })
+              reject(new Error(errMsg))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+            toast.error("Failed to check job status")
+            reject(err)
+          }
+        }, 2000))
+      }).catch((err) => {
+        const errMsg = err instanceof Error ? err.message : "Unknown error"
+        updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+        toast.error("Failed to start face headshot generation", { description: errMsg })
         reject(err)
       })
     })
@@ -1683,7 +1749,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const userTemplates = useWorkflowStore.getState().userPromptTemplates
       const flowTemplates = useWorkflowStore.getState().flowPromptTemplates
       const charDescs = charDefs.filter((c) => c.type === "description" && c.description).map((c) => {
-        const templateKey = c.category === "location" ? "location-description"
+        const templateKey = c.category === "face" ? "face-description"
+          : c.category === "location" ? "location-description"
           : c.category === "object" ? "object-description"
           : "character-description"
         const template = resolveTemplate(templateKey, userTemplates, flowTemplates)
@@ -2315,6 +2382,19 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return runCharacterGeneration(node.id, charData)
     }
 
+    if (node.type === "face") {
+      const faceData = node.data as FaceNodeData
+      if (!faceData.faceName) {
+        toast.error(`Node "${faceData.label}": no face name set`)
+        return Promise.reject(new Error("No face name"))
+      }
+      if (!faceData.sourceImageUrl) {
+        toast.error(`Node "${faceData.label}": no reference photo uploaded`)
+        return Promise.reject(new Error("No reference photo"))
+      }
+      return runFaceGeneration(node.id, faceData)
+    }
+
     if (node.type === "object") {
       const objData = node.data as ObjectNodeData
       if (!objData.objectName) {
@@ -2363,12 +2443,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       ]
       const refUrls: string[] = [...(inputs.referenceImageUrls ?? [])]
       const charDescs: string[] = []
+      const sceneUserTemplates = useWorkflowStore.getState().userPromptTemplates
+      const sceneFlowTemplates = useWorkflowStore.getState().flowPromptTemplates
       for (const assetId of allAssetIds) {
         const asset = characterDefinitions.find((a) => a.id === assetId)
         if (asset?.referenceImageUrl) refUrls.push(asset.referenceImageUrl)
         if (asset?.type === "description" && asset.description) {
-          const label = asset.category === "location" ? "location" : asset.category === "object" ? "object" : "character"
-          charDescs.push(`Include ${label} '${asset.name}': ${asset.description}.`)
+          const templateKey = asset.category === "face" ? "face-description"
+            : asset.category === "location" ? "location-description"
+            : asset.category === "object" ? "object-description"
+            : "character-description"
+          const template = resolveTemplate(templateKey, sceneUserTemplates, sceneFlowTemplates)
+          charDescs.push(applyTemplate(template, { name: asset.name, description: asset.description }))
         }
       }
       const finalPrompt = charDescs.length > 0 ? `${combinedPrompt}\n${charDescs.join(" ")}` : combinedPrompt
@@ -2553,7 +2639,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const charDescs = sceneCharDefs
       .filter((c) => c.type === "description" && c.description)
       .map((c) => {
-        const templateKey = c.category === "location" ? "location-description"
+        const templateKey = c.category === "face" ? "face-description"
+          : c.category === "location" ? "location-description"
           : c.category === "object" ? "object-description"
           : "character-description"
         const template = resolveTemplate(templateKey, userTemplates, flowTemplates)

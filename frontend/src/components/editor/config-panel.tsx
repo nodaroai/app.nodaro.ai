@@ -89,6 +89,7 @@ import type {
   ScriptScene,
   CharacterDefinition,
   CharacterNodeData,
+  FaceNodeData,
   ObjectNodeData,
   LocationNodeData,
 } from "@/types/nodes"
@@ -603,6 +604,11 @@ export function ConfigPanel() {
           {/* Character Node */}
           {selectedNode.type === "character" && (
             <CharacterConfig data={selectedNode.data as CharacterNodeData} onUpdate={update} />
+          )}
+
+          {/* Face Node */}
+          {selectedNode.type === "face" && (
+            <FaceConfig data={selectedNode.data as FaceNodeData} onUpdate={update} />
           )}
 
           {/* Object Node */}
@@ -4362,6 +4368,181 @@ function CharacterConfig({ data, onUpdate }: { readonly data: CharacterNodeData;
           Generate All Assets
         </Button>
       </div>
+    </div>
+  )
+}
+
+function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; readonly onUpdate: (updates: Partial<FaceNodeData>) => void }) {
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const isRunning = data.executionStatus === "running"
+
+  // Check for duplicate face names across all face nodes
+  const existingNames = useMemo(() => {
+    const names: string[] = []
+    for (const n of nodes) {
+      if (n.type === "face" && n.id !== selectedNodeId) {
+        const nd = n.data as FaceNodeData
+        if (nd.faceName) names.push(nd.faceName)
+      }
+    }
+    return names
+  }, [nodes, selectedNodeId])
+
+  function handleNameChange(newName: string) {
+    if (!newName) {
+      onUpdate({ faceName: newName })
+      return
+    }
+    let finalName = newName
+    let version = 2
+    const wasVersioned = existingNames.includes(newName)
+    while (existingNames.includes(finalName)) {
+      finalName = `${newName} (${version})`
+      version++
+    }
+    if (wasVersioned) {
+      onUpdate({
+        faceName: finalName,
+        generatedResults: [],
+        activeResultIndex: 0,
+        executionStatus: "idle",
+      })
+    } else {
+      onUpdate({ faceName: finalName })
+    }
+  }
+
+  const duplicateWarning = useMemo(() => {
+    if (!data.faceName) return null
+    if (data.faceDbId) return null
+    const exactMatch = existingNames.includes(data.faceName)
+    if (exactMatch) return `A face named "${data.faceName}" already exists. It will be auto-versioned on blur.`
+    return null
+  }, [data.faceName, data.faceDbId, existingNames])
+
+  async function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const { url } = await uploadImage(file)
+      onUpdate({ sourceImageUrl: url })
+    } catch {
+      // error already thrown by uploadImage
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="face-name">Face Name</Label>
+        <Input
+          id="face-name"
+          value={data.faceName}
+          onChange={(e) => onUpdate({ faceName: e.target.value })}
+          onBlur={(e) => handleNameChange(e.target.value)}
+          placeholder="e.g. John Smith"
+        />
+        {duplicateWarning && (
+          <p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>
+        )}
+      </div>
+      <div>
+        <Label htmlFor="face-desc">Description</Label>
+        <Textarea
+          id="face-desc"
+          value={data.description}
+          onChange={(e) => onUpdate({ description: e.target.value })}
+          placeholder="A person in their 30s with brown eyes and short dark hair..."
+          rows={3}
+        />
+      </div>
+      <div>
+        <Label htmlFor="face-style">Style</Label>
+        <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as FaceNodeData["style"] })}>
+          <SelectTrigger id="face-style">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="realistic">Realistic</SelectItem>
+            <SelectItem value="anime">Anime</SelectItem>
+            <SelectItem value="3d-pixar">3D Pixar</SelectItem>
+            <SelectItem value="illustration">Illustration</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Source image: URL input + Upload button */}
+      <div>
+        <Label htmlFor="face-image">Reference Photo</Label>
+        <p className="text-[10px] text-muted-foreground mb-1">
+          Upload a clear face photo. This will be used to maintain facial identity in generated images.
+        </p>
+        <div className="flex gap-1.5">
+          <Input
+            id="face-image"
+            value={data.sourceImageUrl}
+            onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })}
+            placeholder="https://... or upload"
+            className="flex-1"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleUploadImage}
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0 h-9 w-9"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload image from computer"
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Generate Headshot button */}
+      <Button
+        size="sm"
+        className="w-full text-xs h-8 text-white hover:opacity-90"
+        style={{ backgroundColor: '#ff0073' }}
+        disabled={isRunning || !data.faceName || !data.sourceImageUrl}
+        onClick={() => {
+          if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId)
+        }}
+      >
+        {isRunning ? (
+          <>
+            <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Play className="w-3 h-3 mr-1.5" />
+            Generate Headshot
+          </>
+        )}
+      </Button>
+      {!data.sourceImageUrl && data.faceName && (
+        <p className="text-[10px] text-muted-foreground">
+          Upload a reference photo to enable headshot generation.
+        </p>
+      )}
     </div>
   )
 }

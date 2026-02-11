@@ -1,6 +1,6 @@
 import type { Node, Edge } from "@xyflow/react"
 
-export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "object" | "location" | "utility"
+export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "utility"
 
 export interface FieldMapping {
   readonly sourceNodeId: string
@@ -357,7 +357,7 @@ export interface CharacterDefinition {
   readonly id: string
   readonly name: string
   readonly type: "reference" | "description"
-  readonly category?: "character" | "location" | "object"
+  readonly category?: "character" | "face" | "location" | "object"
   readonly referenceImageUrl?: string
   readonly description?: string
   readonly sourceSceneIndex?: number
@@ -1049,6 +1049,25 @@ export type LocationNodeData = {
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
 }
 
+// --- Face Node Data ---
+
+export type FaceNodeData = {
+  [key: string]: unknown
+  label: string
+  faceDbId: string
+  faceName: string
+  description: string
+  sourceImageUrl: string
+  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  projectId: string
+  createdAt: string
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedResults: GeneratedResult[]
+  activeResultIndex: number
+  fieldMappings: FieldMappings
+}
+
 // --- Sticky Note Node Data ---
 
 export type StickyNoteData = {
@@ -1213,6 +1232,7 @@ export type SceneNodeData =
   | CharacterNodeData
   | ObjectNodeData
   | LocationNodeData
+  | FaceNodeData
   | StickyNoteData
 
 export type SceneNodeType =
@@ -1264,6 +1284,7 @@ export type SceneNodeType =
   | "webhook-output"
   | "scene"
   | "character"
+  | "face"
   | "object"
   | "location"
   | "sticky-note"
@@ -1768,6 +1789,29 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       anglesStatus: "idle",
       customVariations: [],
     } as CharacterNodeData,
+  },
+  // Face
+  {
+    type: "face",
+    label: "Face",
+    category: "face",
+    creditCost: 5,
+    inputs: ["in"],
+    outputs: ["faceRef"],
+    defaultData: {
+      label: "Face",
+      faceDbId: "",
+      faceName: "",
+      description: "",
+      sourceImageUrl: "",
+      style: "realistic",
+      projectId: "",
+      createdAt: "",
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+      fieldMappings: {},
+    } as FaceNodeData,
   },
   // Object
   {

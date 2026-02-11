@@ -206,6 +206,25 @@ export async function saveCharacter(data: {
   return res.json()
 }
 
+export async function generateFace(data: {
+  name: string
+  description?: string
+  style?: string
+  sourceImageUrl?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-face`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to start face headshot generation")
+  }
+  return res.json()
+}
+
 export async function deleteCharacter(characterId: string): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
     method: "DELETE",
