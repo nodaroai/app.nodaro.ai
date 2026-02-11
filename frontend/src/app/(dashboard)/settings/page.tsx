@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Loader2, Globe, Lock } from "lucide-react"
+import { Loader2, Globe, Lock, RotateCcw, FileText, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -12,6 +12,11 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
+import {
+  SYSTEM_PROMPT_TEMPLATES,
+  ASSET_DESCRIPTION_KEYS,
+  ASSET_GENERATION_KEYS,
+} from "@/lib/prompt-templates"
 
 const API_BASE = ""
 
@@ -23,6 +28,9 @@ export default function SettingsPage() {
   const [tier, setTier] = useState<string>("free")
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [templates, setTemplates] = useState<Record<string, string>>({})
+  const [savedTemplates, setSavedTemplates] = useState<Record<string, string>>({})
+  const [savingTemplates, setSavingTemplates] = useState(false)
 
   useEffect(() => {
     if (!user?.id) return
@@ -36,6 +44,9 @@ export default function SettingsPage() {
         const data = json.data ?? json
         setPublicOutputs(data.publicOutputs ?? true)
         setTier(data.tier ?? "free")
+        const pt = (data.promptTemplates ?? {}) as Record<string, string>
+        setTemplates(pt)
+        setSavedTemplates(pt)
       } catch (err) {
         console.error("Failed to load settings:", err)
       } finally {
@@ -72,6 +83,59 @@ export default function SettingsPage() {
       setSaving(false)
     }
   }
+
+  function handleTemplateChange(key: string, value: string) {
+    setTemplates((prev) => {
+      const next = { ...prev }
+      if (value.trim() === "") {
+        delete next[key]
+      } else {
+        next[key] = value
+      }
+      return next
+    })
+  }
+
+  function handleResetTemplate(key: string) {
+    setTemplates((prev) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  async function handleSaveTemplates() {
+    if (!user?.id) return
+
+    setSavingTemplates(true)
+    try {
+      const response = await fetch(`${API_BASE}/v1/user/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, promptTemplates: templates }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Failed" }))
+        throw new Error(err.error ?? "Failed to save templates")
+      }
+
+      const json = await response.json()
+      const data = json.data ?? json
+      const pt = (data.promptTemplates ?? {}) as Record<string, string>
+      setTemplates(pt)
+      setSavedTemplates(pt)
+      toast.success("Prompt templates saved")
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save"
+      toast.error(message)
+    } finally {
+      setSavingTemplates(false)
+    }
+  }
+
+  const hasTemplateChanges =
+    JSON.stringify(templates) !== JSON.stringify(savedTemplates)
 
   const canToggle = PRIVATE_MODE_TIERS.has(tier)
 
@@ -139,6 +203,138 @@ export default function SettingsPage() {
           </TooltipProvider>
         </div>
       </div>
+
+      {/* Prompt Templates */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <FileText className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-xl font-bold">Prompt Templates</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-6">
+          Customize the prompts used when generating images from asset nodes.
+          Leave a field empty to use the system default (shown as placeholder).
+        </p>
+
+        {/* Asset Descriptions */}
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Asset Descriptions
+        </h3>
+        <div className="space-y-4 mb-8">
+          {ASSET_DESCRIPTION_KEYS.map((key) => (
+            <TemplateCard
+              key={key}
+              templateKey={key}
+              value={templates[key] ?? ""}
+              onChange={handleTemplateChange}
+              onReset={handleResetTemplate}
+            />
+          ))}
+        </div>
+
+        {/* Asset Generation */}
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Asset Generation
+        </h3>
+        <div className="space-y-4 mb-6">
+          {ASSET_GENERATION_KEYS.map((key) => (
+            <TemplateCard
+              key={key}
+              templateKey={key}
+              value={templates[key] ?? ""}
+              onChange={handleTemplateChange}
+              onReset={handleResetTemplate}
+            />
+          ))}
+        </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSaveTemplates}
+            disabled={savingTemplates || !hasTemplateChanges}
+            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+          >
+            {savingTemplates ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            Save Templates
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TemplateCard({
+  templateKey,
+  value,
+  onChange,
+  onReset,
+}: {
+  readonly templateKey: string
+  readonly value: string
+  readonly onChange: (key: string, value: string) => void
+  readonly onReset: (key: string) => void
+}) {
+  const info = SYSTEM_PROMPT_TEMPLATES[templateKey]
+  if (!info) return null
+
+  const hasOverride = value.trim().length > 0
+
+  return (
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-4">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <h4 className="text-sm font-semibold">{info.label}</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">{info.description}</p>
+        </div>
+        {hasOverride && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => onReset(templateKey)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Reset to system default</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </div>
+
+      <textarea
+        rows={3}
+        value={value}
+        placeholder={info.template}
+        onChange={(e) => onChange(templateKey, e.target.value)}
+        className={cn(
+          "w-full rounded-md border px-3 py-2 text-sm font-mono resize-y",
+          "bg-transparent placeholder:text-muted-foreground/50",
+          "border-zinc-200 dark:border-zinc-700",
+          "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
+        )}
+      />
+
+      {info.variables.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          <span className="text-xs text-muted-foreground">Variables:</span>
+          {info.variables.map((v) => (
+            <span
+              key={v}
+              className="bg-zinc-100 dark:bg-zinc-800 text-xs px-1.5 py-0.5 rounded font-mono text-muted-foreground"
+            >
+              {`{${v}}`}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
