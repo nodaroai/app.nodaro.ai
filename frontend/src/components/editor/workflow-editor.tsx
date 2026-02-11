@@ -25,6 +25,7 @@ import { InsufficientCreditsModal } from "@/components/credits/InsufficientCredi
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
+import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -1679,13 +1680,24 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const allCharDefs = useWorkflowStore.getState().characterDefinitions
       const charDefs = allCharDefs.filter((c) => charIds.includes(c.id))
       const charRefUrls = charDefs.filter((c) => c.type === "reference" && c.referenceImageUrl).map((c) => c.referenceImageUrl as string)
+      const userTemplates = useWorkflowStore.getState().userPromptTemplates
+      const flowTemplates = useWorkflowStore.getState().flowPromptTemplates
       const charDescs = charDefs.filter((c) => c.type === "description" && c.description).map((c) => {
-        const label = c.category === "location" ? "location" : c.category === "object" ? "object" : "character"
-        return `Include ${label} '${c.name}': ${c.description}.`
+        const templateKey = c.category === "location" ? "location-description"
+          : c.category === "object" ? "object-description"
+          : "character-description"
+        const template = resolveTemplate(templateKey, userTemplates, flowTemplates)
+        return applyTemplate(template, { name: c.name, description: c.description || "" })
       })
 
       const refImages = [...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
-      const finalPrompt = charDescs.length > 0 ? `${prompt}\n${charDescs.join(" ")}` : prompt
+      let finalPrompt: string
+      if (charDescs.length > 0) {
+        const wrapperTemplate = resolveTemplate("generate-image-wrapper", userTemplates, flowTemplates)
+        finalPrompt = applyTemplate(wrapperTemplate, { userPrompt: prompt, assetDescriptions: charDescs.join(" ") })
+      } else {
+        finalPrompt = prompt
+      }
       return runImageGeneration(node.id, finalPrompt, refImages.length > 0 ? refImages : undefined, (node.data as GenerateImageData).provider || undefined)
     }
 
@@ -2536,14 +2548,26 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const charRefUrls = sceneCharDefs
       .filter((c) => c.type === "reference" && c.referenceImageUrl)
       .map((c) => c.referenceImageUrl as string)
+    const userTemplates = useWorkflowStore.getState().userPromptTemplates
+    const flowTemplates = useWorkflowStore.getState().flowPromptTemplates
     const charDescs = sceneCharDefs
       .filter((c) => c.type === "description" && c.description)
-      .map((c) => `Include character '${c.name}': ${c.description}.`)
+      .map((c) => {
+        const templateKey = c.category === "location" ? "location-description"
+          : c.category === "object" ? "object-description"
+          : "character-description"
+        const template = resolveTemplate(templateKey, userTemplates, flowTemplates)
+        return applyTemplate(template, { name: c.name, description: c.description || "" })
+      })
 
     const allRefImages = [...refUrls, ...charRefUrls]
-    const finalPrompt = charDescs.length > 0
-      ? `${scene.imagePrompt}\n${charDescs.join(" ")}`
-      : scene.imagePrompt
+    let finalPrompt: string
+    if (charDescs.length > 0) {
+      const wrapperTemplate = resolveTemplate("generate-image-wrapper", userTemplates, flowTemplates)
+      finalPrompt = applyTemplate(wrapperTemplate, { userPrompt: scene.imagePrompt, assetDescriptions: charDescs.join(" ") })
+    } else {
+      finalPrompt = scene.imagePrompt
+    }
 
     updateSceneInScript(scriptNodeId, sceneIndex, { imageStatus: "running" })
 
