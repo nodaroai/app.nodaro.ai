@@ -31,6 +31,8 @@ import { APP_VERSION } from "@/lib/version"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
 
 const STORAGE_KEY = "scenenode-sidebar-collapsed"
+const API_BASE = ""
+const REPORT_POLL_INTERVAL = 60_000
 
 interface NavItem {
   readonly href: string
@@ -68,6 +70,31 @@ export function AppSidebar({
   const { isCollapsed, setCollapsed } = useSidebar()
   const [mounted, setMounted] = useState(false)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
+  const [pendingReportsCount, setPendingReportsCount] = useState(0)
+
+  // Poll pending gallery reports count for admin badge
+  useEffect(() => {
+    if (!isAdmin || !user?.id) return
+
+    let cancelled = false
+
+    async function fetchCount() {
+      try {
+        const response = await fetch(`${API_BASE}/v1/admin/gallery-reports/count?userId=${user!.id}`)
+        if (!response.ok) return
+        const json = await response.json()
+        if (!cancelled) {
+          setPendingReportsCount(json.count ?? 0)
+        }
+      } catch {
+        // Badge is non-critical
+      }
+    }
+
+    fetchCount()
+    const interval = setInterval(fetchCount, REPORT_POLL_INTERVAL)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [isAdmin, user?.id])
 
   // Load collapsed state from localStorage on mount, respecting defaultCollapsed
   useEffect(() => {
@@ -177,6 +204,8 @@ export function AppSidebar({
               ? pathname.startsWith("/admin")
               : pathname === item.href || pathname.startsWith(item.href + "/")
 
+            const showBadge = item.adminOnly && pendingReportsCount > 0
+
             const linkContent = (
               <Link
                 href={item.href}
@@ -189,8 +218,22 @@ export function AppSidebar({
                     : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-white",
                 )}
               >
-                <item.icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-[#ff0073]")} />
-                {!isCollapsed && <span>{item.label}</span>}
+                <span className="relative flex-shrink-0">
+                  <item.icon className={cn("h-5 w-5", isActive && "text-[#ff0073]")} />
+                  {showBadge && isCollapsed && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-[#ff0073]" />
+                  )}
+                </span>
+                {!isCollapsed && (
+                  <>
+                    <span>{item.label}</span>
+                    {showBadge && (
+                      <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
+                        {pendingReportsCount}
+                      </span>
+                    )}
+                  </>
+                )}
               </Link>
             )
 

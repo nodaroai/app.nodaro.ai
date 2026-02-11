@@ -90,6 +90,43 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
   })
 
   /**
+   * GET /v1/admin/gallery-reports/count
+   * Returns the count of pending gallery reports.
+   *
+   * Query params:
+   *   userId - admin user ID for auth
+   */
+  app.get("/v1/admin/gallery-reports/count", async (req, reply) => {
+    const query = req.query as Record<string, string | undefined>
+    const userId = query.userId
+
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
+    const isAdmin = await checkIsAdmin(userId)
+    if (!isAdmin) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Only admins can view report counts" },
+      })
+    }
+
+    const { count, error } = await supabase
+      .from("gallery_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+
+    if (error) {
+      console.error("[admin-gallery-reports] Count query failed:", error)
+      return reply.status(500).send({ error: "Failed to fetch report count" })
+    }
+
+    return reply.send({ count: count ?? 0 })
+  })
+
+  /**
    * PATCH /v1/admin/gallery-reports/:reportId
    * Update report status (reviewed / dismissed).
    *

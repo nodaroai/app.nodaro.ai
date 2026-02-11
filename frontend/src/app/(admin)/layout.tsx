@@ -33,6 +33,8 @@ import { useAuth } from "@/hooks/use-auth"
 import { isFeatureEnabled } from "@/lib/edition"
 
 const STORAGE_KEY = "scenenode-admin-sidebar-collapsed"
+const API_BASE = ""
+const REPORT_POLL_INTERVAL = 60_000
 
 const ADMIN_NAV = [
   { href: "/admin", label: "Dashboard", icon: BarChart3 },
@@ -58,6 +60,31 @@ export default function AdminLayout({
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [pendingReportsCount, setPendingReportsCount] = useState(0)
+
+  // Poll pending gallery reports count for badge
+  useEffect(() => {
+    if (!user?.id || !isAdmin) return
+
+    let cancelled = false
+
+    async function fetchCount() {
+      try {
+        const response = await fetch(`${API_BASE}/v1/admin/gallery-reports/count?userId=${user!.id}`)
+        if (!response.ok) return
+        const json = await response.json()
+        if (!cancelled) {
+          setPendingReportsCount(json.count ?? 0)
+        }
+      } catch {
+        // Badge is non-critical
+      }
+    }
+
+    fetchCount()
+    const interval = setInterval(fetchCount, REPORT_POLL_INTERVAL)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [user?.id, isAdmin])
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {
@@ -180,6 +207,9 @@ export default function AdminLayout({
                   ? pathname === "/admin"
                   : pathname.startsWith(item.href)
 
+              const isReportsItem = item.href === "/admin/reports"
+              const showBadge = isReportsItem && pendingReportsCount > 0
+
               const linkContent = (
                 <Link
                   key={item.href}
@@ -193,8 +223,22 @@ export default function AdminLayout({
                       : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/50 dark:hover:text-white",
                   )}
                 >
-                  <item.icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-[#ff0073]")} />
-                  {!collapsed && <span>{item.label}</span>}
+                  <span className="relative flex-shrink-0">
+                    <item.icon className={cn("h-5 w-5", isActive && "text-[#ff0073]")} />
+                    {showBadge && collapsed && (
+                      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-[#ff0073]" />
+                    )}
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span>{item.label}</span>
+                      {showBadge && (
+                        <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
+                          {pendingReportsCount}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </Link>
               )
 
