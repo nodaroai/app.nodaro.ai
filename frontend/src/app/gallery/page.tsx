@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { ArrowLeft, Image as ImageIcon, Video, Music, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { ArrowLeft, Image as ImageIcon, Video, Music, Loader2, ChevronLeft, ChevronRight, Play, Pause } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog"
 
 const API_BASE = ""
@@ -20,8 +21,6 @@ interface GalleryItem {
   readonly outputUrl: string
   readonly thumbnailUrl: string | null
   readonly createdAt: string
-  readonly username: string
-  readonly avatarUrl: string | null
 }
 
 interface GalleryResponse {
@@ -66,6 +65,61 @@ function TypeBadge({ type }: { readonly type: "image" | "video" | "audio" }) {
     <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", className)}>
       {label}
     </span>
+  )
+}
+
+function AudioCard({ url }: { readonly url: string }) {
+  const [playing, setPlaying] = useState(false)
+  const [audio] = useState(() => {
+    if (typeof window === "undefined") return null
+    const a = new Audio(url)
+    a.addEventListener("ended", () => setPlaying(false))
+    return a
+  })
+
+  function toggle(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!audio) return
+    if (playing) {
+      audio.pause()
+      audio.currentTime = 0
+      setPlaying(false)
+    } else {
+      audio.play()
+      setPlaying(true)
+    }
+  }
+
+  useEffect(() => {
+    return () => { audio?.pause() }
+  }, [audio])
+
+  return (
+    <div className="w-full h-full bg-zinc-100 dark:bg-zinc-900 flex flex-col items-center justify-center gap-3">
+      {/* Waveform bars */}
+      <div className="flex items-end gap-[3px] h-8">
+        {[0.4, 0.7, 1, 0.6, 0.85, 0.5, 0.9, 0.35, 0.75, 0.55].map((h, i) => (
+          <div
+            key={i}
+            className={cn(
+              "w-1 rounded-full bg-amber-500/60",
+              playing && "animate-pulse",
+            )}
+            style={{ height: `${h * 100}%` }}
+          />
+        ))}
+      </div>
+      <button
+        onClick={toggle}
+        className="rounded-full bg-amber-500/10 p-2 hover:bg-amber-500/20 transition-colors"
+      >
+        {playing ? (
+          <Pause className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        ) : (
+          <Play className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        )}
+      </button>
+    </div>
   )
 }
 
@@ -192,26 +246,28 @@ export default function GalleryPage() {
                       loading="lazy"
                     />
                   ) : item.type === "video" ? (
-                    <div className="w-full h-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center">
-                      <Video className="h-8 w-8 text-muted-foreground" />
-                    </div>
+                    <video
+                      src={item.outputUrl}
+                      muted
+                      loop
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full object-cover"
+                      onMouseEnter={(e) => e.currentTarget.play()}
+                      onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+                    />
                   ) : (
-                    <div className="w-full h-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center">
-                      <Music className="h-8 w-8 text-muted-foreground" />
-                    </div>
+                    <AudioCard url={item.outputUrl} />
                   )}
 
                   {/* Overlay */}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="flex items-center justify-between">
-                      <span className="text-white text-xs truncate">
-                        {item.username}
-                      </span>
                       <TypeBadge type={item.type} />
+                      <span className="text-white/60 text-xs">
+                        {formatDate(item.createdAt)}
+                      </span>
                     </div>
-                    <span className="text-white/60 text-xs">
-                      {formatDate(item.createdAt)}
-                    </span>
                   </div>
                 </button>
               ))}
@@ -248,6 +304,7 @@ export default function GalleryPage() {
       {/* Preview Dialog */}
       <Dialog open={selectedItem !== null} onOpenChange={(open) => !open && setSelectedItem(null)}>
         <DialogContent className="sm:max-w-3xl p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Preview</DialogTitle>
           {selectedItem && (
             <div>
               {/* Preview */}
@@ -274,10 +331,7 @@ export default function GalleryPage() {
 
               {/* Meta */}
               <div className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{selectedItem.username}</span>
-                  <TypeBadge type={selectedItem.type} />
-                </div>
+                <TypeBadge type={selectedItem.type} />
                 <span className="text-xs text-muted-foreground">
                   {formatDate(selectedItem.createdAt)}
                 </span>
