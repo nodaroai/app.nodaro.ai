@@ -59,7 +59,7 @@ export default function PricingPage() {
     }
 
     if (!user) {
-      router.push("/login")
+      router.push(`/login?plan=${tierId}`)
       return
     }
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { AppSidebar, MobileHeader } from "@/components/layout/app-sidebar"
 import { SidebarProvider } from "@/components/layout/sidebar-context"
 
@@ -11,10 +11,20 @@ export default function DashboardLayout({
   readonly children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Check if we're in the editor - sidebar starts collapsed but can be expanded
   const isEditor = pathname.includes("/workflows/")
+
+  // After OAuth login, check for a pending plan selection and redirect to billing
+  useEffect(() => {
+    const pendingPlan = localStorage.getItem("scenenode_pending_plan")
+    if (pendingPlan) {
+      localStorage.removeItem("scenenode_pending_plan")
+      router.replace(`/billing?plan=${encodeURIComponent(pendingPlan)}`)
+    }
+  }, [])
 
   // Close mobile menu on route change
   useEffect(() => {

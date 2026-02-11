@@ -1,17 +1,37 @@
 "use client"
 
 import { useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 
+const PENDING_PLAN_KEY = "scenenode_pending_plan"
+
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageContent />
+    </Suspense>
+  )
+}
+
+function LoginPageContent() {
   const { signInWithGoogle } = useAuth()
+  const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
   async function handleGoogleSignIn() {
     setPending(true)
     setError(null)
+
+    // Persist plan param through the OAuth redirect
+    const plan = searchParams.get("plan")
+    if (plan) {
+      localStorage.setItem(PENDING_PLAN_KEY, plan)
+    }
+
     try {
       await signInWithGoogle()
     } catch (err) {
