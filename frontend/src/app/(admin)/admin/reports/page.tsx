@@ -172,7 +172,7 @@ export default function AdminGalleryReportsPage() {
     }
   }
 
-  async function handleRemoveFromGallery(jobId: string) {
+  async function handleRemoveFromGallery(jobId: string, reportId: string) {
     if (!user?.id) return
     setActionLoading(jobId)
     try {
@@ -184,7 +184,15 @@ export default function AdminGalleryReportsPage() {
 
       if (!response.ok) throw new Error("Failed to remove item")
 
+      // Also mark this report as reviewed (backend auto-reviews too, but update UI immediately)
+      await fetch(`${API_BASE}/v1/admin/gallery-reports/${reportId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, status: "reviewed" }),
+      }).catch(() => {})
+
       toast.success("Item removed from gallery")
+      fetchReports()
     } catch {
       toast.error("Failed to remove item")
     } finally {
@@ -334,7 +342,7 @@ export default function AdminGalleryReportsPage() {
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs text-red-600 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        onClick={() => handleRemoveFromGallery(report.job_id)}
+                        onClick={() => handleRemoveFromGallery(report.job_id, report.id)}
                         disabled={isProcessing}
                       >
                         <Trash2 className="h-3 w-3 mr-1" />

@@ -306,6 +306,17 @@ export async function galleryRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: "Failed to remove item from gallery" })
     }
 
+    // Auto-review all pending reports for this job
+    const { error: reportsError } = await supabase
+      .from("gallery_reports")
+      .update({ status: "reviewed" })
+      .eq("job_id", jobId)
+      .eq("status", "pending")
+
+    if (reportsError) {
+      console.error("[gallery] Failed to auto-review reports:", reportsError)
+    }
+
     return reply.send({ success: true, message: "Item removed from gallery" })
   })
 }
