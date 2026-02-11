@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson, FileText } from "lucide-react"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,13 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { FlowTemplatesDialog } from "./flow-templates-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import {
@@ -71,8 +78,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   const project = useProjectsStore((s) =>
     projectId ? s.projects.find((p) => p.id === projectId) : undefined,
   )
+  const flowTemplates = useWorkflowStore((s) => s.flowPromptTemplates)
+  const userTemplates = useWorkflowStore((s) => s.userPromptTemplates)
+  const setFlowPromptTemplates = useWorkflowStore((s) => s.setFlowPromptTemplates)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const setVideoAutoplay = useWorkflowStore((s) => s.setVideoAutoplay)
+  const [flowTemplatesOpen, setFlowTemplatesOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [showSavedState, setShowSavedState] = useState(false)
@@ -256,10 +267,13 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       // For template export, strip all generated content from nodes
       const exportNodes = includeAssets ? nodes : stripGeneratedContent(nodes)
 
+      const hasFlowTemplates = Object.keys(flowTemplates).length > 0
+
       const workflowData: ExportedWorkflow = {
         name: workflowName || "Untitled Workflow",
         nodes: exportNodes,
         edges,
+        ...(hasFlowTemplates ? { settings: { flowPromptTemplates: flowTemplates } } : {}),
         exportedAt: new Date().toISOString(),
         version: "1.0",
       }
@@ -345,7 +359,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     } finally {
       setExporting(false)
     }
-  }, [nodes, edges, workflowName])
+  }, [nodes, edges, workflowName, flowTemplates])
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -500,6 +514,10 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           target: nodeIdMap[edge.target] || edge.target,
         }))
 
+        // Extract flow-level prompt templates from settings if present
+        const importedFlowTemplates =
+          (data.settings?.flowPromptTemplates as Record<string, string> | undefined) ?? {}
+
         // Set the imported workflow using loadWorkflow
         const importedName = (data.name || "Untitled Workflow") + " (Imported)"
         loadWorkflow(
@@ -507,6 +525,8 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           importedName,
           nodesToImport,
           edgesToImport,
+          undefined,
+          Object.keys(importedFlowTemplates).length > 0 ? importedFlowTemplates : undefined,
         )
 
         const assetCount = Object.keys(assetIdMap).length
@@ -588,6 +608,33 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           className="hidden"
           accept=".json,application/json"
           onChange={handleFileSelect}
+        />
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="relative"
+                onClick={() => setFlowTemplatesOpen(true)}
+              >
+                <FileText className="h-4 w-4" />
+                {Object.keys(flowTemplates).length > 0 && (
+                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-[#ff0073] border-2 border-white dark:border-card" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Prompt Templates</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <FlowTemplatesDialog
+          open={flowTemplatesOpen}
+          onOpenChange={setFlowTemplatesOpen}
+          flowTemplates={flowTemplates}
+          userTemplates={userTemplates}
+          onSave={setFlowPromptTemplates}
         />
 
         <DropdownMenu>
