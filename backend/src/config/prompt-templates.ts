@@ -11,7 +11,7 @@ export const SYSTEM_PROMPT_TEMPLATES: Record<string, string> = {
   "location-generation":
     "Create a cinematic scene of: {description}. Category: {category}. Atmospheric lighting, high detail, wide angle.",
   "face-generation":
-    "Create a professional close-up face portrait headshot of the person in the reference image. Looking directly at camera, sharp focus on facial features, clean background, studio lighting, high resolution. Maintain exact facial identity and features.",
+    "Create a professional close-up face portrait headshot: {description}. Style: {style}. Looking directly at camera, sharp focus on facial features, clean background, studio lighting, high resolution. Maintain exact facial identity and features from the reference image.",
   "generate-image-wrapper": "{userPrompt}\n{assetDescriptions}",
 }
 

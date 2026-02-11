@@ -6,7 +6,7 @@ import {
   Hash, Clock, RatioIcon, Mic, ShieldCheck, Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin,
   ChevronRight, Search, Download, ArrowLeft, Wand2, Layers, Users, Waypoints, ArrowUpFromLine,
-  FileText, Disc3, FastForward,
+  FileText, Disc3, FastForward, Smile,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SceneNodeType } from "@/types/nodes"
@@ -78,6 +78,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Assets" },
   { type: "object", label: "Create Object", icon: <Package className="h-4 w-4" />, category: "Assets" },
   { type: "location", label: "Create Location", icon: <MapPin className="h-4 w-4" />, category: "Assets" },
+  { type: "face", label: "Create Face", icon: <Smile className="h-4 w-4" />, category: "Assets" },
   { type: "scene", label: "Scene", icon: <Clapperboard className="h-4 w-4" />, category: "Assets" },
   // Output
   { type: "save-to-storage", label: "Save to Storage", icon: <HardDrive className="h-4 w-4" />, category: "Output" },
@@ -89,7 +90,7 @@ const CATEGORIES = [
   { id: "Parameter", label: "PARAMETER", icon: <SlidersHorizontal className="h-4 w-4" />, description: "Tone, Style, Duration" },
   { id: "AI", label: "AI", icon: <BookOpen className="h-4 w-4" />, description: "Generate Script, Image" },
   { id: "Processing", label: "PROCESSING", icon: <Merge className="h-4 w-4" />, description: "Combine, Merge, Trim" },
-  { id: "Assets", label: "ASSETS", icon: <UserPlus className="h-4 w-4" />, description: "Character, Location, Object" },
+  { id: "Assets", label: "ASSETS", icon: <UserPlus className="h-4 w-4" />, description: "Character, Face, Object, Location" },
   { id: "Output", label: "OUTPUT", icon: <HardDrive className="h-4 w-4" />, description: "Save, Webhook" },
 ]
 
