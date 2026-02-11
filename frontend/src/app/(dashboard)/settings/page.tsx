@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Loader2, Globe, Lock, RotateCcw, FileText, Save } from "lucide-react"
+import { Loader2, Globe, Lock, RotateCcw, FileText, Save, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -14,8 +14,8 @@ import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
 import {
   SYSTEM_PROMPT_TEMPLATES,
-  ASSET_DESCRIPTION_KEYS,
-  ASSET_GENERATION_KEYS,
+  TEMPLATE_GROUPS,
+  WRAPPER_TEMPLATE_KEY,
 } from "@/lib/prompt-templates"
 
 const API_BASE = ""
@@ -215,36 +215,27 @@ export default function SettingsPage() {
           Leave a field empty to use the system default (shown as placeholder).
         </p>
 
-        {/* Asset Descriptions */}
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Asset Descriptions
-        </h3>
-        <div className="space-y-4 mb-8">
-          {ASSET_DESCRIPTION_KEYS.map((key) => (
-            <TemplateCard
-              key={key}
-              templateKey={key}
-              value={templates[key] ?? ""}
-              onChange={handleTemplateChange}
-              onReset={handleResetTemplate}
-            />
-          ))}
-        </div>
-
-        {/* Asset Generation */}
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Asset Generation
-        </h3>
+        {/* Asset type groups */}
         <div className="space-y-4 mb-6">
-          {ASSET_GENERATION_KEYS.map((key) => (
-            <TemplateCard
-              key={key}
-              templateKey={key}
-              value={templates[key] ?? ""}
+          {TEMPLATE_GROUPS.map((group) => (
+            <TemplateGroupCard
+              key={group.name}
+              name={group.name}
+              descriptionKey={group.descriptionKey}
+              generationKey={group.generationKey}
+              templates={templates}
               onChange={handleTemplateChange}
               onReset={handleResetTemplate}
             />
           ))}
+
+          {/* Standalone: Generate Image Wrapper */}
+          <TemplateCard
+            templateKey={WRAPPER_TEMPLATE_KEY}
+            value={templates[WRAPPER_TEMPLATE_KEY] ?? ""}
+            onChange={handleTemplateChange}
+            onReset={handleResetTemplate}
+          />
         </div>
 
         {/* Save Button */}
@@ -263,6 +254,131 @@ export default function SettingsPage() {
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+type TemplateTab = "description" | "generation"
+
+function TemplateGroupCard({
+  name,
+  descriptionKey,
+  generationKey,
+  templates,
+  onChange,
+  onReset,
+}: {
+  readonly name: string
+  readonly descriptionKey: string
+  readonly generationKey: string
+  readonly templates: Record<string, string>
+  readonly onChange: (key: string, value: string) => void
+  readonly onReset: (key: string) => void
+}) {
+  const [tab, setTab] = useState<TemplateTab>("description")
+
+  const activeKey = tab === "description" ? descriptionKey : generationKey
+  const info = SYSTEM_PROMPT_TEMPLATES[activeKey]
+  if (!info) return null
+
+  const value = templates[activeKey] ?? ""
+  const hasOverride = value.trim().length > 0
+
+  return (
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-4">
+      {/* Header: title + info tooltip */}
+      <div className="flex items-center gap-2 mb-3">
+        <h4 className="text-sm font-semibold">{name}</h4>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs text-xs leading-relaxed">
+              <p><strong>Description</strong> — the text appended to the prompt when this asset is connected to a Generate Image node.</p>
+              <p className="mt-1"><strong>Generation</strong> — the prompt used when generating this asset&apos;s own image (e.g., clicking Run on a {name} node).</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-3">
+        <button
+          type="button"
+          onClick={() => setTab("description")}
+          className={cn(
+            "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+            tab === "description"
+              ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
+              : "text-muted-foreground hover:bg-muted/50 border border-transparent",
+          )}
+        >
+          Description
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("generation")}
+          className={cn(
+            "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+            tab === "generation"
+              ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/30"
+              : "text-muted-foreground hover:bg-muted/50 border border-transparent",
+          )}
+        >
+          Generation
+        </button>
+
+        {/* Reset button (right-aligned) */}
+        {hasOverride && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 ml-auto text-muted-foreground hover:text-foreground"
+                  onClick={() => onReset(activeKey)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Reset to system default</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </div>
+
+      {/* Textarea */}
+      <textarea
+        rows={3}
+        value={value}
+        placeholder={info.template}
+        onChange={(e) => onChange(activeKey, e.target.value)}
+        className={cn(
+          "w-full rounded-md border px-3 py-2 text-sm font-mono resize-y",
+          "bg-transparent placeholder:text-muted-foreground/50",
+          "border-zinc-200 dark:border-zinc-700",
+          "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
+        )}
+      />
+
+      {/* Variable badges */}
+      {info.variables.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          <span className="text-xs text-muted-foreground">Variables:</span>
+          {info.variables.map((v) => (
+            <span
+              key={v}
+              className="bg-zinc-100 dark:bg-zinc-800 text-xs px-1.5 py-0.5 rounded font-mono text-muted-foreground"
+            >
+              {`{${v}}`}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

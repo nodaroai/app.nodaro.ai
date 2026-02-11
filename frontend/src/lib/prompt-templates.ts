@@ -63,8 +63,8 @@ export const SYSTEM_PROMPT_TEMPLATES: Record<string, PromptTemplateInfo> = {
     label: "Face Generation",
     description: "Prompt used when generating a headshot from a Face node",
     template:
-      "Create a professional close-up face portrait headshot of the person in the reference image. Looking directly at camera, sharp focus on facial features, clean background, studio lighting, high resolution. Maintain exact facial identity and features.",
-    variables: [],
+      "Create a professional close-up face portrait headshot: {description}. Style: {style}. Looking directly at camera, sharp focus on facial features, clean background, studio lighting, high resolution. Maintain exact facial identity and features from the reference image.",
+    variables: ["description", "style"],
   },
   "generate-image-wrapper": {
     label: "Generate Image Wrapper",
@@ -75,20 +75,20 @@ export const SYSTEM_PROMPT_TEMPLATES: Record<string, PromptTemplateInfo> = {
   },
 }
 
-export const ASSET_DESCRIPTION_KEYS = [
-  "character-description",
-  "object-description",
-  "location-description",
-  "face-description",
-  "generate-image-wrapper",
-] as const
+export interface TemplateGroup {
+  readonly name: string
+  readonly descriptionKey: string
+  readonly generationKey: string
+}
 
-export const ASSET_GENERATION_KEYS = [
-  "character-generation",
-  "object-generation",
-  "location-generation",
-  "face-generation",
-] as const
+export const TEMPLATE_GROUPS: readonly TemplateGroup[] = [
+  { name: "Character", descriptionKey: "character-description", generationKey: "character-generation" },
+  { name: "Object", descriptionKey: "object-description", generationKey: "object-generation" },
+  { name: "Location", descriptionKey: "location-description", generationKey: "location-generation" },
+  { name: "Face", descriptionKey: "face-description", generationKey: "face-generation" },
+]
+
+export const WRAPPER_TEMPLATE_KEY = "generate-image-wrapper"
 
 export function applyTemplate(
   template: string,
