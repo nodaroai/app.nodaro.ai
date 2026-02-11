@@ -806,11 +806,22 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running" })
 
+    // Build prompt using template hierarchy: flow > user > system
+    const faceUserTemplates = useWorkflowStore.getState().userPromptTemplates
+    const faceFlowTemplates = useWorkflowStore.getState().flowPromptTemplates
+    const faceTemplate = resolveTemplate("face-generation", faceUserTemplates, faceFlowTemplates)
+    const faceDescParts = [data.faceName, data.description].filter(Boolean).join(", ")
+    const facePrompt = applyTemplate(faceTemplate, {
+      description: faceDescParts,
+      style: data.style || "realistic",
+    })
+
     return new Promise((resolve, reject) => {
       generateFace({
         name: data.faceName,
         description: data.description || undefined,
         style: data.style || undefined,
+        prompt: facePrompt,
         sourceImageUrl: data.sourceImageUrl || undefined,
         userId: user?.id,
       }).then(({ jobId }) => {

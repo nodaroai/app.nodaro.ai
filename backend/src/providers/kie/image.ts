@@ -19,7 +19,8 @@ export class KieImageProvider
   async generateImage(
     prompt: string,
     referenceImageUrls?: string[],
-    model?: string
+    model?: string,
+    extraParams?: Record<string, unknown>
   ): Promise<ProviderResult> {
     const provider = model ?? "nano-banana"
     const modelConfig = KIE_IMAGE_MODELS[provider]
@@ -39,12 +40,14 @@ export class KieImageProvider
       )
     }
 
-    // Build input with model-specific parameters
+    // Build input with model-specific parameters, then caller overrides
     const input: Record<string, unknown> = {
       prompt,
       output_format: "png",
       // Apply model-specific extra params (aspect_ratio, image_size, resolution, etc.)
       ...modelConfig.extraParams,
+      // Caller overrides (e.g. face generation uses 1:1 aspect ratio)
+      ...extraParams,
     }
 
     // Add reference images based on input type

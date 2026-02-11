@@ -210,6 +210,7 @@ export async function generateFace(data: {
   name: string
   description?: string
   style?: string
+  prompt?: string
   sourceImageUrl?: string
   userId?: string
 }): Promise<{ jobId: string }> {

@@ -1044,7 +1044,7 @@ export function createVideoWorker() {
           const { prompt, sourceImageUrl, provider } = job.data as { jobId: string; prompt: string; sourceImageUrl?: string; provider?: string }
           console.log(`[worker] generate-face ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, { aspect_ratio: "1:1" })
           await job.updateProgress(50)
           const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)

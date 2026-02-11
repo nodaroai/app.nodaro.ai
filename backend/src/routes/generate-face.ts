@@ -9,6 +9,7 @@ const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
+  prompt: z.string().max(4000).optional(),
   sourceImageUrl: z.string().url().optional(),
   userId: z.string().uuid().optional(),
 })
@@ -25,7 +26,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       })
     }
 
-    const { name, description, style, sourceImageUrl, userId } = parsed.data
+    const { name, description, style, prompt: clientPrompt, sourceImageUrl, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -36,27 +37,31 @@ export async function generateFaceRoutes(app: FastifyInstance) {
     // Model identifier for credit check
     const modelIdentifier = "nano-banana"
 
-    // Fetch user prompt templates for face-generation
-    let userTemplates: Record<string, string> = {}
-    try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("prompt_templates")
-        .eq("id", userId)
-        .single()
-      userTemplates = (profile?.prompt_templates as Record<string, string>) ?? {}
-    } catch {
-      // Ignore - use system defaults
-    }
+    // Use client-provided prompt (which includes flow+user template resolution)
+    // or fall back to server-side template resolution (for direct API calls)
+    let prompt: string
+    if (clientPrompt) {
+      prompt = clientPrompt
+    } else {
+      let userTemplates: Record<string, string> = {}
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("prompt_templates")
+          .eq("id", userId)
+          .single()
+        userTemplates = (profile?.prompt_templates as Record<string, string>) ?? {}
+      } catch {
+        // Ignore - use system defaults
+      }
 
-    // Build face headshot prompt using template
-    const template = resolveTemplate("face-generation", userTemplates)
-    const descParts = [name, description].filter(Boolean).join(", ")
-    const styleDesc = style ?? "realistic"
-    const prompt = applyTemplate(template, {
-      description: descParts,
-      style: styleDesc,
-    })
+      const template = resolveTemplate("face-generation", userTemplates)
+      const descParts = [name, description].filter(Boolean).join(", ")
+      prompt = applyTemplate(template, {
+        description: descParts,
+        style: style ?? "realistic",
+      })
+    }
 
     const { data: job, error } = await supabase
       .from("jobs")
