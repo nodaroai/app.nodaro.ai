@@ -28,7 +28,7 @@ import { resizeVideo } from "../providers/video/resize-video.js"
 import { adjustVolume } from "../providers/video/adjust-volume.js"
 import { addCaptions } from "../providers/video/add-captions.js"
 import { mixAudio } from "../providers/video/mix-audio.js"
-import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
+import { cleanupWorkDir, createWorkDir, downloadFile } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { KieAudioProvider } from "../providers/kie/audio.js"
@@ -40,6 +40,7 @@ import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import { randomUUID } from "node:crypto"
 import youtubedl from "youtube-dl-exec"
+import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 
 const SOCIAL_HOSTNAMES = [
   "youtube.com", "youtu.be",
@@ -172,6 +173,71 @@ async function refundJobCredits(usageLogId: string | null | undefined, jobId: st
   }
 }
 
+/**
+ * Upload image to R2, optionally applying a watermark first.
+ * When watermark is true, downloads the source image, composites the
+ * "SceneNode.ai" text overlay, then uploads the watermarked buffer.
+ */
+async function uploadImageMaybeWatermark(
+  sourceUrl: string,
+  jobId: string,
+  jobUserId: string | undefined,
+  watermark: boolean,
+): Promise<string> {
+  if (!watermark) {
+    return uploadToR2(sourceUrl, jobId, "image", jobUserId)
+  }
+  const response = await fetch(sourceUrl)
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status}`)
+  const buffer = Buffer.from(await response.arrayBuffer())
+  const watermarked = await applyImageWatermark(buffer)
+  return uploadBufferToR2(watermarked, `images/${jobId}.png`, "image/png", jobUserId)
+}
+
+/**
+ * Upload video to R2, optionally applying a watermark first.
+ * When watermark is true, downloads to a temp file, runs ffmpeg drawtext,
+ * then uploads the watermarked file.
+ */
+async function uploadVideoMaybeWatermark(
+  sourceUrl: string,
+  jobId: string,
+  jobUserId: string | undefined,
+  watermark: boolean,
+): Promise<string> {
+  if (!watermark) {
+    return uploadToR2(sourceUrl, jobId, "video", jobUserId)
+  }
+  const workDir = await createWorkDir("wm")
+  try {
+    const inputPath = join(workDir, "input.mp4")
+    const outputPath = join(workDir, "output.mp4")
+    await downloadFile(sourceUrl, inputPath)
+    await applyVideoWatermark(inputPath, outputPath)
+    return await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+  } finally {
+    await cleanupWorkDir(workDir)
+  }
+}
+
+/**
+ * Apply video watermark to a local file on disk, then upload to R2.
+ * Used when the file is already local (e.g. after ffmpeg merge).
+ */
+async function watermarkLocalVideoAndUpload(
+  localPath: string,
+  jobId: string,
+  jobUserId: string | undefined,
+  watermark: boolean,
+): Promise<string> {
+  if (!watermark) {
+    return uploadFileToR2(localPath, jobId, "video", jobUserId)
+  }
+  const wmPath = localPath.replace(/\.mp4$/, "-wm.mp4")
+  await applyVideoWatermark(localPath, wmPath)
+  return uploadFileToR2(wmPath, jobId, "video", jobUserId)
+}
+
 export function createVideoWorker() {
   initProviders()
 
@@ -193,6 +259,17 @@ export function createVideoWorker() {
       const usageLogId = jobRecord?.usage_log_id
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
 
+      // Determine if output should be watermarked (free tier only, cloud edition)
+      let shouldWatermark = false
+      if (hasCredits() && jobUserId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("tier")
+          .eq("id", jobUserId)
+          .single()
+        shouldWatermark = profile?.tier === "free"
+      }
+
       try {
         await supabase
           .from("jobs")
@@ -209,7 +286,7 @@ export function createVideoWorker() {
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -243,7 +320,7 @@ export function createVideoWorker() {
           const result = await editImage(imageUrl, resolvedProvider, prompt)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -280,7 +357,7 @@ export function createVideoWorker() {
           const result = await generateImage(prompt, resolvedProvider, allImages)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -326,7 +403,10 @@ export function createVideoWorker() {
           await job.updateProgress(40)
 
           // Upload the generated video to R2
-          let finalVideoUrl = await uploadToR2(result.url, jobId, "video", jobUserId)
+          // If audio merge follows, upload without watermark (watermark applied to final)
+          let finalVideoUrl = audioUrl
+            ? await uploadToR2(result.url, jobId, "video", jobUserId)
+            : await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(70)
 
           // If audio URL is provided, merge it with the video
@@ -341,8 +421,8 @@ export function createVideoWorker() {
             })
             await job.updateProgress(90)
 
-            // Upload merged video
-            finalVideoUrl = await uploadFileToR2(mergedPath, `${jobId}-merged`, "video", jobUserId)
+            // Upload merged video (with watermark if applicable)
+            finalVideoUrl = await watermarkLocalVideoAndUpload(mergedPath, `${jobId}-merged`, jobUserId, shouldWatermark)
             await cleanupWorkDir(dirname(mergedPath))
           }
 
@@ -378,7 +458,7 @@ export function createVideoWorker() {
           const result = await videoToVideo(videoUrl, provider ?? "wan", prompt)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
+          const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -411,7 +491,7 @@ export function createVideoWorker() {
           const result = await textToVideo(prompt, provider ?? "minimax", duration)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
+          const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -446,7 +526,7 @@ export function createVideoWorker() {
           const result = await lipSync(imageUrl, audioUrl, provider ?? "kling-avatar", prompt, resolution)
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
+          const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -923,7 +1003,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -947,7 +1027,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -971,7 +1051,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -995,7 +1075,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -1019,7 +1099,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -1043,7 +1123,7 @@ export function createVideoWorker() {
           const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
           const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
           await job.updateProgress(50)
-          const r2Url = await uploadToR2(result.url, jobId, "image", jobUserId)
+          const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -1092,7 +1172,7 @@ export function createVideoWorker() {
           )
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
+          const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
@@ -1133,7 +1213,7 @@ export function createVideoWorker() {
           )
           await job.updateProgress(50)
 
-          const r2Url = await uploadToR2(result.url, jobId, "video", jobUserId)
+          const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
           // Check if job was cancelled before saving result
