@@ -1579,6 +1579,8 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
+  const refImageInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingRefImage, setUploadingRefImage] = useState(false)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const addNode = useWorkflowStore((s) => s.addNode)
@@ -1630,6 +1632,21 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
     }
   }
 
+  async function handleRefImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingRefImage(true)
+    try {
+      const { url } = await uploadImage(file)
+      onUpdate({ referenceImageUrl: url })
+    } catch {
+      // error already thrown by uploadImage
+    } finally {
+      setUploadingRefImage(false)
+      if (refImageInputRef.current) refImageInputRef.current.value = ""
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1640,6 +1657,62 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           placeholder="Describe the image to generate..."
         />
       </MappableField>
+
+      {/* Reference Image */}
+      <div>
+        <Label className="text-xs">Reference Image</Label>
+        <p className="text-[10px] text-muted-foreground mb-1">
+          Upload an image to use as visual reference for generation.
+        </p>
+        {data.referenceImageUrl ? (
+          <div className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
+            <img
+              src={data.referenceImageUrl}
+              alt="Reference"
+              className="w-10 h-10 rounded object-cover flex-shrink-0"
+            />
+            <span className="text-xs text-muted-foreground truncate flex-1">Reference image</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 h-6 w-6"
+              onClick={() => onUpdate({ referenceImageUrl: undefined })}
+              title="Remove reference image"
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-1.5">
+            <Input
+              value=""
+              onChange={(e) => {
+                if (e.target.value.trim()) onUpdate({ referenceImageUrl: e.target.value.trim() })
+              }}
+              placeholder="https://... or upload"
+              className="flex-1"
+            />
+            <input
+              ref={refImageInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={handleRefImageUpload}
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              className="shrink-0 h-9 w-9"
+              disabled={uploadingRefImage}
+              onClick={() => refImageInputRef.current?.click()}
+              title="Upload reference image"
+            >
+              {uploadingRefImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            </Button>
+          </div>
+        )}
+      </div>
+
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "nano-banana"}

@@ -1768,7 +1768,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return applyTemplate(template, { name: c.name, description: c.description || "" })
       })
 
-      const refImages = [...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
+      const nodeRefUrl = (node.data as GenerateImageData).referenceImageUrl
+      const refImages = [...(nodeRefUrl ? [nodeRefUrl] : []), ...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
       let finalPrompt: string
       if (charDescs.length > 0) {
         const wrapperTemplate = resolveTemplate("generate-image-wrapper", userTemplates, flowTemplates)

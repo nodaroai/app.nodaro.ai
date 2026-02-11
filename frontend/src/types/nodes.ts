@@ -420,6 +420,7 @@ export type GenerateImageData = {
   style: string
   aspectRatio: "1:1" | "16:9" | "9:16" | "4:3"
   negativePrompt: string
+  referenceImageUrl?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
