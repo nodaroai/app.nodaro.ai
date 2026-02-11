@@ -65,22 +65,26 @@ COPY <<'EOF' /app/start.sh
 #!/bin/sh
 set -e
 
-# Start backend
+# Start backend API server
 cd /app/backend
 node dist/server.js &
 BACKEND_PID=$!
+
+# Start BullMQ worker (job processor)
+node dist/worker.js &
+WORKER_PID=$!
 
 # Start frontend (Next.js standalone server)
 cd /app/frontend
 PORT=3000 HOSTNAME=0.0.0.0 node server.js &
 FRONTEND_PID=$!
 
-# Wait for either to exit
-wait -n $BACKEND_PID $FRONTEND_PID
+# Wait for any process to exit
+wait -n $BACKEND_PID $WORKER_PID $FRONTEND_PID
 EXIT_CODE=$?
 
-# If one exits, stop the other
-kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+# If one exits, stop the others
+kill $BACKEND_PID $WORKER_PID $FRONTEND_PID 2>/dev/null || true
 exit $EXIT_CODE
 EOF
 
