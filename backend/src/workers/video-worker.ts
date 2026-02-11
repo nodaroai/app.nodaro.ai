@@ -281,6 +281,7 @@ export function createVideoWorker() {
             status: "processing",
             started_at: new Date().toISOString(),
             is_public: isPublicOutput,
+            job_type: job.name,
           })
           .eq("id", jobId)
 

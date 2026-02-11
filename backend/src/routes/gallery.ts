@@ -66,7 +66,7 @@ export async function galleryRoutes(app: FastifyInstance) {
     // Build query
     let dbQuery = supabase
       .from("jobs")
-      .select("id, name, output_data, completed_at, user_id", { count: "exact" })
+      .select("id, job_type, output_data, completed_at, user_id", { count: "exact" })
       .eq("is_public", true)
       .eq("status", "completed")
       .not("output_data", "is", null)
@@ -76,11 +76,11 @@ export async function galleryRoutes(app: FastifyInstance) {
     // Filter by type (restricts to specific job names)
     if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
       const jobNames = jobNamesForType(typeFilter)
-      dbQuery = dbQuery.in("name", jobNames)
+      dbQuery = dbQuery.in("job_type", jobNames)
     } else {
       // Exclude text-only jobs (scripts, transcriptions) from gallery
       const allMediaNames = [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS]
-      dbQuery = dbQuery.in("name", allMediaNames)
+      dbQuery = dbQuery.in("job_type", allMediaNames)
     }
 
     const { data: jobs, count, error } = await dbQuery
@@ -111,8 +111,8 @@ export async function galleryRoutes(app: FastifyInstance) {
     const items = jobs
       .map((job) => {
         const outputData = (job.output_data ?? {}) as Record<string, unknown>
-        const type = getOutputType(job.name)
-        const outputUrl = getOutputUrl(job.name, outputData)
+        const type = getOutputType(job.job_type)
+        const outputUrl = getOutputUrl(job.job_type, outputData)
 
         if (!type || !outputUrl) return null
 
@@ -121,7 +121,7 @@ export async function galleryRoutes(app: FastifyInstance) {
         return {
           id: job.id,
           type,
-          jobName: job.name,
+          jobName: job.job_type,
           outputUrl,
           thumbnailUrl: (outputData.thumbnailUrl as string) ?? null,
           createdAt: job.completed_at,
