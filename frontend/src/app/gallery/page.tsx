@@ -312,7 +312,7 @@ export default function GalleryPage() {
                       playsInline
                       preload="metadata"
                       className="w-full h-full object-cover"
-                      onMouseEnter={(e) => e.currentTarget.play()}
+                      onMouseEnter={(e) => { e.currentTarget.play().catch(() => {}) }}
                       onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
                     />
                   ) : (
