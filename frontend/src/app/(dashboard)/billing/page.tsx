@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { Suspense, useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
@@ -32,6 +32,14 @@ import { PRICING_TIERS, getBillingCycleFromPriceId } from "@/lib/pricing-data"
 import { toast } from "sonner"
 
 export default function BillingPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-96"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+      <BillingPageContent />
+    </Suspense>
+  )
+}
+
+function BillingPageContent() {
   const { user, loading: authLoading } = useAuth()
   const searchParams = useSearchParams()
   const { balance, isLoading: creditsLoading, refetch: refetchCredits } = useUserCredits(user?.id)

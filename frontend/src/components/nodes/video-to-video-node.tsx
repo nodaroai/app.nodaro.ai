@@ -21,7 +21,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "wan", 4)
+  const credits = useModelCredits((nodeData.provider as string | undefined) ?? "wan", 4)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

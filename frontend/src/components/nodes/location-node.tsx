@@ -33,7 +33,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function LocationNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as LocationNodeData
-  const credits = useModelCredits(nodeData.provider ?? "nano-banana", 1)
+  const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
