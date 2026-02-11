@@ -192,6 +192,17 @@ export default function SettingsPage() {
     input.click()
   }
 
+  function handleResetAll() {
+    const confirmed = window.confirm(
+      "Are you sure? This will remove all your custom templates and restore system defaults.",
+    )
+    if (!confirmed) return
+    setTemplates({})
+    setEditingKey(null)
+  }
+
+  const hasAnyOverride = Object.keys(templates).length > 0
+
   const hasTemplateChanges =
     JSON.stringify(templates) !== JSON.stringify(savedTemplates)
 
@@ -289,6 +300,23 @@ export default function SettingsPage() {
                 <TooltipContent>Import templates from JSON</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            {hasAnyOverride && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
+                      onClick={handleResetAll}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Reset all templates to defaults</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         </div>
         <p className="text-sm text-muted-foreground mb-6">
