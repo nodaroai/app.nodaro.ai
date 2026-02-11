@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
+import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
@@ -17,7 +18,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("tier, public_outputs")
+      .select("tier, public_outputs, prompt_templates")
       .eq("id", userId)
       .single()
 
@@ -29,6 +30,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       data: {
         tier: profile.tier,
         publicOutputs: profile.public_outputs ?? true,
+        promptTemplates: (profile.prompt_templates as Record<string, string>) ?? {},
       },
     })
   })
@@ -36,7 +38,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
   /**
    * PATCH /v1/user/settings - Update user settings
    *
-   * Body: { userId: string, publicOutputs?: boolean }
+   * Body: { userId: string, publicOutputs?: boolean, promptTemplates?: Record<string, string> }
    *
    * Tier restriction: only Standard and above can set publicOutputs = false
    */
@@ -44,15 +46,16 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     const body = req.body as Record<string, unknown> | undefined
     const userId = body?.userId as string | undefined
     const publicOutputs = body?.publicOutputs as boolean | undefined
+    const promptTemplates = body?.promptTemplates as Record<string, string> | undefined
 
     if (!userId) {
       return reply.status(400).send({ error: "userId is required" })
     }
 
-    // Fetch current tier
+    // Fetch current profile
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("tier")
+      .select("tier, prompt_templates")
       .eq("id", userId)
       .single()
 
@@ -73,6 +76,23 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       updates.public_outputs = publicOutputs
     }
 
+    // Validate and filter prompt templates
+    if (promptTemplates !== undefined) {
+      const validKeys = new Set(Object.keys(SYSTEM_PROMPT_TEMPLATES))
+      const filtered: Record<string, string> = {}
+
+      for (const [key, value] of Object.entries(promptTemplates)) {
+        if (!validKeys.has(key)) continue
+        if (typeof value !== "string") continue
+        const trimmed = value.trim()
+        // Skip empty values or values identical to system default
+        if (trimmed === "" || trimmed === SYSTEM_PROMPT_TEMPLATES[key]) continue
+        filtered[key] = trimmed
+      }
+
+      updates.prompt_templates = filtered
+    }
+
     if (Object.keys(updates).length === 0) {
       return reply.status(400).send({ error: "No valid fields to update" })
     }
@@ -87,6 +107,11 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: "Failed to update settings" })
     }
 
-    return reply.send({ data: { publicOutputs: publicOutputs ?? true } })
+    return reply.send({
+      data: {
+        publicOutputs: publicOutputs ?? true,
+        promptTemplates: (updates.prompt_templates as Record<string, string>) ?? (profile.prompt_templates as Record<string, string>) ?? {},
+      },
+    })
   })
 }
