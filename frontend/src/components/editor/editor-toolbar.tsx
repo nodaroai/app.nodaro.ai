@@ -81,7 +81,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(({ data: { user } }: { data: { user: any } }) => {
       setUserId(user?.id ?? undefined)
     })
   }, [])
