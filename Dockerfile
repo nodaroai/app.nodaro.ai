@@ -1,7 +1,9 @@
 # ── Stage 1: Build backend ────────────────────────────────────────────
 FROM node:20-alpine AS backend-builder
 
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3
+
+ENV YOUTUBE_DL_SKIP_PYTHON_CHECK=1
 
 WORKDIR /app/backend
 COPY backend/package*.json ./
