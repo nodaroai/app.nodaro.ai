@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { isPromptBlocked } from "../config/content-filter.js"
 
 const IMAGE_JOBS = new Set([
   "generate-image", "edit-image", "image-to-image",
@@ -46,6 +48,40 @@ function jobNamesForType(type: string): string[] {
   if (type === "audio") return [...AUDIO_JOBS]
   return []
 }
+
+// ---- Helpers ----
+
+async function checkIsAdmin(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .single()
+
+  if (error) {
+    if (error.code === "PGRST116") return false
+    throw new Error(`Admin check failed: ${error.message}`)
+  }
+
+  if (!data) return false
+  return data.role === "admin" || data.role === "super_admin"
+}
+
+// ---- Zod Schemas ----
+
+const reportBody = z.object({
+  jobId: z.string().uuid(),
+  reason: z.enum(["inappropriate", "copyright", "spam", "other"]),
+  details: z.string().max(1000).optional(),
+})
+
+const adminDeleteParams = z.object({
+  jobId: z.string().uuid(),
+})
+
+const adminDeleteBody = z.object({
+  userId: z.string().uuid(),
+})
 
 export async function galleryRoutes(app: FastifyInstance) {
   /**
@@ -107,7 +143,7 @@ export async function galleryRoutes(app: FastifyInstance) {
       (profiles ?? []).map((p) => [p.id, p]),
     )
 
-    // Build response items
+    // Build response items — filter out blocked prompts
     const items = jobs
       .map((job) => {
         const outputData = (job.output_data ?? {}) as Record<string, unknown>
@@ -121,6 +157,9 @@ export async function galleryRoutes(app: FastifyInstance) {
         const prompt = (inputData.prompt as string)
           ?? (inputData.text as string)
           ?? null
+
+        // Filter out items with blocked words in prompt
+        if (isPromptBlocked(prompt)) return null
 
         // Extract model from provider column or input_data.provider
         const model = (job.provider as string)
@@ -146,5 +185,127 @@ export async function galleryRoutes(app: FastifyInstance) {
       page,
       limit,
     })
+  })
+
+  /**
+   * POST /v1/gallery/report - Report a gallery item
+   *
+   * Body: { jobId, reason, details? }
+   * No auth required — uses IP for rate limiting / dedup.
+   */
+  app.post("/v1/gallery/report", async (req, reply) => {
+    const parsed = reportBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid request",
+        },
+      })
+    }
+
+    const { jobId, reason, details } = parsed.data
+    const reporterIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+      ?? req.ip
+      ?? null
+
+    // Check job exists and is public
+    const { data: job, error: jobError } = await supabase
+      .from("jobs")
+      .select("id")
+      .eq("id", jobId)
+      .eq("is_public", true)
+      .eq("status", "completed")
+      .single()
+
+    if (jobError || !job) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Gallery item not found" },
+      })
+    }
+
+    // Prevent duplicate reports from same IP within 1 hour
+    if (reporterIp) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      const { data: existing } = await supabase
+        .from("gallery_reports")
+        .select("id")
+        .eq("job_id", jobId)
+        .eq("reporter_ip", reporterIp)
+        .gte("created_at", oneHourAgo)
+        .limit(1)
+
+      if (existing && existing.length > 0) {
+        return reply.status(429).send({
+          error: { code: "rate_limited", message: "You already reported this item recently" },
+        })
+      }
+    }
+
+    const { error: insertError } = await supabase
+      .from("gallery_reports")
+      .insert({
+        job_id: jobId,
+        reason,
+        details: details ?? null,
+        reporter_ip: reporterIp,
+      })
+
+    if (insertError) {
+      console.error("[gallery] Report insert failed:", insertError)
+      return reply.status(500).send({ error: "Failed to submit report" })
+    }
+
+    return reply.send({ success: true, message: "Report submitted" })
+  })
+
+  /**
+   * DELETE /v1/gallery/:jobId - Admin soft-delete from gallery
+   *
+   * Sets is_public = false (does not delete the job).
+   * Body: { userId }
+   */
+  app.delete<{ Params: { jobId: string } }>("/v1/gallery/:jobId", async (req, reply) => {
+    const paramsResult = adminDeleteParams.safeParse(req.params)
+    if (!paramsResult.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: paramsResult.error.issues[0]?.message ?? "Invalid job ID",
+        },
+      })
+    }
+
+    const bodyResult = adminDeleteBody.safeParse(req.body)
+    if (!bodyResult.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: bodyResult.error.issues[0]?.message ?? "userId is required",
+        },
+      })
+    }
+
+    const { jobId } = paramsResult.data
+    const { userId } = bodyResult.data
+
+    const isAdmin = await checkIsAdmin(userId)
+    if (!isAdmin) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Only admins can remove gallery items" },
+      })
+    }
+
+    const { error } = await supabase
+      .from("jobs")
+      .update({ is_public: false })
+      .eq("id", jobId)
+
+    if (error) {
+      console.error("[gallery] Admin delete failed:", error)
+      return reply.status(500).send({ error: "Failed to remove item from gallery" })
+    }
+
+    return reply.send({ success: true, message: "Item removed from gallery" })
   })
 }

@@ -41,6 +41,7 @@ import { tmpdir } from "node:os"
 import { randomUUID } from "node:crypto"
 import youtubedl from "youtube-dl-exec"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
+import { isPromptBlocked } from "../config/content-filter.js"
 
 const SOCIAL_HOSTNAMES = [
   "youtube.com", "youtu.be",
@@ -272,6 +273,15 @@ export function createVideoWorker() {
           shouldWatermark = profile?.tier === "free"
         }
         isPublicOutput = profile?.public_outputs ?? true
+      }
+
+      // Auto-hide outputs whose prompt contains blocked words
+      if (isPublicOutput) {
+        const jobData = job.data as Record<string, unknown>
+        const promptText = (jobData.prompt as string) ?? (jobData.text as string) ?? null
+        if (isPromptBlocked(promptText)) {
+          isPublicOutput = false
+        }
       }
 
       try {
