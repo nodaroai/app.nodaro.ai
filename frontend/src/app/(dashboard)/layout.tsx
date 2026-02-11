@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { AppSidebar, MobileHeader } from "@/components/layout/app-sidebar"
 import { SidebarProvider } from "@/components/layout/sidebar-context"
+import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
 
 export default function DashboardLayout({
   children,
@@ -13,6 +14,9 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Load user prompt templates into workflow store on app init
+  useLoadUserSettings()
 
   // Check if we're in the editor - sidebar starts collapsed but can be expanded
   const isEditor = pathname.includes("/workflows/")

@@ -196,7 +196,7 @@ export function useWorkflowPersistence(projectId?: string) {
       const resolvedProjectId = pid ?? projectId
       if (!resolvedProjectId) return { success: false, error: "No project ID" }
 
-      const { workflowId, workflowName, nodes, edges, characterDefinitions } =
+      const { workflowId, workflowName, nodes, edges, characterDefinitions, flowPromptTemplates } =
         useWorkflowStore.getState()
 
       // Don't save empty workflows
@@ -212,7 +212,10 @@ export function useWorkflowPersistence(projectId?: string) {
           name: workflowName,
           nodes: JSON.parse(JSON.stringify(nodes)),
           edges: JSON.parse(JSON.stringify(edges)),
-          settings: { characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)) },
+          settings: {
+            characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)),
+            flowPromptTemplates: JSON.parse(JSON.stringify(flowPromptTemplates)),
+          },
         }
 
         if (workflowId) {
@@ -295,6 +298,7 @@ export function useWorkflowPersistence(projectId?: string) {
 
         const settings = (data.settings ?? {}) as Record<string, unknown>
         const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
+        const flowTemplates = (settings.flowPromptTemplates ?? {}) as Record<string, string>
         let nodes = data.nodes as WorkflowNode[]
         const edges = data.edges as WorkflowEdge[]
 
@@ -310,6 +314,7 @@ export function useWorkflowPersistence(projectId?: string) {
           nodes,
           edges,
           charDefs,
+          flowTemplates,
         )
 
         // If nodes were updated during sync, save the updated workflow

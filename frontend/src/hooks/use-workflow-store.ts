@@ -25,6 +25,8 @@ interface WorkflowState {
   readonly videoAutoplay: boolean
   readonly newNodeIds: Set<string>
   readonly characterDefinitions: CharacterDefinition[]
+  readonly userPromptTemplates: Record<string, string>
+  readonly flowPromptTemplates: Record<string, string>
 
   readonly setWorkflowId: (id: string | null) => void
   readonly setProjectId: (id: string | null) => void
@@ -38,7 +40,9 @@ interface WorkflowState {
   readonly deleteEdge: (edgeId: string) => void
   readonly duplicateNode: (nodeId: string) => void
   readonly selectNode: (nodeId: string | null) => void
-  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[]) => void
+  readonly setUserPromptTemplates: (templates: Record<string, string>) => void
+  readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
+  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
@@ -87,6 +91,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   videoAutoplay: true,
   newNodeIds: new Set<string>(),
   characterDefinitions: [],
+  userPromptTemplates: {},
+  flowPromptTemplates: {},
 
   setWorkflowId: (id) => set({ workflowId: id }),
 
@@ -256,7 +262,11 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
 
-  loadWorkflow: (id, name, nodes, edges, characterDefinitions) => {
+  setUserPromptTemplates: (templates) => set({ userPromptTemplates: templates }),
+
+  setFlowPromptTemplates: (templates) => set({ flowPromptTemplates: templates, isDirty: true }),
+
+  loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates) => {
     nextNodeId =
       nodes.reduce((max, n) => {
         const num = parseInt(n.id.replace("node_", ""), 10)
@@ -273,6 +283,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       characterDefinitions: characterDefinitions ?? [],
+      flowPromptTemplates: flowPromptTemplates ?? {},
     })
   },
 
@@ -288,6 +299,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       characterDefinitions: [],
+      flowPromptTemplates: {},
     })
   },
 
