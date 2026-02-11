@@ -259,21 +259,29 @@ export function createVideoWorker() {
       const usageLogId = jobRecord?.usage_log_id
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
 
-      // Determine if output should be watermarked (free tier only, cloud edition)
+      // Fetch user profile for watermark + gallery visibility decisions
       let shouldWatermark = false
-      if (hasCredits() && jobUserId) {
+      let isPublicOutput = true
+      if (jobUserId) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("tier")
+          .select("tier, public_outputs")
           .eq("id", jobUserId)
           .single()
-        shouldWatermark = profile?.tier === "free"
+        if (hasCredits()) {
+          shouldWatermark = profile?.tier === "free"
+        }
+        isPublicOutput = profile?.public_outputs ?? true
       }
 
       try {
         await supabase
           .from("jobs")
-          .update({ status: "processing", started_at: new Date().toISOString() })
+          .update({
+            status: "processing",
+            started_at: new Date().toISOString(),
+            is_public: isPublicOutput,
+          })
           .eq("id", jobId)
 
         if (job.name === "generate-image") {
