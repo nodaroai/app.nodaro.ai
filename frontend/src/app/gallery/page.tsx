@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
-import { ArrowLeft, Image as ImageIcon, Video, Music, Loader2, ChevronLeft, ChevronRight, Play, Pause } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ArrowLeft, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,8 @@ interface GalleryItem {
   readonly outputUrl: string
   readonly thumbnailUrl: string | null
   readonly createdAt: string
+  readonly prompt: string | null
+  readonly model: string | null
 }
 
 interface GalleryResponse {
@@ -123,21 +125,51 @@ function AudioCard({ url }: { readonly url: string }) {
   )
 }
 
+function CopyPromptButton({ prompt }: { readonly prompt: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(prompt)
+    setCopied(true)
+    toast.success("Prompt copied to clipboard")
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-green-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+      {copied ? "Copied" : "Copy Prompt"}
+    </button>
+  )
+}
+
 export default function GalleryPage() {
   const [items, setItems] = useState<readonly GalleryItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState<FilterType>("all")
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const hasMore = items.length < total
 
-  const totalPages = Math.ceil(total / ITEMS_PER_PAGE)
-
-  const fetchGallery = useCallback(async () => {
-    setLoading(true)
+  const fetchGallery = useCallback(async (pageNum: number, append: boolean) => {
+    if (append) {
+      setLoadingMore(true)
+    } else {
+      setLoading(true)
+    }
     try {
       const params = new URLSearchParams({
-        page: String(page),
+        page: String(pageNum),
         limit: String(ITEMS_PER_PAGE),
       })
       if (filter !== "all") {
@@ -148,25 +180,49 @@ export default function GalleryPage() {
       if (!response.ok) throw new Error("Failed to fetch gallery")
 
       const json = (await response.json()) as GalleryResponse
-      setItems(json.data)
+      if (append) {
+        setItems((prev) => [...prev, ...json.data])
+      } else {
+        setItems(json.data)
+      }
       setTotal(json.total)
     } catch (err) {
       console.error("Gallery fetch failed:", err)
-      setItems([])
-      setTotal(0)
+      if (!append) {
+        setItems([])
+        setTotal(0)
+      }
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
-  }, [page, filter])
+  }, [filter])
 
-  useEffect(() => {
-    fetchGallery()
-  }, [fetchGallery])
-
-  // Reset to page 1 when filter changes
+  // Initial load
   useEffect(() => {
     setPage(1)
-  }, [filter])
+    fetchGallery(1, false)
+  }, [fetchGallery])
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loading && !loadingMore) {
+          const nextPage = page + 1
+          setPage(nextPage)
+          fetchGallery(nextPage, true)
+        }
+      },
+      { rootMargin: "200px" },
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loading, loadingMore, page, fetchGallery])
 
   return (
     <div className="min-h-screen bg-background">
@@ -233,10 +289,13 @@ export default function GalleryPage() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {items.map((item) => (
-                <button
+                <div
                   key={item.id}
-                  className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all text-left"
+                  role="button"
+                  tabIndex={0}
+                  className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
                   onClick={() => setSelectedItem(item)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedItem(item) }}
                 >
                   {item.type === "image" ? (
                     <img
@@ -269,33 +328,23 @@ export default function GalleryPage() {
                       </span>
                     </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-muted-foreground px-3">
-                  Page {page} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="h-1" />
+
+            {loadingMore && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
+            )}
+
+            {!hasMore && items.length > 0 && (
+              <p className="text-center text-sm text-muted-foreground py-8">
+                You've reached the end
+              </p>
             )}
           </>
         )}
@@ -330,11 +379,34 @@ export default function GalleryPage() {
               </div>
 
               {/* Meta */}
-              <div className="p-4 flex items-center justify-between">
-                <TypeBadge type={selectedItem.type} />
-                <span className="text-xs text-muted-foreground">
-                  {formatDate(selectedItem.createdAt)}
-                </span>
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TypeBadge type={selectedItem.type} />
+                    {selectedItem.model && (
+                      <span className="text-xs text-muted-foreground bg-zinc-100 dark:bg-zinc-800 rounded px-2 py-0.5">
+                        {selectedItem.model}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(selectedItem.createdAt)}
+                  </span>
+                </div>
+
+                {selectedItem.prompt && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Prompt
+                      </span>
+                      <CopyPromptButton prompt={selectedItem.prompt} />
+                    </div>
+                    <p className="text-sm text-foreground leading-relaxed bg-zinc-50 dark:bg-zinc-900 rounded-md p-3 border border-zinc-200 dark:border-zinc-800">
+                      {selectedItem.prompt}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}

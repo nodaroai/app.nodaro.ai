@@ -66,7 +66,7 @@ export async function galleryRoutes(app: FastifyInstance) {
     // Build query
     let dbQuery = supabase
       .from("jobs")
-      .select("id, job_type, output_data, completed_at, user_id", { count: "exact" })
+      .select("id, job_type, input_data, output_data, completed_at, user_id, provider", { count: "exact" })
       .eq("is_public", true)
       .eq("status", "completed")
       .not("output_data", "is", null)
@@ -111,12 +111,21 @@ export async function galleryRoutes(app: FastifyInstance) {
     const items = jobs
       .map((job) => {
         const outputData = (job.output_data ?? {}) as Record<string, unknown>
+        const inputData = (job.input_data ?? {}) as Record<string, unknown>
         const type = getOutputType(job.job_type)
         const outputUrl = getOutputUrl(job.job_type, outputData)
 
         if (!type || !outputUrl) return null
 
-        const profile = profileMap.get(job.user_id)
+        // Extract prompt from input_data (different field names per job type)
+        const prompt = (inputData.prompt as string)
+          ?? (inputData.text as string)
+          ?? null
+
+        // Extract model from provider column or input_data.provider
+        const model = (job.provider as string)
+          ?? (inputData.provider as string)
+          ?? null
 
         return {
           id: job.id,
@@ -125,8 +134,8 @@ export async function galleryRoutes(app: FastifyInstance) {
           outputUrl,
           thumbnailUrl: (outputData.thumbnailUrl as string) ?? null,
           createdAt: job.completed_at,
-          username: profile?.full_name || "Anonymous",
-          avatarUrl: profile?.avatar_url ?? null,
+          prompt,
+          model,
         }
       })
       .filter(Boolean)
