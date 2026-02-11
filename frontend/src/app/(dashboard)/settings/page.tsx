@@ -1,7 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Loader2, Globe, Lock, RotateCcw, FileText, Save, Info } from "lucide-react"
+import {
+  Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
+  Pencil, X, Download, Upload,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -22,6 +25,8 @@ const API_BASE = ""
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
+const VALID_TEMPLATE_KEYS = new Set(Object.keys(SYSTEM_PROMPT_TEMPLATES))
+
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth()
   const [publicOutputs, setPublicOutputs] = useState(true)
@@ -31,6 +36,7 @@ export default function SettingsPage() {
   const [templates, setTemplates] = useState<Record<string, string>>({})
   const [savedTemplates, setSavedTemplates] = useState<Record<string, string>>({})
   const [savingTemplates, setSavingTemplates] = useState(false)
+  const [editingKey, setEditingKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user?.id) return
@@ -125,6 +131,7 @@ export default function SettingsPage() {
       const pt = (data.promptTemplates ?? {}) as Record<string, string>
       setTemplates(pt)
       setSavedTemplates(pt)
+      setEditingKey(null)
       toast.success("Prompt templates saved")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save"
@@ -132,6 +139,57 @@ export default function SettingsPage() {
     } finally {
       setSavingTemplates(false)
     }
+  }
+
+  function handleExport() {
+    const hasOverrides = Object.keys(templates).length > 0
+    const data = hasOverrides
+      ? templates
+      : {
+          _note: "These are system defaults. Edit the values you want to customize.",
+          ...Object.fromEntries(
+            Object.entries(SYSTEM_PROMPT_TEMPLATES).map(([k, v]) => [k, v.template]),
+          ),
+        }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "scenenode-prompt-templates.json"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handleImport() {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".json"
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const parsed: unknown = JSON.parse(text)
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Expected a JSON object")
+        }
+        const imported: Record<string, string> = {}
+        for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+          if (VALID_TEMPLATE_KEYS.has(k) && typeof v === "string") {
+            imported[k] = v
+          }
+        }
+        if (Object.keys(imported).length === 0) {
+          toast.error("No valid template overrides found in file")
+          return
+        }
+        setTemplates(imported)
+        toast.success(`Imported ${Object.keys(imported).length} template overrides`)
+      } catch {
+        toast.error("Invalid template file")
+      }
+    }
+    input.click()
   }
 
   const hasTemplateChanges =
@@ -209,10 +267,33 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2 mb-4">
           <FileText className="h-5 w-5 text-muted-foreground" />
           <h2 className="text-xl font-bold">Prompt Templates</h2>
+
+          <div className="flex items-center gap-1 ml-auto">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleExport}>
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Export templates as JSON</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleImport}>
+                    <Upload className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Import templates from JSON</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground mb-6">
           Customize the prompts used when generating images from asset nodes.
-          Leave a field empty to use the system default (shown as placeholder).
+          Click the edit button to modify a template.
         </p>
 
         {/* Asset type groups */}
@@ -224,6 +305,9 @@ export default function SettingsPage() {
               descriptionKey={group.descriptionKey}
               generationKey={group.generationKey}
               templates={templates}
+              editingKey={editingKey}
+              onStartEdit={setEditingKey}
+              onCancelEdit={() => setEditingKey(null)}
               onChange={handleTemplateChange}
               onReset={handleResetTemplate}
             />
@@ -233,6 +317,9 @@ export default function SettingsPage() {
           <TemplateCard
             templateKey={WRAPPER_TEMPLATE_KEY}
             value={templates[WRAPPER_TEMPLATE_KEY] ?? ""}
+            isEditing={editingKey === WRAPPER_TEMPLATE_KEY}
+            onStartEdit={() => setEditingKey(WRAPPER_TEMPLATE_KEY)}
+            onCancelEdit={() => setEditingKey(null)}
             onChange={handleTemplateChange}
             onReset={handleResetTemplate}
           />
@@ -265,6 +352,9 @@ function TemplateGroupCard({
   descriptionKey,
   generationKey,
   templates,
+  editingKey,
+  onStartEdit,
+  onCancelEdit,
   onChange,
   onReset,
 }: {
@@ -272,6 +362,9 @@ function TemplateGroupCard({
   readonly descriptionKey: string
   readonly generationKey: string
   readonly templates: Record<string, string>
+  readonly editingKey: string | null
+  readonly onStartEdit: (key: string) => void
+  readonly onCancelEdit: () => void
   readonly onChange: (key: string, value: string) => void
   readonly onReset: (key: string) => void
 }) {
@@ -283,6 +376,8 @@ function TemplateGroupCard({
 
   const value = templates[activeKey] ?? ""
   const hasOverride = value.trim().length > 0
+  const displayText = hasOverride ? value : info.template
+  const isEditing = editingKey === activeKey
 
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-4">
@@ -302,9 +397,15 @@ function TemplateGroupCard({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
+        {hasOverride && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+            Custom
+          </span>
+        )}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs + Edit/Cancel */}
       <div className="flex gap-1 mb-3">
         <button
           type="button"
@@ -331,53 +432,86 @@ function TemplateGroupCard({
           Generation
         </button>
 
-        {/* Reset button (right-aligned) */}
-        {hasOverride && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 ml-auto text-muted-foreground hover:text-foreground"
-                  onClick={() => onReset(activeKey)}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reset to system default</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
+        <div className="flex items-center gap-1 ml-auto">
+          {isEditing && hasOverride && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => onReset(activeKey)}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Reset to system default</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {isEditing ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={onCancelEdit}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />
+              Cancel
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => onStartEdit(activeKey)}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              Edit
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Textarea */}
-      <textarea
-        rows={3}
-        value={value}
-        placeholder={info.template}
-        onChange={(e) => onChange(activeKey, e.target.value)}
-        className={cn(
-          "w-full rounded-md border px-3 py-2 text-sm font-mono resize-y",
-          "bg-transparent placeholder:text-muted-foreground/50",
-          "border-zinc-200 dark:border-zinc-700",
-          "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
-        )}
-      />
-
-      {/* Variable badges */}
-      {info.variables.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          <span className="text-xs text-muted-foreground">Variables:</span>
-          {info.variables.map((v) => (
-            <span
-              key={v}
-              className="bg-zinc-100 dark:bg-zinc-800 text-xs px-1.5 py-0.5 rounded font-mono text-muted-foreground"
-            >
-              {`{${v}}`}
-            </span>
-          ))}
-        </div>
+      {/* Content: read-only or textarea */}
+      {isEditing ? (
+        <>
+          <textarea
+            rows={3}
+            value={value}
+            placeholder={info.template}
+            onChange={(e) => onChange(activeKey, e.target.value)}
+            className={cn(
+              "w-full rounded-md border px-3 py-2 text-sm font-mono resize-y",
+              "bg-transparent placeholder:text-muted-foreground/50",
+              "border-zinc-200 dark:border-zinc-700",
+              "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
+            )}
+            autoFocus
+          />
+          {info.variables.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              <span className="text-xs text-muted-foreground">Variables:</span>
+              {info.variables.map((v) => (
+                <span
+                  key={v}
+                  className="bg-zinc-100 dark:bg-zinc-800 text-xs px-1.5 py-0.5 rounded font-mono text-muted-foreground"
+                >
+                  {`{${v}}`}
+                </span>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <p className={cn(
+          "text-xs font-mono leading-relaxed whitespace-pre-wrap",
+          hasOverride ? "text-foreground" : "text-muted-foreground",
+        )}>
+          {displayText}
+        </p>
       )}
     </div>
   )
@@ -386,11 +520,17 @@ function TemplateGroupCard({
 function TemplateCard({
   templateKey,
   value,
+  isEditing,
+  onStartEdit,
+  onCancelEdit,
   onChange,
   onReset,
 }: {
   readonly templateKey: string
   readonly value: string
+  readonly isEditing: boolean
+  readonly onStartEdit: () => void
+  readonly onCancelEdit: () => void
   readonly onChange: (key: string, value: string) => void
   readonly onReset: (key: string) => void
 }) {
@@ -398,58 +538,102 @@ function TemplateCard({
   if (!info) return null
 
   const hasOverride = value.trim().length > 0
+  const displayText = hasOverride ? value : info.template
 
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div>
-          <h4 className="text-sm font-semibold">{info.label}</h4>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold">{info.label}</h4>
+            {hasOverride && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] font-medium">
+                Custom
+              </span>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">{info.description}</p>
         </div>
-        {hasOverride && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => onReset(templateKey)}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reset to system default</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
+
+        <div className="flex items-center gap-1">
+          {isEditing && hasOverride && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => onReset(templateKey)}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Reset to system default</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {isEditing ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={onCancelEdit}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />
+              Cancel
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={onStartEdit}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              Edit
+            </Button>
+          )}
+        </div>
       </div>
 
-      <textarea
-        rows={3}
-        value={value}
-        placeholder={info.template}
-        onChange={(e) => onChange(templateKey, e.target.value)}
-        className={cn(
-          "w-full rounded-md border px-3 py-2 text-sm font-mono resize-y",
-          "bg-transparent placeholder:text-muted-foreground/50",
-          "border-zinc-200 dark:border-zinc-700",
-          "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
-        )}
-      />
-
-      {info.variables.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          <span className="text-xs text-muted-foreground">Variables:</span>
-          {info.variables.map((v) => (
-            <span
-              key={v}
-              className="bg-zinc-100 dark:bg-zinc-800 text-xs px-1.5 py-0.5 rounded font-mono text-muted-foreground"
-            >
-              {`{${v}}`}
-            </span>
-          ))}
-        </div>
+      {isEditing ? (
+        <>
+          <textarea
+            rows={3}
+            value={value}
+            placeholder={info.template}
+            onChange={(e) => onChange(templateKey, e.target.value)}
+            className={cn(
+              "w-full rounded-md border px-3 py-2 text-sm font-mono resize-y",
+              "bg-transparent placeholder:text-muted-foreground/50",
+              "border-zinc-200 dark:border-zinc-700",
+              "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
+            )}
+            autoFocus
+          />
+          {info.variables.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              <span className="text-xs text-muted-foreground">Variables:</span>
+              {info.variables.map((v) => (
+                <span
+                  key={v}
+                  className="bg-zinc-100 dark:bg-zinc-800 text-xs px-1.5 py-0.5 rounded font-mono text-muted-foreground"
+                >
+                  {`{${v}}`}
+                </span>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <p className={cn(
+          "text-xs font-mono leading-relaxed whitespace-pre-wrap",
+          hasOverride ? "text-foreground" : "text-muted-foreground",
+        )}>
+          {displayText}
+        </p>
       )}
     </div>
   )
