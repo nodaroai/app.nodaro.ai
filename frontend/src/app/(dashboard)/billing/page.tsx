@@ -28,7 +28,7 @@ import {
   type SubscriptionInfo,
   type TransactionRecord,
 } from "@/lib/api"
-import { PRICING_TIERS } from "@/lib/pricing-data"
+import { PRICING_TIERS, getBillingCycleFromPriceId } from "@/lib/pricing-data"
 import { toast } from "sonner"
 
 export default function BillingPage() {
@@ -114,6 +114,10 @@ export default function BillingPage() {
   }
 
   const currentTier = PRICING_TIERS.find((t) => t.id === (balance?.tier ?? "free"))
+  const subBillingCycle = getBillingCycleFromPriceId(subscription?.paddle_price_id)
+  const displayPrice = currentTier
+    ? subBillingCycle === "monthly" ? currentTier.priceMonthly : currentTier.priceAnnual
+    : 0
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
@@ -168,9 +172,12 @@ export default function BillingPage() {
               <p className="text-lg font-semibold capitalize">
                 {currentTier?.name ?? "Free"}
               </p>
-              {currentTier && currentTier.priceMonthly > 0 && (
+              {currentTier && displayPrice > 0 && (
                 <p className="text-sm text-muted-foreground">
-                  ${currentTier.priceMonthly}/month
+                  ${displayPrice}/mo{" "}
+                  <span className="text-xs">
+                    ({subBillingCycle === "annual" ? "billed annually" : "billed monthly"})
+                  </span>
                 </p>
               )}
             </div>

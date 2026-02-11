@@ -3,13 +3,19 @@
  *
  * Client-side pricing constants for the pricing page and billing dashboard.
  * Price IDs match the Paddle configuration in backend/src/billing/paddle-config.ts.
+ *
+ * Two billing cycles: "monthly" (higher price) and "annual" (billed yearly at lower per-month rate).
  */
+
+export type BillingCycle = "monthly" | "annual"
 
 export interface PricingTier {
   readonly id: string
   readonly name: string
   readonly priceMonthly: number
-  readonly priceId: string | null
+  readonly priceAnnual: number
+  readonly priceIdMonthly: string | null
+  readonly priceIdAnnual: string | null
   readonly credits: number
   readonly llmRequests: number | null
   readonly storage: string
@@ -23,7 +29,9 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     id: "free",
     name: "Free",
     priceMonthly: 0,
-    priceId: null,
+    priceAnnual: 0,
+    priceIdMonthly: null,
+    priceIdAnnual: null,
     credits: 50,
     llmRequests: 20,
     storage: "500 MB",
@@ -40,8 +48,10 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   {
     id: "basic",
     name: "Basic",
-    priceMonthly: 19,
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_BASIC || "pri_01kh3bsqwcvna2shws5ee1fzek",
+    priceMonthly: 24,
+    priceAnnual: 19,
+    priceIdMonthly: process.env.NEXT_PUBLIC_PADDLE_PRICE_BASIC_MONTHLY || null,
+    priceIdAnnual: process.env.NEXT_PUBLIC_PADDLE_PRICE_BASIC || "pri_01kh3bsqwcvna2shws5ee1fzek",
     credits: 95,
     llmRequests: 100,
     storage: "5 GB",
@@ -58,8 +68,10 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   {
     id: "standard",
     name: "Standard",
-    priceMonthly: 39,
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_STANDARD || "pri_01kh3btfezxg529x44qknn5h1q",
+    priceMonthly: 49,
+    priceAnnual: 39,
+    priceIdMonthly: process.env.NEXT_PUBLIC_PADDLE_PRICE_STANDARD_MONTHLY || null,
+    priceIdAnnual: process.env.NEXT_PUBLIC_PADDLE_PRICE_STANDARD || "pri_01kh3btfezxg529x44qknn5h1q",
     credits: 235,
     llmRequests: 300,
     storage: "15 GB",
@@ -71,14 +83,15 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       "No watermark",
       "Priority queue",
     ],
-    highlighted: true,
     cta: "Subscribe",
   },
   {
     id: "pro",
     name: "Pro",
-    priceMonthly: 79,
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_PRO || "pri_01kh3bvg0gjkhnydp175zyzzd6",
+    priceMonthly: 99,
+    priceAnnual: 79,
+    priceIdMonthly: process.env.NEXT_PUBLIC_PADDLE_PRICE_PRO_MONTHLY || null,
+    priceIdAnnual: process.env.NEXT_PUBLIC_PADDLE_PRICE_PRO || "pri_01kh3bvg0gjkhnydp175zyzzd6",
     credits: 530,
     llmRequests: 1000,
     storage: "50 GB",
@@ -90,13 +103,16 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       "No watermark",
       "Fastest queue priority",
     ],
+    highlighted: true,
     cta: "Subscribe",
   },
   {
     id: "business",
     name: "Business",
-    priceMonthly: 149,
-    priceId: process.env.NEXT_PUBLIC_PADDLE_PRICE_BUSINESS || "pri_01kh3bwnatzcgmj55pxdrkhap7",
+    priceMonthly: 189,
+    priceAnnual: 149,
+    priceIdMonthly: process.env.NEXT_PUBLIC_PADDLE_PRICE_BUSINESS_MONTHLY || null,
+    priceIdAnnual: process.env.NEXT_PUBLIC_PADDLE_PRICE_BUSINESS || "pri_01kh3bwnatzcgmj55pxdrkhap7",
     credits: 1120,
     llmRequests: null,
     storage: "100 GB",
@@ -111,6 +127,32 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     cta: "Subscribe",
   },
 ] as const
+
+/** Get the display price for a tier based on billing cycle. */
+export function getTierPrice(tier: PricingTier, cycle: BillingCycle): number {
+  return cycle === "monthly" ? tier.priceMonthly : tier.priceAnnual
+}
+
+/** Get the Paddle price ID for a tier based on billing cycle. */
+export function getTierPriceId(tier: PricingTier, cycle: BillingCycle): string | null {
+  return cycle === "monthly" ? tier.priceIdMonthly : tier.priceIdAnnual
+}
+
+/** Calculate the annual savings percentage compared to monthly billing. */
+export function getAnnualSavingsPercent(tier: PricingTier): number {
+  if (tier.priceMonthly <= 0) return 0
+  return Math.round(((tier.priceMonthly - tier.priceAnnual) / tier.priceMonthly) * 100)
+}
+
+/** Determine billing cycle from a Paddle price ID by matching against all tiers. */
+export function getBillingCycleFromPriceId(priceId: string | null | undefined): BillingCycle {
+  if (!priceId) return "annual"
+  for (const tier of PRICING_TIERS) {
+    if (tier.priceIdMonthly === priceId) return "monthly"
+    if (tier.priceIdAnnual === priceId) return "annual"
+  }
+  return "annual"
+}
 
 export interface TopupPackage {
   readonly id: string

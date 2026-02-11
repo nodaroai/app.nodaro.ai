@@ -165,12 +165,13 @@ function SubscriptionTiersSection() {
           <thead className="bg-muted/50">
             <tr>
               <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Tier</th>
-              <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Price/mo</th>
+              <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Monthly</th>
+              <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Annual</th>
               <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Credits</th>
               <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">$/Credit</th>
               <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">LLM Requests</th>
               <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Our Cost</th>
-              <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Margin</th>
+              <th className="text-right px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Margin (Mo/Yr)</th>
               <th className="text-left px-4 py-2.5 font-medium text-xs uppercase tracking-wider text-muted-foreground">Notes</th>
             </tr>
           </thead>
@@ -178,13 +179,14 @@ function SubscriptionTiersSection() {
             {SUBSCRIPTION_TIERS.map((tier) => (
               <tr key={tier.name} className="border-t hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-2.5 font-medium">{tier.name}</td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs">{tier.price === 0 ? "$0" : `$${tier.price}`}</td>
+                <td className="px-4 py-2.5 text-right font-mono text-xs">{tier.priceMonthly === 0 ? "$0" : `$${tier.priceMonthly}`}</td>
+                <td className="px-4 py-2.5 text-right font-mono text-xs">{tier.priceAnnual === 0 ? "$0" : `$${tier.priceAnnual}`}</td>
                 <td className="px-4 py-2.5 text-right font-mono text-xs">{tier.credits.toLocaleString()}</td>
                 <td className="px-4 py-2.5 text-right font-mono text-xs">{tier.perCredit !== null ? `$${tier.perCredit.toFixed(3)}` : "--"}</td>
                 <td className="px-4 py-2.5 text-xs">{tier.llmRequests}</td>
                 <td className="px-4 py-2.5 text-right font-mono text-xs">~${tier.estimatedCost}</td>
-                <td className={`px-4 py-2.5 text-right font-mono text-xs font-semibold ${marginColor(tier.margin)}`}>
-                  {tier.margin !== null ? `${tier.margin}%` : "loss leader"}
+                <td className={`px-4 py-2.5 text-right font-mono text-xs font-semibold ${marginColor(tier.marginAnnual)}`}>
+                  {tier.marginMonthly !== null ? `${tier.marginMonthly}/${tier.marginAnnual}%` : "loss leader"}
                 </td>
                 <td className="px-4 py-2.5 text-xs text-muted-foreground">{tier.notes ?? ""}</td>
               </tr>

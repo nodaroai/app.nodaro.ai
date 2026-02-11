@@ -9,7 +9,13 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { openCheckout } from "@/lib/paddle"
 import { getSubscription, changePlan, type SubscriptionInfo } from "@/lib/api"
-import { PRICING_TIERS } from "@/lib/pricing-data"
+import {
+  PRICING_TIERS,
+  getTierPrice,
+  getTierPriceId,
+  getAnnualSavingsPercent,
+  type BillingCycle,
+} from "@/lib/pricing-data"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 
@@ -19,6 +25,7 @@ export default function PricingPage() {
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [subLoading, setSubLoading] = useState(false)
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
 
   // Fetch current subscription when user is available
   useEffect(() => {
@@ -33,8 +40,17 @@ export default function PricingPage() {
   const isActiveSub = subscription &&
     (subscription.status === "active" || subscription.status === "past_due")
   const currentTierId = isActiveSub
-    ? PRICING_TIERS.find((t) => t.priceId === subscription.paddle_price_id)?.id ?? null
+    ? PRICING_TIERS.find(
+        (t) =>
+          t.priceIdAnnual === subscription.paddle_price_id ||
+          t.priceIdMonthly === subscription.paddle_price_id,
+      )?.id ?? null
     : null
+
+  // Max savings across all paid tiers (for the toggle badge)
+  const maxSavings = Math.max(
+    ...PRICING_TIERS.filter((t) => t.priceMonthly > 0).map(getAnnualSavingsPercent),
+  )
 
   async function handleSubscribe(tierId: string, priceId: string | null) {
     if (!priceId) {
@@ -110,6 +126,44 @@ export default function PricingPage() {
           Start free and scale as you grow. All plans include access to the
           visual workflow editor and AI video generation tools.
         </p>
+
+        {/* Billing cycle toggle */}
+        <div className="mt-8 inline-flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800 p-1 bg-card">
+          <button
+            className={cn(
+              "rounded-full px-5 py-2 text-sm font-medium transition-colors",
+              billingCycle === "monthly"
+                ? "bg-[#ff0073] text-white"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            onClick={() => setBillingCycle("monthly")}
+          >
+            Monthly
+          </button>
+          <button
+            className={cn(
+              "rounded-full px-5 py-2 text-sm font-medium transition-colors flex items-center gap-2",
+              billingCycle === "annual"
+                ? "bg-[#ff0073] text-white"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            onClick={() => setBillingCycle("annual")}
+          >
+            Annual
+            {maxSavings > 0 && (
+              <span
+                className={cn(
+                  "text-xs font-semibold px-2 py-0.5 rounded-full",
+                  billingCycle === "annual"
+                    ? "bg-white/20 text-white"
+                    : "bg-green-500/10 text-green-600 dark:text-green-400",
+                )}
+              >
+                Save {maxSavings}%
+              </span>
+            )}
+          </button>
+        </div>
       </section>
 
       {/* Tier Cards */}
@@ -117,6 +171,10 @@ export default function PricingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
           {PRICING_TIERS.map((tier) => {
             const isCurrent = tier.id === currentTierId
+            const displayPrice = getTierPrice(tier, billingCycle)
+            const priceId = getTierPriceId(tier, billingCycle)
+            const savings = getAnnualSavingsPercent(tier)
+
             return (
               <div
                 key={tier.id}
@@ -149,13 +207,22 @@ export default function PricingPage() {
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold">{tier.name}</h3>
                   <div className="mt-3 flex items-baseline gap-1">
+                    {billingCycle === "annual" && tier.priceMonthly > 0 && (
+                      <span className="text-lg text-muted-foreground line-through mr-1">
+                        ${tier.priceMonthly}
+                      </span>
+                    )}
                     <span className="text-3xl font-bold">
-                      ${tier.priceMonthly}
+                      ${displayPrice}
                     </span>
-                    <span className="text-sm text-muted-foreground">/month</span>
+                    <span className="text-sm text-muted-foreground">/mo</span>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {tier.credits} credits / month
+                    {tier.priceMonthly > 0
+                      ? billingCycle === "annual"
+                        ? `$${tier.priceAnnual * 12}/yr \u00b7 Save ${savings}%`
+                        : "Billed monthly"
+                      : `${tier.credits} credits / month`}
                   </p>
                 </div>
 
@@ -177,7 +244,7 @@ export default function PricingPage() {
                   )}
                   variant={!isCurrent && tier.highlighted ? "default" : "outline"}
                   disabled={isCurrent || loadingTier === tier.id || subLoading}
-                  onClick={() => handleSubscribe(tier.id, tier.priceId)}
+                  onClick={() => handleSubscribe(tier.id, priceId)}
                 >
                   {getButtonLabel(tier.id)}
                 </Button>

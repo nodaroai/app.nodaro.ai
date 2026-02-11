@@ -4,21 +4,23 @@
 
 export interface SubscriptionTier {
   readonly name: string
-  readonly price: number
+  readonly priceMonthly: number
+  readonly priceAnnual: number
   readonly credits: number
   readonly perCredit: number | null
   readonly llmRequests: string
   readonly estimatedCost: number
-  readonly margin: number | null
+  readonly marginMonthly: number | null
+  readonly marginAnnual: number | null
   readonly notes?: string
 }
 
 export const SUBSCRIPTION_TIERS: readonly SubscriptionTier[] = [
-  { name: "Free", price: 0, credits: 50, perCredit: null, llmRequests: "20/mo", estimatedCost: 5, margin: null, notes: "10 cr/day, VEO 3 blocked, watermark" },
-  { name: "Basic", price: 19, credits: 95, perCredit: 0.20, llmRequests: "100/mo", estimatedCost: 9.6, margin: 49 },
-  { name: "Standard", price: 39, credits: 235, perCredit: 0.166, llmRequests: "300/mo", estimatedCost: 23.8, margin: 39 },
-  { name: "Pro", price: 79, credits: 530, perCredit: 0.149, llmRequests: "1,000/mo", estimatedCost: 54, margin: 32 },
-  { name: "Business", price: 149, credits: 1120, perCredit: 0.133, llmRequests: "Unlimited", estimatedCost: 112, margin: 25 },
+  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 50, perCredit: null, llmRequests: "20/mo", estimatedCost: 5, marginMonthly: null, marginAnnual: null, notes: "10 cr/day, VEO 3 blocked, watermark" },
+  { name: "Basic", priceMonthly: 24, priceAnnual: 19, credits: 95, perCredit: 0.20, llmRequests: "100/mo", estimatedCost: 9.6, marginMonthly: 60, marginAnnual: 49 },
+  { name: "Standard", priceMonthly: 49, priceAnnual: 39, credits: 235, perCredit: 0.166, llmRequests: "300/mo", estimatedCost: 23.8, marginMonthly: 51, marginAnnual: 39 },
+  { name: "Pro", priceMonthly: 99, priceAnnual: 79, credits: 530, perCredit: 0.149, llmRequests: "1,000/mo", estimatedCost: 54, marginMonthly: 45, marginAnnual: 32 },
+  { name: "Business", priceMonthly: 189, priceAnnual: 149, credits: 1120, perCredit: 0.133, llmRequests: "Unlimited", estimatedCost: 112, marginMonthly: 41, marginAnnual: 25 },
 ] as const
 
 export interface TopUpPackage {
