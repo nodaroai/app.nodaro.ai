@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Check, ArrowLeft, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -20,12 +20,22 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 
 export default function PricingPage() {
+  return (
+    <Suspense>
+      <PricingPageContent />
+    </Suspense>
+  )
+}
+
+function PricingPageContent() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [subLoading, setSubLoading] = useState(false)
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
+  const searchParams = useSearchParams()
+  const autoCheckoutTriggered = useRef(false)
 
   // Fetch current subscription when user is available
   useEffect(() => {
@@ -46,6 +56,22 @@ export default function PricingPage() {
           t.priceIdMonthly === subscription.paddle_price_id,
       )?.id ?? null
     : null
+
+  // Auto-open Paddle checkout when redirected from login with ?plan= param
+  useEffect(() => {
+    if (authLoading || subLoading || autoCheckoutTriggered.current) return
+    const planParam = searchParams.get("plan")
+    if (!planParam || !user || isActiveSub) return
+
+    const tier = PRICING_TIERS.find((t) => t.id === planParam)
+    if (!tier) return
+
+    const priceId = getTierPriceId(tier, billingCycle)
+    if (!priceId) return
+
+    autoCheckoutTriggered.current = true
+    handleSubscribe(tier.id, priceId)
+  }, [authLoading, subLoading, user, isActiveSub, searchParams, billingCycle])
 
   // Max savings across all paid tiers (for the toggle badge)
   const maxSavings = Math.max(

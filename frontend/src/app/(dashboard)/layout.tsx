@@ -17,12 +17,12 @@ export default function DashboardLayout({
   // Check if we're in the editor - sidebar starts collapsed but can be expanded
   const isEditor = pathname.includes("/workflows/")
 
-  // After OAuth login, check for a pending plan selection and redirect to billing
+  // After OAuth login, check for a pending plan selection and redirect to pricing
   useEffect(() => {
     const pendingPlan = localStorage.getItem("scenenode_pending_plan")
     if (pendingPlan) {
       localStorage.removeItem("scenenode_pending_plan")
-      router.replace(`/billing?plan=${encodeURIComponent(pendingPlan)}`)
+      router.replace(`/pricing?plan=${encodeURIComponent(pendingPlan)}`)
     }
   }, [])
 
