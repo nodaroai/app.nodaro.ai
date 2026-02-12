@@ -2399,10 +2399,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data) as AIWriterNodeData | undefined)?.generatedResults ?? []
         const newResult = { text: result.generatedText, jobId: result.jobId, timestamp: new Date().toISOString() }
 
-        // Parse generated text into items using the separator
-        const separator = writerData.separator || "*"
+        // Parse generated text into items using the separator (line-based split)
+        const separator = writerData.separator || "---"
+        const separatorRegex = new RegExp(`\\n${separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n`, "g")
         const items = result.generatedText
-          .split(separator)
+          .split(separatorRegex)
           .map((s: string) => s.trim())
           .filter((s: string) => s.length > 0)
 

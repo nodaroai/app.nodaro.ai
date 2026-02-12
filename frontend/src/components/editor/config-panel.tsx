@@ -5553,11 +5553,11 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Separator</Label>
-              <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Character used to split output into individual items for batch processing</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Line separator used to split output into individual items for batch processing</p>
               <Input
-                value={data.separator ?? "*"}
+                value={data.separator ?? "---"}
                 onChange={(e) => onUpdate({ separator: e.target.value })}
-                placeholder="*"
+                placeholder="---"
                 className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
               />
             </div>

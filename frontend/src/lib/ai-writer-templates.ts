@@ -20,7 +20,9 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
       "- Wardrobe and styling notes\n" +
       "- Props needed\n" +
       "- Mood and color palette\n\n" +
-      "Output a clear, numbered plan that a photographer and art director can follow on set.",
+      "Output exactly {outputCount} detailed image prompts, one per scene/setup.\n" +
+      "Separate each prompt with --- on its own line.\n" +
+      "Each prompt should be a self-contained image generation description.",
     placeholderInput: "e.g. Fashion editorial for spring collection in a botanical garden...",
   },
   {
@@ -34,7 +36,9 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
       "- A detailed product description (150-250 words)\n" +
       "- 5 key features as bullet points\n" +
       "- Suggested image prompts for product photography\n\n" +
-      "Write in a persuasive, benefit-focused tone. Avoid jargon unless the audience is technical.",
+      "Write in a persuasive, benefit-focused tone. Avoid jargon unless the audience is technical.\n\n" +
+      "Output exactly {outputCount} product entries.\n" +
+      "Separate each entry with --- on its own line.",
     placeholderInput: "e.g. Wireless noise-canceling headphones with 40-hour battery, matte black...",
   },
   {
@@ -51,6 +55,8 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
       "- Dialogue or voiceover (if any)\n" +
       "- Transition to next scene\n" +
       "- Estimated duration per scene\n\n" +
+      "Output exactly {outputCount} scene descriptions.\n" +
+      "Separate each scene with --- on its own line.\n" +
       "Format each scene clearly so it can be handed to an image generation pipeline.",
     placeholderInput: "e.g. 30-second product launch video for a smartwatch...",
   },
