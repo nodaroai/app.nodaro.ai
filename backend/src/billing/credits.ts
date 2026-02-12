@@ -111,6 +111,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "runway": 0,
   "pika": 0,
   "sora": 0,
+  // ── LLM ──
+  "ai-writer": 2,
   // ── Node types (legacy fallback for workflow estimation) ──
   "generate-script": 2,
   "generate-image": 1,

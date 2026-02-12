@@ -12,6 +12,7 @@ const envSchema = z.object({
   R2_PUBLIC_URL: z.string().default(""),
   REPLICATE_API_TOKEN: z.string().default(""),
   KIE_API_KEY: z.string().default(""),
+  ANTHROPIC_API_KEY: z.string().default(""),
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
