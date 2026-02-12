@@ -281,6 +281,8 @@ function MappableField({
 }
 
 function getModelIdentifier(node: WorkflowNode): string {
+  // AI Writer always uses "ai-writer" for credit cost lookup (not the LLM provider name)
+  if (node.type === "ai-writer") return "ai-writer"
   const data = node.data as Record<string, unknown>
   const provider = data.provider as string | undefined
   if (provider) return provider
@@ -645,7 +647,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover" || selectedNode.type === "suno-extend" || selectedNode.type === "suno-lyrics" || selectedNode.type === "suno-separate" || selectedNode.type === "suno-music-video") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover" || selectedNode.type === "suno-extend" || selectedNode.type === "suno-lyrics" || selectedNode.type === "suno-separate" || selectedNode.type === "suno-music-video" || selectedNode.type === "ai-writer") && (
               <GenerateButton
                 onClick={() => runSingleNode?.(selectedNode.id)}
                 modelIdentifier={getModelIdentifier(selectedNode)}

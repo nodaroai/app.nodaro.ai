@@ -1505,6 +1505,29 @@ export async function videoUpscaleApi(
   return res.json()
 }
 
+// --- AI Writer ---
+
+export async function generateAIWriter(params: {
+  userId: string
+  systemPrompt: string
+  userInput: string
+  provider?: string
+  model?: string
+  temperature?: number
+  maxTokens?: number
+}): Promise<{ jobId: string; generatedText: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/ai-writer/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "AI Writer generation failed")
+  }
+  return res.json()
+}
+
 // Stats types
 export interface StatsResponse {
   totalExecutions: number

@@ -18,11 +18,11 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits, generateAIWriter } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
@@ -54,6 +54,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "motion-transfer": 30,
   "video-upscale": 20,
   "transcribe": 2,
+  "ai-writer": 2,
   "combine-videos": 2,
   "merge-video-audio": 1,
   "extract-audio": 1,
@@ -2196,6 +2197,56 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           toast.error("Transcription failed", { description: err.message })
           reject(err)
         })
+      })
+    }
+
+    if (node.type === "ai-writer") {
+      const writerData = node.data as AIWriterNodeData
+      const { updateNodeData } = useWorkflowStore.getState()
+
+      if (!writerData.systemPrompt?.trim()) {
+        toast.error(`Node "${writerData.label}": no system prompt provided`)
+        return Promise.reject(new Error("No system prompt"))
+      }
+
+      // Use connected text input or user input from config panel
+      const userInput = (typeof inputs.prompt === "string" && inputs.prompt.trim())
+        ? inputs.prompt
+        : writerData.userInput
+
+      if (!userInput?.trim()) {
+        toast.error(`Node "${writerData.label}": no input provided`)
+        return Promise.reject(new Error("No input"))
+      }
+
+      updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined })
+
+      return generateAIWriter({
+        userId: user?.id ?? "",
+        systemPrompt: writerData.systemPrompt,
+        userInput,
+        provider: writerData.provider || "claude",
+        model: writerData.model || undefined,
+        temperature: writerData.temperature,
+        maxTokens: writerData.maxTokens,
+      }).then((result) => {
+        const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data) as AIWriterNodeData | undefined)?.generatedResults ?? []
+        const newResult = { text: result.generatedText, jobId: result.jobId, timestamp: new Date().toISOString() }
+
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          generatedText: result.generatedText,
+          generatedResults: [newResult, ...existingResults],
+          activeResultIndex: 0,
+        })
+        toast.success("AI Writer completed")
+      }).catch((err: Error) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err.message || "Generation failed",
+        })
+        toast.error(`AI Writer failed: ${err.message}`)
+        throw err
       })
     }
 
