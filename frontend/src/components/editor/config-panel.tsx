@@ -82,6 +82,7 @@ import type {
   LipSyncData,
   MotionTransferData,
   VideoUpscaleData,
+  AIWriterNodeData,
   SaveToStorageData,
   WebhookOutputData,
   FieldMappings,
@@ -94,6 +95,7 @@ import type {
   LocationNodeData,
 } from "@/types/nodes"
 import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/nodes"
+import { AI_WRITER_TEMPLATES, getAIWriterTemplate } from "@/lib/ai-writer-templates"
 import { SceneConfig } from "./scene-config"
 import { SceneEditorModal } from "./scene-editor-modal"
 import { AssetSelectionModal, type SelectedAsset } from "./asset-selection-modal"
@@ -379,6 +381,7 @@ export function ConfigPanel() {
       "suno-separate": "Suno Separate",
       "suno-music-video": "Suno Music Video",
       "transcribe": "Transcribe",
+      "ai-writer": "AI Writer",
       "combine-videos": "Combine Videos",
       "merge-video-audio": "Merge Video & Audio",
       "add-captions": "Add Captions",
@@ -562,6 +565,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "transcribe" && (
             <TranscribeConfig data={selectedNode.data as TranscribeData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "ai-writer" && (
+            <AIWriterConfig data={selectedNode.data as AIWriterNodeData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
 
           {/* Processing Nodes */}
@@ -5360,6 +5366,125 @@ function LocationAssetGrid({ items }: { readonly items: Array<{ name: string; ur
       </div>
       {lightboxSrc && (
         <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
+    </>
+  )
+}
+
+function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
+  const currentTemplate = getAIWriterTemplate(data.templateId)
+
+  function handleTemplateChange(templateId: string) {
+    const tpl = getAIWriterTemplate(templateId)
+    if (!tpl) return
+    onUpdate({
+      templateId,
+      systemPrompt: tpl.systemPrompt,
+    })
+  }
+
+  return (
+    <>
+      {/* Template Selector */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-3">
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Template</Label>
+        <Select value={data.templateId} onValueChange={handleTemplateChange}>
+          <SelectTrigger className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {AI_WRITER_TEMPLATES.map((tpl) => (
+              <SelectItem key={tpl.id} value={tpl.id}>
+                {tpl.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {currentTemplate && currentTemplate.id !== "custom" && (
+          <p className="text-xs text-muted-foreground">{currentTemplate.description}</p>
+        )}
+      </div>
+
+      {/* System Prompt */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">System Prompt</Label>
+        <Textarea
+          rows={6}
+          value={data.systemPrompt}
+          onChange={(e) => onUpdate({ systemPrompt: e.target.value })}
+          placeholder="Instructions for the AI writer..."
+          className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm font-mono resize-y"
+        />
+      </div>
+
+      {/* User Input */}
+      <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">User Input</Label>
+        <Textarea
+          rows={4}
+          value={data.userInput}
+          onChange={(e) => onUpdate({ userInput: e.target.value })}
+          placeholder={currentTemplate?.placeholderInput ?? "Enter your instructions..."}
+          className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm resize-y"
+        />
+      </div>
+
+      {/* Settings */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="settings" className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shadow-sm">
+          <AccordionTrigger className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
+            Settings
+          </AccordionTrigger>
+          <AccordionContent className="px-3 pb-3 space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Provider</Label>
+              <Select value={data.provider} onValueChange={(v) => onUpdate({ provider: v as AIWriterNodeData["provider"] })}>
+                <SelectTrigger className="mt-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gemini">Gemini</SelectItem>
+                  <SelectItem value="claude">Claude</SelectItem>
+                  <SelectItem value="gpt">GPT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Temperature: {data.temperature.toFixed(1)}</Label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.1}
+                value={data.temperature}
+                onChange={(e) => onUpdate({ temperature: parseFloat(e.target.value) })}
+                className="w-full mt-1 accent-[#ff0073]"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Max Tokens</Label>
+              <Input
+                type="number"
+                min={256}
+                max={8192}
+                step={256}
+                value={data.maxTokens}
+                onChange={(e) => onUpdate({ maxTokens: parseInt(e.target.value, 10) || 2048 })}
+                className="mt-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+              />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {/* Output Display */}
+      {data.generatedText && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Output</Label>
+          <div className="bg-[#F8FAFC] dark:bg-[#121212] rounded-lg p-3 max-h-60 overflow-y-auto">
+            <p className="text-sm whitespace-pre-wrap">{data.generatedText}</p>
+          </div>
+        </div>
       )}
     </>
   )

@@ -6,7 +6,7 @@ import {
   Hash, Clock, RatioIcon, Mic, ShieldCheck, Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin,
   ChevronRight, Search, Download, ArrowLeft, Wand2, Layers, Users, Waypoints, ArrowUpFromLine,
-  FileText, Disc3, FastForward, Smile,
+  FileText, Disc3, FastForward, Smile, Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SceneNodeType } from "@/types/nodes"
@@ -39,6 +39,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Parameter" },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
+  { type: "ai-writer", label: "AI Writer", icon: <Sparkles className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   { type: "transcribe", label: "Transcribe", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   // AI — Image
   { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI", group: "Image" },

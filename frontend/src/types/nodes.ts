@@ -1069,6 +1069,26 @@ export type FaceNodeData = {
   fieldMappings: FieldMappings
 }
 
+// --- AI Writer Node Data ---
+
+export type AIWriterNodeData = {
+  [key: string]: unknown
+  label: string
+  templateId: string
+  systemPrompt: string
+  userInput: string
+  provider: "gemini" | "claude" | "gpt"
+  model: string
+  temperature: number
+  maxTokens: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedText?: string
+  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string }>
+  activeResultIndex?: number
+}
+
 // --- Sticky Note Node Data ---
 
 export type StickyNoteData = {
@@ -1234,6 +1254,7 @@ export type SceneNodeData =
   | ObjectNodeData
   | LocationNodeData
   | FaceNodeData
+  | AIWriterNodeData
   | StickyNoteData
 
 export type SceneNodeType =
@@ -1288,6 +1309,7 @@ export type SceneNodeType =
   | "face"
   | "object"
   | "location"
+  | "ai-writer"
   | "sticky-note"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
@@ -1929,6 +1951,26 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedVideoUrl: "",
       videoExecutionStatus: "idle",
     } as SceneNodeDataType,
+  },
+  // AI Writer
+  {
+    type: "ai-writer",
+    label: "AI Writer",
+    category: "ai",
+    creditCost: 2,
+    inputs: ["in"],
+    outputs: ["text"],
+    defaultData: {
+      label: "AI Writer",
+      templateId: "custom",
+      systemPrompt: "",
+      userInput: "",
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      temperature: 0.7,
+      maxTokens: 2048,
+      fieldMappings: {},
+    } as AIWriterNodeData,
   },
   // Utility
   {

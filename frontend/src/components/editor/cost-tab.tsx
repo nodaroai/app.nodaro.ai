@@ -27,6 +27,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "generate-music": "Generate Music",
   "text-to-audio": "Text to Audio",
   "transcribe": "Transcribe",
+  "ai-writer": "AI Writer",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
