@@ -411,15 +411,6 @@ export type KieImageProvider =
 // All image providers (union of both)
 export type ImageProvider = ReplicateImageProvider | KieImageProvider
 
-export interface BatchResult {
-  readonly index: number
-  readonly prompt: string
-  readonly imageUrl?: string
-  readonly status: "completed" | "failed"
-  readonly error?: string
-  readonly jobId?: string
-}
-
 export type GenerateImageData = {
   [key: string]: unknown
   label: string
@@ -437,8 +428,6 @@ export type GenerateImageData = {
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   characterDefinitionIds?: readonly string[]
-  batchResults?: BatchResult[]
-  batchProgress?: { current: number; total: number }
 }
 
 // Edit Image providers (KIE.ai only)
@@ -1101,6 +1090,7 @@ export type AIWriterNodeData = {
   generatedItems?: string[]
   generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string }>
   activeResultIndex?: number
+  createdNodeIds?: string[]
 }
 
 // --- Sticky Note Node Data ---

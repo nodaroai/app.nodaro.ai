@@ -87,7 +87,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Track the workflow ID this component instance owns. Polling callbacks
   // compare against this to avoid writing results into the wrong workflow.
   const ownerWorkflowIdRef = useRef<string | null>(workflowId ?? null)
-  const batchCancelledRef = useRef(false)
   const [activeJobCount, setActiveJobCount] = useState(0)
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false)
   const [insufficientCreditsData, setInsufficientCreditsData] = useState<{
@@ -206,7 +205,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }
 
   function handleStop() {
-    batchCancelledRef.current = true
     for (const interval of pollIntervalsRef.current) {
       clearInterval(interval)
     }
@@ -624,136 +622,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         reject(err)
       })
     })
-  }
-
-  /** Runs a single image generation and polls until complete, without updating node data.
-   *  Returns { imageUrl, jobId } on success, throws on failure. */
-  function runSingleBatchImage(
-    prompt: string,
-    referenceImageUrls?: string[],
-    provider?: string,
-    aspectRatio?: string
-  ): Promise<{ imageUrl: string; jobId: string }> {
-    return new Promise((resolve, reject) => {
-      generateImage(prompt, referenceImageUrls, provider, undefined, aspectRatio, user?.id).then(({ jobId }) => {
-        const poll = trackInterval(setInterval(async () => {
-          if (isWorkflowStale() || batchCancelledRef.current) {
-            untrackInterval(poll)
-            reject(new WorkflowStaleError())
-            return
-          }
-          try {
-            const job = await getJobStatus(jobId)
-            if (job.status === "completed") {
-              untrackInterval(poll)
-              const imageUrl = job.output_data?.imageUrl ?? ""
-              resolve({ imageUrl, jobId })
-            } else if (job.status === "failed") {
-              untrackInterval(poll)
-              reject(new Error(job.error_message ?? "Image generation failed"))
-            }
-          } catch (err) {
-            untrackInterval(poll)
-            reject(err)
-          }
-        }, 2000))
-      }).catch(reject)
-    })
-  }
-
-  /** Executes batch image generation: one image per item from AI Writer output.
-   *  Updates node data with batchProgress and batchResults as it goes. */
-  async function executeBatchImageGeneration(
-    node: WorkflowNode,
-    items: string[],
-    referenceImageUrls: string[],
-    charDescs: string[],
-    userTemplates: Record<string, string>,
-    flowTemplates: Record<string, string>,
-    provider?: string,
-    aspectRatio?: string
-  ): Promise<void> {
-    const { updateNodeData } = useWorkflowStore.getState()
-    const total = items.length
-    batchCancelledRef.current = false
-
-    updateNodeData(node.id, {
-      executionStatus: "running",
-      batchProgress: { current: 0, total },
-      batchResults: [],
-      generatedImageUrl: undefined,
-    })
-
-    const batchResults: Array<{ index: number; prompt: string; imageUrl?: string; status: "completed" | "failed"; error?: string; jobId?: string }> = []
-
-    for (let i = 0; i < total; i++) {
-      if (batchCancelledRef.current || isWorkflowStale()) {
-        break
-      }
-
-      const itemPrompt = items[i]
-      let finalPrompt: string
-      if (charDescs.length > 0) {
-        const wrapperTemplate = resolveTemplate("generate-image-wrapper", userTemplates, flowTemplates)
-        finalPrompt = applyTemplate(wrapperTemplate, { userPrompt: itemPrompt, assetDescriptions: charDescs.join(" ") })
-      } else {
-        finalPrompt = itemPrompt
-      }
-
-      try {
-        const result = await runSingleBatchImage(
-          finalPrompt,
-          referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
-          provider,
-          aspectRatio
-        )
-        batchResults.push({
-          index: i,
-          prompt: itemPrompt,
-          imageUrl: result.imageUrl,
-          status: "completed",
-          jobId: result.jobId,
-        })
-      } catch (err) {
-        if (err instanceof WorkflowStaleError) break
-        batchResults.push({
-          index: i,
-          prompt: itemPrompt,
-          status: "failed",
-          error: err instanceof Error ? err.message : "Unknown error",
-        })
-      }
-
-      // Update progress after each item
-      updateNodeData(node.id, {
-        batchProgress: { current: i + 1, total },
-        batchResults: [...batchResults],
-      })
-    }
-
-    // Build generatedResults from successful batch items for the standard result versioning UI
-    const successfulResults = batchResults
-      .filter((r) => r.status === "completed" && r.imageUrl)
-      .map((r) => ({
-        url: r.imageUrl!,
-        timestamp: new Date().toISOString(),
-        jobId: r.jobId ?? "",
-      }))
-
-    const succeeded = batchResults.filter((r) => r.status === "completed").length
-
-    updateNodeData(node.id, {
-      executionStatus: batchCancelledRef.current ? "idle" : "completed",
-      batchResults: [...batchResults],
-      batchProgress: { current: batchResults.length, total },
-      generatedResults: successfulResults,
-      activeResultIndex: 0,
-      generatedImageUrl: successfulResults[0]?.url,
-    })
-
-    if (!batchCancelledRef.current) {
-      toast.success(`Batch complete: ${succeeded}/${total} succeeded`)
-    }
   }
 
   function runEditImage(nodeId: string, imageUrl: string, prompt?: string, provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit"): Promise<void> {
@@ -1906,28 +1774,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const nodeRefUrl = imgData.referenceImageUrl
       const refImages = [...(nodeRefUrl ? [nodeRefUrl] : []), ...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
 
-      // Check for AI Writer source with multiple items -> batch mode
-      const incomingEdges = edges.filter((e) => e.target === node.id)
-      const aiWriterSource = incomingEdges
-        .map((e) => nodes.find((n) => n.id === e.source))
-        .find((n) => n?.type === "ai-writer")
-      const writerItems = (aiWriterSource?.data as AIWriterNodeData | undefined)?.generatedItems
-
-      if (writerItems && writerItems.length > 1) {
-        // Batch mode: run image generation once per AI Writer item
-        return executeBatchImageGeneration(
-          node,
-          writerItems,
-          refImages,
-          charDescs,
-          userTemplates,
-          flowTemplates,
-          imgData.provider || undefined,
-          imgData.aspectRatio || undefined
-        )
-      }
-
-      // Single execution mode (no batch)
+      // Single execution mode
       const prompt = inputs.prompt ?? imgData.prompt?.trim()
       if (!prompt) {
         toast.error(`Node "${imgData.label}": no prompt found`)
@@ -2706,7 +2553,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // --- Main workflow execution ---
 
   async function handleRun() {
-    batchCancelledRef.current = false
     const { nodes, edges } = useWorkflowStore.getState()
 
     const executableNodes = nodes.filter(isExecutableNode)
@@ -2786,7 +2632,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }
 
   function handleRunSingleNode(nodeId: string) {
-    batchCancelledRef.current = false
     const { nodes, edges } = useWorkflowStore.getState()
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return
@@ -3351,6 +3196,104 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
+  function handleCreateNodesFromWriter(writerNodeId: string) {
+    const store = useWorkflowStore.getState()
+    const writerNode = store.nodes.find((n) => n.id === writerNodeId)
+    if (!writerNode) return
+
+    const writerData = writerNode.data as AIWriterNodeData
+    const items = writerData.generatedItems
+    if (!items || items.length === 0) {
+      toast.error("No generated prompts to create nodes from. Run the AI Writer first.")
+      return
+    }
+
+    // Cleanup previously created nodes (if re-generating)
+    const oldNodeIds = writerData.createdNodeIds ?? []
+    if (oldNodeIds.length > 0) {
+      for (const oldId of oldNodeIds) {
+        store.deleteNode(oldId)
+      }
+    }
+
+    // Find Face node connected to the AI Writer's input
+    const writerIncomingEdges = store.edges.filter((e) => e.target === writerNodeId)
+    const faceNode = writerIncomingEdges
+      .map((e) => store.nodes.find((n) => n.id === e.source))
+      .find((n) => n?.type === "face")
+
+    // Calculate starting ID counter (same pattern as handleExpandStoryboard)
+    let idCounter = store.nodes.reduce((max, n) => {
+      const num = parseInt(n.id.replace("node_", ""), 10)
+      return isNaN(num) ? max : Math.max(max, num)
+    }, 0) + 1
+
+    function nextId(): string {
+      const id = `node_${idCounter}`
+      idCounter += 1
+      return id
+    }
+
+    // Get default data for generate-image from NODE_DEFINITIONS
+    const imgDef = NODE_DEFINITIONS.find((d) => d.type === "generate-image")
+    const imgDefaults = imgDef?.defaultData ?? {}
+
+    const newNodes: WorkflowNode[] = []
+    const newEdges: WorkflowEdge[] = []
+    const createdIds: string[] = []
+
+    // Grid layout: 2 columns, positioned to the right of AI Writer
+    const startX = writerNode.position.x + 400
+    const startY = writerNode.position.y
+    const COL_SPACING = 320
+    const ROW_SPACING = 280
+
+    for (let i = 0; i < items.length; i++) {
+      const col = i % 2
+      const row = Math.floor(i / 2)
+      const nodeId = nextId()
+      createdIds.push(nodeId)
+
+      newNodes.push({
+        id: nodeId,
+        type: "generate-image",
+        position: {
+          x: startX + col * COL_SPACING,
+          y: startY + row * ROW_SPACING,
+        },
+        data: {
+          ...imgDefaults,
+          label: `Image ${i + 1}`,
+          prompt: items[i],
+        },
+      } as WorkflowNode)
+
+      // Edge: AI Writer -> Generate Image (provenance)
+      newEdges.push({
+        id: `edge_${Date.now()}_writer_img_${i}`,
+        source: writerNodeId,
+        sourceHandle: "text",
+        target: nodeId,
+        targetHandle: "in",
+      } as WorkflowEdge)
+
+      // Edge: Face -> Generate Image (if Face node exists)
+      if (faceNode) {
+        newEdges.push({
+          id: `edge_${Date.now()}_face_img_${i}`,
+          source: faceNode.id,
+          sourceHandle: "faceRef",
+          target: nodeId,
+          targetHandle: "in",
+        } as WorkflowEdge)
+      }
+    }
+
+    store.batchAddNodesAndEdges(newNodes, newEdges)
+    store.updateNodeData(writerNodeId, { createdNodeIds: createdIds })
+    toast.success(`Created ${items.length} Generate Image nodes`)
+  }
+
   function handleCreateSceneNode(scriptNodeId: string, sceneIndex: number) {
     const store = useWorkflowStore.getState()
     const scriptNode = store.nodes.find((n) => n.id === scriptNodeId)
@@ -3462,6 +3405,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setGenerateLocationAssetFn(handleGenerateLocationAsset)
     return () => useWorkflowStore.getState().setGenerateLocationAssetFn(null)
+  })
+
+  // Register create nodes from AI Writer
+  useEffect(() => {
+    useWorkflowStore.getState().setCreateNodesFromWriter(handleCreateNodesFromWriter)
+    return () => useWorkflowStore.getState().setCreateNodesFromWriter(null)
   })
 
   // Ctrl+S keyboard shortcut

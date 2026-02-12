@@ -83,7 +83,6 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
   AIWriterNodeData,
-  BatchResult,
   SaveToStorageData,
   WebhookOutputData,
   FieldMappings,
@@ -1863,67 +1862,6 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           </div>
         </div>
       </div>
-
-      {/* Batch Results */}
-      {data.batchResults && data.batchResults.length > 0 && (
-        <div className="pt-1">
-          <Separator className="mb-3" />
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Batch Results
-            </label>
-            <span className="text-[10px] text-muted-foreground">
-              {data.batchResults.filter((r: BatchResult) => r.status === "completed").length}/{data.batchResults.length} succeeded
-            </span>
-          </div>
-          {data.batchProgress && data.executionStatus === "running" && (
-            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-2">
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${data.batchProgress.total > 0 ? Math.round((data.batchProgress.current / data.batchProgress.total) * 100) : 0}%`,
-                  backgroundColor: "#ff0073",
-                }}
-              />
-            </div>
-          )}
-          <div className="grid grid-cols-3 gap-1.5 max-h-[240px] overflow-y-auto">
-            {data.batchResults.map((r: BatchResult) => (
-              <div
-                key={`batch-result-${r.index}`}
-                className={`relative rounded-md border overflow-hidden cursor-pointer transition-all ${
-                  r.index === (data.activeResultIndex ?? 0)
-                    ? "ring-2 ring-primary"
-                    : "hover:ring-1 hover:ring-muted-foreground/30"
-                }`}
-                onClick={() => {
-                  if (r.status === "completed" && r.imageUrl) {
-                    onUpdate({ activeResultIndex: r.index, generatedImageUrl: r.imageUrl })
-                  }
-                }}
-              >
-                {r.status === "completed" && r.imageUrl ? (
-                  <img
-                    src={r.imageUrl}
-                    alt={`Batch ${r.index + 1}`}
-                    loading="lazy"
-                    className="w-full h-16 object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-16 flex items-center justify-center bg-red-500/5" title={r.error}>
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                  </div>
-                )}
-                <div className="absolute top-0.5 left-0.5">
-                  <span className="text-[8px] px-1 py-0.5 rounded bg-black/50 text-white">
-                    {r.index + 1}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <AssetSelectionModal
         isOpen={showAssetLibrary}
@@ -5436,6 +5374,8 @@ function LocationAssetGrid({ items }: { readonly items: Array<{ name: string; ur
 }
 
 function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const [expandedItemIndex, setExpandedItemIndex] = useState<number | null>(null)
   const currentTemplate = getAIWriterTemplate(data.templateId)
 
   function handleTemplateChange(templateId: string) {
@@ -5565,17 +5505,84 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
         </AccordionItem>
       </Accordion>
 
-      {/* Output Display */}
-      {data.generatedText && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
+      {/* Generated Prompts List */}
+      {data.generatedItems && data.generatedItems.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Output</Label>
-            {data.generatedItems && data.generatedItems.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
-                {data.generatedItems.length} items
-              </span>
-            )}
+            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
+              Generated Prompts
+            </Label>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
+              {data.generatedItems.length} items
+            </span>
           </div>
+          <div className="space-y-1.5 max-h-80 overflow-y-auto">
+            {data.generatedItems.map((item, idx) => (
+              <div key={idx} className="group">
+                <div
+                  className="flex items-start gap-2 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] hover:bg-gray-100 dark:hover:bg-[#1a1a1a] cursor-pointer transition-colors"
+                  onClick={() => setExpandedItemIndex(expandedItemIndex === idx ? null : idx)}
+                >
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-500/10 text-violet-500 text-[10px] font-bold flex items-center justify-center mt-0.5">
+                    {idx + 1}
+                  </span>
+                  {expandedItemIndex === idx ? (
+                    <Textarea
+                      value={item}
+                      onChange={(e) => {
+                        const updated = [...data.generatedItems!]
+                        updated[idx] = e.target.value
+                        onUpdate({ generatedItems: updated })
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      rows={4}
+                      className="flex-1 text-xs bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#2D2D2D] resize-y"
+                    />
+                  ) : (
+                    <p className="flex-1 text-xs text-muted-foreground line-clamp-2">{item}</p>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const updated = data.generatedItems!.filter((_, i) => i !== idx)
+                      onUpdate({ generatedItems: updated })
+                      if (expandedItemIndex === idx) setExpandedItemIndex(null)
+                    }}
+                    className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/20"
+                  >
+                    <X className="w-3 h-3 text-red-500" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Create Nodes Button */}
+          <button
+            onClick={() => {
+              if (selectedNodeId) {
+                useWorkflowStore.getState().createNodesFromWriter?.(selectedNodeId)
+              }
+            }}
+            className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-white transition-colors"
+            style={{ backgroundColor: "#ff0073" }}
+          >
+            {data.createdNodeIds && data.createdNodeIds.length > 0
+              ? `Re-create ${data.generatedItems.length} Image Nodes`
+              : `Create ${data.generatedItems.length} Image Nodes`}
+          </button>
+          {data.createdNodeIds && data.createdNodeIds.length > 0 && (
+            <p className="text-[10px] text-center text-muted-foreground">
+              {data.createdNodeIds.length} nodes previously created (will be replaced)
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Raw Output Display */}
+      {data.generatedText && !data.generatedItems?.length && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Raw Output</Label>
           <div className="bg-[#F8FAFC] dark:bg-[#121212] rounded-lg p-3 max-h-60 overflow-y-auto">
             <p className="text-sm whitespace-pre-wrap">{data.generatedText}</p>
           </div>
