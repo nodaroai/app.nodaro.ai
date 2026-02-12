@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import {
-  Type, BookOpen, ImageIcon, Film, Merge, Plus, X,
+  Type, List, BookOpen, ImageIcon, Film, Merge, Plus, X,
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
@@ -26,6 +26,7 @@ interface NodeOption {
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   { type: "text-prompt", label: "Text Prompt", icon: <Type className="h-4 w-4" />, category: "Input" },
+  { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Input" },
   { type: "upload-image", label: "Upload Image", icon: <Upload className="h-4 w-4" />, category: "Input" },
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },

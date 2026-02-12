@@ -497,6 +497,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
                     nodeType === 'qa-check') return '#ff0073'
                 // Input nodes - neon cyan
                 if (nodeType === 'text-prompt' ||
+                    nodeType === 'list' ||
                     nodeType === 'upload-image' ||
                     nodeType === 'upload-video' ||
                     nodeType === 'upload-audio' ||

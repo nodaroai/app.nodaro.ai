@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import {
-  Type, BookOpen, ImageIcon, Film, Merge, Upload, Video, Rss, Palette, PaintBucket, Server,
+  Type, List, BookOpen, ImageIcon, Film, Merge, Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, Package, MapPin,
   ChevronRight, Search, Download, ArrowLeft, Wand2, Layers, Users, Waypoints, ArrowUpFromLine,
@@ -22,6 +22,7 @@ interface NodeOption {
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   { type: "text-prompt", label: "Text Prompt", icon: <Type className="h-4 w-4" />, category: "Input" },
+  { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Input" },
   { type: "upload-image", label: "Upload Image", icon: <Upload className="h-4 w-4" />, category: "Input" },
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },

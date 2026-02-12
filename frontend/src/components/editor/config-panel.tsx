@@ -39,6 +39,7 @@ import {
 import { TTS_VOICES } from "@/lib/tts-voices"
 import type {
   TextPromptData,
+  ListNodeData,
   UploadImageData,
   UploadVideoData,
   UploadAudioData,
@@ -462,6 +463,9 @@ export function ConfigPanel() {
           {selectedNode.type === "text-prompt" && (
             <TextPromptConfig data={selectedNode.data as TextPromptData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "list" && (
+            <ListConfig data={selectedNode.data as ListNodeData} onUpdate={update} />
+          )}
           {selectedNode.type === "upload-image" && (
             <UploadImageConfig data={selectedNode.data as UploadImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
@@ -721,6 +725,80 @@ function TextPromptConfig({ data, onUpdate }: ConfigProps<TextPromptData>) {
           placeholder="Enter your story prompt..."
         />
       </div>
+    </div>
+  )
+}
+
+function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (patch: Partial<ListNodeData>) => void }) {
+  const [newItem, setNewItem] = useState("")
+  const itemList = useMemo(
+    () => (data.items || "").split("\n").filter((l) => l.trim() !== ""),
+    [data.items],
+  )
+
+  function save(updated: ReadonlyArray<string>) {
+    onUpdate({ items: updated.join("\n") })
+  }
+
+  function addItem(text: string) {
+    if (!text.trim()) return
+    save([...itemList, text.trim()])
+    setNewItem("")
+  }
+
+  function updateItem(index: number, value: string) {
+    const updated = itemList.map((item, i) => (i === index ? value : item))
+    save(updated)
+  }
+
+  function removeItem(index: number) {
+    save(itemList.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Label>Items</Label>
+      <div className="flex flex-col gap-1.5">
+        {itemList.map((item, i) => (
+          <div key={`item-${i}`} className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-5 text-right shrink-0">{i + 1}</span>
+            <input
+              className="flex-1 text-sm bg-muted/30 rounded px-2 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+              value={item}
+              onChange={(e) => updateItem(i, e.target.value)}
+            />
+            <button
+              type="button"
+              className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
+              onClick={() => removeItem(i)}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-5 text-right shrink-0" />
+          <input
+            className="flex-1 text-sm bg-muted/30 rounded px-2 py-1 border border-dashed border-border focus:border-[#ff0073] focus:outline-none"
+            placeholder="Add item..."
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newItem.trim()) {
+                e.preventDefault()
+                addItem(newItem)
+              }
+            }}
+            onBlur={() => {
+              if (newItem.trim()) addItem(newItem)
+            }}
+          />
+          <span className="w-3 shrink-0" />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {itemList.length} item{itemList.length !== 1 ? "s" : ""}
+      </p>
     </div>
   )
 }

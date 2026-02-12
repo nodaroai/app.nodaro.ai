@@ -23,6 +23,13 @@ export type TextPromptData = {
   variables: Record<string, string>
 }
 
+export type ListNodeData = {
+  [key: string]: unknown
+  label: string
+  items: string
+  fieldMappings: Record<string, string>
+}
+
 export type UploadImageData = {
   [key: string]: unknown
   label: string
@@ -1257,10 +1264,12 @@ export type SceneNodeData =
   | LocationNodeData
   | FaceNodeData
   | AIWriterNodeData
+  | ListNodeData
   | StickyNoteData
 
 export type SceneNodeType =
   | "text-prompt"
+  | "list"
   | "upload-image"
   | "upload-video"
   | "upload-audio"
@@ -1337,6 +1346,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: [],
     outputs: ["prompt"],
     defaultData: { label: "Text Prompt", text: "", variables: {} },
+  },
+  {
+    type: "list",
+    label: "List",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["list"],
+    defaultData: { label: "List", items: "", fieldMappings: {} },
   },
   {
     type: "upload-image",
