@@ -1982,7 +1982,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       outputCount: 30,
       separator: "*",
       provider: "claude",
-      model: "claude-sonnet-4-5-20250514",
+      model: "claude-sonnet-4-5-20250929",
       temperature: 0.7,
       maxTokens: 2048,
       fieldMappings: {},
