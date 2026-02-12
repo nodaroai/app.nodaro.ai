@@ -2400,7 +2400,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const newResult = { text: result.generatedText, jobId: result.jobId, timestamp: new Date().toISOString() }
 
         // Parse generated text into items using the separator (line-based split)
-        const separator = writerData.separator || "---"
+        const separator = writerData.separator || "===NEXT==="
         const separatorRegex = new RegExp(`\\n${separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n`, "g")
         const items = result.generatedText
           .split(separatorRegex)

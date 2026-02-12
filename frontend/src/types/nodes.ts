@@ -1980,7 +1980,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       systemPrompt: "",
       userInput: "",
       outputCount: 30,
-      separator: "---",
+      separator: "===NEXT===",
       provider: "claude",
       model: "claude-sonnet-4-5-20250929",
       temperature: 0.7,
