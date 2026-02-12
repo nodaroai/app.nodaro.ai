@@ -83,6 +83,7 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
   AIWriterNodeData,
+  BatchResult,
   SaveToStorageData,
   WebhookOutputData,
   FieldMappings,
@@ -1862,6 +1863,67 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           </div>
         </div>
       </div>
+
+      {/* Batch Results */}
+      {data.batchResults && data.batchResults.length > 0 && (
+        <div className="pt-1">
+          <Separator className="mb-3" />
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Batch Results
+            </label>
+            <span className="text-[10px] text-muted-foreground">
+              {data.batchResults.filter((r: BatchResult) => r.status === "completed").length}/{data.batchResults.length} succeeded
+            </span>
+          </div>
+          {data.batchProgress && data.executionStatus === "running" && (
+            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${data.batchProgress.total > 0 ? Math.round((data.batchProgress.current / data.batchProgress.total) * 100) : 0}%`,
+                  backgroundColor: "#ff0073",
+                }}
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-1.5 max-h-[240px] overflow-y-auto">
+            {data.batchResults.map((r: BatchResult) => (
+              <div
+                key={`batch-result-${r.index}`}
+                className={`relative rounded-md border overflow-hidden cursor-pointer transition-all ${
+                  r.index === (data.activeResultIndex ?? 0)
+                    ? "ring-2 ring-primary"
+                    : "hover:ring-1 hover:ring-muted-foreground/30"
+                }`}
+                onClick={() => {
+                  if (r.status === "completed" && r.imageUrl) {
+                    onUpdate({ activeResultIndex: r.index, generatedImageUrl: r.imageUrl })
+                  }
+                }}
+              >
+                {r.status === "completed" && r.imageUrl ? (
+                  <img
+                    src={r.imageUrl}
+                    alt={`Batch ${r.index + 1}`}
+                    loading="lazy"
+                    className="w-full h-16 object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-16 flex items-center justify-center bg-red-500/5" title={r.error}>
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                  </div>
+                )}
+                <div className="absolute top-0.5 left-0.5">
+                  <span className="text-[8px] px-1 py-0.5 rounded bg-black/50 text-white">
+                    {r.index + 1}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <AssetSelectionModal
         isOpen={showAssetLibrary}

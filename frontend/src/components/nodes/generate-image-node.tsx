@@ -25,6 +25,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const rawUrl = activeResult?.url ?? nodeData.generatedImageUrl ?? (nodeData as Record<string, unknown>).url as string | undefined
   // Treat empty strings as undefined (falsy check)
   const activeUrl = rawUrl && rawUrl.trim() ? rawUrl : undefined
+  const batchProgress = nodeData.batchProgress
+  const batchResults = nodeData.batchResults
+  const isBatchMode = !!(batchProgress || (batchResults && batchResults.length > 0))
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
   const attachedIds = nodeData.characterDefinitionIds ?? []
@@ -66,13 +69,61 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       ]}
     >
       <div className="flex flex-col gap-1">
-        {status === "running" && (
+        {status === "running" && isBatchMode && batchProgress && (
+          <div className="flex flex-col items-center justify-center gap-1.5 h-28 rounded-md bg-muted/30">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <span className="text-xs text-muted-foreground font-medium">
+              {batchProgress.current}/{batchProgress.total}
+            </span>
+            <div className="w-4/5 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${batchProgress.total > 0 ? Math.round((batchProgress.current / batchProgress.total) * 100) : 0}%`,
+                  backgroundColor: "#ff0073",
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {status === "running" && !isBatchMode && (
           <div className="flex items-center justify-center h-28 rounded-md bg-muted/30">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {status !== "running" && activeUrl && (
+        {status !== "running" && isBatchMode && batchResults && batchResults.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-medium text-muted-foreground">
+                {batchResults.filter((r) => r.status === "completed").length}/{batchResults.length} images
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-0.5 max-h-[72px] overflow-hidden rounded-md">
+              {batchResults
+                .filter((r) => r.status === "completed" && r.imageUrl)
+                .slice(0, 12)
+                .map((r) => (
+                  <img
+                    key={`batch-${r.index}`}
+                    src={r.imageUrl}
+                    alt={`Batch ${r.index + 1}`}
+                    loading="lazy"
+                    className={`w-full h-6 object-cover cursor-pointer transition-opacity ${
+                      r.index === activeIndex ? "ring-1 ring-primary" : "opacity-70 hover:opacity-100"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      updateNodeData(id, { activeResultIndex: r.index, generatedImageUrl: r.imageUrl })
+                    }}
+                  />
+                ))}
+            </div>
+          </div>
+        )}
+
+        {status !== "running" && !isBatchMode && activeUrl && (
           <div className="relative group">
             <img
               src={activeUrl}
@@ -129,13 +180,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {status !== "running" && !activeUrl && status !== "failed" && (
+        {status !== "running" && !activeUrl && status !== "failed" && !isBatchMode && (
           <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
             <ImageIcon className="w-6 h-6" />
           </div>
         )}
 
-        {results.length > 1 && (
+        {results.length > 1 && !isBatchMode && (
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">

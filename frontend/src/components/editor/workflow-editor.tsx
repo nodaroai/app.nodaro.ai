@@ -87,6 +87,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Track the workflow ID this component instance owns. Polling callbacks
   // compare against this to avoid writing results into the wrong workflow.
   const ownerWorkflowIdRef = useRef<string | null>(workflowId ?? null)
+  const batchCancelledRef = useRef(false)
   const [activeJobCount, setActiveJobCount] = useState(0)
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false)
   const [insufficientCreditsData, setInsufficientCreditsData] = useState<{
@@ -100,7 +101,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const storeNodes = useWorkflowStore((s) => s.nodes)
   useEffect(() => {
     if (!hasCredits()) return
-    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location"])
+    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location", "ai-writer"])
     const executableNodes = storeNodes.filter((n) => execTypes.has(n.type ?? ""))
     const total = executableNodes.reduce((sum, node) => {
       const data = node.data as Record<string, unknown>
@@ -205,6 +206,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }
 
   function handleStop() {
+    batchCancelledRef.current = true
     for (const interval of pollIntervalsRef.current) {
       clearInterval(interval)
     }
@@ -222,7 +224,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -397,6 +399,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const { characterDefinitions } = useWorkflowStore.getState()
       return buildScenePrompt(sceneData, characterDefinitions)
     }
+    if (type === "ai-writer") {
+      return (data.generatedText as string | undefined)
+    }
     return undefined
   }
 
@@ -561,6 +566,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "transcribe" || src.type === "suno-lyrics") {
         // Transcribe / lyrics output text - can feed into add-captions, text-prompt downstream, etc.
         inputs.prompt = output
+      } else if (src.type === "ai-writer") {
+        // AI Writer outputs text - use as prompt for downstream nodes
+        inputs.prompt = output
       }
     }
 
@@ -616,6 +624,136 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         reject(err)
       })
     })
+  }
+
+  /** Runs a single image generation and polls until complete, without updating node data.
+   *  Returns { imageUrl, jobId } on success, throws on failure. */
+  function runSingleBatchImage(
+    prompt: string,
+    referenceImageUrls?: string[],
+    provider?: string,
+    aspectRatio?: string
+  ): Promise<{ imageUrl: string; jobId: string }> {
+    return new Promise((resolve, reject) => {
+      generateImage(prompt, referenceImageUrls, provider, undefined, aspectRatio, user?.id).then(({ jobId }) => {
+        const poll = trackInterval(setInterval(async () => {
+          if (isWorkflowStale() || batchCancelledRef.current) {
+            untrackInterval(poll)
+            reject(new WorkflowStaleError())
+            return
+          }
+          try {
+            const job = await getJobStatus(jobId)
+            if (job.status === "completed") {
+              untrackInterval(poll)
+              const imageUrl = job.output_data?.imageUrl ?? ""
+              resolve({ imageUrl, jobId })
+            } else if (job.status === "failed") {
+              untrackInterval(poll)
+              reject(new Error(job.error_message ?? "Image generation failed"))
+            }
+          } catch (err) {
+            untrackInterval(poll)
+            reject(err)
+          }
+        }, 2000))
+      }).catch(reject)
+    })
+  }
+
+  /** Executes batch image generation: one image per item from AI Writer output.
+   *  Updates node data with batchProgress and batchResults as it goes. */
+  async function executeBatchImageGeneration(
+    node: WorkflowNode,
+    items: string[],
+    referenceImageUrls: string[],
+    charDescs: string[],
+    userTemplates: Record<string, string>,
+    flowTemplates: Record<string, string>,
+    provider?: string,
+    aspectRatio?: string
+  ): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+    const total = items.length
+    batchCancelledRef.current = false
+
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      batchProgress: { current: 0, total },
+      batchResults: [],
+      generatedImageUrl: undefined,
+    })
+
+    const batchResults: Array<{ index: number; prompt: string; imageUrl?: string; status: "completed" | "failed"; error?: string; jobId?: string }> = []
+
+    for (let i = 0; i < total; i++) {
+      if (batchCancelledRef.current || isWorkflowStale()) {
+        break
+      }
+
+      const itemPrompt = items[i]
+      let finalPrompt: string
+      if (charDescs.length > 0) {
+        const wrapperTemplate = resolveTemplate("generate-image-wrapper", userTemplates, flowTemplates)
+        finalPrompt = applyTemplate(wrapperTemplate, { userPrompt: itemPrompt, assetDescriptions: charDescs.join(" ") })
+      } else {
+        finalPrompt = itemPrompt
+      }
+
+      try {
+        const result = await runSingleBatchImage(
+          finalPrompt,
+          referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
+          provider,
+          aspectRatio
+        )
+        batchResults.push({
+          index: i,
+          prompt: itemPrompt,
+          imageUrl: result.imageUrl,
+          status: "completed",
+          jobId: result.jobId,
+        })
+      } catch (err) {
+        if (err instanceof WorkflowStaleError) break
+        batchResults.push({
+          index: i,
+          prompt: itemPrompt,
+          status: "failed",
+          error: err instanceof Error ? err.message : "Unknown error",
+        })
+      }
+
+      // Update progress after each item
+      updateNodeData(node.id, {
+        batchProgress: { current: i + 1, total },
+        batchResults: [...batchResults],
+      })
+    }
+
+    // Build generatedResults from successful batch items for the standard result versioning UI
+    const successfulResults = batchResults
+      .filter((r) => r.status === "completed" && r.imageUrl)
+      .map((r) => ({
+        url: r.imageUrl!,
+        timestamp: new Date().toISOString(),
+        jobId: r.jobId ?? "",
+      }))
+
+    const succeeded = batchResults.filter((r) => r.status === "completed").length
+
+    updateNodeData(node.id, {
+      executionStatus: batchCancelledRef.current ? "idle" : "completed",
+      batchResults: [...batchResults],
+      batchProgress: { current: batchResults.length, total },
+      generatedResults: successfulResults,
+      activeResultIndex: 0,
+      generatedImageUrl: successfulResults[0]?.url,
+    })
+
+    if (!batchCancelledRef.current) {
+      toast.success(`Batch complete: ${succeeded}/${total} succeeded`)
+    }
   }
 
   function runEditImage(nodeId: string, imageUrl: string, prompt?: string, provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit"): Promise<void> {
@@ -1745,16 +1883,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "generate-image") {
-      const prompt = inputs.prompt ?? (node.data as GenerateImageData).prompt?.trim()
-      if (!prompt) {
-        toast.error(`Node "${(node.data as GenerateImageData).label}": no prompt found`)
-        return Promise.reject(new Error("No prompt"))
-      }
+      const imgData = node.data as GenerateImageData
       const chainRefs = inputs.referenceImageUrls ?? (inputs.imageUrl ? [inputs.imageUrl] : undefined)
       const extractedRefs = (node.data as Record<string, unknown>).extractedReferenceUrls as string[] | undefined
 
       // Look up character definitions attached to this node
-      const charIds = (node.data as GenerateImageData).characterDefinitionIds ?? []
+      const charIds = imgData.characterDefinitionIds ?? []
       const allCharDefs = useWorkflowStore.getState().characterDefinitions
       const charDefs = allCharDefs.filter((c) => charIds.includes(c.id))
       const charRefUrls = charDefs.filter((c) => c.type === "reference" && c.referenceImageUrl).map((c) => c.referenceImageUrl as string)
@@ -1769,8 +1903,36 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return applyTemplate(template, { name: c.name, description: c.description || "" })
       })
 
-      const nodeRefUrl = (node.data as GenerateImageData).referenceImageUrl
+      const nodeRefUrl = imgData.referenceImageUrl
       const refImages = [...(nodeRefUrl ? [nodeRefUrl] : []), ...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
+
+      // Check for AI Writer source with multiple items -> batch mode
+      const incomingEdges = edges.filter((e) => e.target === node.id)
+      const aiWriterSource = incomingEdges
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .find((n) => n?.type === "ai-writer")
+      const writerItems = (aiWriterSource?.data as AIWriterNodeData | undefined)?.generatedItems
+
+      if (writerItems && writerItems.length > 1) {
+        // Batch mode: run image generation once per AI Writer item
+        return executeBatchImageGeneration(
+          node,
+          writerItems,
+          refImages,
+          charDescs,
+          userTemplates,
+          flowTemplates,
+          imgData.provider || undefined,
+          imgData.aspectRatio || undefined
+        )
+      }
+
+      // Single execution mode (no batch)
+      const prompt = inputs.prompt ?? imgData.prompt?.trim()
+      if (!prompt) {
+        toast.error(`Node "${imgData.label}": no prompt found`)
+        return Promise.reject(new Error("No prompt"))
+      }
       let finalPrompt: string
       if (charDescs.length > 0) {
         const wrapperTemplate = resolveTemplate("generate-image-wrapper", userTemplates, flowTemplates)
@@ -1778,7 +1940,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else {
         finalPrompt = prompt
       }
-      return runImageGeneration(node.id, finalPrompt, refImages.length > 0 ? refImages : undefined, (node.data as GenerateImageData).provider || undefined)
+      return runImageGeneration(node.id, finalPrompt, refImages.length > 0 ? refImages : undefined, imgData.provider || undefined)
     }
 
     if (node.type === "edit-image") {
@@ -2233,13 +2395,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data) as AIWriterNodeData | undefined)?.generatedResults ?? []
         const newResult = { text: result.generatedText, jobId: result.jobId, timestamp: new Date().toISOString() }
 
+        // Parse generated text into items using the separator
+        const separator = writerData.separator || "*"
+        const items = result.generatedText
+          .split(separator)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 0)
+
         updateNodeData(node.id, {
           executionStatus: "completed",
           generatedText: result.generatedText,
+          generatedItems: items,
           generatedResults: [newResult, ...existingResults],
           activeResultIndex: 0,
         })
-        toast.success("AI Writer completed")
+        toast.success(`AI Writer completed: ${items.length} item${items.length !== 1 ? "s" : ""} generated`)
       }).catch((err: Error) => {
         updateNodeData(node.id, {
           executionStatus: "failed",
@@ -2531,6 +2701,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // --- Main workflow execution ---
 
   async function handleRun() {
+    batchCancelledRef.current = false
     const { nodes, edges } = useWorkflowStore.getState()
 
     const executableNodes = nodes.filter(isExecutableNode)
@@ -2610,6 +2781,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }
 
   function handleRunSingleNode(nodeId: string) {
+    batchCancelledRef.current = false
     const { nodes, edges } = useWorkflowStore.getState()
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return

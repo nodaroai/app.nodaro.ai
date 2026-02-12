@@ -411,6 +411,15 @@ export type KieImageProvider =
 // All image providers (union of both)
 export type ImageProvider = ReplicateImageProvider | KieImageProvider
 
+export interface BatchResult {
+  readonly index: number
+  readonly prompt: string
+  readonly imageUrl?: string
+  readonly status: "completed" | "failed"
+  readonly error?: string
+  readonly jobId?: string
+}
+
 export type GenerateImageData = {
   [key: string]: unknown
   label: string
@@ -428,6 +437,8 @@ export type GenerateImageData = {
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   characterDefinitionIds?: readonly string[]
+  batchResults?: BatchResult[]
+  batchProgress?: { current: number; total: number }
 }
 
 // Edit Image providers (KIE.ai only)
@@ -1077,6 +1088,8 @@ export type AIWriterNodeData = {
   templateId: string
   systemPrompt: string
   userInput: string
+  outputCount: number
+  separator: string
   provider: "gemini" | "claude" | "gpt"
   model: string
   temperature: number
@@ -1085,6 +1098,7 @@ export type AIWriterNodeData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedText?: string
+  generatedItems?: string[]
   generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string }>
   activeResultIndex?: number
 }
@@ -1965,6 +1979,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       templateId: "custom",
       systemPrompt: "",
       userInput: "",
+      outputCount: 30,
+      separator: "*",
       provider: "gemini",
       model: "gemini-2.5-flash",
       temperature: 0.7,
