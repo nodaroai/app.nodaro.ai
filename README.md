@@ -9,6 +9,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Build from Prompt**: Describe a video in plain text, get a complete workflow auto-generated
 - **Asset Management**: Characters, locations, objects with reference images for visual consistency
 - **Scene Node**: Cinematic control center combining characters, cinematography, mood, and dialogue
+- **SSE Streaming**: Real-time token streaming for AI Writer with live preview in node and config panel
 - **Model Agnostic**: Swap AI providers without changing workflows
 - **45 Node Types**: Input (5), Parameter (8), AI (16), Scene (1), Assets (3), Processing (9), Output (2), Utility (1)
 - **Light/Dark Mode**: Premium styling with glassmorphism effects
@@ -102,6 +103,9 @@ EDITION=community
 
 # KIE.ai (optional, cloud edition)
 KIE_API_KEY=kie_xxxxx
+
+# CORS (optional, comma-separated extra origins)
+CORS_ORIGIN=https://app.scenenode.ai
 ```
 
 ### Getting API Keys
@@ -170,6 +174,8 @@ REST API at `http://localhost:8000`. Key endpoints:
 | `POST /v1/suno/lyrics` | AI-generated lyrics |
 | `POST /v1/suno/separate` | Vocal/instrumental stem separation |
 | `POST /v1/suno/music-video` | Generate music video from Suno track |
+| `POST /v1/ai-writer/generate` | AI Writer (sync, returns full JSON) |
+| `POST /v1/ai-writer/generate-stream` | AI Writer (SSE streaming, real-time tokens) |
 | `POST /v1/combine-videos` | FFmpeg video concatenation |
 | `POST /v1/workflows/:id/run` | Execute workflow |
 
