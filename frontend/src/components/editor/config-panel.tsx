@@ -5378,6 +5378,23 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
   const [expandedItemIndex, setExpandedItemIndex] = useState<number | null>(null)
   const currentTemplate = getAIWriterTemplate(data.templateId)
 
+  // Track execution progress of created image nodes
+  const createdIds = data.createdNodeIds ?? []
+  const allNodes = useWorkflowStore((s) => s.nodes)
+  const imageNodeStatuses = useMemo(() => {
+    if (createdIds.length === 0) return { running: 0, completed: 0, failed: 0, total: 0 }
+    let running = 0, completed = 0, failed = 0
+    for (const id of createdIds) {
+      const node = allNodes.find((n) => n.id === id)
+      const status = (node?.data as Record<string, unknown>)?.executionStatus as string | undefined
+      if (status === "running") running += 1
+      else if (status === "completed") completed += 1
+      else if (status === "failed") failed += 1
+    }
+    return { running, completed, failed, total: createdIds.length }
+  }, [createdIds, allNodes])
+  const isGenerating = imageNodeStatuses.running > 0
+
   function handleTemplateChange(templateId: string) {
     const tpl = getAIWriterTemplate(templateId)
     if (!tpl) return
@@ -5574,6 +5591,42 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
           {data.createdNodeIds && data.createdNodeIds.length > 0 && (
             <p className="text-[10px] text-center text-muted-foreground">
               {data.createdNodeIds.length} nodes previously created (will be replaced)
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Run All Image Nodes */}
+      {createdIds.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
+          <button
+            onClick={() => {
+              if (selectedNodeId && !isGenerating) {
+                useWorkflowStore.getState().runAllWriterImageNodes?.(selectedNodeId)
+              }
+            }}
+            disabled={isGenerating}
+            className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-50"
+            style={{ backgroundColor: isGenerating ? "#6b7280" : "#7c3aed" }}
+          >
+            {isGenerating
+              ? `Generating images: ${imageNodeStatuses.completed + imageNodeStatuses.failed}/${imageNodeStatuses.total} complete`
+              : `Generate All ${createdIds.length} Images`}
+          </button>
+          {isGenerating && (
+            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${imageNodeStatuses.total > 0 ? Math.round(((imageNodeStatuses.completed + imageNodeStatuses.failed) / imageNodeStatuses.total) * 100) : 0}%`,
+                  backgroundColor: "#7c3aed",
+                }}
+              />
+            </div>
+          )}
+          {!isGenerating && (imageNodeStatuses.completed > 0 || imageNodeStatuses.failed > 0) && (
+            <p className="text-[10px] text-center text-muted-foreground">
+              {imageNodeStatuses.completed} succeeded{imageNodeStatuses.failed > 0 ? `, ${imageNodeStatuses.failed} failed` : ""}
             </p>
           )}
         </div>

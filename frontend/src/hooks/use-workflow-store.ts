@@ -70,6 +70,8 @@ interface WorkflowState {
   readonly setGenerateLocationAssetFn: (fn: ((nodeId: string, assetType: "timeOfDay" | "weather" | "angles") => Promise<void>) | null) => void
   readonly createNodesFromWriter: ((writerNodeId: string) => void) | null
   readonly setCreateNodesFromWriter: (fn: ((writerNodeId: string) => void) | null) => void
+  readonly runAllWriterImageNodes: ((writerNodeId: string) => void) | null
+  readonly setRunAllWriterImageNodes: (fn: ((writerNodeId: string) => void) | null) => void
 }
 
 let nextNodeId = 1
@@ -373,4 +375,6 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setGenerateLocationAssetFn: (fn) => set({ generateLocationAssetFn: fn }),
   createNodesFromWriter: null,
   setCreateNodesFromWriter: (fn) => set({ createNodesFromWriter: fn }),
+  runAllWriterImageNodes: null,
+  setRunAllWriterImageNodes: (fn) => set({ runAllWriterImageNodes: fn }),
 }))

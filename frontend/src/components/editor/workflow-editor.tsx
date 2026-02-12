@@ -3294,6 +3294,70 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     toast.success(`Created ${items.length} Generate Image nodes`)
   }
 
+  async function handleRunAllWriterImageNodes(writerNodeId: string) {
+    const store = useWorkflowStore.getState()
+    const writerNode = store.nodes.find((n) => n.id === writerNodeId)
+    if (!writerNode) return
+
+    const writerData = writerNode.data as AIWriterNodeData
+    const nodeIds = writerData.createdNodeIds ?? []
+    if (nodeIds.length === 0) {
+      toast.error("No image nodes to run. Create nodes first.")
+      return
+    }
+
+    // Collect valid nodes and reset their status
+    const targetNodes = nodeIds
+      .map((id) => store.nodes.find((n) => n.id === id))
+      .filter((n): n is WorkflowNode => !!n && n.type === "generate-image")
+
+    if (targetNodes.length === 0) {
+      toast.error("Created image nodes no longer exist on canvas.")
+      return
+    }
+
+    for (const node of targetNodes) {
+      store.updateNodeData(node.id, { executionStatus: "idle", errorMessage: undefined })
+    }
+
+    setIsRunning(true)
+
+    // Run with concurrency limit of 3
+    const CONCURRENCY = 3
+    let completed = 0
+    const total = targetNodes.length
+    const queue = [...targetNodes]
+
+    async function runNext(): Promise<void> {
+      while (queue.length > 0) {
+        const node = queue.shift()
+        if (!node) break
+        try {
+          await executeNode(node)
+        } catch {
+          // Error already handled via toast in executeNode
+        }
+        completed += 1
+      }
+    }
+
+    // Start CONCURRENCY workers in parallel
+    const workers = Array.from({ length: Math.min(CONCURRENCY, total) }, () => runNext())
+    await Promise.all(workers)
+
+    if (pollIntervalsRef.current.size === 0) {
+      setIsRunning(false)
+    }
+
+    const finalNodes = useWorkflowStore.getState().nodes
+    const succeeded = nodeIds.filter((id) => {
+      const n = finalNodes.find((node) => node.id === id)
+      return (n?.data as Record<string, unknown>)?.executionStatus === "completed"
+    }).length
+
+    toast.success(`Image generation complete: ${succeeded}/${total} succeeded`)
+  }
+
   function handleCreateSceneNode(scriptNodeId: string, sceneIndex: number) {
     const store = useWorkflowStore.getState()
     const scriptNode = store.nodes.find((n) => n.id === scriptNodeId)
@@ -3411,6 +3475,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setCreateNodesFromWriter(handleCreateNodesFromWriter)
     return () => useWorkflowStore.getState().setCreateNodesFromWriter(null)
+  })
+
+  // Register run all writer image nodes
+  useEffect(() => {
+    useWorkflowStore.getState().setRunAllWriterImageNodes(handleRunAllWriterImageNodes)
+    return () => useWorkflowStore.getState().setRunAllWriterImageNodes(null)
   })
 
   // Ctrl+S keyboard shortcut
