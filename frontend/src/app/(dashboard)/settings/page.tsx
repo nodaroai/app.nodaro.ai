@@ -80,8 +80,11 @@ export default function SettingsPage() {
         throw new Error(err.error ?? "Failed to update")
       }
 
-      setPublicOutputs(newValue)
-      toast.success(newValue ? "Outputs are now public" : "Outputs are now private")
+      // Use server-confirmed value instead of optimistic update
+      const json = await response.json()
+      const confirmed = (json.data ?? json).publicOutputs
+      setPublicOutputs(confirmed ?? newValue)
+      toast.success(confirmed ? "Outputs are now public" : "Outputs are now private")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update"
       toast.error(message)

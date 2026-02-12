@@ -52,10 +52,10 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "userId is required" })
     }
 
-    // Fetch current profile
+    // Fetch current profile (include public_outputs for response accuracy)
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("tier, prompt_templates")
+      .select("tier, public_outputs, prompt_templates")
       .eq("id", userId)
       .single()
 
@@ -107,9 +107,23 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: "Failed to update settings" })
     }
 
+    // When gallery visibility changes, sync existing jobs to match
+    if (publicOutputs !== undefined && publicOutputs !== (profile.public_outputs ?? true)) {
+      const { error: jobsError } = await supabase
+        .from("jobs")
+        .update({ is_public: publicOutputs })
+        .eq("user_id", userId)
+
+      if (jobsError) {
+        console.error("[user-settings] Failed to sync jobs visibility:", jobsError)
+      }
+    }
+
+    const confirmedPublicOutputs = publicOutputs ?? (profile.public_outputs ?? true)
+
     return reply.send({
       data: {
-        publicOutputs: publicOutputs ?? true,
+        publicOutputs: confirmedPublicOutputs,
         promptTemplates: (updates.prompt_templates as Record<string, string>) ?? (profile.prompt_templates as Record<string, string>) ?? {},
       },
     })
