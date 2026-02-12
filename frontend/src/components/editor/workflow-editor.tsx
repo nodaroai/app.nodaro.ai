@@ -276,6 +276,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const data = node.data as Record<string, unknown>
     const type = node.type
 
+    if (type === "list") {
+      const items = (data.items as string | undefined) || ""
+      const lines = items.split("\n").filter((l: string) => l.trim().length > 0)
+      // Return first item as string for backward compat with single-value consumption
+      return lines[0]?.trim()
+    }
     if (type === "text-prompt") {
       return (data.text as string | undefined)?.trim()
     }
@@ -404,6 +410,36 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return undefined
   }
 
+  function extractNodeOutputAsList(node: WorkflowNode): string[] | undefined {
+    const data = node.data as Record<string, unknown>
+    if (node.type === "list") {
+      const items = (data.items as string | undefined) || ""
+      const lines = items.split("\n").filter((l: string) => l.trim().length > 0).map((l: string) => l.trim())
+      return lines.length > 0 ? lines : undefined
+    }
+    // For non-list nodes, check if node has multiple results (from future list execution)
+    const listResults = data.__listResults as string[] | undefined
+    if (listResults && listResults.length > 0) return listResults
+    // Fallback: wrap single output as array
+    const single = extractNodeOutput(node)
+    return single ? [single] : undefined
+  }
+
+  /**
+   * Check if a node receives list input from any source.
+   * Returns the list items if found, undefined otherwise.
+   */
+  function getListInputForNode(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): string[] | undefined {
+    const incomingEdges = edges.filter((e) => e.target === node.id)
+    for (const edge of incomingEdges) {
+      const sourceNode = nodes.find((n) => n.id === edge.source)
+      if (!sourceNode) continue
+      const listOutput = extractNodeOutputAsList(sourceNode)
+      if (listOutput && listOutput.length > 1) return listOutput
+    }
+    return undefined
+  }
+
   function resolveNodeInputs(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]) {
     const incomingEdges = edges.filter((e) => e.target === node.id)
     const sourceNodes = incomingEdges
@@ -417,6 +453,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (!output) continue
 
       if (src.type === "text-prompt") {
+        inputs.prompt = output
+      } else if (src.type === "list") {
+        // List node provides text - treated as prompt for downstream nodes
         inputs.prompt = output
       } else if (src.type === "upload-image") {
         inputs.imageUrl = output
@@ -2238,10 +2277,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No system prompt"))
       }
 
-      // Use connected text input or user input from config panel
-      const userInput = (typeof inputs.prompt === "string" && inputs.prompt.trim())
-        ? inputs.prompt
-        : writerData.userInput
+      // Use list item override (set by executeNodeForList), connected text input, or config panel input
+      const listItemOverride = (writerData as Record<string, unknown>).__listItemOverride as string | undefined
+      const userInput = listItemOverride
+        || (typeof inputs.prompt === "string" && inputs.prompt.trim() ? inputs.prompt : writerData.userInput)
 
       if (!userInput?.trim()) {
         toast.error(`Node "${writerData.label}": no input provided`)
@@ -2569,6 +2608,78 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return Promise.resolve()
   }
 
+  async function executeNodeForList(node: WorkflowNode, items: string[]): Promise<void> {
+    const { updateNodeData } = useWorkflowStore.getState()
+
+    // Show progress on the node
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      errorMessage: undefined,
+      generatedResults: [],
+      __listTotal: items.length,
+      __listCompleted: 0,
+      __listResults: [],
+    })
+
+    const results: string[] = []
+    let completedCount = 0
+    let failedCount = 0
+
+    for (let i = 0; i < items.length; i++) {
+      if (isWorkflowStale()) break
+
+      const item = items[i]
+      console.log(`[list-exec] Item ${i + 1}/${items.length}: "${item.substring(0, 50)}"`)
+
+      // For AI Writer: temporarily set __listItemOverride to this item, then run
+      if (node.type === "ai-writer") {
+        // Set the current list item as override
+        useWorkflowStore.getState().updateNodeData(node.id, { __listItemOverride: item })
+
+        try {
+          // Re-fetch node with updated data
+          const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+          if (!freshNode) break
+
+          await executeNode(freshNode)
+
+          // Grab the generated text from the node after execution
+          const afterNode = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+          const afterData = afterNode?.data as Record<string, unknown>
+          const generatedText = (afterData?.generatedText as string) || ""
+          results.push(generatedText)
+          completedCount++
+        } catch {
+          failedCount++
+          results.push("") // placeholder for failed item
+        }
+
+        // Update progress
+        useWorkflowStore.getState().updateNodeData(node.id, {
+          __listCompleted: completedCount + failedCount,
+          __listResults: [...results],
+        })
+
+        // Clear override for next iteration
+        useWorkflowStore.getState().updateNodeData(node.id, { __listItemOverride: undefined })
+      } else {
+        // Generic node: set prompt input temporarily
+        // For now, skip non-AI-Writer nodes (Phase 3c will handle these)
+        results.push("")
+        completedCount++
+      }
+    }
+
+    // Final status
+    useWorkflowStore.getState().updateNodeData(node.id, {
+      executionStatus: failedCount === items.length ? "failed" : "completed",
+      __listTotal: items.length,
+      __listCompleted: completedCount + failedCount,
+      __listResults: results,
+      errorMessage: failedCount > 0 ? `${completedCount}/${items.length} succeeded, ${failedCount} failed` : undefined,
+    })
+  }
+
   // --- Main workflow execution ---
 
   async function handleRun() {
@@ -2624,7 +2735,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (toRun.length === 0) continue
 
       const results = await Promise.allSettled(
-        toRun.map((node) => executeNode(node))
+        toRun.map((node) => {
+          const { nodes: currentNodes, edges: currentEdges } = useWorkflowStore.getState()
+          const listItems = getListInputForNode(node, currentNodes, currentEdges)
+
+          if (!listItems || listItems.length <= 1) {
+            // Normal single execution
+            return executeNode(node)
+          }
+
+          // List propagation: run node once per list item sequentially
+          return executeNodeForList(node, listItems)
+        })
       )
 
       const hasRealError = results.some(
