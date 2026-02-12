@@ -1787,6 +1787,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else {
         finalPrompt = prompt
       }
+      // Truncate to backend limit (2000 chars) after wrapper expansion
+      if (finalPrompt.length > 2000) {
+        finalPrompt = finalPrompt.slice(0, 1997) + "..."
+      }
       return runImageGeneration(node.id, finalPrompt, refImages.length > 0 ? refImages : undefined, imgData.provider || undefined)
     }
 
@@ -2740,6 +2744,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     } else {
       finalPrompt = scene.imagePrompt
     }
+    // Truncate to backend limit (2000 chars) after wrapper expansion
+    if (finalPrompt.length > 2000) {
+      finalPrompt = finalPrompt.slice(0, 1997) + "..."
+    }
 
     updateSceneInScript(scriptNodeId, sceneIndex, { imageStatus: "running" })
 
@@ -3266,7 +3274,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         data: {
           ...imgDefaults,
           label: `Image ${i + 1}`,
-          prompt: items[i].length > 1900 ? items[i].substring(0, 1900) + "..." : items[i],
+          prompt: items[i].length > 1500 ? items[i].substring(0, 1500) + "..." : items[i],
         },
       } as WorkflowNode)
 
