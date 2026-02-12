@@ -289,6 +289,21 @@ function PricingPageContent() {
             any time. Credits never expire.
           </p>
         </div>
+
+        {/* Legal links */}
+        <div className="mt-8 flex items-center justify-center gap-4 text-xs text-muted-foreground/60">
+          <a href="https://scenenode.ai/terms" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+            Terms of Service
+          </a>
+          <span>&middot;</span>
+          <a href="https://scenenode.ai/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+            Privacy Policy
+          </a>
+          <span>&middot;</span>
+          <a href="https://scenenode.ai/refund" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+            Refund Policy
+          </a>
+        </div>
       </section>
     </div>
   )
