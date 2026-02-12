@@ -2383,11 +2383,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined })
 
+      // Replace {outputCount} placeholder in system prompt
+      const outputCount = writerData.outputCount ?? 30
+      const processedPrompt = writerData.systemPrompt.replaceAll("{outputCount}", String(outputCount))
+
       return generateAIWriter({
         userId: user?.id ?? "",
-        systemPrompt: writerData.systemPrompt,
+        systemPrompt: processedPrompt,
         userInput,
-        provider: writerData.provider || "claude",
+        provider: "claude", // Only Claude is currently supported
         model: writerData.model || undefined,
         temperature: writerData.temperature,
         maxTokens: writerData.maxTokens,

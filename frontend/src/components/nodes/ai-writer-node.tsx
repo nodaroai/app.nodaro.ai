@@ -72,7 +72,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
   const activeText = activeResult?.text ?? nodeData.generatedText
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "gemini", 2)
+  const credits = useModelCredits("ai-writer", 2)
   const template = getAIWriterTemplate(nodeData.templateId)
 
   function handleDeleteResult(indexToDelete: number) {

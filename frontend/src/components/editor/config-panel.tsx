@@ -5537,6 +5537,30 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
                 className="mt-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
               />
             </div>
+            <Separator />
+            <div>
+              <Label className="text-xs text-muted-foreground">Output Count</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Number of items to generate (used in &#123;outputCount&#125; placeholder)</p>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                value={data.outputCount ?? 30}
+                onChange={(e) => onUpdate({ outputCount: parseInt(e.target.value, 10) || 30 })}
+                className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Separator</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Character used to split output into individual items for batch processing</p>
+              <Input
+                value={data.separator ?? "*"}
+                onChange={(e) => onUpdate({ separator: e.target.value })}
+                placeholder="*"
+                className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+              />
+            </div>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
@@ -5544,7 +5568,14 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
       {/* Output Display */}
       {data.generatedText && (
         <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Output</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Output</Label>
+            {data.generatedItems && data.generatedItems.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
+                {data.generatedItems.length} items
+              </span>
+            )}
+          </div>
           <div className="bg-[#F8FAFC] dark:bg-[#121212] rounded-lg p-3 max-h-60 overflow-y-auto">
             <p className="text-sm whitespace-pre-wrap">{data.generatedText}</p>
           </div>

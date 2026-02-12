@@ -163,6 +163,8 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.generatedImageUrl = undefined
           data.activeResultIndex = 0
           data.executionStatus = undefined
+          data.batchResults = undefined
+          data.batchProgress = undefined
           break
 
         case "image-to-video":
@@ -239,6 +241,15 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.generatedResults = []
           data.activeResultIndex = 0
           data.generatedText = undefined
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          break
+
+        case "ai-writer":
+          data.generatedResults = []
+          data.activeResultIndex = 0
+          data.generatedText = undefined
+          data.generatedItems = undefined
           data.executionStatus = undefined
           data.errorMessage = undefined
           break
