@@ -5395,6 +5395,21 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
   }, [createdIds, allNodes])
   const isGenerating = imageNodeStatuses.running > 0
 
+  // Check if a reference image source is connected to this AI Writer node
+  const allEdges = useWorkflowStore((s) => s.edges)
+  const hasRefImage = useMemo(() => {
+    if (!selectedNodeId) return false
+    const IMG_SRC_TYPES = new Set(["generate-image", "upload-image", "edit-image", "image-to-image", "character", "object", "location"])
+    return allEdges
+      .filter((e) => e.target === selectedNodeId)
+      .some((e) => {
+        const src = allNodes.find((n) => n.id === e.source)
+        return src && IMG_SRC_TYPES.has(src.type ?? "")
+      })
+  }, [selectedNodeId, allEdges, allNodes])
+  const isPresetTemplate = data.templateId !== "custom"
+  const needsRefImage = isPresetTemplate && !hasRefImage
+
   function handleTemplateChange(templateId: string) {
     const tpl = getAIWriterTemplate(templateId)
     if (!tpl) return
@@ -5425,6 +5440,18 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
           <p className="text-xs text-muted-foreground">{currentTemplate.description}</p>
         )}
       </div>
+
+      {/* Reference Image Warning */}
+      {needsRefImage && (
+        <div className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 shadow-sm">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Connect a reference image node (Generate Image, Upload Image) to AI Writer for character consistency across all generated images.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* System Prompt */}
       <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-2">
@@ -5591,6 +5618,11 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
           {data.createdNodeIds && data.createdNodeIds.length > 0 && (
             <p className="text-[10px] text-center text-muted-foreground">
               {data.createdNodeIds.length} nodes previously created (will be replaced)
+            </p>
+          )}
+          {!hasRefImage && (
+            <p className="text-[10px] text-center text-amber-600 dark:text-amber-400">
+              No reference image connected -- images will have no visual reference
             </p>
           )}
         </div>

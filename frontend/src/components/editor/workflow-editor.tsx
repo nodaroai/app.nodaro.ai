@@ -26,6 +26,7 @@ import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, Uploa
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
+import { getAIWriterTemplate } from "@/lib/ai-writer-templates"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -2217,6 +2218,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const writerData = node.data as AIWriterNodeData
       const { updateNodeData } = useWorkflowStore.getState()
 
+      // If using a predefined template (not custom), require a reference image connection
+      const writerTemplate = getAIWriterTemplate(writerData.templateId)
+      if (writerTemplate && writerTemplate.id !== "custom") {
+        const IMG_SRC_TYPES = new Set(["generate-image", "upload-image", "edit-image", "image-to-image", "character", "object", "location"])
+        const writerEdges = edges.filter((e) => e.target === node.id)
+        const hasImageSource = writerEdges.some((e) => {
+          const src = nodes.find((n) => n.id === e.source)
+          return src && IMG_SRC_TYPES.has(src.type ?? "")
+        })
+        if (!hasImageSource) {
+          toast.error(`Node "${writerData.label}": connect a reference image (Generate Image, Upload Image, etc.) before running with a template`)
+          return Promise.reject(new Error("No reference image connected"))
+        }
+      }
+
       if (!writerData.systemPrompt?.trim()) {
         toast.error(`Node "${writerData.label}": no system prompt provided`)
         return Promise.reject(new Error("No system prompt"))
@@ -3204,6 +3220,19 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
+  function getImageOutputHandle(nodeType: string): string {
+    switch (nodeType) {
+      case "generate-image":
+      case "upload-image":
+        return "image"
+      case "character": return "characterRef"
+      case "object": return "objectRef"
+      case "location": return "locationRef"
+      case "face": return "faceRef"
+      default: return "out" // edit-image, image-to-image
+    }
+  }
+
   function handleCreateNodesFromWriter(writerNodeId: string) {
     const store = useWorkflowStore.getState()
     const writerNode = store.nodes.find((n) => n.id === writerNodeId)
@@ -3236,6 +3265,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .find((n) => n?.type === "face")
     const faceNode = connectedFace ?? freshStore.nodes.find((n) => n.type === "face")
     console.log("[ai-writer] Face node found:", faceNode ? { id: faceNode.id, type: faceNode.type } : "NONE")
+
+    // Find image-producing source nodes connected to AI Writer (for reference image pass-through)
+    const IMAGE_SOURCE_TYPES = new Set([
+      "generate-image", "upload-image", "edit-image", "image-to-image",
+      "character", "object", "location",
+    ])
+    const imageSourceNodes = writerIncomingEdges
+      .map((e) => freshStore.nodes.find((n) => n.id === e.source))
+      .filter((n): n is WorkflowNode => !!n && IMAGE_SOURCE_TYPES.has(n.type ?? "") && n.type !== "face")
+    console.log("[ai-writer] Image source nodes:", imageSourceNodes.map(n => ({ id: n.id, type: n.type })))
 
     // Calculate starting ID counter (same pattern as handleExpandStoryboard)
     let idCounter = store.nodes.reduce((max, n) => {
@@ -3304,12 +3343,29 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         console.log("[ai-writer] Face edge:", { source: faceEdge.source, sourceHandle: faceEdge.sourceHandle, target: faceEdge.target, targetHandle: faceEdge.targetHandle })
         newEdges.push(faceEdge)
       }
+
+      // Edges: Reference Image sources -> Generate Image (for visual consistency)
+      for (const imgSrc of imageSourceNodes) {
+        const srcHandle = getImageOutputHandle(imgSrc.type ?? "")
+        newEdges.push({
+          id: `edge_${Date.now()}_ref_${imgSrc.id}_img_${i}`,
+          source: imgSrc.id,
+          sourceHandle: srcHandle,
+          target: nodeId,
+          targetHandle: "in",
+        } as WorkflowEdge)
+        console.log("[ai-writer] Ref image edge:", { source: imgSrc.id, type: imgSrc.type, sourceHandle: srcHandle, target: nodeId })
+      }
     }
 
     console.log("[ai-writer] Total edges:", newEdges.length, "nodes:", newNodes.length)
     store.batchAddNodesAndEdges(newNodes, newEdges)
     store.updateNodeData(writerNodeId, { createdNodeIds: createdIds })
-    toast.success(`Created ${items.length} Generate Image nodes${faceNode ? " (with Face)" : ""}`)
+    const refInfo = [
+      faceNode ? "Face" : "",
+      imageSourceNodes.length > 0 ? `${imageSourceNodes.length} ref image${imageSourceNodes.length !== 1 ? "s" : ""}` : "",
+    ].filter(Boolean).join(" + ")
+    toast.success(`Created ${items.length} Generate Image nodes${refInfo ? ` (with ${refInfo})` : ""}`)
   }
 
   async function handleRunAllWriterImageNodes(writerNodeId: string) {
