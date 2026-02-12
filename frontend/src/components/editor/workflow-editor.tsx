@@ -18,7 +18,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits, generateAIWriter } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits, generateAIWriter, generateAIWriterStream } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
@@ -2248,20 +2248,27 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No input"))
       }
 
-      updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined })
+      // Clear generatedText and set activeResultIndex to -1 so the node UI
+      // shows the streaming text (from onToken) instead of a stale old result.
+      updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined, generatedText: "", activeResultIndex: -1 })
 
       // Replace {outputCount} placeholder in system prompt
       const outputCount = writerData.outputCount ?? 30
       const processedPrompt = writerData.systemPrompt.replaceAll("{outputCount}", String(outputCount))
 
-      return generateAIWriter({
+      return generateAIWriterStream({
         userId: user?.id ?? "",
         systemPrompt: processedPrompt,
         userInput,
-        provider: "claude", // Only Claude is currently supported
-        model: writerData.model || undefined,
-        temperature: writerData.temperature,
-        maxTokens: writerData.maxTokens,
+        model: writerData.model || "claude-sonnet-4-5-20250929",
+        temperature: writerData.temperature ?? 0.7,
+        maxTokens: writerData.maxTokens ?? 4096,
+        onToken: (token) => {
+          // Update node data so the AI Writer node component shows streaming text
+          const fresh = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+          const prev = ((fresh?.data) as AIWriterNodeData | undefined)?.generatedText ?? ""
+          updateNodeData(node.id, { generatedText: prev + token })
+        },
       }).then((result) => {
         const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data) as AIWriterNodeData | undefined)?.generatedResults ?? []
         const newResult = { text: result.generatedText, jobId: result.jobId, timestamp: new Date().toISOString() }

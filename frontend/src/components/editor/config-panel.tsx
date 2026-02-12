@@ -5549,6 +5549,28 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
         </AccordionItem>
       </Accordion>
 
+      {/* Streaming Output -- visible while AI Writer is running */}
+      {data.executionStatus === "running" && (
+        <div className="rounded-xl border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/10 p-3 shadow-sm space-y-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
+            <Label className="text-[11px] font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">
+              Streaming...
+            </Label>
+          </div>
+          <div className="bg-white/60 dark:bg-[#121212] rounded-lg p-3 max-h-60 overflow-y-auto">
+            {data.generatedText ? (
+              <p className="text-sm whitespace-pre-wrap">
+                {data.generatedText}
+                <span className="animate-pulse text-violet-500">|</span>
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">Waiting for tokens...</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Generated Prompts List */}
       {data.generatedItems && data.generatedItems.length > 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-3">

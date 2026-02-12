@@ -1528,6 +1528,63 @@ export async function generateAIWriter(params: {
   return res.json()
 }
 
+export async function generateAIWriterStream(params: {
+  systemPrompt: string
+  userInput: string
+  model: string
+  temperature: number
+  maxTokens: number
+  userId: string
+  onToken: (token: string) => void
+  signal?: AbortSignal
+}): Promise<{ jobId: string; generatedText: string }> {
+  const { onToken, signal, ...body } = params
+  let collectedText = ""
+  let jobId = ""
+
+  // SSE streaming must bypass the Next.js rewrite proxy (which buffers the
+  // response body) and call the backend directly so tokens arrive in real-time.
+  const sseBaseUrl = process.env.NEXT_PUBLIC_API_URL || ""
+
+  try {
+    const { streamRequest } = await import("@/lib/sse-client")
+
+    for await (const event of streamRequest("/v1/ai-writer/generate-stream", {
+      body,
+      signal,
+      baseUrl: sseBaseUrl || undefined,
+    })) {
+      switch (event.type) {
+        case "metadata":
+          jobId = (event.data as Record<string, unknown>).jobId as string
+          break
+        case "token":
+          collectedText += event.data as string
+          onToken(event.data as string)
+          break
+        case "done": {
+          const done = event.data as Record<string, unknown>
+          return {
+            jobId: (done.jobId as string) ?? jobId,
+            generatedText: (done.generatedText as string) ?? collectedText,
+          }
+        }
+        case "error": {
+          const err = event.data as { code: string; message: string }
+          throw new Error(err.message)
+        }
+      }
+    }
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return { jobId, generatedText: collectedText }
+    }
+    throw err
+  }
+
+  throw new Error("Stream ended without completion")
+}
+
 // Stats types
 export interface StatsResponse {
   totalExecutions: number

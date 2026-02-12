@@ -1,5 +1,6 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
+import { config } from "./lib/config.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
@@ -63,8 +64,21 @@ import { aiWriterRoutes } from "./routes/ai-writer.js"
 export async function buildApp() {
   const app = Fastify({ logger: true })
 
+  // Build CORS origin whitelist: always include localhost for dev, plus
+  // any origins from CORS_ORIGIN env var (comma-separated).
+  const allowedOrigins = new Set([
+    "http://localhost:3000",
+    "https://app.scenenode.ai",
+  ])
+  if (config.CORS_ORIGIN) {
+    for (const o of config.CORS_ORIGIN.split(",")) {
+      const trimmed = o.trim()
+      if (trimmed) allowedOrigins.add(trimmed)
+    }
+  }
+
   await app.register(cors, {
-    origin: true,
+    origin: [...allowedOrigins],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
