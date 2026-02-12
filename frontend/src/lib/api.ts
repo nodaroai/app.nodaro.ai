@@ -1507,6 +1507,9 @@ export async function videoUpscaleApi(
 
 // --- AI Writer ---
 
+// Call backend directly (bypass Next.js proxy which has a ~30s timeout)
+const AI_WRITER_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
 export async function generateAIWriter(params: {
   userId: string
   systemPrompt: string
@@ -1516,7 +1519,7 @@ export async function generateAIWriter(params: {
   temperature?: number
   maxTokens?: number
 }): Promise<{ jobId: string; generatedText: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/ai-writer/generate`, {
+  const res = await fetch(`${AI_WRITER_BASE_URL}/v1/ai-writer/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
