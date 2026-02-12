@@ -3216,11 +3216,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
     }
 
-    // Find Face node connected to the AI Writer's input
+    // Find Face node on the canvas (standalone reference node)
+    // First check nodes connected to AI Writer, then fall back to any Face node on canvas
     const writerIncomingEdges = store.edges.filter((e) => e.target === writerNodeId)
-    const faceNode = writerIncomingEdges
+    const connectedFace = writerIncomingEdges
       .map((e) => store.nodes.find((n) => n.id === e.source))
       .find((n) => n?.type === "face")
+    const faceNode = connectedFace ?? store.nodes.find((n) => n.type === "face")
 
     // Calculate starting ID counter (same pattern as handleExpandStoryboard)
     let idCounter = store.nodes.reduce((max, n) => {
