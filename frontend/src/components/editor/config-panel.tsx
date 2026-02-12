@@ -5521,30 +5521,6 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
                 className="mt-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
               />
             </div>
-            <Separator />
-            <div>
-              <Label className="text-xs text-muted-foreground">Output Count</Label>
-              <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Number of items to generate (used in &#123;outputCount&#125; placeholder)</p>
-              <Input
-                type="number"
-                min={1}
-                max={100}
-                step={1}
-                value={data.outputCount ?? 30}
-                onChange={(e) => onUpdate({ outputCount: parseInt(e.target.value, 10) || 30 })}
-                className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Separator</Label>
-              <p className="text-[10px] text-muted-foreground mt-0.5 mb-1">Line separator used to split output into individual items for batch processing</p>
-              <Input
-                value={data.separator ?? "===NEXT==="}
-                onChange={(e) => onUpdate({ separator: e.target.value })}
-                placeholder="===NEXT==="
-                className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
-              />
-            </div>
           </AccordionContent>
         </AccordionItem>
       </Accordion>

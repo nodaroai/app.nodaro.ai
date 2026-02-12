@@ -2252,9 +2252,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       // shows the streaming text (from onToken) instead of a stale old result.
       updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined, generatedText: "", activeResultIndex: -1 })
 
-      // Replace {outputCount} placeholder in system prompt
-      const outputCount = writerData.outputCount ?? 30
-      const processedPrompt = writerData.systemPrompt.replaceAll("{outputCount}", String(outputCount))
+      const processedPrompt = writerData.systemPrompt
 
       return generateAIWriterStream({
         userId: user?.id ?? "",
@@ -2273,13 +2271,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const existingResults = ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data) as AIWriterNodeData | undefined)?.generatedResults ?? []
         const newResult = { text: result.generatedText, jobId: result.jobId, timestamp: new Date().toISOString() }
 
-        // Parse generated text into items using the separator (line-based split)
-        const separator = writerData.separator || "===NEXT==="
-        const separatorRegex = new RegExp(`\\n${separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n`, "g")
-        const items = result.generatedText
-          .split(separatorRegex)
-          .map((s: string) => s.trim())
-          .filter((s: string) => s.length > 0)
+        const items = [result.generatedText]
 
         updateNodeData(node.id, {
           executionStatus: "completed",

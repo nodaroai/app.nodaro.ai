@@ -1077,8 +1077,6 @@ export type AIWriterNodeData = {
   templateId: string
   systemPrompt: string
   userInput: string
-  outputCount: number
-  separator: string
   provider: "gemini" | "claude" | "gpt"
   model: string
   temperature: number
@@ -1969,8 +1967,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       templateId: "custom",
       systemPrompt: "",
       userInput: "",
-      outputCount: 30,
-      separator: "===NEXT===",
       provider: "claude",
       model: "claude-sonnet-4-5-20250929",
       temperature: 0.7,

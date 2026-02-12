@@ -13,12 +13,15 @@ const aiWriterBody = z.object({
   provider: z.enum(["claude"]).default("claude"),
   model: z.string().default("claude-sonnet-4-5-20250929"),
   temperature: z.number().min(0).max(2).default(0.7),
-  maxTokens: z.number().min(1).max(8192).default(4096),
+  maxTokens: z.number().min(1).max(4096).default(4096),
   userId: z.string().uuid().optional(),
 })
 
 export async function aiWriterRoutes(app: FastifyInstance) {
-  // Legacy synchronous endpoint -- kept for backward compatibility
+  // ---------------------------------------------------------------------------
+  // POST /v1/ai-writer/generate  (Legacy synchronous endpoint)
+  // ---------------------------------------------------------------------------
+
   app.post(
     "/v1/ai-writer/generate",
     {
@@ -96,7 +99,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         req,
         reply,
         job.id,
-        modelIdentifier
+        modelIdentifier,
       )
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -121,9 +124,8 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         const textBlock = response.content.find((b) => b.type === "text")
         const generatedText = textBlock?.text ?? ""
 
-        // Finalize job and credits in a separate try/catch so we can debug post-API failures
+        // Finalize job and credits
         try {
-          // Mark job as completed
           const { error: updateError } = await supabase
             .from("jobs")
             .update({
@@ -138,7 +140,6 @@ export async function aiWriterRoutes(app: FastifyInstance) {
             console.log("[ai-writer] Job marked completed")
           }
 
-          // Commit credits
           if (usageLogId) {
             await CreditsService.commitCredits(usageLogId)
             console.log("[ai-writer] Credits finalized")
@@ -155,13 +156,11 @@ export async function aiWriterRoutes(app: FastifyInstance) {
 
         console.error("[ai-writer] Error details:", JSON.stringify(err, null, 2))
 
-        // Mark job as failed
         await supabase
           .from("jobs")
           .update({ status: "failed", output_data: { error: message } })
           .eq("id", job.id)
 
-        // Refund credits
         if (usageLogId) {
           await CreditsService.refundCredits(usageLogId)
         }
@@ -170,7 +169,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
           error: { code: "llm_error", message },
         })
       }
-    }
+    },
   )
 
   // ---------------------------------------------------------------------------
@@ -249,7 +248,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         req,
         reply,
         job.id,
-        modelIdentifier
+        modelIdentifier,
       )
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -269,7 +268,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         "[ai-writer-stream] Starting stream, model:",
         model,
         "maxTokens:",
-        maxTokens
+        maxTokens,
       )
 
       try {
@@ -316,7 +315,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
 
         console.log(
           "[ai-writer-stream] Complete, tokens:",
-          finalMessage.usage.output_tokens
+          finalMessage.usage.output_tokens,
         )
 
         // Finalize job
@@ -335,7 +334,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         if (updateError) {
           console.error(
             "[ai-writer-stream] Job update error:",
-            updateError.message
+            updateError.message,
           )
         }
 
@@ -379,6 +378,6 @@ export async function aiWriterRoutes(app: FastifyInstance) {
           sse.close()
         }
       }
-    }
+    },
   )
 }

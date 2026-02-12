@@ -141,8 +141,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
     }
 
     // Process system prompt
-    const outputCount = writerData.outputCount ?? 30
-    const processedPrompt = writerData.systemPrompt.replaceAll("{outputCount}", String(outputCount))
+    const processedPrompt = writerData.systemPrompt
 
     // Set up abort controller
     const controller = new AbortController()
@@ -189,12 +188,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
       const existingResults = ((freshNode?.data) as AIWriterNodeData | undefined)?.generatedResults ?? []
       const newResult = { text: finalText, jobId: result.jobId, timestamp: new Date().toISOString() }
 
-      const separator = writerData.separator || "===NEXT==="
-      const separatorRegex = new RegExp(`\\n${separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n`, "g")
-      const items = finalText
-        .split(separatorRegex)
-        .map((s: string) => s.trim())
-        .filter((s: string) => s.length > 0)
+      const items = [finalText]
 
       updateNodeData(id, {
         executionStatus: "completed",
