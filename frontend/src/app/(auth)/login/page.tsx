@@ -41,16 +41,29 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6 text-center">
-        <div>
-          <h1 className="text-2xl font-bold text-primary">SceneNode</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+    <div className="relative flex min-h-screen flex-col items-center justify-center px-4 bg-gradient-to-b from-background via-background to-zinc-950/40">
+      {/* Subtle dot grid background */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: "radial-gradient(circle, currentColor 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      />
+
+      <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
+        {/* Logo + tagline */}
+        <div className="space-y-3">
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-[#ff0073] to-purple-500 bg-clip-text text-transparent">
+            SceneNode
+          </h1>
+          <p className="text-base text-muted-foreground animate-in fade-in duration-700">
             Visual workflows for AI video generation
           </p>
         </div>
 
-        <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
+        {/* Login card */}
+        <div className="rounded-xl border border-white/[0.08] bg-card/60 backdrop-blur-sm p-6 shadow-lg space-y-4">
           <h2 className="text-lg font-semibold">Sign in</h2>
 
           <Button
@@ -64,7 +77,26 @@ function LoginPageContent() {
           {error && (
             <p className="text-sm text-destructive">{error}</p>
           )}
+
+          <p className="text-xs text-muted-foreground/60 pt-1">
+            Start free with 50 credits. No credit card required.
+          </p>
         </div>
+      </div>
+
+      {/* Legal footer */}
+      <div className="absolute bottom-6 flex items-center justify-center gap-4 text-xs text-muted-foreground/60">
+        <a href="https://scenenode.ai/terms" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+          Terms of Service
+        </a>
+        <span>&middot;</span>
+        <a href="https://scenenode.ai/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+          Privacy Policy
+        </a>
+        <span>&middot;</span>
+        <a href="https://scenenode.ai/refund" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+          Refund Policy
+        </a>
       </div>
     </div>
   )
