@@ -3224,13 +3224,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
     }
 
+    // Re-read store after cleanup to get fresh node list
+    const freshStore = useWorkflowStore.getState()
+
     // Find Face node on the canvas (standalone reference node)
     // First check nodes connected to AI Writer, then fall back to any Face node on canvas
-    const writerIncomingEdges = store.edges.filter((e) => e.target === writerNodeId)
+    console.log("[ai-writer] All nodes:", freshStore.nodes.map(n => ({ id: n.id, type: n.type })))
+    const writerIncomingEdges = freshStore.edges.filter((e) => e.target === writerNodeId)
     const connectedFace = writerIncomingEdges
-      .map((e) => store.nodes.find((n) => n.id === e.source))
+      .map((e) => freshStore.nodes.find((n) => n.id === e.source))
       .find((n) => n?.type === "face")
-    const faceNode = connectedFace ?? store.nodes.find((n) => n.type === "face")
+    const faceNode = connectedFace ?? freshStore.nodes.find((n) => n.type === "face")
+    console.log("[ai-writer] Face node found:", faceNode ? { id: faceNode.id, type: faceNode.type } : "NONE")
 
     // Calculate starting ID counter (same pattern as handleExpandStoryboard)
     let idCounter = store.nodes.reduce((max, n) => {
@@ -3289,19 +3294,22 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       // Edge: Face -> Generate Image (if Face node exists)
       if (faceNode) {
-        newEdges.push({
+        const faceEdge = {
           id: `edge_${Date.now()}_face_img_${i}`,
           source: faceNode.id,
           sourceHandle: "faceRef",
           target: nodeId,
           targetHandle: "in",
-        } as WorkflowEdge)
+        } as WorkflowEdge
+        console.log("[ai-writer] Face edge:", { source: faceEdge.source, sourceHandle: faceEdge.sourceHandle, target: faceEdge.target, targetHandle: faceEdge.targetHandle })
+        newEdges.push(faceEdge)
       }
     }
 
+    console.log("[ai-writer] Total edges:", newEdges.length, "nodes:", newNodes.length)
     store.batchAddNodesAndEdges(newNodes, newEdges)
     store.updateNodeData(writerNodeId, { createdNodeIds: createdIds })
-    toast.success(`Created ${items.length} Generate Image nodes`)
+    toast.success(`Created ${items.length} Generate Image nodes${faceNode ? " (with Face)" : ""}`)
   }
 
   async function handleRunAllWriterImageNodes(writerNodeId: string) {
