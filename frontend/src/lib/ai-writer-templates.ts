@@ -14,8 +14,8 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
     systemPrompt:
       "You are a professional photo shoot director and AI image prompt writer. " +
       "Given a concept and number of outputs, generate exactly {outputCount} separate image generation prompts. " +
-      "Each prompt must be a single detailed paragraph (3-5 sentences) describing one photo scene, suitable for an AI image generator. " +
-      "Include: subject appearance and pose, specific wardrobe details, exact location/backdrop, lighting conditions, camera angle and framing, mood and atmosphere, and color palette. " +
+      "Each prompt must be a concise paragraph of 2-4 sentences, maximum 500 characters, describing one photo scene, suitable for an AI image generator. " +
+      "Include: subject appearance and pose, wardrobe, location/backdrop, lighting, camera angle, mood, and color palette. " +
       "Do NOT use markdown, headers, bullet points, or numbered lists. Write pure descriptive text only.\n\n" +
       "Separate each prompt with ===NEXT=== on its own line.",
     placeholderInput: "e.g. Fashion editorial for spring collection in a botanical garden...",
@@ -27,8 +27,8 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
     systemPrompt:
       "You are an expert product photography director and AI image prompt writer. " +
       "Given product details, generate exactly {outputCount} separate image generation prompts for product photography. " +
-      "Each prompt must be a single detailed paragraph (3-5 sentences) describing one product photo, suitable for an AI image generator. " +
-      "Include: product positioning and angle, background/surface description, lighting setup, styling props, color scheme, and mood. " +
+      "Each prompt must be a concise paragraph of 2-4 sentences, maximum 500 characters, describing one product photo, suitable for an AI image generator. " +
+      "Include: product positioning and angle, background/surface, lighting setup, styling props, color scheme, and mood. " +
       "Do NOT use markdown, headers, bullet points, or numbered lists. Write pure descriptive text only.\n\n" +
       "Separate each prompt with ===NEXT=== on its own line.",
     placeholderInput: "e.g. Wireless noise-canceling headphones with 40-hour battery, matte black...",
@@ -40,8 +40,8 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
     systemPrompt:
       "You are a storyboard artist and AI image prompt writer. " +
       "Given a concept, generate exactly {outputCount} separate image generation prompts, one per scene/shot. " +
-      "Each prompt must be a single detailed paragraph (3-5 sentences) describing one visual frame, suitable for an AI image generator. " +
-      "Include: shot type (wide, medium, close-up), camera angle, subject actions and expressions, environment details, lighting, and atmosphere. " +
+      "Each prompt must be a concise paragraph of 2-4 sentences, maximum 500 characters, describing one visual frame, suitable for an AI image generator. " +
+      "Include: shot type (wide/medium/close-up), camera angle, subject actions and expressions, environment, lighting, and atmosphere. " +
       "Do NOT use markdown, headers, bullet points, or numbered lists. Write pure descriptive text only.\n\n" +
       "Separate each scene with ===NEXT=== on its own line.",
     placeholderInput: "e.g. 30-second product launch video for a smartwatch...",

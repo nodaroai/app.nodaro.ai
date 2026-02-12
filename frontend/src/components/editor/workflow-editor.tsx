@@ -3264,7 +3264,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         data: {
           ...imgDefaults,
           label: `Image ${i + 1}`,
-          prompt: items[i],
+          prompt: items[i].length > 1900 ? items[i].substring(0, 1900) + "..." : items[i],
         },
       } as WorkflowNode)
 
