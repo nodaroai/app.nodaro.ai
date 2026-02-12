@@ -88,9 +88,14 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
+      // Extend request timeout for long LLM calls (up to 60s)
+      reply.raw.setTimeout(60000)
+
       // Call Anthropic Claude API synchronously
       try {
         const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
+
+        console.log("[ai-writer] Calling Anthropic API with model:", model)
 
         const response = await anthropic.messages.create({
           model,
@@ -99,6 +104,8 @@ export async function aiWriterRoutes(app: FastifyInstance) {
           system: systemPrompt,
           messages: [{ role: "user", content: userInput }],
         })
+
+        console.log("[ai-writer] Success, output tokens:", response.usage.output_tokens)
 
         // Extract text from response
         const textBlock = response.content.find((b) => b.type === "text")
@@ -122,6 +129,8 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Claude API call failed"
+
+        console.error("[ai-writer] Error details:", JSON.stringify(err, null, 2))
 
         // Mark job as failed
         await supabase
