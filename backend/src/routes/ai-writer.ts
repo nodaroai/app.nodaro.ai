@@ -12,7 +12,7 @@ const aiWriterBody = z.object({
   provider: z.enum(["claude"]).default("claude"),
   model: z.string().default("claude-sonnet-4-5-20250929"),
   temperature: z.number().min(0).max(2).default(0.7),
-  maxTokens: z.number().min(1).max(8192).default(2048),
+  maxTokens: z.number().min(1).max(8192).default(4096),
   userId: z.string().uuid().optional(),
 })
 
@@ -23,6 +23,9 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       preHandler: creditGuard(() => "ai-writer"),
     },
     async (req, reply) => {
+      // Extend request timeout for long LLM calls (up to 120s)
+      reply.raw.setTimeout(120000)
+
       const parsed = aiWriterBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
@@ -78,6 +81,8 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
       }
 
+      console.log("[ai-writer] Job inserted:", job.id)
+
       // Reserve credits
       const reservation = await reserveCreditsForJob(
         req,
@@ -88,14 +93,11 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      // Extend request timeout for long LLM calls (up to 60s)
-      reply.raw.setTimeout(60000)
-
       // Call Anthropic Claude API synchronously
       try {
         const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
 
-        console.log("[ai-writer] Calling Anthropic API with model:", model)
+        console.log("[ai-writer] Calling Anthropic API with model:", model, "maxTokens:", maxTokens)
 
         const response = await anthropic.messages.create({
           model,
@@ -105,27 +107,40 @@ export async function aiWriterRoutes(app: FastifyInstance) {
           messages: [{ role: "user", content: userInput }],
         })
 
-        console.log("[ai-writer] Success, output tokens:", response.usage.output_tokens)
+        console.log("[ai-writer] Success, output tokens:", response.usage.output_tokens, "stop_reason:", response.stop_reason)
 
         // Extract text from response
         const textBlock = response.content.find((b) => b.type === "text")
         const generatedText = textBlock?.text ?? ""
 
-        // Mark job as completed
-        await supabase
-          .from("jobs")
-          .update({
-            status: "completed",
-            output_data: { generatedText, model, usage: response.usage },
-          })
-          .eq("id", job.id)
+        // Finalize job and credits in a separate try/catch so we can debug post-API failures
+        try {
+          // Mark job as completed
+          const { error: updateError } = await supabase
+            .from("jobs")
+            .update({
+              status: "completed",
+              output_data: { generatedText, model, usage: response.usage },
+            })
+            .eq("id", job.id)
 
-        // Commit credits
-        if (usageLogId) {
-          await CreditsService.commitCredits(usageLogId)
+          if (updateError) {
+            console.error("[ai-writer] Supabase job update error:", updateError.message)
+          } else {
+            console.log("[ai-writer] Job marked completed")
+          }
+
+          // Commit credits
+          if (usageLogId) {
+            await CreditsService.commitCredits(usageLogId)
+            console.log("[ai-writer] Credits finalized")
+          }
+        } catch (postErr) {
+          console.error("[ai-writer] Post-API error:", postErr)
         }
 
-        return { jobId: job.id, generatedText }
+        console.log("[ai-writer] Sending response, text length:", generatedText.length)
+        return reply.send({ jobId: job.id, generatedText })
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Claude API call failed"

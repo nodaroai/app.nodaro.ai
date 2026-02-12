@@ -1984,7 +1984,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       provider: "claude",
       model: "claude-sonnet-4-5-20250929",
       temperature: 0.7,
-      maxTokens: 2048,
+      maxTokens: 4096,
       fieldMappings: {},
     } as AIWriterNodeData,
   },
