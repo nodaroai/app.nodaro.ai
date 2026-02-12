@@ -2,15 +2,18 @@
 
 import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
+import { Loader2 } from "lucide-react"
 import { AppSidebar, MobileHeader } from "@/components/layout/app-sidebar"
 import { SidebarProvider } from "@/components/layout/sidebar-context"
 import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function DashboardLayout({
   children,
 }: {
   readonly children: React.ReactNode
 }) {
+  const { user, loading: authLoading } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -20,6 +23,13 @@ export default function DashboardLayout({
 
   // Check if we're in the editor - sidebar starts collapsed but can be expanded
   const isEditor = pathname.includes("/workflows/")
+
+  // Redirect unauthenticated users to login
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/login")
+    }
+  }, [authLoading, user, router])
 
   // After OAuth login, check for a pending plan selection and redirect to pricing
   useEffect(() => {
@@ -34,6 +44,15 @@ export default function DashboardLayout({
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [pathname])
+
+  // Show loading state while checking auth
+  if (authLoading || !user) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <SidebarProvider defaultCollapsed={isEditor}>
