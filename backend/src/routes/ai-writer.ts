@@ -21,10 +21,16 @@ export async function aiWriterRoutes(app: FastifyInstance) {
     "/v1/ai-writer/generate",
     {
       preHandler: creditGuard(() => "ai-writer"),
+      config: { requestTimeout: 120000 } as Record<string, unknown>,
     },
     async (req, reply) => {
-      // Extend request timeout for long LLM calls (up to 120s)
+      // Set timeouts at every layer to prevent premature connection close
+      req.raw.setTimeout(120000)
       reply.raw.setTimeout(120000)
+      const server = reply.server as unknown as { requestTimeout?: number }
+      if (server.requestTimeout !== undefined) {
+        server.requestTimeout = 120000
+      }
 
       const parsed = aiWriterBody.safeParse(req.body)
       if (!parsed.success) {
