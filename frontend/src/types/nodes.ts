@@ -2012,7 +2012,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Combine Text",
     category: "utility",
     creditCost: 0,
-    inputs: ["text"],
+    inputs: ["in"],
     outputs: ["text"],
     defaultData: {
       label: "Combine Text",

@@ -2635,6 +2635,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Check for __listResults first (list execution outputs)
         const srcData = sourceNode.data as Record<string, unknown>
         const listResults = srcData.__listResults as string[] | undefined
+
         if (listResults && listResults.length > 0) {
           for (const item of listResults) {
             if (item?.trim()) textParts.push(item.trim())
