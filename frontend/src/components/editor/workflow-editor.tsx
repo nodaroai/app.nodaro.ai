@@ -1776,7 +1776,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function executeNode(node: WorkflowNode): Promise<void> {
+  function executeNode(node: WorkflowNode, overridePrompt?: string): Promise<void> {
     const { nodes, edges } = useWorkflowStore.getState()
     const inputs = resolveNodeInputs(node, nodes, edges)
 
@@ -1815,7 +1815,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const refImages = [...(nodeRefUrl ? [nodeRefUrl] : []), ...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
 
       // Single execution mode
-      const prompt = inputs.prompt ?? imgData.prompt?.trim()
+      const prompt = overridePrompt || inputs.prompt || imgData.prompt?.trim()
       if (!prompt) {
         toast.error(`Node "${imgData.label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
@@ -2277,9 +2277,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No system prompt"))
       }
 
-      // Use list item override (set by executeNodeForList), connected text input, or config panel input
-      const listItemOverride = (writerData as Record<string, unknown>).__listItemOverride as string | undefined
-      const userInput = listItemOverride
+      // Use override prompt (from list execution), connected text input, or config panel input
+      const userInput = overridePrompt
         || (typeof inputs.prompt === "string" && inputs.prompt.trim() ? inputs.prompt : writerData.userInput)
 
       if (!userInput?.trim()) {
@@ -2629,45 +2628,36 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (isWorkflowStale()) break
 
       const item = items[i]
-      console.log(`[list-exec] Item ${i + 1}/${items.length}: "${item.substring(0, 50)}"`)
+      // Pass item as override prompt directly to executeNode (no store mutation needed)
+      try {
+        const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+        if (!freshNode) break
 
-      // For AI Writer: temporarily set __listItemOverride to this item, then run
-      if (node.type === "ai-writer") {
-        // Set the current list item as override
-        useWorkflowStore.getState().updateNodeData(node.id, { __listItemOverride: item })
+        await executeNode(freshNode, item)
 
-        try {
-          // Re-fetch node with updated data
-          const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
-          if (!freshNode) break
-
-          await executeNode(freshNode)
-
-          // Grab the generated text from the node after execution
-          const afterNode = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
-          const afterData = afterNode?.data as Record<string, unknown>
-          const generatedText = (afterData?.generatedText as string) || ""
-          results.push(generatedText)
-          completedCount++
-        } catch {
-          failedCount++
-          results.push("") // placeholder for failed item
+        // Extract the output after execution
+        const afterNode = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+        if (afterNode) {
+          if (node.type === "ai-writer") {
+            const afterData = afterNode.data as Record<string, unknown>
+            results.push((afterData?.generatedText as string) || "")
+          } else {
+            results.push(extractNodeOutput(afterNode) || "")
+          }
+        } else {
+          results.push("")
         }
-
-        // Update progress
-        useWorkflowStore.getState().updateNodeData(node.id, {
-          __listCompleted: completedCount + failedCount,
-          __listResults: [...results],
-        })
-
-        // Clear override for next iteration
-        useWorkflowStore.getState().updateNodeData(node.id, { __listItemOverride: undefined })
-      } else {
-        // Generic node: set prompt input temporarily
-        // For now, skip non-AI-Writer nodes (Phase 3c will handle these)
-        results.push("")
         completedCount++
+      } catch {
+        failedCount++
+        results.push("")
       }
+
+      // Update progress
+      useWorkflowStore.getState().updateNodeData(node.id, {
+        __listCompleted: completedCount + failedCount,
+        __listResults: [...results],
+      })
     }
 
     // Final status
@@ -2738,7 +2728,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toRun.map((node) => {
           const { nodes: currentNodes, edges: currentEdges } = useWorkflowStore.getState()
           const listItems = getListInputForNode(node, currentNodes, currentEdges)
-
           if (!listItems || listItems.length <= 1) {
             // Normal single execution
             return executeNode(node)
@@ -2783,7 +2772,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     setIsRunning(true)
-    executeNode(node).catch(() => {
+    const { nodes: currentNodes, edges: currentEdges } = useWorkflowStore.getState()
+    const listItems = getListInputForNode(node, currentNodes, currentEdges)
+
+    const execution = (listItems && listItems.length > 1)
+      ? executeNodeForList(node, listItems)
+      : executeNode(node)
+
+    execution.catch(() => {
       // Error already handled via toast in executeNode
     }).finally(() => {
       if (pollIntervalsRef.current.size === 0) {
