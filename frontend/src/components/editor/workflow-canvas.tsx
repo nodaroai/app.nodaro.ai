@@ -522,7 +522,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
                     nodeType === 'extract-audio' ||
                     nodeType === 'mix-audio' ||
                     nodeType === 'adjust-volume' ||
-                    nodeType === 'trim-video') return '#475569'
+                    nodeType === 'trim-video' ||
+                    nodeType === 'combine-text') return '#475569'
                 // Output nodes - green
                 if (nodeType === 'save-to-storage' ||
                     nodeType === 'webhook-output') return '#22c55e'

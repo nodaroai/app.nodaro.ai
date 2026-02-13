@@ -1098,6 +1098,18 @@ export type AIWriterNodeData = {
   createdNodeIds?: string[]
 }
 
+// --- Combine Text Node Data ---
+
+export type CombineTextNodeData = {
+  [key: string]: unknown
+  label: string
+  separator: "newline" | "comma" | "space" | "double-newline" | "custom"
+  customSeparator: string
+  combinedText: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 // --- Sticky Note Node Data ---
 
 export type StickyNoteData = {
@@ -1265,6 +1277,7 @@ export type SceneNodeData =
   | FaceNodeData
   | AIWriterNodeData
   | ListNodeData
+  | CombineTextNodeData
   | StickyNoteData
 
 export type SceneNodeType =
@@ -1321,6 +1334,7 @@ export type SceneNodeType =
   | "object"
   | "location"
   | "ai-writer"
+  | "combine-text"
   | "sticky-note"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
@@ -1993,6 +2007,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as AIWriterNodeData,
   },
   // Utility
+  {
+    type: "combine-text",
+    label: "Combine Text",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["text"],
+    outputs: ["text"],
+    defaultData: {
+      label: "Combine Text",
+      separator: "newline",
+      customSeparator: "",
+      combinedText: "",
+    } as CombineTextNodeData,
+  },
   {
     type: "sticky-note",
     label: "Sticky Note",

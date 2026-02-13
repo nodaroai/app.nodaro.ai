@@ -78,6 +78,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "extract-audio", label: "Extract Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
+  // Processing — Text
+  { type: "combine-text", label: "Combine Text", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Text" },
   // Character
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
   // Face

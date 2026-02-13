@@ -84,6 +84,7 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
   AIWriterNodeData,
+  CombineTextNodeData,
   SaveToStorageData,
   WebhookOutputData,
   FieldMappings,
@@ -393,6 +394,7 @@ export function ConfigPanel() {
       "mix-audio": "Mix Audio",
       "adjust-volume": "Adjust Volume",
       "trim-video": "Trim Video",
+      "combine-text": "Combine Text",
       "save-to-storage": "Save to Storage",
       "webhook-output": "Webhook Output",
       "character": "Character",
@@ -604,6 +606,9 @@ export function ConfigPanel() {
           {selectedNode.type === "trim-video" && (
             <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "combine-text" && (
+            <CombineTextConfig data={selectedNode.data as CombineTextNodeData} onUpdate={update} />
+          )}
 
           {/* Output Nodes */}
           {selectedNode.type === "save-to-storage" && (
@@ -661,7 +666,7 @@ export function ConfigPanel() {
               />
             )}
 
-            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio") && (
+            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text") && (
               <button
                 type="button"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -4110,6 +4115,59 @@ function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) {
           onChange={(e) => onUpdate({ endTime: parseFloat(e.target.value) || 0 })}
         />
       </div>
+    </div>
+  )
+}
+
+/* ── Utility Node Configs ── */
+
+function CombineTextConfig({ data, onUpdate }: { data: CombineTextNodeData; onUpdate: (patch: Partial<CombineTextNodeData>) => void }) {
+  const SEPARATOR_OPTIONS = [
+    { value: "newline", label: "New Line (\\n)" },
+    { value: "double-newline", label: "Double New Line (\\n\\n)" },
+    { value: "comma", label: "Comma (,)" },
+    { value: "space", label: "Space" },
+    { value: "custom", label: "Custom" },
+  ] as const
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Separator</Label>
+        <Select value={data.separator} onValueChange={(v) => onUpdate({ separator: v as CombineTextNodeData["separator"] })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SEPARATOR_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {data.separator === "custom" && (
+        <div>
+          <Label>Custom Separator</Label>
+          <Input
+            value={data.customSeparator}
+            onChange={(e) => onUpdate({ customSeparator: e.target.value })}
+            placeholder="Enter separator..."
+          />
+        </div>
+      )}
+
+      {data.combinedText && (
+        <div>
+          <Label>Output Preview</Label>
+          <Textarea
+            rows={4}
+            value={data.combinedText}
+            readOnly
+            className="text-xs opacity-70"
+          />
+        </div>
+      )}
     </div>
   )
 }

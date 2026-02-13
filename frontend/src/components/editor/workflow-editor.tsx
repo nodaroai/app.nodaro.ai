@@ -22,7 +22,7 @@ import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, te
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
@@ -223,7 +223,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer", "combine-text"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -406,6 +406,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
     if (type === "ai-writer") {
       return (data.generatedText as string | undefined)
+    }
+    if (type === "combine-text") {
+      return (data.combinedText as string | undefined)
     }
     return undefined
   }
@@ -606,6 +609,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         inputs.prompt = output
       } else if (src.type === "ai-writer") {
         // AI Writer outputs text - use as prompt for downstream nodes
+        inputs.prompt = output
+      } else if (src.type === "combine-text") {
+        // Combine Text outputs text - use as prompt for downstream nodes
         inputs.prompt = output
       }
     }
@@ -2602,6 +2608,51 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const finalPrompt = charDescs.length > 0 ? `${combinedPrompt}\n${charDescs.join(" ")}` : combinedPrompt
       const sceneAspectRatio = (sceneData as Record<string, unknown>).aspectRatio as string | undefined
       return runImageGeneration(node.id, finalPrompt, refUrls.length > 0 ? refUrls : undefined, undefined, sceneAspectRatio)
+    }
+
+    if (node.type === "combine-text") {
+      const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
+      const combineData = node.data as CombineTextNodeData
+
+      // Resolve separator string
+      const separatorMap: Record<string, string> = {
+        newline: "\n",
+        "double-newline": "\n\n",
+        comma: ", ",
+        space: " ",
+        custom: combineData.customSeparator ?? "",
+      }
+      const sep = separatorMap[combineData.separator] ?? "\n"
+
+      // Collect all text from upstream sources
+      const incomingEdges = currentEdges.filter((e) => e.target === node.id)
+      const textParts: string[] = []
+
+      for (const edge of incomingEdges) {
+        const sourceNode = currentNodes.find((n) => n.id === edge.source)
+        if (!sourceNode) continue
+
+        // Check for __listResults first (list execution outputs)
+        const srcData = sourceNode.data as Record<string, unknown>
+        const listResults = srcData.__listResults as string[] | undefined
+        if (listResults && listResults.length > 0) {
+          for (const item of listResults) {
+            if (item?.trim()) textParts.push(item.trim())
+          }
+          continue
+        }
+
+        // Fall back to single output
+        const output = extractNodeOutput(sourceNode)
+        if (output?.trim()) textParts.push(output.trim())
+      }
+
+      const combinedText = textParts.join(sep)
+      updateNodeData(node.id, {
+        combinedText,
+        executionStatus: "completed",
+      })
+      return Promise.resolve()
     }
 
     return Promise.resolve()
