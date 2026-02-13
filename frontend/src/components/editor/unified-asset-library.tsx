@@ -343,7 +343,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
 
   return (
     <>
-      {/* Asset Library Modal */}
+      {/* My Library Modal */}
       {open && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm"
@@ -355,7 +355,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-white">Asset Library</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-white">My Library</h3>
             <button
               type="button"
               className="p-1 text-white/80 hover:text-white transition-colors"
@@ -940,7 +940,7 @@ export function UnifiedAssetLibraryButton() {
         onClick={() => setOpen(true)}
       >
         <Grid3X3 className="h-4 w-4" />
-        Asset Library
+        My Library
         {totalCount > 0 && (
           <span className="ml-auto text-[10px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
             {totalCount}
@@ -959,7 +959,7 @@ export function UnifiedAssetLibraryButton() {
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-white">Asset Library</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-white">My Library</h3>
               <button
                 type="button"
                 className="p-1 text-white/80 hover:text-white transition-colors"

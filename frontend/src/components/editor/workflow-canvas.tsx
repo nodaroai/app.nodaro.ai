@@ -266,7 +266,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Ctrl+L - Asset Library
+      // Ctrl+L - My Library
       if ((e.ctrlKey || e.metaKey) && e.key === "l") {
         e.preventDefault()
         setAssetLibraryOpen(true)
@@ -434,7 +434,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onClose={() => setSearchModalOpen(false)}
       />
 
-      {/* Asset Library Modal */}
+      {/* My Library Modal */}
       <UnifiedAssetLibraryModal
         open={assetLibraryOpen}
         onClose={() => setAssetLibraryOpen(false)}

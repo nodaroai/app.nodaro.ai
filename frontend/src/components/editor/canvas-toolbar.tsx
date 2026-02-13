@@ -129,7 +129,7 @@ export function CanvasToolbar({
 
       <ToolbarButton
         icon={<Package className="w-5 h-5" />}
-        label="Asset Library"
+        label="My Library"
         shortcut="Ctrl+L"
         onClick={onAssetLibrary}
       />

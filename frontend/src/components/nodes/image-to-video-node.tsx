@@ -66,6 +66,12 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const credits = useModelCredits(nodeData.provider ?? "minimax", 4)
+  const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
+  const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
+  const isNodeRunning = nodeData.executionStatus === "running"
+  const listProgressPercent = (listTotal && listTotal > 0 && listCompleted !== undefined)
+    ? Math.round((listCompleted / listTotal) * 100)
+    : undefined
 
   const supportsEndFrame = END_FRAME_SUPPORTED_PROVIDERS.includes(nodeData.provider)
 
@@ -165,6 +171,9 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      listCount={listTotal}
+      listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
+      listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       handles={handles}
     >
       <div className="flex flex-col gap-2">

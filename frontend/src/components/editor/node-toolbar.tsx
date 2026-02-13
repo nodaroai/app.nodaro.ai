@@ -112,7 +112,7 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
   return (
     <>
-      {/* Unified Asset Library - quick access to all assets */}
+      {/* Unified My Library - quick access to all assets */}
       <div className="flex flex-col gap-1 pb-3 mb-3 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
         <span className="font-sans text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B] mb-1">
           Library

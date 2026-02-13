@@ -26,6 +26,9 @@ interface BaseNodeProps {
   readonly minWidth?: number
   readonly minHeight?: number
   readonly isRunning?: boolean
+  readonly listCount?: number
+  readonly listProgress?: string
+  readonly listProgressPercent?: number
 }
 
 // Light mode: white bg with colored top accent line, Dark mode: category-colored borders
@@ -89,6 +92,9 @@ export function BaseNode({
   minWidth = 200,
   minHeight = 80,
   isRunning = false,
+  listCount,
+  listProgress,
+  listProgressPercent,
 }: BaseNodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
@@ -183,6 +189,16 @@ export function BaseNode({
           <span className={cn("w-6 h-6 rounded-md flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5", CATEGORY_ICON_COLOR[category])}>{icon}</span>
         )}
         <span className="flex-1 truncate">{label}</span>
+        {listProgress && (
+          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">
+            {listProgress}
+          </span>
+        )}
+        {!listProgress && listCount !== undefined && listCount > 1 && (
+          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+            ×{listCount}
+          </span>
+        )}
         {credits !== undefined && credits > 0 && (
           <span className={cn(
             "font-mono text-[10px]",
@@ -192,6 +208,30 @@ export function BaseNode({
           )}>{credits}cr</span>
         )}
       </div>
+
+      {listProgressPercent !== undefined && listProgressPercent > 0 && (
+        <div className="w-full px-3 py-1.5">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-mono text-cyan-300">
+              {listProgressPercent < 100 ? "Processing list..." : "Complete"}
+            </span>
+            <span className="text-[10px] font-mono text-cyan-300">
+              {listProgressPercent}%
+            </span>
+          </div>
+          <div className="w-full h-2 rounded-full bg-black/30 dark:bg-white/10 overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500 ease-out",
+                listProgressPercent < 100
+                  ? "bg-gradient-to-r from-cyan-400 to-fuchsia-500 animate-pulse"
+                  : "bg-cyan-400"
+              )}
+              style={{ width: `${listProgressPercent}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {children && <div className="px-3 py-2 text-xs overflow-hidden bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>}
 

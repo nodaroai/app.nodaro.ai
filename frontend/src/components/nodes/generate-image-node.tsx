@@ -34,6 +34,12 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const [extractOpen, setExtractOpen] = useState(false)
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
   const credits = useModelCredits(nodeData.provider ?? "nano-banana", 1)
+  const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
+  const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
+  const isNodeRunning = nodeData.executionStatus === "running"
+  const listProgressPercent = (listTotal && listTotal > 0 && listCompleted !== undefined)
+    ? Math.round((listCompleted / listTotal) * 100)
+    : undefined
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -60,6 +66,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      listCount={listTotal}
+      listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
+      listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "image", type: "source", position: Position.Right, label: "Image" },

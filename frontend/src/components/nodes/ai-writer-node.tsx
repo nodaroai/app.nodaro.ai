@@ -78,6 +78,12 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits("ai-writer", 2)
   const template = getAIWriterTemplate(nodeData.templateId)
   const { user } = useAuth()
+  const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
+  const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
+  const isNodeRunning = nodeData.executionStatus === "running"
+  const listProgressPercent = (listTotal && listTotal > 0 && listCompleted !== undefined)
+    ? Math.round((listCompleted / listTotal) * 100)
+    : undefined
 
   // Streaming state -- tokens are written to the Zustand store (generatedText)
   // so that both the node card and the config panel can display them.
@@ -239,6 +245,9 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
           credits={credits}
           selected={selected}
           isRunning={status === "running"}
+          listCount={listTotal}
+          listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
+          listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
           handles={[
             { id: "in", type: "target", position: Position.Left, label: "Input" },
             { id: "text", type: "source", position: Position.Right, label: "Text" },
