@@ -5718,6 +5718,7 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
       templateId,
       systemPrompt: tpl.systemPrompt,
       ...(isDefaultOrEmpty && tpl.defaultInput ? { userInput: tpl.defaultInput } : {}),
+      ...(tpl.defaultMaxTokens ? { maxTokens: tpl.defaultMaxTokens } : {}),
     })
   }
 

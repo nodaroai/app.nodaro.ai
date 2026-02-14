@@ -5,6 +5,7 @@ export interface AIWriterTemplate {
   readonly systemPrompt: string
   readonly placeholderInput: string
   readonly defaultInput?: string
+  readonly defaultMaxTokens?: number
 }
 
 export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
@@ -85,6 +86,7 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
       "- Each prompt block must be self-contained and production-ready",
     placeholderInput: "e.g. American blonde model, 28 days: 7 days Paris, 7 days Thailand, 7 days Bali, 7 days New York. Mix casual street style with high fashion campaign shoots. Body type: tall 5'10, athletic, slim figure.",
     defaultInput: "American blonde model, 28 days:\n7 days Paris, 7 days Thailand, 7 days Bali, 7 days New York.\nMix casual street style with high fashion campaign shoots.\nBody type: tall 5'10, athletic, slim figure.",
+    defaultMaxTokens: 16384,
   },
   {
     id: "product-catalog",
