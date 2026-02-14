@@ -14,7 +14,7 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
   const status = nodeData.executionStatus ?? "idle"
 
   const partCount = nodeData.splitResults?.length ?? 0
-  const separator = nodeData.separator || "*"
+  const separator = nodeData.separator || "===NEXT==="
   const separatorLabel = separator === "\n" ? "\\n" : separator.length > 8 ? `${separator.slice(0, 6)}...` : separator
 
   return (

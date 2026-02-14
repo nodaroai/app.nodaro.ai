@@ -2729,7 +2729,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (node.type === "split-text") {
       const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
       const splitData = node.data as SplitTextData
-      const separator = splitData.separator || "\n"
+      const separator = splitData.separator || "===NEXT==="
 
       // Get input text from upstream node
       const incomingEdges = currentEdges.filter((e) => e.target === node.id)

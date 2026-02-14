@@ -2070,7 +2070,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["out"],
     defaultData: {
       label: "Split Text",
-      separator: "*",
+      separator: "===NEXT===",
       trimWhitespace: true,
       removeEmpty: true,
     } as SplitTextData,
