@@ -1904,7 +1904,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (finalPrompt.length > 2000) {
         finalPrompt = finalPrompt.slice(0, 1997) + "..."
       }
-      return runImageGeneration(node.id, finalPrompt, refImages.length > 0 ? refImages : undefined, imgData.provider || undefined)
+      return runImageGeneration(node.id, finalPrompt, refImages.length > 0 ? refImages : undefined, imgData.provider || undefined, imgData.aspectRatio || undefined)
     }
 
     if (node.type === "edit-image") {
