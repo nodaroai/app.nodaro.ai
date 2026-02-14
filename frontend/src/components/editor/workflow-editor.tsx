@@ -2886,7 +2886,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     if (chains.length === 0) return
 
+    // List source types should NOT be cloned or removed — only their downstream nodes
+    const LIST_SOURCE_TYPES = new Set(["loop", "split-text", "list"])
     const chainNodeIds = new Set(chains.flat().map((n) => n.id))
+    const cloneableNodeIds = new Set(chains.flat().filter((n) => !LIST_SOURCE_TYPES.has(n.type as string)).map((n) => n.id))
     const resultCount = (chains[0][0].data as Record<string, unknown>).__listResults as string[]
     if (!resultCount) return
 
@@ -2908,6 +2911,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       for (let i = 0; i < iterCount; i++) {
         for (const node of chain) {
+          // Skip list source nodes — they stay as-is on the canvas
+          if (LIST_SOURCE_TYPES.has(node.type as string)) continue
           const d = node.data as Record<string, unknown>
           const listResults = (d.__listResults as string[]) ?? []
           const listInputs = (d.__listInputs as string[]) ?? []
@@ -2948,11 +2953,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     // Recreate edges between cloned pipeline nodes
     for (const edge of edges) {
-      const sourceInChain = chainNodeIds.has(edge.source)
-      const targetInChain = chainNodeIds.has(edge.target)
+      const sourceCloneable = cloneableNodeIds.has(edge.source)
+      const targetCloneable = cloneableNodeIds.has(edge.target)
 
-      if (sourceInChain && targetInChain) {
-        // Both ends are in pipeline — create per-iteration edge
+      if (sourceCloneable && targetCloneable) {
+        // Both ends are cloned — create per-iteration edge
         const sourceNode = nodes.find((n) => n.id === edge.source)
         const iterCount = sourceNode
           ? ((sourceNode.data as Record<string, unknown>).__listResults as string[] | undefined)?.length ?? 0
@@ -2965,8 +2970,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             target: `${edge.target}_iter_${i}`,
           })
         }
-      } else if (!sourceInChain && targetInChain) {
-        // Source is outside pipeline (e.g., Character, Loop) — fan out to all clones
+      } else if (!sourceCloneable && targetCloneable) {
+        // Source is outside pipeline or a list source (e.g., Character, Loop, Split Text) — fan out to all clones
         const targetNode = nodes.find((n) => n.id === edge.target)
         const iterCount = targetNode
           ? ((targetNode.data as Record<string, unknown>).__listResults as string[] | undefined)?.length ?? 0
@@ -2979,12 +2984,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           })
         }
       }
-      // If source is in chain but target is not, we skip (downstream of pipeline stays connected to nothing)
+      // If source is cloneable but target is not, we skip (downstream of pipeline stays connected to nothing)
     }
 
-    // Remove original pipeline nodes and their edges, add clones
-    const remainingNodes = nodes.filter((n) => !chainNodeIds.has(n.id))
-    const remainingEdges = edges.filter((e) => !chainNodeIds.has(e.source) && !chainNodeIds.has(e.target))
+    // Remove original pipeline nodes and their edges, add clones (keep list source nodes)
+    const remainingNodes = nodes.filter((n) => !cloneableNodeIds.has(n.id))
+    const remainingEdges = edges.filter((e) => !cloneableNodeIds.has(e.source) && !cloneableNodeIds.has(e.target))
 
     useWorkflowStore.setState({
       nodes: [...remainingNodes, ...newNodes],
