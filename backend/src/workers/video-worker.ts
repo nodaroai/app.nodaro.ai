@@ -296,13 +296,14 @@ export function createVideoWorker() {
           .eq("id", jobId)
 
         if (job.name === "generate-image") {
-          const { prompt, referenceImageUrls, provider } = job.data as { jobId: string; prompt: string; referenceImageUrls?: string[]; provider?: string }
+          const { prompt, referenceImageUrls, provider, aspectRatio } = job.data as { jobId: string; prompt: string; referenceImageUrls?: string[]; provider?: string; aspectRatio?: string }
           console.log(`[worker] generate-image ${jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
           if (referenceImageUrls?.length) {
             console.log(`[worker] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
           }
 
-          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls)
+          const extraParams = aspectRatio ? { aspect_ratio: aspectRatio } : undefined
+          const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, extraParams)
           await job.updateProgress(50)
 
           const r2Url = await uploadImageMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)

@@ -22,6 +22,7 @@ const generateImageBody = z.object({
     "grok-i2i",
     "gpt-image-i2i",
   ]).optional(),
+  aspectRatio: z.enum(["1:1", "16:9", "9:16", "4:3"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -37,7 +38,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, userId } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -79,6 +80,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       prompt,
       referenceImageUrls,
       provider,
+      aspectRatio,
       usageLogId,
     })
 
