@@ -247,7 +247,8 @@ export function BaseNode({
           {h.label && h.top && (
             <span
               className={cn(
-                "absolute text-[9px] text-muted-foreground/70 pointer-events-none select-none leading-none",
+                "absolute text-[9px] font-medium pointer-events-none select-none leading-none px-1 py-0.5 rounded",
+                "text-muted-foreground bg-background/80 dark:bg-muted/60",
                 h.type === "target" ? "left-3" : "right-3",
               )}
               style={{ top: h.top, transform: "translateY(-50%)" }}
