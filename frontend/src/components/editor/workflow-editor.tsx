@@ -1838,12 +1838,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function executeNode(node: WorkflowNode, overridePrompt?: string): Promise<void> {
+  function executeNode(node: WorkflowNode, overridePrompt?: string, overrideMediaUrl?: string): Promise<void> {
     const { nodes, edges } = useWorkflowStore.getState()
     const inputs = resolveNodeInputs(node, nodes, edges)
 
     if (node.type === "generate-script") {
-      const prompt = inputs.prompt ?? ""
+      const prompt = overridePrompt ?? inputs.prompt ?? ""
       if (!prompt) {
         toast.error(`Node "${(node.data as GenerateScriptData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
@@ -1897,8 +1897,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "edit-image") {
-      // Use imageUrl if available, otherwise use first reference image as fallback
-      const imageUrl = inputs.imageUrl ?? inputs.referenceImageUrls?.[0]
+      // Use overrideMediaUrl (list chaining) > imageUrl > first reference image as fallback
+      const imageUrl = overrideMediaUrl ?? inputs.imageUrl ?? inputs.referenceImageUrls?.[0]
       if (!imageUrl) {
         toast.error(`Node "${(node.data as EditImageData).label}": no input image found`)
         return Promise.reject(new Error("No input image"))
@@ -1910,8 +1910,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "image-to-image") {
-      // Use imageUrl if available, otherwise use first reference image as fallback
-      const imageUrl = inputs.imageUrl ?? inputs.referenceImageUrls?.[0]
+      // Use overrideMediaUrl (list chaining) > imageUrl > first reference image as fallback
+      const imageUrl = overrideMediaUrl ?? inputs.imageUrl ?? inputs.referenceImageUrls?.[0]
       if (!imageUrl) {
         toast.error(`Node "${(node.data as ImageToImageData).label}": no input image found`)
         return Promise.reject(new Error("No input image"))
@@ -1933,12 +1933,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const i2vData = node.data as ImageToVideoData
       const nodeProvider = i2vData.provider
 
-      // Resolve start frame from dedicated handle
-      let startFrameUrl: string | undefined
-      const startEdge = edges.find((e) => e.target === node.id && e.targetHandle === "startFrame")
-      if (startEdge) {
-        const startNode = nodes.find((n) => n.id === startEdge.source)
-        if (startNode) startFrameUrl = extractNodeOutput(startNode)
+      // Resolve start frame: override (list chaining) > dedicated handle > legacy > generic
+      let startFrameUrl: string | undefined = overrideMediaUrl
+      if (!startFrameUrl) {
+        const startEdge = edges.find((e) => e.target === node.id && e.targetHandle === "startFrame")
+        if (startEdge) {
+          const startNode = nodes.find((n) => n.id === startEdge.source)
+          if (startNode) startFrameUrl = extractNodeOutput(startNode)
+        }
       }
       // Fallback: legacy selectedStartFrameNodeId or generic imageUrl
       if (!startFrameUrl && i2vData.selectedStartFrameNodeId) {
@@ -1988,7 +1990,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "video-to-video") {
-      const sourceVideoUrl = inputs.videoUrl
+      const sourceVideoUrl = overrideMediaUrl ?? inputs.videoUrl
       if (!sourceVideoUrl) {
         toast.error(`Node "${(node.data as VideoToVideoData).label}": no source video found`)
         return Promise.reject(new Error("No source video"))
@@ -2003,7 +2005,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "text-to-video") {
-      const prompt = (typeof inputs.prompt === "string" ? inputs.prompt : undefined) ?? (node.data as TextToVideoData).prompt?.trim()
+      const prompt = overridePrompt ?? (typeof inputs.prompt === "string" ? inputs.prompt : undefined) ?? (node.data as TextToVideoData).prompt?.trim()
       if (!prompt) {
         toast.error(`Node "${(node.data as TextToVideoData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
@@ -2013,9 +2015,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     if (node.type === "text-to-speech") {
       const ttsData = node.data as TextToSpeechData
-      const text = (ttsData.textSource === "direct" && ttsData.directText?.trim())
-        ? ttsData.directText.trim()
-        : (typeof inputs.prompt === "string" ? inputs.prompt : "")
+      const text = overridePrompt
+        ?? ((ttsData.textSource === "direct" && ttsData.directText?.trim())
+          ? ttsData.directText.trim()
+          : (typeof inputs.prompt === "string" ? inputs.prompt : ""))
       if (!text) {
         toast.error(`Node "${ttsData.label}": no text found`)
         return Promise.reject(new Error("No text"))
@@ -2032,7 +2035,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "generate-music") {
-      const prompt = inputs.prompt ?? (node.data as GenerateMusicData).prompt?.trim()
+      const prompt = overridePrompt ?? inputs.prompt ?? (node.data as GenerateMusicData).prompt?.trim()
       if (!prompt) {
         toast.error(`Node "${(node.data as GenerateMusicData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
@@ -2043,7 +2046,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "text-to-audio") {
-      const prompt = inputs.prompt ?? (node.data as TextToAudioData).prompt?.trim()
+      const prompt = overridePrompt ?? inputs.prompt ?? (node.data as TextToAudioData).prompt?.trim()
       if (!prompt) {
         toast.error(`Node "${(node.data as TextToAudioData).label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
@@ -2055,7 +2058,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     if (node.type === "suno-generate") {
       const d = node.data as SunoGenerateData
-      const prompt = inputs.prompt ?? d.prompt?.trim()
+      const prompt = overridePrompt ?? inputs.prompt ?? d.prompt?.trim()
       if (!prompt) {
         toast.error(`Node "${d.label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
@@ -2394,9 +2397,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (node.type === "lip-sync") {
       const lsData = node.data as LipSyncData
 
-      // Resolve image from selected node
-      let imageUrl: string | undefined
-      if (lsData.selectedImageNodeId) {
+      // Resolve image: override (list chaining) > selected node > fallback
+      let imageUrl: string | undefined = overrideMediaUrl
+      if (!imageUrl && lsData.selectedImageNodeId) {
         const imageNode = nodes.find((n) => n.id === lsData.selectedImageNodeId)
         if (imageNode) {
           imageUrl = extractNodeOutput(imageNode)
@@ -2483,7 +2486,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     if (node.type === "video-upscale") {
       const vuData = node.data as unknown as VideoUpscaleData
-      const videoUrl = inputs.videoUrl
+      const videoUrl = overrideMediaUrl ?? inputs.videoUrl
       if (!videoUrl) {
         toast.error(`Node "${vuData.label}": no video input found`)
         return Promise.reject(new Error("No video input"))
@@ -2529,21 +2532,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "extract-audio") {
-      const videoUrl = inputs.videoUrl
+      const videoUrl = overrideMediaUrl ?? inputs.videoUrl
       if (!videoUrl) { toast.error(`Node "${(node.data as ExtractAudioData).label}": no video input`); return Promise.reject(new Error("No video")) }
       const d = node.data as ExtractAudioData
       return runProcessingNode(node.id, () => extractAudioApi(videoUrl, d.audioFormat, d.outputSilentVideo, user?.id), "generatedAudioUrl", "Extract Audio")
     }
 
     if (node.type === "trim-video") {
-      const videoUrl = inputs.videoUrl
+      const videoUrl = overrideMediaUrl ?? inputs.videoUrl
       if (!videoUrl) { toast.error(`Node "${(node.data as TrimVideoData).label}": no video input`); return Promise.reject(new Error("No video")) }
       const d = node.data as TrimVideoData
       return runProcessingNode(node.id, () => trimVideoApi(videoUrl, d.startTime, d.endTime || undefined, user?.id), "generatedVideoUrl", "Trim Video")
     }
 
     if (node.type === "resize-video") {
-      const videoUrl = inputs.videoUrl
+      const videoUrl = overrideMediaUrl ?? inputs.videoUrl
       if (!videoUrl) { toast.error(`Node "${(node.data as ResizeVideoData).label}": no video input`); return Promise.reject(new Error("No video")) }
       const d = node.data as ResizeVideoData
       return runProcessingNode(node.id, () => resizeVideoApi(videoUrl, d.targetAspect, d.method, d.padColor || undefined, user?.id), "generatedVideoUrl", "Resize Video")
@@ -2552,7 +2555,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (node.type === "adjust-volume") {
       const videoUrl = inputs.videoUrl
       const audioUrl = inputs.audioUrl
-      const inputUrl = videoUrl ?? audioUrl
+      const inputUrl = overrideMediaUrl ?? videoUrl ?? audioUrl
       if (!inputUrl) { toast.error(`Node "${(node.data as AdjustVolumeData).label}": no audio or video input`); return Promise.reject(new Error("No input")) }
       const inputType: "video" | "audio" = videoUrl ? "video" : "audio"
       const outputKey: "generatedVideoUrl" | "generatedAudioUrl" = inputType === "video" ? "generatedVideoUrl" : "generatedAudioUrl"
@@ -2563,7 +2566,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "add-captions") {
-      const videoUrl = inputs.videoUrl
+      const videoUrl = overrideMediaUrl ?? inputs.videoUrl
       if (!videoUrl) { toast.error(`Node "${(node.data as AddCaptionsData).label}": no video input`); return Promise.reject(new Error("No video")) }
       const d = node.data as AddCaptionsData
       const text = inputs.prompt ?? ""
@@ -2736,12 +2739,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (isWorkflowStale()) break
 
       const item = items[i]
-      // Pass item as override prompt directly to executeNode (no store mutation needed)
+      // Detect if list item is a URL (image/video/audio) vs plain text
+      const isUrl = item.startsWith("http") || /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(item)
       try {
         const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
         if (!freshNode) break
 
-        await executeNode(freshNode, item)
+        // Route URL items as image override, text items as prompt override
+        await executeNode(freshNode, isUrl ? undefined : item, isUrl ? item : undefined)
 
         // Extract the output after execution
         const afterNode = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
