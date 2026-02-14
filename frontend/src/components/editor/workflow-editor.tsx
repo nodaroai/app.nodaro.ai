@@ -446,7 +446,22 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (sourceNode.type === "loop") {
         const loopData = sourceNode.data as LoopNodeData
         const colIndex = (loopData.columns ?? []).findIndex((c) => c.handleId === edge.sourceHandle)
-        if (colIndex >= 0) {
+
+        // Check if Loop has upstream input connected to "in" handle
+        const loopIncomingEdges = edges.filter((e) => e.target === sourceNode.id && e.targetHandle === "in")
+        if (loopIncomingEdges.length > 0) {
+          // Connected mode: get upstream node's output, split by newline
+          const upstreamEdge = loopIncomingEdges[0]
+          const upstreamNode = nodes.find((n) => n.id === upstreamEdge.source)
+          if (upstreamNode) {
+            const upstreamOutput = extractNodeOutput(upstreamNode)
+            if (upstreamOutput) {
+              const items = upstreamOutput.split("\n").map((s) => s.trim()).filter((s) => s.length > 0)
+              if (items.length > 1) return items
+            }
+          }
+        } else if (colIndex >= 0) {
+          // Manual mode: use table data
           const items = (loopData.rows ?? []).map((row) => row[colIndex]).filter((v) => v?.trim())
           if (items.length > 1) return items
         }
@@ -480,9 +495,26 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Loop node: resolve column from the source handle on the connecting edge
         const loopEdge = incomingEdges.find((e) => e.source === src.id)
         const loopData = src.data as LoopNodeData
-        const colIndex = (loopData.columns ?? []).findIndex((c) => c.handleId === loopEdge?.sourceHandle)
-        if (colIndex >= 0) {
-          inputs.prompt = loopData.rows?.[0]?.[colIndex]?.trim() || ""
+
+        // Check if Loop has upstream input connected to "in" handle
+        const loopIncomingEdges = edges.filter((e) => e.target === src.id && e.targetHandle === "in")
+        if (loopIncomingEdges.length > 0) {
+          // Connected mode: get upstream node's output (first line)
+          const upstreamEdge = loopIncomingEdges[0]
+          const upstreamNode = nodes.find((n) => n.id === upstreamEdge.source)
+          if (upstreamNode) {
+            const upstreamOutput = extractNodeOutput(upstreamNode)
+            if (upstreamOutput) {
+              const lines = upstreamOutput.split("\n").map((s) => s.trim()).filter((s) => s.length > 0)
+              inputs.prompt = lines[0] || ""
+            }
+          }
+        } else {
+          // Manual mode: use table data
+          const colIndex = (loopData.columns ?? []).findIndex((c) => c.handleId === loopEdge?.sourceHandle)
+          if (colIndex >= 0) {
+            inputs.prompt = loopData.rows?.[0]?.[colIndex]?.trim() || ""
+          }
         }
       } else if (src.type === "upload-image") {
         inputs.imageUrl = output

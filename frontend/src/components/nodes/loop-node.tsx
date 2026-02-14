@@ -43,11 +43,18 @@ function buildHandles(columns: ReadonlyArray<LoopColumn>) {
 function LoopNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as LoopNodeData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const edges = useWorkflowStore((s) => s.edges)
   const updateNodeInternals = useUpdateNodeInternals()
   const status = (nodeData as Record<string, unknown>).executionStatus as string | undefined ?? "idle"
 
   const columns = nodeData.columns ?? []
   const handles = useMemo(() => buildHandles(columns), [columns])
+
+  // Check if an upstream node is connected to the "in" handle
+  const hasUpstreamInput = useMemo(
+    () => edges.some((e) => e.target === id && e.targetHandle === "in"),
+    [edges, id],
+  )
 
   // Notify React Flow when handles change so new handles become connectable
   useEffect(() => {
@@ -56,6 +63,16 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
 
   const rowCount = nodeData.rows?.length ?? 0
   const colCount = nodeData.columns?.length ?? 0
+
+  // Build status text
+  let statusText: string
+  if (hasUpstreamInput) {
+    statusText = "Connected: waiting for input..."
+  } else if (colCount > 0) {
+    statusText = `${rowCount} row${rowCount !== 1 ? "s" : ""} \u00D7 ${colCount} col${colCount !== 1 ? "s" : ""}`
+  } else {
+    statusText = "Click to configure..."
+  }
 
   return (
     <div className="relative group/run">
@@ -71,9 +88,7 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div style={{ minHeight: colCount > 1 ? `${colCount * 22 + 8}px` : undefined }}>
           <p className="text-sm text-muted-foreground">
-            {colCount > 0
-              ? `${rowCount} row${rowCount !== 1 ? "s" : ""} \u00D7 ${colCount} col${colCount !== 1 ? "s" : ""}`
-              : "Click to configure..."}
+            {statusText}
           </p>
         </div>
       </BaseNode>
