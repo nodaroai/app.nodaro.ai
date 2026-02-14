@@ -5711,9 +5711,13 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
   function handleTemplateChange(templateId: string) {
     const tpl = getAIWriterTemplate(templateId)
     if (!tpl) return
+    // Check if userInput is empty or matches the previous template's defaultInput
+    const prevTpl = getAIWriterTemplate(data.templateId)
+    const isDefaultOrEmpty = !data.userInput?.trim() || data.userInput === prevTpl?.defaultInput
     onUpdate({
       templateId,
       systemPrompt: tpl.systemPrompt,
+      ...(isDefaultOrEmpty && tpl.defaultInput ? { userInput: tpl.defaultInput } : {}),
     })
   }
 
