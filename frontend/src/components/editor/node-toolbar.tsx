@@ -81,6 +81,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
   // Processing — Text
   { type: "combine-text", label: "Combine Text", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Text" },
+  { type: "split-text", label: "Split Text", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Text" },
   // Character
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
   // Face

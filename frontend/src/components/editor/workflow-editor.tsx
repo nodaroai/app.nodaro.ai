@@ -22,7 +22,7 @@ import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, te
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, LoopNodeData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, SplitTextData, LoopNodeData } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
@@ -223,7 +223,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer", "combine-text"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer", "combine-text", "split-text"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -414,11 +414,19 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (type === "combine-text") {
       return (data.combinedText as string | undefined)
     }
+    if (type === "split-text") {
+      const splitResults = (data.splitResults as string[] | undefined) ?? []
+      return splitResults.length > 0 ? splitResults[0] : undefined
+    }
     return undefined
   }
 
   function extractNodeOutputAsList(node: WorkflowNode): string[] | undefined {
     const data = node.data as Record<string, unknown>
+    if (node.type === "split-text") {
+      const splitResults = (data.splitResults as string[] | undefined) ?? []
+      return splitResults.length > 0 ? splitResults : undefined
+    }
     if (node.type === "list") {
       const items = (data.items as string | undefined) || ""
       const lines = items.split("\n").filter((l: string) => l.trim().length > 0).map((l: string) => l.trim())
@@ -668,6 +676,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         inputs.prompt = output
       } else if (src.type === "combine-text") {
         // Combine Text outputs text - use as prompt for downstream nodes
+        inputs.prompt = output
+      } else if (src.type === "split-text") {
+        // Split Text outputs text items - use as prompt for downstream nodes
         inputs.prompt = output
       }
     }
@@ -2711,6 +2722,47 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       updateNodeData(node.id, {
         combinedText,
         executionStatus: "completed",
+      })
+      return Promise.resolve()
+    }
+
+    if (node.type === "split-text") {
+      const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
+      const splitData = node.data as SplitTextData
+      const separator = splitData.separator || "\n"
+
+      // Get input text from upstream node
+      const incomingEdges = currentEdges.filter((e) => e.target === node.id)
+      let inputText = ""
+
+      for (const edge of incomingEdges) {
+        const sourceNode = currentNodes.find((n) => n.id === edge.source)
+        if (!sourceNode) continue
+        const output = extractNodeOutput(sourceNode)
+        if (output) inputText += output
+      }
+
+      if (!inputText) {
+        updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No input text received" })
+        return Promise.resolve()
+      }
+
+      // Split the text
+      let parts = inputText.split(separator)
+
+      if (splitData.trimWhitespace !== false) {
+        parts = parts.map((p) => p.trim())
+      }
+      if (splitData.removeEmpty !== false) {
+        parts = parts.filter((p) => p.length > 0)
+      }
+
+      updateNodeData(node.id, {
+        splitResults: parts,
+        executionStatus: "completed",
+        errorMessage: undefined,
+        __listResults: [...parts],
+        __listTotal: parts.length,
       })
       return Promise.resolve()
     }

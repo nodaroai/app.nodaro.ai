@@ -87,6 +87,7 @@ import type {
   VideoUpscaleData,
   AIWriterNodeData,
   CombineTextNodeData,
+  SplitTextData,
   SaveToStorageData,
   WebhookOutputData,
   FieldMappings,
@@ -398,6 +399,7 @@ export function ConfigPanel() {
       "adjust-volume": "Adjust Volume",
       "trim-video": "Trim Video",
       "combine-text": "Combine Text",
+      "split-text": "Split Text",
       "loop": "Loop",
       "save-to-storage": "Save to Storage",
       "webhook-output": "Webhook Output",
@@ -616,6 +618,9 @@ export function ConfigPanel() {
           {selectedNode.type === "combine-text" && (
             <CombineTextConfig data={selectedNode.data as CombineTextNodeData} onUpdate={update} />
           )}
+          {selectedNode.type === "split-text" && (
+            <SplitTextConfig data={selectedNode.data as SplitTextData} onUpdate={update} />
+          )}
 
           {/* Output Nodes */}
           {selectedNode.type === "save-to-storage" && (
@@ -673,7 +678,7 @@ export function ConfigPanel() {
               />
             )}
 
-            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text") && (
+            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text") && (
               <button
                 type="button"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -5965,5 +5970,59 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
         </div>
       )}
     </>
+  )
+}
+
+function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpdate: (patch: Partial<SplitTextData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Separator</Label>
+        <Input
+          value={data.separator}
+          onChange={(e) => onUpdate({ separator: e.target.value })}
+          placeholder="Enter separator (e.g. * or ===NEXT===)"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          The delimiter used to split the input text into items
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <Label>Trim whitespace</Label>
+        <Button
+          variant={data.trimWhitespace !== false ? "default" : "outline"}
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => onUpdate({ trimWhitespace: data.trimWhitespace === false })}
+        >
+          {data.trimWhitespace !== false ? "On" : "Off"}
+        </Button>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <Label>Remove empty</Label>
+        <Button
+          variant={data.removeEmpty !== false ? "default" : "outline"}
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => onUpdate({ removeEmpty: data.removeEmpty === false })}
+        >
+          {data.removeEmpty !== false ? "On" : "Off"}
+        </Button>
+      </div>
+
+      {data.splitResults && data.splitResults.length > 0 && (
+        <div>
+          <Label>Preview ({data.splitResults.length} items)</Label>
+          <Textarea
+            rows={Math.min(data.splitResults.length, 6)}
+            value={data.splitResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}
+            readOnly
+            className="text-xs opacity-70"
+          />
+        </div>
+      )}
+    </div>
   )
 }
