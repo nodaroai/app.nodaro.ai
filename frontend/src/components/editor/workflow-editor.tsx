@@ -22,7 +22,7 @@ import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, te
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, LoopNodeData } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
@@ -282,6 +282,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       // Return first item as string for backward compat with single-value consumption
       return lines[0]?.trim()
     }
+    if (type === "loop") {
+      const loopData = data as LoopNodeData
+      return loopData.rows?.[0]?.[0]?.trim() || ""
+    }
     if (type === "text-prompt") {
       return (data.text as string | undefined)?.trim()
     }
@@ -437,6 +441,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     for (const edge of incomingEdges) {
       const sourceNode = nodes.find((n) => n.id === edge.source)
       if (!sourceNode) continue
+
+      // Loop node: extract items from the specific column matching the source handle
+      if (sourceNode.type === "loop") {
+        const loopData = sourceNode.data as LoopNodeData
+        const colIndex = (loopData.columns ?? []).findIndex((c) => c.handleId === edge.sourceHandle)
+        if (colIndex >= 0) {
+          const items = (loopData.rows ?? []).map((row) => row[colIndex]).filter((v) => v?.trim())
+          if (items.length > 1) return items
+        }
+        continue
+      }
+
       const listOutput = extractNodeOutputAsList(sourceNode)
       if (listOutput && listOutput.length > 1) return listOutput
     }
@@ -460,6 +476,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "list") {
         // List node provides text - treated as prompt for downstream nodes
         inputs.prompt = output
+      } else if (src.type === "loop") {
+        // Loop node: resolve column from the source handle on the connecting edge
+        const loopEdge = incomingEdges.find((e) => e.source === src.id)
+        const loopData = src.data as LoopNodeData
+        const colIndex = (loopData.columns ?? []).findIndex((c) => c.handleId === loopEdge?.sourceHandle)
+        if (colIndex >= 0) {
+          inputs.prompt = loopData.rows?.[0]?.[colIndex]?.trim() || ""
+        }
       } else if (src.type === "upload-image") {
         inputs.imageUrl = output
       } else if (src.type === "character") {
