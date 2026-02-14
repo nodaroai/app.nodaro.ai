@@ -498,6 +498,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
                 // Input nodes - neon cyan
                 if (nodeType === 'text-prompt' ||
                     nodeType === 'list' ||
+                    nodeType === 'loop' ||
                     nodeType === 'upload-image' ||
                     nodeType === 'upload-video' ||
                     nodeType === 'upload-audio' ||

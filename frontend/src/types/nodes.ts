@@ -30,6 +30,20 @@ export type ListNodeData = {
   fieldMappings: Record<string, string>
 }
 
+export interface LoopColumn {
+  readonly id: string
+  readonly name: string
+  readonly handleId: string
+}
+
+export type LoopNodeData = {
+  [key: string]: unknown
+  label: string
+  columns: LoopColumn[]
+  rows: string[][]
+  fieldMappings: Record<string, string>
+}
+
 export type UploadImageData = {
   [key: string]: unknown
   label: string
@@ -1277,12 +1291,14 @@ export type SceneNodeData =
   | FaceNodeData
   | AIWriterNodeData
   | ListNodeData
+  | LoopNodeData
   | CombineTextNodeData
   | StickyNoteData
 
 export type SceneNodeType =
   | "text-prompt"
   | "list"
+  | "loop"
   | "upload-image"
   | "upload-video"
   | "upload-audio"
@@ -1369,6 +1385,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: [],
     outputs: ["list"],
     defaultData: { label: "List", items: "", fieldMappings: {} },
+  },
+  {
+    type: "loop",
+    label: "Loop",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: [],
+    defaultData: { label: "Loop", columns: [], rows: [], fieldMappings: {} } as LoopNodeData,
   },
   {
     type: "upload-image",

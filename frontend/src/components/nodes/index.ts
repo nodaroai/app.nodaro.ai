@@ -1,5 +1,6 @@
 import { TextPromptNode } from "./text-prompt-node"
 import { ListNode } from "./list-node"
+import { LoopNode } from "./loop-node"
 import { UploadImageNode } from "./upload-image-node"
 import { UploadVideoNode } from "./upload-video-node"
 import { UploadAudioNode } from "./upload-audio-node"
@@ -59,6 +60,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Input
   "text-prompt": TextPromptNode,
   "list": ListNode,
+  "loop": LoopNode,
   "upload-image": UploadImageNode,
   "upload-video": UploadVideoNode,
   "upload-audio": UploadAudioNode,

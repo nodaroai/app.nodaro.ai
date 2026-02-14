@@ -40,6 +40,8 @@ import { TTS_VOICES } from "@/lib/tts-voices"
 import type {
   TextPromptData,
   ListNodeData,
+  LoopNodeData,
+  LoopColumn,
   UploadImageData,
   UploadVideoData,
   UploadAudioData,
@@ -395,6 +397,7 @@ export function ConfigPanel() {
       "adjust-volume": "Adjust Volume",
       "trim-video": "Trim Video",
       "combine-text": "Combine Text",
+      "loop": "Loop",
       "save-to-storage": "Save to Storage",
       "webhook-output": "Webhook Output",
       "character": "Character",
@@ -467,6 +470,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "list" && (
             <ListConfig data={selectedNode.data as ListNodeData} onUpdate={update} />
+          )}
+          {selectedNode.type === "loop" && (
+            <LoopConfig data={selectedNode.data as LoopNodeData} onUpdate={update} />
           )}
           {selectedNode.type === "upload-image" && (
             <UploadImageConfig data={selectedNode.data as UploadImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -803,6 +809,140 @@ function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (patch: 
       </div>
       <p className="text-xs text-muted-foreground">
         {itemList.length} item{itemList.length !== 1 ? "s" : ""}
+      </p>
+    </div>
+  )
+}
+
+function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (patch: Partial<LoopNodeData>) => void }) {
+  const columns = data.columns ?? []
+  const rows = data.rows ?? []
+
+  function addColumn() {
+    const id = crypto.randomUUID()
+    const name = `Column ${columns.length + 1}`
+    const newCol: LoopColumn = { id, name, handleId: `col_${id}` }
+    const updatedRows = rows.map((row) => [...row, ""])
+    onUpdate({ columns: [...columns, newCol], rows: updatedRows })
+  }
+
+  function removeColumn(colIndex: number) {
+    const updatedCols = columns.filter((_, i) => i !== colIndex)
+    const updatedRows = rows.map((row) => row.filter((_, i) => i !== colIndex))
+    onUpdate({ columns: updatedCols, rows: updatedRows })
+  }
+
+  function renameColumn(colIndex: number, name: string) {
+    const updatedCols = columns.map((col, i) =>
+      i === colIndex ? { ...col, name } : col,
+    )
+    onUpdate({ columns: updatedCols })
+  }
+
+  function addRow() {
+    const newRow = columns.map(() => "")
+    onUpdate({ rows: [...rows, newRow] })
+  }
+
+  function removeRow(rowIndex: number) {
+    onUpdate({ rows: rows.filter((_, i) => i !== rowIndex) })
+  }
+
+  function updateCell(rowIndex: number, colIndex: number, value: string) {
+    const updatedRows = rows.map((row, ri) =>
+      ri === rowIndex ? row.map((cell, ci) => (ci === colIndex ? value : cell)) : row,
+    )
+    onUpdate({ rows: updatedRows })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <Label>Table</Label>
+        <button
+          type="button"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          onClick={addColumn}
+        >
+          <Plus className="w-3 h-3" />
+          Add Column
+        </button>
+      </div>
+
+      {columns.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-6 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/50">
+          <p className="text-sm">No columns yet</p>
+          <p className="text-xs mt-1">Add a column to get started</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr>
+                <th className="w-6" />
+                {columns.map((col, ci) => (
+                  <th key={col.id} className="pb-1 px-0.5">
+                    <div className="flex items-center gap-0.5">
+                      <input
+                        className="flex-1 min-w-[60px] text-xs font-medium bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+                        value={col.name}
+                        onChange={(e) => renameColumn(ci, e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
+                        onClick={() => removeColumn(ci)}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, ri) => (
+                <tr key={`row-${ri}`}>
+                  <td className="pr-1 text-right align-middle">
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        className="shrink-0 text-muted-foreground/40 hover:text-red-500 transition-colors"
+                        onClick={() => removeRow(ri)}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                      <span className="text-muted-foreground w-3 text-right">{ri + 1}</span>
+                    </div>
+                  </td>
+                  {columns.map((col, ci) => (
+                    <td key={`${col.id}-${ri}`} className="px-0.5 py-0.5">
+                      <input
+                        className="w-full min-w-[60px] text-xs bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+                        value={row[ci] ?? ""}
+                        onChange={(e) => updateCell(ri, ci, e.target.value)}
+                        placeholder={col.name}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button
+            type="button"
+            className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={addRow}
+          >
+            <Plus className="w-3 h-3" />
+            Add Row
+          </button>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        {rows.length} row{rows.length !== 1 ? "s" : ""} &times; {columns.length} column{columns.length !== 1 ? "s" : ""}
       </p>
     </div>
   )
