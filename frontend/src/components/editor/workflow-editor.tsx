@@ -2785,6 +2785,162 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  // --- Post-execution: expand loop results into separate pipelines ---
+
+  function expandLoopResults() {
+    const { nodes, edges } = useWorkflowStore.getState()
+
+    // Find nodes with multiple list results
+    const multiResultNodes = nodes.filter((n) => {
+      const d = n.data as Record<string, unknown>
+      const results = d.__listResults as string[] | undefined
+      return results && results.length > 1
+    })
+    if (multiResultNodes.length === 0) return
+
+    // Build adjacency: source -> [target edges]
+    const downstreamEdges = new Map<string, typeof edges>()
+    for (const edge of edges) {
+      const list = downstreamEdges.get(edge.source) ?? []
+      list.push(edge)
+      downstreamEdges.set(edge.source, list)
+    }
+
+    // Walk downstream from each multi-result node to find the full pipeline chain.
+    // A pipeline chain = all connected nodes that also have __listResults of same count.
+    const multiResultIds = new Set(multiResultNodes.map((n) => n.id))
+    const visited = new Set<string>()
+    const chains: WorkflowNode[][] = []
+
+    for (const startNode of multiResultNodes) {
+      if (visited.has(startNode.id)) continue
+      const chain: WorkflowNode[] = []
+      const queue = [startNode]
+      while (queue.length > 0) {
+        const current = queue.shift()!
+        if (visited.has(current.id)) continue
+        visited.add(current.id)
+        chain.push(current)
+        // Walk downstream
+        for (const edge of downstreamEdges.get(current.id) ?? []) {
+          if (multiResultIds.has(edge.target) && !visited.has(edge.target)) {
+            const targetNode = nodes.find((n) => n.id === edge.target)
+            if (targetNode) queue.push(targetNode)
+          }
+        }
+      }
+      if (chain.length > 0) chains.push(chain)
+    }
+
+    if (chains.length === 0) return
+
+    const chainNodeIds = new Set(chains.flat().map((n) => n.id))
+    const resultCount = (chains[0][0].data as Record<string, unknown>).__listResults as string[]
+    if (!resultCount) return
+
+    const newNodes: WorkflowNode[] = []
+    const newEdges: typeof edges = []
+
+    // Determine output URL field per node type
+    const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync", "suno-music-video", "combine-videos"])
+    const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
+
+    function getOutputUrlField(nodeType: string): string {
+      if (videoTypes.has(nodeType)) return "generatedVideoUrl"
+      if (audioTypes.has(nodeType)) return "generatedAudioUrl"
+      return "generatedImageUrl"
+    }
+
+    for (const chain of chains) {
+      const iterCount = ((chain[0].data as Record<string, unknown>).__listResults as string[]).length
+
+      for (let i = 0; i < iterCount; i++) {
+        for (const node of chain) {
+          const d = node.data as Record<string, unknown>
+          const listResults = (d.__listResults as string[]) ?? []
+          const listInputs = (d.__listInputs as string[]) ?? []
+          const resultUrl = listResults[i] ?? ""
+          const inputText = listInputs[i] ?? ""
+          const outputField = getOutputUrlField(node.type as string)
+
+          const cloneData: Record<string, unknown> = { ...d }
+          // Set single result
+          if (resultUrl) {
+            cloneData.generatedResults = [{ url: resultUrl, timestamp: new Date().toISOString(), jobId: "" }]
+            cloneData[outputField] = resultUrl
+            cloneData.activeResultIndex = 0
+          }
+          // Set input as prompt if it's text (not URL)
+          if (inputText && !inputText.startsWith("http")) {
+            cloneData.prompt = inputText
+          }
+          // Label with iteration number
+          const baseLabel = (d.label as string) || (node.type as string)
+          cloneData.label = `${baseLabel} #${i + 1}`
+          cloneData.executionStatus = resultUrl ? "completed" : "failed"
+          // Remove list metadata
+          delete cloneData.__listResults
+          delete cloneData.__listInputs
+          delete cloneData.__listTotal
+          delete cloneData.__listCompleted
+
+          newNodes.push({
+            ...node,
+            id: `${node.id}_iter_${i}`,
+            position: { x: node.position.x, y: node.position.y + i * 220 },
+            data: cloneData as SceneNodeDataType,
+          })
+        }
+      }
+    }
+
+    // Recreate edges between cloned pipeline nodes
+    for (const edge of edges) {
+      const sourceInChain = chainNodeIds.has(edge.source)
+      const targetInChain = chainNodeIds.has(edge.target)
+
+      if (sourceInChain && targetInChain) {
+        // Both ends are in pipeline — create per-iteration edge
+        const sourceNode = nodes.find((n) => n.id === edge.source)
+        const iterCount = sourceNode
+          ? ((sourceNode.data as Record<string, unknown>).__listResults as string[] | undefined)?.length ?? 0
+          : 0
+        for (let i = 0; i < iterCount; i++) {
+          newEdges.push({
+            ...edge,
+            id: `${edge.id}_iter_${i}`,
+            source: `${edge.source}_iter_${i}`,
+            target: `${edge.target}_iter_${i}`,
+          })
+        }
+      } else if (!sourceInChain && targetInChain) {
+        // Source is outside pipeline (e.g., Character, Loop) — fan out to all clones
+        const targetNode = nodes.find((n) => n.id === edge.target)
+        const iterCount = targetNode
+          ? ((targetNode.data as Record<string, unknown>).__listResults as string[] | undefined)?.length ?? 0
+          : 0
+        for (let i = 0; i < iterCount; i++) {
+          newEdges.push({
+            ...edge,
+            id: `${edge.id}_iter_${i}`,
+            target: `${edge.target}_iter_${i}`,
+          })
+        }
+      }
+      // If source is in chain but target is not, we skip (downstream of pipeline stays connected to nothing)
+    }
+
+    // Remove original pipeline nodes and their edges, add clones
+    const remainingNodes = nodes.filter((n) => !chainNodeIds.has(n.id))
+    const remainingEdges = edges.filter((e) => !chainNodeIds.has(e.source) && !chainNodeIds.has(e.target))
+
+    useWorkflowStore.setState({
+      nodes: [...remainingNodes, ...newNodes],
+      edges: [...remainingEdges, ...newEdges],
+      isDirty: true,
+    })
+  }
+
   // --- Main workflow execution ---
 
   async function handleRun() {
@@ -2873,6 +3029,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       toast.error("Workflow execution stopped due to errors")
     } else if (!isWorkflowStale()) {
       toast.success("Workflow execution complete")
+      // Auto-expand multi-result pipeline nodes into separate instances
+      expandLoopResults()
     }
   }
 
