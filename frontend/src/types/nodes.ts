@@ -1124,6 +1124,19 @@ export type CombineTextNodeData = {
   errorMessage?: string
 }
 
+// --- Split Text Node Data ---
+
+export type SplitTextData = {
+  [key: string]: unknown
+  label: string
+  separator: string
+  trimWhitespace: boolean
+  removeEmpty: boolean
+  splitResults?: string[]
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 // --- Sticky Note Node Data ---
 
 export type StickyNoteData = {
@@ -1293,6 +1306,7 @@ export type SceneNodeData =
   | ListNodeData
   | LoopNodeData
   | CombineTextNodeData
+  | SplitTextData
   | StickyNoteData
 
 export type SceneNodeType =
@@ -1351,6 +1365,7 @@ export type SceneNodeType =
   | "location"
   | "ai-writer"
   | "combine-text"
+  | "split-text"
   | "sticky-note"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
@@ -2045,6 +2060,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       customSeparator: "",
       combinedText: "",
     } as CombineTextNodeData,
+  },
+  {
+    type: "split-text",
+    label: "Split Text",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Split Text",
+      separator: "*",
+      trimWhitespace: true,
+      removeEmpty: true,
+    } as SplitTextData,
   },
   {
     type: "sticky-note",

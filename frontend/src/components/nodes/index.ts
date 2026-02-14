@@ -53,6 +53,7 @@ import { FaceNode } from "./face-node"
 import { ObjectNode } from "./object-node"
 import { LocationNode } from "./location-node"
 import { CombineTextNode } from "./combine-text-node"
+import { SplitTextNode } from "./split-text-node"
 import { StickyNoteNode } from "./sticky-note-node"
 import type { SceneNodeType } from "@/types/nodes"
 
@@ -123,5 +124,6 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "location": LocationNode,
   // Utility
   "combine-text": CombineTextNode,
+  "split-text": SplitTextNode,
   "sticky-note": StickyNoteNode,
 }
