@@ -20,8 +20,14 @@ function buildHandles(columns: ReadonlyArray<LoopColumn>) {
     return [target]
   }
 
+  // Distribute source handles within the body area (below header).
+  // Header occupies roughly the top 35%; place handles from 42% to 88%.
+  const startPct = 42
+  const endPct = 88
   const sources = columns.map((col, i) => {
-    const pct = Math.round(((i + 1) / (columns.length + 1)) * 100)
+    const pct = columns.length === 1
+      ? Math.round((startPct + endPct) / 2)
+      : Math.round(startPct + (i / (columns.length - 1)) * (endPct - startPct))
     return {
       id: col.handleId,
       type: "source" as const,
@@ -63,11 +69,13 @@ function LoopNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={status === "running"}
         handles={handles}
       >
-        <p className="text-sm text-muted-foreground">
-          {colCount > 0
-            ? `${rowCount} row${rowCount !== 1 ? "s" : ""} \u00D7 ${colCount} col${colCount !== 1 ? "s" : ""}`
-            : "Click to configure..."}
-        </p>
+        <div style={{ minHeight: colCount > 1 ? `${colCount * 22 + 8}px` : undefined }}>
+          <p className="text-sm text-muted-foreground">
+            {colCount > 0
+              ? `${rowCount} row${rowCount !== 1 ? "s" : ""} \u00D7 ${colCount} col${colCount !== 1 ? "s" : ""}`
+              : "Click to configure..."}
+          </p>
+        </div>
       </BaseNode>
       <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
     </div>
