@@ -103,6 +103,7 @@ import { AI_WRITER_TEMPLATES, getAIWriterTemplate } from "@/lib/ai-writer-templa
 import { SceneConfig } from "./scene-config"
 import { SceneEditorModal } from "./scene-editor-modal"
 import { AssetSelectionModal, type SelectedAsset } from "./asset-selection-modal"
+import { IterationResultsPanel } from "./iteration-results-panel"
 
 interface SourceNodeInfo {
   readonly id: string
@@ -698,6 +699,22 @@ export function ConfigPanel() {
               const mediaType: "image" | "video" | "audio" = videoTypes.has(selectedNode.type as string) ? "video" : audioTypes.has(selectedNode.type as string) ? "audio" : "image"
               return (
                 <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />
+              )
+            })()}
+
+            {/* Iteration Results Panel — shown when node ran multiple times via List/Loop */}
+            {(() => {
+              const d = selectedNode.data as Record<string, unknown>
+              const listResults = d.__listResults as string[] | undefined
+              const listInputs = d.__listInputs as string[] | undefined
+              if (!listResults || listResults.length <= 1) return null
+              return (
+                <IterationResultsPanel
+                  nodeId={selectedNode.id}
+                  nodeType={selectedNode.type as string}
+                  listResults={listResults}
+                  listInputs={listInputs ?? []}
+                />
               )
             })()}
 

@@ -2729,6 +2729,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       __listTotal: items.length,
       __listCompleted: 0,
       __listResults: [],
+      __listInputs: [...items],
     })
 
     const results: string[] = []
@@ -2779,6 +2780,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       __listTotal: items.length,
       __listCompleted: completedCount + failedCount,
       __listResults: results,
+      __listInputs: [...items],
       errorMessage: failedCount > 0 ? `${completedCount}/${items.length} succeeded, ${failedCount} failed` : undefined,
     })
   }
