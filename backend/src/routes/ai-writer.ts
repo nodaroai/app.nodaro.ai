@@ -13,7 +13,7 @@ const aiWriterBody = z.object({
   provider: z.enum(["claude"]).default("claude"),
   model: z.string().default("claude-sonnet-4-5-20250929"),
   temperature: z.number().min(0).max(2).default(0.7),
-  maxTokens: z.number().min(1).max(4096).default(4096),
+  maxTokens: z.number().min(1).max(16384).default(4096),
   userId: z.string().uuid().optional(),
 })
 
