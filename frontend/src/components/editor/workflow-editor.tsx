@@ -2349,8 +2349,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
 
       if (!writerData.systemPrompt?.trim()) {
-        toast.error(`Node "${writerData.label}": no system prompt provided`)
-        return Promise.reject(new Error("No system prompt"))
+        updateNodeData(node.id, { executionStatus: "failed", errorMessage: "System prompt is required" })
+        return Promise.resolve()
       }
 
       // Use override prompt (from list execution), connected text input, or config panel input
@@ -3700,13 +3700,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     // Find Face node on the canvas (standalone reference node)
     // First check nodes connected to AI Writer, then fall back to any Face node on canvas
-    console.log("[ai-writer] All nodes:", freshStore.nodes.map(n => ({ id: n.id, type: n.type })))
     const writerIncomingEdges = freshStore.edges.filter((e) => e.target === writerNodeId)
     const connectedFace = writerIncomingEdges
       .map((e) => freshStore.nodes.find((n) => n.id === e.source))
       .find((n) => n?.type === "face")
     const faceNode = connectedFace ?? freshStore.nodes.find((n) => n.type === "face")
-    console.log("[ai-writer] Face node found:", faceNode ? { id: faceNode.id, type: faceNode.type } : "NONE")
 
     // Find image-producing source nodes connected to AI Writer (for reference image pass-through)
     const IMAGE_SOURCE_TYPES = new Set([
@@ -3716,7 +3714,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const imageSourceNodes = writerIncomingEdges
       .map((e) => freshStore.nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => !!n && IMAGE_SOURCE_TYPES.has(n.type ?? "") && n.type !== "face")
-    console.log("[ai-writer] Image source nodes:", imageSourceNodes.map(n => ({ id: n.id, type: n.type })))
 
     // Calculate starting ID counter (same pattern as handleExpandStoryboard)
     let idCounter = store.nodes.reduce((max, n) => {
@@ -3782,7 +3779,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           target: nodeId,
           targetHandle: "in",
         } as WorkflowEdge
-        console.log("[ai-writer] Face edge:", { source: faceEdge.source, sourceHandle: faceEdge.sourceHandle, target: faceEdge.target, targetHandle: faceEdge.targetHandle })
         newEdges.push(faceEdge)
       }
 
@@ -3796,11 +3792,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           target: nodeId,
           targetHandle: "in",
         } as WorkflowEdge)
-        console.log("[ai-writer] Ref image edge:", { source: imgSrc.id, type: imgSrc.type, sourceHandle: srcHandle, target: nodeId })
       }
     }
 
-    console.log("[ai-writer] Total edges:", newEdges.length, "nodes:", newNodes.length)
     store.batchAddNodesAndEdges(newNodes, newEdges)
     store.updateNodeData(writerNodeId, { createdNodeIds: createdIds })
     const refInfo = [
