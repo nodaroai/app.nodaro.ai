@@ -52,6 +52,8 @@ interface WorkflowState {
   readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
   readonly runFromHere: ((nodeId: string) => void) | null
   readonly setRunFromHere: (fn: ((nodeId: string) => void) | null) => void
+  readonly runSelected: (() => void) | null
+  readonly setRunSelected: (fn: (() => void) | null) => void
   readonly generateSceneImage: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null
   readonly setGenerateSceneImage: (fn: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null) => void
   readonly addCharacterDefinition: (char: CharacterDefinition) => void
@@ -350,6 +352,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setRunSingleNode: (fn) => set({ runSingleNode: fn }),
   runFromHere: null,
   setRunFromHere: (fn) => set({ runFromHere: fn }),
+  runSelected: null,
+  setRunSelected: (fn) => set({ runSelected: fn }),
   generateSceneImage: null,
   setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
 

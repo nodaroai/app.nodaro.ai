@@ -3249,6 +3249,70 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
+  // Run selected: execute all currently selected nodes in DAG order
+  async function handleRunSelected() {
+    const { nodes, edges } = useWorkflowStore.getState()
+    const selectedNodes = nodes.filter((n) => n.selected)
+    if (selectedNodes.length === 0) {
+      toast.error("No nodes selected.")
+      return
+    }
+
+    const selectedIds = new Set(selectedNodes.map((n) => n.id))
+    const subgraphEdges = edges.filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
+    const levels = buildExecutionLevels(selectedNodes, subgraphEdges)
+
+    const executableCount = selectedNodes.filter(isExecutableNode).length
+    if (executableCount === 0) {
+      toast.error("No executable nodes in selection.")
+      return
+    }
+
+    setIsRunning(true)
+    toast.info("Running selected nodes...", { description: `${executableCount} node(s) to run` })
+
+    let failed = false
+    for (const level of levels) {
+      if (failed) break
+
+      const toRun = level.filter(isExecutableNode)
+      if (toRun.length === 0) continue
+
+      const results = await Promise.allSettled(
+        toRun.map((node) => {
+          const { nodes: currentNodes, edges: currentEdges } = useWorkflowStore.getState()
+          const listItems = getListInputForNode(node, currentNodes, currentEdges)
+          if (!listItems || listItems.length <= 1) {
+            return executeNode(node)
+          }
+          return executeNodeForList(node, listItems)
+        })
+      )
+
+      const hasRealError = results.some(
+        (r) => r.status === "rejected" && !(r.reason instanceof WorkflowStaleError)
+      )
+      const hasStaleError = results.some(
+        (r) => r.status === "rejected" && r.reason instanceof WorkflowStaleError
+      )
+      if (hasStaleError) break
+      if (hasRealError) {
+        failed = true
+      }
+    }
+
+    if (pollIntervalsRef.current.size === 0) {
+      setIsRunning(false)
+    }
+
+    if (failed) {
+      toast.error("Run selected stopped due to errors")
+    } else if (!isWorkflowStale()) {
+      toast.success("Run selected complete")
+      expandLoopResults()
+    }
+  }
+
   // Generate image for a single scene within a generate-script node
   function updateSceneInScript(
     scriptNodeId: string,
@@ -4085,6 +4149,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setRunFromHere(handleRunFromHere)
     return () => useWorkflowStore.getState().setRunFromHere(null)
+  })
+
+  // Register run-selected runner
+  useEffect(() => {
+    useWorkflowStore.getState().setRunSelected(handleRunSelected)
+    return () => useWorkflowStore.getState().setRunSelected(null)
   })
 
   // Register scene image generator

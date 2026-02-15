@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useMemo } from "react"
-import { Play, FastForward, Copy, Trash2 } from "lucide-react"
+import { Play, FastForward, ListChecks, Copy, Trash2 } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 interface NodeContextMenuProps {
@@ -16,6 +16,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
+  const runSelected = useWorkflowStore((s) => s.runSelected)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const ref = useRef<HTMLDivElement>(null)
@@ -23,6 +24,10 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const hasDownstream = useMemo(() => {
     return edges.some((e) => e.source === nodeId)
   }, [nodeId, edges])
+
+  const selectedCount = useMemo(() => {
+    return nodes.filter((n) => n.selected).length
+  }, [nodes])
 
   const isRunning = useMemo(() => {
     const node = nodes.find((n) => n.id === nodeId)
@@ -47,6 +52,11 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
 
   function handleRunFromHere() {
     runFromHere?.(nodeId)
+    onClose()
+  }
+
+  function handleRunSelected() {
+    runSelected?.()
     onClose()
   }
 
@@ -82,6 +92,16 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         >
           <FastForward className="h-3.5 w-3.5" />
           Run from here
+        </button>
+      )}
+      {selectedCount >= 2 && (
+        <button
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left disabled:opacity-50"
+          onClick={handleRunSelected}
+          disabled={isRunning}
+        >
+          <ListChecks className="h-3.5 w-3.5" />
+          Run selected ({selectedCount})
         </button>
       )}
       <div className="my-1 border-t" />

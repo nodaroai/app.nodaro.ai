@@ -22,6 +22,7 @@ import { SearchModal } from "./search-modal"
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { UnifiedAssetLibraryModal } from "./unified-asset-library"
 import { MediaLibraryModal } from "./media-library-modal"
+import { SelectionActionBar } from "./selection-action-bar"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
@@ -544,6 +545,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           />
         </ReactFlow>
       </div>
+
+      <SelectionActionBar />
 
       {nodeContextMenu && (
         <NodeContextMenu
