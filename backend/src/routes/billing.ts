@@ -10,7 +10,7 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { paddle } from "../billing/paddle-client.js"
-import { PRICE_TO_TIER, getTierFromPriceId } from "../billing/paddle-config.js"
+import { PRICE_TO_TIER, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS } from "../billing/paddle-config.js"
 
 export async function billingRoutes(app: FastifyInstance) {
   // Get current subscription for a user
@@ -145,6 +145,38 @@ export async function billingRoutes(app: FastifyInstance) {
       )
 
       const newTier = getTierFromPriceId(newPriceId)
+      const newCredits = TIER_CREDITS[newTier] ?? 50
+      const newStorageLimit = TIER_STORAGE_LIMITS[newTier] ?? TIER_STORAGE_LIMITS.free
+
+      // Immediate local DB update so users see changes right away
+      // (webhook will reconcile later as a backup)
+      const { error: subUpdateError, count: subCount } = await supabase
+        .from("subscriptions")
+        .update({
+          paddle_price_id: newPriceId,
+          tier: newTier,
+        })
+        .eq("paddle_subscription_id", sub.paddle_subscription_id)
+
+      if (subUpdateError) {
+        console.error("[billing] change-plan: subscriptions update failed:", subUpdateError.message)
+      }
+      console.log(`[billing] change-plan: subscriptions updated ${subCount ?? "unknown"} rows for paddle_sub=${sub.paddle_subscription_id}, newTier=${newTier}`)
+
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({
+          tier: newTier,
+          subscription_credits: newCredits,
+          storage_limit_bytes: newStorageLimit,
+        })
+        .eq("id", userId)
+
+      if (profileUpdateError) {
+        console.error("[billing] change-plan: profiles update failed:", profileUpdateError.message)
+      }
+      console.log(`[billing] change-plan: profile updated for user=${userId}, tier=${newTier}, credits=${newCredits}, storage=${newStorageLimit}`)
+
       return reply.send({
         data: { subscriptionId: updated.id, tier: newTier },
       })
