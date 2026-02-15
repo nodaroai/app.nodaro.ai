@@ -445,7 +445,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
    * Returns the list items if found, undefined otherwise.
    */
   function getListInputForNode(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): string[] | undefined {
-    console.log("[getListInput] checking node:", node.id, node.type)
     const incomingEdges = edges.filter((e) => e.target === node.id)
     for (const edge of incomingEdges) {
       const sourceNode = nodes.find((n) => n.id === edge.source)
@@ -478,7 +477,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
 
       const listOutput = extractNodeOutputAsList(sourceNode)
-      console.log("[getListInput] source:", sourceNode.id, sourceNode.type, "listOutput:", listOutput?.length, "splitResults:", (sourceNode.data as Record<string, unknown>).splitResults ? ((sourceNode.data as Record<string, unknown>).splitResults as string[]).length : "none")
       if (listOutput && listOutput.length > 1) return listOutput
     }
     return undefined
@@ -1923,7 +1921,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
 
       // Single execution mode
-      console.log("[generate-image] overridePrompt:", overridePrompt?.substring(0, 50), "refImages:", refImages?.length)
       const prompt = overridePrompt || inputs.prompt || imgData.prompt?.trim()
       if (!prompt) {
         toast.error(`Node "${imgData.label}": no prompt found`)
@@ -2787,14 +2784,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       // Split the text
       let parts = inputText.split(separator)
-      console.log("[split-text] Split into", parts.length, "items, separator:", JSON.stringify(separator), "inputText length:", inputText.length, "first 100 chars:", inputText.substring(0, 100))
 
       if (splitData.trimWhitespace !== false) {
         parts = parts.map((p) => p.trim())
       }
       if (splitData.removeEmpty !== false) {
         parts = parts.filter((p) => p.length > 0)
-        console.log("[split-text] After trim/filter:", parts.length, "items")
       }
 
       updateNodeData(node.id, {
@@ -3081,7 +3076,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     const levels = buildExecutionLevels(nodes, edges)
-    console.log("[execution] levels:", levels.map((l, i) => `Level ${i}: ${l.map((n) => `${n.type}(${n.id.substring(0, 6)})`).join(", ")}`))
 
     setIsRunning(true)
     toast.info("Executing workflow...", { description: `${executableNodes.length} node(s) to run` })
@@ -3097,7 +3091,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toRun.map((node) => {
           const { nodes: currentNodes, edges: currentEdges } = useWorkflowStore.getState()
           const listItems = getListInputForNode(node, currentNodes, currentEdges)
-          console.log("[execution] node:", node.type, node.id.substring(0, 6), "listItems:", listItems?.length ?? "none")
           if (!listItems || listItems.length <= 1) {
             // Normal single execution
             return executeNode(node)

@@ -422,7 +422,7 @@ export function ConfigPanel() {
       )}
       <div className={isExpanded
         ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
-        : "flex flex-col h-full min-h-0"
+        : "flex flex-col h-full min-h-0 overflow-hidden"
       }>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
