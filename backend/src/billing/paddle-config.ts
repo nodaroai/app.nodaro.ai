@@ -47,11 +47,12 @@ export const TOPUP_CREDITS: Record<string, number> = {
 }
 
 export const TIER_STORAGE_LIMITS: Record<string, number> = {
-  free: 500 * 1024 * 1024,           // 500 MB
-  basic: 5 * 1024 * 1024 * 1024,     // 5 GB
-  standard: 15 * 1024 * 1024 * 1024, // 15 GB
-  pro: 50 * 1024 * 1024 * 1024,      // 50 GB
-  business: 100 * 1024 * 1024 * 1024, // 100 GB
+  free: 1 * 1024 * 1024 * 1024,          // 1 GB
+  basic: 10 * 1024 * 1024 * 1024,        // 10 GB
+  standard: 25 * 1024 * 1024 * 1024,     // 25 GB
+  pro: 50 * 1024 * 1024 * 1024,          // 50 GB
+  business: 200 * 1024 * 1024 * 1024,    // 200 GB
+  enterprise: 500 * 1024 * 1024 * 1024,  // 500 GB
 }
 
 export const RETENTION_DAYS = {

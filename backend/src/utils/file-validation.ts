@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
+import { TIER_STORAGE_LIMITS } from "../billing/paddle-config.js"
 
 // ============================================================
 // MIME Type Validation
@@ -46,19 +47,6 @@ const SIZE_LIMITS: Record<string, number> = {
 }
 
 const DEFAULT_SIZE_LIMIT = 50 * 1024 * 1024 // 50 MB fallback
-
-// ============================================================
-// Storage Quotas per Tier (in bytes)
-// ============================================================
-
-const STORAGE_QUOTAS: Record<string, number> = {
-  free: 1 * 1024 * 1024 * 1024,          // 1 GB
-  basic: 10 * 1024 * 1024 * 1024,         // 10 GB
-  standard: 25 * 1024 * 1024 * 1024,      // 25 GB
-  pro: 50 * 1024 * 1024 * 1024,           // 50 GB
-  business: 200 * 1024 * 1024 * 1024,     // 200 GB
-  enterprise: 500 * 1024 * 1024 * 1024,   // 500 GB
-}
 
 // ============================================================
 // Types
@@ -189,10 +177,10 @@ export async function checkStorageQuota(
     return { allowed: true }
   }
 
-  // Get user profile for tier and current storage usage
+  // Get user profile for tier, current storage usage, and admin-overridable limit
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("storage_used_bytes, subscription_tier")
+    .select("storage_used_bytes, storage_limit_bytes, subscription_tier")
     .eq("id", userId)
     .single()
 
@@ -205,7 +193,8 @@ export async function checkStorageQuota(
 
   const tier = profile.subscription_tier ?? "free"
   const usedBytes = profile.storage_used_bytes ?? 0
-  const quotaBytes = STORAGE_QUOTAS[tier] ?? STORAGE_QUOTAS.free
+  const dbLimit = profile.storage_limit_bytes ?? 0
+  const quotaBytes = dbLimit > 0 ? dbLimit : (TIER_STORAGE_LIMITS[tier] ?? TIER_STORAGE_LIMITS.free)
 
   const newUsed = usedBytes + fileSizeBytes
   if (newUsed > quotaBytes) {

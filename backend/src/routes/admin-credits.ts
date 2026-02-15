@@ -7,7 +7,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   app.get("/v1/admin/users", async (_request, reply) => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, display_name, avatar_url, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, created_at")
+      .select("id, display_name, avatar_url, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, created_at")
       .order("created_at", { ascending: false })
 
     if (error) return reply.code(500).send({ error: error.message })
@@ -146,6 +146,46 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     }
 
     return { tier, subscription_credits: newCredits, total_credits: totalAfter, credit_delta: creditDelta }
+  })
+
+  // PUT /v1/admin/users/:id/storage - Admin change user storage limit
+  app.put("/v1/admin/users/:id/storage", async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { storageLimitBytes, adminUserId } = request.body as {
+      storageLimitBytes: number
+      adminUserId: string
+    }
+
+    if (!storageLimitBytes || storageLimitBytes <= 0) {
+      return reply.code(400).send({ error: "storageLimitBytes must be a positive number" })
+    }
+    if (!adminUserId) {
+      return reply.code(400).send({ error: "Missing required field: adminUserId" })
+    }
+
+    // Fetch current limit
+    const { data: profile, error: fetchError } = await supabase
+      .from("profiles")
+      .select("storage_limit_bytes")
+      .eq("id", id)
+      .single()
+
+    if (fetchError || !profile) {
+      return reply.code(404).send({ error: "User not found" })
+    }
+
+    const previousLimit = profile.storage_limit_bytes ?? 0
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ storage_limit_bytes: storageLimitBytes })
+      .eq("id", id)
+
+    if (updateError) {
+      return reply.code(500).send({ error: updateError.message })
+    }
+
+    return { storage_limit_bytes: storageLimitBytes, previous_limit: previousLimit }
   })
 
   // GET /v1/admin/models - List all models with pricing

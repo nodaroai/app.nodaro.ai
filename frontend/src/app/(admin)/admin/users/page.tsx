@@ -10,6 +10,7 @@ import {
   Coins,
   Plus,
   Minus,
+  HardDrive,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -63,6 +64,26 @@ const SOURCE_COLORS: Record<string, string> = {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return bytes + " B"
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB"
+}
+
+const STORAGE_LIMIT_OPTIONS: ReadonlyArray<{ readonly label: string; readonly bytes: number }> = [
+  { label: "1 GB (Free)", bytes: 1 * 1024 * 1024 * 1024 },
+  { label: "10 GB (Basic)", bytes: 10 * 1024 * 1024 * 1024 },
+  { label: "25 GB (Standard)", bytes: 25 * 1024 * 1024 * 1024 },
+  { label: "50 GB (Pro)", bytes: 50 * 1024 * 1024 * 1024 },
+  { label: "200 GB (Business)", bytes: 200 * 1024 * 1024 * 1024 },
+  { label: "500 GB (Enterprise)", bytes: 500 * 1024 * 1024 * 1024 },
+]
+
+// ---------------------------------------------------------------------------
 // Expanded Row Component
 // ---------------------------------------------------------------------------
 
@@ -80,6 +101,15 @@ function UserExpandedRow({
   const [adjustDesc, setAdjustDesc] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [changingTier, setChangingTier] = useState(false)
+  const [storagePreset, setStoragePreset] = useState<string>(() => {
+    const match = STORAGE_LIMIT_OPTIONS.find((o) => o.bytes === user.storage_limit_bytes)
+    return match ? String(match.bytes) : "custom"
+  })
+  const [customStorageGB, setCustomStorageGB] = useState(() => {
+    const match = STORAGE_LIMIT_OPTIONS.find((o) => o.bytes === user.storage_limit_bytes)
+    return match ? "" : String(Math.round(user.storage_limit_bytes / (1024 * 1024 * 1024)))
+  })
+  const [savingStorage, setSavingStorage] = useState(false)
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const supabase = createClient()
@@ -202,12 +232,55 @@ function UserExpandedRow({
     }
   }, [user.id, onCreditsAdjusted, getAuthHeaders, fetchTransactions])
 
+  const handleStorageChange = useCallback(async () => {
+    const bytes = storagePreset === "custom"
+      ? Math.round(Number(customStorageGB) * 1024 * 1024 * 1024)
+      : Number(storagePreset)
+
+    if (!bytes || bytes <= 0) {
+      toast.error("Storage limit must be a positive number")
+      return
+    }
+
+    setSavingStorage(true)
+    try {
+      const supabase = createClient()
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        toast.error("Not authenticated")
+        return
+      }
+
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${API}/v1/admin/users/${user.id}/storage`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          storageLimitBytes: bytes,
+          adminUserId: authUser.id,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || `Request failed (${res.status})`)
+      }
+
+      toast.success(`Storage limit updated to ${formatBytes(bytes)}`)
+      onCreditsAdjusted()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update storage limit")
+    } finally {
+      setSavingStorage(false)
+    }
+  }, [user.id, storagePreset, customStorageGB, onCreditsAdjusted, getAuthHeaders])
+
   const total = user.subscription_credits + user.topup_credits
   const subPercent = total > 0 ? (user.subscription_credits / total) * 100 : 0
 
   return (
     <tr>
-      <td colSpan={10} className="px-4 py-4 bg-muted/30">
+      <td colSpan={11} className="px-4 py-4 bg-muted/30">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left: Credit Management */}
           <div className="space-y-4">
@@ -310,6 +383,87 @@ function UserExpandedRow({
                   <Minus className="h-3 w-3 mr-1" />
                 )}
                 {submitting ? "Adjusting..." : "Apply"}
+              </Button>
+            </div>
+
+            {/* Storage Management */}
+            <div className="border rounded-lg p-3 bg-card space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <HardDrive className="h-4 w-4" />
+                Storage Management
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Usage</span>
+                <span className="font-mono font-medium">
+                  {formatBytes(user.storage_used_bytes)} / {formatBytes(user.storage_limit_bytes)}
+                </span>
+              </div>
+              {/* Usage bar */}
+              {(() => {
+                const usagePercent = user.storage_limit_bytes > 0
+                  ? Math.min(100, (user.storage_used_bytes / user.storage_limit_bytes) * 100)
+                  : 0
+                return (
+                  <>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${
+                          usagePercent > 90
+                            ? "bg-red-500"
+                            : usagePercent > 70
+                            ? "bg-amber-500"
+                            : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                        }`}
+                        style={{ width: `${usagePercent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>{Math.round(usagePercent)}% used</span>
+                      <span>{formatBytes(Math.max(0, user.storage_limit_bytes - user.storage_used_bytes))} remaining</span>
+                    </div>
+                  </>
+                )
+              })()}
+              {/* Limit selector */}
+              <div className="text-sm font-medium pt-1">Set Limit</div>
+              <Select value={storagePreset} onValueChange={setStoragePreset}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  {STORAGE_LIMIT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.bytes} value={String(opt.bytes)}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+              {storagePreset === "custom" && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="GB"
+                    value={customStorageGB}
+                    onChange={(e) => setCustomStorageGB(e.target.value)}
+                    className="flex-1"
+                    min={1}
+                  />
+                  <span className="text-sm text-muted-foreground">GB</span>
+                </div>
+              )}
+              <Button
+                size="sm"
+                disabled={savingStorage || (storagePreset === "custom" && (!customStorageGB || Number(customStorageGB) <= 0))}
+                onClick={handleStorageChange}
+                className="w-full"
+              >
+                {savingStorage ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <HardDrive className="h-3 w-3 mr-1" />
+                )}
+                {savingStorage ? "Updating..." : "Apply"}
               </Button>
             </div>
           </div>
@@ -443,6 +597,7 @@ export default function AdminUsersPage() {
               <th className="text-right px-4 py-2 font-medium">Topup CR</th>
               <th className="text-right px-4 py-2 font-medium">Total</th>
               <th className="text-right px-4 py-2 font-medium">Daily Spent</th>
+              <th className="text-right px-4 py-2 font-medium">Storage</th>
               <th className="text-left px-4 py-2 font-medium">Role</th>
               <th className="text-left px-4 py-2 font-medium">Joined</th>
             </tr>
@@ -462,7 +617,7 @@ export default function AdminUsersPage() {
             })}
             {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
                   {searchQuery.trim() ? "No users match your search." : "No users found."}
                 </td>
               </tr>
@@ -537,6 +692,9 @@ function UserRow({
         <td className="px-4 py-2 text-right font-mono">{user.topup_credits}</td>
         <td className="px-4 py-2 text-right font-mono font-bold">{total}</td>
         <td className="px-4 py-2 text-right font-mono text-muted-foreground">{user.daily_spent_credits}</td>
+        <td className="px-4 py-2 text-right font-mono text-muted-foreground text-xs">
+          {formatBytes(user.storage_used_bytes)} / {formatBytes(user.storage_limit_bytes)}
+        </td>
         <td className="px-4 py-2">
           <Badge variant={user.role !== "user" ? "default" : "secondary"}>
             {user.role}
