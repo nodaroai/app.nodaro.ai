@@ -105,7 +105,7 @@ function getGitHash(): string {
 // Section 1: Project Structure
 // ---------------------------------------------------------------------------
 
-function buildProjectStructure(): string {
+function buildProjectStructure(hideSrcDirs: ReadonlySet<string> = new Set()): string {
   const skip = new Set([
     "node_modules",
     ".next",
@@ -165,6 +165,7 @@ function buildProjectStructure(): string {
             const srcChildren = fs
               .readdirSync(srcAbs, { withFileTypes: true })
               .filter((e) => !skip.has(e.name))
+              .filter((e) => !(entry.name === "backend" && hideSrcDirs.has(e.name)))
               .sort((a, b) => {
                 if (a.isDirectory() && !b.isDirectory()) return -1
                 if (!a.isDirectory() && b.isDirectory()) return 1
@@ -462,10 +463,276 @@ function extractEditionGating(): readonly EditionUsage[] {
 }
 
 // ---------------------------------------------------------------------------
+// Interactive Architecture Graph (HTML + D3.js)
+// ---------------------------------------------------------------------------
+
+function resolveImportPath(importingFile: string, specifier: string): string | null {
+  let basePath: string
+
+  if (specifier.startsWith("@/")) {
+    basePath = path.posix.join("frontend/src", specifier.slice(2))
+  } else if (specifier.startsWith(".")) {
+    const dir = path.posix.dirname(importingFile)
+    basePath = path.posix.join(dir, specifier)
+  } else {
+    return null
+  }
+
+  // Strip .js extension (ESM TypeScript convention in backend)
+  if (basePath.endsWith(".js")) {
+    basePath = basePath.slice(0, -3)
+  }
+
+  const candidates = [
+    basePath,
+    basePath + ".ts",
+    basePath + ".tsx",
+    path.posix.join(basePath, "index.ts"),
+    path.posix.join(basePath, "index.tsx"),
+  ]
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(ROOT, candidate))) {
+      return candidate
+    }
+  }
+
+  return null
+}
+
+function getDirectoryGroup(filePath: string): string {
+  if (filePath.includes("/routes/")) return "routes"
+  if (filePath.includes("/providers/")) return "providers"
+  if (filePath.includes("/components/")) return "components"
+  if (filePath.includes("/hooks/")) return "hooks"
+  if (filePath.includes("/billing/")) return "billing"
+  if (filePath.includes("/lib/")) return "lib"
+  if (filePath.includes("/middleware/")) return "middleware"
+  return "other"
+}
+
+interface FullGraphData {
+  readonly nodes: { id: string; name: string; group: string }[]
+  readonly edges: { source: string; target: string }[]
+}
+
+function buildFullImportGraph(): FullGraphData {
+  const allFiles = [
+    ...globRecursive("frontend/src", ".ts"),
+    ...globRecursive("frontend/src", ".tsx"),
+    ...globRecursive("backend/src", ".ts"),
+  ]
+
+  const fileSet = new Set(allFiles)
+  const nodesMap = new Map<string, { id: string; name: string; group: string }>()
+  const edges: { source: string; target: string }[] = []
+  const edgeSet = new Set<string>()
+
+  const importRe = /(?:import|from)\s+["']([^"']+)["']/g
+
+  for (const file of allFiles) {
+    const content = readFile(file)
+    let match: RegExpExecArray | null
+
+    while ((match = importRe.exec(content)) !== null) {
+      const specifier = match[1]
+      if (!specifier.startsWith(".") && !specifier.startsWith("@/")) continue
+
+      const resolved = resolveImportPath(file, specifier)
+      if (!resolved || !fileSet.has(resolved)) continue
+
+      const edgeKey = `${file}|${resolved}`
+      if (edgeSet.has(edgeKey)) continue
+      edgeSet.add(edgeKey)
+
+      edges.push({ source: file, target: resolved })
+
+      if (!nodesMap.has(file)) {
+        nodesMap.set(file, { id: file, name: path.basename(file), group: getDirectoryGroup(file) })
+      }
+      if (!nodesMap.has(resolved)) {
+        nodesMap.set(resolved, { id: resolved, name: path.basename(resolved), group: getDirectoryGroup(resolved) })
+      }
+    }
+  }
+
+  return { nodes: Array.from(nodesMap.values()), edges }
+}
+
+const GRAPH_EXCLUDE_KEYWORDS = ["billing", "admin", "paddle", "gallery-reports"]
+
+function filterGraphForPublic(data: FullGraphData): FullGraphData {
+  const excludedIds = new Set(
+    data.nodes
+      .filter((n) => GRAPH_EXCLUDE_KEYWORDS.some((kw) => n.id.includes(kw)))
+      .map((n) => n.id),
+  )
+  return {
+    nodes: data.nodes.filter((n) => !excludedIds.has(n.id)),
+    edges: data.edges.filter((e) => !excludedIds.has(e.source) && !excludedIds.has(e.target)),
+  }
+}
+
+interface GraphHTMLOptions {
+  readonly showBilling?: boolean
+}
+
+function generateGraphHTML(graphData: FullGraphData, options: GraphHTMLOptions = {}): string {
+  const { showBilling = true } = options
+  const dataJson = JSON.stringify(graphData)
+
+  const billingLegendItem = showBilling
+    ? '\n  <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div> billing</div>'
+    : ""
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SceneNode.ai - Architecture Graph</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"><\/script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  h1 { position: fixed; top: 12px; left: 20px; z-index: 10; font-size: 18px; font-weight: 600; opacity: 0.85; }
+  h1 span { color: #ff0073; }
+  svg { width: 100vw; height: 100vh; display: block; }
+  .tooltip {
+    position: fixed; background: #333; color: #eee; padding: 5px 10px; border-radius: 4px;
+    font-size: 11px; font-family: monospace; pointer-events: none; z-index: 100;
+    white-space: nowrap; border: 1px solid #555;
+  }
+  .legend {
+    position: fixed; bottom: 16px; right: 16px; z-index: 10;
+    background: rgba(30,30,30,0.92); border: 1px solid #333; border-radius: 8px;
+    padding: 12px 16px; font-size: 11px;
+  }
+  .legend-title { font-weight: 600; margin-bottom: 6px; font-size: 12px; opacity: 0.7; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .stats { position: fixed; top: 12px; right: 20px; z-index: 10; font-size: 12px; opacity: 0.45; }
+</style>
+</head>
+<body>
+<h1>SceneNode.ai &mdash; <span>Architecture Graph</span></h1>
+<div class="stats" id="stats"></div>
+<div class="legend">
+  <div class="legend-title">Directory Groups</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4a9eff"></div> routes</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> providers</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> components</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#fb923c"></div> hooks</div>${billingLegendItem}
+  <div class="legend-item"><div class="legend-dot" style="background:#22d3ee"></div> lib</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#facc15"></div> middleware</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> other</div>
+</div>
+<svg></svg>
+<script>
+const data = ${dataJson};
+
+document.getElementById("stats").textContent = data.nodes.length + " files \\u00b7 " + data.edges.length + " imports";
+
+const colors = {
+  routes: "#4a9eff", providers: "#4ade80", components: "#a78bfa", hooks: "#fb923c",
+  billing: "#f87171", lib: "#22d3ee", middleware: "#facc15", other: "#94a3b8"
+};
+
+const width = window.innerWidth;
+const height = window.innerHeight;
+const svg = d3.select("svg").attr("width", width).attr("height", height);
+const g = svg.append("g");
+
+svg.call(d3.zoom().scaleExtent([0.05, 10]).on("zoom", (e) => g.attr("transform", e.transform)));
+
+// Incoming edge count drives node radius
+const incoming = {};
+data.edges.forEach(e => { incoming[e.target] = (incoming[e.target] || 0) + 1; });
+const maxIn = Math.max(1, ...Object.values(incoming));
+data.nodes.forEach(n => { n.radius = 4 + 14 * Math.sqrt((incoming[n.id] || 0) / maxIn); });
+
+const simulation = d3.forceSimulation(data.nodes)
+  .force("link", d3.forceLink(data.edges).id(d => d.id).distance(60).strength(0.3))
+  .force("charge", d3.forceManyBody().strength(-80))
+  .force("center", d3.forceCenter(width / 2, height / 2))
+  .force("collide", d3.forceCollide(d => d.radius + 3));
+
+const link = g.append("g").selectAll("line").data(data.edges).join("line")
+  .attr("stroke", "#555").attr("stroke-opacity", 0.25).attr("stroke-width", 0.8);
+
+const node = g.append("g").selectAll("circle").data(data.nodes).join("circle")
+  .attr("r", d => d.radius)
+  .attr("fill", d => colors[d.group] || colors.other)
+  .attr("stroke", "#fff").attr("stroke-width", 0.5).attr("cursor", "pointer")
+  .call(d3.drag()
+    .on("start", (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+    .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+    .on("end", (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
+  );
+
+const label = g.append("g").selectAll("text").data(data.nodes).join("text")
+  .text(d => d.name).attr("font-size", 8).attr("fill", "#ccc")
+  .attr("pointer-events", "none").attr("dx", d => d.radius + 3).attr("dy", 3);
+
+// Tooltip
+const tooltip = d3.select("body").append("div").attr("class", "tooltip").style("display", "none");
+node.on("mouseover", (e, d) => {
+  tooltip.style("display", "block").text(d.id)
+    .style("left", (e.clientX + 14) + "px").style("top", (e.clientY - 8) + "px");
+}).on("mousemove", (e) => {
+  tooltip.style("left", (e.clientX + 14) + "px").style("top", (e.clientY - 8) + "px");
+}).on("mouseout", () => tooltip.style("display", "none"));
+
+// Click to highlight node + direct connections
+let selected = null;
+function resetHighlight() {
+  node.attr("opacity", 1);
+  link.attr("stroke-opacity", 0.25).attr("stroke", "#555");
+  label.attr("opacity", 1);
+}
+
+node.on("click", (e, d) => {
+  e.stopPropagation();
+  if (selected === d.id) { selected = null; resetHighlight(); return; }
+  selected = d.id;
+  const connected = new Set([d.id]);
+  data.edges.forEach(edge => {
+    const s = typeof edge.source === "object" ? edge.source.id : edge.source;
+    const t = typeof edge.target === "object" ? edge.target.id : edge.target;
+    if (s === d.id) connected.add(t);
+    if (t === d.id) connected.add(s);
+  });
+  node.attr("opacity", n => connected.has(n.id) ? 1 : 0.08);
+  link.attr("stroke-opacity", edge => {
+    const s = typeof edge.source === "object" ? edge.source.id : edge.source;
+    const t = typeof edge.target === "object" ? edge.target.id : edge.target;
+    return (s === d.id || t === d.id) ? 0.9 : 0.02;
+  }).attr("stroke", edge => {
+    const s = typeof edge.source === "object" ? edge.source.id : edge.source;
+    const t = typeof edge.target === "object" ? edge.target.id : edge.target;
+    return (s === d.id || t === d.id) ? "#ff0073" : "#555";
+  });
+  label.attr("opacity", n => connected.has(n.id) ? 1 : 0.04);
+});
+
+svg.on("click", () => { selected = null; resetHighlight(); });
+
+simulation.on("tick", () => {
+  link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+  node.attr("cx", d => d.x).attr("cy", d => d.y);
+  label.attr("x", d => d.x).attr("y", d => d.y);
+});
+<\/script>
+</body>
+</html>`
+}
+
+// ---------------------------------------------------------------------------
 // Assemble Output
 // ---------------------------------------------------------------------------
 
-function generate(): string {
+function generate(edition: "full" | "public" = "full"): string {
+  const isPublic = edition === "public"
   const gitHash = getGitHash()
   const timestamp = new Date().toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC")
 
@@ -483,14 +750,21 @@ function generate(): string {
   out.push("## 1. Project Structure")
   out.push("")
   out.push("```")
-  out.push(buildProjectStructure())
+  out.push(buildProjectStructure(isPublic ? new Set(["billing"]) : new Set()))
   out.push("```")
   out.push("")
 
   // Section 2
   out.push("## 2. API Routes")
   out.push("")
-  const routes = extractRoutes()
+  const allRoutes = extractRoutes()
+  const routes = isPublic
+    ? allRoutes.filter((r) =>
+        !r.path.startsWith("/v1/admin") &&
+        !r.path.startsWith("/v1/billing") &&
+        !r.path.toLowerCase().includes("paddle"),
+      )
+    : allRoutes
   out.push(`${routes.length} routes across ${new Set(routes.map((r) => r.file)).size} files.`)
   out.push("")
   out.push("| Method | Path | File |")
@@ -503,7 +777,14 @@ function generate(): string {
   // Section 3
   out.push("## 3. Database Tables")
   out.push("")
-  const tables = extractTables()
+  const allTables = extractTables()
+  const EXCLUDED_TABLES_PUBLIC = new Set([
+    "subscriptions", "transactions", "paddle_customers",
+    "credit_purchases", "app_settings", "gallery_reports",
+  ])
+  const tables = isPublic
+    ? allTables.filter((t) => !EXCLUDED_TABLES_PUBLIC.has(t.name))
+    : allTables
   out.push(`${tables.length} tables found across migration files.`)
   out.push("")
   for (const t of tables) {
@@ -550,32 +831,38 @@ function generate(): string {
   out.push("## 6. Import Graph (Key Files)")
   out.push("")
   const importGraph = buildImportGraph()
+  const IMPORT_FILTER_KEYWORDS = ["billing", "admin", "paddle", "gallery-reports"]
   for (const entry of importGraph) {
     out.push(`### \`${entry.file}\``)
     out.push("")
-    if (entry.imports.length === 0) {
+    const filteredImports = isPublic && entry.file === "backend/src/app.ts"
+      ? entry.imports.filter((imp) => !IMPORT_FILTER_KEYWORDS.some((kw) => imp.includes(kw)))
+      : entry.imports
+    if (filteredImports.length === 0) {
       out.push("No project-local imports.")
     } else {
-      for (const imp of entry.imports) {
+      for (const imp of filteredImports) {
         out.push(`- \`${imp}\``)
       }
     }
     out.push("")
   }
 
-  // Section 7
-  out.push("## 7. Edition Gating")
-  out.push("")
-  const gating = extractEditionGating()
-  out.push(`${gating.length} edition-gated call sites found (excluding definition files).`)
-  out.push("")
-  if (gating.length > 0) {
-    out.push("| Function | File | Line |")
-    out.push("|----------|------|------|")
-    for (const g of gating) {
-      out.push(`| \`${g.fn}()\` | \`${g.file}\` | ${g.line} |`)
-    }
+  // Section 7 (full edition only)
+  if (!isPublic) {
+    out.push("## 7. Edition Gating")
     out.push("")
+    const gating = extractEditionGating()
+    out.push(`${gating.length} edition-gated call sites found (excluding definition files).`)
+    out.push("")
+    if (gating.length > 0) {
+      out.push("| Function | File | Line |")
+      out.push("|----------|------|------|")
+      for (const g of gating) {
+        out.push(`| \`${g.fn}()\` | \`${g.file}\` | ${g.line} |`)
+      }
+      out.push("")
+    }
   }
 
   return out.join("\n")
@@ -585,9 +872,30 @@ function generate(): string {
 // Main
 // ---------------------------------------------------------------------------
 
-const output = generate()
+// Full internal version
+const output = generate("full")
 const outPath = path.join(ROOT, "ARCHITECTURE.md")
 fs.writeFileSync(outPath, output, "utf-8")
-
 const lineCount = output.split("\n").length
 console.log(`Wrote ARCHITECTURE.md (${lineCount} lines, ${Math.round(output.length / 1024)}KB)`)
+
+// Public community edition (filtered)
+const publicOutput = generate("public")
+const publicPath = path.join(ROOT, "ARCHITECTURE.public.md")
+fs.writeFileSync(publicPath, publicOutput, "utf-8")
+const publicLineCount = publicOutput.split("\n").length
+console.log(`Wrote ARCHITECTURE.public.md (${publicLineCount} lines, ${Math.round(publicOutput.length / 1024)}KB)`)
+
+// Interactive architecture graph (full)
+const graphData = buildFullImportGraph()
+const graphHTML = generateGraphHTML(graphData)
+const graphPath = path.join(ROOT, "architecture-graph.html")
+fs.writeFileSync(graphPath, graphHTML, "utf-8")
+console.log(`Wrote architecture-graph.html (${graphData.nodes.length} nodes, ${graphData.edges.length} edges, ${Math.round(graphHTML.length / 1024)}KB)`)
+
+// Interactive architecture graph (public, filtered)
+const publicGraphData = filterGraphForPublic(graphData)
+const publicGraphHTML = generateGraphHTML(publicGraphData, { showBilling: false })
+const publicGraphPath = path.join(ROOT, "architecture-graph.public.html")
+fs.writeFileSync(publicGraphPath, publicGraphHTML, "utf-8")
+console.log(`Wrote architecture-graph.public.html (${publicGraphData.nodes.length} nodes, ${publicGraphData.edges.length} edges, ${Math.round(publicGraphHTML.length / 1024)}KB)`)

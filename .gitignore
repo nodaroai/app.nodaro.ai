@@ -1,5 +1,7 @@
 .claude/
 CLAUDE.md
+ARCHITECTURE.md
+architecture-graph.html
 node_modules/
 .next/
 .env
