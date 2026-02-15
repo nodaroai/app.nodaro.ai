@@ -11,6 +11,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [role, setRole] = useState<UserRole>("user")
   const [loading, setLoading] = useState(true)
+  const [roleLoaded, setRoleLoaded] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export function useAuth() {
         }
       }
 
+      setRoleLoaded(true)
       setLoading(false)
     }
 
@@ -43,8 +45,12 @@ export function useAuth() {
       setUser(session?.user ?? null)
       if (!session?.user) {
         setRole("user")
+        setRoleLoaded(true)
       }
-      setLoading(false)
+      // Only clear loading if role is already loaded (avoid race with loadUser)
+      if (!session?.user) {
+        setLoading(false)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -71,5 +77,5 @@ export function useAuth() {
 
   const isAdmin = role === "admin" || role === "super_admin"
 
-  return { user, role, isAdmin, loading, signInWithGoogle, signOut }
+  return { user, role, isAdmin, loading, roleLoaded, signInWithGoogle, signOut }
 }

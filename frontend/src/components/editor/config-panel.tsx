@@ -2218,7 +2218,7 @@ const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "kling": [5, 10],
   "kling-turbo": [5, 10],
   "kling-3.0": [3, 4, 5, 6, 7, 8, 9, 10, 15],
-  "grok-i2v": [6, 10],
+  "grok-i2v": [10],
   "sora2-pro": [5, 10],
 }
 
@@ -2618,7 +2618,7 @@ const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "veo3": [8],
   "kling": [5, 10],
   "kling-turbo": [5, 10],
-  "grok": [6, 10],
+  "grok": [10],
   "sora2-pro": [5, 10],
 }
 

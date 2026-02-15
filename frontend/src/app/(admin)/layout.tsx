@@ -55,7 +55,7 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, isAdmin, loading, signOut } = useAuth()
+  const { user, isAdmin, loading, roleLoaded, signOut } = useAuth()
   const [checked, setChecked] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -102,17 +102,18 @@ export default function AdminLayout({
 
   useEffect(() => {
     if (loading) return
-
-    const timeout = setTimeout(() => {
-      if (!isFeatureEnabled("adminPanel") || !user || !isAdmin) {
-        router.replace("/projects")
-      } else {
-        setChecked(true)
-      }
-    }, 500)
-
-    return () => clearTimeout(timeout)
-  }, [user, isAdmin, loading, router])
+    if (!user) {
+      router.replace("/projects")
+      return
+    }
+    // Wait for role to be fetched before making admin decision
+    if (!roleLoaded) return
+    if (!isFeatureEnabled("adminPanel") || !isAdmin) {
+      router.replace("/projects")
+    } else {
+      setChecked(true)
+    }
+  }, [user, isAdmin, loading, roleLoaded, router])
 
   const toggleCollapsed = () => {
     const newValue = !collapsed

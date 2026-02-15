@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, type DragEvent } from "react"
+import { useRouter } from "next/navigation"
 import { Plus, FolderPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -32,16 +33,24 @@ export function WorkflowsTab({ projectId }: WorkflowsTabProps) {
   const renameFolder = useProjectsStore((s) => s.renameFolder)
   const deleteFolder = useProjectsStore((s) => s.deleteFolder)
 
+  const router = useRouter()
+
   const [rootDragOver, setRootDragOver] = useState(false)
 
   const rootWorkflows = workflows.filter((w) => w.folderId === null)
 
-  function handleNewWorkflow() {
-    createWorkflow(projectId, "Untitled Workflow")
+  async function handleNewWorkflow() {
+    const wf = await createWorkflow(projectId, "Untitled Workflow")
+    if (wf) {
+      router.push(`/projects/${projectId}/workflows/${wf.id}`)
+    }
   }
 
-  function handleNewWorkflowInFolder(folderId: string) {
-    createWorkflow(projectId, "Untitled Workflow", folderId)
+  async function handleNewWorkflowInFolder(folderId: string) {
+    const wf = await createWorkflow(projectId, "Untitled Workflow", folderId)
+    if (wf) {
+      router.push(`/projects/${projectId}/workflows/${wf.id}`)
+    }
   }
 
   function handleNewFolder() {

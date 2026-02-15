@@ -1,12 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Plus, Search, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { ProjectCard } from "@/components/dashboard/project-card"
-import { CreateProjectDialog } from "@/components/dashboard/create-project-dialog"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 
 export default function ProjectsPage() {
@@ -17,11 +17,20 @@ export default function ProjectsPage() {
   const deleteProject = useProjectsStore((s) => s.deleteProject)
   const updateProject = useProjectsStore((s) => s.updateProject)
 
+  const router = useRouter()
+
   const handleRenameProject = async (id: string, newName: string) => {
     await updateProject(id, { name: newName })
   }
+
+  const handleCreateProject = async () => {
+    const project = await createProject("Untitled Project")
+    if (project) {
+      router.push(`/projects/${project.id}`)
+    }
+  }
+
   const [search, setSearch] = useState("")
-  const [dialogOpen, setDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchProjects()
@@ -37,7 +46,7 @@ export default function ProjectsPage() {
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl font-bold">Projects</h1>
-        <Button size="sm" className="sm:size-default" onClick={() => setDialogOpen(true)}>
+        <Button size="sm" className="sm:size-default" onClick={handleCreateProject}>
           <Plus className="h-4 w-4 mr-1" />
           <span className="hidden sm:inline">New Project</span>
           <span className="sm:hidden">New</span>
@@ -81,11 +90,6 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      <CreateProjectDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onCreate={createProject}
-      />
     </div>
   )
 }

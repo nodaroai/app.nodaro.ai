@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Video, VideoOff, MoreVertical, Download, Upload, Package, FileJson, FileText } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText } from "lucide-react"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -748,7 +748,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           className={videoAutoplay ? "text-white hover:opacity-90" : ""}
           style={videoAutoplay ? { backgroundColor: '#ff0073', borderColor: '#ff0073' } : undefined}
         >
-          {videoAutoplay ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+          {videoAutoplay ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
       </div>
     </div>
