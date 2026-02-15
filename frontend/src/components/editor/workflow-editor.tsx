@@ -1856,6 +1856,28 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  const IMAGE_REF_TYPES = new Set(["upload-image", "face", "character", "object", "location", "generate-image", "edit-image", "image-to-image"])
+  const PASSTHROUGH_TYPES = new Set(["ai-writer", "split-text", "combine-text", "text-prompt", "loop", "list"])
+
+  function collectAncestorRefs(nodeId: string, nodes: WorkflowNode[], edges: WorkflowEdge[], visited = new Set<string>()): string[] {
+    if (visited.has(nodeId)) return []
+    visited.add(nodeId)
+    const refs: string[] = []
+    const incoming = edges.filter((e) => e.target === nodeId)
+    for (const edge of incoming) {
+      const src = nodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      if (IMAGE_REF_TYPES.has(src.type ?? "")) {
+        const url = extractNodeOutput(src)
+        if (url?.trim()) refs.push(url.trim())
+      }
+      if (PASSTHROUGH_TYPES.has(src.type ?? "")) {
+        refs.push(...collectAncestorRefs(src.id, nodes, edges, visited))
+      }
+    }
+    return refs
+  }
+
   function executeNode(node: WorkflowNode, overridePrompt?: string, overrideMediaUrl?: string): Promise<void> {
     const { nodes, edges } = useWorkflowStore.getState()
     const inputs = resolveNodeInputs(node, nodes, edges)
@@ -1893,6 +1915,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       const nodeRefUrl = imgData.referenceImageUrl
       const refImages = [...(nodeRefUrl ? [nodeRefUrl] : []), ...(chainRefs ?? []), ...(extractedRefs ?? []), ...charRefUrls]
+
+      // If no direct references found, walk up DAG to find ancestor reference images
+      if (refImages.length === 0) {
+        const ancestorRefs = collectAncestorRefs(node.id, nodes, edges)
+        refImages.push(...ancestorRefs)
+      }
 
       // Single execution mode
       console.log("[generate-image] overridePrompt:", overridePrompt?.substring(0, 50), "refImages:", refImages?.length)
