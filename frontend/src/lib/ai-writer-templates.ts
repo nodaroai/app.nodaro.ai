@@ -62,6 +62,7 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
       "OUTPUT STRUCTURE\n" +
       "============================================\n" +
       "COUNTING RULE: Before generating, count the TOTAL days from the user's brief. Example: \"10 days Rome, 3 days Paris\" = 13 prompts. \"2 days: 1 day Paris, 1 day Tel Aviv\" = 2 prompts. Output EXACTLY that number — no more, no fewer.\n\n" +
+      "Style preferences like 'mix casual and fashion' or 'casual + editorial' describe the RANGE to blend WITHIN each prompt. They are NOT a reason to multiply the prompt count. Total prompts = total days. Always.\n\n" +
       "Each prompt block MUST follow this exact structure:\n\n" +
       "Face: maintain identical facial features from reference image. Same face structure, age, complexion, and expression style in all images.\n" +
       "Body type: [as described by the user in their input]\n" +
