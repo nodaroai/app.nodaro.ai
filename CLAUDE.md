@@ -629,6 +629,48 @@ To add SSE streaming to a new backend endpoint:
 
 ---
 
+## Storage Management (v1.22)
+
+### Single Source of Truth
+- `TIER_STORAGE_LIMITS` in `backend/src/billing/paddle-config.ts` defines per-tier storage quotas (Free=500MB, Basic=5GB, Standard=15GB, Pro=50GB, Business=100GB)
+- `checkStorageLimit()` in `CreditsService` reads `storage_limit_bytes` from DB first (supports admin overrides), falls back to `TIER_STORAGE_LIMITS[tier]`
+- Storage enforcement: `creditGuard` middleware checks storage before credits (HTTP 413 `storage_limit_exceeded`)
+
+### StorageExceededModal
+- `frontend/src/components/credits/StorageExceededModal.tsx` -- Reusable modal showing used/quota/remaining with progress bar
+- Shown on **upload errors** (via `useFileUpload` hook in upload-image/audio/video nodes)
+- Shown on **execution errors** (via `isStorageError()` helper in `workflow-editor.tsx` catching `StorageExceededError`)
+- Two CTAs: "Upgrade Plan" (/pricing) and "Manage Files" (/library)
+
+### StorageExceededError
+- Custom error class in `frontend/src/lib/api.ts` with `usedBytes`, `quotaBytes`, `remainingBytes`, `tier`
+- `throwApiError()` helper detects `storage_limit_exceeded` from API JSON responses and throws `StorageExceededError`
+- `useFileUpload` hook detects HTTP 413 responses and exposes `storageExceeded` state
+
+### Library Page
+- `frontend/src/app/(dashboard)/library/page.tsx` -- User file management with storage summary
+- Features: filter tabs (all/image/video/audio), file grid with thumbnails, multi-select delete, cursor-based pagination
+- API: `GET /v1/library?userId=...&owned=true` (only user's own files), `DELETE /v1/library/:id?userId=...`
+- Sidebar: "Library" nav item with Archive icon between Gallery and Pricing
+
+### Admin Storage Controls
+- `PUT /v1/admin/users/:id/storage` -- Admin can override storage limit per user
+- `GET /v1/admin/users` -- Returns storage_used_bytes + storage_limit_bytes for each user
+- Admin Users page shows storage bar per user with edit capability
+
+### Key Files
+- `backend/src/billing/paddle-config.ts` -- `TIER_STORAGE_LIMITS`
+- `backend/src/billing/credits.ts` -- `checkStorageLimit()` (DB-first, fallback to tier)
+- `backend/src/middleware/credit-guard.ts` -- Storage check before credit check
+- `backend/src/routes/library.ts` -- Library CRUD + `owned` query param
+- `backend/src/routes/admin-credits.ts` -- Admin storage management endpoints
+- `frontend/src/components/credits/StorageExceededModal.tsx` -- Modal component
+- `frontend/src/hooks/use-file-upload.ts` -- Upload hook with storage error detection
+- `frontend/src/app/(dashboard)/library/page.tsx` -- Library page
+- `frontend/src/app/(dashboard)/billing/page.tsx` -- Billing page storage section
+
+---
+
 ## List Infrastructure (v1.25) -- COMPLETE
 
 **Phase 1: AI Writer cleanup** -- Removed auto-chunking from AI Writer. Single LLM call per run, 1 credit, maxTokens 4096. SSE streaming kept intact.
@@ -753,6 +795,7 @@ Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produce
 - [x] Run only specific node in workflow (Run This Node + Run from here + Run Selected)
 - [x] Skip node in specific run
 - [x] ARCHITECTURE.md / Code Graph (auto-generated, 4 output files)
+- [x] Storage sync + management (quota enforcement, library page, admin controls, StorageExceededModal)
 - [ ] Version history per node
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
@@ -764,4 +807,4 @@ Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produce
 ---
 
 *Last updated: 2026-02-14*
-*Version: 1.21.0*
+*Version: 1.22.0*
