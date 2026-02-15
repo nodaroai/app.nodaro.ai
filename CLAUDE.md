@@ -716,11 +716,43 @@ Right-click or multi-select to skip/unskip nodes. Skipped nodes and their depend
 
 ---
 
+## Architecture Documentation (v1.21)
+
+Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produces 4 output files:
+
+| File | Content | Git-tracked |
+|------|---------|-------------|
+| `ARCHITECTURE.md` | Full internal architecture (all routes, tables, billing) | No (.gitignored) |
+| `ARCHITECTURE.public.md` | Filtered for Community edition (no admin/billing/paddle) | Yes |
+| `architecture-graph.html` | Interactive D3.js force-directed import graph (all files) | No (.gitignored) |
+| `architecture-graph.public.html` | Filtered graph (no billing/admin/paddle nodes) | Yes |
+
+**Command:** `npx tsx scripts/generate-architecture.ts`
+
+### What the script scans
+- Project structure (frontend/src, backend/src directory trees)
+- API routes (from `app.ts` route registrations)
+- Database tables (from Supabase migrations)
+- Node types (from `NODE_DEFINITIONS` in workflow store)
+- AI providers (from provider registry)
+- Import graph (all `.ts`/`.tsx` files, resolves `@/` aliases + relative imports)
+- Edition gating (from config helpers)
+
+### Public version filtering
+- Routes: excludes `/v1/admin/*`, `/v1/billing/*`, paddle-related
+- Tables: excludes `subscriptions`, `transactions`, `paddle_customers`, `credit_transactions`, `app_settings`
+- Project structure: hides `backend/src/billing/` directory
+- Import graph: excludes nodes with `billing`/`admin`/`paddle`/`gallery-reports` in path
+- Edition gating section: excluded entirely
+
+---
+
 ## Active TODOs
 - [x] Phase 7: Paddle sandbox testing (verified: subscriptions, top-ups, webhooks, billing page)
 - [ ] Phase 7: Paddle production go-live (swap sandbox keys for production)
 - [x] Run only specific node in workflow (Run This Node + Run from here + Run Selected)
 - [x] Skip node in specific run
+- [x] ARCHITECTURE.md / Code Graph (auto-generated, 4 output files)
 - [ ] Version history per node
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
@@ -732,4 +764,4 @@ Right-click or multi-select to skip/unskip nodes. Skipped nodes and their depend
 ---
 
 *Last updated: 2026-02-14*
-*Version: 1.20.0*
+*Version: 1.21.0*
