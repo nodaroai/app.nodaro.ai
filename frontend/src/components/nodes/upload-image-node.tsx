@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import type { UploadImageData } from "@/types/nodes"
 
 function formatBytes(bytes: number): string {
@@ -21,7 +22,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const { upload, isUploading, uploadError, clearError } = useFileUpload()
+  const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
 
   const imageUrl = nodeData.thumbnailUrl || nodeData.r2Url || nodeData.url
   const hasFile = Boolean(nodeData.r2Url || nodeData.url) && !nodeData.externalUrl
@@ -253,6 +254,14 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
         src={lightboxSrc}
         alt={nodeData.filename || "Uploaded image"}
         onClose={() => setLightboxSrc(null)}
+      />
+
+      <StorageExceededModal
+        open={storageExceeded.exceeded}
+        onClose={clearStorageExceeded}
+        usedBytes={storageExceeded.usedBytes}
+        quotaBytes={storageExceeded.quotaBytes}
+        tier={storageExceeded.tier}
       />
     </>
   )

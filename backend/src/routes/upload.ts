@@ -133,12 +133,13 @@ export async function uploadRoutes(app: FastifyInstance) {
       if (!quota.allowed) {
         return reply.status(413).send({
           error: {
-            code: "storage_quota_exceeded",
+            code: "storage_limit_exceeded",
             message: quota.error,
+            usedBytes: quota.usedBytes,
+            quotaBytes: quota.quotaBytes,
+            remainingBytes: quota.remainingBytes,
+            tier: quota.tier,
           },
-          usedBytes: quota.usedBytes,
-          quotaBytes: quota.quotaBytes,
-          remainingBytes: quota.remainingBytes,
         })
       }
     }

@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import type { UploadVideoData } from "@/types/nodes"
 
 function formatBytes(bytes: number): string {
@@ -27,7 +28,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const { upload, isUploading, uploadError, clearError } = useFileUpload()
+  const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
 
   const videoUrl = nodeData.r2Url || nodeData.url
   const thumbnailUrl = nodeData.thumbnailUrl
@@ -277,6 +278,14 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
         url={videoUrl}
       />
     )}
+
+    <StorageExceededModal
+      open={storageExceeded.exceeded}
+      onClose={clearStorageExceeded}
+      usedBytes={storageExceeded.usedBytes}
+      quotaBytes={storageExceeded.quotaBytes}
+      tier={storageExceeded.tier}
+    />
     </>
   )
 }

@@ -68,13 +68,26 @@ export function creditGuard(
       const storageCheck = await CreditsService.checkStorageLimit(userId)
 
       if (!storageCheck.allowed) {
+        // Fetch tier for frontend display
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("tier")
+          .eq("id", userId)
+          .single()
+
+        const tier = profile?.tier ?? "free"
+        const quotaBytes = storageCheck.limitBytes
+        const usedBytes = storageCheck.usedBytes
+
         reply.status(413).send({
           error: {
             code: "storage_limit_exceeded",
             message: storageCheck.error ?? "Storage limit exceeded",
+            usedBytes,
+            quotaBytes,
+            remainingBytes: Math.max(0, quotaBytes - usedBytes),
+            tier,
           },
-          usedBytes: storageCheck.usedBytes,
-          limitBytes: storageCheck.limitBytes,
         })
         return
       }

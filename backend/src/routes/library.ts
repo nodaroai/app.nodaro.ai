@@ -35,6 +35,7 @@ const listLibraryQuery = z.object({
   search: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(40),
   cursor: z.string().uuid().optional(),
+  owned: z.coerce.boolean().optional().default(false),
 })
 
 const assetIdParams = z.object({
@@ -75,12 +76,19 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { userId, type, search, limit, cursor } = parsed.data
+    const { userId, type, search, limit, cursor, owned } = parsed.data
 
     let query = supabase
       .from("assets")
       .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, created_at")
-      .or(`user_id.eq.${userId},is_library_item.eq.true`)
+
+    if (owned) {
+      query = query.eq("user_id", userId)
+    } else {
+      query = query.or(`user_id.eq.${userId},is_library_item.eq.true`)
+    }
+
+    query = query
       .order("created_at", { ascending: false })
       .limit(limit + 1) // Fetch one extra to determine nextCursor
 

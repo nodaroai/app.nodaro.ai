@@ -12,6 +12,8 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Loader2,
+  HardDrive,
+  FolderOpen,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,7 +31,15 @@ import {
   type TransactionRecord,
 } from "@/lib/api"
 import { PRICING_TIERS, getBillingCycleFromPriceId } from "@/lib/pricing-data"
+import { createClient } from "@/lib/supabase"
 import { toast } from "sonner"
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
 
 export default function BillingPage() {
   return (
@@ -49,6 +59,8 @@ function BillingPageContent() {
   const [subLoading, setSubLoading] = useState(true)
   const [txLoading, setTxLoading] = useState(true)
   const [manageLoading, setManageLoading] = useState(false)
+  const [storageUsed, setStorageUsed] = useState(0)
+  const [storageLimit, setStorageLimit] = useState(0)
 
   const loadBillingData = useCallback(async () => {
     if (!user?.id) return
@@ -56,15 +68,26 @@ function BillingPageContent() {
     setSubLoading(true)
     setTxLoading(true)
 
-    const [sub, txs] = await Promise.all([
+    const supabase = createClient()
+    const [sub, txs, profileRes] = await Promise.all([
       getSubscription(user.id),
       getTransactions(user.id),
+      supabase
+        .from("profiles")
+        .select("storage_used_bytes, storage_limit_bytes")
+        .eq("id", user.id)
+        .single(),
     ])
 
     setSubscription(sub)
     setSubLoading(false)
     setTransactions(txs)
     setTxLoading(false)
+
+    if (profileRes.data) {
+      setStorageUsed(profileRes.data.storage_used_bytes ?? 0)
+      setStorageLimit(profileRes.data.storage_limit_bytes ?? 0)
+    }
   }, [user?.id])
 
   useEffect(() => {
@@ -174,7 +197,7 @@ function BillingPageContent() {
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Plan</p>
               <p className="text-lg font-semibold capitalize">
@@ -201,6 +224,12 @@ function BillingPageContent() {
               <p className="text-sm text-muted-foreground">Monthly Credits</p>
               <p className="text-lg font-semibold">
                 {currentTier?.credits ?? 50}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Storage</p>
+              <p className="text-lg font-semibold">
+                {formatBytes(storageLimit)}
               </p>
             </div>
           </div>
@@ -279,6 +308,70 @@ function BillingPageContent() {
 
         {user && <CreditTopup userId={user.id} userEmail={user.email ?? undefined} />}
       </section>
+
+      {/* Storage */}
+      {(() => {
+        const usagePercent = storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0
+        return (
+          <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <HardDrive className="h-5 w-5 text-[#ff0073]" />
+              <h2 className="text-lg font-semibold">Storage</h2>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Used</p>
+                <p className="text-2xl font-bold font-mono">{formatBytes(storageUsed)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Limit</p>
+                <p className="text-2xl font-bold font-mono">{formatBytes(storageLimit)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Available</p>
+                <p className="text-2xl font-bold font-mono">{formatBytes(Math.max(0, storageLimit - storageUsed))}</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${usagePercent}%`,
+                    backgroundColor: usagePercent >= 90 ? "#ef4444" : usagePercent >= 70 ? "#f59e0b" : "#3b82f6",
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-right">{usagePercent}% used</p>
+            </div>
+
+            <div className="flex justify-end">
+              <Link href="/library">
+                <Button variant="outline" size="sm">
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Manage Files
+                </Button>
+              </Link>
+            </div>
+
+            {usagePercent > 70 && (
+              <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  {usagePercent >= 90 ? "Storage almost full! Upgrade for more space." : "Running low on storage. Consider upgrading."}
+                </p>
+                <Link href="/pricing">
+                  <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-400">
+                    <ArrowUpRight className="h-3 w-3 mr-1" />
+                    Upgrade
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </section>
+        )
+      })()}
 
       {/* Transaction History */}
       <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">

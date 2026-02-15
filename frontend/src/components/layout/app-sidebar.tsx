@@ -15,6 +15,7 @@ import {
   CreditCard,
   Sparkles,
   Images,
+  Archive,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -45,6 +46,7 @@ interface NavItem {
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/projects", label: "Projects", icon: FolderOpen },
   { href: "/gallery", label: "Gallery", icon: Images },
+  { href: "/library", label: "Library", icon: Archive },
   { href: "/pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
   { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },

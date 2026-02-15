@@ -1,5 +1,39 @@
 export const API_BASE_URL = ''
 
+export class StorageExceededError extends Error {
+  readonly usedBytes: number
+  readonly quotaBytes: number
+  readonly remainingBytes: number
+  readonly tier: string
+
+  constructor(message: string, usedBytes: number, quotaBytes: number, remainingBytes: number, tier: string) {
+    super(message)
+    this.name = "StorageExceededError"
+    this.usedBytes = usedBytes
+    this.quotaBytes = quotaBytes
+    this.remainingBytes = remainingBytes
+    this.tier = tier
+  }
+}
+
+/**
+ * Throws StorageExceededError if the parsed error JSON indicates storage_limit_exceeded.
+ * Otherwise throws a plain Error with the message (or the given fallback).
+ */
+function throwApiError(errJson: Record<string, unknown> | null, fallback: string): never {
+  const errObj = errJson?.error as Record<string, unknown> | undefined
+  if (errObj?.code === "storage_limit_exceeded") {
+    throw new StorageExceededError(
+      (errObj.message as string) ?? fallback,
+      (errObj.usedBytes as number) ?? 0,
+      (errObj.quotaBytes as number) ?? 0,
+      (errObj.remainingBytes as number) ?? 0,
+      (errObj.tier as string) ?? "free",
+    )
+  }
+  throw new Error((errObj?.message as string) ?? fallback)
+}
+
 interface ApiResponse<T> {
   success: boolean
   data?: T
@@ -68,7 +102,7 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start image generation")
+    throwApiError(err, "Failed to start image generation")
   }
   return res.json()
 }
@@ -98,7 +132,7 @@ export async function editImage(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start image editing")
+    throwApiError(err, "Failed to start image editing")
   }
   return res.json()
 }
@@ -129,7 +163,7 @@ export async function imageToImage(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start image transformation")
+    throwApiError(err, "Failed to start image transformation")
   }
   return res.json()
 }
@@ -150,7 +184,7 @@ export async function generateCharacter(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start character generation")
+    throwApiError(err, "Failed to start character generation")
   }
   return res.json()
 }
@@ -173,7 +207,7 @@ export async function generateCharacterAsset(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start character asset generation")
+    throwApiError(err, "Failed to start character asset generation")
   }
   return res.json()
 }
@@ -201,7 +235,7 @@ export async function saveCharacter(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to save character")
+    throwApiError(err, "Failed to save character")
   }
   return res.json()
 }
@@ -226,7 +260,7 @@ export async function saveFace(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to save face")
+    throwApiError(err, "Failed to save face")
   }
   return res.json()
 }
@@ -256,7 +290,7 @@ export async function getFaces(projectId?: string, userId?: string): Promise<{ f
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch faces")
+    throwApiError(err, "Failed to fetch faces")
   }
   return res.json()
 }
@@ -267,7 +301,7 @@ export async function deleteFace(faceId: string): Promise<{ success: boolean }> 
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to delete face")
+    throwApiError(err, "Failed to delete face")
   }
   return res.json()
 }
@@ -287,7 +321,7 @@ export async function generateFace(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start face headshot generation")
+    throwApiError(err, "Failed to start face headshot generation")
   }
   return res.json()
 }
@@ -298,7 +332,7 @@ export async function deleteCharacter(characterId: string): Promise<{ success: b
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to delete character")
+    throwApiError(err, "Failed to delete character")
   }
   return res.json()
 }
@@ -332,7 +366,7 @@ export async function getCharacters(projectId?: string, userId?: string): Promis
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch characters")
+    throwApiError(err, "Failed to fetch characters")
   }
   return res.json()
 }
@@ -347,7 +381,7 @@ export async function getCharacterById(characterId: string): Promise<DbCharacter
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch character")
+    throwApiError(err, "Failed to fetch character")
   }
   return res.json()
 }
@@ -368,7 +402,7 @@ export async function generateObject(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start object generation")
+    throwApiError(err, "Failed to start object generation")
   }
   return res.json()
 }
@@ -390,7 +424,7 @@ export async function generateObjectAsset(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start object asset generation")
+    throwApiError(err, "Failed to start object asset generation")
   }
   return res.json()
 }
@@ -416,7 +450,7 @@ export async function saveObject(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to save object")
+    throwApiError(err, "Failed to save object")
   }
   return res.json()
 }
@@ -427,7 +461,7 @@ export async function deleteObject(objectId: string): Promise<{ success: boolean
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to delete object")
+    throwApiError(err, "Failed to delete object")
   }
   return res.json()
 }
@@ -460,7 +494,7 @@ export async function getObjects(projectId?: string, userId?: string): Promise<{
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch objects")
+    throwApiError(err, "Failed to fetch objects")
   }
   return res.json()
 }
@@ -475,7 +509,7 @@ export async function getObjectById(objectId: string): Promise<DbObject | null> 
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch object")
+    throwApiError(err, "Failed to fetch object")
   }
   return res.json()
 }
@@ -496,7 +530,7 @@ export async function generateLocation(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start location generation")
+    throwApiError(err, "Failed to start location generation")
   }
   return res.json()
 }
@@ -518,7 +552,7 @@ export async function generateLocationAsset(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start location asset generation")
+    throwApiError(err, "Failed to start location asset generation")
   }
   return res.json()
 }
@@ -544,7 +578,7 @@ export async function saveLocation(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to save location")
+    throwApiError(err, "Failed to save location")
   }
   return res.json()
 }
@@ -555,7 +589,7 @@ export async function deleteLocation(locationId: string): Promise<{ success: boo
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to delete location")
+    throwApiError(err, "Failed to delete location")
   }
   return res.json()
 }
@@ -588,7 +622,7 @@ export async function getLocations(projectId?: string, userId?: string): Promise
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch locations")
+    throwApiError(err, "Failed to fetch locations")
   }
   return res.json()
 }
@@ -603,7 +637,7 @@ export async function getLocationById(locationId: string): Promise<DbLocation | 
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch location")
+    throwApiError(err, "Failed to fetch location")
   }
   return res.json()
 }
@@ -621,7 +655,7 @@ export async function splitImage(data: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to split image")
+    throwApiError(err, "Failed to split image")
   }
   return res.json()
 }
@@ -685,7 +719,7 @@ export async function generateVideo(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start video generation")
+    throwApiError(err, "Failed to start video generation")
   }
   return res.json()
 }
@@ -702,7 +736,7 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start video-to-video generation")
+    throwApiError(err, "Failed to start video-to-video generation")
   }
   return res.json()
 }
@@ -719,7 +753,7 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start text-to-video generation")
+    throwApiError(err, "Failed to start text-to-video generation")
   }
   return res.json()
 }
@@ -751,7 +785,7 @@ export async function textToSpeech(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start text-to-speech generation")
+    throwApiError(err, "Failed to start text-to-speech generation")
   }
   return res.json()
 }
@@ -770,7 +804,7 @@ export async function generateScriptApi(prompt: string, sceneCount?: number, ton
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start script generation")
+    throwApiError(err, "Failed to start script generation")
   }
   return res.json()
 }
@@ -792,7 +826,7 @@ export async function combineVideos(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start video combination")
+    throwApiError(err, "Failed to start video combination")
   }
   return res.json()
 }
@@ -815,7 +849,7 @@ export async function mergeVideoAudioApi(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start merge-video-audio")
+    throwApiError(err, "Failed to start merge-video-audio")
   }
   return res.json()
 }
@@ -832,7 +866,7 @@ export async function extractAudioApi(videoUrl: string, audioFormat?: string, ou
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start extract-audio")
+    throwApiError(err, "Failed to start extract-audio")
   }
   return res.json()
 }
@@ -849,7 +883,7 @@ export async function trimVideoApi(videoUrl: string, startTime: number, endTime?
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start trim-video")
+    throwApiError(err, "Failed to start trim-video")
   }
   return res.json()
 }
@@ -866,7 +900,7 @@ export async function resizeVideoApi(videoUrl: string, targetAspect: string, met
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start resize-video")
+    throwApiError(err, "Failed to start resize-video")
   }
   return res.json()
 }
@@ -888,7 +922,7 @@ export async function adjustVolumeApi(inputUrl: string, inputType: "audio" | "vi
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start adjust-volume")
+    throwApiError(err, "Failed to start adjust-volume")
   }
   return res.json()
 }
@@ -905,7 +939,7 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start add-captions")
+    throwApiError(err, "Failed to start add-captions")
   }
   return res.json()
 }
@@ -922,7 +956,7 @@ export async function mixAudioApi(audioUrls: string[], userId?: string): Promise
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start mix-audio")
+    throwApiError(err, "Failed to start mix-audio")
   }
   return res.json()
 }
@@ -940,7 +974,7 @@ export async function uploadImage(file: File | Blob): Promise<{ url: string }> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to upload image")
+    throwApiError(err, "Failed to upload image")
   }
   return res.json()
 }
@@ -954,7 +988,7 @@ export async function uploadAudio(file: File): Promise<{ url: string }> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to upload audio file")
+    throwApiError(err, "Failed to upload audio file")
   }
   return res.json()
 }
@@ -994,6 +1028,15 @@ export async function uploadFile(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
+    if (err?.error?.code === "storage_limit_exceeded") {
+      throw new StorageExceededError(
+        err.error.message ?? "Storage limit exceeded",
+        err.error.usedBytes ?? 0,
+        err.error.quotaBytes ?? 0,
+        err.error.remainingBytes ?? 0,
+        err.error.tier ?? "free",
+      )
+    }
     const message = err?.error?.message ?? "Upload failed"
     throw new Error(message)
   }
@@ -1009,7 +1052,7 @@ export async function downloadYouTubeAudio(url: string): Promise<{ url: string; 
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to extract audio from video")
+    throwApiError(err, "Failed to extract audio from video")
   }
   return res.json()
 }
@@ -1022,7 +1065,7 @@ export async function startVideoDownload(url: string): Promise<{ downloadId: str
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start download. The video may be private or require login.")
+    throwApiError(err, "Failed to start download. The video may be private or require login.")
   }
   return res.json()
 }
@@ -1076,7 +1119,7 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start audio generation")
+    throwApiError(err, "Failed to start audio generation")
   }
   return res.json()
 }
@@ -1116,7 +1159,7 @@ export async function sunoGenerateApi(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start Suno generation")
+    throwApiError(err, "Failed to start Suno generation")
   }
   return res.json()
 }
@@ -1151,7 +1194,7 @@ export async function sunoCoverApi(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start Suno cover")
+    throwApiError(err, "Failed to start Suno cover")
   }
   return res.json()
 }
@@ -1193,7 +1236,7 @@ export async function sunoExtendApi(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start Suno extend")
+    throwApiError(err, "Failed to start Suno extend")
   }
   return res.json()
 }
@@ -1211,7 +1254,7 @@ export async function sunoLyricsApi(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start Suno lyrics generation")
+    throwApiError(err, "Failed to start Suno lyrics generation")
   }
   return res.json()
 }
@@ -1232,7 +1275,7 @@ export async function sunoSeparateApi(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start Suno separate")
+    throwApiError(err, "Failed to start Suno separate")
   }
   return res.json()
 }
@@ -1251,7 +1294,7 @@ export async function sunoMusicVideoApi(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start Suno music video")
+    throwApiError(err, "Failed to start Suno music video")
   }
   return res.json()
 }
@@ -1268,7 +1311,7 @@ export async function transcribeApi(audioUrl: string, provider?: string, languag
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start transcription")
+    throwApiError(err, "Failed to start transcription")
   }
   return res.json()
 }
@@ -1293,7 +1336,7 @@ export async function lipSyncApi(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start lip sync generation")
+    throwApiError(err, "Failed to start lip sync generation")
   }
   return res.json()
 }
@@ -1315,7 +1358,7 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start music generation")
+    throwApiError(err, "Failed to start music generation")
   }
   return res.json()
 }
@@ -1332,7 +1375,7 @@ export async function extractYouTubeAudioApi(youtubeUrl: string, userId?: string
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start YouTube audio extraction")
+    throwApiError(err, "Failed to start YouTube audio extraction")
   }
   return res.json()
 }
@@ -1406,7 +1449,7 @@ export async function getJobs(userId?: string, cursor?: string): Promise<{
   const res = await fetch(`${API_BASE_URL}${url}`)
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch jobs")
+    throwApiError(err, "Failed to fetch jobs")
   }
   return res.json()
 }
@@ -1417,7 +1460,7 @@ export async function deleteJob(jobId: string): Promise<{ success: boolean }> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to delete job")
+    throwApiError(err, "Failed to delete job")
   }
   return { success: true }
 }
@@ -1445,7 +1488,7 @@ export async function getBatchJobStatus(jobIds: string[]): Promise<BatchJobStatu
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch batch job status")
+    throwApiError(err, "Failed to fetch batch job status")
   }
   const body = await res.json()
   return body.data
@@ -1501,7 +1544,7 @@ export async function getPredictions(cursor?: string): Promise<{
   const res = await fetch(`${API_BASE_URL}${url}`)
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch predictions")
+    throwApiError(err, "Failed to fetch predictions")
   }
   return res.json()
 }
@@ -1510,7 +1553,7 @@ export async function getPrediction(id: string): Promise<{ data: ReplicatePredic
   const res = await fetch(`${API_BASE_URL}/v1/predictions/${id}`)
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch prediction")
+    throwApiError(err, "Failed to fetch prediction")
   }
   return res.json()
 }
@@ -1521,7 +1564,7 @@ export async function cancelPrediction(id: string): Promise<{ data: ReplicatePre
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to cancel prediction")
+    throwApiError(err, "Failed to cancel prediction")
   }
   return res.json()
 }
@@ -1546,7 +1589,7 @@ export async function motionTransferApi(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start motion transfer")
+    throwApiError(err, "Failed to start motion transfer")
   }
   return res.json()
 }
@@ -1566,7 +1609,7 @@ export async function videoUpscaleApi(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to start video upscale")
+    throwApiError(err, "Failed to start video upscale")
   }
   return res.json()
 }
@@ -1589,7 +1632,7 @@ export async function generateAIWriter(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "AI Writer generation failed")
+    throwApiError(err, "AI Writer generation failed")
   }
   return res.json()
 }
@@ -1672,7 +1715,7 @@ export async function getStats(scope: "user" | "platform" = "user", userId?: str
   const res = await fetch(`${API_BASE_URL}/v1/stats?${params.toString()}`)
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch stats")
+    throwApiError(err, "Failed to fetch stats")
   }
   return res.json()
 }
@@ -1707,7 +1750,7 @@ export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch cost summary")
+    throwApiError(err, "Failed to fetch cost summary")
   }
   return res.json()
 }
@@ -1721,7 +1764,7 @@ export async function cancelJob(jobId: string, userId?: string): Promise<{ succe
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to cancel job")
+    throwApiError(err, "Failed to cancel job")
   }
   return res.json()
 }
@@ -1734,7 +1777,7 @@ export async function cancelAllJobs(userId: string): Promise<{ success: boolean;
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to cancel jobs")
+    throwApiError(err, "Failed to cancel jobs")
   }
   return res.json()
 }
@@ -1763,17 +1806,19 @@ export async function getLibraryAssets(params: {
   search?: string
   limit?: number
   cursor?: string
+  owned?: boolean
 }): Promise<{ data: LibraryAsset[]; nextCursor: string | null }> {
   const qs = new URLSearchParams({ userId: params.userId })
   if (params.type && params.type !== "all") qs.set("type", params.type)
   if (params.search) qs.set("search", params.search)
   if (params.limit) qs.set("limit", String(params.limit))
   if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.owned) qs.set("owned", "true")
 
   const res = await fetch(`${API_BASE_URL}/v1/library?${qs.toString()}`)
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to fetch library assets")
+    throwApiError(err, "Failed to fetch library assets")
   }
   return res.json()
 }
@@ -1788,7 +1833,7 @@ export async function deleteLibraryAsset(
   )
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to delete asset")
+    throwApiError(err, "Failed to delete asset")
   }
   return res.json()
 }
@@ -1807,7 +1852,7 @@ export async function promoteToLibrary(
   )
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to promote asset")
+    throwApiError(err, "Failed to promote asset")
   }
   return res.json()
 }
@@ -1826,7 +1871,7 @@ export async function demoteFromLibrary(
   )
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to demote asset")
+    throwApiError(err, "Failed to demote asset")
   }
   return res.json()
 }
@@ -1846,7 +1891,7 @@ export async function saveGeneratedToLibrary(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to save to library")
+    throwApiError(err, "Failed to save to library")
   }
   return res.json()
 }
@@ -1881,7 +1926,7 @@ export async function getUserCredits(userId: string): Promise<{ data: UserBalanc
   const res = await fetch(`${API_BASE_URL}/v1/user/credits?userId=${encodeURIComponent(userId)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to get credits")
+    throwApiError(err, "Failed to get credits")
   }
   return res.json()
 }
@@ -1890,7 +1935,7 @@ export async function checkCredits(userId: string, model: string): Promise<{ dat
   const res = await fetch(`${API_BASE_URL}/v1/credits/check?userId=${encodeURIComponent(userId)}&model=${encodeURIComponent(model)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to check credits")
+    throwApiError(err, "Failed to check credits")
   }
   return res.json()
 }
@@ -1899,7 +1944,7 @@ export async function getModelCreditCost(model: string): Promise<{ data: { model
   const res = await fetch(`${API_BASE_URL}/v1/credits/model-cost?model=${encodeURIComponent(model)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? "Failed to get model cost")
+    throwApiError(err, "Failed to get model cost")
   }
   return res.json()
 }

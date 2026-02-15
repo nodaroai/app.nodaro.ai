@@ -18,10 +18,11 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits, generateAIWriter, generateAIWriterStream } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits, generateAIWriter, generateAIWriterStream, StorageExceededError } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
+import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, SplitTextData, LoopNodeData } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
@@ -96,6 +97,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     tier: string
   } | null>(null)
   const [workflowCreditEstimate, setWorkflowCreditEstimate] = useState<number>(0)
+  const [showStorageExceeded, setShowStorageExceeded] = useState(false)
+  const [storageExceededData, setStorageExceededData] = useState<{
+    usedBytes: number
+    quotaBytes: number
+    tier: string
+  } | null>(null)
 
   // Update credit estimate when nodes change
   const storeNodes = useWorkflowStore((s) => s.nodes)
@@ -791,7 +798,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-        toast.error("Failed to start image generation", { description: errMsg })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start image generation", { description: errMsg })
+        }
         reject(err)
       })
     })
@@ -840,7 +849,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-        toast.error("Failed to start image editing", { description: errMsg })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start image editing", { description: errMsg })
+        }
         reject(err)
       })
     })
@@ -889,7 +900,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-        toast.error("Failed to start image transformation", { description: errMsg })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start image transformation", { description: errMsg })
+        }
         reject(err)
       })
     })
@@ -976,7 +989,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-        toast.error("Failed to start character generation", { description: errMsg })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start character generation", { description: errMsg })
+        }
         reject(err)
       })
     })
@@ -1065,7 +1080,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-        toast.error("Failed to start face headshot generation", { description: errMsg })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start face headshot generation", { description: errMsg })
+        }
         reject(err)
       })
     })
@@ -1146,7 +1163,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
         updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-        toast.error("Failed to start object generation", { description: errMsg })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start object generation", { description: errMsg })
+        }
         reject(err)
       })
     })
@@ -1225,9 +1244,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         updateNodeData(nodeId, { executionStatus: "failed" })
-        toast.error("Failed to start location generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start location generation", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          })
+        }
         reject(err)
       })
     })
@@ -1588,9 +1609,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-        toast.error("Failed to start video generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start video generation", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          })
+        }
         reject(err)
       })
     })
@@ -1647,9 +1670,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-        toast.error("Failed to start video-to-video generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start video-to-video generation", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          })
+        }
         reject(err)
       })
     })
@@ -1706,9 +1731,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-        toast.error("Failed to start text-to-video generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start text-to-video generation", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          })
+        }
         reject(err)
       })
     })
@@ -1755,9 +1782,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         updateNodeData(nodeId, { executionStatus: "failed" })
-        toast.error("Failed to start text-to-speech generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start text-to-speech generation", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          })
+        }
         reject(err)
       })
     })
@@ -1804,9 +1833,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         updateNodeData(nodeId, { executionStatus: "failed" })
-        toast.error("Failed to start script generation", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start script generation", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          })
+        }
         reject(err)
       })
     })
@@ -1853,9 +1884,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         updateNodeData(nodeId, { executionStatus: "failed" })
-        toast.error("Failed to start combine videos", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        })
+        if (!isStorageError(err)) {
+          toast.error("Failed to start combine videos", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          })
+        }
         reject(err)
       })
     })
@@ -1924,7 +1957,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-        toast.error(`Failed to start ${label}`, { description: err instanceof Error ? err.message : "Unknown error" })
+        if (!isStorageError(err)) {
+          toast.error(`Failed to start ${label}`, { description: err instanceof Error ? err.message : "Unknown error" })
+        }
         reject(err)
       })
     })
@@ -1950,6 +1985,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }
     }
     return refs
+  }
+
+  /** Check if an error is a StorageExceededError and show the modal instead of a toast. Returns true if handled. */
+  function isStorageError(err: unknown): boolean {
+    if (err instanceof StorageExceededError) {
+      setStorageExceededData({ usedBytes: err.usedBytes, quotaBytes: err.quotaBytes, tier: err.tier })
+      setShowStorageExceeded(true)
+      return true
+    }
+    return false
   }
 
   function executeNode(node: WorkflowNode, overridePrompt?: string, overrideMediaUrl?: string): Promise<void> {
@@ -2305,7 +2350,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           }, 3000))
         }).catch((err) => {
           updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-          toast.error("Failed to start lyrics generation", { description: err instanceof Error ? err.message : "Unknown error" })
+          if (!isStorageError(err)) {
+            toast.error("Failed to start lyrics generation", { description: err instanceof Error ? err.message : "Unknown error" })
+          }
           reject(err)
         })
       })
@@ -2430,9 +2477,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               console.error("[transcribe] Poll error:", err)
             }
           }, 2000))
-        }).catch((err: Error) => {
-          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message, currentJobId: undefined, currentJobProgress: undefined })
-          toast.error("Transcription failed", { description: err.message })
+        }).catch((err: unknown) => {
+          const errMsg = err instanceof Error ? err.message : "Unknown error"
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined, currentJobProgress: undefined })
+          if (!isStorageError(err)) {
+            toast.error("Transcription failed", { description: errMsg })
+          }
           reject(err)
         })
       })
@@ -4484,6 +4534,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         required={insufficientCreditsData?.required ?? 0}
         available={insufficientCreditsData?.available ?? 0}
         tier={insufficientCreditsData?.tier ?? "free"}
+      />
+
+      <StorageExceededModal
+        open={showStorageExceeded}
+        onClose={() => setShowStorageExceeded(false)}
+        usedBytes={storageExceededData?.usedBytes ?? 0}
+        quotaBytes={storageExceededData?.quotaBytes ?? 0}
+        tier={storageExceededData?.tier ?? "free"}
       />
     </div>
   )

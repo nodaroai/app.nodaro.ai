@@ -6,6 +6,7 @@ import { Music, Upload, Link, Loader2, AlertCircle, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import type { UploadAudioData } from "@/types/nodes"
 
 function formatBytes(bytes: number): string {
@@ -25,7 +26,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const { upload, isUploading, uploadError, clearError } = useFileUpload()
+  const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
 
   const audioUrl = nodeData.r2Url || nodeData.url
   const hasFile = Boolean(audioUrl) && !nodeData.externalUrl
@@ -89,6 +90,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
+    <>
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -216,6 +218,15 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
         </>
       )}
     </BaseNode>
+
+    <StorageExceededModal
+      open={storageExceeded.exceeded}
+      onClose={clearStorageExceeded}
+      usedBytes={storageExceeded.usedBytes}
+      quotaBytes={storageExceeded.quotaBytes}
+      tier={storageExceeded.tier}
+    />
+    </>
   )
 }
 

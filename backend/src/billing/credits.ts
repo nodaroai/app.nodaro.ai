@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
-import { FREE_TIER_RESTRICTIONS, TIER_LLM_LIMITS } from "./paddle-config.js"
+import { FREE_TIER_RESTRICTIONS, TIER_LLM_LIMITS, TIER_STORAGE_LIMITS } from "./paddle-config.js"
 
 // ============================================================
 // Types
@@ -739,7 +739,7 @@ export class CreditsService {
     }
 
     const usedBytes = profile.storage_used_bytes ?? 0
-    const limitBytes = profile.storage_limit_bytes ?? 500 * 1024 * 1024 // 500 MB default
+    const limitBytes = profile.storage_limit_bytes ?? TIER_STORAGE_LIMITS.free
 
     if (usedBytes >= limitBytes) {
       const usedGB = (usedBytes / (1024 * 1024 * 1024)).toFixed(1)

@@ -66,6 +66,7 @@ export interface StorageQuotaResult {
   readonly usedBytes?: number
   readonly quotaBytes?: number
   readonly remainingBytes?: number
+  readonly tier?: string
 }
 
 // ============================================================
@@ -204,6 +205,7 @@ export async function checkStorageQuota(
       usedBytes,
       quotaBytes,
       remainingBytes: Math.max(0, quotaBytes - usedBytes),
+      tier,
     }
   }
 
@@ -212,6 +214,7 @@ export async function checkStorageQuota(
     usedBytes,
     quotaBytes,
     remainingBytes: quotaBytes - newUsed,
+    tier,
   }
 }
 
