@@ -5697,7 +5697,7 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
   const allEdges = useWorkflowStore((s) => s.edges)
   const hasRefImage = useMemo(() => {
     if (!selectedNodeId) return false
-    const IMG_SRC_TYPES = new Set(["generate-image", "upload-image", "edit-image", "image-to-image", "character", "object", "location"])
+    const IMG_SRC_TYPES = new Set(["generate-image", "upload-image", "edit-image", "image-to-image", "character", "object", "location", "face"])
     return allEdges
       .filter((e) => e.target === selectedNodeId)
       .some((e) => {
