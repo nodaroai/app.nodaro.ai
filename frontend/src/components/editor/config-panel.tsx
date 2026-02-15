@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -302,6 +302,7 @@ export function ConfigPanel() {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const runFromHere = useWorkflowStore((s) => s.runFromHere)
 
   const [userId, setUserId] = useState<string | undefined>(undefined)
 
@@ -318,6 +319,11 @@ export function ConfigPanel() {
     if (!selectedNodeId) return [] as SourceNodeInfo[]
     return getConnectedSources(selectedNodeId, edges, nodes)
   }, [edges, nodes, selectedNodeId])
+
+  const hasDownstream = useMemo(() => {
+    if (!selectedNodeId) return false
+    return edges.some((e) => e.source === selectedNodeId)
+  }, [selectedNodeId, edges])
 
   const fieldMappings: FieldMappings = useMemo(() => {
     if (!selectedNode) return {}
@@ -689,6 +695,19 @@ export function ConfigPanel() {
                   : <Play className="w-4 h-4" />
                 }
                 {(selectedNode.data as Record<string, unknown>).executionStatus === "running" ? "Running..." : "Run"}
+              </button>
+            )}
+
+            {hasDownstream && (
+              <button
+                type="button"
+                onClick={() => runFromHere?.(selectedNode.id)}
+                disabled={(selectedNode.data as Record<string, unknown>).executionStatus === "running"}
+                className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-[#ff0073] hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
+                title="Runs this node and all connected downstream nodes in sequence"
+              >
+                <FastForward className="w-3.5 h-3.5" />
+                Run from here
               </button>
             )}
 

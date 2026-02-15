@@ -3174,6 +3174,81 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
+  // Run from here: execute this node + all downstream nodes in DAG order
+  async function handleRunFromHere(nodeId: string) {
+    const { nodes, edges } = useWorkflowStore.getState()
+    const startNode = nodes.find((n) => n.id === nodeId)
+    if (!startNode) return
+
+    // BFS forward to collect all downstream node IDs (including start)
+    const downstream = new Set<string>([nodeId])
+    const queue = [nodeId]
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      for (const edge of edges) {
+        if (edge.source === current && !downstream.has(edge.target)) {
+          downstream.add(edge.target)
+          queue.push(edge.target)
+        }
+      }
+    }
+
+    // Filter to only downstream nodes, then build execution levels within that subgraph
+    const subgraphNodes = nodes.filter((n) => downstream.has(n.id))
+    const subgraphEdges = edges.filter((e) => downstream.has(e.source) && downstream.has(e.target))
+    const levels = buildExecutionLevels(subgraphNodes, subgraphEdges)
+
+    const executableCount = subgraphNodes.filter(isExecutableNode).length
+    if (executableCount === 0) {
+      toast.error("No executable nodes found downstream.")
+      return
+    }
+
+    setIsRunning(true)
+    toast.info("Running from here...", { description: `${executableCount} node(s) to run` })
+
+    let failed = false
+    for (const level of levels) {
+      if (failed) break
+
+      const toRun = level.filter(isExecutableNode)
+      if (toRun.length === 0) continue
+
+      const results = await Promise.allSettled(
+        toRun.map((node) => {
+          const { nodes: currentNodes, edges: currentEdges } = useWorkflowStore.getState()
+          const listItems = getListInputForNode(node, currentNodes, currentEdges)
+          if (!listItems || listItems.length <= 1) {
+            return executeNode(node)
+          }
+          return executeNodeForList(node, listItems)
+        })
+      )
+
+      const hasRealError = results.some(
+        (r) => r.status === "rejected" && !(r.reason instanceof WorkflowStaleError)
+      )
+      const hasStaleError = results.some(
+        (r) => r.status === "rejected" && r.reason instanceof WorkflowStaleError
+      )
+      if (hasStaleError) break
+      if (hasRealError) {
+        failed = true
+      }
+    }
+
+    if (pollIntervalsRef.current.size === 0) {
+      setIsRunning(false)
+    }
+
+    if (failed) {
+      toast.error("Run from here stopped due to errors")
+    } else if (!isWorkflowStale()) {
+      toast.success("Run from here complete")
+      expandLoopResults()
+    }
+  }
+
   // Generate image for a single scene within a generate-script node
   function updateSceneInScript(
     scriptNodeId: string,
@@ -4004,6 +4079,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(handleRunSingleNode)
     return () => useWorkflowStore.getState().setRunSingleNode(null)
+  })
+
+  // Register run-from-here runner
+  useEffect(() => {
+    useWorkflowStore.getState().setRunFromHere(handleRunFromHere)
+    return () => useWorkflowStore.getState().setRunFromHere(null)
   })
 
   // Register scene image generator
