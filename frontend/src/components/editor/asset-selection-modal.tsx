@@ -1,19 +1,19 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { X, Loader2, AlertCircle, Search, UserCircle, Package, MapPin } from "lucide-react"
+import { X, Loader2, AlertCircle, Search, UserCircle, Package, MapPin, SmilePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { getCharacters, getObjects, getLocations, type DbCharacter, type DbObject, type DbLocation } from "@/lib/api"
+import { getCharacters, getObjects, getLocations, getFaces, type DbCharacter, type DbObject, type DbLocation, type DbFace } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 
-type AssetType = "all" | "character" | "object" | "location"
+type AssetType = "all" | "character" | "object" | "location" | "face"
 
 export interface SelectedAsset {
   id: string
   name: string
-  type: "character" | "object" | "location"
+  type: "character" | "object" | "location" | "face"
   thumbnailUrl?: string
   description?: string
 }
@@ -29,7 +29,7 @@ interface AssetSelectionModalProps {
 interface UnifiedAsset {
   id: string
   name: string
-  type: "character" | "object" | "location"
+  type: "character" | "object" | "location" | "face"
   thumbnailUrl?: string
   description?: string
 }
@@ -56,10 +56,11 @@ export function AssetSelectionModal({
       const { data: { user } } = await supabase.auth.getUser()
       const userId = user?.id
 
-      const [charactersRes, objectsRes, locationsRes] = await Promise.all([
+      const [charactersRes, objectsRes, locationsRes, facesRes] = await Promise.all([
         getCharacters(undefined, userId),
         getObjects(undefined, userId),
         getLocations(undefined, userId),
+        getFaces(undefined, userId),
       ])
 
       const unified: UnifiedAsset[] = [
@@ -83,6 +84,13 @@ export function AssetSelectionModal({
           type: "location",
           thumbnailUrl: l.sourceImageUrl ?? undefined,
           description: l.description ?? undefined,
+        })),
+        ...facesRes.faces.map((f): UnifiedAsset => ({
+          id: f.id,
+          name: f.name,
+          type: "face",
+          thumbnailUrl: f.sourceImageUrl ?? undefined,
+          description: f.description ?? undefined,
         })),
       ]
 
@@ -129,6 +137,7 @@ export function AssetSelectionModal({
       character: filtered.filter((a) => a.type === "character").length,
       object: filtered.filter((a) => a.type === "object").length,
       location: filtered.filter((a) => a.type === "location").length,
+      face: filtered.filter((a) => a.type === "face").length,
     }
   }, [assets, excludeIds])
 
@@ -209,6 +218,15 @@ export function AssetSelectionModal({
               <MapPin className="w-3.5 h-3.5 mr-1" />
               Locations ({counts.location})
             </Button>
+            <Button
+              variant={typeFilter === "face" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTypeFilter("face")}
+              className={cn("text-xs", typeFilter === "face" && "bg-violet-500 hover:bg-violet-600")}
+            >
+              <SmilePlus className="w-3.5 h-3.5 mr-1" />
+              Faces ({counts.face})
+            </Button>
           </div>
         </div>
 
@@ -247,6 +265,7 @@ export function AssetSelectionModal({
                     asset.type === "character" && "hover:border-pink-500/50",
                     asset.type === "object" && "hover:border-emerald-500/50",
                     asset.type === "location" && "hover:border-cyan-500/50",
+                    asset.type === "face" && "hover:border-violet-500/50",
                   )}
                 >
                   {asset.thumbnailUrl ? (
@@ -261,10 +280,12 @@ export function AssetSelectionModal({
                       asset.type === "character" && "bg-pink-500/10",
                       asset.type === "object" && "bg-emerald-500/10",
                       asset.type === "location" && "bg-cyan-500/10",
+                      asset.type === "face" && "bg-violet-500/10",
                     )}>
                       {asset.type === "character" && <UserCircle className="w-8 h-8 text-pink-500/50" />}
                       {asset.type === "object" && <Package className="w-8 h-8 text-emerald-500/50" />}
                       {asset.type === "location" && <MapPin className="w-8 h-8 text-cyan-500/50" />}
+                      {asset.type === "face" && <SmilePlus className="w-8 h-8 text-violet-500/50" />}
                     </div>
                   )}
                   <span className="text-xs font-medium mt-1.5 truncate w-full text-center">{asset.name}</span>
@@ -273,6 +294,7 @@ export function AssetSelectionModal({
                     asset.type === "character" && "bg-pink-500/10 text-pink-500",
                     asset.type === "object" && "bg-emerald-500/10 text-emerald-500",
                     asset.type === "location" && "bg-cyan-500/10 text-cyan-500",
+                    asset.type === "face" && "bg-violet-500/10 text-violet-500",
                   )}>
                     {asset.type}
                   </span>

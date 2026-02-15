@@ -35,6 +35,7 @@ import { generateFaceRoutes } from "./routes/generate-face.js"
 import { generateCharacterAssetRoutes } from "./routes/generate-character-asset.js"
 import { splitImageRoutes } from "./routes/split-image.js"
 import { characterRoutes } from "./routes/characters.js"
+import { faceRoutes } from "./routes/faces.js"
 import { objectRoutes } from "./routes/objects.js"
 import { generateObjectAssetRoutes } from "./routes/generate-object-asset.js"
 import { generateObjectRoutes } from "./routes/generate-object.js"
@@ -118,6 +119,7 @@ export async function buildApp() {
   await app.register(generateCharacterAssetRoutes)
   await app.register(splitImageRoutes)
   await app.register(characterRoutes)
+  await app.register(faceRoutes)
   await app.register(objectRoutes)
   await app.register(generateObjectAssetRoutes)
   await app.register(generateObjectRoutes)

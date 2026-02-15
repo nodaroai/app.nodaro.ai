@@ -18,7 +18,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits, generateAIWriter, generateAIWriterStream } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits, generateAIWriter, generateAIWriterStream } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { getCachedCredits } from "@/hooks/use-model-credits"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
@@ -970,6 +970,27 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 activeResultIndex: 0,
               })
               toast.success("Face headshot generated")
+
+              // Save/update face in database
+              const supabase = createClient()
+              const { data: { user: faceUser } } = await supabase.auth.getUser()
+              saveFace({
+                id: currentData?.faceDbId || undefined,
+                userId: faceUser?.id,
+                nodeId,
+                projectId: projectId || undefined,
+                name: data.faceName,
+                description: data.description || undefined,
+                style: data.style || undefined,
+                sourceImageUrl: imageUrl || undefined,
+              }).then(({ id: dbId }) => {
+                if (!currentData?.faceDbId) {
+                  updateNodeData(nodeId, { faceDbId: dbId })
+                }
+              }).catch(() => {
+                // Face save is best-effort, don't block on failure
+              })
+
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)

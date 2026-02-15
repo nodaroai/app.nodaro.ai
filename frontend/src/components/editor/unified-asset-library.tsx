@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { createPortal } from "react-dom"
-import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, FolderOpen } from "lucide-react"
+import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, SmilePlus, FolderOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -16,21 +16,21 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CharacterPageModal } from "./character-page-modal"
 import { ObjectPageModal } from "./object-page-modal"
 import { LocationPageModal } from "./location-page-modal"
-import { getCharacters, getObjects, getLocations, type DbCharacter, type DbObject, type DbLocation } from "@/lib/api"
+import { getCharacters, getObjects, getLocations, getFaces, type DbCharacter, type DbObject, type DbLocation, type DbFace } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
-import type { CharacterNodeData, ObjectNodeData, LocationNodeData } from "@/types/nodes"
+import type { CharacterNodeData, ObjectNodeData, LocationNodeData, FaceNodeData } from "@/types/nodes"
 
-type AssetType = "all" | "character" | "object" | "location"
+type AssetType = "all" | "character" | "object" | "location" | "face"
 
 interface UnifiedAsset {
   id: string
   dbId: string
   name: string
-  type: "character" | "object" | "location"
+  type: "character" | "object" | "location" | "face"
   thumbnailUrl?: string
   projectId?: string
   // Store original data for populating nodes
-  originalData: DbCharacter | DbObject | DbLocation
+  originalData: DbCharacter | DbObject | DbLocation | DbFace
 }
 
 interface UnifiedAssetLibraryModalProps {
@@ -72,10 +72,11 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
       const { data: { user } } = await supabase.auth.getUser()
       const userId = user?.id
 
-      const [charactersRes, objectsRes, locationsRes] = await Promise.all([
+      const [charactersRes, objectsRes, locationsRes, facesRes] = await Promise.all([
         getCharacters(undefined, userId),
         getObjects(undefined, userId),
         getLocations(undefined, userId),
+        getFaces(undefined, userId),
       ])
 
       const unified: UnifiedAsset[] = [
@@ -105,6 +106,15 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           thumbnailUrl: l.sourceImageUrl ?? undefined,
           projectId: l.projectId ?? undefined,
           originalData: l,
+        })),
+        ...facesRes.faces.map((f): UnifiedAsset => ({
+          id: `face-${f.id}`,
+          dbId: f.id,
+          name: f.name,
+          type: "face",
+          thumbnailUrl: f.sourceImageUrl ?? undefined,
+          projectId: f.projectId ?? undefined,
+          originalData: f,
         })),
       ]
 
@@ -163,6 +173,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
     character: assets.filter((a) => a.type === "character").length,
     object: assets.filter((a) => a.type === "object").length,
     location: assets.filter((a) => a.type === "location").length,
+    face: assets.filter((a) => a.type === "face").length,
   }), [assets])
 
   // Find if asset has a node on canvas
@@ -178,6 +189,9 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
         } else if (asset.type === "location" && node.type === "location") {
           const d = node.data as LocationNodeData
           if (d.locationDbId === asset.dbId) return node.id
+        } else if (asset.type === "face" && node.type === "face") {
+          const d = node.data as FaceNodeData
+          if (d.faceDbId === asset.dbId) return node.id
         }
       }
       return null
@@ -195,6 +209,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
         if (asset.type === "character") setCharacterPageNodeId(existingNodeId)
         else if (asset.type === "object") setObjectPageNodeId(existingNodeId)
         else if (asset.type === "location") setLocationPageNodeId(existingNodeId)
+        else if (asset.type === "face") selectNode(existingNodeId)
         // Delay onClose to ensure local state update is processed before parent re-renders
         setTimeout(() => onClose(), 0)
       } else {
@@ -250,6 +265,16 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             })
             selectNode(nodeId)
             setLocationPageNodeId(nodeId)
+          } else if (asset.type === "face") {
+            const f = asset.originalData as DbFace
+            updateNodeData(nodeId, {
+              faceDbId: f.id,
+              faceName: f.name,
+              description: f.description ?? "",
+              style: f.style ?? "realistic",
+              sourceImageUrl: f.sourceImageUrl ?? "",
+            })
+            selectNode(nodeId)
           }
           // Delay onClose to ensure local state update is processed before parent re-renders
           setTimeout(() => onClose(), 0)
@@ -310,6 +335,15 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             weather: l.weather ?? [],
             angles: l.angles ?? [],
           })
+        } else if (asset.type === "face") {
+          const f = asset.originalData as DbFace
+          updateNodeData(nodeId, {
+            faceDbId: f.id,
+            faceName: f.name,
+            description: f.description ?? "",
+            style: f.style ?? "realistic",
+            sourceImageUrl: f.sourceImageUrl ?? "",
+          })
         }
 
         selectNode(nodeId)
@@ -320,7 +354,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
   )
 
   // Type badge colors and icons
-  const getTypeBadge = (type: "character" | "object" | "location") => {
+  const getTypeBadge = (type: "character" | "object" | "location" | "face") => {
     switch (type) {
       case "character":
         return { color: "bg-pink-500/10 text-pink-600", icon: UserCircle }
@@ -328,6 +362,8 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
         return { color: "bg-emerald-500/10 text-emerald-600", icon: Package }
       case "location":
         return { color: "bg-cyan-500/10 text-cyan-600", icon: MapPin }
+      case "face":
+        return { color: "bg-violet-500/10 text-violet-600", icon: SmilePlus }
     }
   }
 
@@ -466,6 +502,19 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               <MapPin className="h-3 w-3" />
               Locations
               <span className="text-[10px] opacity-70">({counts.location})</span>
+            </button>
+            <button
+              type="button"
+              className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                typeFilter === "face"
+                  ? "bg-[#ff0073] text-white"
+                  : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+              }`}
+              onClick={() => setTypeFilter("face")}
+            >
+              <SmilePlus className="h-3 w-3" />
+              Faces
+              <span className="text-[10px] opacity-70">({counts.face})</span>
             </button>
           </div>
 
@@ -637,18 +686,13 @@ export function UnifiedAssetLibraryButton() {
 
       console.log("[AssetLibrary] Fetching all assets for userId:", userId)
 
-      // Fetch all three types in parallel - NO projectId filter to get ALL user assets
-      const [charactersRes, objectsRes, locationsRes] = await Promise.all([
+      // Fetch all four types in parallel - NO projectId filter to get ALL user assets
+      const [charactersRes, objectsRes, locationsRes, facesRes] = await Promise.all([
         getCharacters(undefined, userId),
         getObjects(undefined, userId),
         getLocations(undefined, userId),
+        getFaces(undefined, userId),
       ])
-
-      console.log("[AssetLibrary] Fetched:", {
-        characters: charactersRes.characters.length,
-        objects: objectsRes.objects.length,
-        locations: locationsRes.locations.length,
-      })
 
       // Combine into unified array
       const unified: UnifiedAsset[] = [
@@ -679,9 +723,16 @@ export function UnifiedAssetLibraryButton() {
           projectId: l.projectId ?? undefined,
           originalData: l,
         })),
+        ...facesRes.faces.map((f): UnifiedAsset => ({
+          id: `face-${f.id}`,
+          dbId: f.id,
+          name: f.name,
+          type: "face",
+          thumbnailUrl: f.sourceImageUrl ?? undefined,
+          projectId: f.projectId ?? undefined,
+          originalData: f,
+        })),
       ]
-
-      console.log("[AssetLibrary] Unified assets:", unified.map(a => `${a.type}:${a.name}`))
       setAssets(unified)
     } catch (err) {
       console.error("[AssetLibrary] Error:", err)
@@ -750,6 +801,7 @@ export function UnifiedAssetLibraryButton() {
       character: assets.filter((a) => a.type === "character").length,
       object: assets.filter((a) => a.type === "object").length,
       location: assets.filter((a) => a.type === "location").length,
+      face: assets.filter((a) => a.type === "face").length,
     }
   }, [assets])
 
@@ -766,6 +818,9 @@ export function UnifiedAssetLibraryButton() {
         } else if (asset.type === "location" && node.type === "location") {
           const d = node.data as LocationNodeData
           if (d.locationDbId === asset.dbId) return node.id
+        } else if (asset.type === "face" && node.type === "face") {
+          const d = node.data as FaceNodeData
+          if (d.faceDbId === asset.dbId) return node.id
         }
       }
       return null
@@ -783,6 +838,7 @@ export function UnifiedAssetLibraryButton() {
         if (asset.type === "character") setCharacterPageNodeId(existingNodeId)
         else if (asset.type === "object") setObjectPageNodeId(existingNodeId)
         else if (asset.type === "location") setLocationPageNodeId(existingNodeId)
+        else if (asset.type === "face") selectNode(existingNodeId)
         setOpen(false)
       } else {
         // Not on canvas - create node then open Page modal
@@ -839,6 +895,16 @@ export function UnifiedAssetLibraryButton() {
             })
             selectNode(nodeId)
             setLocationPageNodeId(nodeId)
+          } else if (asset.type === "face") {
+            const f = asset.originalData as DbFace
+            updateNodeData(nodeId, {
+              faceDbId: f.id,
+              faceName: f.name,
+              description: f.description ?? "",
+              style: f.style ?? "realistic",
+              sourceImageUrl: f.sourceImageUrl ?? "",
+            })
+            selectNode(nodeId)
           }
           setOpen(false)
         }
@@ -898,6 +964,15 @@ export function UnifiedAssetLibraryButton() {
             weather: l.weather ?? [],
             angles: l.angles ?? [],
           })
+        } else if (asset.type === "face") {
+          const f = asset.originalData as DbFace
+          updateNodeData(nodeId, {
+            faceDbId: f.id,
+            faceName: f.name,
+            description: f.description ?? "",
+            style: f.style ?? "realistic",
+            sourceImageUrl: f.sourceImageUrl ?? "",
+          })
         }
 
         selectNode(nodeId)
@@ -908,7 +983,7 @@ export function UnifiedAssetLibraryButton() {
   )
 
   // Type badge colors and icons
-  const getTypeBadge = (type: "character" | "object" | "location") => {
+  const getTypeBadge = (type: "character" | "object" | "location" | "face") => {
     switch (type) {
       case "character":
         return { color: "bg-pink-500/10 text-pink-600", icon: UserCircle }
@@ -916,6 +991,8 @@ export function UnifiedAssetLibraryButton() {
         return { color: "bg-emerald-500/10 text-emerald-600", icon: Package }
       case "location":
         return { color: "bg-cyan-500/10 text-cyan-600", icon: MapPin }
+      case "face":
+        return { color: "bg-violet-500/10 text-violet-600", icon: SmilePlus }
     }
   }
 
@@ -1070,6 +1147,19 @@ export function UnifiedAssetLibraryButton() {
                 <MapPin className="h-3 w-3" />
                 Locations
                 <span className="text-[10px] opacity-70">({counts.location})</span>
+              </button>
+              <button
+                type="button"
+                className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                  typeFilter === "face"
+                    ? "bg-[#ff0073] text-white"
+                    : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+                }`}
+                onClick={() => setTypeFilter("face")}
+              >
+                <SmilePlus className="h-3 w-3" />
+                Faces
+                <span className="text-[10px] opacity-70">({counts.face})</span>
               </button>
             </div>
 

@@ -206,6 +206,72 @@ export async function saveCharacter(data: {
   return res.json()
 }
 
+// Face DB API functions
+export async function saveFace(data: {
+  id?: string
+  userId?: string
+  nodeId: string
+  workflowId?: string
+  projectId?: string
+  name: string
+  description?: string
+  style?: string
+  sourceImageUrl?: string
+  expressions?: { name: string; url: string }[]
+}): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/faces`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to save face")
+  }
+  return res.json()
+}
+
+export interface DbFace {
+  id: string
+  userId: string | null
+  nodeId: string
+  projectId: string | null
+  name: string
+  description: string | null
+  style: string | null
+  sourceImageUrl: string | null
+  expressions: { name: string; url: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export async function getFaces(projectId?: string, userId?: string): Promise<{ faces: DbFace[] }> {
+  const params = new URLSearchParams()
+  if (projectId) params.set("projectId", projectId)
+  if (userId) params.set("userId", userId)
+  const qs = params.toString()
+  const res = await fetch(`${API_BASE_URL}/v1/faces${qs ? `?${qs}` : ""}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to fetch faces")
+  }
+  return res.json()
+}
+
+export async function deleteFace(faceId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/faces/${encodeURIComponent(faceId)}`, {
+    method: "DELETE",
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.error?.message ?? "Failed to delete face")
+  }
+  return res.json()
+}
+
 export async function generateFace(data: {
   name: string
   description?: string
