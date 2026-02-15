@@ -4754,10 +4754,22 @@ function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; readonly 
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
   const isRunning = data.executionStatus === "running"
+
+  const hasConnectedImage = useMemo(() => {
+    if (!selectedNodeId) return false
+    const IMAGE_TYPES = new Set(["upload-image", "generate-image", "edit-image", "image-to-image"])
+    return edges
+      .filter((e) => e.target === selectedNodeId)
+      .some((e) => {
+        const src = nodes.find((n) => n.id === e.source)
+        return src && IMAGE_TYPES.has(src.type ?? "")
+      })
+  }, [selectedNodeId, edges, nodes])
 
   // Check for duplicate face names across all face nodes
   const existingNames = useMemo(() => {
@@ -4899,7 +4911,7 @@ function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; readonly 
         size="sm"
         className="w-full text-xs h-8 text-white hover:opacity-90"
         style={{ backgroundColor: '#ff0073' }}
-        disabled={isRunning || !data.faceName || !data.sourceImageUrl}
+        disabled={isRunning || !data.faceName || (!data.sourceImageUrl && !hasConnectedImage)}
         onClick={() => {
           if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId)
         }}
@@ -4916,9 +4928,9 @@ function FaceConfig({ data, onUpdate }: { readonly data: FaceNodeData; readonly 
           </>
         )}
       </Button>
-      {!data.sourceImageUrl && data.faceName && (
+      {!data.sourceImageUrl && !hasConnectedImage && data.faceName && (
         <p className="text-[10px] text-muted-foreground">
-          Upload a reference photo to enable headshot generation.
+          Upload a reference photo or connect an Upload Image node to enable headshot generation.
         </p>
       )}
     </div>
