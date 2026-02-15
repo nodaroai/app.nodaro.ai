@@ -655,6 +655,7 @@ To add SSE streaming to a new backend endpoint:
 | `handleRunFromHere(nodeId)` | BFS forward from node, collapse first, execute downstream subgraph |
 | `handleRunSelected()` | Execute only selected nodes in topological order |
 | `executeNodeForList()` | Run a node N times for each list item with progress tracking |
+| `getEffectivelySkippedIds()` | Compute skipped nodes + downstream propagation (fixed-point) |
 
 ### Clone Expand/Collapse Lifecycle
 1. **List execution completes** -> `expandLoopResults()` creates `_iter_N` clones with individual results
@@ -694,11 +695,32 @@ Loop Node (Phase L1+L2): Table editor with dynamic columns/handles, execution en
 
 ---
 
+## Skip Node (v1.20)
+
+**Status: COMPLETE** (branch: feat/skip-node, merged to main)
+
+Right-click or multi-select to skip/unskip nodes. Skipped nodes and their dependents are excluded from execution. Visual: opacity-40 + dashed border + orange SKIP badge. Runtime-only flag (`data.skipped`), not persisted to DB.
+
+### Key Changes
+- `frontend/src/hooks/use-workflow-store.ts` -- `toggleSkipNode`, `skipSelectedNodes`, `unskipSelectedNodes` store actions
+- `frontend/src/components/editor/node-context-menu.tsx` -- Skip/Unskip toggle in right-click menu
+- `frontend/src/components/editor/selection-action-bar.tsx` -- Bulk Skip/Unskip button for multi-select
+- `frontend/src/components/nodes/base-node.tsx` -- `opacity-40 border-dashed` + orange SKIP badge when `data.skipped`
+- `frontend/src/components/editor/workflow-editor.tsx` -- `getEffectivelySkippedIds()` helper + skip filtering in `handleRun`, `handleRunFromHere`, `handleRunSelected`
+
+### Effective Skip Propagation
+`getEffectivelySkippedIds(nodes, edges)` computes the full set of effectively skipped nodes:
+1. Directly skipped nodes (`data.skipped === true`)
+2. Nodes whose ALL parents are effectively skipped (cascading propagation via fixed-point iteration)
+3. Nodes with at least one non-skipped parent still execute normally
+
+---
+
 ## Active TODOs
 - [x] Phase 7: Paddle sandbox testing (verified: subscriptions, top-ups, webhooks, billing page)
 - [ ] Phase 7: Paddle production go-live (swap sandbox keys for production)
 - [x] Run only specific node in workflow (Run This Node + Run from here + Run Selected)
-- [ ] Skip node in specific run
+- [x] Skip node in specific run
 - [ ] Version history per node
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
@@ -710,4 +732,4 @@ Loop Node (Phase L1+L2): Table editor with dynamic columns/handles, execution en
 ---
 
 *Last updated: 2026-02-14*
-*Version: 1.19.0*
+*Version: 1.20.0*
