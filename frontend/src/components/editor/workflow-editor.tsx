@@ -229,6 +229,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return EXECUTABLE_TYPES.has(node.type ?? "")
   }
 
+  function isExpandedClone(node: WorkflowNode): boolean {
+    return !!(node.data as Record<string, unknown>).__expandedClone
+  }
+
   function buildExecutionLevels(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[][] {
     const inDegree = new Map<string, number>()
     const children = new Map<string, string[]>()
@@ -2896,7 +2900,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // --- Post-execution: expand loop results into separate pipelines ---
 
   function expandLoopResults() {
-    const { nodes, edges } = useWorkflowStore.getState()
+    let { nodes, edges } = useWorkflowStore.getState()
+
+    // Clean up old expanded clones before creating new ones
+    const oldCloneIds = new Set(nodes.filter(isExpandedClone).map((n) => n.id))
+    if (oldCloneIds.size > 0) {
+      nodes = nodes.filter((n) => !oldCloneIds.has(n.id))
+      edges = edges.filter((e) => !oldCloneIds.has(e.source) && !oldCloneIds.has(e.target))
+    }
 
     // Find nodes with multiple list results
     const multiResultNodes = nodes.filter((n) => {
@@ -2991,6 +3002,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           const baseLabel = (d.label as string) || (node.type as string)
           cloneData.label = `${baseLabel} #${i + 1}`
           cloneData.executionStatus = resultUrl ? "completed" : "failed"
+          // Mark as expanded clone so execution skips it
+          cloneData.__expandedClone = true
+          cloneData.__expandedFrom = node.id
           // Remove list metadata
           delete cloneData.__listResults
           delete cloneData.__listInputs
@@ -3057,7 +3071,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // --- Main workflow execution ---
 
   async function handleRun() {
-    const { nodes, edges } = useWorkflowStore.getState()
+    const { nodes: allNodes, edges } = useWorkflowStore.getState()
+    // Exclude expanded clones -- they're display-only copies from previous list execution
+    const nodes = allNodes.filter((n) => !isExpandedClone(n))
 
     const executableNodes = nodes.filter(isExecutableNode)
     if (executableNodes.length === 0) {
@@ -3180,13 +3196,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const startNode = nodes.find((n) => n.id === nodeId)
     if (!startNode) return
 
-    // BFS forward to collect all downstream node IDs (including start)
+    // BFS forward to collect all downstream node IDs (including start), skip expanded clones
     const downstream = new Set<string>([nodeId])
     const queue = [nodeId]
     while (queue.length > 0) {
       const current = queue.shift()!
       for (const edge of edges) {
         if (edge.source === current && !downstream.has(edge.target)) {
+          const targetNode = nodes.find((n) => n.id === edge.target)
+          if (targetNode && isExpandedClone(targetNode)) continue
           downstream.add(edge.target)
           queue.push(edge.target)
         }
@@ -3252,7 +3270,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Run selected: execute all currently selected nodes in DAG order
   async function handleRunSelected() {
     const { nodes, edges } = useWorkflowStore.getState()
-    const selectedNodes = nodes.filter((n) => n.selected)
+    const selectedNodes = nodes.filter((n) => n.selected && !isExpandedClone(n))
     if (selectedNodes.length === 0) {
       toast.error("No nodes selected.")
       return
