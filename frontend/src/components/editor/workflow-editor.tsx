@@ -229,6 +229,33 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return EXECUTABLE_TYPES.has(node.type ?? "")
   }
 
+  /** Collapse expanded clones back to their hidden parent nodes.
+   *  Removes clones + clone edges, unhides originals, persists to store.
+   *  Returns cleaned { nodes, edges } for the caller to operate on. */
+  function collapseExpandedClones(): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
+    let { nodes, edges } = useWorkflowStore.getState()
+    const iterPattern = /_iter_\d+$/
+    const cloneIds = new Set(
+      nodes
+        .filter((n) => !!(n.data as Record<string, unknown>).__expandedClone || iterPattern.test(n.id))
+        .map((n) => n.id),
+    )
+    if (cloneIds.size === 0) return { nodes, edges }
+
+    // Remove clone nodes and their edges
+    nodes = nodes.filter((n) => !cloneIds.has(n.id))
+    edges = edges.filter((e) => !cloneIds.has(e.source) && !cloneIds.has(e.target))
+
+    // Unhide parent nodes
+    nodes = nodes.map((n) => {
+      if (!n.hidden) return n
+      return { ...n, hidden: false }
+    })
+
+    useWorkflowStore.setState({ nodes, edges, isDirty: true })
+    return { nodes, edges }
+  }
+
   function buildExecutionLevels(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[][] {
     const inDegree = new Map<string, number>()
     const children = new Map<string, string[]>()
@@ -2991,6 +3018,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           const baseLabel = (d.label as string) || (node.type as string)
           cloneData.label = `${baseLabel} #${i + 1}`
           cloneData.executionStatus = resultUrl ? "completed" : "failed"
+          // Tag as expanded clone for collapse/re-expand cycle
+          cloneData.__expandedClone = true
+          cloneData.__expandedFrom = node.id
           // Remove list metadata
           delete cloneData.__listResults
           delete cloneData.__listInputs
@@ -3043,13 +3073,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       // If source is cloneable but target is not, we skip (downstream of pipeline stays connected to nothing)
     }
 
-    // Remove original pipeline nodes and their edges, add clones (keep list source nodes)
-    const remainingNodes = nodes.filter((n) => !cloneableNodeIds.has(n.id))
-    const remainingEdges = edges.filter((e) => !cloneableNodeIds.has(e.source) && !cloneableNodeIds.has(e.target))
+    // Hide original pipeline nodes (keep them + their edges for collapse/re-expand)
+    const finalNodes = nodes.map((n) => {
+      if (!cloneableNodeIds.has(n.id)) return n
+      return { ...n, hidden: true }
+    })
 
     useWorkflowStore.setState({
-      nodes: [...remainingNodes, ...newNodes],
-      edges: [...remainingEdges, ...newEdges],
+      nodes: [...finalNodes, ...newNodes],
+      edges: [...edges, ...newEdges],
       isDirty: true,
     })
   }
@@ -3057,7 +3089,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // --- Main workflow execution ---
 
   async function handleRun() {
-    const { nodes, edges } = useWorkflowStore.getState()
+    // Collapse expanded clones so we execute original nodes only
+    const { nodes, edges } = collapseExpandedClones()
 
     const executableNodes = nodes.filter(isExecutableNode)
     if (executableNodes.length === 0) {
@@ -3176,7 +3209,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // Run from here: execute this node + all downstream nodes in DAG order
   async function handleRunFromHere(nodeId: string) {
-    const { nodes, edges } = useWorkflowStore.getState()
+    // Collapse expanded clones so BFS walks the original graph
+    const { nodes, edges } = collapseExpandedClones()
     const startNode = nodes.find((n) => n.id === nodeId)
     if (!startNode) return
 
@@ -3251,7 +3285,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // Run selected: execute all currently selected nodes in DAG order
   async function handleRunSelected() {
-    const { nodes, edges } = useWorkflowStore.getState()
+    // Collapse expanded clones so we execute original nodes only
+    const { nodes, edges } = collapseExpandedClones()
     const selectedNodes = nodes.filter((n) => n.selected)
     if (selectedNodes.length === 0) {
       toast.error("No nodes selected.")

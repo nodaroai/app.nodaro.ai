@@ -643,6 +643,31 @@ To add SSE streaming to a new backend endpoint:
 
 **Phase 4: List UI badges and progress** -- xN badge (cyan pill) on nodes connected to list input showing iteration count. Running counter badge (fuchsia pill, animated) showing "2/3" during execution. Progress bar with gradient (cyan-to-fuchsia) and percentage during list execution. Renamed "Asset Library" to "My Library" across all UI.
 
+**Phase 5: Expand/Collapse Clones** -- After list execution, `expandLoopResults()` creates visual clones (e.g., `node_7_iter_0`) for each list result. Originals are hidden (`hidden: true`), not deleted. Clones are marked with `data.__expandedClone: true` and `data.__expandedFrom: originalNodeId`. Before any execution (`handleRun`, `handleRunFromHere`, `handleRunSelected`), `collapseExpandedClones()` removes clones, unhides originals, and restores clean graph for BFS/execution. Clone detection uses BOTH `__expandedClone` flag AND `/_iter_\d+$/` ID pattern (backwards compat).
+
+**Phase 6: Run Selected** -- Multi-select nodes on canvas, floating action bar appears above selection with "Run selected (N)" button. Right-click context menu also shows "Run selected" when 2+ nodes selected. `handleRunSelected()` collects selected executable nodes, collapses clones, builds execution levels from selection subset, runs topological sort within selection only.
+
+### Key Functions (workflow-editor.tsx)
+| Function | Purpose |
+|----------|---------|
+| `collapseExpandedClones()` | Pre-execution: remove clones, unhide originals, restore clean graph |
+| `expandLoopResults()` | Post-execution: create visual clones from `__listResults`, hide originals |
+| `handleRunFromHere(nodeId)` | BFS forward from node, collapse first, execute downstream subgraph |
+| `handleRunSelected()` | Execute only selected nodes in topological order |
+| `executeNodeForList()` | Run a node N times for each list item with progress tracking |
+
+### Clone Expand/Collapse Lifecycle
+1. **List execution completes** -> `expandLoopResults()` creates `_iter_N` clones with individual results
+2. Originals hidden, clones visible with result data (images, text, etc.)
+3. **Next execution triggered** -> `collapseExpandedClones()` removes ALL clones, unhides originals
+4. Clean graph used for BFS traversal and topological sort
+5. After execution, `expandLoopResults()` creates fresh clones from new results
+
+### Run Selected Components
+- `frontend/src/components/editor/selection-action-bar.tsx` -- Floating bar above multi-selection
+- `frontend/src/components/editor/node-context-menu.tsx` -- "Run selected" context menu item
+- `frontend/src/hooks/use-workflow-store.ts` -- `runSelected` / `setRunSelected` store fields
+
 **Known issue:** `generatedResults` may accumulate across runs (cosmetic, does not affect execution).
 
 ---
@@ -672,7 +697,7 @@ Loop Node (Phase L1+L2): Table editor with dynamic columns/handles, execution en
 ## Active TODOs
 - [x] Phase 7: Paddle sandbox testing (verified: subscriptions, top-ups, webhooks, billing page)
 - [ ] Phase 7: Paddle production go-live (swap sandbox keys for production)
-- [ ] Run only specific node in workflow
+- [x] Run only specific node in workflow (Run This Node + Run from here + Run Selected)
 - [ ] Skip node in specific run
 - [ ] Version history per node
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
@@ -685,4 +710,4 @@ Loop Node (Phase L1+L2): Table editor with dynamic columns/handles, execution en
 ---
 
 *Last updated: 2026-02-14*
-*Version: 1.26.0*
+*Version: 1.19.0*
