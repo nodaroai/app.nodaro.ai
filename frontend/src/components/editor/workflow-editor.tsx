@@ -2642,11 +2642,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         toast.error(`Node "${faceData.label}": no face name set`)
         return Promise.reject(new Error("No face name"))
       }
-      if (!faceData.sourceImageUrl) {
+      // Use connected Upload Image URL as fallback if no direct upload
+      const sourceImageUrl = faceData.sourceImageUrl || inputs.imageUrl
+      if (!sourceImageUrl) {
         toast.error(`Node "${faceData.label}": no reference photo uploaded`)
         return Promise.reject(new Error("No reference photo"))
       }
-      return runFaceGeneration(node.id, faceData)
+      return runFaceGeneration(node.id, { ...faceData, sourceImageUrl })
     }
 
     if (node.type === "object") {
