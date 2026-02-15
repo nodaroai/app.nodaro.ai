@@ -2372,7 +2372,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       // If using a predefined template (not custom), require a reference image connection
       const writerTemplate = getAIWriterTemplate(writerData.templateId)
       if (writerTemplate && writerTemplate.id !== "custom") {
-        const IMG_SRC_TYPES = new Set(["generate-image", "upload-image", "edit-image", "image-to-image", "character", "object", "location"])
+        const IMG_SRC_TYPES = new Set(["generate-image", "upload-image", "edit-image", "image-to-image", "character", "object", "location", "face"])
         const writerEdges = edges.filter((e) => e.target === node.id)
         const hasImageSource = writerEdges.some((e) => {
           const src = nodes.find((n) => n.id === e.source)
