@@ -229,14 +229,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return EXECUTABLE_TYPES.has(node.type ?? "")
   }
 
-  function isExpandedClone(node: WorkflowNode): boolean {
-    return !!(node.data as Record<string, unknown>).__expandedClone
-  }
-
-  function isExpandedParent(node: WorkflowNode): boolean {
-    return !!(node.data as Record<string, unknown>).__expandedParent
-  }
-
   function buildExecutionLevels(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[][] {
     const inDegree = new Map<string, number>()
     const children = new Map<string, string[]>()
@@ -2904,41 +2896,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // --- Post-execution: expand loop results into separate pipelines ---
 
   function expandLoopResults() {
-    let { nodes, edges } = useWorkflowStore.getState()
-    let didCleanup = false
+    const { nodes, edges } = useWorkflowStore.getState()
 
-    // Phase 1: Clean up old expanded clones and restore hidden parent nodes
-    const oldCloneIds = new Set(nodes.filter(isExpandedClone).map((n) => n.id))
-    if (oldCloneIds.size > 0) {
-      nodes = nodes.filter((n) => !oldCloneIds.has(n.id))
-      edges = edges.filter((e) => !oldCloneIds.has(e.source) && !oldCloneIds.has(e.target))
-      didCleanup = true
-    }
-
-    // Unhide parent nodes that were hidden during previous expansion
-    const hasHiddenParents = nodes.some(isExpandedParent)
-    if (hasHiddenParents) {
-      nodes = nodes.map((n) => {
-        if (!isExpandedParent(n)) return n
-        const cleanData = { ...n.data as Record<string, unknown> }
-        delete cleanData.__expandedParent
-        return { ...n, hidden: false, data: cleanData as unknown as SceneNodeDataType }
-      })
-      didCleanup = true
-    }
-
-    // Phase 2: Find nodes with multiple list results
+    // Find nodes with multiple list results
     const multiResultNodes = nodes.filter((n) => {
       const d = n.data as Record<string, unknown>
       const results = d.__listResults as string[] | undefined
       return results && results.length > 1
     })
-    if (multiResultNodes.length === 0) {
-      if (didCleanup) {
-        useWorkflowStore.setState({ nodes, edges, isDirty: true })
-      }
-      return
-    }
+    if (multiResultNodes.length === 0) return
 
     // Build adjacency: source -> [target edges]
     const downstreamEdges = new Map<string, typeof edges>()
@@ -2974,23 +2940,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (chain.length > 0) chains.push(chain)
     }
 
-    if (chains.length === 0) {
-      if (didCleanup) {
-        useWorkflowStore.setState({ nodes, edges, isDirty: true })
-      }
-      return
-    }
+    if (chains.length === 0) return
 
-    // List source types should NOT be cloned — only their downstream nodes
+    // List source types should NOT be cloned or removed — only their downstream nodes
     const LIST_SOURCE_TYPES = new Set(["loop", "split-text", "list"])
+    const chainNodeIds = new Set(chains.flat().map((n) => n.id))
     const cloneableNodeIds = new Set(chains.flat().filter((n) => !LIST_SOURCE_TYPES.has(n.type as string)).map((n) => n.id))
     const resultCount = (chains[0][0].data as Record<string, unknown>).__listResults as string[]
-    if (!resultCount) {
-      if (didCleanup) {
-        useWorkflowStore.setState({ nodes, edges, isDirty: true })
-      }
-      return
-    }
+    if (!resultCount) return
 
     const newNodes: WorkflowNode[] = []
     const newEdges: typeof edges = []
@@ -3034,9 +2991,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           const baseLabel = (d.label as string) || (node.type as string)
           cloneData.label = `${baseLabel} #${i + 1}`
           cloneData.executionStatus = resultUrl ? "completed" : "failed"
-          // Mark as expanded clone so execution skips it
-          cloneData.__expandedClone = true
-          cloneData.__expandedFrom = node.id
           // Remove list metadata
           delete cloneData.__listResults
           delete cloneData.__listInputs
@@ -3089,20 +3043,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       // If source is cloneable but target is not, we skip (downstream of pipeline stays connected to nothing)
     }
 
-    // Hide original pipeline nodes (keep them in the graph for re-execution), add clones
-    // Original edges are kept (React Flow auto-hides edges to hidden nodes)
-    const finalNodes = nodes.map((n) => {
-      if (!cloneableNodeIds.has(n.id)) return n
-      return {
-        ...n,
-        hidden: true,
-        data: { ...n.data as Record<string, unknown>, __expandedParent: true } as unknown as SceneNodeDataType,
-      }
-    })
+    // Remove original pipeline nodes and their edges, add clones (keep list source nodes)
+    const remainingNodes = nodes.filter((n) => !cloneableNodeIds.has(n.id))
+    const remainingEdges = edges.filter((e) => !cloneableNodeIds.has(e.source) && !cloneableNodeIds.has(e.target))
 
     useWorkflowStore.setState({
-      nodes: [...finalNodes, ...newNodes],
-      edges: [...edges, ...newEdges],
+      nodes: [...remainingNodes, ...newNodes],
+      edges: [...remainingEdges, ...newEdges],
       isDirty: true,
     })
   }
@@ -3110,9 +3057,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // --- Main workflow execution ---
 
   async function handleRun() {
-    const { nodes: allNodes, edges } = useWorkflowStore.getState()
-    // Exclude expanded clones -- they're display-only copies from previous list execution
-    const nodes = allNodes.filter((n) => !isExpandedClone(n))
+    const { nodes, edges } = useWorkflowStore.getState()
 
     const executableNodes = nodes.filter(isExecutableNode)
     if (executableNodes.length === 0) {
@@ -3235,15 +3180,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const startNode = nodes.find((n) => n.id === nodeId)
     if (!startNode) return
 
-    // BFS forward to collect all downstream node IDs (including start), skip expanded clones
+    // BFS forward to collect all downstream node IDs (including start)
     const downstream = new Set<string>([nodeId])
     const queue = [nodeId]
     while (queue.length > 0) {
       const current = queue.shift()!
       for (const edge of edges) {
         if (edge.source === current && !downstream.has(edge.target)) {
-          const targetNode = nodes.find((n) => n.id === edge.target)
-          if (targetNode && isExpandedClone(targetNode)) continue
           downstream.add(edge.target)
           queue.push(edge.target)
         }
@@ -3309,7 +3252,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Run selected: execute all currently selected nodes in DAG order
   async function handleRunSelected() {
     const { nodes, edges } = useWorkflowStore.getState()
-    const selectedNodes = nodes.filter((n) => n.selected && !isExpandedClone(n))
+    const selectedNodes = nodes.filter((n) => n.selected)
     if (selectedNodes.length === 0) {
       toast.error("No nodes selected.")
       return
