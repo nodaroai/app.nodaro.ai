@@ -7,7 +7,7 @@ import {
   type EdgeChange,
   type Connection,
 } from "@xyflow/react"
-import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData } from "@/types/nodes"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
@@ -149,13 +149,37 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     }),
 
   onConnect: (connection) =>
-    set((state) => ({
-      edges: addEdge(
+    set((state) => {
+      const newEdges = addEdge(
         { ...connection, id: `edge_${Date.now()}` },
         state.edges,
-      ),
-      isDirty: true,
-    })),
+      )
+
+      // Auto-create "Prompt" column when connecting to a Loop node with 0 columns
+      let newNodes = state.nodes
+      if (connection.targetHandle === "in") {
+        const targetNode = state.nodes.find((n) => n.id === connection.target)
+        if (targetNode?.type === "loop") {
+          const loopData = targetNode.data as LoopNodeData
+          if (!loopData.columns || loopData.columns.length === 0) {
+            newNodes = state.nodes.map((n) =>
+              n.id === connection.target
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      columns: [{ id: crypto.randomUUID(), name: "Prompt", handleId: "prompt" }],
+                      rows: [[""]],
+                    },
+                  }
+                : n,
+            )
+          }
+        }
+      }
+
+      return { nodes: newNodes, edges: newEdges, isDirty: true }
+    }),
 
   addNode: (type, position, initialData) => {
     const definition = NODE_DEFINITIONS.find((d) => d.type === type)
