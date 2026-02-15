@@ -299,6 +299,34 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return levels
   }
 
+  function getEffectivelySkippedIds(nodes: WorkflowNode[], edges: WorkflowEdge[]): Set<string> {
+    const directlySkipped = new Set(
+      nodes
+        .filter((n) => !!(n.data as Record<string, unknown>).skipped)
+        .map((n) => n.id)
+    )
+    const effectivelySkipped = new Set(directlySkipped)
+
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const node of nodes) {
+        if (effectivelySkipped.has(node.id)) continue
+
+        const parentIds = edges
+          .filter((e) => e.target === node.id)
+          .map((e) => e.source)
+
+        if (parentIds.length > 0 && parentIds.every((pid) => effectivelySkipped.has(pid))) {
+          effectivelySkipped.add(node.id)
+          changed = true
+        }
+      }
+    }
+
+    return effectivelySkipped
+  }
+
   function extractNodeOutput(node: WorkflowNode): string | undefined {
     const data = node.data as Record<string, unknown>
     const type = node.type
@@ -3130,6 +3158,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     const levels = buildExecutionLevels(nodes, edges)
+    const skippedIds = getEffectivelySkippedIds(nodes, edges)
+
+    for (const id of skippedIds) {
+      useWorkflowStore.getState().updateNodeData(id, { executionStatus: "skipped" })
+    }
 
     setIsRunning(true)
     toast.info("Executing workflow...", { description: `${executableNodes.length} node(s) to run` })
@@ -3138,7 +3171,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     for (const level of levels) {
       if (failed) break
 
-      const toRun = level.filter(isExecutableNode)
+      const toRun = level.filter((n) => isExecutableNode(n) && !skippedIds.has(n.id))
       if (toRun.length === 0) continue
 
       const results = await Promise.allSettled(
@@ -3231,11 +3264,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const subgraphNodes = nodes.filter((n) => downstream.has(n.id))
     const subgraphEdges = edges.filter((e) => downstream.has(e.source) && downstream.has(e.target))
     const levels = buildExecutionLevels(subgraphNodes, subgraphEdges)
+    const skippedIds = getEffectivelySkippedIds(subgraphNodes, subgraphEdges)
 
     const executableCount = subgraphNodes.filter(isExecutableNode).length
     if (executableCount === 0) {
       toast.error("No executable nodes found downstream.")
       return
+    }
+
+    for (const id of skippedIds) {
+      useWorkflowStore.getState().updateNodeData(id, { executionStatus: "skipped" })
     }
 
     setIsRunning(true)
@@ -3245,7 +3283,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     for (const level of levels) {
       if (failed) break
 
-      const toRun = level.filter(isExecutableNode)
+      const toRun = level.filter((n) => isExecutableNode(n) && !skippedIds.has(n.id))
       if (toRun.length === 0) continue
 
       const results = await Promise.allSettled(
@@ -3296,11 +3334,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const selectedIds = new Set(selectedNodes.map((n) => n.id))
     const subgraphEdges = edges.filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
     const levels = buildExecutionLevels(selectedNodes, subgraphEdges)
+    const skippedIds = getEffectivelySkippedIds(selectedNodes, subgraphEdges)
 
     const executableCount = selectedNodes.filter(isExecutableNode).length
     if (executableCount === 0) {
       toast.error("No executable nodes in selection.")
       return
+    }
+
+    for (const id of skippedIds) {
+      useWorkflowStore.getState().updateNodeData(id, { executionStatus: "skipped" })
     }
 
     setIsRunning(true)
@@ -3310,7 +3353,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     for (const level of levels) {
       if (failed) break
 
-      const toRun = level.filter(isExecutableNode)
+      const toRun = level.filter((n) => isExecutableNode(n) && !skippedIds.has(n.id))
       if (toRun.length === 0) continue
 
       const results = await Promise.allSettled(

@@ -1,13 +1,15 @@
 "use client"
 
 import { useMemo } from "react"
-import { Play } from "lucide-react"
+import { Play, CircleSlash, CircleCheck } from "lucide-react"
 import { useReactFlow, useViewport } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 export function SelectionActionBar() {
   const nodes = useWorkflowStore((s) => s.nodes)
   const runSelected = useWorkflowStore((s) => s.runSelected)
+  const skipSelectedNodes = useWorkflowStore((s) => s.skipSelectedNodes)
+  const unskipSelectedNodes = useWorkflowStore((s) => s.unskipSelectedNodes)
   const viewport = useViewport()
   const { flowToScreenPosition } = useReactFlow()
 
@@ -49,6 +51,20 @@ export function SelectionActionBar() {
     return data.executionStatus === "running"
   })
 
+  const allSkipped = selectedNodes.every((n) => {
+    const data = n.data as Record<string, unknown>
+    return data.skipped === true
+  })
+
+  const handleToggleSkip = () => {
+    const ids = selectedNodes.map((n) => n.id)
+    if (allSkipped) {
+      unskipSelectedNodes(ids)
+    } else {
+      skipSelectedNodes(ids)
+    }
+  }
+
   return (
     <div
       className="fixed z-40 flex items-center gap-2 px-3 py-2 rounded-lg border bg-popover shadow-lg"
@@ -66,6 +82,14 @@ export function SelectionActionBar() {
       >
         <Play className="w-3.5 h-3.5" />
         Run selected ({selectedCount})
+      </button>
+      <button
+        type="button"
+        onClick={handleToggleSkip}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-600 text-white hover:bg-zinc-600/90 transition-colors"
+      >
+        {allSkipped ? <CircleCheck className="w-3.5 h-3.5" /> : <CircleSlash className="w-3.5 h-3.5" />}
+        {allSkipped ? `Unskip (${selectedCount})` : `Skip (${selectedCount})`}
       </button>
     </div>
   )

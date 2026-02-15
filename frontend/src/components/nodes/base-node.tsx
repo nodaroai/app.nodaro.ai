@@ -100,6 +100,10 @@ export function BaseNode({
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
+  const isSkipped = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id)
+    return !!(node?.data as Record<string, unknown> | undefined)?.skipped
+  })
   const isNew = newNodeIds.has(id)
 
   useEffect(() => {
@@ -137,6 +141,7 @@ export function BaseNode({
           selected && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
           isRunning && "node-running",
           isNew && !isRunning && "node-new-pulse",
+          isSkipped && "opacity-40 border-dashed",
         )}
         onClick={() => selectNode(id)}
       >
@@ -206,6 +211,11 @@ export function BaseNode({
               ? "text-white/70 dark:text-[#ff0073]"
               : "text-[#64748B] dark:text-[#ff0073]"
           )}>{credits}cr</span>
+        )}
+        {isSkipped && (
+          <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
+            SKIP
+          </span>
         )}
       </div>
 

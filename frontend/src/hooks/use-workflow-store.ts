@@ -59,6 +59,9 @@ interface WorkflowState {
   readonly addCharacterDefinition: (char: CharacterDefinition) => void
   readonly updateCharacterDefinition: (id: string, updates: Partial<Omit<CharacterDefinition, "id">>) => void
   readonly removeCharacterDefinition: (id: string) => void
+  readonly toggleSkipNode: (nodeId: string) => void
+  readonly skipSelectedNodes: (nodeIds: string[]) => void
+  readonly unskipSelectedNodes: (nodeIds: string[]) => void
   readonly batchAddNodesAndEdges: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
   readonly expandStoryboard: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null
   readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null) => void
@@ -376,6 +379,42 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       characterDefinitions: state.characterDefinitions.filter((c) => c.id !== id),
       isDirty: true,
     })),
+
+  toggleSkipNode: (nodeId) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, skipped: !(node.data as Record<string, unknown>).skipped } as SceneNodeData }
+          : node,
+      ),
+      isDirty: true,
+    })),
+
+  skipSelectedNodes: (nodeIds) =>
+    set((state) => {
+      const idSet = new Set(nodeIds)
+      return {
+        nodes: state.nodes.map((node) =>
+          idSet.has(node.id)
+            ? { ...node, data: { ...node.data, skipped: true } as SceneNodeData }
+            : node,
+        ),
+        isDirty: true,
+      }
+    }),
+
+  unskipSelectedNodes: (nodeIds) =>
+    set((state) => {
+      const idSet = new Set(nodeIds)
+      return {
+        nodes: state.nodes.map((node) =>
+          idSet.has(node.id)
+            ? { ...node, data: { ...node.data, skipped: false } as SceneNodeData }
+            : node,
+        ),
+        isDirty: true,
+      }
+    }),
 
   batchAddNodesAndEdges: (newNodes, newEdges) => {
     // Update nextNodeId to avoid collisions

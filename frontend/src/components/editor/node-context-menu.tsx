@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useMemo } from "react"
-import { Play, FastForward, ListChecks, Copy, Trash2 } from "lucide-react"
+import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 interface NodeContextMenuProps {
@@ -17,6 +17,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const runSelected = useWorkflowStore((s) => s.runSelected)
+  const toggleSkipNode = useWorkflowStore((s) => s.toggleSkipNode)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const ref = useRef<HTMLDivElement>(null)
@@ -33,6 +34,12 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return false
     return (node.data as Record<string, unknown>).executionStatus === "running"
+  }, [nodeId, nodes])
+
+  const isSkipped = useMemo(() => {
+    const node = nodes.find((n) => n.id === nodeId)
+    if (!node) return false
+    return !!(node.data as Record<string, unknown>).skipped
   }, [nodeId, nodes])
 
   useEffect(() => {
@@ -57,6 +64,11 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
 
   function handleRunSelected() {
     runSelected?.()
+    onClose()
+  }
+
+  function handleToggleSkip() {
+    toggleSkipNode(nodeId)
     onClose()
   }
 
@@ -104,6 +116,13 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
           Run selected ({selectedCount})
         </button>
       )}
+      <button
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
+        onClick={handleToggleSkip}
+      >
+        {isSkipped ? <CircleCheck className="h-3.5 w-3.5" /> : <CircleSlash className="h-3.5 w-3.5" />}
+        {isSkipped ? "Unskip Node" : "Skip Node"}
+      </button>
       <div className="my-1 border-t" />
       <button
         className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
