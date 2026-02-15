@@ -796,6 +796,7 @@ Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produce
 - [x] Skip node in specific run
 - [x] ARCHITECTURE.md / Code Graph (auto-generated, 4 output files)
 - [x] Storage sync + management (quota enforcement, library page, admin controls, StorageExceededModal)
+- [x] UI fixes: admin race condition (roleLoaded), theme toggle (resolvedTheme), new project/workflow auto-navigate, grok duration 10s only, play/pause icons
 - [ ] Version history per node
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
