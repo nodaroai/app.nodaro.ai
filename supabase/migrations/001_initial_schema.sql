@@ -6,7 +6,7 @@
 -- ============================================================
 
 -- Profiles (extends Supabase auth.users)
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     full_name TEXT,
@@ -19,7 +19,7 @@ CREATE TABLE public.profiles (
 );
 
 -- API Keys
-CREATE TABLE public.api_keys (
+CREATE TABLE IF NOT EXISTS public.api_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE public.api_keys (
 );
 
 -- Projects
-CREATE TABLE public.projects (
+CREATE TABLE IF NOT EXISTS public.projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE public.projects (
 );
 
 -- Folders (organize workflows within projects)
-CREATE TABLE public.folders (
+CREATE TABLE IF NOT EXISTS public.folders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -51,7 +51,7 @@ CREATE TABLE public.folders (
 );
 
 -- Characters (per-project, for visual consistency)
-CREATE TABLE public.characters (
+CREATE TABLE IF NOT EXISTS public.characters (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE public.characters (
 );
 
 -- Style Presets (system + user-created)
-CREATE TABLE public.style_presets (
+CREATE TABLE IF NOT EXISTS public.style_presets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     thumbnail_url TEXT,
@@ -73,7 +73,7 @@ CREATE TABLE public.style_presets (
 );
 
 -- Workflows (the node graph)
-CREATE TABLE public.workflows (
+CREATE TABLE IF NOT EXISTS public.workflows (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -91,7 +91,7 @@ CREATE TABLE public.workflows (
 );
 
 -- Workflow History (undo/versioning)
-CREATE TABLE public.workflow_history (
+CREATE TABLE IF NOT EXISTS public.workflow_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workflow_id UUID NOT NULL REFERENCES public.workflows(id) ON DELETE CASCADE,
     version INTEGER NOT NULL,
@@ -101,7 +101,7 @@ CREATE TABLE public.workflow_history (
 );
 
 -- Jobs (workflow executions)
-CREATE TABLE public.jobs (
+CREATE TABLE IF NOT EXISTS public.jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workflow_id UUID NOT NULL REFERENCES public.workflows(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -120,7 +120,7 @@ CREATE TABLE public.jobs (
 );
 
 -- Job Checkpoints (for resuming failed jobs)
-CREATE TABLE public.job_checkpoints (
+CREATE TABLE IF NOT EXISTS public.job_checkpoints (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
     step TEXT NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE public.job_checkpoints (
 );
 
 -- Assets (generated files)
-CREATE TABLE public.assets (
+CREATE TABLE IF NOT EXISTS public.assets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     job_id UUID REFERENCES public.jobs(id) ON DELETE SET NULL,
@@ -145,7 +145,7 @@ CREATE TABLE public.assets (
 );
 
 -- Webhooks
-CREATE TABLE public.webhooks (
+CREATE TABLE IF NOT EXISTS public.webhooks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     url TEXT NOT NULL,
@@ -156,7 +156,7 @@ CREATE TABLE public.webhooks (
 );
 
 -- Webhook Deliveries (retry tracking)
-CREATE TABLE public.webhook_deliveries (
+CREATE TABLE IF NOT EXISTS public.webhook_deliveries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     webhook_id UUID NOT NULL REFERENCES public.webhooks(id) ON DELETE CASCADE,
     job_id UUID REFERENCES public.jobs(id) ON DELETE SET NULL,
@@ -171,7 +171,7 @@ CREATE TABLE public.webhook_deliveries (
 );
 
 -- Usage Logs (billing)
-CREATE TABLE public.usage_logs (
+CREATE TABLE IF NOT EXISTS public.usage_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     job_id UUID REFERENCES public.jobs(id) ON DELETE SET NULL,
@@ -184,7 +184,7 @@ CREATE TABLE public.usage_logs (
 );
 
 -- Subscriptions
-CREATE TABLE public.subscriptions (
+CREATE TABLE IF NOT EXISTS public.subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     paddle_subscription_id TEXT UNIQUE,
@@ -199,7 +199,7 @@ CREATE TABLE public.subscriptions (
 );
 
 -- Credit Purchases (top-ups)
-CREATE TABLE public.credit_purchases (
+CREATE TABLE IF NOT EXISTS public.credit_purchases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     paddle_transaction_id TEXT UNIQUE,
@@ -231,110 +231,160 @@ ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_purchases ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
-CREATE POLICY "Users can view own profile" ON public.profiles
-    FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON public.profiles
-    FOR UPDATE USING (auth.uid() = id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'Users can view own profile') THEN
+    CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'Users can update own profile') THEN
+    CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+  END IF;
+END $$;
 
 -- API Keys
-CREATE POLICY "Users can CRUD own API keys" ON public.api_keys
-    FOR ALL USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'api_keys' AND policyname = 'Users can CRUD own API keys') THEN
+    CREATE POLICY "Users can CRUD own API keys" ON public.api_keys FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Projects
-CREATE POLICY "Users can CRUD own projects" ON public.projects
-    FOR ALL USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'projects' AND policyname = 'Users can CRUD own projects') THEN
+    CREATE POLICY "Users can CRUD own projects" ON public.projects FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Folders (access via project ownership)
-CREATE POLICY "Users can CRUD own folders" ON public.folders
-    FOR ALL USING (
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'folders' AND policyname = 'Users can CRUD own folders') THEN
+    CREATE POLICY "Users can CRUD own folders" ON public.folders FOR ALL USING (
         EXISTS (SELECT 1 FROM public.projects WHERE id = project_id AND user_id = auth.uid())
     );
+  END IF;
+END $$;
 
 -- Characters (access via project ownership)
-CREATE POLICY "Users can CRUD own characters" ON public.characters
-    FOR ALL USING (
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'characters' AND policyname = 'Users can CRUD own characters') THEN
+    CREATE POLICY "Users can CRUD own characters" ON public.characters FOR ALL USING (
         EXISTS (SELECT 1 FROM public.projects WHERE id = project_id AND user_id = auth.uid())
     );
+  END IF;
+END $$;
 
 -- Style Presets (system presets readable by all, own presets fully managed)
-CREATE POLICY "Users can read system presets" ON public.style_presets
-    FOR SELECT USING (is_system = TRUE OR user_id = auth.uid());
-CREATE POLICY "Users can CRUD own presets" ON public.style_presets
-    FOR ALL USING (user_id = auth.uid());
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'style_presets' AND policyname = 'Users can read system presets') THEN
+    CREATE POLICY "Users can read system presets" ON public.style_presets FOR SELECT USING (is_system = TRUE OR user_id = auth.uid());
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'style_presets' AND policyname = 'Users can CRUD own presets') THEN
+    CREATE POLICY "Users can CRUD own presets" ON public.style_presets FOR ALL USING (user_id = auth.uid());
+  END IF;
+END $$;
 
 -- Workflows
-CREATE POLICY "Users can CRUD own workflows" ON public.workflows
-    FOR ALL USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'workflows' AND policyname = 'Users can CRUD own workflows') THEN
+    CREATE POLICY "Users can CRUD own workflows" ON public.workflows FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Workflow History (access via workflow ownership)
-CREATE POLICY "Users can access own workflow history" ON public.workflow_history
-    FOR ALL USING (
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'workflow_history' AND policyname = 'Users can access own workflow history') THEN
+    CREATE POLICY "Users can access own workflow history" ON public.workflow_history FOR ALL USING (
         EXISTS (SELECT 1 FROM public.workflows WHERE id = workflow_id AND user_id = auth.uid())
     );
+  END IF;
+END $$;
 
 -- Jobs
-CREATE POLICY "Users can CRUD own jobs" ON public.jobs
-    FOR ALL USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'jobs' AND policyname = 'Users can CRUD own jobs') THEN
+    CREATE POLICY "Users can CRUD own jobs" ON public.jobs FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Job Checkpoints (access via job ownership)
-CREATE POLICY "Users can access own job checkpoints" ON public.job_checkpoints
-    FOR ALL USING (
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'job_checkpoints' AND policyname = 'Users can access own job checkpoints') THEN
+    CREATE POLICY "Users can access own job checkpoints" ON public.job_checkpoints FOR ALL USING (
         EXISTS (SELECT 1 FROM public.jobs WHERE id = job_id AND user_id = auth.uid())
     );
+  END IF;
+END $$;
 
 -- Assets
-CREATE POLICY "Users can CRUD own assets" ON public.assets
-    FOR ALL USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'assets' AND policyname = 'Users can CRUD own assets') THEN
+    CREATE POLICY "Users can CRUD own assets" ON public.assets FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Webhooks
-CREATE POLICY "Users can CRUD own webhooks" ON public.webhooks
-    FOR ALL USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'webhooks' AND policyname = 'Users can CRUD own webhooks') THEN
+    CREATE POLICY "Users can CRUD own webhooks" ON public.webhooks FOR ALL USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Webhook Deliveries (access via webhook ownership)
-CREATE POLICY "Users can view own webhook deliveries" ON public.webhook_deliveries
-    FOR SELECT USING (
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'webhook_deliveries' AND policyname = 'Users can view own webhook deliveries') THEN
+    CREATE POLICY "Users can view own webhook deliveries" ON public.webhook_deliveries FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.webhooks WHERE id = webhook_id AND user_id = auth.uid())
     );
+  END IF;
+END $$;
 
 -- Usage Logs
-CREATE POLICY "Users can view own usage" ON public.usage_logs
-    FOR SELECT USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'usage_logs' AND policyname = 'Users can view own usage') THEN
+    CREATE POLICY "Users can view own usage" ON public.usage_logs FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Subscriptions
-CREATE POLICY "Users can view own subscription" ON public.subscriptions
-    FOR SELECT USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'subscriptions' AND policyname = 'Users can view own subscription') THEN
+    CREATE POLICY "Users can view own subscription" ON public.subscriptions FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Credit Purchases
-CREATE POLICY "Users can view own purchases" ON public.credit_purchases
-    FOR SELECT USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'credit_purchases' AND policyname = 'Users can view own purchases') THEN
+    CREATE POLICY "Users can view own purchases" ON public.credit_purchases FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- ============================================================
 -- 3. INDEXES
 -- ============================================================
 
-CREATE INDEX idx_projects_user_id ON public.projects(user_id);
-CREATE INDEX idx_folders_project_id ON public.folders(project_id);
-CREATE INDEX idx_characters_project_id ON public.characters(project_id);
-CREATE INDEX idx_style_presets_user_id ON public.style_presets(user_id);
-CREATE INDEX idx_style_presets_is_system ON public.style_presets(is_system) WHERE is_system = TRUE;
-CREATE INDEX idx_workflows_project_id ON public.workflows(project_id);
-CREATE INDEX idx_workflows_folder_id ON public.workflows(folder_id);
-CREATE INDEX idx_workflows_user_id ON public.workflows(user_id);
-CREATE INDEX idx_workflow_history_workflow_id ON public.workflow_history(workflow_id);
-CREATE INDEX idx_jobs_workflow_id ON public.jobs(workflow_id);
-CREATE INDEX idx_jobs_user_id ON public.jobs(user_id);
-CREATE INDEX idx_jobs_status ON public.jobs(status);
-CREATE INDEX idx_jobs_parent_job_id ON public.jobs(parent_job_id);
-CREATE INDEX idx_job_checkpoints_job_id ON public.job_checkpoints(job_id);
-CREATE INDEX idx_assets_user_id ON public.assets(user_id);
-CREATE INDEX idx_assets_job_id ON public.assets(job_id);
-CREATE INDEX idx_assets_expires_at ON public.assets(expires_at);
-CREATE INDEX idx_usage_logs_user_id ON public.usage_logs(user_id);
-CREATE INDEX idx_usage_logs_created_at ON public.usage_logs(created_at);
-CREATE INDEX idx_api_keys_key_hash ON public.api_keys(key_hash);
-CREATE INDEX idx_webhook_deliveries_next_retry ON public.webhook_deliveries(next_retry_at) WHERE delivered_at IS NULL;
-CREATE INDEX idx_subscriptions_user_id ON public.subscriptions(user_id);
-CREATE INDEX idx_credit_purchases_user_id ON public.credit_purchases(user_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON public.projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_folders_project_id ON public.folders(project_id);
+CREATE INDEX IF NOT EXISTS idx_characters_project_id ON public.characters(project_id);
+CREATE INDEX IF NOT EXISTS idx_style_presets_user_id ON public.style_presets(user_id);
+CREATE INDEX IF NOT EXISTS idx_style_presets_is_system ON public.style_presets(is_system) WHERE is_system = TRUE;
+CREATE INDEX IF NOT EXISTS idx_workflows_project_id ON public.workflows(project_id);
+CREATE INDEX IF NOT EXISTS idx_workflows_folder_id ON public.workflows(folder_id);
+CREATE INDEX IF NOT EXISTS idx_workflows_user_id ON public.workflows(user_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_history_workflow_id ON public.workflow_history(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_workflow_id ON public.jobs(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON public.jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON public.jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_parent_job_id ON public.jobs(parent_job_id);
+CREATE INDEX IF NOT EXISTS idx_job_checkpoints_job_id ON public.job_checkpoints(job_id);
+CREATE INDEX IF NOT EXISTS idx_assets_user_id ON public.assets(user_id);
+CREATE INDEX IF NOT EXISTS idx_assets_job_id ON public.assets(job_id);
+CREATE INDEX IF NOT EXISTS idx_assets_expires_at ON public.assets(expires_at);
+CREATE INDEX IF NOT EXISTS idx_usage_logs_user_id ON public.usage_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_usage_logs_created_at ON public.usage_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON public.api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_next_retry ON public.webhook_deliveries(next_retry_at) WHERE delivered_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON public.subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_credit_purchases_user_id ON public.credit_purchases(user_id);
 
 -- ============================================================
 -- 4. AUTO-CREATE PROFILE ON SIGNUP
@@ -354,7 +404,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+-- Drop and recreate trigger to avoid "already exists" error
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
@@ -370,11 +422,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS set_updated_at ON public.profiles;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON public.projects;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.projects
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON public.workflows;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.workflows
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+DROP TRIGGER IF EXISTS set_updated_at ON public.subscriptions;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.subscriptions
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
