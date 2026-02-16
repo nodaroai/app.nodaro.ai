@@ -394,6 +394,32 @@ Files: `frontend/src/app/(dashboard)/library/page.tsx`, `backend/src/routes/libr
 - `frontend/src/app/(dashboard)/settings/page.tsx` -- Settings page with visibility toggle
 - `supabase/migrations/011_gallery_and_private_mode.sql` -- DB migration (public_outputs on profiles, is_public on jobs, gallery index, RLS policy)
 
+### Gallery Lightbox (v1.25.0)
+
+Full-featured lightbox for gallery items with navigation, download, fullscreen, and reference media.
+
+**Features:**
+- Arrow navigation (click + keyboard ArrowLeft/ArrowRight) between gallery items
+- Download proxy: `GET /v1/download?url=...` streams R2 files with `Content-Disposition: attachment` (domain-locked to R2 bucket)
+- CSS fullscreen overlay (separate `fixed` div, z-[9999], independent of Radix Dialog) with minimize/close/download buttons
+- Model name badge shows `inputData.provider` (model identifier like "nano-banana") over `job.provider` (provider name like "kie")
+- Report dialog (public, IP-deduplicated) + admin delete (soft-delete via `is_public = false`)
+
+**Reference Media (input sources):**
+- Avatar-stack thumbnails in meta section (w-10 h-10 rounded-full, overlapping with negative margin, +N indicator for >4)
+- Click thumbnail opens separate Radix Dialog (not custom overlay -- avoids event bubbling issues)
+- Arrow navigation between references (click + keyboard) with position indicator
+- Video references (`.mp4`, `.webm`, `.mov`) render as `<video>` thumbnails (muted, preload=metadata) and `<video controls autoPlay>` in Dialog
+- Comprehensive input extraction in `gallery.ts` collects ALL media URLs from `inputData` via `Set` deduplication:
+  - Arrays: `referenceImageUrls`, `videoUrls`, `audioUrls`
+  - Singles: `imageUrl`, `endFrameUrl`, `videoUrl`, `audioUrl`
+  - Works for all job types automatically (image, video, audio, FFmpeg processing)
+
+**Key Files:**
+- `backend/src/routes/gallery.ts` -- Gallery API with comprehensive reference extraction
+- `backend/src/routes/download.ts` -- Download proxy endpoint (R2 domain-locked)
+- `frontend/src/app/gallery/page.tsx` -- Gallery page with lightbox, fullscreen, reference Dialog
+
 ### Database Additions
 - `profiles.public_outputs` (boolean, default true) -- user preference for gallery visibility
 - `jobs.is_public` (boolean, default true) -- per-job visibility flag set at processing time
@@ -402,10 +428,10 @@ Files: `frontend/src/app/(dashboard)/library/page.tsx`, `backend/src/routes/libr
 
 ---
 
-## AI Writer Node (v1.22)
+## AI Agent Node (v1.24, formerly AI Writer)
 
 ### Overview
-AI Writer generates multiple image prompts from a single concept, then spawns individual Generate Image nodes on the canvas. Uses Claude Sonnet via Anthropic API (2 credits per generation).
+AI Agent (display name changed from "AI Writer" in v1.24) generates multiple image prompts from a single concept, then spawns individual Generate Image nodes on the canvas. Uses Claude Sonnet via Anthropic API (2 credits per generation).
 
 ### Workflow
 1. Connect a **reference image** (Generate Image, Upload Image, etc.) to AI Writer for visual consistency
@@ -490,7 +516,7 @@ backend/src/
   server.ts               — Entry point
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, user-settings, ai-writer)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System above)
   billing/                — Credits, Paddle, cleanup (see Credit System above)
@@ -808,4 +834,4 @@ Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produce
 ---
 
 *Last updated: 2026-02-16*
-*Version: 1.24.0*
+*Version: 1.25.0*
