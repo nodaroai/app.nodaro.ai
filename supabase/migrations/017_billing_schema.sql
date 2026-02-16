@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 -- Credit transactions (audit log)
 CREATE TABLE IF NOT EXISTS credit_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES profiles(id),
+  user_id UUID NOT NULL REFERENCES profiles(id),
   amount INTEGER NOT NULL,
   credit_type TEXT NOT NULL,
   source TEXT NOT NULL,

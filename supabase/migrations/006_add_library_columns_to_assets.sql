@@ -2,10 +2,10 @@
 -- These columns are required by admin.ts promote/demote endpoints
 
 -- Whether this asset is promoted to the shared library (admin only)
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS is_library_item BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS is_library_item BOOLEAN DEFAULT FALSE;
 
 -- Source of the upload: manual_upload, api, generation, library
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS upload_source TEXT DEFAULT 'manual_upload';
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS upload_source TEXT DEFAULT 'job';
 
 -- Performance indexes for library queries
 CREATE INDEX IF NOT EXISTS idx_assets_user_type ON public.assets(user_id, type);
