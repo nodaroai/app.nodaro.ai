@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { invalidateSettingsCache } from "../lib/app-settings.js"
 
 const updateSettingBody = z.object({
   value: z.union([z.string(), z.number(), z.boolean(), z.record(z.unknown())]),
@@ -137,6 +138,9 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
         error: { code: "internal_error", message: error.message },
       })
     }
+
+    // Invalidate cached settings so changes take effect immediately
+    invalidateSettingsCache()
 
     return {
       key: data.key,

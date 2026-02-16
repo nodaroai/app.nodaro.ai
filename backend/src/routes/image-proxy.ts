@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { Readable } from "node:stream"
 import { z } from "zod"
 import { config } from "../lib/config.js"
 
@@ -24,7 +25,7 @@ export async function imageProxyRoutes(app: FastifyInstance) {
       })
     }
 
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
     if (!response.ok) {
       return reply.status(502).send({
         error: { code: "proxy_error", message: `Upstream returned ${response.status}` },
@@ -38,12 +39,16 @@ export async function imageProxyRoutes(app: FastifyInstance) {
       })
     }
 
-    const buffer = Buffer.from(await response.arrayBuffer())
-
+    // Stream response directly without buffering in memory
+    const contentLength = response.headers.get("content-length")
+    reply.raw.writeHead(200, {
+      "Content-Type": contentType,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "Access-Control-Allow-Origin": "*",
+      ...(contentLength ? { "Content-Length": contentLength } : {}),
+    })
+    const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+    nodeStream.pipe(reply.raw)
     return reply
-      .header("Content-Type", contentType)
-      .header("Cache-Control", "public, max-age=86400")
-      .header("Access-Control-Allow-Origin", "*")
-      .send(buffer)
   })
 }

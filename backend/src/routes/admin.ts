@@ -1,29 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 // ============================================================
 // Admin Routes - Cost Alerts, Model Pricing & Asset Library
 // ============================================================
-
-// ---- Helpers ----
-
-async function checkIsAdmin(userId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single()
-
-  if (error) {
-    // PGRST116 = no rows found (user doesn't exist) -> not admin
-    if (error.code === "PGRST116") return false
-    throw new Error(`Admin check failed: ${error.message}`)
-  }
-
-  if (!data) return false
-  return data.role === "admin" || data.role === "super_admin"
-}
 
 // ---- Zod Schemas ----
 

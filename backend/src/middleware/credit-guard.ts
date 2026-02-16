@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
 import { hasCredits } from "../lib/config.js"
-import { CreditsService, type ReserveResult } from "../billing/credits.js"
+import { CreditsService, type ReserveResult, type CreditProfile, type StorageProfile } from "../billing/credits.js"
 import { supabase } from "../lib/supabase.js"
 
 /**
@@ -61,21 +61,32 @@ export function creditGuard(
     if (!userId) return
 
     const modelIdentifier = modelResolver(req)
+
+    // FFmpeg operations are free — skip all credit/storage checks
+    if (modelIdentifier === "ffmpeg") return
+
     const routeName = req.url.split("?")[0] ?? "unknown"
+
+    // Fetch profile ONCE with all columns needed by both storage + credit checks
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset, storage_used_bytes, storage_limit_bytes")
+      .eq("id", userId)
+      .single()
+
+    if (profileError || !profile) {
+      reply.status(500).send({
+        error: { code: "credit_check_failed", message: "User profile not found" },
+      })
+      return
+    }
 
     // Step 1: Check storage limit BEFORE credit check (for routes that produce output files)
     try {
-      const storageCheck = await CreditsService.checkStorageLimit(userId)
+      const storageCheck = CreditsService.checkStorageLimitWithProfile(profile as StorageProfile)
 
       if (!storageCheck.allowed) {
-        // Fetch tier for frontend display
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("tier")
-          .eq("id", userId)
-          .single()
-
-        const tier = profile?.tier ?? "free"
+        const tier = (profile as CreditProfile).tier ?? "free"
         const quotaBytes = storageCheck.limitBytes
         const usedBytes = storageCheck.usedBytes
 
@@ -96,9 +107,9 @@ export function creditGuard(
       // Non-fatal: allow the request to proceed if storage check fails
     }
 
-    // Step 2: Check if user has enough credits
+    // Step 2: Check if user has enough credits (using pre-fetched profile)
     try {
-      const creditCheck = await CreditsService.checkCredits(userId, modelIdentifier)
+      const creditCheck = await CreditsService.checkCreditsWithProfile(userId, profile as CreditProfile, modelIdentifier)
 
       if (!creditCheck.allowed) {
         reply.status(402).send({
@@ -111,6 +122,10 @@ export function creditGuard(
         })
         return
       }
+
+      // Step 3: Store pending reservation with watermark from checkCredits
+      // (avoids duplicate profiles query in reserveCredits)
+      req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: creditCheck.watermark ?? false }
     } catch (err) {
       console.error(`[credit-guard] ${routeName} credit check failed:`, err)
       reply.status(500).send({
@@ -118,10 +133,6 @@ export function creditGuard(
       })
       return
     }
-
-    // Step 3: Reserve credits (actual reservation happens after job creation in the route)
-    // We store a "pending" reservation marker so the route knows to reserve after job insert
-    req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: false }
   }
 }
 
@@ -139,6 +150,9 @@ export async function reserveCreditsForJob(
 ): Promise<ReserveResult | undefined> {
   if (!hasCredits()) return undefined
 
+  // FFmpeg operations are free — skip reservation
+  if (modelIdentifier === "ffmpeg") return undefined
+
   const body = req.body as Record<string, unknown> | undefined
   const userId = (body?.userId as string) ?? undefined
   if (!userId) return undefined
@@ -151,7 +165,8 @@ export async function reserveCreditsForJob(
       jobId,
       modelIdentifier,
       0, // provider cost calculated in worker
-      0  // display cost calculated in worker
+      0, // display cost calculated in worker
+      req.creditReservation?.watermark, // pass watermark from checkCredits
     )
 
     // Store usageLogId and estimated credits on the job

@@ -11,13 +11,14 @@
  */
 
 import { config } from "../../lib/config.js"
-import { KIE_API_BASE, createSanitizedError, sleep } from "./client.js"
+import { KIE_API_BASE, createSanitizedError, sleep, pollDelay } from "./client.js"
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
 
-const SUNO_POLL_INTERVAL_MS = 5000
+const SUNO_POLL_INTERVAL_MS = 5000 // kept for timeout calculations
+const DEBUG = config.NODE_ENV === "development"
 const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
 
 // =============================================================================
@@ -223,8 +224,8 @@ export async function sunoGenerate(
   if (params.weirdnessConstraint != null) body.weirdness_constraint = params.weirdnessConstraint
   if (params.audioWeight != null) body.audio_weight = params.audioWeight
 
-  console.log(`[Suno] Generating song with model ${model}`)
-  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+  if (DEBUG) console.log(`[Suno] Generating song with model ${model}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
   const response = await fetch(
     `${KIE_API_BASE}/api/v1/generate`,
@@ -235,12 +236,13 @@ export async function sunoGenerate(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await response.text()
-  console.log(`[Suno] Response status: ${response.status}`)
-  console.log(`[Suno] Response: ${responseText.substring(0, 500)}`)
+  if (DEBUG) console.log(`[Suno] Response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Response: ${responseText.substring(0, 500)}`)
 
   if (!response.ok) {
     throw createSanitizedError(
@@ -274,7 +276,7 @@ export async function sunoGenerate(
     )
   }
 
-  console.log(`[Suno] Task created: ${taskId}`)
+  if (DEBUG) console.log(`[Suno] Task created: ${taskId}`)
   return pollSunoTask(taskId)
 }
 
@@ -309,8 +311,8 @@ export async function sunoCover(
   if (params.negativeStyle) body.negative_style = params.negativeStyle
   if (params.vocalGender) body.vocal_gender = params.vocalGender
 
-  console.log(`[Suno] Creating cover with model ${model}`)
-  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+  if (DEBUG) console.log(`[Suno] Creating cover with model ${model}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
   const response = await fetch(
     `${KIE_API_BASE}/api/v1/generate/upload-cover`,
@@ -321,12 +323,13 @@ export async function sunoCover(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await response.text()
-  console.log(`[Suno] Cover response status: ${response.status}`)
-  console.log(`[Suno] Cover response: ${responseText.substring(0, 500)}`)
+  if (DEBUG) console.log(`[Suno] Cover response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Cover response: ${responseText.substring(0, 500)}`)
 
   if (!response.ok) {
     throw createSanitizedError(
@@ -360,7 +363,7 @@ export async function sunoCover(
     )
   }
 
-  console.log(`[Suno] Cover task created: ${taskId}`)
+  if (DEBUG) console.log(`[Suno] Cover task created: ${taskId}`)
   return pollSunoTask(taskId)
 }
 
@@ -397,8 +400,8 @@ export async function sunoExtend(
   if (params.weirdnessConstraint != null) body.weirdness_constraint = params.weirdnessConstraint
   if (params.audioWeight != null) body.audio_weight = params.audioWeight
 
-  console.log(`[Suno] Extending track ${params.audioId} with model ${model}`)
-  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+  if (DEBUG) console.log(`[Suno] Extending track ${params.audioId} with model ${model}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
   const response = await fetch(
     `${KIE_API_BASE}/api/v1/generate/extend`,
@@ -409,12 +412,13 @@ export async function sunoExtend(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await response.text()
-  console.log(`[Suno] Extend response status: ${response.status}`)
-  console.log(`[Suno] Extend response: ${responseText.substring(0, 500)}`)
+  if (DEBUG) console.log(`[Suno] Extend response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Extend response: ${responseText.substring(0, 500)}`)
 
   if (!response.ok) {
     throw createSanitizedError(
@@ -448,7 +452,7 @@ export async function sunoExtend(
     )
   }
 
-  console.log(`[Suno] Extend task created: ${taskId}`)
+  if (DEBUG) console.log(`[Suno] Extend task created: ${taskId}`)
   return pollSunoTask(taskId)
 }
 
@@ -471,8 +475,8 @@ export async function sunoLyrics(
     callBackUrl: "https://callback.placeholder",
   }
 
-  console.log(`[Suno] Generating lyrics`)
-  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+  if (DEBUG) console.log(`[Suno] Generating lyrics`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
   const response = await fetch(
     `${KIE_API_BASE}/api/v1/lyrics`,
@@ -483,12 +487,13 @@ export async function sunoLyrics(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await response.text()
-  console.log(`[Suno] Lyrics response status: ${response.status}`)
-  console.log(`[Suno] Lyrics response: ${responseText.substring(0, 500)}`)
+  if (DEBUG) console.log(`[Suno] Lyrics response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Lyrics response: ${responseText.substring(0, 500)}`)
 
   if (!response.ok) {
     throw createSanitizedError(
@@ -522,7 +527,7 @@ export async function sunoLyrics(
     )
   }
 
-  console.log(`[Suno] Lyrics task created: ${taskId}`)
+  if (DEBUG) console.log(`[Suno] Lyrics task created: ${taskId}`)
   return pollSunoLyricsTask(taskId)
 }
 
@@ -534,13 +539,22 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
 
   let attempts = 0
   while (attempts < SUNO_MAX_POLL_ATTEMPTS) {
-    await sleep(SUNO_POLL_INTERVAL_MS)
+    await sleep(pollDelay(attempts))
     attempts++
 
-    const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/generate/record-info?taskId=${taskId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
-    )
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/generate/record-info?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[Suno] Poll attempt ${attempts} timeout, retrying...`)
+        continue
+      }
+      throw err
+    }
 
     if (!detailResponse.ok) {
       console.warn(
@@ -559,12 +573,12 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
     }
 
     const status = detailData.data?.status
-    console.log(
+    if (DEBUG) console.log(
       `[Suno] Task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
     )
 
     if (status === "FIRST_SUCCESS") {
-      console.log(`[Suno] Task ${taskId} FIRST_SUCCESS — tracks still processing, continuing to poll`)
+      if (DEBUG) console.log(`[Suno] Task ${taskId} FIRST_SUCCESS — tracks still processing, continuing to poll`)
       continue
     }
 
@@ -578,7 +592,7 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
       }
 
       // Log raw track data for debugging
-      console.log(`[Suno] Raw track data:`, JSON.stringify(sunoData[0], null, 2))
+      if (DEBUG) console.log(`[Suno] Raw track data:`, JSON.stringify(sunoData[0], null, 2))
 
       const tracks: SunoTrack[] = sunoData.map((t) => {
         // Handle both audio_url and audioUrl field names
@@ -605,7 +619,7 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
         )
       }
 
-      console.log(
+      if (DEBUG) console.log(
         `[Suno] Task ${taskId} completed with ${validTracks.length} valid track(s) of ${tracks.length} total`
       )
       return { taskId, tracks: validTracks }
@@ -640,13 +654,22 @@ async function pollSunoLyricsTask(taskId: string): Promise<SunoLyricsResult> {
 
   let attempts = 0
   while (attempts < SUNO_MAX_POLL_ATTEMPTS) {
-    await sleep(SUNO_POLL_INTERVAL_MS)
+    await sleep(pollDelay(attempts))
     attempts++
 
-    const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/lyrics/record-info?taskId=${taskId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
-    )
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/lyrics/record-info?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[Suno] Lyrics poll attempt ${attempts} timeout, retrying...`)
+        continue
+      }
+      throw err
+    }
 
     if (!detailResponse.ok) {
       console.warn(
@@ -665,7 +688,7 @@ async function pollSunoLyricsTask(taskId: string): Promise<SunoLyricsResult> {
     }
 
     const status = detailData.data?.status
-    console.log(
+    if (DEBUG) console.log(
       `[Suno] Lyrics task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
     )
 
@@ -683,7 +706,7 @@ async function pollSunoLyricsTask(taskId: string): Promise<SunoLyricsResult> {
         title: (d.title ?? "") as string,
       }))
 
-      console.log(
+      if (DEBUG) console.log(
         `[Suno] Lyrics task ${taskId} completed with ${lyrics.length} result(s)`
       )
       return { taskId, lyrics }
@@ -730,8 +753,8 @@ export async function sunoSeparate(
     callBackUrl: "https://callback.placeholder",
   }
 
-  console.log(`[Suno] Separating audio (type: ${params.type})`)
-  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+  if (DEBUG) console.log(`[Suno] Separating audio (type: ${params.type})`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
   const response = await fetch(
     `${KIE_API_BASE}/api/v1/vocal-removal/generate`,
@@ -742,12 +765,13 @@ export async function sunoSeparate(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await response.text()
-  console.log(`[Suno] Separate response status: ${response.status}`)
-  console.log(`[Suno] Separate response: ${responseText.substring(0, 500)}`)
+  if (DEBUG) console.log(`[Suno] Separate response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Separate response: ${responseText.substring(0, 500)}`)
 
   if (!response.ok) {
     throw createSanitizedError(
@@ -781,7 +805,7 @@ export async function sunoSeparate(
     )
   }
 
-  console.log(`[Suno] Separate task created: ${taskId}`)
+  if (DEBUG) console.log(`[Suno] Separate task created: ${taskId}`)
   return pollSunoSeparateTask(taskId)
 }
 
@@ -812,13 +836,22 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
 
   let attempts = 0
   while (attempts < SUNO_MAX_POLL_ATTEMPTS) {
-    await sleep(SUNO_POLL_INTERVAL_MS)
+    await sleep(pollDelay(attempts))
     attempts++
 
-    const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/vocal-removal/record-info?taskId=${taskId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
-    )
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/vocal-removal/record-info?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[Suno] Separate poll attempt ${attempts} timeout, retrying...`)
+        continue
+      }
+      throw err
+    }
 
     if (!detailResponse.ok) {
       console.warn(
@@ -841,10 +874,10 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
     const resp = data?.response as Record<string, unknown> | undefined
     const originData = resp?.originData as Array<Record<string, unknown>> | undefined
 
-    console.log(
+    if (DEBUG) console.log(
       `[Suno] Separate task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
     )
-    console.log(`[Suno] Separate raw response:`, JSON.stringify(detailData).substring(0, 500))
+    if (DEBUG) console.log(`[Suno] Separate raw response:`, JSON.stringify(detailData).substring(0, 500))
 
     // Check for failure statuses
     if (status === "FAILED" || status?.includes("FAILED") || status?.includes("ERROR")) {
@@ -874,7 +907,7 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
       }
 
       const stemCount = Object.values(result).filter((v) => typeof v === "string" && v.startsWith("http")).length
-      console.log(
+      if (DEBUG) console.log(
         `[Suno] Separate task ${taskId} completed with ${stemCount} stem(s)`
       )
       return result
@@ -914,8 +947,8 @@ export async function sunoMusicVideo(
     callBackUrl: "https://callback.placeholder",
   }
 
-  console.log(`[Suno] Generating music video for task ${params.taskId}`)
-  console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+  if (DEBUG) console.log(`[Suno] Generating music video for task ${params.taskId}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
   const response = await fetch(
     `${KIE_API_BASE}/api/v1/mp4/generate`,
@@ -926,12 +959,13 @@ export async function sunoMusicVideo(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await response.text()
-  console.log(`[Suno] Music video response status: ${response.status}`)
-  console.log(`[Suno] Music video response: ${responseText.substring(0, 500)}`)
+  if (DEBUG) console.log(`[Suno] Music video response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Music video response: ${responseText.substring(0, 500)}`)
 
   if (!response.ok) {
     throw createSanitizedError(
@@ -965,7 +999,7 @@ export async function sunoMusicVideo(
     )
   }
 
-  console.log(`[Suno] Music video task created: ${taskId}`)
+  if (DEBUG) console.log(`[Suno] Music video task created: ${taskId}`)
   return pollSunoMusicVideoTask(taskId)
 }
 
@@ -977,14 +1011,21 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
   const apiKey = config.KIE_API_KEY!
 
   for (let attempts = 1; attempts <= SUNO_MAX_POLL_ATTEMPTS; attempts++) {
-    await sleep(SUNO_POLL_INTERVAL_MS)
+    await sleep(pollDelay(attempts))
 
-    const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/mp4/record-info?taskId=${taskId}`,
-      {
-        headers: { Authorization: `Bearer ${apiKey}` },
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/mp4/record-info?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[Suno] Music video poll attempt ${attempts} timeout, retrying...`)
+        continue
       }
-    )
+      throw err
+    }
 
     const detailText = await detailResponse.text()
     let detailData: Record<string, unknown>
@@ -999,10 +1040,10 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
     const status = data?.status as string | undefined
     const resp = data?.response as Record<string, unknown> | undefined
 
-    console.log(
+    if (DEBUG) console.log(
       `[Suno] Music video task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
     )
-    console.log(`[Suno] Music video raw response:`, JSON.stringify(detailData).substring(0, 500))
+    if (DEBUG) console.log(`[Suno] Music video raw response:`, JSON.stringify(detailData).substring(0, 500))
 
     // Check for failure statuses
     if (status === "FAILED" || status?.includes("FAILED") || status?.includes("ERROR")) {
@@ -1019,7 +1060,7 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
     // Success: look for videoUrl in response
     const videoUrl = (resp?.videoUrl ?? resp?.video_url ?? resp?.mp4Url ?? resp?.mp4_url) as string | undefined
     if (videoUrl) {
-      console.log(`[Suno] Music video task ${taskId} completed`)
+      if (DEBUG) console.log(`[Suno] Music video task ${taskId} completed`)
       return { taskId, videoUrl }
     }
 
@@ -1030,7 +1071,7 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
         (v) => typeof v === "string" && (v.endsWith(".mp4") || v.includes("mp4"))
       ) as string | undefined
       if (possibleUrl) {
-        console.log(`[Suno] Music video task ${taskId} completed (from status)`)
+        if (DEBUG) console.log(`[Suno] Music video task ${taskId} completed (from status)`)
         return { taskId, videoUrl: possibleUrl }
       }
     }

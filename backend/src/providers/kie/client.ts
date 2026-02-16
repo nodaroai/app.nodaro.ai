@@ -11,14 +11,17 @@
 
 import { config } from "../../lib/config.js"
 
+const DEBUG = config.NODE_ENV === "development"
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
 
 export const KIE_API_BASE = "https://api.kie.ai"
-export const POLL_INTERVAL_MS = 2000 // Poll every 2 seconds
-export const MAX_POLL_ATTEMPTS = 150 // Max 5 minutes (150 * 2s)
-export const MAX_POLL_ATTEMPTS_VIDEO = 300 // Max 10 minutes for video (300 * 2s)
+export const POLL_INTERVAL_MS = 2000 // Used by kling3-client
+// With exponential backoff: ~5 min total for 60 attempts, ~10 min for 90 attempts
+export const MAX_POLL_ATTEMPTS = 60
+export const MAX_POLL_ATTEMPTS_VIDEO = 90
 
 // =============================================================================
 // ERROR SANITIZATION (Cloud edition: don't expose "KIE.ai" to customers)
@@ -182,6 +185,13 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Exponential backoff: 2s for first 5, ramp to 10s cap */
+export function pollDelay(attempt: number): number {
+  if (attempt <= 5) return 2000
+  if (attempt <= 15) return Math.min(2000 + (attempt - 5) * 1000, 10000)
+  return 10000
+}
+
 // =============================================================================
 // CORE API FUNCTIONS
 // =============================================================================
@@ -207,14 +217,14 @@ export async function runKieTask(
 
   const requestBody = { model, input }
 
-  console.log(`[KIE.ai] >>>>>> SENDING TO KIE.AI API <<<<<<`)
-  console.log(
-    `[KIE.ai] Endpoint: ${KIE_API_BASE}/api/v1/jobs/createTask`
-  )
-  console.log(`[KIE.ai] Model: ${model}`)
-  console.log(`[KIE.ai] FULL REQUEST BODY:`)
-  console.log(JSON.stringify(requestBody, null, 2))
-  console.log(`[KIE.ai] >>>>>> END REQUEST BODY <<<<<<`)
+  if (DEBUG) {
+    console.log(`[KIE.ai] >>>>>> SENDING TO KIE.AI API <<<<<<`)
+    console.log(`[KIE.ai] Endpoint: ${KIE_API_BASE}/api/v1/jobs/createTask`)
+    console.log(`[KIE.ai] Model: ${model}`)
+    console.log(`[KIE.ai] FULL REQUEST BODY:`)
+    console.log(JSON.stringify(requestBody, null, 2))
+    console.log(`[KIE.ai] >>>>>> END REQUEST BODY <<<<<<`)
+  }
 
   // Step 1: Create task
   const createResponse = await fetch(
@@ -226,14 +236,15 @@ export async function runKieTask(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await createResponse.text()
-  console.log(`[KIE.ai] Response status: ${createResponse.status}`)
-  console.log(
-    `[KIE.ai] Response body (first 500 chars): ${responseText.substring(0, 500)}`
-  )
+  if (DEBUG) {
+    console.log(`[KIE.ai] Response status: ${createResponse.status}`)
+    console.log(`[KIE.ai] Response body (first 500 chars): ${responseText.substring(0, 500)}`)
+  }
 
   if (!createResponse.ok) {
     console.error(
@@ -279,16 +290,25 @@ export async function runKieTask(
   const taskId = createData.data.taskId
   console.log(`[KIE.ai] Task created: ${taskId}`)
 
-  // Step 2: Poll for completion
+  // Step 2: Poll for completion with exponential backoff
   let attempts = 0
   while (attempts < maxAttempts) {
-    await sleep(POLL_INTERVAL_MS)
     attempts++
+    await sleep(pollDelay(attempts))
 
-    const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
-    )
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[KIE.ai] Poll attempt ${attempts} timeout, retrying...`)
+        continue
+      }
+      throw err
+    }
 
     if (!detailResponse.ok) {
       console.warn(
@@ -318,9 +338,9 @@ export async function runKieTask(
 
     // Log progress for sora2 models (0-100) and call callback if provided
     const progress = detailData.data.progress
-    console.log(
-      `[KIE.ai] Task ${taskId} state: ${state}${progress !== undefined ? ` (progress: ${progress}%)` : ""} (attempt ${attempts})`
-    )
+    if (DEBUG) {
+      console.log(`[KIE.ai] Task ${taskId} state: ${state}${progress !== undefined ? ` (progress: ${progress}%)` : ""} (attempt ${attempts})`)
+    }
 
     // Call progress callback if we have progress data
     if (progress !== undefined && onProgress) {
@@ -373,7 +393,7 @@ export async function runKieTask(
   }
 
   throw createSanitizedError(
-    `task timed out after ${(maxAttempts * POLL_INTERVAL_MS) / 1000} seconds`,
+    `task timed out after ${maxAttempts} poll attempts`,
     "Generation"
   )
 }
@@ -414,13 +434,10 @@ export async function runVeoTask(
     requestBody.generationType = "TEXT_2_VIDEO"
   }
 
-  console.log(
-    `[KIE.ai VEO] Creating VEO task with model: ${model}`
-  )
-  console.log(
-    `[KIE.ai VEO] Request body:`,
-    JSON.stringify(requestBody, null, 2)
-  )
+  if (DEBUG) {
+    console.log(`[KIE.ai VEO] Creating VEO task with model: ${model}`)
+    console.log(`[KIE.ai VEO] Request body:`, JSON.stringify(requestBody, null, 2))
+  }
 
   // Step 1: Create VEO task using special endpoint
   const createResponse = await fetch(
@@ -432,16 +449,15 @@ export async function runVeoTask(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await createResponse.text()
-  console.log(
-    `[KIE.ai VEO] Response status: ${createResponse.status}`
-  )
-  console.log(
-    `[KIE.ai VEO] Response body: ${responseText.substring(0, 500)}`
-  )
+  if (DEBUG) {
+    console.log(`[KIE.ai VEO] Response status: ${createResponse.status}`)
+    console.log(`[KIE.ai VEO] Response body: ${responseText.substring(0, 500)}`)
+  }
 
   if (!createResponse.ok) {
     throw createSanitizedError(
@@ -481,18 +497,27 @@ export async function runVeoTask(
   const taskId = createData.data.taskId
   console.log(`[KIE.ai VEO] Task created: ${taskId}`)
 
-  // Step 2: Poll for completion using VEO-specific endpoint (NOT the standard recordInfo!)
+  // Step 2: Poll for completion using VEO-specific endpoint with exponential backoff
   // VEO endpoint: /api/v1/veo/record-info (with hyphen)
   // Status field: successFlag (0=generating, 1=success, 2=failed, 3=generation failed)
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
-    await sleep(POLL_INTERVAL_MS)
     attempts++
+    await sleep(pollDelay(attempts))
 
-    const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/veo/record-info?taskId=${taskId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
-    )
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/veo/record-info?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[KIE.ai VEO] Poll attempt ${attempts} timeout, retrying...`)
+        continue
+      }
+      throw err
+    }
 
     if (!detailResponse.ok) {
       console.warn(
@@ -502,9 +527,9 @@ export async function runVeoTask(
     }
 
     const detailText = await detailResponse.text()
-    console.log(
-      `[KIE.ai VEO] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`
-    )
+    if (DEBUG) {
+      console.log(`[KIE.ai VEO] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`)
+    }
 
     let detailData: VeoRecordInfoResponse
     try {
@@ -517,9 +542,9 @@ export async function runVeoTask(
     }
 
     const successFlag = detailData.data?.successFlag
-    console.log(
-      `[KIE.ai VEO] Task ${taskId} successFlag: ${successFlag} (attempt ${attempts})`
-    )
+    if (DEBUG) {
+      console.log(`[KIE.ai VEO] Task ${taskId} successFlag: ${successFlag} (attempt ${attempts})`)
+    }
 
     // successFlag: 0=generating, 1=success, 2=failed, 3=generation failed
     if (successFlag === 1) {
@@ -557,7 +582,7 @@ export async function runVeoTask(
   }
 
   throw createSanitizedError(
-    `VEO task timed out after ${(MAX_POLL_ATTEMPTS_VIDEO * POLL_INTERVAL_MS) / 1000} seconds`,
+    `VEO task timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`,
     "Video generation"
   )
 }

@@ -6,7 +6,7 @@ import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promises as fs } from "node:fs"
 import { spawn } from "node:child_process"
-import { uploadBufferToR2 } from "../lib/storage.js"
+import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 
 const SUPPORTED_HOSTNAMES = [
   "youtube.com", "youtu.be",
@@ -219,9 +219,7 @@ function runDownloadWithProgress(
       state.phase = "uploading"
       state.percent = 95
 
-      const buffer = await fs.readFile(uploadPath)
-      const r2Key = `videos/yt-${outputId}.mp4`
-      const videoR2Url = await uploadBufferToR2(buffer, r2Key, "video/mp4")
+      const videoR2Url = await uploadFileWithKeyToR2(uploadPath, `videos/yt-${outputId}.mp4`, "video/mp4")
       await fs.unlink(uploadPath).catch(() => {})
 
       const thumbnailUrl = await findAndUploadThumbnail(baseName, outputId)

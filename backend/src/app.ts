@@ -64,7 +64,7 @@ import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { downloadRoutes } from "./routes/download.js"
 
 export async function buildApp() {
-  const app = Fastify({ logger: true })
+  const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
 
   // Build CORS origin whitelist: always include localhost for dev, plus
   // any origins from CORS_ORIGIN env var (comma-separated).

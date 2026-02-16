@@ -1,7 +1,4 @@
-import Replicate from "replicate"
-import { config } from "./config.js"
-
-const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
+import { replicate } from "../providers/replicate/client.js"
 
 export async function translateToEnglish(text: string): Promise<string> {
   const nonAsciiRatio = (text.match(/[^\x00-\x7F]/g) || []).length / text.length

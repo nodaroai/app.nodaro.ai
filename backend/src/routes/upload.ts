@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify"
 import multipart from "@fastify/multipart"
 import { randomUUID } from "node:crypto"
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
+import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
+import { s3 } from "../lib/storage.js"
 import {
   validateFile,
   checkStorageQuota,
@@ -17,19 +18,6 @@ import {
   processAudio,
   type FileMetadata,
 } from "../utils/thumbnail.js"
-
-// ============================================================
-// S3 Client (shared across all upload endpoints)
-// ============================================================
-
-const s3 = new S3Client({
-  region: "auto",
-  endpoint: `https://${config.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: config.R2_ACCESS_KEY_ID,
-    secretAccessKey: config.R2_SECRET_ACCESS_KEY,
-  },
-})
 
 // ============================================================
 // Legacy Constants (kept for backward-compatible endpoints)
@@ -70,6 +58,7 @@ async function uploadBufferToS3(
       Key: key,
       Body: buffer,
       ContentType: contentType,
+      CacheControl: "public, max-age=31536000, immutable",
     }),
   )
   return `${config.R2_PUBLIC_URL}/${key}`
@@ -107,8 +96,18 @@ export async function uploadRoutes(app: FastifyInstance) {
       })
     }
 
-    const buffer = await data.toBuffer()
+    // Step 0: Validate MIME type BEFORE buffering the entire file
     const mimeType = data.mimetype
+    const earlyValidation = validateFile(mimeType, 0) // size=0 skips size check
+    if (!earlyValidation.valid && earlyValidation.error?.includes("Unsupported file type")) {
+      // Consume and discard the stream to prevent connection hang
+      data.file.resume()
+      return reply.status(400).send({
+        error: { code: "validation_error", message: earlyValidation.error },
+      })
+    }
+
+    const buffer = await data.toBuffer()
     const originalFilename = data.filename
 
     // Parse optional fields from multipart form
@@ -117,7 +116,7 @@ export async function uploadRoutes(app: FastifyInstance) {
     const projectId = fields?.projectId?.value ?? null
     const filenameOverride = fields?.filename?.value ?? null
 
-    // Step 1: Validate MIME type and size
+    // Step 1: Validate MIME type and size (full validation with actual size)
     const validation = validateFile(mimeType, buffer.length)
     if (!validation.valid) {
       return reply.status(400).send({

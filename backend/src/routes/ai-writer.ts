@@ -7,6 +7,15 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 
+// Lazy singleton — avoid creating a new client on every request
+let _anthropic: Anthropic | null = null
+function getAnthropicClient(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
+  }
+  return _anthropic
+}
+
 const aiWriterBody = z.object({
   systemPrompt: z.string().max(10000),
   userInput: z.string().min(1).max(10000),
@@ -32,10 +41,6 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       // Set timeouts at every layer to prevent premature connection close
       req.raw.setTimeout(120000)
       reply.raw.setTimeout(120000)
-      const server = reply.server as unknown as { requestTimeout?: number }
-      if (server.requestTimeout !== undefined) {
-        server.requestTimeout = 120000
-      }
 
       const parsed = aiWriterBody.safeParse(req.body)
       if (!parsed.success) {
@@ -106,7 +111,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
 
       // Call Anthropic Claude API synchronously
       try {
-        const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
+        const anthropic = getAnthropicClient()
 
         console.log("[ai-writer] Calling Anthropic API with model:", model, "maxTokens:", maxTokens)
 
@@ -261,7 +266,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         data: { jobId: job.id, model, maxTokens },
       })
 
-      const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
+      const anthropic = getAnthropicClient()
       let fullText = ""
 
       console.log(

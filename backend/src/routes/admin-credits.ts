@@ -1,21 +1,35 @@
 import { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
-import { CreditsService } from "../billing/credits.js"
+import { CreditsService, invalidateModelPricingCache } from "../billing/credits.js"
 
 export async function adminCreditsRoutes(app: FastifyInstance) {
-  // GET /v1/admin/users - List all users with credit info
-  app.get("/v1/admin/users", async (_request, reply) => {
-    const { data, error } = await supabase
+  // GET /v1/admin/users - List all users with credit info (paginated)
+  app.get("/v1/admin/users", async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>
+    const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
+    const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
+    const search = query.search?.trim() ?? null
+
+    let dbQuery = supabase
       .from("profiles")
-      .select("id, display_name, avatar_url, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, created_at")
+      .select("id, display_name, avatar_url, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, created_at", { count: "exact" })
       .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (search) {
+      dbQuery = dbQuery.or(`display_name.ilike.%${search}%,email.ilike.%${search}%`)
+    }
+
+    const { data, count, error } = await dbQuery
 
     if (error) return reply.code(500).send({ error: error.message })
 
-    return (data ?? []).map((u) => ({
+    const users = (data ?? []).map((u) => ({
       ...u,
       total_credits: (u.subscription_credits ?? 0) + (u.topup_credits ?? 0),
     }))
+
+    return { data: users, total: count ?? 0, limit, offset }
   })
 
   // GET /v1/admin/users/:id/balance - Get detailed balance for a user
@@ -288,15 +302,19 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       .single()
 
     if (error) return reply.code(500).send({ error: error.message })
+    invalidateModelPricingCache()
     return data
   })
 
   // GET /v1/admin/credits/summary - Platform-wide credit stats
   app.get("/v1/admin/credits/summary", async (_request, reply) => {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("subscription_credits, topup_credits, subscription_tier")
+    // Run both queries in parallel
+    const [profilesResult, transactionsResult] = await Promise.all([
+      supabase.from("profiles").select("subscription_credits, topup_credits, subscription_tier"),
+      supabase.from("credit_transactions").select("id", { count: "exact", head: true }),
+    ])
 
+    const profiles = profilesResult.data
     if (!profiles) {
       return { totalUsers: 0, totalCreditsOutstanding: 0, tierBreakdown: {}, totalTransactions: 0 }
     }
@@ -311,15 +329,11 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       tierBreakdown[tier] = (tierBreakdown[tier] ?? 0) + 1
     }
 
-    const { count: totalTransactions } = await supabase
-      .from("credit_transactions")
-      .select("id", { count: "exact", head: true })
-
     return {
       totalUsers: profiles.length,
       totalCreditsOutstanding,
       tierBreakdown,
-      totalTransactions: totalTransactions ?? 0,
+      totalTransactions: transactionsResult.count ?? 0,
     }
   })
 }

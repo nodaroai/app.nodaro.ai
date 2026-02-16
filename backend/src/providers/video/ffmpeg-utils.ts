@@ -1,16 +1,19 @@
 import { execFile } from "node:child_process"
+import { createWriteStream } from "node:fs"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
+import { Readable } from "node:stream"
+import { pipeline } from "node:stream/promises"
 
 export async function downloadFile(url: string, dest: string): Promise<void> {
-  const response = await fetch(url)
+  const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
   if (!response.ok) {
     throw new Error(`Failed to download: ${url} (${response.status})`)
   }
-  const buffer = Buffer.from(await response.arrayBuffer())
-  await fs.writeFile(dest, buffer)
+  const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+  await pipeline(nodeStream, createWriteStream(dest))
 }
 
 export function runFfmpeg(args: readonly string[]): Promise<string> {

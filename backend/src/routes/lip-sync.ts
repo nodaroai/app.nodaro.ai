@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const lipSyncBody = z.object({
   imageUrl: z.string().url(),       // Portrait/face image
@@ -13,7 +14,12 @@ const lipSyncBody = z.object({
 })
 
 export async function lipSyncRoutes(app: FastifyInstance) {
-  app.post("/v1/lip-sync", async (req, reply) => {
+  app.post("/v1/lip-sync", {
+    preHandler: creditGuard((req) => {
+      const body = req.body as Record<string, unknown>
+      return (body?.provider as string) ?? "kling-avatar"
+    }),
+  }, async (req, reply) => {
     const parsed = lipSyncBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -49,13 +55,19 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       })
     }
 
+    const modelIdentifier = provider ?? "kling-avatar"
+    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+    if (reply.sent) return
+    const usageLogId = reservation?.usageLogId
+
     await videoQueue.add("lip-sync", {
       jobId: job.id,
       imageUrl,
       audioUrl,
       prompt,
-      provider: provider ?? "kling-avatar",
+      provider: modelIdentifier,
       resolution,
+      usageLogId,
     })
 
     return { jobId: job.id }

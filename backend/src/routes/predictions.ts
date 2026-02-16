@@ -52,6 +52,7 @@ export async function predictionsRoutes(app: FastifyInstance) {
             Authorization: `Bearer ${REPLICATE_API_TOKEN}`,
             "Content-Type": "application/json",
           },
+          signal: AbortSignal.timeout(30_000),
         })
 
         if (!response.ok) {
@@ -99,6 +100,7 @@ export async function predictionsRoutes(app: FastifyInstance) {
             Authorization: `Bearer ${REPLICATE_API_TOKEN}`,
             "Content-Type": "application/json",
           },
+          signal: AbortSignal.timeout(30_000),
         })
 
         if (!response.ok) {
@@ -139,6 +141,7 @@ export async function predictionsRoutes(app: FastifyInstance) {
             Authorization: `Bearer ${REPLICATE_API_TOKEN}`,
             "Content-Type": "application/json",
           },
+          signal: AbortSignal.timeout(30_000),
         })
 
         if (!response.ok) {

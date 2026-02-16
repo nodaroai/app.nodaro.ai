@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
-import { deleteFromR2 } from "../lib/storage.js"
+import { deleteFromR2, batchDeleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 
 // ============================================================
@@ -112,7 +112,7 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
 
   const freeUserIds = freeUsers.map((u) => u.id)
 
-  // --- Phase A1: Clean assets table ---
+  // --- Phase A1: Clean assets table (batch R2 deletes) ---
   let hasMoreAssets = true
   while (hasMoreAssets) {
     const { data: assets, error } = await supabase
@@ -134,36 +134,40 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       break
     }
 
+    // Collect R2 keys and batch delete
+    const r2Keys = assets.map(a => a.r2_key).filter((k): k is string => !!k)
+    const batchResult = await batchDeleteFromR2(r2Keys)
+    filesDeleted += batchResult.deleted
+    errors += batchResult.errors
+
+    // Batch update all asset DB records at once
+    const assetIds = assets.filter(a => a.r2_key).map(a => a.id)
+    if (assetIds.length > 0) {
+      await supabase
+        .from("assets")
+        .update({ r2_key: null, r2_url: null })
+        .in("id", assetIds)
+    }
+
+    // Aggregate storage deltas per user, then update once per user
+    const deltasByUser = new Map<string, number>()
     for (const asset of assets) {
       if (!asset.r2_key) continue
-
-      const deleted = await safeDeleteR2(asset.r2_key)
-      if (deleted) {
-        const size = asset.size_bytes ?? 0
-        bytesFreed += size
-
-        // Null out r2_key to mark as cleaned
-        await supabase
-          .from("assets")
-          .update({ r2_key: null, r2_url: null })
-          .eq("id", asset.id)
-
-        // Decrement storage
-        if (size > 0 && asset.user_id) {
-          await updateStorageUsage(asset.user_id, -size).catch(() => {})
-        }
-
-        filesDeleted++
-      } else {
-        errors++
+      const size = asset.size_bytes ?? 0
+      bytesFreed += size
+      if (size > 0 && asset.user_id) {
+        deltasByUser.set(asset.user_id, (deltasByUser.get(asset.user_id) ?? 0) + size)
       }
+    }
+    for (const [uid, bytes] of deltasByUser) {
+      await updateStorageUsage(uid, -bytes).catch(() => {})
     }
 
     // If we got fewer than BATCH_SIZE, we're done
     if (assets.length < BATCH_SIZE) hasMoreAssets = false
   }
 
-  // --- Phase A2: Clean job output files ---
+  // --- Phase A2: Clean job output files (batch R2 deletes) ---
   let hasMoreJobs = true
   while (hasMoreJobs) {
     const { data: jobs, error } = await supabase
@@ -186,44 +190,45 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       break
     }
 
+    // Collect all R2 keys across all jobs in this batch
+    const allR2Keys: string[] = []
     for (const job of jobs) {
       const output = job.output_data as Record<string, unknown> | null
       if (!output) continue
-
       const urls = extractR2UrlsFromOutput(output)
-      let jobBytesFreed = 0
-
       for (const url of urls) {
         const r2Key = r2KeyFromUrl(url)
-        if (!r2Key) continue
-
-        const deleted = await safeDeleteR2(r2Key)
-        if (deleted) {
-          filesDeleted++
-        } else {
-          errors++
-        }
+        if (r2Key) allR2Keys.push(r2Key)
       }
+    }
 
-      // Mark output_data as cleaned (set URLs to null)
-      const cleanedOutput: Record<string, unknown> = { ...output, _cleaned: true }
-      for (const url of urls) {
-        for (const [key, value] of Object.entries(cleanedOutput)) {
-          if (value === url) {
-            cleanedOutput[key] = null
+    // Batch delete all R2 files
+    if (allR2Keys.length > 0) {
+      const batchResult = await batchDeleteFromR2(allR2Keys)
+      filesDeleted += batchResult.deleted
+      errors += batchResult.errors
+    }
+
+    // Update DB records in parallel chunks of 10
+    const jobUpdates = jobs
+      .filter(job => job.output_data != null)
+      .map(job => {
+        const output = job.output_data as Record<string, unknown>
+        const urls = extractR2UrlsFromOutput(output)
+        const cleanedOutput: Record<string, unknown> = { ...output, _cleaned: true }
+        for (const url of urls) {
+          for (const [key, value] of Object.entries(cleanedOutput)) {
+            if (value === url) cleanedOutput[key] = null
           }
         }
-      }
+        return { id: job.id, cleanedOutput }
+      })
 
-      await supabase
-        .from("jobs")
-        .update({ output_data: cleanedOutput })
-        .eq("id", job.id)
-
-      if (jobBytesFreed > 0 && job.user_id) {
-        await updateStorageUsage(job.user_id, -jobBytesFreed).catch(() => {})
-        bytesFreed += jobBytesFreed
-      }
+    for (let i = 0; i < jobUpdates.length; i += 10) {
+      const chunk = jobUpdates.slice(i, i + 10)
+      await Promise.all(chunk.map(u =>
+        supabase.from("jobs").update({ output_data: u.cleanedOutput }).eq("id", u.id)
+      ))
     }
 
     if (jobs.length < BATCH_SIZE) hasMoreJobs = false
@@ -268,7 +273,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     let userFilesDeleted = 0
     let userBytesFreed = 0
 
-    // Delete all user's R2 assets
+    // Delete all user's R2 assets (batch)
     let hasMore = true
     while (hasMore) {
       const { data: assets } = await supabase
@@ -283,25 +288,27 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         break
       }
 
+      const r2Keys = assets.map(a => a.r2_key).filter((k): k is string => !!k)
+      const batchResult = await batchDeleteFromR2(r2Keys)
+      userFilesDeleted += batchResult.deleted
+      errors += batchResult.errors
+
+      // Batch update all asset DB records and sum freed bytes
+      const assetIds = assets.filter(a => a.r2_key).map(a => a.id)
+      if (assetIds.length > 0) {
+        await supabase
+          .from("assets")
+          .update({ r2_key: null, r2_url: null })
+          .in("id", assetIds)
+      }
       for (const asset of assets) {
-        if (!asset.r2_key) continue
-        const deleted = await safeDeleteR2(asset.r2_key)
-        if (deleted) {
-          userFilesDeleted++
-          userBytesFreed += asset.size_bytes ?? 0
-          await supabase
-            .from("assets")
-            .update({ r2_key: null, r2_url: null })
-            .eq("id", asset.id)
-        } else {
-          errors++
-        }
+        userBytesFreed += asset.size_bytes ?? 0
       }
 
       if (assets.length < BATCH_SIZE) hasMore = false
     }
 
-    // Delete all user's job output files
+    // Delete all user's job output files (batch)
     hasMore = true
     while (hasMore) {
       const { data: jobs } = await supabase
@@ -317,27 +324,36 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         break
       }
 
+      // Collect all R2 keys across jobs
+      const allR2Keys: string[] = []
       for (const job of jobs) {
         const output = job.output_data as Record<string, unknown> | null
         if (!output || output._cleaned) continue
-
         const urls = extractR2UrlsFromOutput(output)
         for (const url of urls) {
           const r2Key = r2KeyFromUrl(url)
-          if (!r2Key) continue
-
-          const deleted = await safeDeleteR2(r2Key)
-          if (deleted) {
-            userFilesDeleted++
-          } else {
-            errors++
-          }
+          if (r2Key) allR2Keys.push(r2Key)
         }
+      }
 
-        await supabase
-          .from("jobs")
-          .update({ output_data: { ...output, _cleaned: true } })
-          .eq("id", job.id)
+      if (allR2Keys.length > 0) {
+        const batchResult = await batchDeleteFromR2(allR2Keys)
+        userFilesDeleted += batchResult.deleted
+        errors += batchResult.errors
+      }
+
+      // Update job output_data in parallel chunks of 10
+      const jobsToClean = jobs.filter(j => {
+        const o = j.output_data as Record<string, unknown> | null
+        return o && !o._cleaned
+      })
+      for (let i = 0; i < jobsToClean.length; i += 10) {
+        const chunk = jobsToClean.slice(i, i + 10)
+        await Promise.all(chunk.map(job =>
+          supabase.from("jobs")
+            .update({ output_data: { ...(job.output_data as Record<string, unknown>), _cleaned: true } })
+            .eq("id", job.id)
+        ))
       }
 
       if (jobs.length < BATCH_SIZE) hasMore = false
@@ -396,38 +412,39 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
     return { usersDowngraded: 0, errors: 0 }
   }
 
-  for (const sub of subs) {
-    try {
-      // Only downgrade if user is still on a paid tier (webhook may have already handled this)
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tier")
-        .eq("id", sub.user_id)
-        .single()
+  try {
+    // Batch: fetch all affected profiles in one query
+    const userIds = subs.map(s => s.user_id)
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, tier")
+      .in("id", userIds)
 
-      if (profile && profile.tier !== "free") {
-        await supabase
-          .from("profiles")
-          .update({
-            tier: FREE_TIER_DEFAULTS.tier,
-            subscription_credits: FREE_TIER_DEFAULTS.subscription_credits,
-            storage_limit_bytes: FREE_TIER_DEFAULTS.storage_limit_bytes,
-            subscription_ended_at: now,
-          })
-          .eq("id", sub.user_id)
-
-        usersDowngraded++
-      }
-
-      // Mark subscription as "expired" so it's not reprocessed
+    // Find users still on paid tiers (webhook may have already downgraded some)
+    const toDowngrade = (profiles ?? []).filter(p => p.tier !== "free").map(p => p.id)
+    if (toDowngrade.length > 0) {
       await supabase
-        .from("subscriptions")
-        .update({ status: "expired", updated_at: now })
-        .eq("id", sub.id)
-    } catch (err) {
-      console.error(`[cleanup] Failed to expire subscription ${sub.id}:`, err)
-      errors++
+        .from("profiles")
+        .update({
+          tier: FREE_TIER_DEFAULTS.tier,
+          subscription_credits: FREE_TIER_DEFAULTS.subscription_credits,
+          storage_limit_bytes: FREE_TIER_DEFAULTS.storage_limit_bytes,
+          subscription_ended_at: now,
+        })
+        .in("id", toDowngrade)
+
+      usersDowngraded = toDowngrade.length
     }
+
+    // Batch: mark all subscriptions as expired
+    const subIds = subs.map(s => s.id)
+    await supabase
+      .from("subscriptions")
+      .update({ status: "expired", updated_at: now })
+      .in("id", subIds)
+  } catch (err) {
+    console.error(`[cleanup] Failed to expire subscriptions batch:`, err)
+    errors++
   }
 
   if (usersDowngraded > 0) {

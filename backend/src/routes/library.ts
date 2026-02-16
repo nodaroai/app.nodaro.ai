@@ -4,26 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { config, isCloud } from "../lib/config.js"
 import { deleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
-
-// ============================================================
-// Helpers
-// ============================================================
-
-async function checkIsAdmin(userId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single()
-
-  if (error) {
-    if (error.code === "PGRST116") return false
-    throw new Error(`Admin check failed: ${error.message}`)
-  }
-
-  if (!data) return false
-  return data.role === "admin" || data.role === "super_admin"
-}
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 // ============================================================
 // Schemas

@@ -1,24 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-
-// ---- Helpers ----
-
-async function checkIsAdmin(userId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single()
-
-  if (error) {
-    if (error.code === "PGRST116") return false
-    throw new Error(`Admin check failed: ${error.message}`)
-  }
-
-  if (!data) return false
-  return data.role === "admin" || data.role === "super_admin"
-}
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 // ---- Zod Schemas ----
 

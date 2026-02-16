@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { isPromptBlocked } from "../config/content-filter.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 const IMAGE_JOBS = new Set([
   "generate-image", "edit-image", "image-to-image",
@@ -49,24 +50,6 @@ function jobNamesForType(type: string): string[] {
   return []
 }
 
-// ---- Helpers ----
-
-async function checkIsAdmin(userId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single()
-
-  if (error) {
-    if (error.code === "PGRST116") return false
-    throw new Error(`Admin check failed: ${error.message}`)
-  }
-
-  if (!data) return false
-  return data.role === "admin" || data.role === "super_admin"
-}
-
 // ---- Zod Schemas ----
 
 const reportBody = z.object({
@@ -88,26 +71,30 @@ export async function galleryRoutes(app: FastifyInstance) {
    * GET /v1/gallery - Public gallery of completed outputs
    *
    * Query params:
-   *   page  - page number (default 1)
-   *   limit - items per page (default 20, max 50)
-   *   type  - optional filter: "image" | "video" | "audio"
+   *   cursor - ISO timestamp cursor for pagination (completed_at of last item)
+   *   limit  - items per page (default 20, max 50)
+   *   type   - optional filter: "image" | "video" | "audio"
    */
   app.get("/v1/gallery", async (req, reply) => {
     const query = req.query as Record<string, string | undefined>
-    const page = Math.max(1, parseInt(query.page ?? "1", 10) || 1)
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? "20", 10) || 20))
     const typeFilter = query.type as string | undefined
-    const offset = (page - 1) * limit
+    const cursor = query.cursor as string | undefined
 
-    // Build query
+    // Build query — fetch limit + 1 to detect if there are more items
     let dbQuery = supabase
       .from("jobs")
-      .select("id, job_type, input_data, output_data, completed_at, user_id, provider", { count: "exact" })
+      .select("id, job_type, input_data, output_data, completed_at, user_id, provider")
       .eq("is_public", true)
       .eq("status", "completed")
       .not("output_data", "is", null)
       .order("completed_at", { ascending: false })
-      .range(offset, offset + limit - 1)
+      .limit(limit + 1)
+
+    // Cursor-based pagination: fetch items older than cursor
+    if (cursor) {
+      dbQuery = dbQuery.lt("completed_at", cursor)
+    }
 
     // Filter by type (restricts to specific job names)
     if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
@@ -119,7 +106,7 @@ export async function galleryRoutes(app: FastifyInstance) {
       dbQuery = dbQuery.in("job_type", allMediaNames)
     }
 
-    const { data: jobs, count, error } = await dbQuery
+    const { data: jobs, error } = await dbQuery
 
     if (error) {
       console.error("[gallery] Query failed:", error)
@@ -127,24 +114,15 @@ export async function galleryRoutes(app: FastifyInstance) {
     }
 
     if (!jobs || jobs.length === 0) {
-      return reply.send({ data: [], total: 0, page, limit })
+      return reply.send({ data: [], nextCursor: null })
     }
 
-    // Batch-fetch profiles for usernames
-    const userIds = [...new Set(jobs.map((j) => j.user_id).filter(Boolean))]
-    const { data: profiles } = userIds.length > 0
-      ? await supabase
-          .from("profiles")
-          .select("id, full_name, avatar_url")
-          .in("id", userIds)
-      : { data: [] }
-
-    const profileMap = new Map(
-      (profiles ?? []).map((p) => [p.id, p]),
-    )
+    // Determine if there are more items
+    const hasMore = jobs.length > limit
+    const pageJobs = hasMore ? jobs.slice(0, limit) : jobs
 
     // Build response items — filter out blocked prompts
-    const items = jobs
+    const items = pageJobs
       .map((job) => {
         const outputData = (job.output_data ?? {}) as Record<string, unknown>
         const inputData = (job.input_data ?? {}) as Record<string, unknown>
@@ -201,11 +179,14 @@ export async function galleryRoutes(app: FastifyInstance) {
       })
       .filter(Boolean)
 
+    // Set nextCursor to the completed_at of the last item in the page
+    const lastItem = pageJobs[pageJobs.length - 1]
+    const nextCursor = hasMore && lastItem?.completed_at ? lastItem.completed_at : null
+
+    reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=60")
     return reply.send({
       data: items,
-      total: count ?? 0,
-      page,
-      limit,
+      nextCursor,
     })
   })
 

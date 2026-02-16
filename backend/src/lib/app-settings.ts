@@ -10,6 +10,9 @@ let cachedSettings: AppSettings | null = null
 let cacheTimestamp = 0
 const CACHE_TTL_MS = 60_000
 
+// Stampede protection: if a refresh is in-flight, share the promise
+let inflight: Promise<AppSettings> | null = null
+
 export async function getAppSettings(): Promise<AppSettings> {
   const now = Date.now()
 
@@ -18,6 +21,18 @@ export async function getAppSettings(): Promise<AppSettings> {
     return cachedSettings
   }
 
+  // If another call is already refreshing, await it
+  if (inflight) return inflight
+
+  inflight = refreshSettings()
+  try {
+    return await inflight
+  } finally {
+    inflight = null
+  }
+}
+
+async function refreshSettings(): Promise<AppSettings> {
   const { data, error } = await supabase
     .from("app_settings")
     .select("key, value")
@@ -43,7 +58,7 @@ export async function getAppSettings(): Promise<AppSettings> {
 
   // Update cache
   cachedSettings = settings
-  cacheTimestamp = now
+  cacheTimestamp = Date.now()
 
   return settings
 }

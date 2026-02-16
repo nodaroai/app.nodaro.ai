@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import youtubedl from "youtube-dl-exec"
-import { uploadBufferToR2 } from "../lib/storage.js"
+import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 
 // Supported video platforms (yt-dlp supports 1000+ sites natively)
 const SUPPORTED_HOSTNAMES = [
@@ -103,9 +103,7 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
       console.log(`[youtube-audio] Downloaded to: ${actualPath} (${stat.size} bytes)`)
 
       // Upload audio to R2 with correct MP3 content type
-      const buffer = await fs.readFile(actualPath)
-      const r2Key = `audios/yt-${outputId}.mp3`
-      const r2Url = await uploadBufferToR2(buffer, r2Key, "audio/mpeg")
+      const r2Url = await uploadFileWithKeyToR2(actualPath, `audios/yt-${outputId}.mp3`, "audio/mpeg")
 
       // Cleanup audio temp file
       await fs.unlink(actualPath).catch(() => {})

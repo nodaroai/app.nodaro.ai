@@ -30,9 +30,7 @@ interface GalleryItem {
 
 interface GalleryResponse {
   readonly data: readonly GalleryItem[]
-  readonly total: number
-  readonly page: number
-  readonly limit: number
+  readonly nextCursor: string | null
 }
 
 type FilterType = "all" | "image" | "video" | "audio"
@@ -170,15 +168,14 @@ function CopyPromptButton({ prompt }: { readonly prompt: string }) {
 export default function GalleryPage() {
   const { user, isAdmin } = useAuth()
   const [items, setItems] = useState<readonly GalleryItem[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterType>("all")
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const hasMore = items.length < total
+  const hasMore = nextCursor !== null
 
   // Report dialog state
   const [reportItem, setReportItem] = useState<GalleryItem | null>(null)
@@ -190,7 +187,7 @@ export default function GalleryPage() {
   const [deleteItem, setDeleteItem] = useState<GalleryItem | null>(null)
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
 
-  const fetchGallery = useCallback(async (pageNum: number, append: boolean) => {
+  const fetchGallery = useCallback(async (cursor: string | null, append: boolean) => {
     if (append) {
       setLoadingMore(true)
     } else {
@@ -198,11 +195,13 @@ export default function GalleryPage() {
     }
     try {
       const params = new URLSearchParams({
-        page: String(pageNum),
         limit: String(ITEMS_PER_PAGE),
       })
       if (filter !== "all") {
         params.set("type", filter)
+      }
+      if (cursor) {
+        params.set("cursor", cursor)
       }
 
       const response = await fetch(`${API_BASE}/v1/gallery?${params}`)
@@ -214,12 +213,12 @@ export default function GalleryPage() {
       } else {
         setItems(json.data)
       }
-      setTotal(json.total)
+      setNextCursor(json.nextCursor)
     } catch (err) {
       console.error("Gallery fetch failed:", err)
       if (!append) {
         setItems([])
-        setTotal(0)
+        setNextCursor(null)
       }
     } finally {
       setLoading(false)
@@ -229,8 +228,8 @@ export default function GalleryPage() {
 
   // Initial load
   useEffect(() => {
-    setPage(1)
-    fetchGallery(1, false)
+    setNextCursor(null)
+    fetchGallery(null, false)
   }, [fetchGallery])
 
   // Infinite scroll via IntersectionObserver
@@ -241,9 +240,7 @@ export default function GalleryPage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && hasMore && !loading && !loadingMore) {
-          const nextPage = page + 1
-          setPage(nextPage)
-          fetchGallery(nextPage, true)
+          fetchGallery(nextCursor, true)
         }
       },
       { rootMargin: "200px" },
@@ -251,7 +248,7 @@ export default function GalleryPage() {
 
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasMore, loading, loadingMore, page, fetchGallery])
+  }, [hasMore, loading, loadingMore, nextCursor, fetchGallery])
 
   async function handleReport() {
     if (!reportItem) return

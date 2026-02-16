@@ -228,19 +228,12 @@ export async function updateStorageUsage(
   // Self-hosted: no tracking
   if (!hasCredits()) return
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("storage_used_bytes")
-    .eq("id", userId)
-    .single()
+  const { error } = await supabase.rpc("increment_storage", {
+    p_user_id: userId,
+    p_bytes: additionalBytes,
+  })
 
-  if (!profile) return
-
-  const currentUsed = profile.storage_used_bytes ?? 0
-  const newUsage = Math.max(0, currentUsed + additionalBytes)
-
-  await supabase
-    .from("profiles")
-    .update({ storage_used_bytes: newUsage })
-    .eq("id", userId)
+  if (error) {
+    console.error("[updateStorageUsage] increment_storage RPC failed:", error.message)
+  }
 }

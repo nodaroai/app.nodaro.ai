@@ -49,14 +49,7 @@ app.post("/v1/my-route", {
 })
 ```
 
-**Credit files:**
-- `backend/src/billing/credits.ts` -- CreditsService (check, reserve, refund, dual-pool)
-- `backend/src/middleware/credit-guard.ts` -- creditGuard preHandler + reserveCreditsForJob
-- `backend/src/billing/paddle-config.ts` -- Tier/pricing constants, price ID mappings
-- `backend/src/routes/paddle-webhook.ts` -- Paddle webhook handler (POST /v1/billing/paddle-webhook)
-- `backend/src/billing/provision-credits.ts` -- Webhook event handlers (sub created/updated/canceled, topup)
-- `backend/src/billing/cleanup-service.ts` -- R2 media cleanup
-- `backend/src/billing/cleanup-cron.ts` -- Scheduled cleanup jobs
+**Credit files:** `billing/credits.ts` (CreditsService), `middleware/credit-guard.ts` (preHandler + reserve), `billing/paddle-config.ts` (tiers/pricing), `routes/paddle-webhook.ts` (webhook handler), `billing/provision-credits.ts` (webhook event handlers), `billing/cleanup-service.ts` + `cleanup-cron.ts` (R2 media cleanup)
 
 ### API Proxy Architecture (CRITICAL)
 
@@ -67,15 +60,11 @@ Next.js `rewrites` in `frontend/next.config.ts` proxy `/v1/*` to the backend (`h
 - `API_BASE_URL` in `frontend/src/lib/api.ts` is `""` (empty string) -- NEVER hardcode `localhost:8000`
 - Admin pages and hooks must also use relative `/v1/...` paths, NOT their own `API_BASE_URL`
 - The backend URL is configured via `NEXT_PUBLIC_API_URL` env var in `next.config.ts` only
-- This pattern eliminates mixed-content (HTTPS/HTTP) issues when using ngrok or production domains
-- **Exception: SSE streaming** calls bypass the proxy and call `NEXT_PUBLIC_API_URL` directly (the proxy buffers response bodies, breaking real-time token delivery). See SSE Streaming Infrastructure below.
+- **Exception: SSE streaming** calls bypass the proxy and call `NEXT_PUBLIC_API_URL` directly (proxy buffers responses, breaking real-time delivery)
 
 ### CORS Configuration
-
-Backend CORS is configured in `backend/src/app.ts` with a whitelist:
-- Default origins: `http://localhost:3000`, `https://app.scenenode.ai`
-- Additional origins via `CORS_ORIGIN` env var (comma-separated)
-- SSE responses include CORS headers manually (in `sse.ts`) because `reply.raw.writeHead()` bypasses Fastify's `onSend` hooks where `@fastify/cors` injects headers
+- Backend CORS in `backend/src/app.ts`: whitelist `http://localhost:3000`, `https://app.scenenode.ai`, plus `CORS_ORIGIN` env var (comma-separated)
+- SSE responses include CORS headers manually (in `sse.ts`) because `reply.raw.writeHead()` bypasses Fastify's `onSend` hooks
 
 ### Coding Standards
 - **Backend**: Fastify plugin pattern (NOT Express Router)
@@ -257,12 +246,12 @@ All gated behind `hasCredits()`:
 - `useModelCredits(modelId)` hook — fetches from `/v1/credits/model-cost` with cache
 
 ### Watermark System (Free Tier)
-- Free tier outputs get a semi-transparent "SceneNode.ai" watermark; paid tiers get clean outputs
-- **Images**: Sharp SVG composite, bottom-right, font size = 2.5% of image width (min 16px)
-- **Videos**: FFmpeg `drawtext` filter, white@0.5 opacity, bottom-right corner
-- **NOT watermarked**: audio (TTS, music, SFX, suno-*), scripts, FFmpeg processing nodes
+- Free tier: semi-transparent "SceneNode.ai" watermark; paid tiers: clean outputs
+- **Images**: Sharp SVG composite, bottom-right, font size = 2.5% of width (min 16px)
+- **Videos**: FFmpeg `drawtext` filter, white@0.5 opacity, bottom-right
+- **NOT watermarked**: audio, scripts, FFmpeg processing nodes
 - Worker checks `profiles.tier` at job start; `shouldWatermark = (tier === "free")`
-- Helper functions in `backend/src/utils/watermark.ts`: `applyImageWatermark(buffer)`, `applyVideoWatermark(inputPath, outputPath)`
+- Helpers in `backend/src/utils/watermark.ts`: `applyImageWatermark(buffer)`, `applyVideoWatermark(inputPath, outputPath)`
 - Worker helpers: `uploadImageMaybeWatermark`, `uploadVideoMaybeWatermark`, `watermarkLocalVideoAndUpload`
 - Special case: image-to-video with audio merge -- watermark applied to FINAL merged output only
 
@@ -276,42 +265,35 @@ All gated behind `hasCredits()`:
 ## Billing (Paddle)
 
 ### Billing Routes (`backend/src/routes/billing.ts`)
-- `GET /v1/billing/subscription?userId=...` -- Get current subscription
+- `GET /v1/billing/subscription?userId=...` -- Current subscription
 - `GET /v1/billing/transactions?userId=...` -- Transaction history
 - `POST /v1/billing/manage-subscription` -- Paddle customer portal URL
-- `POST /v1/billing/change-plan` -- Change subscription tier (calls `paddle.subscriptions.update()` with `prorated_immediately`)
+- `POST /v1/billing/change-plan` -- Change tier (`paddle.subscriptions.update()` with `prorated_immediately`)
 
 ### Plan Change Flow (CRITICAL -- avoids duplicate subscriptions)
 - Subscribed users: pricing page calls `POST /v1/billing/change-plan` (NOT `openCheckout()`)
 - New users: pricing page calls `openCheckout()` to create first subscription
 - Paddle sends `subscription.updated` webhook automatically after plan change
-- `handleSubscriptionUpdated()` in `provision-credits.ts` handles credit diff (upgrade grants, downgrade defers)
+- `handleSubscriptionUpdated()` in `provision-credits.ts` handles credit diff
 
 ### Cancellation Flow (CRITICAL -- must downgrade immediately)
 - `subscription.canceled` webhook fires for BOTH immediate and end-of-period cancellations
-- `handleSubscriptionCanceled()` ALWAYS downgrades user to free tier immediately:
-  - `tier = "free"`, `subscription_credits = min(current, 50)`, `storage_limit_bytes = 1GB`
-- `expireSubscriptions` cron is a safety net only (marks subs as "expired" to prevent reprocessing)
-- Topup credits are NOT affected by cancellation (they never expire)
+- `handleSubscriptionCanceled()` ALWAYS downgrades to free tier immediately: `tier = "free"`, `subscription_credits = min(current, 50)`, `storage_limit_bytes = 1GB`
+- `expireSubscriptions` cron is a safety net only
+- Topup credits are NOT affected by cancellation
 
 ### Webhook System
 - Endpoint: `POST /v1/billing/paddle-webhook` (in `backend/src/routes/paddle-webhook.ts`)
 - **Webhook URL must match deployment**: `https://{domain}/v1/billing/paddle-webhook`
-- Events handled: subscription.created/updated/canceled/past_due/paused/resumed, transaction.completed/payment_failed
-- All webhook writes are idempotent (check existing before insert)
-- Signature verification via `paddle.webhooks.unmarshal(rawBody, secret, signature)`
+- Events: subscription.created/updated/canceled/past_due/paused/resumed, transaction.completed/payment_failed
+- All writes are idempotent; signature verification via `paddle.webhooks.unmarshal(rawBody, secret, signature)`
 
 ### General
 - `BILLING_PROVIDER=paddle` env var enables billing features
 - Storage limits: Free=1GB, Basic=10GB, Standard=25GB, Pro=50GB, Business=200GB
-- Retention: Active subscribers = kept. Free/canceled = 60 days grace then delete media. Workflows never deleted.
-- Cleanup cron: runs hourly (expire subscriptions) and daily 3AM UTC (R2 media cleanup)
-- Subscription statuses: `active` -> `canceled` (webhook) -> `expired` (cron safety net)
-
-### Frontend Billing Pages
-- `/pricing` -- Subscription-aware: shows "Current Plan" badge, "Switch Plan" for existing subscribers, normal checkout for new users
-- `/billing` -- Dashboard: current plan, credit balance (subscription + topup pools), transaction history, manage subscription link
-- All API calls use relative paths via Next.js proxy (see API Proxy Architecture above)
+- Retention: Active = kept. Free/canceled = 60 days grace then delete media. Workflows never deleted.
+- Cleanup cron: hourly (expire subs), daily 3AM UTC (R2 media cleanup)
+- Frontend pages: `/pricing` (subscription-aware), `/billing` (dashboard with credit balance, storage, transactions)
 
 ### Paddle Env Var Naming (CRITICAL -- has caused bugs twice)
 Backend `.env` uses **`PADDLE_PRICE_CREDITS_55/150/330/700`** for top-ups (named by credit amount).
@@ -321,40 +303,28 @@ NEVER use placeholder fallbacks like `"pri_topup_10"` -- always use real Paddle 
 ### Paddle Testing with ngrok
 - Paddle rejects `localhost` -- must use ngrok for checkout + webhook testing
 - Frontend: `ngrok http 3000` -- Next.js proxy handles API calls seamlessly
-- Webhook URL in Paddle dashboard: `https://<ngrok-url>/v1/billing/paddle-webhook`
+- Webhook URL: `https://<ngrok-url>/v1/billing/paddle-webhook`
 - Add ngrok URL to Supabase Auth > Redirect URLs: `https://*.ngrok-free.app/**`
-- Google OAuth `redirectTo` already uses `window.location.origin` (in `use-auth.ts`)
 
 ---
 
-## Storage Management (v1.22.0)
+## Storage & Library (v1.22.0)
 
 **Quota Enforcement:**
 - DB-first: `storage_limit_bytes` in profiles takes precedence (admin override)
 - Falls back to `TIER_STORAGE_LIMITS[tier]` from `paddle-config.ts`
 - Self-hosted (`hasCredits() = false`): no enforcement
 - Checked in `credit-guard.ts` + upload routes
-- Single source of truth: `TIER_STORAGE_LIMITS` in `paddle-config.ts`
 
 **StorageExceededModal:**
 - `StorageExceededError` class in `api.ts` with `throwApiError()` (~60 throw sites)
-- Backend error format `storage_limit_exceeded` with usedBytes/quotaBytes/remainingBytes/tier
-- `workflow-editor.tsx` catches on all 14+ API calls, shows modal not toast
-- `use-file-upload.ts` catches for upload nodes
+- `workflow-editor.tsx` catches on all 14+ API calls (shows modal not toast); `use-file-upload.ts` catches for uploads
 
-**Admin Storage:** PUT /v1/admin/users/:id/storage, progress bar + tier presets + custom GB
+**Admin Storage:** `PUT /v1/admin/users/:id/storage` -- progress bar + tier presets + custom GB
 
-**Billing Page Storage:** Section between Credit Balance and Transaction History, usage bar, upgrade prompt at 70%+, "Manage Files" -> /library
+***REDACTED-OSS-SCRUB***
 
-**Change Plan Immediate DB Update:** After paddle.subscriptions.update() succeeds, immediately update subscriptions + profiles tables. Webhook = backup reconciliation.
-
-**Key files:** paddle-config.ts, credits.ts, credit-guard.ts, upload.ts, billing.ts, api.ts (StorageExceededError), StorageExceededModal.tsx
-
----
-
-## Library Page (v1.22.0)
-
-`/library` -- file management: storage summary + progress bar, filter tabs (All/Images/Videos/Audio), thumbnails + type badges + sizes + dates, multi-select + bulk delete, cursor pagination, `owned=true` filter. Sidebar: Archive icon.
+**Library Page** (`/library`): Storage summary bar, filter tabs (All/Images/Videos/Audio), thumbnails + type badges + sizes + dates, multi-select + bulk delete, cursor pagination.
 Files: `frontend/src/app/(dashboard)/library/page.tsx`, `backend/src/routes/library.ts`
 
 ---
@@ -373,19 +343,19 @@ Files: `frontend/src/app/(dashboard)/library/page.tsx`, `backend/src/routes/libr
 ## Gallery & Private Mode
 
 ### Public Gallery
-- `GET /v1/gallery` -- public endpoint, no auth required
-- Query params: `page` (default 1), `limit` (default 20, max 50), `type` (image/video/audio)
-- Returns completed public jobs with username (never exposes user_id/email)
-- Maps job names to output types via Sets: IMAGE_JOBS, VIDEO_JOBS, AUDIO_JOBS
-- Frontend: `/gallery` standalone page (outside dashboard layout) with grid, filter tabs, pagination, dialog preview
+- `GET /v1/gallery` -- public, no auth. Params: `cursor`, `limit` (default 20, max 50), `type` (image/video/audio)
+- Returns `{ data, nextCursor }` — cursor-based pagination
+- Frontend: `/gallery` standalone page with grid, filter tabs, dialog preview
 
 ### Private Mode
-- `GET /v1/user/settings?userId=` -- returns tier + publicOutputs
-- `PATCH /v1/user/settings` -- updates public_outputs with tier enforcement
+- `GET /v1/user/settings?userId=` / `PATCH /v1/user/settings` -- tier + publicOutputs
 - Only Standard/Pro/Business can set `publicOutputs = false` (Free/Basic always public)
-- Frontend: Settings page has Gallery Visibility toggle card
 - Worker sets `is_public` flag on jobs during processing based on user's `public_outputs` profile setting
 
+### DB Additions
+- `profiles.public_outputs` (boolean, default true), `jobs.is_public` (boolean, default true)
+- `idx_jobs_public_gallery` -- partial index WHERE `is_public = true AND status = 'completed'`
+- Key files: `routes/gallery.ts`, `routes/user-settings.ts`, `app/gallery/page.tsx`, `app/(dashboard)/settings/page.tsx`
 ### Key Files
 - `backend/src/routes/gallery.ts` -- Gallery API route
 - `backend/src/routes/user-settings.ts` -- User settings API route
@@ -430,32 +400,29 @@ Full-featured lightbox for gallery items with navigation, download, fullscreen, 
 
 ## AI Agent Node (v1.24, formerly AI Writer)
 
+Generates multiple image prompts from a single concept via Claude Sonnet (2 credits). Spawns individual Generate Image nodes on canvas.
 ### Overview
 AI Agent (display name changed from "AI Writer" in v1.24) generates multiple image prompts from a single concept, then spawns individual Generate Image nodes on the canvas. Uses Claude Sonnet via Anthropic API (2 credits per generation).
 
 ### Workflow
-1. Connect a **reference image** (Generate Image, Upload Image, etc.) to AI Writer for visual consistency
-2. Optionally connect a **Face** node for facial identity
-3. Select a template (Photo Shoot, Product Catalog, Storyboard) or use Custom
-4. Run AI Writer -- generates N prompts separated by `===NEXT===`
-5. Click "Create N Image Nodes" -- spawns individual Generate Image nodes in 2-column grid
-6. Each node receives: prompt text + reference image edges + face edge
-7. Click "Generate All N Images" -- runs all with concurrency limit of 3
+1. Connect a **reference image** + optionally a **Face** node
+2. Select template (Photo Shoot, Product Catalog, Storyboard, Custom)
+3. Run → generates N prompts separated by `===NEXT===`
+4. "Create N Image Nodes" → spawns Generate Image nodes in 2-column grid with edges
+5. "Generate All N Images" → runs all with concurrency limit of 3
 
 ### Key Files
-- `backend/src/routes/ai-writer.ts` -- POST `/v1/ai-writer/generate` (Claude API, 120s timeout)
+- `backend/src/routes/ai-writer.ts` -- POST `/v1/ai-writer/generate` + `/generate-stream`
 - `frontend/src/lib/ai-writer-templates.ts` -- 3 built-in templates + Custom
-- `frontend/src/components/nodes/ai-writer-node.tsx` -- Node component with preview modal
-- `frontend/src/lib/api.ts` -- `generateAIWriter()` (bypasses Next.js proxy for long requests)
+- `frontend/src/components/nodes/ai-writer-node.tsx` -- Node component with streaming + preview
 
 ### Architecture Notes
 - Templates use `{outputCount}` placeholder replaced at runtime
-- Predefined templates require a connected reference image; Custom does not
+- Predefined templates require connected reference image; Custom does not
 - Created nodes tracked via `createdNodeIds` on AIWriterNodeData for cleanup on re-creation
-- Store functions: `createNodesFromWriter` + `runAllWriterImageNodes` (registered via useEffect pattern)
-- `handleCreateNodesFromWriter()` uses `getImageOutputHandle()` for correct source handle IDs per node type
-- Prompt truncation: 1500 chars at node creation, 2000 chars after wrapper expansion (character descriptions)
-- `AI_WRITER_BASE_URL` calls backend directly (not via Next.js proxy) to avoid 30s timeout
+- `handleCreateNodesFromWriter()` uses `getImageOutputHandle()` for correct source handle IDs
+- Prompt truncation: 1500 chars at node creation, 2000 chars after wrapper expansion
+- Calls backend directly (not via proxy) to avoid 30s timeout
 
 ### Output Handle Map (for edge creation)
 | Node Type | Output Handle |
@@ -485,7 +452,7 @@ AI Agent (display name changed from "AI Writer" in v1.24) generates multiple ima
 | `app_settings` | key (unique), value (JSONB) | ai_provider, cost_markup_percent |
 | `credit_transactions` | id, user_id, amount, credit_type, source, job_id | Audit log |
 | `paddle_customers` | id, user_id, paddle_customer_id | Supabase ↔ Paddle mapping |
-| `subscriptions` | id, paddle_subscription_id, paddle_price_id, tier, status, current_period_start, current_period_end, canceled_at, updated_at | Synced from Paddle |
+| `subscriptions` | id, paddle_subscription_id, paddle_price_id, tier, status, current_period_start/end, canceled_at | Synced from Paddle |
 | `transactions` | id, paddle_transaction_id, type, amount_usd, credits_granted | Payment history |
 
 ---
@@ -506,7 +473,6 @@ frontend/src/
   components/ui/          — shadcn/ui
   hooks/                  — useModelCredits, etc.
   lib/api.ts              — API client
-  lib/ai-writer-templates.ts — AI Writer templates + system prompts
   lib/paddle.ts           — Paddle.js singleton
   lib/edition.ts          — Edition helpers
   lib/pricing-data.ts     — Tier/model pricing constants
@@ -522,7 +488,8 @@ backend/src/
   billing/                — Credits, Paddle, cleanup (see Credit System above)
   middleware/             — credit-guard.ts, auth
   lib/config.ts           — Env config + edition helpers
-  lib/app-settings.ts     — Settings cache (60s TTL)
+  lib/admin-check.ts      — Shared cached admin check (30s TTL)
+  lib/app-settings.ts     — Settings cache (60s TTL, stampede-safe)
 ```
 
 ---
@@ -540,17 +507,13 @@ backend/src/
 
 ## SSE Streaming Infrastructure
 
-**File:** `backend/src/lib/sse.ts`
+### Backend (`backend/src/lib/sse.ts`)
 
-Reusable Server-Sent Events helper for Fastify. Used by any endpoint that needs to stream data to the browser (AI Writer, future AI Flow Builder, etc).
-
-### Usage
 ```typescript
 import { createSSEStream } from "../lib/sse.js"
 
 app.get("/v1/my-stream", async (req, reply) => {
   const sse = createSSEStream(req, reply)
-
   sse.sendEvent({ type: "progress", step: 1, total: 3, message: "Starting..." })
   sse.sendEvent({ type: "token", data: "Hello" })
   sse.sendEvent({ type: "done", data: { result: "ok" } })
@@ -558,70 +521,47 @@ app.get("/v1/my-stream", async (req, reply) => {
 })
 ```
 
-### SSE Controller API
-| Method | Description |
-|--------|-------------|
-| `sendEvent(event)` | Send a structured `StreamEvent` as `data: JSON\n\n` |
-| `sendComment(text?)` | Send SSE comment (`: text\n\n`), used for keepalive |
-| `close()` | End the stream, clear keepalive timer |
-| `isClosed` | Boolean — true after close() or client disconnect |
+**Controller API:** `sendEvent(event)`, `sendComment(text?)`, `close()`, `isClosed`
 
-### Event Protocol (`StreamEvent`)
+**Event Protocol (`StreamEvent`):**
 | Type | Fields | Purpose |
 |------|--------|---------|
-| `token` | `data: string` | Incremental text chunk (LLM streaming) |
-| `metadata` | `data: Record<string, unknown>` | Model info, usage stats, etc. |
-| `progress` | `step, total, message` | Step-based progress indicator |
-| `done` | `data: Record<string, unknown>` | Final result payload |
-| `error` | `data: { code, message }` | Error with machine-readable code |
+| `token` | `data: string` | Incremental text chunk |
+| `metadata` | `data: Record<string, unknown>` | Model info, usage stats |
+| `progress` | `step, total, message` | Step-based progress |
+| `done` | `data: Record<string, unknown>` | Final result |
+| `error` | `data: { code, message }` | Error with code |
 
-### Behavior
-- Sets headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`
-- Adds `Access-Control-Allow-Origin` + `Access-Control-Allow-Credentials` from request `Origin` header (bypasses `@fastify/cors` since `reply.raw.writeHead()` skips Fastify hooks)
-- Auto keepalive comment every 15s to prevent proxy/CDN timeout
-- Cleans up on `close()` or client disconnect (`req.raw.on('close')`)
-- All writes are no-ops after close (safe to call `sendEvent` on a closed stream)
+**Behavior:** Sets `text/event-stream` headers + manual CORS headers (bypasses `@fastify/cors`). Auto keepalive every 15s. All writes are no-ops after close.
 
 ### Frontend SSE Client (`frontend/src/lib/sse-client.ts`)
 
-Reusable async generator for consuming SSE from POST requests (native `EventSource` only supports GET).
+Async generator for SSE from POST requests (native `EventSource` only supports GET):
 
 ```typescript
 import { streamRequest, type StreamEvent } from "@/lib/sse-client"
 
 const controller = new AbortController()
-
 for await (const event of streamRequest("/v1/ai-writer/generate-stream", {
   body: { systemPrompt, userInput, userId, model },
   signal: controller.signal,
 })) {
   switch (event.type) {
-    case "metadata": console.log("Job:", event.data.jobId); break
-    case "token":    output += event.data; break
-    case "done":     console.log("Complete:", event.data); break
-    case "error":    console.error(event.data.message); break
+    case "token": output += event.data; break
+    case "done":  console.log("Complete:", event.data); break
+    case "error": console.error(event.data.message); break
   }
 }
-
-// Cancel mid-stream:
-controller.abort()
+controller.abort() // Cancel mid-stream
 ```
 
 - Uses `fetch()` + `ReadableStream.getReader()` + `TextDecoder`
-- Accepts optional `baseUrl` to bypass Next.js proxy (calls backend directly for real-time SSE)
-- Buffers partial chunks across reads (SSE data may split mid-line)
-- Skips SSE comments (`:` prefix) and empty lines
-- Supports `AbortSignal` for cancellation
-- Throws on non-200 responses with status + body text
-- Exports `StreamEvent` type (same shape as backend)
+- Optional `baseUrl` to bypass Next.js proxy for real-time SSE
+- Buffers partial chunks, skips SSE comments, supports `AbortSignal`
 
-### Streaming API Function (`frontend/src/lib/api.ts`)
-
-`generateAIWriterStream()` -- high-level wrapper around `streamRequest()` for the AI Writer:
+### Streaming API Wrapper (`frontend/src/lib/api.ts`)
 
 ```typescript
-import { generateAIWriterStream } from "@/lib/api"
-
 const { jobId, generatedText } = await generateAIWriterStream({
   systemPrompt, userInput, model, temperature, maxTokens, userId,
   onToken: (token) => { output += token; setText(output) },
@@ -629,57 +569,26 @@ const { jobId, generatedText } = await generateAIWriterStream({
 })
 ```
 
-- Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses Next.js proxy using `NEXT_PUBLIC_API_URL`)
-- `onToken` callback fires for each streamed text delta
-- Returns `{ jobId, generatedText }` on `done` event
-- Throws on `error` event
-- On abort (`signal`): returns gracefully with whatever text was collected so far
+Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ jobId, generatedText }` on done. On abort: returns gracefully with collected text.
 
-### AI Writer Node Streaming UX (`frontend/src/components/nodes/ai-writer-node.tsx`)
+### Streaming UX Pattern (AI Writer Node)
+- **Streaming**: Tokens appear real-time with blinking cursor. Stop button visible. `accumulatedTextRef` flushes to Zustand via `requestAnimationFrame` (~60fps).
+- `activeResultIndex = -1` at start so `generatedText` drives display (not stale results)
+- DAG executor also uses `generateAIWriterStream()` -- same real-time tokens during workflow execution
+- Both sync and streaming paths produce identical output format (`generatedText` + `generatedItems` + `generatedResults`)
 
-The AI Writer node uses streaming when the user clicks Run directly on the node:
-
-- **Idle**: Dashed placeholder with FileText icon
-- **Streaming**: Tokens appear in real-time in the output area with blinking cursor `|`. Stop button (red Square) visible inside the node. Preview modal disabled during streaming. RunNodeButton hidden (isRunning=true).
-- **Completed**: Final text saved to `generatedResults` + `generatedItems` (same format as sync path). Preview modal re-enabled. Result thumbnails show for multi-result history.
-- **Failed**: Error state with AlertCircle icon + error message
-- **Stopped (abort)**: `generateAIWriterStream` returns partial text gracefully. The node treats this as an error with "Generation failed" message since partial output isn't useful for AI Writer (it needs all items separated by `===NEXT===`).
-
-**Key implementation details:**
-- `handleStreamingRun` bypasses `runSingleNode` from the store -- calls `generateAIWriterStream` directly
-- Resolves connected text-prompt node input (same logic as `workflow-editor.tsx`)
-- Processes `{outputCount}` placeholder in system prompt before sending
-- Tokens accumulate in `accumulatedTextRef` (ref) and flush to Zustand store (`generatedText`) via `requestAnimationFrame` (~60fps). This lets both the node card and config panel display streaming text in real-time.
-- `activeResultIndex` set to `-1` at streaming start so stale results don't override streaming text
-- Uses `useRef<AbortController>` for stop; `isStreaming` state drives cursor + stop button
-- Config panel shows "Streaming..." section with live text + blinking cursor when `executionStatus === "running"`
-- Saves results identically to the sync path: `generatedText`, `generatedItems` (separator split), `generatedResults` array
-
-### Workflow Execution Streaming (`workflow-editor.tsx` `executeNode`)
-
-The DAG executor also uses `generateAIWriterStream()` for ai-writer nodes:
-- `onToken` callback updates `generatedText` in the Zustand store, so the node UI shows real-time tokens even during full workflow execution
-- At execution start, `activeResultIndex` is set to `-1` and `generatedText` cleared so the node displays streaming text instead of a stale old result
-- After completion, `activeResultIndex: 0` is restored and `generatedResults` updated (same format as before)
-- The promise returned by `generateAIWriterStream()` is awaited, so downstream nodes don't execute until streaming finishes
-- Output to downstream nodes is identical to the old sync path (`generatedText` + `generatedItems`)
-
-### Streaming Endpoints
-
+### Endpoints
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/ai-writer/generate` | POST | Legacy sync endpoint (returns full JSON) |
-| `/v1/ai-writer/generate-stream` | POST | SSE streaming endpoint (returns event stream) |
+| `/v1/ai-writer/generate` | POST | Legacy sync (full JSON) |
+| `/v1/ai-writer/generate-stream` | POST | SSE streaming (event stream) |
 
-Both endpoints share the same Zod schema (`aiWriterBody`), credit guard, and job lifecycle. The streaming endpoint uses `anthropic.messages.stream()` + `on("text")` events.
+Both share same Zod schema, credit guard, and job lifecycle.
 
 ### Adding Streaming to New Features
-
-To add SSE streaming to a new backend endpoint:
-
-1. **Backend route**: Import `createSSEStream` from `../lib/sse.js`. After validation/auth/credit checks, call `createSSEStream(req, reply)` to get the controller. Send `metadata`, then stream `token` events, then `done`/`error`. Handle errors with `sse.sendEvent({ type: "error", ... })` + `sse.close()`.
-2. **Frontend API function**: Create a wrapper in `api.ts` that calls `streamRequest()` from `sse-client.ts` with the endpoint URL. Handle `token`/`done`/`error` events. Accept an `onToken` callback and `AbortSignal`.
-3. **Node component**: Add `accumulatedTextRef` + `flushTimerRef` refs + `AbortController` ref. In `onToken`, accumulate text in the ref and flush to Zustand store via `requestAnimationFrame` (throttles to ~60fps). Set `activeResultIndex: -1` at start so the store's `generatedText` drives display. Add `isStreaming` state for cursor + stop button.
+1. **Backend**: Import `createSSEStream` from `../lib/sse.js`. Send `metadata` → stream `token` events → `done`/`error` + `close()`.
+2. **Frontend API**: Wrapper in `api.ts` calling `streamRequest()` with `onToken` callback + `AbortSignal`.
+3. **Node component**: `accumulatedTextRef` + `requestAnimationFrame` flush to Zustand. `activeResultIndex: -1` at start. `isStreaming` state for cursor + stop button.
 
 ---
 
@@ -694,125 +603,201 @@ To add SSE streaming to a new backend endpoint:
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
-| Settings cache | 60s TTL | Reduce DB queries for app_settings |
+| Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
 
 ---
 
-## List Infrastructure (v1.25) -- COMPLETE
+## List Infrastructure (v1.25)
 
-**Phase 1: AI Writer cleanup** -- Removed auto-chunking from AI Writer. Single LLM call per run, 1 credit, maxTokens 4096. SSE streaming kept intact.
+- **List Node**: Input node (0 credits). User enters items one per line. Dynamic config panel with add/edit/delete per row.
+- **Execution**: `extractNodeOutputAsList()` returns `string[]`. `getListInputForNode()` detects list input from upstream. `executeNodeForList()` runs node N times sequentially with progress (`__listTotal`/`__listCompleted`/`__listResults`).
+- **All node types**: `executeNode` accepts optional `overridePrompt` (no store mutation). Works for both "Execute workflow" and "Run This Node".
+- **UI badges**: xN badge (cyan pill) showing iteration count. Running counter (fuchsia pill, animated) "2/3". Progress bar with gradient.
 
-**Phase 2: List Node** -- New "list" input node (category: input, 0 credits). User enters items one per line. Dynamic config panel with add/edit/delete per row. Added to both toolbars, nodeTypes, config panel.
+### Expand/Collapse Clones
+- After list execution, `expandLoopResults()` creates visual clones (`node_7_iter_0`) with individual results. Originals hidden (`hidden: true`).
+- Before any execution, `collapseExpandedClones()` removes clones, unhides originals, restores clean graph.
+- Clone detection: `__expandedClone` flag AND `/_iter_\d+$/` ID pattern (backwards compat).
 
-**Phase 3a: Execution engine list support** -- `extractNodeOutputAsList()` returns all items as `string[]`. `getListInputForNode()` checks if node receives list input from upstream (>1 items). Added `"list"` case in `resolveNodeInputs`.
-
-**Phase 3b: List propagation (AI Writer)** -- `executeNodeForList()` runs AI Writer sequentially per list item with progress tracking (`__listTotal`/`__listCompleted`/`__listResults`).
-
-**Phase 3c: List propagation for all nodes** -- Extended to all node types. `executeNode` accepts optional `overridePrompt` parameter (prompt passed directly, no store mutation). Generate Image: `overridePrompt` takes priority over `inputs.prompt`. `handleRunSingleNode` also checks for list input and routes to `executeNodeForList`. Works for both "Execute workflow" and "Run This Node" buttons.
-
-**Phase 4: List UI badges and progress** -- xN badge (cyan pill) on nodes connected to list input showing iteration count. Running counter badge (fuchsia pill, animated) showing "2/3" during execution. Progress bar with gradient (cyan-to-fuchsia) and percentage during list execution. Renamed "Asset Library" to "My Library" across all UI.
-
-**Phase 5: Expand/Collapse Clones** -- After list execution, `expandLoopResults()` creates visual clones (e.g., `node_7_iter_0`) for each list result. Originals are hidden (`hidden: true`), not deleted. Clones are marked with `data.__expandedClone: true` and `data.__expandedFrom: originalNodeId`. Before any execution (`handleRun`, `handleRunFromHere`, `handleRunSelected`), `collapseExpandedClones()` removes clones, unhides originals, and restores clean graph for BFS/execution. Clone detection uses BOTH `__expandedClone` flag AND `/_iter_\d+$/` ID pattern (backwards compat).
-
-**Phase 6: Run Selected** -- Multi-select nodes on canvas, floating action bar appears above selection with "Run selected (N)" button. Right-click context menu also shows "Run selected" when 2+ nodes selected. `handleRunSelected()` collects selected executable nodes, collapses clones, builds execution levels from selection subset, runs topological sort within selection only.
+### Run Selected
+- Multi-select → floating action bar with "Run selected (N)". Also in right-click context menu.
+- `handleRunSelected()`: collapses clones, topological sort within selection only.
+- Components: `selection-action-bar.tsx`, `node-context-menu.tsx`, store fields `runSelected`/`setRunSelected`
 
 ### Key Functions (workflow-editor.tsx)
 | Function | Purpose |
 |----------|---------|
-| `collapseExpandedClones()` | Pre-execution: remove clones, unhide originals, restore clean graph |
-| `expandLoopResults()` | Post-execution: create visual clones from `__listResults`, hide originals |
-| `handleRunFromHere(nodeId)` | BFS forward from node, collapse first, execute downstream subgraph |
-| `handleRunSelected()` | Execute only selected nodes in topological order |
-| `executeNodeForList()` | Run a node N times for each list item with progress tracking |
-| `getEffectivelySkippedIds()` | Compute skipped nodes + downstream propagation (fixed-point) |
+| `collapseExpandedClones()` | Pre-execution: remove clones, unhide originals |
+| `expandLoopResults()` | Post-execution: create clones from `__listResults` |
+| `handleRunFromHere(nodeId)` | BFS forward, collapse first, execute downstream |
+| `handleRunSelected()` | Execute selected nodes in topological order |
+| `executeNodeForList()` | Run node N times for each list item |
+| `getEffectivelySkippedIds()` | Compute skipped nodes + downstream propagation |
 
-### Clone Expand/Collapse Lifecycle
-1. **List execution completes** -> `expandLoopResults()` creates `_iter_N` clones with individual results
-2. Originals hidden, clones visible with result data (images, text, etc.)
-3. **Next execution triggered** -> `collapseExpandedClones()` removes ALL clones, unhides originals
-4. Clean graph used for BFS traversal and topological sort
-5. After execution, `expandLoopResults()` creates fresh clones from new results
-
-### Run Selected Components
-- `frontend/src/components/editor/selection-action-bar.tsx` -- Floating bar above multi-selection
-- `frontend/src/components/editor/node-context-menu.tsx` -- "Run selected" context menu item
-- `frontend/src/hooks/use-workflow-store.ts` -- `runSelected` / `setRunSelected` store fields
-
-**Known issue:** `generatedResults` may accumulate across runs (cosmetic, does not affect execution).
+**Known issue:** `generatedResults` may accumulate across runs (cosmetic only).
 
 ---
 
 ## Loop Node (v1.26)
 
-**Status: COMPLETE** (branch: feature/loop-node, merged to main)
+Table editor with dynamic columns/handles. Each column = output handle feeding values to downstream nodes.
 
-Loop Node (Phase L1+L2): Table editor with dynamic columns/handles, execution engine that feeds column values to downstream nodes. Supports manual table input and connected mode (upstream node auto-populates rows by splitting text on newlines).
+- **Manual mode**: User defines columns + rows in table. Each column handle feeds column values as list.
+- **Connected mode**: Upstream wires to `"in"` handle. Splits output by `\n`, overrides manual table.
+- Reuses List execution path: `getListInputForNode` → `executeNodeForList`
+- `edge.sourceHandle` resolves which column feeds which downstream node
+- Dynamic handles require `useUpdateNodeInternals` (React Flow v12 doesn't auto-detect new `<Handle>` components)
 
-### Key Files
-- `frontend/src/components/nodes/loop-node.tsx` -- Node component with dynamic handles via `useUpdateNodeInternals`
-- `frontend/src/types/nodes.ts` -- `LoopColumn`, `LoopNodeData` types
-- `frontend/src/components/editor/config-panel.tsx` -- `LoopConfig` table editor (add/remove columns+rows, rename headers, edit cells)
-- `frontend/src/components/editor/workflow-editor.tsx` -- `getListInputForNode` + `resolveNodeInputs` Loop cases
-
-### Architecture
-- **Manual mode**: User defines columns (each = output handle) and rows in a table. Each column handle feeds its column values as a list to downstream nodes.
-- **Connected mode**: Upstream node wires to Loop's `"in"` handle. Loop reads upstream output, splits by `\n`, uses lines as iteration items (overrides manual table).
-- Reuses existing List execution path: `getListInputForNode` -> `executeNodeForList` (runs downstream N times).
-- `edge.sourceHandle` resolves which column feeds which downstream node.
-- Dynamic handles require `useUpdateNodeInternals` hook (React Flow v12 doesn't auto-detect new `<Handle>` components).
-- Handle positions distributed within body area (42%-88%) to avoid header overlap.
+**Key files:** `components/nodes/loop-node.tsx`, `types/nodes.ts` (`LoopColumn`, `LoopNodeData`), `config-panel.tsx` (`LoopConfig`), `workflow-editor.tsx`
 
 ---
 
 ## Skip Node (v1.20)
 
-**Status: COMPLETE** (branch: feat/skip-node, merged to main)
+Right-click or multi-select to skip/unskip nodes. Visual: opacity-40 + dashed border + orange SKIP badge. Runtime-only flag (`data.skipped`), not persisted to DB.
 
-Right-click or multi-select to skip/unskip nodes. Skipped nodes and their dependents are excluded from execution. Visual: opacity-40 + dashed border + orange SKIP badge. Runtime-only flag (`data.skipped`), not persisted to DB.
-
-### Key Changes
-- `frontend/src/hooks/use-workflow-store.ts` -- `toggleSkipNode`, `skipSelectedNodes`, `unskipSelectedNodes` store actions
-- `frontend/src/components/editor/node-context-menu.tsx` -- Skip/Unskip toggle in right-click menu
-- `frontend/src/components/editor/selection-action-bar.tsx` -- Bulk Skip/Unskip button for multi-select
-- `frontend/src/components/nodes/base-node.tsx` -- `opacity-40 border-dashed` + orange SKIP badge when `data.skipped`
-- `frontend/src/components/editor/workflow-editor.tsx` -- `getEffectivelySkippedIds()` helper + skip filtering in `handleRun`, `handleRunFromHere`, `handleRunSelected`
-
-### Effective Skip Propagation
-`getEffectivelySkippedIds(nodes, edges)` computes the full set of effectively skipped nodes:
+**Effective Skip Propagation** (`getEffectivelySkippedIds`):
 1. Directly skipped nodes (`data.skipped === true`)
-2. Nodes whose ALL parents are effectively skipped (cascading propagation via fixed-point iteration)
-3. Nodes with at least one non-skipped parent still execute normally
+2. Nodes whose ALL parents are effectively skipped (fixed-point cascade)
+3. Nodes with at least one non-skipped parent still execute
+
+**Key files:** `use-workflow-store.ts` (`toggleSkipNode`, `skipSelectedNodes`, `unskipSelectedNodes`), `node-context-menu.tsx`, `selection-action-bar.tsx`, `base-node.tsx`, `workflow-editor.tsx`
 
 ---
 
 ## Architecture Documentation (v1.21)
 
-Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produces 4 output files:
+Auto-generated via `npx tsx scripts/generate-architecture.ts`. Produces:
 
-| File | Content | Git-tracked |
-|------|---------|-------------|
-| `ARCHITECTURE.md` | Full internal architecture (all routes, tables, billing) | No (.gitignored) |
-| `ARCHITECTURE.public.md` | Filtered for Community edition (no admin/billing/paddle) | Yes |
-| `architecture-graph.html` | Interactive D3.js force-directed import graph (all files) | No (.gitignored) |
-| `architecture-graph.public.html` | Filtered graph (no billing/admin/paddle nodes) | Yes |
+| File | Git-tracked |
+|------|-------------|
+| `ARCHITECTURE.md` (full internal) | No |
+| `ARCHITECTURE.public.md` (filtered, no admin/billing) | Yes |
+| `architecture-graph.html` (D3.js import graph) | No |
+| `architecture-graph.public.html` (filtered graph) | Yes |
 
-**Command:** `npx tsx scripts/generate-architecture.ts`
+Scans: project structure, API routes, DB tables, node types, AI providers, import graph, edition gating. Public version excludes admin/billing/paddle paths and tables.
 
-### What the script scans
-- Project structure (frontend/src, backend/src directory trees)
-- API routes (from `app.ts` route registrations)
-- Database tables (from Supabase migrations)
-- Node types (from `NODE_DEFINITIONS` in workflow store)
-- AI providers (from provider registry)
-- Import graph (all `.ts`/`.tsx` files, resolves `@/` aliases + relative imports)
-- Edition gating (from config helpers)
+---
 
-### Public version filtering
-- Routes: excludes `/v1/admin/*`, `/v1/billing/*`, paddle-related
-- Tables: excludes `subscriptions`, `transactions`, `paddle_customers`, `credit_transactions`, `app_settings`
-- Project structure: hides `backend/src/billing/` directory
-- Import graph: excludes nodes with `billing`/`admin`/`paddle`/`gallery-reports` in path
-- Edition gating section: excluded entirely
+## Backend Performance (v1.24.2)
+
+### v1.24.1 — Initial optimizations (19 fixes)
+
+**Shared utilities:**
+- `lib/admin-check.ts` — `checkIsAdmin()` with 30s Map cache (replaces 4 duplicate copies)
+- `lib/storage.ts` — exported `s3` client, added `batchDeleteFromR2()` (DeleteObjectsCommand, 1000 keys/batch)
+- `routes/ai-writer.ts` — Anthropic client lazy singleton (`getAnthropicClient()`)
+
+**Pagination & queries:**
+- Gallery: cursor-based pagination (drops expensive `COUNT(*)`)
+- Admin users: paginated with `limit`/`offset`/`search` params
+- Admin credit summary: `Promise.all` for parallel profile + transaction queries
+- Worker: single Supabase join query for job + profile (replaces 2 sequential queries)
+
+**Streaming & memory:**
+- Image proxy: `Readable.fromWeb().pipe(reply.raw)` — zero-copy streaming
+- Upload: early MIME validation before `toBuffer()` — rejects bad types without buffering
+
+**Caching:**
+- App-settings: stampede-safe via `inflight` promise mutex
+- Admin check: 30s TTL per-user cache
+- Settings invalidation: `invalidateSettingsCache()` called on admin update
+
+**Infrastructure:**
+- Supabase client: disabled `autoRefreshToken` / `persistSession` for service-role
+- Fastify: explicit `bodyLimit: 1MB` for JSON endpoints
+- KIE verbose logging gated behind `NODE_ENV=development`
+- Cleanup: batch R2 deletes replace serial `safeDeleteR2` loops
+- Suno stems: parallel `Promise.all` uploads
+
+### v1.24.2 — Quick wins (14 fixes)
+
+**Correctness & revenue:**
+- Removed global `server.requestTimeout` mutation in `ai-writer.ts` (was affecting ALL connections)
+- Added `creditGuard` + `reserveCreditsForJob` to lip-sync route (was missing credit enforcement)
+- Model pricing cache now invalidated after admin updates (`invalidateModelPricingCache()` in `admin-credits.ts`)
+
+**Singleton clients:**
+- 5 files replaced `new Replicate(...)` with import from `providers/replicate/client.ts` singleton
+- Files: `script-generator.ts`, `translate.ts`, `generate-music.ts`, `text-to-audio.ts`, `transcribe.ts`
+
+**I/O & memory:**
+- New `uploadFileWithKeyToR2()` in `storage.ts` — streams local files to R2 instead of `readFile` + buffer
+- Applied in: `download-video.ts`, `youtube-audio.ts`, `video-worker.ts`
+- Removed unnecessary profile read-back in `reserveCredits` (saved 1 DB query per job)
+- Removed unused gallery profiles query
+
+**Polling backoff:**
+- Exported `pollDelay()` from `kie/client.ts` (was private)
+- Kling3 + all 4 Suno polling loops now use exponential backoff via `pollDelay()`
+
+**Logging:**
+- Kling3 + Suno verbose `console.log` calls gated behind `DEBUG = NODE_ENV === "development"` (~60 calls)
+- `console.warn`/`console.error` left ungated (only fires on actual problems)
+
+**Process reliability:**
+- `unhandledRejection` + `uncaughtException` handlers on both `server.ts` and `worker.ts`
+- Worker shutdown timeout (30s), `lockDuration: 900_000`, `stalledInterval: 300_000`
+- R2 assets: immutable cache headers (`max-age=31536000, immutable`) on image-proxy + upload
+
+**Key files changed:**
+| File | What changed |
+|------|-------------|
+| `lib/storage.ts` | `batchDeleteFromR2()` (v1.24.1), `uploadFileWithKeyToR2()` (v1.24.2) |
+| `lib/queue.ts` | BullMQ `defaultJobOptions`, removed `webhookQueue` |
+| `providers/kie/client.ts` | `pollDelay()` exported, DEBUG logging |
+| `providers/kie/kling3-client.ts` | Backoff polling, DEBUG logging |
+| `providers/kie/suno-client.ts` | Backoff polling (4 loops), DEBUG logging (~34 calls) |
+| `routes/lip-sync.ts` | Added `creditGuard` + `reserveCreditsForJob` |
+| `routes/admin-credits.ts` | `invalidateModelPricingCache()` after model update |
+| `server.ts` / `worker.ts` | Process error handlers, shutdown timeout |
+
+### v1.24.3 — Medium-effort targeted refactors (5 fixes)
+
+**Credit guard consolidation (saves 1-2 DB queries per AI request):**
+- `creditGuard` now fetches profile ONCE with superset of columns, passes to both checks
+- New `checkCreditsWithProfile()` and `checkStorageLimitWithProfile()` methods on CreditsService
+- New exported types: `CreditProfile`, `StorageProfile` in `billing/credits.ts`
+- Eliminated redundant tier query on storage-exceeded error (profile already fetched)
+- Removed dead code: `checkLlmLimit()`, `trackLlmRequest()`, `LlmLimitResult` type
+
+**FFmpeg zero-cost early return (saves 4-5 queries per FFmpeg request):**
+- `creditGuard` returns immediately for `modelIdentifier === "ffmpeg"`
+- `reserveCreditsForJob` also returns early for ffmpeg
+- 8 FFmpeg routes (combine-videos, merge-video-audio, etc.) skip all credit DB queries
+
+**Fetch timeouts on all 26 external calls (prevents hung processes):**
+- Polling loops (KIE/Suno status checks): 10s timeout with TimeoutError → continue retry
+- One-shot API calls (task creation, Replicate): 30s timeout
+- File downloads (images, videos, streaming): 60-120s timeout
+- Files: `kie/client.ts`, `kling3-client.ts`, `suno-client.ts`, `predictions.ts`, `image-proxy.ts`, `split-image.ts`, `storage.ts`, `ffmpeg-utils.ts`, `video-worker.ts`
+
+**Batch cleanup service DB updates (reduces ~300 queries to ~10):**
+- Asset updates: batch `.in("id", ids)` instead of per-asset updates
+- Storage deltas: aggregated per-user before single `updateStorageUsage` call
+- Job output cleanup: chunked `Promise.all` (10 concurrent) instead of sequential
+- `expireSubscriptions`: batch profile fetch + batch update + batch subscription mark
+
+**Gallery Cache-Control:**
+- `GET /v1/gallery` returns `Cache-Control: public, max-age=30, stale-while-revalidate=60`
+
+**Key files changed:**
+| File | What changed |
+|------|-------------|
+| `middleware/credit-guard.ts` | Single profile query, FFmpeg early return |
+| `billing/credits.ts` | `checkCreditsWithProfile`, `checkStorageLimitWithProfile`, dead code removal |
+| `billing/cleanup-service.ts` | Batched all N+1 loops |
+| `providers/kie/client.ts` | 4 fetch timeouts (30s create, 10s poll) |
+| `providers/kie/kling3-client.ts` | 2 fetch timeouts |
+| `providers/kie/suno-client.ts` | 10 fetch timeouts |
+| `routes/predictions.ts` | 3 fetch timeouts (30s) |
+| `routes/image-proxy.ts` | 1 fetch timeout (120s) |
+| `routes/split-image.ts` | 1 fetch timeout (60s) |
+| `routes/gallery.ts` | Cache-Control header |
+| `lib/storage.ts` | 1 fetch timeout (120s) |
+| `providers/video/ffmpeg-utils.ts` | 1 fetch timeout (120s) |
+| `workers/video-worker.ts` | 1 fetch timeout (60s), removed dead trackLlmRequest call |
 
 ---
 
@@ -820,7 +805,6 @@ Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produce
 - [ ] Phase 7: Paddle production go-live (swap sandbox keys for production)
 - [ ] Create monthly Paddle price IDs and add env vars (currently only annual prices exist)
 - [ ] Phase 6 Templates (preset workflow templates)
-- [x] Loop Node auto-create "Prompt" column
 - [ ] Landing page storage tier update
 - [ ] Project Folders
 - [ ] Version history per node

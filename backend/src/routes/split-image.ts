@@ -35,7 +35,7 @@ export async function splitImageRoutes(app: FastifyInstance) {
     }
 
     try {
-      const response = await fetch(imageUrl)
+      const response = await fetch(imageUrl, { signal: AbortSignal.timeout(60_000) })
       if (!response.ok) {
         throw new Error(`Failed to download image: ${response.status}`)
       }

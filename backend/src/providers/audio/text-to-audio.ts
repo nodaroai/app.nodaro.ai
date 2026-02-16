@@ -1,7 +1,4 @@
-import Replicate from "replicate"
-import { config } from "../../lib/config.js"
-
-const replicate = new Replicate({ auth: config.REPLICATE_API_TOKEN })
+import { replicate } from "../replicate/client.js"
 
 export type AudioProvider = "tangoflux"
 

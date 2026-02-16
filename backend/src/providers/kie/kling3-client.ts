@@ -10,11 +10,13 @@
 import { config } from "../../lib/config.js"
 import {
   KIE_API_BASE,
-  POLL_INTERVAL_MS,
   MAX_POLL_ATTEMPTS_VIDEO,
   sleep,
   createSanitizedError,
+  pollDelay,
 } from "./client.js"
+
+const DEBUG = config.NODE_ENV === "development"
 
 export interface Kling3Params {
   prompt: string
@@ -60,8 +62,10 @@ export async function kling3Generate(
     input,
   }
 
-  console.log(`[Kling3] ========== KLING 3.0 VIDEO REQUEST ==========`)
-  console.log(`[Kling3] Input:`, JSON.stringify(requestBody, null, 2))
+  if (DEBUG) {
+    console.log(`[Kling3] ========== KLING 3.0 VIDEO REQUEST ==========`)
+    console.log(`[Kling3] Input:`, JSON.stringify(requestBody, null, 2))
+  }
 
   const createResponse = await fetch(
     `${KIE_API_BASE}/api/v1/jobs/createTask`,
@@ -72,12 +76,15 @@ export async function kling3Generate(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30_000),
     }
   )
 
   const responseText = await createResponse.text()
-  console.log(`[Kling3] Response status: ${createResponse.status}`)
-  console.log(`[Kling3] Response body: ${responseText.substring(0, 500)}`)
+  if (DEBUG) {
+    console.log(`[Kling3] Response status: ${createResponse.status}`)
+    console.log(`[Kling3] Response body: ${responseText.substring(0, 500)}`)
+  }
 
   if (!createResponse.ok) {
     throw createSanitizedError(
@@ -111,7 +118,7 @@ export async function kling3Generate(
     )
   }
 
-  console.log(`[Kling3] Task created: ${taskId}`)
+  if (DEBUG) console.log(`[Kling3] Task created: ${taskId}`)
 
   const videoUrl = await pollKling3Task(taskId, apiKey)
 
@@ -126,13 +133,22 @@ async function pollKling3Task(
   let attempts = 0
 
   while (attempts < maxAttempts) {
-    await sleep(POLL_INTERVAL_MS)
+    await sleep(pollDelay(attempts))
     attempts++
 
-    const detailResponse = await fetch(
-      `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } }
-    )
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[Kling3] Poll attempt ${attempts} timeout, retrying...`)
+        continue
+      }
+      throw err
+    }
 
     if (!detailResponse.ok) {
       console.warn(
@@ -142,9 +158,7 @@ async function pollKling3Task(
     }
 
     const detailText = await detailResponse.text()
-    console.log(
-      `[Kling3] Poll ${attempts} raw response: ${detailText.substring(0, 500)}`
-    )
+    if (DEBUG) console.log(`[Kling3] Poll ${attempts} raw response: ${detailText.substring(0, 500)}`)
 
     let detailData: Record<string, unknown>
     try {
@@ -162,9 +176,7 @@ async function pollKling3Task(
 
     const state = (data.state as string) ?? (data.status as string)
     const progress = data.progress as number | undefined
-    console.log(
-      `[Kling3] Task ${taskId} state: ${state}${progress !== undefined ? ` (${progress}%)` : ""} (attempt ${attempts})`
-    )
+    if (DEBUG) console.log(`[Kling3] Task ${taskId} state: ${state}${progress !== undefined ? ` (${progress}%)` : ""} (attempt ${attempts})`)
 
     if (state === "success" || state === "completed") {
       // Try multiple possible video URL locations
@@ -186,13 +198,13 @@ async function pollKling3Task(
           (parsed.videoUrl as string) ??
           (parsed.video_url as string)
         if (fromResult) {
-          console.log(`[Kling3] Video completed: ${fromResult}`)
+          if (DEBUG) console.log(`[Kling3] Video completed: ${fromResult}`)
           return fromResult
         }
       }
 
       if (videoUrl) {
-        console.log(`[Kling3] Video completed: ${videoUrl}`)
+        if (DEBUG) console.log(`[Kling3] Video completed: ${videoUrl}`)
         return videoUrl
       }
 

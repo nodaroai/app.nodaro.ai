@@ -22,6 +22,16 @@ CREATE TABLE IF NOT EXISTS public.characters (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Ensure node_id column exists (may be missing if table was created by an earlier migration)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'characters' AND column_name = 'node_id'
+  ) THEN
+    ALTER TABLE public.characters ADD COLUMN node_id TEXT;
+  END IF;
+END $$;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_characters_project_id ON public.characters(project_id);
 CREATE INDEX IF NOT EXISTS idx_characters_node_id ON public.characters(node_id);

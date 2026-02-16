@@ -19,7 +19,7 @@ import {
 import { KieError } from "../providers/kie/client.js"
 import type { ProgressCallback } from "../providers/provider.interface.js"
 import { generateScript, type ScriptProvider } from "../providers/script/script-generator.js"
-import { uploadToR2, uploadFileToR2, uploadBufferToR2 } from "../lib/storage.js"
+import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { combineVideos } from "../providers/video/combine-videos.js"
 import { mergeVideoAudio } from "../providers/video/merge-video-audio.js"
 import { extractAudio } from "../providers/video/extract-audio.js"
@@ -105,9 +105,7 @@ async function downloadAudioToR2(url: string): Promise<string> {
   const stat = await fs.stat(actualPath)
   if (stat.size === 0) throw new Error("Downloaded audio file is empty")
 
-  const buffer = await fs.readFile(actualPath)
-  const r2Key = `audios/cover-src-${outputId}.mp3`
-  const r2Url = await uploadBufferToR2(buffer, r2Key, "audio/mpeg")
+  const r2Url = await uploadFileWithKeyToR2(actualPath, `audios/cover-src-${outputId}.mp3`, "audio/mpeg")
   await fs.unlink(actualPath).catch(() => {})
 
   console.log(`[worker] Audio downloaded and uploaded to R2: ${r2Url}`)
@@ -188,7 +186,7 @@ async function uploadImageMaybeWatermark(
   if (!watermark) {
     return uploadToR2(sourceUrl, jobId, "image", jobUserId)
   }
-  const response = await fetch(sourceUrl)
+  const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(60_000) })
   if (!response.ok) throw new Error(`Failed to download image: ${response.status}`)
   const buffer = Buffer.from(await response.arrayBuffer())
   const watermarked = await applyImageWatermark(buffer)
@@ -251,24 +249,20 @@ export function createVideoWorker() {
     async (job) => {
       const { jobId } = job.data as { jobId: string }
 
-      // Fetch usage_log_id and user_id for credit/storage tracking (cloud edition)
+      // Fetch job + user profile in a single join query (avoids sequential DB calls)
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id")
+        .select("usage_log_id, user_id, profiles!user_id(tier, public_outputs)")
         .eq("id", jobId)
         .single()
       const usageLogId = jobRecord?.usage_log_id
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
 
-      // Fetch user profile for watermark + gallery visibility decisions
+      // Extract profile from join result
       let shouldWatermark = false
       let isPublicOutput = true
-      if (jobUserId) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("tier, public_outputs")
-          .eq("id", jobUserId)
-          .single()
+      if (jobUserId && jobRecord?.profiles) {
+        const profile = jobRecord.profiles as unknown as { tier?: string; public_outputs?: boolean }
         if (hasCredits()) {
           shouldWatermark = profile?.tier === "free"
         }
@@ -623,13 +617,6 @@ export function createVideoWorker() {
           }
           console.log(`[worker] generate-script ${jobId} (provider: ${provider ?? "gemini"})`)
 
-          // Track LLM request for script generation (cloud edition)
-          if (hasCredits() && jobUserId) {
-            CreditsService.trackLlmRequest(jobUserId).catch((err) =>
-              console.error(`[worker] LLM tracking failed for job ${jobId}:`, err)
-            )
-          }
-
           const script = await generateScript(prompt, sceneCount, tone, targetDuration, provider)
           await job.updateProgress(100)
 
@@ -959,16 +946,20 @@ export function createVideoWorker() {
             "brassUrl", "woodwindsUrl",
           ] as const
 
-          let uploadedCount = 0
-          for (const field of stemFields) {
-            const url = result[field]
-            if (url) {
+          // Upload stems in parallel
+          const uploadPromises = stemFields
+            .filter(field => result[field])
+            .map(async (field) => {
+              const url = result[field] as string
               const stemName = field.replace("Url", "")
               const r2Url = await uploadToR2(url, `${jobId}-${stemName}`, "audio", jobUserId)
-              outputData[field] = r2Url
-              uploadedCount++
-            }
+              return { field, r2Url }
+            })
+          const uploaded = await Promise.all(uploadPromises)
+          for (const { field, r2Url } of uploaded) {
+            outputData[field] = r2Url
           }
+          const uploadedCount = uploaded.length
 
           // Set primary audioUrl for downstream routing
           outputData.audioUrl = outputData.vocalUrl ?? outputData.instrumentalUrl
@@ -1312,6 +1303,6 @@ export function createVideoWorker() {
         throw err
       }
     },
-    { connection, concurrency: 2 },
+    { connection, concurrency: 8, lockDuration: 900_000, stalledInterval: 300_000 },
   )
 }
