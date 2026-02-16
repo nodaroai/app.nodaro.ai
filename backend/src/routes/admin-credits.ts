@@ -188,6 +188,73 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     return { storage_limit_bytes: storageLimitBytes, previous_limit: previousLimit }
   })
 
+  // PUT /v1/admin/users/:id/role - Admin change user role (super_admin only)
+  app.put("/v1/admin/users/:id/role", async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { role, adminUserId } = request.body as {
+      role: string
+      adminUserId: string
+    }
+
+    const VALID_ROLES = ["user", "admin", "super_admin"]
+    if (!role || !VALID_ROLES.includes(role)) {
+      return reply.code(400).send({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` })
+    }
+    if (!adminUserId) {
+      return reply.code(400).send({ error: "Missing required field: adminUserId" })
+    }
+
+    // Verify requesting user is super_admin
+    const { data: adminProfile, error: adminError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", adminUserId)
+      .single()
+
+    if (adminError || !adminProfile) {
+      return reply.code(403).send({ error: "Admin user not found" })
+    }
+    if (adminProfile.role !== "super_admin") {
+      return reply.code(403).send({ error: "Only super_admin can change user roles" })
+    }
+
+    // Prevent self-demotion
+    if (adminUserId === id) {
+      return reply.code(400).send({ error: "Cannot change your own role" })
+    }
+
+    // Protect the original super_admin (owner)
+    const OWNER_EMAIL = "[email removed]"
+    const { data: targetProfile, error: targetError } = await supabase
+      .from("profiles")
+      .select("email, role")
+      .eq("id", id)
+      .single()
+
+    if (targetError || !targetProfile) {
+      return reply.code(404).send({ error: "User not found" })
+    }
+    if (targetProfile.email === OWNER_EMAIL) {
+      return reply.code(403).send({ error: "Cannot change the role of the platform owner" })
+    }
+
+    const previousRole = targetProfile.role ?? "user"
+    if (previousRole === role) {
+      return reply.code(200).send({ message: "Role unchanged", role })
+    }
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ role })
+      .eq("id", id)
+
+    if (updateError) {
+      return reply.code(500).send({ error: updateError.message })
+    }
+
+    return { role, previous_role: previousRole }
+  })
+
   // GET /v1/admin/models - List all models with pricing
   app.get("/v1/admin/models", async (_request, reply) => {
     const { data, error } = await supabase

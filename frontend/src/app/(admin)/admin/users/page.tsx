@@ -11,6 +11,7 @@ import {
   Plus,
   Minus,
   HardDrive,
+  Shield,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useAdmin, type AdminUser } from "@/hooks/use-admin"
+import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 
 // ---------------------------------------------------------------------------
@@ -61,6 +63,14 @@ const SOURCE_COLORS: Record<string, string> = {
   subscription_renewal: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
   one_time_purchase: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   expiry: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+}
+
+const OWNER_EMAIL = "[email removed]"
+
+const ROLE_COLORS: Record<string, string> = {
+  user: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  admin: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  super_admin: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +547,7 @@ function UserExpandedRow({
 
 export default function AdminUsersPage() {
   const { fetchUsers, loading } = useAdmin()
+  const { user: currentUser, role: currentUserRole } = useAuth()
   const [users, setUsers] = useState<ReadonlyArray<AdminUser>>([])
   const [page, setPage] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
@@ -612,6 +623,8 @@ export default function AdminUsersPage() {
                   isExpanded={isExpanded}
                   onToggle={() => toggleExpand(user.id)}
                   onCreditsAdjusted={loadUsers}
+                  currentUserRole={currentUserRole}
+                  currentUserId={currentUser?.id ?? ""}
                 />
               )
             })}
@@ -657,14 +670,62 @@ function UserRow({
   isExpanded,
   onToggle,
   onCreditsAdjusted,
+  currentUserRole,
+  currentUserId,
 }: {
   readonly user: AdminUser
   readonly isExpanded: boolean
   readonly onToggle: () => void
   readonly onCreditsAdjusted: () => void
+  readonly currentUserRole: string
+  readonly currentUserId: string
 }) {
+  const [changingRole, setChangingRole] = useState(false)
   const total = user.subscription_credits + user.topup_credits
   const tierClass = TIER_COLORS[user.subscription_tier] ?? TIER_COLORS.free
+  const roleClass = ROLE_COLORS[user.role] ?? ROLE_COLORS.user
+
+  const isOwner = user.email === OWNER_EMAIL
+  const isSuperAdmin = currentUserRole === "super_admin"
+  const isSelf = currentUserId === user.id
+  const canChangeRole = isSuperAdmin && !isOwner && !isSelf
+
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (session?.access_token) {
+      headers["Authorization"] = `Bearer ${session.access_token}`
+    }
+    return headers
+  }, [])
+
+  const handleRoleChange = useCallback(async (newRole: string) => {
+    setChangingRole(true)
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${API}/v1/admin/users/${user.id}/role`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          role: newRole,
+          adminUserId: currentUserId,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || `Request failed (${res.status})`)
+      }
+
+      toast.success(`Role changed to ${newRole}`)
+      onCreditsAdjusted()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to change role")
+    } finally {
+      setChangingRole(false)
+    }
+  }, [user.id, currentUserId, onCreditsAdjusted, getAuthHeaders])
 
   return (
     <>
@@ -695,10 +756,32 @@ function UserRow({
         <td className="px-4 py-2 text-right font-mono text-muted-foreground text-xs">
           {formatBytes(user.storage_used_bytes)} / {formatBytes(user.storage_limit_bytes)}
         </td>
-        <td className="px-4 py-2">
-          <Badge variant={user.role !== "user" ? "default" : "secondary"}>
-            {user.role}
-          </Badge>
+        <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+          {isOwner ? (
+            <Badge className="bg-red-600 text-white hover:bg-red-600">
+              <Shield className="h-3 w-3 mr-1" />
+              Owner
+            </Badge>
+          ) : canChangeRole ? (
+            <Select
+              value={user.role}
+              onValueChange={handleRoleChange}
+              disabled={changingRole}
+            >
+              <SelectTrigger className="h-7 w-[130px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" className="z-[9999]">
+                <SelectItem value="user">user</SelectItem>
+                <SelectItem value="admin">admin</SelectItem>
+                <SelectItem value="super_admin">super_admin</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${roleClass}`}>
+              {user.role}
+            </span>
+          )}
         </td>
         <td className="px-4 py-2 text-muted-foreground">
           {new Date(user.created_at).toLocaleDateString()}
