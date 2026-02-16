@@ -3260,6 +3260,7 @@ const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "kling-turbo": [5, 10],
   "grok": [10],
   "sora2-pro": [5, 10],
+  "kling-3.0": [3, 4, 5, 6, 7, 8, 9, 10, 15],
 }
 
 function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes }: ConfigProps<TextToVideoData>) {
@@ -3268,6 +3269,10 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
   const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
   // Get allowed durations for current provider (model-specific)
   const allowedDurations = KIE_T2V_DURATIONS[data.provider || "minimax"] || null
+
+  if (data.provider === "kling-3.0") {
+    return <Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} />
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -3293,6 +3298,7 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
             <SelectItem value="veo3">VEO 3</SelectItem>
             <SelectItem value="kling">Kling</SelectItem>
             <SelectItem value="kling-turbo">Kling Turbo</SelectItem>
+            <SelectItem value="kling-3.0">Kling 3.0 (10 credits)</SelectItem>
             <SelectItem value="veo">VEO 2</SelectItem>
             <SelectItem value="grok">Grok</SelectItem>
             <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
