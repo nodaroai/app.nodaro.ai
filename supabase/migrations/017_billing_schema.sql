@@ -11,7 +11,7 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS subscription_credits INTEGER DEFAU
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS topup_credits INTEGER DEFAULT 0;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '1 month');
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS daily_spent_credits INTEGER DEFAULT 0;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_daily_reset TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_daily_reset DATE DEFAULT CURRENT_DATE;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credits_reset_at TIMESTAMPTZ;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS storage_limit_bytes BIGINT DEFAULT 524288000;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS subscription_ended_at TIMESTAMPTZ;
@@ -59,15 +59,15 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
 
 -- Model pricing (credit costs per AI model)
 CREATE TABLE IF NOT EXISTS model_pricing (
-  model_identifier TEXT PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  model_identifier TEXT NOT NULL UNIQUE,
+  provider_cost_usd DECIMAL(10,6),
   credit_cost INTEGER NOT NULL DEFAULT 0,
   is_enabled BOOLEAN DEFAULT TRUE,
   tier_restriction TEXT,
   category TEXT,
-  display_name TEXT,
-  our_cost DECIMAL(10,6),
-  markup DECIMAL(5,2),
-  provider TEXT
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
