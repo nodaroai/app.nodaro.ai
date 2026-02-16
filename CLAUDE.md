@@ -808,4 +808,4 @@ Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produce
 ---
 
 *Last updated: 2026-02-16*
-*Version: 1.23.0*
+*Version: 1.24.0*
