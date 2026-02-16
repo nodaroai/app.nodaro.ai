@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward, Trash2, ChevronUp, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -2234,7 +2234,544 @@ const PROVIDERS_WITH_END_FRAME: string[] = [
   "pika",        // Replicate
 ]
 
-function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode }: ConfigProps<ImageToVideoData>) {
+// ─── Kling 3.0 Studio Config (3-tab interface) ────────────────────────────
+
+type Kling3Tab = "scene" | "shots" | "elements"
+
+function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode }: ConfigProps<ImageToVideoData>) {
+  const [activeTab, setActiveTab] = useState<Kling3Tab>("scene")
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+
+  const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
+
+  // Connected text prompts
+  const connectedTextPrompts = useMemo(() => {
+    return sources.filter((s) => s.type === "text-prompt").map((s) => ({
+      id: s.id,
+      label: s.label,
+      text: (s.nodeData?.text as string) || "",
+      targetHandle: s.targetHandle,
+    }))
+  }, [sources])
+
+  // Connected images
+  const connectedImages = useMemo(() => {
+    const imageTypes = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
+    return sources.filter((s) => imageTypes.includes(s.type)).map((s) => {
+      let imageUrl: string | undefined
+      const nodeData = s.nodeData || {}
+      if (s.type === "upload-image") {
+        imageUrl = (nodeData.url as string) || undefined
+      } else if (s.type === "generate-image" || s.type === "edit-image" || s.type === "image-to-image" || s.type === "scene") {
+        const results = nodeData.generatedResults as Array<{ url?: string }> | undefined
+        const activeIndex = (nodeData.activeResultIndex as number) ?? 0
+        if (results && results.length > 0) {
+          imageUrl = results[activeIndex]?.url || results[0]?.url
+        }
+        if (!imageUrl) {
+          imageUrl = (nodeData.generatedImageUrl as string) || undefined
+        }
+      } else if (s.type === "character" || s.type === "object" || s.type === "location") {
+        imageUrl = (nodeData.sourceImageUrl as string) || undefined
+      }
+      let displayLabel = s.label
+      if (s.targetHandle === "startFrame") displayLabel = `Start: ${s.label}`
+      else if (s.targetHandle === "endFrame") displayLabel = `End: ${s.label}`
+      return { id: s.id, type: s.type, label: displayLabel, imageUrl, targetHandle: s.targetHandle }
+    })
+  }, [sources])
+
+  const handleTextPromptChange = useCallback((nodeId: string, newText: string) => {
+    if (onUpdateNode) onUpdateNode(nodeId, { text: newText })
+  }, [onUpdateNode])
+
+  // ── Shot helpers ──
+  const shots = data.shots ?? []
+  const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0)
+
+  const handleAddShot = useCallback(() => {
+    onUpdate({ shots: [...shots, { prompt: "", duration: 3 }] })
+  }, [shots, onUpdate])
+
+  const handleRemoveShot = useCallback((index: number) => {
+    onUpdate({ shots: shots.filter((_, i) => i !== index) })
+  }, [shots, onUpdate])
+
+  const handleUpdateShot = useCallback((index: number, field: "prompt" | "duration", value: string | number) => {
+    onUpdate({ shots: shots.map((s, i) => i === index ? { ...s, [field]: value } : s) })
+  }, [shots, onUpdate])
+
+  const handleMoveShot = useCallback((index: number, direction: -1 | 1) => {
+    const target = index + direction
+    if (target < 0 || target >= shots.length) return
+    const next = [...shots]
+    const temp = next[index]
+    next[index] = next[target]!
+    next[target] = temp!
+    onUpdate({ shots: next })
+  }, [shots, onUpdate])
+
+  // ── Element helpers ──
+  const elements = data.elements ?? []
+
+  const handleAddElement = useCallback(() => {
+    onUpdate({ elements: [...elements, { name: `element_${elements.length + 1}`, description: "", type: "image" as const, urls: [] }] })
+  }, [elements, onUpdate])
+
+  const handleRemoveElement = useCallback((index: number) => {
+    onUpdate({ elements: elements.filter((_, i) => i !== index) })
+  }, [elements, onUpdate])
+
+  const handleUpdateElement = useCallback((index: number, field: string, value: unknown) => {
+    onUpdate({ elements: elements.map((el, i) => i === index ? { ...el, [field]: value } : el) })
+  }, [elements, onUpdate])
+
+  // Check if end frame is connected
+  const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
+
+  // Tab button styling
+  const tabClass = (tab: Kling3Tab) =>
+    `px-3 py-1.5 text-xs font-medium transition-colors ${
+      activeTab === tab
+        ? "border-b-2 border-[#ff0073] text-foreground font-semibold"
+        : "text-muted-foreground hover:text-foreground"
+    }`
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Connected Images */}
+      {connectedImages.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
+            Connected Images ({connectedImages.length})
+          </Label>
+          <div className="flex flex-col gap-2">
+            {connectedImages.map((img) => (
+              <div key={img.id} className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-500 dark:text-[#64748B] font-medium w-16 shrink-0 leading-tight truncate" title={img.label}>
+                  {img.label}
+                </span>
+                <div
+                  className="flex-1 h-16 rounded-lg border border-gray-200 dark:border-[#2D2D2D] overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-gray-100 dark:bg-[#121212]"
+                  onClick={() => img.imageUrl && setLightboxImage(img.imageUrl)}
+                  title={`Click to view: ${img.label}`}
+                >
+                  {img.imageUrl ? (
+                    <img src={img.imageUrl} alt={img.label} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">Click to view full size</p>
+        </div>
+      )}
+
+      {/* Connected Text Prompts */}
+      {connectedTextPrompts.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
+            Motion Prompt (from connected node)
+          </Label>
+          {connectedTextPrompts.map((prompt, idx) => (
+            <div key={`${prompt.id}-${idx}`} className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <FileText className="w-3 h-3 text-[#ff0073]" />
+                <span className="text-[10px] text-[#ff0073] font-medium">{prompt.label}</span>
+              </div>
+              <Textarea
+                value={prompt.text}
+                onChange={(e) => handleTextPromptChange(prompt.id, e.target.value)}
+                placeholder="Enter motion prompt..."
+                rows={3}
+                className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Manual Motion Prompt */}
+      {connectedTextPrompts.length === 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
+            Motion Prompt
+          </Label>
+          <Textarea
+            value={data.motionPrompt || ""}
+            onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
+            placeholder="Describe the overall scene, characters, and setting. Use @element_name to reference elements. Add dialogue with 'character says ...'"
+            rows={3}
+            className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1.5">
+            Tip: Connect a Text Prompt node for reusable prompts
+          </p>
+        </div>
+      )}
+
+      {/* Tab Bar */}
+      <div className="flex border-b border-gray-200 dark:border-[#2D2D2D]">
+        <button type="button" className={tabClass("scene")} onClick={() => setActiveTab("scene")}>Scene</button>
+        <button type="button" className={tabClass("shots")} onClick={() => setActiveTab("shots")}>Shots</button>
+        <button type="button" className={tabClass("elements")} onClick={() => setActiveTab("elements")}>Elements</button>
+      </div>
+
+      {/* ═══ SCENE TAB ═══ */}
+      {activeTab === "scene" && (
+        <div className="flex flex-col gap-3">
+          <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+            <Select
+              value={data.provider || "minimax"}
+              onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="minimax">MiniMax (default)</SelectItem>
+                <SelectItem value="veo3">VEO 3</SelectItem>
+                <SelectItem value="veo3.1">VEO 3.1 (Fast)</SelectItem>
+                <SelectItem value="kling">Kling</SelectItem>
+                <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
+                <SelectItem value="kling-3.0">Kling 3.0 (10 credits)</SelectItem>
+                <SelectItem value="veo">VEO 2</SelectItem>
+                <SelectItem value="grok-i2v">Grok</SelectItem>
+                <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
+                <SelectItem value="runway">Runway</SelectItem>
+                <SelectItem value="pika">Pika</SelectItem>
+                <SelectItem value="sora">Sora</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+
+          <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Mode</Label>
+              <Select
+                value={(data as Record<string, unknown>).kling3Mode as string ?? "pro"}
+                onValueChange={(v) => onUpdate({ kling3Mode: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pro">Pro (higher quality)</SelectItem>
+                  <SelectItem value="std">Standard (faster)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="kling3Sound"
+                checked={(data as Record<string, unknown>).kling3Sound !== false}
+                onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
+                className="rounded border-muted-foreground/40"
+              />
+              <label htmlFor="kling3Sound" className="text-xs">Enable Sound Effects</label>
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground">Aspect Ratio</Label>
+              <Select
+                value={data.aspectRatio ?? "16:9"}
+                onValueChange={(v) => onUpdate({ aspectRatio: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                  <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                  <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground">Duration</Label>
+              {data.multiShot ? (
+                <p className="text-xs text-muted-foreground mt-1">Duration: {totalDuration}s (calculated from shots)</p>
+              ) : (
+                <Select
+                  value={String(data.duration || 5)}
+                  onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[3, 4, 5, 6, 7, 8, 9, 10, 15].map((d) => (
+                      <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+
+          {supportsEndFrame && !data.multiShot && (
+            <p className="text-[10px] text-muted-foreground px-1">
+              Connect an image node to the &quot;End Frame&quot; handle for start-to-end frame generation.
+            </p>
+          )}
+
+          <p className="text-[10px] text-muted-foreground px-1">
+            Kling 3.0 generates cinematic video with native audio, lip-synced dialogue, multi-shot storyboarding, and element references. Supports 5 languages with accent control.
+          </p>
+        </div>
+      )}
+
+      {/* ═══ SHOTS TAB ═══ */}
+      {activeTab === "shots" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="multiShotToggle"
+              checked={data.multiShot ?? false}
+              onChange={(e) => {
+                const checked = e.target.checked
+                if (checked && shots.length === 0) {
+                  onUpdate({ multiShot: true, shots: [{ prompt: "", duration: 3 }] })
+                } else {
+                  onUpdate({ multiShot: checked })
+                }
+              }}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="multiShotToggle" className="text-xs font-medium">Enable Multi-Shot</label>
+          </div>
+
+          <p className="text-[10px] text-muted-foreground px-1">
+            Split your video into 2-6 scenes, each with its own prompt and timing. Total duration max 15 seconds.
+          </p>
+
+          {data.multiShot ? (
+            <div className="flex flex-col gap-2">
+              {hasEndFrame && (
+                <p className="text-[10px] text-amber-500 px-1">End frame is not supported in multi-shot mode.</p>
+              )}
+
+              {shots.map((shot, i) => (
+                <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-2 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-muted-foreground w-12 shrink-0">Shot {i + 1}</span>
+                    <Select
+                      value={String(shot.duration)}
+                      onValueChange={(v) => handleUpdateShot(i, "duration", parseInt(v, 10))}
+                    >
+                      <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, k) => k + 1).map((d) => (
+                          <SelectItem key={d} value={String(d)}>{d}s</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex-1" />
+                    <button
+                      type="button"
+                      onClick={() => handleMoveShot(i, -1)}
+                      disabled={i === 0}
+                      className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      title="Move up"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveShot(i, 1)}
+                      disabled={i === shots.length - 1}
+                      className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      title="Move down"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                    {shots.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveShot(i)}
+                        className="p-0.5 text-muted-foreground hover:text-red-500"
+                        title="Delete shot"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Textarea
+                    value={shot.prompt}
+                    onChange={(e) => handleUpdateShot(i, "prompt", e.target.value)}
+                    placeholder="Describe the shot: camera angle, action, and dialogue. Example: Close-up of the woman, she whispers 'I knew you'd come back.' Soft ambient rain."
+                    rows={2}
+                    className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+                  />
+                </div>
+              ))}
+
+              <div className="rounded-md bg-muted/50 border p-2 flex flex-col gap-1">
+                <span className="text-[10px] font-medium text-foreground">Director Tips</span>
+                <span className="text-[10px] text-muted-foreground">Add dialogue: character says &quot;...&quot; or character whispers &quot;...&quot;</span>
+                <span className="text-[10px] text-muted-foreground">Control voice tone: calm, excited, sad, angry, whispering</span>
+                <span className="text-[10px] text-muted-foreground">Languages: English, Chinese, Japanese, Korean, Spanish</span>
+                <span className="text-[10px] text-muted-foreground">Describe camera: dolly zoom, tracking shot, close-up, wide establishing</span>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAddShot}
+                disabled={shots.length >= 6}
+                className="text-xs"
+              >
+                <Plus className="w-3 h-3 mr-1" /> Add Shot
+              </Button>
+
+              <p className={`text-[10px] px-1 ${totalDuration > 15 ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
+                Total: {totalDuration}s / 15s
+              </p>
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground px-1">
+              Single continuous shot using the master prompt and duration from the Scene tab.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ═══ ELEMENTS TAB ═══ */}
+      {activeTab === "elements" && (
+        <div className="flex flex-col gap-3">
+          <p className="text-[10px] text-muted-foreground px-1">
+            Create characters and objects, then use @name in your prompts to reference them.
+          </p>
+
+          {elements.map((el, i) => (
+            <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-2 space-y-1.5">
+              {/* Row 1: Name + Description + Delete */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground shrink-0">@</span>
+                <Input
+                  value={el.name}
+                  onChange={(e) => handleUpdateElement(i, "name", e.target.value.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""))}
+                  placeholder="name"
+                  className="h-7 text-xs w-24 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+                />
+                <Input
+                  value={el.description}
+                  onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 200))}
+                  placeholder="Describe appearance and voice, e.g. 'young woman, red jacket, calm confident voice'"
+                  className="h-7 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveElement(i)}
+                  className="p-0.5 text-muted-foreground hover:text-red-500 shrink-0"
+                  title="Delete element"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Row 2: Type toggle */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground">Type:</span>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateElement(i, "type", el.type === "image" ? "video" : "image")}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                    el.type === "image"
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                      : "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
+                  }`}
+                >
+                  {el.type === "image" ? "Image" : "Video"}
+                </button>
+              </div>
+
+              {/* Row 3: Thumbnails */}
+              <div className="flex items-center gap-1 min-h-[32px]">
+                {el.urls.length > 0 ? (
+                  el.urls.map((url, ui) => (
+                    <img key={ui} src={url} alt={`${el.name} ${ui + 1}`} className="w-8 h-8 rounded object-cover border border-gray-200 dark:border-[#2D2D2D]" />
+                  ))
+                ) : (
+                  <span className="text-[10px] text-muted-foreground">No media yet</span>
+                )}
+              </div>
+
+              {/* Row 4: Add media buttons */}
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  onClick={() => alert("Coming soon")}
+                >
+                  + Library
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  onClick={() => fileInputRefs.current[i]?.click()}
+                >
+                  + Upload
+                </Button>
+                <input
+                  ref={(ref) => { fileInputRefs.current[i] = ref }}
+                  type="file"
+                  accept="image/*,video/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) console.log(`[Kling3Elements] Selected file for element ${i}:`, file.name, file.type)
+                    e.target.value = ""
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  onClick={() => alert("Coming soon")}
+                >
+                  + Workflow
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAddElement}
+            disabled={elements.length >= 5}
+            className="text-xs"
+          >
+            <Plus className="w-3 h-3 mr-1" /> Add Element
+          </Button>
+
+          <div className="rounded-lg border border-dashed border-gray-300 dark:border-[#2D2D2D] p-2">
+            <p className="text-[10px] text-muted-foreground">
+              Example: &quot;Close-up of @hero walking through rain&quot;
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Image Lightbox */}
+      {lightboxImage && (
+        <ImageLightbox
+          src={lightboxImage}
+          alt="Connected image"
+          onClose={() => setLightboxImage(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Standard Image-to-Video Config ───────────────────────────────────────
+
+function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode }: ConfigProps<ImageToVideoData>) {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
   // Get allowed durations for current provider (model-specific)
@@ -2302,6 +2839,11 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
       onUpdateNode(nodeId, { text: newText })
     }
   }, [onUpdateNode])
+
+  // Kling 3.0 uses its own studio config panel
+  if (data.provider === "kling-3.0") {
+    return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} onUpdateNode={onUpdateNode} />
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -2419,34 +2961,6 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
             <label htmlFor="generateAudio" className="text-xs">Generate Audio</label>
           </div>
           <p className="text-xs text-muted-foreground px-1">VEO 3/3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
-        </div>
-      )}
-      {data.provider === "kling-3.0" && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Mode</Label>
-            <Select
-              value={(data as Record<string, unknown>).kling3Mode as string ?? "pro"}
-              onValueChange={(v) => onUpdate({ kling3Mode: v })}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pro">Pro (higher quality)</SelectItem>
-                <SelectItem value="std">Standard (faster)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="kling3Sound"
-              checked={(data as Record<string, unknown>).kling3Sound !== false}
-              onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="kling3Sound" className="text-xs">Enable Sound Effects</label>
-          </div>
-          <p className="text-xs text-muted-foreground px-1">Kling 3.0 generates AI sound effects from the prompt.</p>
         </div>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
