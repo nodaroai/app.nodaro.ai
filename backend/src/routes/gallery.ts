@@ -161,10 +161,31 @@ export async function galleryRoutes(app: FastifyInstance) {
         // Filter out items with blocked words in prompt
         if (isPromptBlocked(prompt)) return null
 
-        // Extract model from provider column or input_data.provider
-        const model = (job.provider as string)
-          ?? (inputData.provider as string)
+        // Extract model name from input_data.provider (stores model identifier like "nano-banana")
+        // Falls back to jobs.provider column (which stores provider name like "kie")
+        const model = (inputData.provider as string)
+          ?? (job.provider as string)
           ?? null
+
+        // Collect all media input URLs from inputData (arrays + singles)
+        const collected = new Set<string>()
+
+        const addStr = (v: unknown) => {
+          if (typeof v === "string" && v.length > 0) collected.add(v)
+        }
+        const addArr = (v: unknown) => {
+          if (Array.isArray(v)) v.forEach(addStr)
+        }
+
+        addArr(inputData.referenceImageUrls)
+        addArr(inputData.videoUrls)
+        addArr(inputData.audioUrls)
+        addStr(inputData.imageUrl)
+        addStr(inputData.endFrameUrl)
+        addStr(inputData.videoUrl)
+        addStr(inputData.audioUrl)
+
+        const referenceImages = [...collected]
 
         return {
           id: job.id,
@@ -175,6 +196,7 @@ export async function galleryRoutes(app: FastifyInstance) {
           createdAt: job.completed_at,
           prompt,
           model,
+          referenceImages,
         }
       })
       .filter(Boolean)

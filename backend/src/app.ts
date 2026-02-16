@@ -61,6 +61,7 @@ import { galleryRoutes } from "./routes/gallery.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { adminGalleryReportsRoutes } from "./routes/admin-gallery-reports.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
+import { downloadRoutes } from "./routes/download.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true })
@@ -145,6 +146,7 @@ export async function buildApp() {
   await app.register(userSettingsRoutes)
   await app.register(adminGalleryReportsRoutes)
   await app.register(aiWriterRoutes)
+  await app.register(downloadRoutes)
 
   return app
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
-import { ArrowLeft, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2 } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
@@ -25,6 +25,7 @@ interface GalleryItem {
   readonly createdAt: string
   readonly prompt: string | null
   readonly model: string | null
+  readonly referenceImages: readonly string[]
 }
 
 interface GalleryResponse {
@@ -44,6 +45,13 @@ const FILTERS: readonly { readonly value: FilterType; readonly label: string; re
 ]
 
 const ITEMS_PER_PAGE = 20
+
+const VIDEO_EXTENSIONS = /\.(mp4|webm|mov)(\?|$)/i
+
+function isVideoUrl(url: string): boolean {
+  return VIDEO_EXTENSIONS.test(url)
+}
+
 
 const REPORT_REASONS = [
   { value: "inappropriate", label: "Inappropriate content" },
@@ -167,7 +175,8 @@ export default function GalleryPage() {
   const [filter, setFilter] = useState<FilterType>("all")
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
   const sentinelRef = useRef<HTMLDivElement>(null)
   const hasMore = items.length < total
 
@@ -291,13 +300,58 @@ export default function GalleryPage() {
       toast.success("Item removed from gallery")
       setItems((prev) => prev.filter((i) => i.id !== deleteItem.id))
       setDeleteItem(null)
-      setSelectedItem(null)
+      setSelectedIndex(null)
     } catch {
       toast.error("Failed to remove item from gallery")
     } finally {
       setDeleteSubmitting(false)
     }
   }
+
+  // Lightbox navigation
+  const goToPrev = useCallback(() => {
+    setReferenceViewIndex(null)
+    setSelectedIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : prev))
+  }, [])
+
+  const goToNext = useCallback(() => {
+    setReferenceViewIndex(null)
+    setSelectedIndex((prev) => (prev !== null && prev < items.length - 1 ? prev + 1 : prev))
+  }, [items.length])
+
+  // Download handler (backend proxy streams with Content-Disposition: attachment)
+  const handleDownload = useCallback(() => {
+    if (!selectedItem) return
+    window.open(`/v1/download?url=${encodeURIComponent(selectedItem.outputUrl)}`, "_blank")
+  }, [selectedItem])
+
+  // Fullscreen (separate overlay div, completely independent of Dialog)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Reference image mini-lightbox
+  const [referenceViewIndex, setReferenceViewIndex] = useState<number | null>(null)
+
+  // Keyboard navigation: arrows for gallery, ESC exits fullscreen
+  useEffect(() => {
+    if (selectedIndex === null || referenceViewIndex !== null) return
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault()
+        goToPrev()
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault()
+        goToNext()
+      } else if (e.key === "Escape" && isFullscreen) {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsFullscreen(false)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown, true)
+    return () => window.removeEventListener("keydown", handleKeyDown, true)
+  }, [selectedIndex, goToPrev, goToNext, isFullscreen, referenceViewIndex])
 
   function openReportDialog(item: GalleryItem, e?: React.MouseEvent) {
     e?.stopPropagation()
@@ -375,14 +429,14 @@ export default function GalleryPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {items.map((item) => (
+              {items.map((item, index) => (
                 <div
-                  key={item.id}
+                  key={`${item.id}-${index}`}
                   role="button"
                   tabIndex={0}
                   className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
-                  onClick={() => setSelectedItem(item)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedItem(item) }}
+                  onClick={() => { setReferenceViewIndex(null); setSelectedIndex(index) }}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setReferenceViewIndex(null); setSelectedIndex(index) } }}
                 >
                   {item.type === "image" ? (
                     <img
@@ -457,32 +511,55 @@ export default function GalleryPage() {
         )}
       </section>
 
-      {/* Preview Dialog */}
-      <Dialog open={selectedItem !== null} onOpenChange={(open) => !open && setSelectedItem(null)}>
-        <DialogContent className="sm:max-w-3xl p-0 overflow-hidden">
+      {/* Preview Dialog (normal lightbox) */}
+      <Dialog open={selectedIndex !== null && !isFullscreen} onOpenChange={(open) => { if (!open) { setSelectedIndex(null); setReferenceViewIndex(null) } }}>
+        <DialogContent showCloseButton={false} className="p-0 overflow-hidden sm:max-w-3xl">
           <DialogTitle className="sr-only">Preview</DialogTitle>
-          {selectedItem && (
+          {selectedItem && selectedIndex !== null && (
             <div>
-              {/* Preview */}
-              <div className="bg-black flex items-center justify-center min-h-[300px] max-h-[70vh]">
+              {/* Preview with navigation arrows */}
+              <div className="relative bg-black flex items-center justify-center min-h-[300px] max-h-[70vh]">
                 {selectedItem.type === "image" ? (
-                  <img
-                    src={selectedItem.outputUrl}
-                    alt=""
-                    className="max-w-full max-h-[70vh] object-contain"
-                  />
+                  <img src={selectedItem.outputUrl} alt="" className="max-w-full max-h-[70vh] object-contain" />
                 ) : selectedItem.type === "video" ? (
-                  <video
-                    src={selectedItem.outputUrl}
-                    controls
-                    autoPlay
-                    className="max-w-full max-h-[70vh]"
-                  />
+                  <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="max-w-full max-h-[70vh]" />
                 ) : (
                   <div className="p-8">
-                    <audio src={selectedItem.outputUrl} controls autoPlay className="w-full" />
+                    <audio key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="w-full" />
                   </div>
                 )}
+
+                {/* Left arrow */}
+                {selectedIndex > 0 && (
+                  <button onClick={goToPrev} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Previous">
+                    <ChevronLeft className="h-6 w-6 text-white" />
+                  </button>
+                )}
+
+                {/* Right arrow */}
+                {selectedIndex < items.length - 1 && (
+                  <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Next">
+                    <ChevronRight className="h-6 w-6 text-white" />
+                  </button>
+                )}
+
+                {/* Top-right buttons: download, fullscreen, close */}
+                <div className="absolute top-2 right-2 flex gap-2">
+                  <button onClick={handleDownload} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Download">
+                    <Download className="h-4 w-4 text-white" />
+                  </button>
+                  <button onClick={() => setIsFullscreen(true)} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Fullscreen">
+                    <Maximize2 className="h-4 w-4 text-white" />
+                  </button>
+                  <button onClick={() => { setSelectedIndex(null); setReferenceViewIndex(null) }} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Close">
+                    <X className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+
+                {/* Position indicator */}
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 font-medium">
+                  {selectedIndex + 1} / {items.length}
+                </span>
               </div>
 
               {/* Meta */}
@@ -521,6 +598,49 @@ export default function GalleryPage() {
                   </div>
                 </div>
 
+                {selectedItem.referenceImages.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      References
+                    </span>
+                    <div className="flex items-center">
+                      {selectedItem.referenceImages.slice(0, 4).map((url, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setReferenceViewIndex(i)}
+                          className="block rounded-full border-2 border-background dark:border-zinc-900 hover:scale-110 hover:z-10 transition-transform relative cursor-pointer"
+                          style={{ marginLeft: i > 0 ? "-0.5rem" : 0, zIndex: 4 - i }}
+                        >
+                          {isVideoUrl(url) ? (
+                            <video
+                              src={url}
+                              muted
+                              playsInline
+                              preload="metadata"
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <img
+                              src={url}
+                              alt={`Reference ${i + 1}`}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          )}
+                        </button>
+                      ))}
+                      {selectedItem.referenceImages.length > 4 && (
+                        <button
+                          onClick={() => setReferenceViewIndex(4)}
+                          className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-700 border-2 border-background dark:border-zinc-900 text-xs font-medium text-muted-foreground relative cursor-pointer hover:scale-110 hover:z-10 transition-transform"
+                          style={{ marginLeft: "-0.5rem", zIndex: 0 }}
+                        >
+                          +{selectedItem.referenceImages.length - 4}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {selectedItem.prompt && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -535,6 +655,118 @@ export default function GalleryPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Fullscreen overlay (completely separate from Dialog) */}
+      {isFullscreen && selectedItem && selectedIndex !== null && (
+        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center">
+          {selectedItem.type === "image" ? (
+            <img src={selectedItem.outputUrl} alt="" className="max-w-full max-h-full object-contain" />
+          ) : selectedItem.type === "video" ? (
+            <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="max-w-full max-h-full" />
+          ) : (
+            <audio key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay />
+          )}
+
+          {/* Left arrow */}
+          {selectedIndex > 0 && (
+            <button onClick={goToPrev} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Previous">
+              <ChevronLeft className="h-6 w-6 text-white" />
+            </button>
+          )}
+
+          {/* Right arrow */}
+          {selectedIndex < items.length - 1 && (
+            <button onClick={goToNext} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Next">
+              <ChevronRight className="h-6 w-6 text-white" />
+            </button>
+          )}
+
+          {/* Top-right buttons: download, minimize (back to dialog), close (back to gallery) */}
+          <div className="absolute top-4 right-4 flex gap-2">
+            <button onClick={handleDownload} className="rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Download">
+              <Download className="h-5 w-5 text-white" />
+            </button>
+            <button onClick={() => setIsFullscreen(false)} className="rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Exit fullscreen">
+              <Minimize2 className="h-5 w-5 text-white" />
+            </button>
+            <button onClick={() => { setIsFullscreen(false); setSelectedIndex(null); setReferenceViewIndex(null) }} className="rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Close">
+              <X className="h-5 w-5 text-white" />
+            </button>
+          </div>
+
+          {/* Position indicator */}
+          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 font-medium">
+            {selectedIndex + 1} / {items.length}
+          </span>
+        </div>
+      )}
+
+      {/* Reference image viewer Dialog */}
+      <Dialog open={referenceViewIndex !== null} onOpenChange={() => setReferenceViewIndex(null)}>
+        <DialogContent
+          showCloseButton={false}
+          className="p-0 overflow-hidden sm:max-w-lg bg-black border-zinc-800"
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft" && referenceViewIndex !== null && referenceViewIndex > 0) {
+              e.preventDefault()
+              setReferenceViewIndex(referenceViewIndex - 1)
+            } else if (e.key === "ArrowRight" && referenceViewIndex !== null && selectedItem && referenceViewIndex < selectedItem.referenceImages.length - 1) {
+              e.preventDefault()
+              setReferenceViewIndex(referenceViewIndex + 1)
+            }
+          }}
+        >
+          <DialogTitle className="sr-only">Reference</DialogTitle>
+          {referenceViewIndex !== null && selectedItem && selectedItem.referenceImages.length > 0 && (
+            <div className="relative flex items-center justify-center min-h-[200px]">
+              {isVideoUrl(selectedItem.referenceImages[referenceViewIndex] ?? "") ? (
+                <video
+                  key={referenceViewIndex}
+                  src={selectedItem.referenceImages[referenceViewIndex]}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-[60vh] object-contain"
+                />
+              ) : (
+                <img
+                  src={selectedItem.referenceImages[referenceViewIndex]}
+                  alt={`Reference ${referenceViewIndex + 1}`}
+                  className="max-w-full max-h-[60vh] object-contain"
+                />
+              )}
+
+              {/* Left arrow */}
+              {referenceViewIndex > 0 && (
+                <button
+                  onClick={() => setReferenceViewIndex(referenceViewIndex - 1)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors"
+                  aria-label="Previous reference"
+                >
+                  <ChevronLeft className="h-5 w-5 text-white" />
+                </button>
+              )}
+
+              {/* Right arrow */}
+              {referenceViewIndex < selectedItem.referenceImages.length - 1 && (
+                <button
+                  onClick={() => setReferenceViewIndex(referenceViewIndex + 1)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors"
+                  aria-label="Next reference"
+                >
+                  <ChevronRight className="h-5 w-5 text-white" />
+                </button>
+              )}
+
+              {/* Position indicator */}
+              {selectedItem.referenceImages.length > 1 && (
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 font-medium">
+                  {referenceViewIndex + 1} / {selectedItem.referenceImages.length}
+                </span>
+              )}
             </div>
           )}
         </DialogContent>
