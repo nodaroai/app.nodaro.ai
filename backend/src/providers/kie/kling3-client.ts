@@ -25,6 +25,9 @@ export interface Kling3Params {
   duration?: string
   aspectRatio?: string
   mode?: "std" | "pro"
+  multiShots?: boolean
+  multiPrompt?: Array<{ prompt: string; duration: number }>
+  klingElements?: Array<{ name: string; description: string; element_input_urls?: string[]; element_input_video_urls?: string[] }>
 }
 
 export interface Kling3Result {
@@ -43,17 +46,42 @@ export async function kling3Generate(
     )
   }
 
+  const multiShots = params.multiShots ?? false
+
   const input: Record<string, unknown> = {
     prompt: params.prompt,
     sound: params.sound ?? true,
     duration: params.duration ?? "5",
     mode: params.mode ?? "pro",
-    multi_shots: false,
+    multi_shots: multiShots,
     aspect_ratio: params.aspectRatio ?? "16:9",
   }
 
   if (params.imageUrls && params.imageUrls.length > 0) {
     input.image_urls = params.imageUrls
+  }
+
+  if (multiShots && params.multiPrompt && params.multiPrompt.length > 0) {
+    input.multi_prompt = params.multiPrompt.map((shot) => ({
+      prompt: shot.prompt,
+      duration: shot.duration,
+    }))
+  }
+
+  if (params.klingElements && params.klingElements.length > 0) {
+    input.kling_elements = params.klingElements.map((el) => {
+      const mapped: Record<string, unknown> = {
+        name: el.name,
+        description: el.description,
+      }
+      if (el.element_input_urls && el.element_input_urls.length > 0) {
+        mapped.element_input_urls = el.element_input_urls
+      }
+      if (el.element_input_video_urls && el.element_input_video_urls.length > 0) {
+        mapped.element_input_video_urls = el.element_input_video_urls
+      }
+      return mapped
+    })
   }
 
   const requestBody = {

@@ -499,6 +499,10 @@ export type ImageToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  aspectRatio?: "16:9" | "9:16" | "1:1"
+  multiShot?: boolean
+  shots?: Array<{ prompt: string; duration: number }>
+  elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
   // Multi-input selection fields
   selectedStartFrameNodeId?: string  // ID of node selected for start frame
   selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)

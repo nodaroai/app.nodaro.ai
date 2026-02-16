@@ -178,7 +178,8 @@ export async function textToVideo(
   prompt: string,
   model: string,
   duration?: number,
-  aspectRatio?: string
+  aspectRatio?: string,
+  options?: ProviderOptions
 ): Promise<RouteResult> {
   return routeAndExecute(
     "text-to-video",
@@ -186,7 +187,7 @@ export async function textToVideo(
     "textToVideo",
     async (instance) => {
       const p = resolveModule<TextToVideoProvider>(instance, "video")
-      return p.textToVideo(prompt, model, duration, aspectRatio)
+      return p.textToVideo(prompt, model, duration, aspectRatio, options)
     }
   )
 }

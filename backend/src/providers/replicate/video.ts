@@ -196,7 +196,8 @@ export class ReplicateVideoProvider
     prompt: string,
     model?: string,
     duration?: number,
-    aspectRatio?: string
+    aspectRatio?: string,
+    _options?: ProviderOptions
   ): Promise<ProviderResult> {
     const resolvedModel = model ?? "minimax"
     const replicateModel =

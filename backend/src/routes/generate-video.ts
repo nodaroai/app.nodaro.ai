@@ -22,6 +22,10 @@ const generateVideoBody = z.object({
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std"]).optional(),       // Kling 3.0 quality mode
   sound: z.boolean().optional(),                  // Kling 3.0 sound effects
+  aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
+  multiShot: z.boolean().optional(),
+  shots: z.array(z.object({ prompt: z.string().max(2500), duration: z.number().int().min(1).max(12) })).max(6).optional(),
+  elements: z.array(z.object({ name: z.string().max(50), description: z.string().max(200), type: z.enum(["image", "video"]), urls: z.array(z.string().url()).min(1).max(4) })).max(5).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -37,7 +41,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, userId } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, aspectRatio, multiShot, shots, elements, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -54,7 +58,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, type: "image-to-video" },
+        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, aspectRatio, multiShot, shots, elements, type: "image-to-video" },
       })
       .select("id")
       .single()
@@ -81,6 +85,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       duration,
       mode,
       sound,
+      aspectRatio,
+      multiShot,
+      shots,
+      elements,
       usageLogId,
     })
 
