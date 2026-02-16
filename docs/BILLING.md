@@ -41,13 +41,13 @@ Supabase (PostgreSQL)
 
 ## Subscription Tiers
 
-| Tier | Price | Credits/mo | LLM Requests/mo | Storage | Paddle Price Key |
-|------|-------|-----------|-----------------|---------|-----------------|
-| Free | $0 | 50 | 20 | 500 MB | n/a |
-| Basic | $19 | 95 | 100 | 5 GB | `basic_monthly` |
-| Standard | $39 | 235 | 300 | 15 GB | `standard_monthly` |
-| Pro | $79 | 530 | 1,000 | 50 GB | `pro_monthly` |
-| Business | $149 | 1,120 | Unlimited | 100 GB | `business_monthly` |
+| Tier | Monthly | Annual | Credits/mo | LLM Requests | Storage | Paddle Price Key |
+|------|---------|--------|-----------|-------------|---------|-----------------|
+| Free | $0 | $0 | 50 | 20 | 1 GB | n/a |
+| Basic | $24/mo | $19/mo ($228/yr) | 95 | 100 | 10 GB | `basic_monthly` |
+| Standard | $49/mo | $39/mo ($468/yr) | 235 | 300 | 25 GB | `standard_monthly` |
+| Pro | $99/mo | $79/mo ($948/yr) | 530 | 1,000 | 50 GB | `pro_monthly` |
+| Business | $189/mo | $149/mo ($1,788/yr) | 1,120 | Unlimited | 200 GB | `business_monthly` |
 
 ## Top-up Packages
 
@@ -99,6 +99,8 @@ Top-up credits never expire and are deducted after subscription credits.
    - **Upgrade**: grants credit difference immediately via `add_subscription_credits` RPC
    - **Downgrade**: updates tier immediately, credits adjust at next renewal
 
+**Note:** After step 3, the backend now immediately updates the local DB (subscriptions + profiles tables) with the new tier, credits, and storage limit. The webhook in step 4-5 serves as backup reconciliation.
+
 **IMPORTANT**: Never call `openCheckout()` for subscribed users -- this creates a duplicate subscription.
 
 ### Subscription Renewal
@@ -111,7 +113,7 @@ Top-up credits never expire and are deducted after subscription credits.
 2. Paddle fires `subscription.canceled` webhook (fires immediately for instant cancel, or at period end for scheduled cancel)
 3. `handleSubscriptionCanceled()` always downgrades the user immediately:
    - Sets subscription status to `canceled` with `canceled_at` timestamp
-   - Downgrades profile: `tier = "free"`, `subscription_credits = min(current, 50)`, `storage_limit_bytes = 500 MB`
+   - Downgrades profile: `tier = "free"`, `subscription_credits = min(current, 50)`, `storage_limit_bytes = 1 GB`
    - Sets `subscription_ended_at = now` (starts 60-day media grace period)
 4. Topup credits are NOT affected (they never expire)
 5. After 60 days past `subscription_ended_at`: R2 media cleanup cron deletes stored files
@@ -202,6 +204,8 @@ Handled atomically by the `deduct_credits` PostgreSQL RPC function with `FOR UPD
 | `components/credits/CreditBalance.tsx` | Toolbar balance widget (auto-refresh 30s) |
 | `components/credits/GenerateButton.tsx` | Config panel button with cost display |
 | `components/credits/InsufficientCreditsModal.tsx` | Insufficient balance modal |
+| `components/credits/StorageExceededModal.tsx` | Storage quota exceeded modal |
+| `app/(dashboard)/library/page.tsx` | File management with storage summary |
 
 ---
 
@@ -251,10 +255,14 @@ Handled atomically by the `deduct_credits` PostgreSQL RPC function with `FOR UPD
 |----------|----------|-------------|
 | `PADDLE_API_KEY` | Yes | Paddle API key (sandbox or production) |
 | `PADDLE_WEBHOOK_SECRET` | Yes | Webhook signature verification secret |
-| `PADDLE_PRICE_BASIC` | No | Override basic tier price ID |
-| `PADDLE_PRICE_STANDARD` | No | Override standard tier price ID |
-| `PADDLE_PRICE_PRO` | No | Override pro tier price ID |
-| `PADDLE_PRICE_BUSINESS` | No | Override business tier price ID |
+| `PADDLE_PRICE_BASIC` | No | Annual basic tier price ID (current default) |
+| `PADDLE_PRICE_STANDARD` | No | Annual standard tier price ID (current default) |
+| `PADDLE_PRICE_PRO` | No | Annual pro tier price ID (current default) |
+| `PADDLE_PRICE_BUSINESS` | No | Annual business tier price ID (current default) |
+| `PADDLE_PRICE_BASIC_MONTHLY` | No | Monthly basic tier price ID (not yet created) |
+| `PADDLE_PRICE_STANDARD_MONTHLY` | No | Monthly standard tier price ID (not yet created) |
+| `PADDLE_PRICE_PRO_MONTHLY` | No | Monthly pro tier price ID (not yet created) |
+| `PADDLE_PRICE_BUSINESS_MONTHLY` | No | Monthly business tier price ID (not yet created) |
 | `PADDLE_PRICE_CREDITS_55` | No | Override 55-credit topup price ID |
 | `PADDLE_PRICE_CREDITS_150` | No | Override 150-credit topup price ID |
 | `PADDLE_PRICE_CREDITS_330` | No | Override 330-credit topup price ID |
@@ -262,16 +270,22 @@ Handled atomically by the `deduct_credits` PostgreSQL RPC function with `FOR UPD
 | `BILLING_PROVIDER` | Yes | Set to `paddle` to enable billing |
 | `EDITION` | Yes | Set to `cloud` for billing features |
 
+**Note:** Currently only annual Paddle price IDs exist. The `PADDLE_PRICE_BASIC/STANDARD/PRO/BUSINESS` env vars hold the **annual** price IDs. Monthly price IDs need to be created in the Paddle dashboard and added via the `_MONTHLY` env vars. Until then, the frontend falls back to `null` for monthly prices and the monthly toggle option will not trigger a checkout.
+
 ### Frontend (.env.local)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` | Yes | Paddle client-side token |
 | `NEXT_PUBLIC_PADDLE_ENVIRONMENT` | Yes | `sandbox` or `production` |
-| `NEXT_PUBLIC_PADDLE_PRICE_BASIC` | No | Override basic tier price ID |
-| `NEXT_PUBLIC_PADDLE_PRICE_STANDARD` | No | Override standard tier price ID |
-| `NEXT_PUBLIC_PADDLE_PRICE_PRO` | No | Override pro tier price ID |
-| `NEXT_PUBLIC_PADDLE_PRICE_BUSINESS` | No | Override business tier price ID |
+| `NEXT_PUBLIC_PADDLE_PRICE_BASIC` | No | Annual basic tier price ID |
+| `NEXT_PUBLIC_PADDLE_PRICE_STANDARD` | No | Annual standard tier price ID |
+| `NEXT_PUBLIC_PADDLE_PRICE_PRO` | No | Annual pro tier price ID |
+| `NEXT_PUBLIC_PADDLE_PRICE_BUSINESS` | No | Annual business tier price ID |
+| `NEXT_PUBLIC_PADDLE_PRICE_BASIC_MONTHLY` | No | Monthly basic tier price ID (not yet created) |
+| `NEXT_PUBLIC_PADDLE_PRICE_STANDARD_MONTHLY` | No | Monthly standard tier price ID (not yet created) |
+| `NEXT_PUBLIC_PADDLE_PRICE_PRO_MONTHLY` | No | Monthly pro tier price ID (not yet created) |
+| `NEXT_PUBLIC_PADDLE_PRICE_BUSINESS_MONTHLY` | No | Monthly business tier price ID (not yet created) |
 | `NEXT_PUBLIC_EDITION` | Yes | Set to `cloud` for billing UI |
 
 ---
@@ -289,6 +303,26 @@ Paddle rejects `localhost` for checkout and webhooks. Use ngrok for testing:
 
 The Google OAuth `redirectTo` in `use-auth.ts` already uses `window.location.origin`,
 so it redirects back to the ngrok URL after login.
+
+---
+
+## Storage Management
+
+### Quota Enforcement
+- **Single source of truth:** `TIER_STORAGE_LIMITS` in `backend/src/billing/paddle-config.ts` (Free=1GB, Basic=10GB, Standard=25GB, Pro=50GB, Business=200GB)
+- DB-first check: `storage_limit_bytes` in profiles takes precedence (supports admin overrides), falls back to `TIER_STORAGE_LIMITS[tier]`
+- Enforced in `credit-guard.ts` middleware (before credit check) and upload routes
+- Self-hosted (`hasCredits() = false`): no enforcement
+- HTTP 413 `storage_limit_exceeded` error with usedBytes/quotaBytes/remainingBytes/tier
+
+### Admin Override
+- `PUT /v1/admin/users/:id/storage` -- set custom storage limit per user
+- Admin Users page shows storage progress bar per user with tier presets + custom GB input
+
+### Frontend UI
+- **StorageExceededModal** (`components/credits/StorageExceededModal.tsx`): shown on execution errors (`workflow-editor.tsx`) and upload errors (`use-file-upload.ts`), with "Upgrade Plan" and "Manage Files" CTAs
+- **Billing page storage section**: usage bar between Credit Balance and Transaction History, upgrade prompt at 70%+, "Manage Files" link to /library
+- **Library page** (`/library`): file management with storage summary, filter tabs, thumbnails, multi-select delete, cursor pagination, `owned=true` filter
 
 ---
 
