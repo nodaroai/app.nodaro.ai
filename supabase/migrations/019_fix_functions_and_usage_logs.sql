@@ -265,3 +265,8 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Trigger: auto-update assets metadata on row update
+DROP TRIGGER IF EXISTS assets_updated_at ON assets;
+CREATE TRIGGER assets_updated_at BEFORE UPDATE ON assets
+  FOR EACH ROW EXECUTE FUNCTION update_assets_updated_at();
