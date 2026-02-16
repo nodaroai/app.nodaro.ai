@@ -125,7 +125,6 @@ export async function handleSubscriptionCreated(
       subscription_credits: credits,
       credits_reset_at: new Date().toISOString(),
       storage_limit_bytes: storageLimit,
-      llm_requests_used: 0,
       subscription_ended_at: null,
     })
     .eq("id", userId)
@@ -211,12 +210,11 @@ export async function handleSubscriptionUpdated(
   }
 
   if (isRenewal) {
-    // Reset subscription credits and LLM requests
+    // Reset subscription credits on renewal
     const { error: resetError } = await supabase
       .from("profiles")
       .update({
         subscription_credits: newCredits,
-        llm_requests_used: 0,
         credits_reset_at: new Date().toISOString(),
       })
       .eq("id", userId)
