@@ -44,7 +44,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Parameter" },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
-  { type: "ai-writer", label: "AI Writer", icon: <Sparkles className="h-4 w-4" />, category: "AI", group: "Script & Text" },
+  { type: "ai-writer", label: "AI Agent", icon: <Sparkles className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   { type: "transcribe", label: "Transcribe", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   // AI — Image
   { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI", group: "Image" },

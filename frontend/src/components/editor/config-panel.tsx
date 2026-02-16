@@ -394,7 +394,7 @@ export function ConfigPanel() {
       "suno-separate": "Suno Separate",
       "suno-music-video": "Suno Music Video",
       "transcribe": "Transcribe",
-      "ai-writer": "AI Writer",
+      "ai-writer": "AI Agent",
       "combine-videos": "Combine Videos",
       "merge-video-audio": "Merge Video & Audio",
       "add-captions": "Add Captions",
@@ -5780,7 +5780,7 @@ function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>) {
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-700 dark:text-amber-300">
-              Connect a reference image node (Generate Image, Upload Image) to AI Writer for character consistency across all generated images.
+              Connect a reference image node (Generate Image, Upload Image) to AI Agent for character consistency across all generated images.
             </p>
           </div>
         </div>

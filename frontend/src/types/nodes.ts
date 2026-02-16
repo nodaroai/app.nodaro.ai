@@ -2026,16 +2026,16 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       videoExecutionStatus: "idle",
     } as SceneNodeDataType,
   },
-  // AI Writer
+  // AI Agent
   {
     type: "ai-writer",
-    label: "AI Writer",
+    label: "AI Agent",
     category: "ai",
     creditCost: 2,
     inputs: ["in"],
     outputs: ["text"],
     defaultData: {
-      label: "AI Writer",
+      label: "AI Agent",
       templateId: "custom",
       systemPrompt: "",
       userInput: "",

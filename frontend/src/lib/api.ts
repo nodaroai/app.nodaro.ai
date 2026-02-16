@@ -1632,7 +1632,7 @@ export async function generateAIWriter(params: {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "AI Writer generation failed")
+    throwApiError(err, "AI Agent generation failed")
   }
   return res.json()
 }

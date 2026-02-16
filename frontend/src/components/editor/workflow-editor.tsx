@@ -2553,13 +2553,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           generatedResults: [newResult, ...existingResults],
           activeResultIndex: 0,
         })
-        toast.success(`AI Writer completed: ${items.length} item${items.length !== 1 ? "s" : ""} generated`)
+        toast.success(`AI Agent completed: ${items.length} item${items.length !== 1 ? "s" : ""} generated`)
       }).catch((err: Error) => {
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err.message || "Generation failed",
         })
-        toast.error(`AI Writer failed: ${err.message}`)
+        toast.error(`AI Agent failed: ${err.message}`)
         throw err
       })
     }
@@ -4011,7 +4011,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const writerData = writerNode.data as AIWriterNodeData
     const items = writerData.generatedItems
     if (!items || items.length === 0) {
-      toast.error("No generated prompts to create nodes from. Run the AI Writer first.")
+      toast.error("No generated prompts to create nodes from. Run the AI Agent first.")
       return
     }
 

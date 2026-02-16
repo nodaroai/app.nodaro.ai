@@ -40,7 +40,7 @@ function WriterPreviewModal({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">AI Writer Output</span>
+            <span className="text-sm font-medium">AI Agent Output</span>
             {templateLabel && (
               <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                 {templateLabel}
@@ -114,7 +114,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
     const writerData = node.data as AIWriterNodeData
 
     if (!user?.id) {
-      toast.error("You must be logged in to run AI Writer")
+      toast.error("You must be logged in to run AI Agent")
       return
     }
 
@@ -203,14 +203,14 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
         generatedResults: [newResult, ...existingResults],
         activeResultIndex: 0,
       })
-      toast.success(`AI Writer completed: ${items.length} item${items.length !== 1 ? "s" : ""} generated`)
+      toast.success(`AI Agent completed: ${items.length} item${items.length !== 1 ? "s" : ""} generated`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Generation failed"
       updateNodeData(id, {
         executionStatus: "failed",
         errorMessage: message,
       })
-      toast.error(`AI Writer failed: ${message}`)
+      toast.error(`AI Agent failed: ${message}`)
     } finally {
       // Cancel any pending rAF flush
       if (flushTimerRef.current !== null) {
