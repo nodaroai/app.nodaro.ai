@@ -74,6 +74,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     : undefined
 
   const supportsEndFrame = END_FRAME_SUPPORTED_PROVIDERS.includes(nodeData.provider)
+  const isKling3 = nodeData.provider === "kling-3.0"
 
   // Resolve connected nodes per handle
   const startFrameInfo = useMemo(() => {
@@ -165,7 +166,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     <div className="relative group/run">
     <BaseNode
       id={id}
-      label={nodeData.label}
+      label={isKling3 ? "Kling 3.0 Studio" : nodeData.label}
       icon={<Film className="h-4 w-4" />}
       category="i2v"
       credits={credits}
@@ -177,6 +178,97 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       handles={handles}
     >
       <div className="flex flex-col gap-2">
+        {isKling3 ? (
+          <>
+            {/* Badges Row */}
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-medium">
+                {(nodeData as Record<string, unknown>).kling3Mode === "std" ? "Std" : "Pro"}
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium">
+                {nodeData.aspectRatio ?? "16:9"}
+              </span>
+              {(nodeData as Record<string, unknown>).kling3Sound !== false && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-medium">
+                  Sound
+                </span>
+              )}
+              {nodeData.multiShot && nodeData.shots && nodeData.shots.length > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-medium">
+                  {nodeData.shots.length} shots
+                </span>
+              )}
+              {nodeData.elements && nodeData.elements.length > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 font-medium">
+                  {nodeData.elements.length} elem
+                </span>
+              )}
+            </div>
+
+            {/* Master Prompt Preview */}
+            {(nodeData.motionPrompt || connectedTextPrompt) && (
+              <div className="text-[10px] text-muted-foreground line-clamp-2 px-1" style={{ wordBreak: "break-word" }}>
+                {nodeData.motionPrompt || connectedTextPrompt?.text}
+              </div>
+            )}
+
+            {/* Shots Summary */}
+            {nodeData.multiShot && nodeData.shots && nodeData.shots.length > 0 && (
+              <div className="flex flex-col gap-1 px-1">
+                <span className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wider">Shots</span>
+                <div className="flex flex-wrap gap-1">
+                  {nodeData.shots.slice(0, 4).map((shot, i) => (
+                    <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground truncate max-w-[100px]">
+                      {i + 1}. {shot.prompt ? (shot.prompt.length > 20 ? shot.prompt.slice(0, 20) + "..." : shot.prompt) : `${shot.duration}s`}
+                    </span>
+                  ))}
+                  {nodeData.shots.length > 4 && (
+                    <span className="text-[9px] px-1.5 py-0.5 text-muted-foreground/60">
+                      +{nodeData.shots.length - 4} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Elements Summary */}
+            {nodeData.elements && nodeData.elements.length > 0 && (
+              <div className="flex flex-col gap-1 px-1">
+                <span className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wider">Elements</span>
+                <div className="flex flex-wrap gap-1">
+                  {nodeData.elements.map((el, i) => (
+                    <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground flex items-center gap-1">
+                      {el.type === "video" ? "\uD83C\uDFAC" : "\uD83D\uDDBC"} @{el.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Compact Start Frame */}
+            {startFrameInfo?.thumbnailUrl && (
+              <div className="relative h-[40px] rounded-md overflow-hidden bg-muted/30 border border-muted">
+                <img
+                  src={startFrameInfo.thumbnailUrl}
+                  alt={startFrameInfo.label}
+                  className="w-full h-full object-cover"
+                />
+                <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/60 text-white px-1 rounded">
+                  Start
+                </span>
+              </div>
+            )}
+
+            {/* Audio indicator (compact) */}
+            {audioInfo && (
+              <div className="flex items-center gap-1.5 px-1">
+                <Volume2 className="w-3 h-3 text-green-500" />
+                <span className="text-[9px] text-muted-foreground truncate">{audioInfo.label}</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
         {/* Frame Previews - side by side label + image per row */}
         <div className="flex flex-col gap-2">
           {/* Start Frame */}
@@ -290,6 +382,8 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <Film className="w-8 h-8" />
             <span className="text-[10px]">Connect image/audio nodes</span>
           </div>
+        )}
+          </>
         )}
 
         {/* Video Preview / Loading / Error States */}
@@ -405,9 +499,13 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {/* Provider & Duration Info */}
-        <div className="flex justify-between text-muted-foreground">
+        <div className="flex justify-between text-[10px] text-muted-foreground">
           <span>{nodeData.provider}</span>
-          <span>{nodeData.duration}s</span>
+          <span>
+            {isKling3 && nodeData.multiShot && nodeData.shots
+              ? `${nodeData.shots.reduce((sum, s) => sum + s.duration, 0)}s total`
+              : `${nodeData.duration ?? 5}s`}
+          </span>
         </div>
       </div>
     </BaseNode>
