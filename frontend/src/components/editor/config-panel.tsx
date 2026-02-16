@@ -2408,17 +2408,17 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
 
   // Tab button styling
   const tabClass = (tab: Kling3Tab) =>
-    `px-3 py-1.5 text-xs font-medium transition-colors ${
+    `px-3 py-2 text-xs font-medium transition-colors ${
       activeTab === tab
-        ? "border-b-2 border-[#ff0073] text-foreground font-semibold"
+        ? "border-b-2 border-[#ff0073] text-[#ff0073] font-semibold"
         : "text-muted-foreground hover:text-foreground"
     }`
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {/* Connected Images */}
       {connectedImages.length > 0 && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
             Connected Images ({connectedImages.length})
           </Label>
@@ -2429,7 +2429,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                   {img.label}
                 </span>
                 <div
-                  className="flex-1 h-16 rounded-lg border border-gray-200 dark:border-[#2D2D2D] overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-gray-100 dark:bg-[#121212]"
+                  className="flex-1 h-16 rounded-lg border border-border overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-muted/30"
                   onClick={() => img.imageUrl && setLightboxImage(img.imageUrl)}
                   title={`Click to view: ${img.label}`}
                 >
@@ -2437,7 +2437,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                     <img src={img.imageUrl} alt={img.label} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                      <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
                     </div>
                   )}
                 </div>
@@ -2450,7 +2450,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
 
       {/* Connected Text Prompts */}
       {connectedTextPrompts.length > 0 && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
             Motion Prompt (from connected node)
           </Label>
@@ -2465,7 +2465,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                 onChange={(e) => handleTextPromptChange(prompt.id, e.target.value)}
                 placeholder="Enter motion prompt..."
                 rows={3}
-                className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+                className="text-xs bg-muted/30 border-border resize-none"
               />
             </div>
           ))}
@@ -2474,7 +2474,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
 
       {/* Manual Motion Prompt */}
       {connectedTextPrompts.length === 0 && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
             Motion Prompt
           </Label>
@@ -2483,7 +2483,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
             onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
             placeholder="Describe the overall scene, characters, and setting. Use @element_name to reference elements. Add dialogue with 'character says ...'"
             rows={3}
-            className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+            className="text-xs bg-muted/30 border-border resize-none"
           />
           <p className="text-[10px] text-muted-foreground mt-1.5">
             Tip: Connect a Text Prompt node for reusable prompts
@@ -2500,88 +2500,102 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
 
       {/* ═══ SCENE TAB ═══ */}
       {activeTab === "scene" && (
-        <div className="flex flex-col gap-3">
-          <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
-            <Select
-              value={data.provider || "minimax"}
-              onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="minimax">MiniMax (default)</SelectItem>
-                <SelectItem value="veo3">VEO 3</SelectItem>
-                <SelectItem value="veo3.1">VEO 3.1 (Fast)</SelectItem>
-                <SelectItem value="kling">Kling</SelectItem>
-                <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
-                <SelectItem value="kling-3.0">Kling 3.0 (10 credits)</SelectItem>
-                <SelectItem value="veo">VEO 2</SelectItem>
-                <SelectItem value="grok-i2v">Grok</SelectItem>
-                <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
-                <SelectItem value="runway">Runway</SelectItem>
-                <SelectItem value="pika">Pika</SelectItem>
-                <SelectItem value="sora">Sora</SelectItem>
-              </SelectContent>
-            </Select>
-          </MappableField>
-
-          <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">Mode</Label>
-              <Select
-                value={(data as Record<string, unknown>).kling3Mode as string ?? "pro"}
-                onValueChange={(v) => onUpdate({ kling3Mode: v })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pro">Pro (higher quality)</SelectItem>
-                  <SelectItem value="std">Standard (faster)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="kling3Sound"
-                checked={(data as Record<string, unknown>).kling3Sound !== false}
-                onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
-                className="rounded border-muted-foreground/40"
-              />
-              <label htmlFor="kling3Sound" className="text-xs">Enable Sound Effects</label>
-            </div>
-
-            <div>
-              <Label className="text-xs text-muted-foreground">Aspect Ratio</Label>
-              <Select
-                value={data.aspectRatio ?? "16:9"}
-                onValueChange={(v) => onUpdate({ aspectRatio: v })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-                  <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-                  <SelectItem value="1:1">1:1 (Square)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="text-xs text-muted-foreground">Duration</Label>
-              {data.multiShot ? (
-                <p className="text-xs text-muted-foreground mt-1">Duration: {totalDuration}s (calculated from shots)</p>
-              ) : (
+        <div className="flex flex-col gap-4">
+          {/* Provider Section */}
+          <div className="space-y-2">
+            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Provider</Label>
+            <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+              <MappableField field="provider" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
                 <Select
-                  value={String(data.duration || 5)}
-                  onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
+                  value={data.provider || "minimax"}
+                  onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[3, 4, 5, 6, 7, 8, 9, 10, 15].map((d) => (
-                      <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
-                    ))}
+                    <SelectItem value="minimax">MiniMax (default)</SelectItem>
+                    <SelectItem value="veo3">VEO 3</SelectItem>
+                    <SelectItem value="veo3.1">VEO 3.1 (Fast)</SelectItem>
+                    <SelectItem value="kling">Kling</SelectItem>
+                    <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
+                    <SelectItem value="kling-3.0">Kling 3.0 (10 credits)</SelectItem>
+                    <SelectItem value="veo">VEO 2</SelectItem>
+                    <SelectItem value="grok-i2v">Grok</SelectItem>
+                    <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
+                    <SelectItem value="runway">Runway</SelectItem>
+                    <SelectItem value="pika">Pika</SelectItem>
+                    <SelectItem value="sora">Sora</SelectItem>
                   </SelectContent>
                 </Select>
-              )}
+              </MappableField>
+            </div>
+          </div>
+
+          {/* Generation Settings Section */}
+          <div className="space-y-2">
+            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Generation Settings</Label>
+            <div className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground mb-1 block">Mode</Label>
+                  <Select
+                    value={(data as Record<string, unknown>).kling3Mode as string ?? "pro"}
+                    onValueChange={(v) => onUpdate({ kling3Mode: v })}
+                  >
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pro">Pro</SelectItem>
+                      <SelectItem value="std">Standard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground mb-1 block">Aspect Ratio</Label>
+                  <Select
+                    value={data.aspectRatio ?? "16:9"}
+                    onValueChange={(v) => onUpdate({ aspectRatio: v })}
+                  >
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="16:9">16:9</SelectItem>
+                      <SelectItem value="9:16">9:16</SelectItem>
+                      <SelectItem value="1:1">1:1</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 py-1">
+                <input
+                  type="checkbox"
+                  id="kling3Sound"
+                  checked={(data as Record<string, unknown>).kling3Sound !== false}
+                  onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
+                  className="rounded border-muted-foreground/40 accent-[#ff0073]"
+                />
+                <label htmlFor="kling3Sound" className="text-xs">Sound Effects</label>
+                <span className="text-[10px] text-muted-foreground ml-auto">Lip-sync + SFX</span>
+              </div>
+
+              <div>
+                <Label className="text-[10px] text-muted-foreground mb-1 block">Duration</Label>
+                {data.multiShot ? (
+                  <div className="flex items-center gap-2 h-8 px-3 rounded-md border border-border bg-muted/30 text-xs text-muted-foreground">
+                    {totalDuration}s (from shots)
+                  </div>
+                ) : (
+                  <Select
+                    value={String(data.duration || 5)}
+                    onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
+                  >
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[3, 4, 5, 6, 7, 8, 9, 10, 15].map((d) => (
+                        <SelectItem key={d} value={String(d)}>{d}s</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </div>
           </div>
 
@@ -2591,47 +2605,55 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
             </p>
           )}
 
-          <p className="text-[10px] text-muted-foreground px-1">
-            Kling 3.0 generates cinematic video with native audio, lip-synced dialogue, multi-shot storyboarding, and element references. Supports 5 languages with accent control.
+          <p className="text-[10px] text-muted-foreground/70 px-1 leading-relaxed">
+            Kling 3.0 generates cinematic video with native audio, lip-synced dialogue, multi-shot storyboarding, and element references.
           </p>
         </div>
       )}
 
       {/* ═══ SHOTS TAB ═══ */}
       {activeTab === "shots" && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="multiShotToggle"
-              checked={data.multiShot ?? false}
-              onChange={(e) => {
-                const checked = e.target.checked
-                if (checked && shots.length === 0) {
-                  onUpdate({ multiShot: true, shots: [{ prompt: "", duration: 3 }] })
-                } else {
-                  onUpdate({ multiShot: checked })
-                }
-              }}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="multiShotToggle" className="text-xs font-medium">Enable Multi-Shot</label>
+        <div className="flex flex-col gap-4">
+          <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="multiShotToggle"
+                  checked={data.multiShot ?? false}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    if (checked && shots.length === 0) {
+                      onUpdate({ multiShot: true, shots: [{ prompt: "", duration: 3 }] })
+                    } else {
+                      onUpdate({ multiShot: checked })
+                    }
+                  }}
+                  className="rounded border-muted-foreground/40 accent-[#ff0073]"
+                />
+                <label htmlFor="multiShotToggle" className="text-xs font-medium">Multi-Shot Mode</label>
+              </div>
+              {data.multiShot && (
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${totalDuration > 15 ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"}`}>
+                  {totalDuration}s / 15s
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5">
+              Split your video into 2-6 scenes, each with its own prompt and timing.
+            </p>
           </div>
 
-          <p className="text-[10px] text-muted-foreground px-1">
-            Split your video into 2-6 scenes, each with its own prompt and timing. Total duration max 15 seconds.
-          </p>
-
           {data.multiShot ? (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               {hasEndFrame && (
                 <p className="text-[10px] text-amber-500 px-1">End frame is not supported in multi-shot mode.</p>
               )}
 
               {shots.map((shot, i) => (
-                <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-2 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-muted-foreground w-12 shrink-0">Shot {i + 1}</span>
+                <div key={i} className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-foreground shrink-0">Shot {i + 1}</span>
                     <Select
                       value={String(shot.duration)}
                       onValueChange={(v) => handleUpdateShot(i, "duration", parseInt(v, 10))}
@@ -2648,7 +2670,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                       type="button"
                       onClick={() => handleMoveShot(i, -1)}
                       disabled={i === 0}
-                      className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
                       title="Move up"
                     >
                       <ChevronUp className="w-3.5 h-3.5" />
@@ -2657,7 +2679,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                       type="button"
                       onClick={() => handleMoveShot(i, 1)}
                       disabled={i === shots.length - 1}
-                      className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
                       title="Move down"
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
@@ -2666,7 +2688,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                       <button
                         type="button"
                         onClick={() => handleRemoveShot(i)}
-                        className="p-0.5 text-muted-foreground hover:text-red-500"
+                        className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-muted-foreground hover:text-red-500 transition-colors"
                         title="Delete shot"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -2676,37 +2698,36 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                   <Textarea
                     value={shot.prompt}
                     onChange={(e) => handleUpdateShot(i, "prompt", e.target.value)}
-                    placeholder="Describe the shot: camera angle, action, and dialogue. Example: Close-up of the woman, she whispers 'I knew you'd come back.' Soft ambient rain."
+                    placeholder="Camera angle, action, dialogue... e.g. Close-up, she whispers 'I knew you'd come back.' Soft rain."
                     rows={2}
-                    className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+                    className="text-xs bg-muted/30 border-border resize-none"
                   />
                 </div>
               ))}
 
-              <div className="rounded-md bg-muted/50 border p-2 flex flex-col gap-1">
-                <span className="text-[10px] font-medium text-foreground">Director Tips</span>
-                <span className="text-[10px] text-muted-foreground">Add dialogue: character says &quot;...&quot; or character whispers &quot;...&quot;</span>
-                <span className="text-[10px] text-muted-foreground">Control voice tone: calm, excited, sad, angry, whispering</span>
-                <span className="text-[10px] text-muted-foreground">Languages: English, Chinese, Japanese, Korean, Spanish</span>
-                <span className="text-[10px] text-muted-foreground">Describe camera: dolly zoom, tracking shot, close-up, wide establishing</span>
+              {/* Director Tips */}
+              <div className="rounded-xl border border-border bg-gradient-to-br from-[#ff0073]/5 to-purple-500/5 p-3 space-y-1.5">
+                <span className="text-[11px] font-semibold text-foreground">Director Tips</span>
+                <div className="grid grid-cols-1 gap-1">
+                  <span className="text-[10px] text-muted-foreground">Dialogue: character says &quot;...&quot; or whispers &quot;...&quot;</span>
+                  <span className="text-[10px] text-muted-foreground">Voice tone: calm, excited, sad, angry, whispering</span>
+                  <span className="text-[10px] text-muted-foreground">Camera: dolly zoom, tracking, close-up, wide establishing</span>
+                  <span className="text-[10px] text-muted-foreground">Languages: English, Chinese, Japanese, Korean, Spanish</span>
+                </div>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
+              {/* Add Shot (dashed) */}
+              <button
+                type="button"
                 onClick={handleAddShot}
                 disabled={shots.length >= 6}
-                className="text-xs"
+                className="w-full py-2.5 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground flex items-center justify-center gap-1.5"
               >
-                <Plus className="w-3 h-3 mr-1" /> Add Shot
-              </Button>
-
-              <p className={`text-[10px] px-1 ${totalDuration > 15 ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
-                Total: {totalDuration}s / 15s
-              </p>
+                <Plus className="w-3.5 h-3.5" /> Add Shot {shots.length < 6 && `(${shots.length}/6)`}
+              </button>
             </div>
           ) : (
-            <p className="text-[10px] text-muted-foreground px-1">
+            <p className="text-[10px] text-muted-foreground/70 px-1">
               Single continuous shot using the master prompt and duration from the Scene tab.
             </p>
           )}
@@ -2715,98 +2736,97 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
 
       {/* ═══ ELEMENTS TAB ═══ */}
       {activeTab === "elements" && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <p className="text-[10px] text-muted-foreground px-1">
-            Create characters and objects, then use @name in your prompts to reference them.
+            Create characters and objects, then reference them with <span className="font-mono text-[#ff0073]">@name</span> in your prompts.
           </p>
 
           {elements.map((el, i) => (
-            <div key={i} className="rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-2 space-y-1.5">
-              {/* Row 1: Name + Description + Delete */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-muted-foreground shrink-0">@</span>
+            <div key={i} className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-2.5">
+              {/* Row 1: Name + Type + Delete */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#ff0073] font-semibold shrink-0">@</span>
                 <Input
                   value={el.name}
                   onChange={(e) => handleUpdateElement(i, "name", e.target.value.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""))}
                   placeholder="name"
-                  className="h-7 text-xs w-24 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
-                />
-                <Input
-                  value={el.description}
-                  onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 200))}
-                  placeholder="Describe appearance and voice, e.g. 'young woman, red jacket, calm confident voice'"
-                  className="h-7 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
+                  className="h-7 text-xs w-24 bg-muted/30 border-border font-mono"
                 />
                 <button
                   type="button"
+                  onClick={() => handleUpdateElement(i, "type", el.type === "image" ? "video" : "image")}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors shrink-0 ${
+                    el.type === "image"
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                      : "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
+                  }`}
+                >
+                  {el.type === "image" ? "Image" : "Video"}
+                </button>
+                <div className="flex-1" />
+                <button
+                  type="button"
                   onClick={() => handleRemoveElement(i)}
-                  className="p-0.5 text-muted-foreground hover:text-red-500 shrink-0"
+                  className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-muted-foreground hover:text-red-500 transition-colors shrink-0"
                   title="Delete element"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Row 2: Type toggle */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-muted-foreground">Type:</span>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateElement(i, "type", el.type === "image" ? "video" : "image")}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                    el.type === "image"
-                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                      : "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
-                  }`}
-                >
-                  {el.type === "image" ? "Image" : "Video"}
-                </button>
-              </div>
+              {/* Row 2: Description */}
+              <Input
+                value={el.description}
+                onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 200))}
+                placeholder="Describe appearance and voice, e.g. 'young woman, red jacket, calm confident voice'"
+                className="h-8 text-xs bg-muted/30 border-border"
+              />
 
               {/* Row 3: Thumbnails */}
-              <div className="flex items-center gap-1 min-h-[32px] flex-wrap">
+              <div className="flex items-center gap-1.5 min-h-[40px] flex-wrap">
                 {el.urls.length > 0 ? (
                   el.urls.map((url, ui) => (
-                    <div key={ui} className="relative group/thumb w-8 h-8 shrink-0">
-                      <img src={url} alt={`${el.name} ${ui + 1}`} className="w-8 h-8 rounded object-cover border border-gray-200 dark:border-[#2D2D2D]" />
+                    <div key={ui} className="relative group/thumb w-10 h-10 shrink-0">
+                      <img src={url} alt={`${el.name} ${ui + 1}`} className="w-10 h-10 rounded-lg object-cover border border-border" />
                       <button
                         type="button"
-                        className="absolute -top-1 -right-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
                         onClick={() => handleRemoveElementUrl(i, ui)}
                         title="Remove"
                       >
-                        <X className="w-2 h-2" />
+                        <X className="w-2.5 h-2.5" />
                       </button>
                     </div>
                   ))
                 ) : (
-                  <span className="text-[10px] text-muted-foreground">No media yet</span>
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
+                    <ImageIcon className="w-4 h-4" />
+                    <span>No media added</span>
+                  </div>
                 )}
               </div>
 
-              {/* Row 4: Add media buttons */}
+              {/* Row 4: Add media buttons (dashed style) */}
               <div className="flex items-center gap-1.5 relative">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 text-[10px] px-2"
+                <button
+                  type="button"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[10px] text-muted-foreground hover:text-[#ff0073] transition-colors"
                   onClick={() => alert("Coming soon")}
                 >
                   + Library
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 text-[10px] px-2"
+                </button>
+                <button
+                  type="button"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[10px] text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40"
                   disabled={uploadingIndex === i}
                   onClick={() => fileInputRefs.current[i]?.click()}
                 >
                   {uploadingIndex === i ? (
-                    <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Uploading</>
+                    <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Uploading</span>
                   ) : (
                     "+ Upload"
                   )}
-                </Button>
+                </button>
                 <input
                   ref={(ref) => { fileInputRefs.current[i] = ref }}
                   type="file"
@@ -2818,20 +2838,19 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                     e.target.value = ""
                   }}
                 />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 text-[10px] px-2"
+                <button
+                  type="button"
+                  className="h-7 px-2.5 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[10px] text-muted-foreground hover:text-[#ff0073] transition-colors"
                   onClick={() => setWorkflowDropdownIndex(workflowDropdownIndex === i ? null : i)}
                 >
                   + Workflow
-                </Button>
+                </button>
 
                 {/* From Workflow dropdown */}
                 {workflowDropdownIndex === i && (
                   <div
                     ref={workflowDropdownRef}
-                    className="absolute top-full left-0 mt-1 w-56 max-h-48 overflow-y-auto z-50 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shadow-lg"
+                    className="absolute top-full left-0 mt-1 w-56 max-h-48 overflow-y-auto z-50 rounded-xl border border-border bg-card shadow-lg"
                   >
                     {workflowImageNodes.length === 0 ? (
                       <p className="text-[10px] text-muted-foreground p-3 text-center">No image nodes in workflow</p>
@@ -2840,14 +2859,14 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                         <button
                           key={node.id}
                           type="button"
-                          className="flex items-center gap-2 w-full px-2.5 py-1.5 text-left hover:bg-muted/50 transition-colors"
+                          className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-muted/50 transition-colors"
                           disabled={!node.thumbUrl}
                           onClick={() => node.thumbUrl && handleAddFromWorkflow(i, node.thumbUrl)}
                         >
                           {node.thumbUrl ? (
-                            <img src={node.thumbUrl} alt={node.label} className="w-6 h-6 rounded object-cover border border-gray-200 dark:border-[#2D2D2D] shrink-0" />
+                            <img src={node.thumbUrl} alt={node.label} className="w-7 h-7 rounded-lg object-cover border border-border shrink-0" />
                           ) : (
-                            <div className="w-6 h-6 rounded bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
+                            <div className="w-7 h-7 rounded-lg bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
                               <ImageIcon className="w-3 h-3 text-muted-foreground/40" />
                             </div>
                           )}
@@ -2865,19 +2884,19 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
             </div>
           ))}
 
-          <Button
-            variant="outline"
-            size="sm"
+          {/* Add Element (dashed) */}
+          <button
+            type="button"
             onClick={handleAddElement}
             disabled={elements.length >= 5}
-            className="text-xs"
+            className="w-full py-2.5 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground flex items-center justify-center gap-1.5"
           >
-            <Plus className="w-3 h-3 mr-1" /> Add Element
-          </Button>
+            <Plus className="w-3.5 h-3.5" /> Add Element {elements.length < 5 && `(${elements.length}/5)`}
+          </button>
 
-          <div className="rounded-lg border border-dashed border-gray-300 dark:border-[#2D2D2D] p-2">
+          <div className="rounded-xl border border-border bg-gradient-to-br from-[#ff0073]/5 to-transparent p-3">
             <p className="text-[10px] text-muted-foreground">
-              Example: &quot;Close-up of @hero walking through rain&quot;
+              Example: <span className="font-mono text-foreground">&quot;Close-up of @hero walking through rain&quot;</span>
             </p>
           </div>
         </div>
