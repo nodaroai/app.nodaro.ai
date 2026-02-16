@@ -21,11 +21,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useAuth } from "@/hooks/use-auth"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { GenerateButton } from "@/components/credits/GenerateButton"
 import { createClient } from "@/lib/supabase"
-import { uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
+import { uploadFile, uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import {
   getProviders,
@@ -2239,8 +2240,13 @@ const PROVIDERS_WITH_END_FRAME: string[] = [
 type Kling3Tab = "scene" | "shots" | "elements"
 
 function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode }: ConfigProps<ImageToVideoData>) {
+  const { user } = useAuth()
+  const allNodes = useWorkflowStore((s) => s.nodes)
   const [activeTab, setActiveTab] = useState<Kling3Tab>("scene")
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
+  const [workflowDropdownIndex, setWorkflowDropdownIndex] = useState<number | null>(null)
+  const workflowDropdownRef = useRef<HTMLDivElement | null>(null)
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "minimax")
@@ -2326,6 +2332,76 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
   const handleUpdateElement = useCallback((index: number, field: string, value: unknown) => {
     onUpdate({ elements: elements.map((el, i) => i === index ? { ...el, [field]: value } : el) })
   }, [elements, onUpdate])
+
+  const handleRemoveElementUrl = useCallback((elementIndex: number, urlIndex: number) => {
+    onUpdate({
+      elements: elements.map((el, i) =>
+        i === elementIndex ? { ...el, urls: el.urls.filter((_, ui) => ui !== urlIndex) } : el
+      ),
+    })
+  }, [elements, onUpdate])
+
+  const handleElementUpload = useCallback(async (elementIndex: number, file: File) => {
+    setUploadingIndex(elementIndex)
+    try {
+      const result = await uploadFile(file, user?.id)
+      const detectedType = file.type.startsWith("video/") ? "video" as const : "image" as const
+      onUpdate({
+        elements: elements.map((el, i) =>
+          i === elementIndex
+            ? { ...el, urls: [...el.urls, result.url], type: el.urls.length === 0 ? detectedType : el.type }
+            : el
+        ),
+      })
+    } catch (err) {
+      console.error("[Kling3Elements] Upload failed:", err)
+    } finally {
+      setUploadingIndex(null)
+    }
+  }, [elements, onUpdate, user?.id])
+
+  // Image-outputting node types for "From Workflow" picker
+  const IMAGE_NODE_TYPES = useMemo(() => new Set([
+    "generate-image", "upload-image", "scene", "character", "object", "location", "edit-image", "image-to-image",
+  ]), [])
+
+  const workflowImageNodes = useMemo(() => {
+    return allNodes
+      .filter((n) => IMAGE_NODE_TYPES.has(String(n.type ?? "")))
+      .map((n) => {
+        const nd = n.data as Record<string, unknown>
+        const results = nd.generatedResults as Array<{ url?: string }> | undefined
+        const activeIdx = (nd.activeResultIndex as number) ?? 0
+        const thumbUrl =
+          results?.[activeIdx]?.url ??
+          (nd.generatedImageUrl as string | undefined) ??
+          (nd.url as string | undefined) ??
+          (nd.portraitUrl as string | undefined) ??
+          (nd.mainImageUrl as string | undefined)
+        return { id: n.id, type: String(n.type), label: (nd.label as string) ?? String(n.type), thumbUrl }
+      })
+  }, [allNodes, IMAGE_NODE_TYPES])
+
+  const handleAddFromWorkflow = useCallback((elementIndex: number, url: string) => {
+    onUpdate({
+      elements: elements.map((el, i) =>
+        i === elementIndex ? { ...el, urls: [...el.urls, url] } : el
+      ),
+    })
+    setWorkflowDropdownIndex(null)
+  }, [elements, onUpdate])
+
+  // Close workflow dropdown on outside click
+  useEffect(() => {
+    if (workflowDropdownIndex === null) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
+        setWorkflowDropdownIndex(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [workflowDropdownIndex])
 
   // Check if end frame is connected
   const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
@@ -2688,10 +2764,20 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
               </div>
 
               {/* Row 3: Thumbnails */}
-              <div className="flex items-center gap-1 min-h-[32px]">
+              <div className="flex items-center gap-1 min-h-[32px] flex-wrap">
                 {el.urls.length > 0 ? (
                   el.urls.map((url, ui) => (
-                    <img key={ui} src={url} alt={`${el.name} ${ui + 1}`} className="w-8 h-8 rounded object-cover border border-gray-200 dark:border-[#2D2D2D]" />
+                    <div key={ui} className="relative group/thumb w-8 h-8 shrink-0">
+                      <img src={url} alt={`${el.name} ${ui + 1}`} className="w-8 h-8 rounded object-cover border border-gray-200 dark:border-[#2D2D2D]" />
+                      <button
+                        type="button"
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                        onClick={() => handleRemoveElementUrl(i, ui)}
+                        title="Remove"
+                      >
+                        <X className="w-2 h-2" />
+                      </button>
+                    </div>
                   ))
                 ) : (
                   <span className="text-[10px] text-muted-foreground">No media yet</span>
@@ -2699,7 +2785,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
               </div>
 
               {/* Row 4: Add media buttons */}
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 relative">
                 <Button
                   variant="outline"
                   size="sm"
@@ -2712,9 +2798,14 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                   variant="outline"
                   size="sm"
                   className="h-6 text-[10px] px-2"
+                  disabled={uploadingIndex === i}
                   onClick={() => fileInputRefs.current[i]?.click()}
                 >
-                  + Upload
+                  {uploadingIndex === i ? (
+                    <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Uploading</>
+                  ) : (
+                    "+ Upload"
+                  )}
                 </Button>
                 <input
                   ref={(ref) => { fileInputRefs.current[i] = ref }}
@@ -2723,7 +2814,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) console.log(`[Kling3Elements] Selected file for element ${i}:`, file.name, file.type)
+                    if (file) handleElementUpload(i, file)
                     e.target.value = ""
                   }}
                 />
@@ -2731,10 +2822,45 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                   variant="outline"
                   size="sm"
                   className="h-6 text-[10px] px-2"
-                  onClick={() => alert("Coming soon")}
+                  onClick={() => setWorkflowDropdownIndex(workflowDropdownIndex === i ? null : i)}
                 >
                   + Workflow
                 </Button>
+
+                {/* From Workflow dropdown */}
+                {workflowDropdownIndex === i && (
+                  <div
+                    ref={workflowDropdownRef}
+                    className="absolute top-full left-0 mt-1 w-56 max-h-48 overflow-y-auto z-50 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shadow-lg"
+                  >
+                    {workflowImageNodes.length === 0 ? (
+                      <p className="text-[10px] text-muted-foreground p-3 text-center">No image nodes in workflow</p>
+                    ) : (
+                      workflowImageNodes.map((node) => (
+                        <button
+                          key={node.id}
+                          type="button"
+                          className="flex items-center gap-2 w-full px-2.5 py-1.5 text-left hover:bg-muted/50 transition-colors"
+                          disabled={!node.thumbUrl}
+                          onClick={() => node.thumbUrl && handleAddFromWorkflow(i, node.thumbUrl)}
+                        >
+                          {node.thumbUrl ? (
+                            <img src={node.thumbUrl} alt={node.label} className="w-6 h-6 rounded object-cover border border-gray-200 dark:border-[#2D2D2D] shrink-0" />
+                          ) : (
+                            <div className="w-6 h-6 rounded bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
+                              <ImageIcon className="w-3 h-3 text-muted-foreground/40" />
+                            </div>
+                          )}
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-medium truncate">{node.label}</span>
+                            <span className="text-[9px] text-muted-foreground">{node.type}</span>
+                          </div>
+                          {!node.thumbUrl && <span className="text-[9px] text-muted-foreground/60 ml-auto">No output</span>}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
