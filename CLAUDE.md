@@ -180,7 +180,7 @@ backend/src/providers/
 | Video | veo3.1 | $1.25 | 8s fixed | imageUrls[] |
 ***REDACTED-OSS-SCRUB***
 ***REDACTED-OSS-SCRUB***
-***REDACTED-OSS-SCRUB***
+| Video | grok-i2v | $0.30 | 10s | No |
 ***REDACTED-OSS-SCRUB***
 | Lip Sync | kling-avatar | $0.40 | - | - |
 | Lip Sync | hailuo-avatar | $0.35 | - | - |
@@ -191,7 +191,7 @@ All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3
 ### Duration Validation
 - VEO3/VEO3.1: Fixed 8 seconds (no duration parameter)
 - Kling/Kling-Turbo: 5 or 10 seconds
-- Grok: 6 or 10 seconds
+- Grok: 10 seconds only
 - Sora: Uses `n_frames` (10 ≈ 5s, 15 ≈ 10s)
 
 ### End Frame Support (Start + End Image → Video)
@@ -222,7 +222,7 @@ All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3
 
 ### Pricing
 - Base formula: `1 credit ≈ $0.10 provider cost`
-- Tiers: Free ($0/50cr), Basic ($19/95cr), Standard ($39/235cr), Pro ($79/530cr), Business ($149/1120cr)
+- Tiers: Free ($0/50cr), Basic ($24mo/$19yr per mo/95cr), Standard ($49mo/$39yr/235cr), Pro ($99mo/$79yr/530cr), Business ($189mo/$149yr/1120cr)
 - Top-ups: $10/55cr, $25/150cr, $50/330cr, $100/700cr (never expire)
 
 ### Credit Cost Per Node
@@ -290,7 +290,7 @@ All gated behind `hasCredits()`:
 ### Cancellation Flow (CRITICAL -- must downgrade immediately)
 - `subscription.canceled` webhook fires for BOTH immediate and end-of-period cancellations
 - `handleSubscriptionCanceled()` ALWAYS downgrades user to free tier immediately:
-  - `tier = "free"`, `subscription_credits = min(current, 50)`, `storage_limit_bytes = 500MB`
+  - `tier = "free"`, `subscription_credits = min(current, 50)`, `storage_limit_bytes = 1GB`
 - `expireSubscriptions` cron is a safety net only (marks subs as "expired" to prevent reprocessing)
 - Topup credits are NOT affected by cancellation (they never expire)
 
@@ -303,7 +303,7 @@ All gated behind `hasCredits()`:
 
 ### General
 - `BILLING_PROVIDER=paddle` env var enables billing features
-- Storage limits: Free=500MB, Basic=5GB, Standard=15GB, Pro=50GB, Business=100GB
+- Storage limits: Free=1GB, Basic=10GB, Standard=25GB, Pro=50GB, Business=200GB
 - Retention: Active subscribers = kept. Free/canceled = 60 days grace then delete media. Workflows never deleted.
 - Cleanup cron: runs hourly (expire subscriptions) and daily 3AM UTC (R2 media cleanup)
 - Subscription statuses: `active` -> `canceled` (webhook) -> `expired` (cron safety net)
@@ -324,6 +324,49 @@ NEVER use placeholder fallbacks like `"pri_topup_10"` -- always use real Paddle 
 - Webhook URL in Paddle dashboard: `https://<ngrok-url>/v1/billing/paddle-webhook`
 - Add ngrok URL to Supabase Auth > Redirect URLs: `https://*.ngrok-free.app/**`
 - Google OAuth `redirectTo` already uses `window.location.origin` (in `use-auth.ts`)
+
+---
+
+## Storage Management (v1.22.0)
+
+**Quota Enforcement:**
+- DB-first: `storage_limit_bytes` in profiles takes precedence (admin override)
+- Falls back to `TIER_STORAGE_LIMITS[tier]` from `paddle-config.ts`
+- Self-hosted (`hasCredits() = false`): no enforcement
+- Checked in `credit-guard.ts` + upload routes
+- Single source of truth: `TIER_STORAGE_LIMITS` in `paddle-config.ts`
+
+**StorageExceededModal:**
+- `StorageExceededError` class in `api.ts` with `throwApiError()` (~60 throw sites)
+- Backend error format `storage_limit_exceeded` with usedBytes/quotaBytes/remainingBytes/tier
+- `workflow-editor.tsx` catches on all 14+ API calls, shows modal not toast
+- `use-file-upload.ts` catches for upload nodes
+
+**Admin Storage:** PUT /v1/admin/users/:id/storage, progress bar + tier presets + custom GB
+
+**Billing Page Storage:** Section between Credit Balance and Transaction History, usage bar, upgrade prompt at 70%+, "Manage Files" -> /library
+
+**Change Plan Immediate DB Update:** After paddle.subscriptions.update() succeeds, immediately update subscriptions + profiles tables. Webhook = backup reconciliation.
+
+**Key files:** paddle-config.ts, credits.ts, credit-guard.ts, upload.ts, billing.ts, api.ts (StorageExceededError), StorageExceededModal.tsx
+
+---
+
+## Library Page (v1.22.0)
+
+`/library` -- file management: storage summary + progress bar, filter tabs (All/Images/Videos/Audio), thumbnails + type badges + sizes + dates, multi-select + bulk delete, cursor pagination, `owned=true` filter. Sidebar: Archive icon.
+Files: `frontend/src/app/(dashboard)/library/page.tsx`, `backend/src/routes/library.ts`
+
+---
+
+## UI Fixes (v1.23.0)
+
+1. Admin Layout Race Condition -- `setTimeout(500)` -> deterministic `roleLoaded` from use-auth.ts
+2. Theme Toggle First-Click -- `theme` -> `resolvedTheme`
+3. New Project Auto-Navigate -- skip dialog, create "Untitled Project" + navigate
+4. New Workflow Auto-Navigate -- async handleNewWorkflow + navigate
+5. Grok Duration -- removed 6s, 10s only
+6. Play/Pause Icon -- Video/VideoOff -> Play/Pause
 
 ---
 
@@ -629,48 +672,6 @@ To add SSE streaming to a new backend endpoint:
 
 ---
 
-## Storage Management (v1.22)
-
-### Single Source of Truth
-- `TIER_STORAGE_LIMITS` in `backend/src/billing/paddle-config.ts` defines per-tier storage quotas (Free=500MB, Basic=5GB, Standard=15GB, Pro=50GB, Business=100GB)
-- `checkStorageLimit()` in `CreditsService` reads `storage_limit_bytes` from DB first (supports admin overrides), falls back to `TIER_STORAGE_LIMITS[tier]`
-- Storage enforcement: `creditGuard` middleware checks storage before credits (HTTP 413 `storage_limit_exceeded`)
-
-### StorageExceededModal
-- `frontend/src/components/credits/StorageExceededModal.tsx` -- Reusable modal showing used/quota/remaining with progress bar
-- Shown on **upload errors** (via `useFileUpload` hook in upload-image/audio/video nodes)
-- Shown on **execution errors** (via `isStorageError()` helper in `workflow-editor.tsx` catching `StorageExceededError`)
-- Two CTAs: "Upgrade Plan" (/pricing) and "Manage Files" (/library)
-
-### StorageExceededError
-- Custom error class in `frontend/src/lib/api.ts` with `usedBytes`, `quotaBytes`, `remainingBytes`, `tier`
-- `throwApiError()` helper detects `storage_limit_exceeded` from API JSON responses and throws `StorageExceededError`
-- `useFileUpload` hook detects HTTP 413 responses and exposes `storageExceeded` state
-
-### Library Page
-- `frontend/src/app/(dashboard)/library/page.tsx` -- User file management with storage summary
-- Features: filter tabs (all/image/video/audio), file grid with thumbnails, multi-select delete, cursor-based pagination
-- API: `GET /v1/library?userId=...&owned=true` (only user's own files), `DELETE /v1/library/:id?userId=...`
-- Sidebar: "Library" nav item with Archive icon between Gallery and Pricing
-
-### Admin Storage Controls
-- `PUT /v1/admin/users/:id/storage` -- Admin can override storage limit per user
-- `GET /v1/admin/users` -- Returns storage_used_bytes + storage_limit_bytes for each user
-- Admin Users page shows storage bar per user with edit capability
-
-### Key Files
-- `backend/src/billing/paddle-config.ts` -- `TIER_STORAGE_LIMITS`
-- `backend/src/billing/credits.ts` -- `checkStorageLimit()` (DB-first, fallback to tier)
-- `backend/src/middleware/credit-guard.ts` -- Storage check before credit check
-- `backend/src/routes/library.ts` -- Library CRUD + `owned` query param
-- `backend/src/routes/admin-credits.ts` -- Admin storage management endpoints
-- `frontend/src/components/credits/StorageExceededModal.tsx` -- Modal component
-- `frontend/src/hooks/use-file-upload.ts` -- Upload hook with storage error detection
-- `frontend/src/app/(dashboard)/library/page.tsx` -- Library page
-- `frontend/src/app/(dashboard)/billing/page.tsx` -- Billing page storage section
-
----
-
 ## List Infrastructure (v1.25) -- COMPLETE
 
 **Phase 1: AI Writer cleanup** -- Removed auto-chunking from AI Writer. Single LLM call per run, 1 credit, maxTokens 4096. SSE streaming kept intact.
@@ -790,13 +791,12 @@ Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produce
 ---
 
 ## Active TODOs
-- [x] Phase 7: Paddle sandbox testing (verified: subscriptions, top-ups, webhooks, billing page)
 - [ ] Phase 7: Paddle production go-live (swap sandbox keys for production)
-- [x] Run only specific node in workflow (Run This Node + Run from here + Run Selected)
-- [x] Skip node in specific run
-- [x] ARCHITECTURE.md / Code Graph (auto-generated, 4 output files)
-- [x] Storage sync + management (quota enforcement, library page, admin controls, StorageExceededModal)
-- [x] UI fixes: admin race condition (roleLoaded), theme toggle (resolvedTheme), new project/workflow auto-navigate, grok duration 10s only, play/pause icons
+- [ ] Create monthly Paddle price IDs and add env vars (currently only annual prices exist)
+- [ ] Phase 6 Templates (preset workflow templates)
+- [x] Loop Node auto-create "Prompt" column
+- [ ] Landing page storage tier update
+- [ ] Project Folders
 - [ ] Version history per node
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
@@ -807,5 +807,5 @@ Auto-generated architecture docs via `scripts/generate-architecture.ts`. Produce
 
 ---
 
-*Last updated: 2026-02-14*
-*Version: 1.22.0*
+*Last updated: 2026-02-16*
+*Version: 1.23.0*
