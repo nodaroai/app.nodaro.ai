@@ -62,9 +62,9 @@ function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | Pub
 }
 
 export async function jobRoutes(app: FastifyInstance) {
-  app.get<{ Params: { id: string }; Querystring: { admin?: string } }>("/v1/jobs/:id", async (req, reply) => {
+  app.get<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
     const { id } = req.params
-    const isAdmin = req.query.admin === "true" // TODO: Replace with proper auth check
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -81,10 +81,10 @@ export async function jobRoutes(app: FastifyInstance) {
     return { data: sanitizeJobForPublic(job as JobRecord, isAdmin) }
   })
 
-  app.get<{ Querystring: { userId?: string; limit?: string; cursor?: string; admin?: string } }>("/v1/jobs", async (req) => {
-    const { userId, limit = "50", cursor, admin } = req.query
+  app.get<{ Querystring: { userId?: string; limit?: string; cursor?: string } }>("/v1/jobs", async (req) => {
+    const { userId, limit = "50", cursor } = req.query
     const limitNum = Math.min(parseInt(limit, 10) || 50, 100)
-    const isAdmin = admin === "true" // TODO: Replace with proper auth check
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
     let query = supabase
       .from("jobs")

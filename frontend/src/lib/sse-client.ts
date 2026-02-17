@@ -30,12 +30,14 @@ export async function* streamRequest<T = StreamEvent>(
     signal?: AbortSignal
     /** Optional base URL to call backend directly, bypassing Next.js proxy */
     baseUrl?: string
+    /** Optional extra headers (e.g. Authorization) */
+    headers?: Record<string, string>
   },
 ): AsyncGenerator<T> {
   const fullUrl = options.baseUrl ? `${options.baseUrl}${url}` : url
   const response = await fetch(fullUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...options.headers },
     body: JSON.stringify(options.body),
     signal: options.signal,
   })

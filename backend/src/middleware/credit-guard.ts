@@ -14,16 +14,8 @@ export interface CreditReservation {
   watermark: boolean
 }
 
-/**
- * Extend Fastify request with credit reservation data and userId.
- * After creditGuard runs, request.creditReservation and request.userId are available.
- */
-declare module "fastify" {
-  interface FastifyRequest {
-    creditReservation?: CreditReservation
-    userId?: string
-  }
-}
+// Note: FastifyRequest augmentation (userId, userRole, creditReservation)
+// is in ./auth.ts which is the canonical source for the declare module block.
 
 /**
  * Creates a Fastify preHandler that checks and reserves credits.
@@ -52,11 +44,12 @@ export function creditGuard(
     // Only cloud edition uses credits
     if (!hasCredits()) return
 
+    // Prefer auth middleware userId, fall back to body for migration period
     const body = req.body as Record<string, unknown> | undefined
-    const userId = (body?.userId as string) ?? undefined
+    const userId = req.userId ?? (body?.userId as string) ?? undefined
 
-    // Always store userId on request so route handlers can access it
-    req.userId = userId
+    // Store on request so route handlers can access it
+    if (userId) req.userId = userId
 
     // No userId means anonymous request - skip credit check
     if (!userId) return
@@ -157,8 +150,9 @@ export async function reserveCreditsForJob(
   // FFmpeg operations are free — skip reservation
   if (modelIdentifier === "ffmpeg") return undefined
 
+  // Prefer auth middleware userId, fall back to body for migration period
   const body = req.body as Record<string, unknown> | undefined
-  const userId = (body?.userId as string) ?? undefined
+  const userId = req.userId ?? (body?.userId as string) ?? undefined
   if (!userId) return undefined
 
   const routeName = req.url.split("?")[0] ?? "unknown"
