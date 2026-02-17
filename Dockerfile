@@ -82,6 +82,6 @@ EOF
 
 RUN chmod +x /app/start.sh
 
-EXPOSE 3000 9000
+EXPOSE 3000
 
 CMD ["/app/start.sh"]
