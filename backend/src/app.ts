@@ -62,6 +62,7 @@ import { userSettingsRoutes } from "./routes/user-settings.js"
 import { adminGalleryReportsRoutes } from "./routes/admin-gallery-reports.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { downloadRoutes } from "./routes/download.js"
+import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 }) // 1 MB for JSON endpoints
@@ -85,6 +86,8 @@ export async function buildApp() {
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
+
+  registerAuthHook(app)
 
   await app.register(healthRoutes)
   await app.register(projectRoutes)

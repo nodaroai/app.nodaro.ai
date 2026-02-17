@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { createClient } from "@/lib/supabase"
 import { useAdminReports, useResolveReportMutation } from "@/hooks/queries/use-admin-queries"
 
 type ReportStatus = "pending" | "reviewed" | "dismissed"
@@ -136,9 +137,11 @@ export default function AdminGalleryReportsPage() {
     if (!user?.id) return
     setActionLoading(jobId)
     try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
       const response = await fetch(`/v1/gallery/${jobId}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ userId: user.id }),
       })
 

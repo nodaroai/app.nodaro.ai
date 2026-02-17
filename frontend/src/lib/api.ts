@@ -1,4 +1,23 @@
+import { createClient } from "@/lib/supabase"
+
 export const API_BASE_URL = ''
+
+/**
+ * Get auth headers with the current session's JWT token.
+ * Returns { Authorization: 'Bearer ...' } or {} if no session.
+ */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` }
+    }
+  } catch {
+    // Silently fall back to no auth header
+  }
+  return {}
+}
 
 export class StorageExceededError extends Error {
   readonly usedBytes: number
@@ -50,10 +69,12 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    const authHeaders = await getAuthHeaders()
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options.headers,
       },
     })
@@ -97,7 +118,7 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -127,7 +148,7 @@ export async function editImage(
   }
   const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -158,7 +179,7 @@ export async function imageToImage(
   }
   const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -179,7 +200,7 @@ export async function generateCharacter(data: {
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -202,7 +223,7 @@ export async function generateCharacterAsset(data: {
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -230,7 +251,7 @@ export async function saveCharacter(data: {
 }): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -255,7 +276,7 @@ export async function saveFace(data: {
 }): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/faces`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -286,7 +307,7 @@ export async function getFaces(projectId?: string, userId?: string): Promise<{ f
   const qs = params.toString()
   const res = await fetch(`${API_BASE_URL}/v1/faces${qs ? `?${qs}` : ""}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -296,8 +317,10 @@ export async function getFaces(projectId?: string, userId?: string): Promise<{ f
 }
 
 export async function deleteFace(faceId: string): Promise<{ success: boolean }> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/faces/${encodeURIComponent(faceId)}`, {
     method: "DELETE",
+    headers: authHeaders,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -316,7 +339,7 @@ export async function generateFace(data: {
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-face`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -327,8 +350,10 @@ export async function generateFace(data: {
 }
 
 export async function deleteCharacter(characterId: string): Promise<{ success: boolean }> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
     method: "DELETE",
+    headers: authHeaders,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -362,7 +387,7 @@ export async function getCharacters(projectId?: string, userId?: string): Promis
   const qs = params.toString()
   const res = await fetch(`${API_BASE_URL}/v1/characters${qs ? `?${qs}` : ""}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -374,7 +399,7 @@ export async function getCharacters(projectId?: string, userId?: string): Promis
 export async function getCharacterById(characterId: string): Promise<DbCharacter | null> {
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
   })
   if (res.status === 404) {
     return null
@@ -397,7 +422,7 @@ export async function generateObject(data: {
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -419,7 +444,7 @@ export async function generateObjectAsset(data: {
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object-asset`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -445,7 +470,7 @@ export async function saveObject(data: {
 }): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/objects`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -456,8 +481,10 @@ export async function saveObject(data: {
 }
 
 export async function deleteObject(objectId: string): Promise<{ success: boolean }> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}`, {
     method: "DELETE",
+    headers: authHeaders,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -490,7 +517,7 @@ export async function getObjects(projectId?: string, userId?: string): Promise<{
   const qs = params.toString()
   const res = await fetch(`${API_BASE_URL}/v1/objects${qs ? `?${qs}` : ""}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -502,7 +529,7 @@ export async function getObjects(projectId?: string, userId?: string): Promise<{
 export async function getObjectById(objectId: string): Promise<DbObject | null> {
   const res = await fetch(`${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
   })
   if (res.status === 404) {
     return null
@@ -525,7 +552,7 @@ export async function generateLocation(data: {
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -547,7 +574,7 @@ export async function generateLocationAsset(data: {
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location-asset`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -573,7 +600,7 @@ export async function saveLocation(data: {
 }): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/locations`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -584,8 +611,10 @@ export async function saveLocation(data: {
 }
 
 export async function deleteLocation(locationId: string): Promise<{ success: boolean }> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}`, {
     method: "DELETE",
+    headers: authHeaders,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -618,7 +647,7 @@ export async function getLocations(projectId?: string, userId?: string): Promise
   const qs = params.toString()
   const res = await fetch(`${API_BASE_URL}/v1/locations${qs ? `?${qs}` : ""}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -630,7 +659,7 @@ export async function getLocations(projectId?: string, userId?: string): Promise
 export async function getLocationById(locationId: string): Promise<DbLocation | null> {
   const res = await fetch(`${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
   })
   if (res.status === 404) {
     return null
@@ -650,7 +679,7 @@ export async function splitImage(data: {
 }): Promise<{ images: { name: string; url: string }[] }> {
   const res = await fetch(`${API_BASE_URL}/v1/split-image`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -722,7 +751,7 @@ export async function generateVideo(
 
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -739,7 +768,7 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
   }
   const res = await fetch(`${API_BASE_URL}/v1/video-to-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -764,7 +793,7 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   }
   const res = await fetch(`${API_BASE_URL}/v1/text-to-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -796,7 +825,7 @@ export async function textToSpeech(
   if (options?.languageCode) body.languageCode = options.languageCode
   const res = await fetch(`${API_BASE_URL}/v1/text-to-speech`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -815,7 +844,7 @@ export async function generateScriptApi(prompt: string, sceneCount?: number, ton
   if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/generate-script`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -837,7 +866,7 @@ export async function combineVideos(
   }
   const res = await fetch(`${API_BASE_URL}/v1/combine-videos`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -860,7 +889,7 @@ export async function mergeVideoAudioApi(
   }
   const res = await fetch(`${API_BASE_URL}/v1/merge-video-audio`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -877,7 +906,7 @@ export async function extractAudioApi(videoUrl: string, audioFormat?: string, ou
   }
   const res = await fetch(`${API_BASE_URL}/v1/extract-audio`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -894,7 +923,7 @@ export async function trimVideoApi(videoUrl: string, startTime: number, endTime?
   }
   const res = await fetch(`${API_BASE_URL}/v1/trim-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -911,7 +940,7 @@ export async function resizeVideoApi(videoUrl: string, targetAspect: string, met
   }
   const res = await fetch(`${API_BASE_URL}/v1/resize-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -933,7 +962,7 @@ export async function adjustVolumeApi(inputUrl: string, inputType: "audio" | "vi
   }
   const res = await fetch(`${API_BASE_URL}/v1/adjust-volume`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -950,7 +979,7 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   }
   const res = await fetch(`${API_BASE_URL}/v1/add-captions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -967,7 +996,7 @@ export async function mixAudioApi(audioUrls: string[], userId?: string): Promise
   }
   const res = await fetch(`${API_BASE_URL}/v1/mix-audio`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -984,8 +1013,10 @@ export function getImageProxyUrl(url: string): string {
 export async function uploadImage(file: File | Blob): Promise<{ url: string }> {
   const formData = new FormData()
   formData.append("file", file, file instanceof File ? file.name : "crop.png")
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/upload/image`, {
     method: "POST",
+    headers: authHeaders,
     body: formData,
   })
   if (!res.ok) {
@@ -998,8 +1029,10 @@ export async function uploadImage(file: File | Blob): Promise<{ url: string }> {
 export async function uploadAudio(file: File): Promise<{ url: string }> {
   const formData = new FormData()
   formData.append("file", file)
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/upload/audio`, {
     method: "POST",
+    headers: authHeaders,
     body: formData,
   })
   if (!res.ok) {
@@ -1038,8 +1071,10 @@ export async function uploadFile(
     formData.append("userId", userId)
   }
 
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/upload`, {
     method: "POST",
+    headers: authHeaders,
     body: formData,
   })
   if (!res.ok) {
@@ -1063,7 +1098,7 @@ export async function uploadFile(
 export async function downloadYouTubeAudio(url: string): Promise<{ url: string; thumbnailUrl: string | null }> {
   const res = await fetch(`${API_BASE_URL}/v1/youtube-audio`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify({ url }),
   })
   if (!res.ok) {
@@ -1076,7 +1111,7 @@ export async function downloadYouTubeAudio(url: string): Promise<{ url: string; 
 export async function startVideoDownload(url: string): Promise<{ downloadId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/download-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify({ url }),
   })
   if (!res.ok) {
@@ -1130,7 +1165,7 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   if (options?.promptInfluence != null) body.promptInfluence = options.promptInfluence
   const res = await fetch(`${API_BASE_URL}/v1/text-to-audio`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1170,7 +1205,7 @@ export async function sunoGenerateApi(params: {
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1205,7 +1240,7 @@ export async function sunoCoverApi(params: {
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/cover`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1247,7 +1282,7 @@ export async function sunoExtendApi(params: {
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/extend`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1265,7 +1300,7 @@ export async function sunoLyricsApi(params: {
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/lyrics`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1286,7 +1321,7 @@ export async function sunoSeparateApi(params: {
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/separate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1305,7 +1340,7 @@ export async function sunoMusicVideoApi(params: {
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/music-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1322,7 +1357,7 @@ export async function transcribeApi(audioUrl: string, provider?: string, languag
   if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/transcribe`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1347,7 +1382,7 @@ export async function lipSyncApi(
   if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/lip-sync`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1369,7 +1404,7 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/generate-music`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1386,7 +1421,7 @@ export async function extractYouTubeAudioApi(youtubeUrl: string, userId?: string
   }
   const res = await fetch(`${API_BASE_URL}/v1/extract-youtube-audio`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1447,7 +1482,10 @@ export interface Job {
 }
 
 export async function getJobStatus(jobId: string): Promise<Job> {
-  const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) throw new Error("Failed to get job status")
   const body = await res.json()
   return body.data
@@ -1462,7 +1500,10 @@ export async function getJobs(userId?: string, cursor?: string): Promise<{
   if (userId) params.set("userId", userId)
   if (cursor) params.set("cursor", cursor)
   const url = params.toString() ? `/v1/jobs?${params.toString()}` : "/v1/jobs"
-  const res = await fetch(`${API_BASE_URL}${url}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}${url}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to fetch jobs")
@@ -1471,8 +1512,10 @@ export async function getJobs(userId?: string, cursor?: string): Promise<{
 }
 
 export async function deleteJob(jobId: string): Promise<{ success: boolean }> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`, {
     method: "DELETE",
+    headers: authHeaders,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1493,9 +1536,10 @@ export async function getBatchJobStatus(jobIds: string[]): Promise<BatchJobStatu
 
   let res: Response
   try {
+    const authHeaders = await getAuthHeaders()
     res = await fetch(`${API_BASE_URL}/v1/jobs/batch-status`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ jobIds }),
     })
   } catch {
@@ -1557,7 +1601,10 @@ export async function getPredictions(cursor?: string): Promise<{
   previous: string | null
 }> {
   const url = cursor ? `/v1/predictions?cursor=${encodeURIComponent(cursor)}` : "/v1/predictions"
-  const res = await fetch(`${API_BASE_URL}${url}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}${url}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to fetch predictions")
@@ -1566,7 +1613,10 @@ export async function getPredictions(cursor?: string): Promise<{
 }
 
 export async function getPrediction(id: string): Promise<{ data: ReplicatePrediction }> {
-  const res = await fetch(`${API_BASE_URL}/v1/predictions/${id}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/predictions/${id}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to fetch prediction")
@@ -1575,8 +1625,10 @@ export async function getPrediction(id: string): Promise<{ data: ReplicatePredic
 }
 
 export async function cancelPrediction(id: string): Promise<{ data: ReplicatePrediction }> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/predictions/${id}/cancel`, {
     method: "POST",
+    headers: authHeaders,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1600,7 +1652,7 @@ export async function motionTransferApi(
   if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/motion-transfer`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1620,7 +1672,7 @@ export async function videoUpscaleApi(
   if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/video-upscale`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -1643,7 +1695,7 @@ export async function generateAIWriter(params: {
 }): Promise<{ jobId: string; generatedText: string }> {
   const res = await fetch(`/v1/ai-writer/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(params),
   })
   if (!res.ok) {
@@ -1673,11 +1725,13 @@ export async function generateAIWriterStream(params: {
 
   try {
     const { streamRequest } = await import("@/lib/sse-client")
+    const authHeaders = await getAuthHeaders()
 
     for await (const event of streamRequest("/v1/ai-writer/generate-stream", {
       body,
       signal,
       baseUrl: sseBaseUrl || undefined,
+      headers: authHeaders,
     })) {
       switch (event.type) {
         case "metadata":
@@ -1728,7 +1782,10 @@ export async function getStats(scope: "user" | "platform" = "user", userId?: str
   params.set("scope", scope)
   if (userId) params.set("userId", userId)
 
-  const res = await fetch(`${API_BASE_URL}/v1/stats?${params.toString()}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/stats?${params.toString()}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to fetch stats")
@@ -1761,7 +1818,7 @@ export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise
   }
   const res = await fetch(`${API_BASE_URL}/v1/jobs/cost-summary`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify({ jobIds }),
   })
   if (!res.ok) {
@@ -1775,7 +1832,7 @@ export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise
 export async function cancelJob(jobId: string, userId?: string): Promise<{ success: boolean; cancelled: number }> {
   const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}/cancel`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify({ userId }),
   })
   if (!res.ok) {
@@ -1788,7 +1845,7 @@ export async function cancelJob(jobId: string, userId?: string): Promise<{ succe
 export async function cancelAllJobs(userId: string): Promise<{ success: boolean; cancelled: number }> {
   const res = await fetch(`${API_BASE_URL}/v1/jobs/cancel-all`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify({ userId }),
   })
   if (!res.ok) {
@@ -1831,7 +1888,10 @@ export async function getLibraryAssets(params: {
   if (params.cursor) qs.set("cursor", params.cursor)
   if (params.owned) qs.set("owned", "true")
 
-  const res = await fetch(`${API_BASE_URL}/v1/library?${qs.toString()}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/library?${qs.toString()}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to fetch library assets")
@@ -1843,9 +1903,10 @@ export async function deleteLibraryAsset(
   assetId: string,
   userId: string,
 ): Promise<{ success: boolean }> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(
     `${API_BASE_URL}/v1/library/${assetId}?userId=${encodeURIComponent(userId)}`,
-    { method: "DELETE" },
+    { method: "DELETE", headers: authHeaders },
   )
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1862,7 +1923,7 @@ export async function promoteToLibrary(
     `${API_BASE_URL}/v1/library/${assetId}/promote`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
       body: JSON.stringify({ userId }),
     },
   )
@@ -1881,7 +1942,7 @@ export async function demoteFromLibrary(
     `${API_BASE_URL}/v1/library/${assetId}/demote`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
       body: JSON.stringify({ userId }),
     },
   )
@@ -1902,7 +1963,7 @@ export async function saveGeneratedToLibrary(params: {
 }): Promise<{ data: { id: string; isLibraryItem: boolean } }> {
   const res = await fetch(`${API_BASE_URL}/v1/library/save-generated`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(params),
   })
   if (!res.ok) {
@@ -1939,7 +2000,10 @@ export interface CreditCheckResult {
 }
 
 export async function getUserCredits(userId: string): Promise<{ data: UserBalance }> {
-  const res = await fetch(`${API_BASE_URL}/v1/user/credits?userId=${encodeURIComponent(userId)}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/user/credits?userId=${encodeURIComponent(userId)}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to get credits")
@@ -1948,7 +2012,10 @@ export async function getUserCredits(userId: string): Promise<{ data: UserBalanc
 }
 
 export async function checkCredits(userId: string, model: string): Promise<{ data: CreditCheckResult }> {
-  const res = await fetch(`${API_BASE_URL}/v1/credits/check?userId=${encodeURIComponent(userId)}&model=${encodeURIComponent(model)}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/credits/check?userId=${encodeURIComponent(userId)}&model=${encodeURIComponent(model)}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to check credits")
@@ -1957,7 +2024,10 @@ export async function checkCredits(userId: string, model: string): Promise<{ dat
 }
 
 export async function getModelCreditCost(model: string): Promise<{ data: { model: string; creditCost: number } }> {
-  const res = await fetch(`${API_BASE_URL}/v1/credits/model-cost?model=${encodeURIComponent(model)}`)
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/credits/model-cost?model=${encodeURIComponent(model)}`, {
+    headers: authHeaders,
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to get model cost")
@@ -1991,8 +2061,10 @@ export interface TransactionRecord {
 }
 
 export async function getSubscription(userId: string): Promise<SubscriptionInfo | null> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(
-    `${API_BASE_URL}/v1/billing/subscription?userId=${encodeURIComponent(userId)}`
+    `${API_BASE_URL}/v1/billing/subscription?userId=${encodeURIComponent(userId)}`,
+    { headers: authHeaders }
   )
   if (!res.ok) return null
   const json = await res.json()
@@ -2000,8 +2072,10 @@ export async function getSubscription(userId: string): Promise<SubscriptionInfo 
 }
 
 export async function getTransactions(userId: string): Promise<TransactionRecord[]> {
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(
-    `${API_BASE_URL}/v1/billing/transactions?userId=${encodeURIComponent(userId)}`
+    `${API_BASE_URL}/v1/billing/transactions?userId=${encodeURIComponent(userId)}`,
+    { headers: authHeaders }
   )
   if (!res.ok) return []
   const json = await res.json()
@@ -2011,7 +2085,7 @@ export async function getTransactions(userId: string): Promise<TransactionRecord
 export async function getManageSubscriptionUrl(userId: string): Promise<string | null> {
   const res = await fetch(`${API_BASE_URL}/v1/billing/manage-subscription`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify({ userId }),
   })
   if (!res.ok) return null
@@ -2025,7 +2099,7 @@ export async function changePlan(
 ): Promise<{ subscriptionId: string; tier: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/billing/change-plan`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify({ userId, newPriceId }),
   })
   if (!res.ok) {

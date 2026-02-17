@@ -30,6 +30,7 @@ function ControlButton({ icon, label, onClick, active }: ControlButtonProps) {
         <TooltipTrigger asChild>
           <button
             type="button"
+            aria-label={label}
             onClick={onClick}
             className={cn(
               "w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200",

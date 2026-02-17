@@ -229,7 +229,11 @@ export function useAdminAlerts() {
   return useQuery({
     queryKey: queryKeys.admin.alerts(),
     queryFn: async () => {
-      const res = await fetch(`/v1/admin/alerts`)
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/v1/admin/alerts`, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      })
       if (!res.ok) throw new Error("Failed to fetch alerts")
       return res.json()
     },
@@ -242,7 +246,11 @@ export function useAdminSettings() {
   return useQuery({
     queryKey: queryKeys.admin.settings(),
     queryFn: async (): Promise<AppSettings> => {
-      const res = await fetch(`/v1/admin/settings`)
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/v1/admin/settings`, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      })
       if (!res.ok) throw new Error("Failed to fetch settings")
       const data = await res.json()
       const settings = data.settings as Record<string, unknown>
@@ -351,9 +359,14 @@ export function useCreateAlertMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (alert: Record<string, unknown>) => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/alerts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
         body: JSON.stringify(alert),
       })
       if (!res.ok) throw new Error("Failed to create alert")
@@ -369,9 +382,14 @@ export function useUpdateAlertMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Record<string, unknown>) => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/alerts/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
         body: JSON.stringify(updates),
       })
       if (!res.ok) throw new Error("Failed to update alert")
@@ -387,7 +405,12 @@ export function useDeleteAlertMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/v1/admin/alerts/${id}`, { method: "DELETE" })
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/v1/admin/alerts/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      })
       if (!res.ok) throw new Error("Failed to delete alert")
       return res.json()
     },
