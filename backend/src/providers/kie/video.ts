@@ -33,6 +33,14 @@ import {
   durationToNFrames,
 } from "./models.js"
 
+function snapToAllowedDuration(requested: number, allowed: number[]): number {
+  if (!allowed || allowed.length === 0) return requested
+  if (allowed.includes(requested)) return requested
+  return allowed.reduce((best, d) =>
+    Math.abs(d - requested) < Math.abs(best - requested) ? d : best
+  )
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -164,15 +172,17 @@ export class KieVideoProvider
 
     // Override duration if provided
     if (duration) {
+      const snapped = snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+      if (snapped !== duration) {
+        console.log(`[KIE.ai] Duration ${duration}s not allowed, snapped to ${snapped}s (allowed: ${JSON.stringify(modelConfig.allowedDurations)})`)
+      }
       if (modelConfig.usesNFrames) {
-        // Sora uses n_frames instead of duration
-        // n_frames 10 = ~5 seconds, n_frames 15 = ~10 seconds
-        input.n_frames = durationToNFrames(duration)
+        input.n_frames = durationToNFrames(snapped)
         console.log(
-          `[KIE.ai] Converting duration ${duration}s to n_frames: ${input.n_frames}`
+          `[KIE.ai] Converting duration ${snapped}s to n_frames: ${input.n_frames}`
         )
       } else {
-        input.duration = String(duration) // KIE expects string for duration
+        input.duration = String(snapped)
       }
     }
 
@@ -287,14 +297,17 @@ export class KieVideoProvider
 
     // Override duration if provided
     if (duration) {
+      const snapped = snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+      if (snapped !== duration) {
+        console.log(`[KIE.ai] Duration ${duration}s not allowed, snapped to ${snapped}s (allowed: ${JSON.stringify(modelConfig.allowedDurations)})`)
+      }
       if (modelConfig.usesNFrames) {
-        // Sora uses n_frames instead of duration
-        input.n_frames = durationToNFrames(duration)
+        input.n_frames = durationToNFrames(snapped)
         console.log(
-          `[KIE.ai] Converting duration ${duration}s to n_frames: ${input.n_frames}`
+          `[KIE.ai] Converting duration ${snapped}s to n_frames: ${input.n_frames}`
         )
       } else {
-        input.duration = String(duration)
+        input.duration = String(snapped)
       }
     }
 

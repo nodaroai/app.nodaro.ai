@@ -22,7 +22,7 @@ export interface Kling3Params {
   prompt: string
   imageUrls?: string[]
   sound?: boolean
-  duration?: string
+  duration?: string | number
   aspectRatio?: string
   mode?: "std" | "pro"
   multiShots?: boolean
@@ -49,13 +49,25 @@ export async function kling3Generate(
   const multiShots = params.multiShots ?? false
 
   // Multi-shot mode requires sound to be enabled
-  const sound = multiShots ? true : (params.sound ?? true)
+  const soundOn = multiShots ? true : (params.sound ?? true)
+
+  const hasMultiPrompt = multiShots && params.multiPrompt && params.multiPrompt.length > 0
+
+  // When multi_shots is true: prompt must be "", duration must be sum of all shots (number)
+  const totalShotDuration = hasMultiPrompt
+    ? params.multiPrompt!.reduce((sum, s) => sum + s.duration, 0)
+    : 0
+
+  const durationNum = hasMultiPrompt
+    ? totalShotDuration
+    : (typeof params.duration === "string" ? parseInt(params.duration, 10) : (params.duration ?? 5))
 
   const input: Record<string, unknown> = {
-    prompt: params.prompt,
-    sound,
-    duration: params.duration ?? "5",
+    prompt: hasMultiPrompt ? "" : params.prompt,
+    sound: soundOn,
+    duration: String(durationNum),
     mode: params.mode ?? "pro",
+    cfg_scale: 0.5,
     multi_shots: multiShots,
     aspect_ratio: params.aspectRatio ?? "16:9",
   }
@@ -64,12 +76,17 @@ export async function kling3Generate(
     input.image_urls = params.imageUrls
   }
 
-  if (multiShots && params.multiPrompt && params.multiPrompt.length > 0) {
-    input.multi_prompt = params.multiPrompt.map((shot) => ({
+  if (hasMultiPrompt) {
+    // Duration as number per shot
+    input.multi_prompt = params.multiPrompt!.map((shot) => ({
       prompt: shot.prompt,
       duration: shot.duration,
     }))
   }
+
+  // Build name prefix map: originalName -> prefixedName
+  // Kling API requires element names to start with "element_"
+  const namePrefixMap: Record<string, string> = {}
 
   if (params.klingElements && params.klingElements.length > 0) {
     input.kling_elements = params.klingElements.map((el) => {
@@ -78,8 +95,16 @@ export async function kling3Generate(
         console.log(`[Kling3] Truncated element "${el.name}" description from ${description.length} to 100 chars`)
         description = description.slice(0, 100)
       }
+
+      // Prefix name with "element_" if not already present
+      const originalName = el.name
+      const prefixedName = originalName.startsWith("element_") ? originalName : `element_${originalName}`
+      if (originalName !== prefixedName) {
+        namePrefixMap[originalName] = prefixedName
+      }
+
       const mapped: Record<string, unknown> = {
-        name: el.name,
+        name: prefixedName,
         description,
       }
       // Use type field to send only the correct URL key
@@ -95,6 +120,32 @@ export async function kling3Generate(
       }
       return mapped
     })
+
+    // Replace @name references in prompts with @element_name
+    if (Object.keys(namePrefixMap).length > 0) {
+      const originalNames = Object.keys(namePrefixMap)
+      const newNames = Object.values(namePrefixMap)
+      console.log(`[Kling3] Prefixed element names: ${originalNames.join(", ")} -> ${newNames.join(", ")}`)
+
+      // Replace in main prompt (sort by length descending to avoid partial matches)
+      const sortedEntries = Object.entries(namePrefixMap).sort((a, b) => b[0].length - a[0].length)
+      let mainPrompt = input.prompt as string
+      for (const [orig, prefixed] of sortedEntries) {
+        mainPrompt = mainPrompt.replaceAll(`@${orig}`, `@${prefixed}`)
+      }
+      input.prompt = mainPrompt
+
+      // Replace in multi_prompt shot prompts
+      if (input.multi_prompt) {
+        input.multi_prompt = (input.multi_prompt as Array<{ prompt: string; duration: number }>).map((shot) => {
+          let shotPrompt = shot.prompt
+          for (const [orig, prefixed] of sortedEntries) {
+            shotPrompt = shotPrompt.replaceAll(`@${orig}`, `@${prefixed}`)
+          }
+          return { ...shot, prompt: shotPrompt }
+        })
+      }
+    }
   }
 
   const requestBody = {
