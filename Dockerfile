@@ -1,4 +1,4 @@
-# ── Stage 1: Build backend ─────────────────────────────────────────
+# ── Stage 1: Build backend ────────────────────────────────────────────
 FROM node:20-alpine AS backend-builder
 
 RUN apk add --no-cache libc6-compat python3
@@ -21,15 +21,23 @@ COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
 
-# Vite inlines env vars at build time. Railway doesn't pass Docker build args,
-# so we use placeholders that get replaced at container startup with real values.
-ENV VITE_SUPABASE_URL=__VITE_SUPABASE_URL__
-ENV VITE_SUPABASE_ANON_KEY=__VITE_SUPABASE_ANON_KEY__
-ENV VITE_APP_URL=__VITE_APP_URL__
+# Railway passes NEXT_PUBLIC_* as build args (existing variables).
+# Map them to VITE_* so Vite inlines them at build time.
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_EDITION
+ARG NEXT_PUBLIC_PADDLE_CLIENT_TOKEN
+ARG NEXT_PUBLIC_PADDLE_ENVIRONMENT
+
+ENV VITE_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV VITE_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV VITE_API_URL=
-ENV VITE_EDITION=__VITE_EDITION__
-ENV VITE_PADDLE_CLIENT_TOKEN=__VITE_PADDLE_CLIENT_TOKEN__
-ENV VITE_PADDLE_ENVIRONMENT=__VITE_PADDLE_ENVIRONMENT__
+ENV VITE_EDITION=$NEXT_PUBLIC_EDITION
+ENV VITE_PADDLE_CLIENT_TOKEN=$NEXT_PUBLIC_PADDLE_CLIENT_TOKEN
+ENV VITE_PADDLE_ENVIRONMENT=$NEXT_PUBLIC_PADDLE_ENVIRONMENT
 
 RUN npm run build
 
@@ -51,36 +59,11 @@ COPY --from=backend-builder /app/backend/package.json ./backend/package.json
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
 
-# Startup script: replace Vite placeholders, run backend + worker + Caddy
+# Startup script: run backend + worker + Caddy
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
 
 echo "Starting with PORT=${PORT:-3000}"
-
-# Fall back to NEXT_PUBLIC_* vars if VITE_* not set (Railway migration)
-VITE_SUPABASE_URL="${VITE_SUPABASE_URL:-$NEXT_PUBLIC_SUPABASE_URL}"
-VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY:-$NEXT_PUBLIC_SUPABASE_ANON_KEY}"
-VITE_APP_URL="${VITE_APP_URL:-$NEXT_PUBLIC_APP_URL}"
-VITE_EDITION="${VITE_EDITION:-$NEXT_PUBLIC_EDITION}"
-VITE_PADDLE_CLIENT_TOKEN="${VITE_PADDLE_CLIENT_TOKEN:-$NEXT_PUBLIC_PADDLE_CLIENT_TOKEN}"
-VITE_PADDLE_ENVIRONMENT="${VITE_PADDLE_ENVIRONMENT:-$NEXT_PUBLIC_PADDLE_ENVIRONMENT}"
-
-# Debug: show which vars are available
-echo "ENV CHECK: VITE_SUPABASE_URL=${#VITE_SUPABASE_URL}chars VITE_EDITION=${VITE_EDITION}"
-
-# Replace Vite build-time placeholders with actual runtime env vars
-echo "Injecting runtime env vars into frontend..."
-for f in /app/frontend/dist/assets/*.js; do
-  [ -f "$f" ] || continue
-  sed -i \
-    -e "s|__VITE_SUPABASE_URL__|${VITE_SUPABASE_URL}|g" \
-    -e "s|__VITE_SUPABASE_ANON_KEY__|${VITE_SUPABASE_ANON_KEY}|g" \
-    -e "s|__VITE_APP_URL__|${VITE_APP_URL}|g" \
-    -e "s|__VITE_EDITION__|${VITE_EDITION}|g" \
-    -e "s|__VITE_PADDLE_CLIENT_TOKEN__|${VITE_PADDLE_CLIENT_TOKEN}|g" \
-    -e "s|__VITE_PADDLE_ENVIRONMENT__|${VITE_PADDLE_ENVIRONMENT}|g" \
-    "$f"
-done
 
 # Start backend API server on fixed internal port
 cd /app/backend
