@@ -11,6 +11,7 @@ import { SceneEditorModal } from "@/components/editor/scene-editor-modal"
 import { ExtractReferencesModal } from "@/components/editor/extract-references-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { CachedImage } from "@/components/ui/cached-image"
 import type { SceneNodeDataType, ExtractedReference } from "@/types/nodes"
 
 function SceneNodeComponent({ id, data, selected }: NodeProps) {
@@ -91,7 +92,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
 
         {status !== "running" && activeUrl && (
           <div className="relative group">
-            <img
+            <CachedImage
               src={activeUrl}
               alt="Scene"
               className="w-full h-24 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
@@ -99,6 +100,8 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
                 e.stopPropagation()
                 setPreviewOpen(true)
               }}
+              thumbnail
+              thumbnailWidth={480}
             />
             <div className="absolute top-1 right-1 flex gap-1">
               <button
@@ -149,10 +152,12 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
         {status !== "running" && !activeUrl && status !== "failed" && (
           <>
             {locationAsset?.referenceImageUrl ? (
-              <img
+              <CachedImage
                 src={locationAsset.referenceImageUrl}
                 alt={locationAsset.name}
                 className="w-full h-20 object-cover rounded-md"
+                thumbnail
+                thumbnailWidth={480}
               />
             ) : (
               <div className="flex items-center justify-center h-20 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
@@ -167,7 +172,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <img
+                <CachedImage
                   src={r.url}
                   alt={`Result ${i + 1}`}
                   className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
@@ -179,6 +184,8 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
                     e.stopPropagation()
                     updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
                   }}
+                  thumbnail
+                  thumbnailWidth={80}
                 />
                 <button
                   type="button"

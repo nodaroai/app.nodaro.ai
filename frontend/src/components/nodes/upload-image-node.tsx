@@ -8,6 +8,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
+import { CachedImage } from "@/components/ui/cached-image"
 import type { UploadImageData } from "@/types/nodes"
 
 function formatBytes(bytes: number): string {
@@ -126,7 +127,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             {hasFile ? (
               <div className="relative group">
                 <div className="w-full aspect-square rounded-md overflow-hidden bg-muted/30">
-                  <img
+                  <CachedImage
                     src={imageUrl}
                     alt={nodeData.filename || "Uploaded image"}
                     className="w-full h-full object-cover cursor-pointer"
@@ -134,6 +135,8 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                       e.stopPropagation()
                       setLightboxSrc(imageUrl)
                     }}
+                    thumbnail
+                    thumbnailWidth={480}
                   />
                 </div>
                 <button
@@ -225,7 +228,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             </div>
             {nodeData.externalUrl && (
               <div className="relative mt-2 w-full aspect-video rounded-md overflow-hidden bg-muted/30">
-                <img
+                <CachedImage
                   src={nodeData.externalUrl}
                   alt="External image"
                   className="w-full h-full object-cover cursor-pointer"
@@ -233,6 +236,8 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                     e.stopPropagation()
                     setLightboxSrc(nodeData.externalUrl)
                   }}
+                  thumbnail
+                  thumbnailWidth={480}
                 />
               </div>
             )}

@@ -8,6 +8,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
+import { CachedImage } from "@/components/ui/cached-image"
 import type { UploadVideoData } from "@/types/nodes"
 
 function formatBytes(bytes: number): string {
@@ -140,10 +141,12 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                     setPreviewOpen(true)
                   }}
                 >
-                  <img
+                  <CachedImage
                     src={thumbnailUrl}
                     alt={nodeData.filename || "Video thumbnail"}
                     className="w-full h-full object-cover"
+                    thumbnail
+                    thumbnailWidth={480}
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">

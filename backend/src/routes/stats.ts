@@ -13,15 +13,36 @@ interface StatsResponse {
   avgVideoTime: number | null
 }
 
+// In-memory cache: key = "user:<userId>" or "platform", value = { data, expiry }
+const CACHE_TTL_MS = 30_000 // 30 seconds
+const statsCache = new Map<string, { data: StatsResponse; expiry: number }>()
+
+function getCachedStats(key: string): StatsResponse | null {
+  const entry = statsCache.get(key)
+  if (!entry) return null
+  if (Date.now() > entry.expiry) {
+    statsCache.delete(key)
+    return null
+  }
+  return entry.data
+}
+
+function setCachedStats(key: string, data: StatsResponse): void {
+  statsCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS })
+  // Evict old entries if cache grows too large (unlikely but safe)
+  if (statsCache.size > 10_000) {
+    const now = Date.now()
+    for (const [k, v] of statsCache) {
+      if (now > v.expiry) statsCache.delete(k)
+    }
+  }
+}
+
 export async function statsRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { scope?: string; userId?: string } }>("/v1/stats", async (req, reply) => {
     const { scope = "user", userId } = req.query
 
     try {
-      // Filtering logic:
-      // - scope="user": ALWAYS filter by userId (required for personal stats)
-      // - scope="platform": no filter (shows all jobs, admin-only feature)
-
       // For user scope, userId is required
       if (scope !== "platform" && !userId) {
         return {
@@ -37,6 +58,13 @@ export async function statsRoutes(app: FastifyInstance) {
             avgVideoTime: null,
           },
         }
+      }
+
+      // Check cache first
+      const cacheKey = scope === "platform" ? "platform" : `user:${userId}`
+      const cached = getCachedStats(cacheKey)
+      if (cached) {
+        return { data: cached }
       }
 
       // Call the get_stats RPC function (uses SECURITY DEFINER to bypass RLS)
@@ -62,6 +90,8 @@ export async function statsRoutes(app: FastifyInstance) {
         avgImageTime: data?.avgImageTime ?? null,
         avgVideoTime: data?.avgVideoTime ?? null,
       }
+
+      setCachedStats(cacheKey, stats)
 
       return { data: stats }
     } catch (err) {

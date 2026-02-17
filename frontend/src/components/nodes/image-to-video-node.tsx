@@ -11,6 +11,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { Kling3DirectorModal } from "@/components/editor/kling3-director-modal"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { CachedImage } from "@/components/ui/cached-image"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
 // Providers that support End Frame (second image for video ending)
@@ -289,10 +290,12 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <span className="text-[10px] text-muted-foreground font-medium w-[52px] shrink-0 leading-tight">Start Frame</span>
             {startFrameInfo?.thumbnailUrl ? (
               <div className="relative flex-1 h-[52px] rounded-md overflow-hidden bg-muted/30 border border-muted">
-                <img
+                <CachedImage
                   src={startFrameInfo.thumbnailUrl}
                   alt={startFrameInfo.label}
                   className="w-full h-full object-cover"
+                  thumbnail
+                  thumbnailWidth={200}
                 />
                 <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/60 text-white px-1 rounded truncate max-w-[90%]">
                   {startFrameInfo.label}
@@ -319,10 +322,12 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             </span>
             {endFrameInfo?.thumbnailUrl ? (
               <div className="relative flex-1 h-[52px] rounded-md overflow-hidden bg-muted/30 border border-muted">
-                <img
+                <CachedImage
                   src={endFrameInfo.thumbnailUrl}
                   alt={endFrameInfo.label}
                   className="w-full h-full object-cover"
+                  thumbnail
+                  thumbnailWidth={200}
                 />
                 <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/60 text-white px-1 rounded truncate max-w-[90%]">
                   {endFrameInfo.label}
