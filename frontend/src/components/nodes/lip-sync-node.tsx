@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { CachedImage } from "@/components/ui/cached-image"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
 
 // Node types that output images (for portrait/face)
@@ -221,10 +222,12 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                         {selectedImage && (
                           <div className="flex items-center gap-2">
                             {selectedImage.thumbnailUrl ? (
-                              <img
+                              <CachedImage
                                 src={selectedImage.thumbnailUrl}
                                 alt=""
                                 className="w-5 h-5 object-cover rounded"
+                                thumbnail
+                                thumbnailWidth={40}
                               />
                             ) : (
                               <ImageIcon className="w-4 h-4 text-blue-500" />
@@ -239,10 +242,12 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                         <SelectItem key={node.id} value={node.id}>
                           <div className="flex items-center gap-2">
                             {node.thumbnailUrl ? (
-                              <img
+                              <CachedImage
                                 src={node.thumbnailUrl}
                                 alt=""
                                 className="w-5 h-5 object-cover rounded"
+                                thumbnail
+                                thumbnailWidth={40}
                               />
                             ) : (
                               <ImageIcon className="w-4 h-4 text-blue-500" />
