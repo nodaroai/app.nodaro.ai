@@ -4,7 +4,7 @@ import { useEffect, useCallback, useState, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
 import {
   X, Play, Loader2, Image as ImageIcon, Volume2, ChevronUp, ChevronDown,
-  Trash2, Plus, Film, Settings, ChevronDown as ChevronDownIcon,
+  Trash2, Plus, Film, Settings, ChevronDown as ChevronDownIcon, Users,
 } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
@@ -55,8 +55,10 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
   const [workflowDropdownIndex, setWorkflowDropdownIndex] = useState<number | null>(null)
+  const [copiedName, setCopiedName] = useState<string | null>(null)
   const workflowDropdownRef = useRef<HTMLDivElement | null>(null)
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  const elementNameRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
   const node = nodes.find((n) => n.id === nodeId)
   const data = node?.data as ImageToVideoData | undefined
@@ -97,6 +99,15 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
   useEffect(() => {
     if (isOpen) setActiveTab("scene")
   }, [isOpen])
+
+  // Auto-focus empty element name input
+  useEffect(() => {
+    const els = data?.elements ?? []
+    const lastIdx = els.length - 1
+    if (lastIdx >= 0 && els[lastIdx]?.name === "") {
+      elementNameRefs.current[lastIdx]?.focus()
+    }
+  }, [data?.elements?.length])
 
   // ── Workflow image nodes for "From Workflow" picker ──
   const IMAGE_NODE_TYPES = useMemo(() => new Set([
@@ -168,7 +179,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
   }
 
   function handleAddElement() {
-    handleUpdate({ elements: [...elements, { name: `element_${elements.length + 1}`, description: "", type: "image" as const, urls: [] }] })
+    handleUpdate({ elements: [...elements, { name: "", description: "", type: "image" as const, urls: [] }] })
   }
   function handleRemoveElement(index: number) {
     handleUpdate({ elements: elements.filter((_, i) => i !== index) })
@@ -622,6 +633,26 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                           <p className="text-[10px] text-muted-foreground/60">
                             Hint: Include dialogue in quotes, add camera directions and mood.
                           </p>
+                          {elements.some((el) => el.name.trim()) && (
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="text-[9px] text-muted-foreground">Reference:</span>
+                              {copiedName && <span className="text-[9px] text-green-400 animate-pulse">Copied!</span>}
+                              {elements.filter((el) => el.name.trim()).map((el) => (
+                                <span
+                                  key={el.name}
+                                  className="text-[9px] px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 cursor-pointer hover:bg-pink-500/20 transition-colors"
+                                  title="Click to copy @name"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(`@${el.name}`)
+                                    setCopiedName(el.name)
+                                    setTimeout(() => setCopiedName(null), 1500)
+                                  }}
+                                >
+                                  @{el.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
 
@@ -653,21 +684,28 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
               {/* ═══ ELEMENTS TAB ═══ */}
               {activeTab === "elements" && (
                 <div className="flex flex-col gap-4">
-                  <p className="text-sm text-muted-foreground">
-                    Create characters and objects, then reference them with <span className="font-mono text-[#ff0073]">@name</span> in your prompts.
-                  </p>
+                  {elements.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                      <Users className="w-12 h-12 text-muted-foreground/30" />
+                      <span className="text-sm font-medium text-foreground">No elements yet</span>
+                      <p className="text-xs text-muted-foreground max-w-[300px] text-center">
+                        Elements let you create consistent characters and objects across shots. Click below to add your first one.
+                      </p>
+                    </div>
+                  )}
 
                   {elements.map((el, i) => (
-                    <div key={i} className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
-                      {/* Row 1: Name + Type + Delete */}
+                    <div key={i} className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-4">
+                      {/* HEADER ROW */}
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-[#ff0073] font-semibold shrink-0">@</span>
+                        <span className="text-lg text-[#ff0073] font-bold shrink-0">@</span>
                         <input
+                          ref={(ref) => { elementNameRefs.current[i] = ref }}
                           type="text"
                           value={el.name}
                           onChange={(e) => handleUpdateElement(i, "name", e.target.value.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""))}
-                          placeholder="name"
-                          className="h-8 w-28 px-2 text-sm rounded-md border border-border bg-muted/30 font-mono outline-none focus:border-[#ff0073] transition-colors"
+                          placeholder="name your character..."
+                          className={`h-8 w-32 px-1 text-sm font-medium bg-transparent border-b-2 font-mono outline-none transition-colors ${el.name === "" ? "border-red-500" : "border-[#ff0073]"} focus:border-[#ff0073]`}
                         />
                         <button
                           type="button"
@@ -691,35 +729,41 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         </button>
                       </div>
 
-                      {/* Row 2: Description */}
-                      <input
-                        type="text"
-                        value={el.description}
-                        onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 200))}
-                        placeholder="Describe appearance and voice, e.g. 'young woman, red jacket, calm confident voice'"
-                        className="w-full h-9 px-3 text-sm rounded-md border border-border bg-muted/30 outline-none focus:border-[#ff0073] transition-colors"
-                      />
+                      {/* DESCRIPTION */}
+                      <div>
+                        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">Description</span>
+                        <input
+                          type="text"
+                          value={el.description}
+                          onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 200))}
+                          placeholder="Describe appearance, clothing, voice tone... e.g. 'Young woman with red hair, green jacket, confident warm voice'"
+                          className="w-full h-10 px-3 text-sm rounded-lg border-2 border-border bg-background outline-none focus:border-[#ff0073] transition-colors"
+                        />
+                      </div>
 
-                      {/* Row 3: Thumbnails */}
-                      <div className="flex items-center gap-2 min-h-[48px] flex-wrap">
+                      {/* REFERENCE IMAGES */}
+                      <div>
+                        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">Reference Images (2-4 recommended)</span>
                         {el.urls.length > 0 ? (
-                          el.urls.map((url, ui) => (
-                            <div key={ui} className="relative group/thumb w-12 h-12 shrink-0">
-                              <img src={url} alt={`${el.name} ${ui + 1}`} className="w-12 h-12 rounded-lg object-cover border border-border" />
-                              <button
-                                type="button"
-                                className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
-                                onClick={() => handleRemoveElementUrl(i, ui)}
-                                title="Remove"
-                              >
-                                <X className="w-2.5 h-2.5" />
-                              </button>
-                            </div>
-                          ))
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {el.urls.map((url, ui) => (
+                              <div key={ui} className="relative group/thumb w-16 h-16 shrink-0">
+                                <img src={url} alt={`${el.name} ${ui + 1}`} className="w-16 h-16 rounded-lg object-cover border border-border" />
+                                <button
+                                  type="button"
+                                  className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
+                                  onClick={() => handleRemoveElementUrl(i, ui)}
+                                  title="Remove"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         ) : (
-                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
-                            <ImageIcon className="w-5 h-5" />
-                            <span>No media added</span>
+                          <div className="flex flex-col items-center justify-center h-20 rounded-lg border-2 border-dashed border-border bg-muted/20 text-muted-foreground/50">
+                            <ImageIcon className="w-6 h-6 mb-1" />
+                            <span className="text-[11px]">Drop images here or use buttons below</span>
                           </div>
                         )}
                       </div>
@@ -799,6 +843,13 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                           </div>
                         )}
                       </div>
+
+                      {/* VOICE HINT */}
+                      {el.type === "image" && (
+                        <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+                          Tip: Add voice description like &quot;deep calm male voice&quot; in the description to enable dialogue
+                        </p>
+                      )}
                     </div>
                   ))}
 
