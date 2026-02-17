@@ -1,4 +1,9 @@
-:{$PORT:3000} {
+{
+	auto_https off
+	admin off
+}
+
+:{$PORT:8080} {
 	handle /v1/* {
 		reverse_proxy {$BACKEND_URL:http://localhost:9000}
 	}
