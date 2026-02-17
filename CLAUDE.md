@@ -139,7 +139,7 @@ backend/src/
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
   billing/                — Credits, Paddle, cleanup (see Credit System)
-  middleware/             — credit-guard.ts, auth
+  middleware/             — credit-guard.ts, auth.ts (JWT verification + 5-min cache)
   lib/config.ts           — Env config + edition helpers
   lib/admin-check.ts      — Shared cached admin check (30s TTL)
   lib/app-settings.ts     — Settings cache (60s TTL, stampede-safe)
