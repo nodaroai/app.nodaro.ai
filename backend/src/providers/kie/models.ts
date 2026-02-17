@@ -198,7 +198,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.50,
     imageParam: "image_urls",
     extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
-    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 15],
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     supportsEndFrame: true,
   },
 
@@ -292,7 +292,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 10,
     cost: 0.50,
     extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
-    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 15],
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 }
 

@@ -526,16 +526,21 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 py-1">
+                        <div className="flex items-center gap-2 py-1" title={data.multiShot ? "Sound is required in multi-shot mode" : undefined}>
                           <input
                             type="checkbox"
                             id="directorSound"
-                            checked={(data as Record<string, unknown>).kling3Sound !== false}
+                            checked={data.multiShot ? true : (data as Record<string, unknown>).kling3Sound !== false}
                             onChange={(e) => handleUpdate({ kling3Sound: e.target.checked })}
-                            className="rounded border-muted-foreground/40 accent-[#ff0073]"
+                            disabled={!!data.multiShot}
+                            className="rounded border-muted-foreground/40 accent-[#ff0073] disabled:opacity-50"
                           />
-                          <label htmlFor="directorSound" className="text-xs">Sound Effects</label>
-                          <span className="text-[10px] text-muted-foreground ml-auto">Lip-sync + SFX</span>
+                          <label htmlFor="directorSound" className={`text-xs ${data.multiShot ? "text-muted-foreground" : ""}`}>Sound Effects</label>
+                          {data.multiShot ? (
+                            <span className="text-[10px] text-muted-foreground ml-auto italic">Required for multi-shot</span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground ml-auto">Lip-sync + SFX</span>
+                          )}
                         </div>
 
                         <div>
@@ -550,7 +555,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                               onChange={(e) => handleUpdate({ duration: parseInt(e.target.value, 10) })}
                               className="w-full h-8 px-2 text-xs rounded-md border border-border bg-muted/30 outline-none"
                             >
-                              {[3, 4, 5, 6, 7, 8, 9, 10, 15].map((d) => (
+                              {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((d) => (
                                 <option key={d} value={String(d)}>{d}s</option>
                               ))}
                             </select>
@@ -769,10 +774,14 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">Description</span>
                         <textarea
                           value={el.description}
-                          onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 200))}
+                          onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 100))}
+                          maxLength={100}
                           placeholder="Describe appearance, clothing, voice tone... e.g. 'Young woman with red hair, green jacket, confident warm voice'"
                           className="w-full min-h-[60px] px-3 py-2 text-sm rounded-xl border-2 border-border bg-background outline-none focus:border-[#ff0073] resize-none leading-relaxed transition-colors"
                         />
+                        <span className={`text-[9px] mt-0.5 block text-right ${el.description.length >= 100 ? "text-red-500" : el.description.length > 80 ? "text-yellow-500" : "text-muted-foreground"}`}>
+                          {el.description.length}/100
+                        </span>
                       </div>
 
                       {/* REFERENCE IMAGES */}

@@ -27,7 +27,7 @@ export interface Kling3Params {
   mode?: "std" | "pro"
   multiShots?: boolean
   multiPrompt?: Array<{ prompt: string; duration: number }>
-  klingElements?: Array<{ name: string; description: string; element_input_urls?: string[]; element_input_video_urls?: string[] }>
+  klingElements?: Array<{ name: string; description: string; type?: "image" | "video"; element_input_urls?: string[]; element_input_video_urls?: string[] }>
 }
 
 export interface Kling3Result {
@@ -48,9 +48,12 @@ export async function kling3Generate(
 
   const multiShots = params.multiShots ?? false
 
+  // Multi-shot mode requires sound to be enabled
+  const sound = multiShots ? true : (params.sound ?? true)
+
   const input: Record<string, unknown> = {
     prompt: params.prompt,
-    sound: params.sound ?? true,
+    sound,
     duration: params.duration ?? "5",
     mode: params.mode ?? "pro",
     multi_shots: multiShots,
@@ -70,15 +73,25 @@ export async function kling3Generate(
 
   if (params.klingElements && params.klingElements.length > 0) {
     input.kling_elements = params.klingElements.map((el) => {
+      let description = el.description
+      if (description.length > 100) {
+        console.log(`[Kling3] Truncated element "${el.name}" description from ${description.length} to 100 chars`)
+        description = description.slice(0, 100)
+      }
       const mapped: Record<string, unknown> = {
         name: el.name,
-        description: el.description,
+        description,
       }
-      if (el.element_input_urls && el.element_input_urls.length > 0) {
-        mapped.element_input_urls = el.element_input_urls
-      }
-      if (el.element_input_video_urls && el.element_input_video_urls.length > 0) {
-        mapped.element_input_video_urls = el.element_input_video_urls
+      // Use type field to send only the correct URL key
+      if (el.type === "video") {
+        if (el.element_input_video_urls && el.element_input_video_urls.length > 0) {
+          mapped.element_input_video_urls = el.element_input_video_urls
+        }
+      } else {
+        // Default to image URLs
+        if (el.element_input_urls && el.element_input_urls.length > 0) {
+          mapped.element_input_urls = el.element_input_urls
+        }
       }
       return mapped
     })
