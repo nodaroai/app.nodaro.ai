@@ -35,7 +35,7 @@ RUN npm run build
 # ── Stage 3: Production runner ───────────────────────────────────────
 FROM node:20-alpine AS runner
 
-RUN apk add --no-cache libc6-compat ffmpeg caddy
+RUN apk add --no-cache libc6-compat ffmpeg caddy curl
 
 ENV NODE_ENV=production
 
@@ -54,8 +54,8 @@ COPY frontend/Caddyfile /etc/caddy/Caddyfile
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
 
-# Railway injects PORT=8080 at runtime for routing
-echo "Starting with PORT=${PORT:-8080}"
+# Railway injects PORT at runtime for routing
+echo "Starting with PORT=${PORT:-3000}"
 
 # Start backend API server on fixed internal port
 cd /app/backend
@@ -63,6 +63,16 @@ PORT=9000 node dist/server.js &
 
 # Start BullMQ worker (job processor)
 node dist/worker.js &
+
+# Wait for backend to be ready before accepting traffic
+echo "Waiting for backend on port 9000..."
+for i in $(seq 1 30); do
+  if curl -sf http://localhost:9000/health > /dev/null 2>&1; then
+    echo "Backend is ready"
+    break
+  fi
+  sleep 1
+done
 
 # Start Caddy as main process (PID 1 for signal handling)
 cd /app
