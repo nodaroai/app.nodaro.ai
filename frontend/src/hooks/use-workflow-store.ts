@@ -99,7 +99,9 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   isDirty: false,
   saveStatus: "idle" as SaveStatus,
   saveError: null,
-  videoAutoplay: true,
+  videoAutoplay: typeof window !== "undefined" && localStorage.getItem("videoAutoplay") !== null
+    ? localStorage.getItem("videoAutoplay") === "true"
+    : true,
   newNodeIds: new Set<string>(),
   characterDefinitions: [],
   userPromptTemplates: {},
@@ -342,7 +344,10 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   setSaveStatus: (status, error = null) => set({ saveStatus: status, saveError: error }),
 
-  setVideoAutoplay: (autoplay) => set({ videoAutoplay: autoplay }),
+  setVideoAutoplay: (autoplay) => {
+    if (typeof window !== "undefined") localStorage.setItem("videoAutoplay", String(autoplay))
+    set({ videoAutoplay: autoplay })
+  },
 
   clearNewNode: (id) =>
     set((state) => {
