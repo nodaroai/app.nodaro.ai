@@ -3,7 +3,7 @@
 		reverse_proxy {$BACKEND_URL:http://localhost:9000}
 	}
 	handle {
-		root * /srv
+		root * /app/frontend/dist
 		try_files {path} /index.html
 		file_server
 	}
