@@ -567,6 +567,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           <Button
             variant="ghost"
             size="sm"
+            aria-label="Back to project"
             className="h-8 w-8 p-0 shrink-0"
             onClick={() => onNavigate ? onNavigate(`/projects/${projectId}`) : undefined}
           >
@@ -600,6 +601,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
         <div className="flex items-center gap-0.5 min-w-0">
           <Input
+            aria-label="Workflow name"
             value={workflowName}
             onChange={(e) => setWorkflowName(e.target.value)}
             className="w-28 sm:w-48 h-8 text-sm"
@@ -625,6 +627,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               <Button
                 variant="outline"
                 size="sm"
+                aria-label="Prompt Templates"
                 className="relative"
                 onClick={() => setFlowTemplatesOpen(true)}
               >
@@ -648,7 +651,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={exporting || importing}>
+            <Button variant="outline" size="sm" aria-label="More options" disabled={exporting || importing}>
               {(exporting || importing) ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -744,6 +747,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           variant="outline"
           size="sm"
           onClick={() => setVideoAutoplay(!videoAutoplay)}
+          aria-label={videoAutoplay ? "Pause video autoplay" : "Enable video autoplay"}
           title={videoAutoplay ? "Auto-playing videos" : "Videos paused"}
           className={videoAutoplay ? "text-white hover:opacity-90" : ""}
           style={videoAutoplay ? { backgroundColor: '#ff0073', borderColor: '#ff0073' } : undefined}

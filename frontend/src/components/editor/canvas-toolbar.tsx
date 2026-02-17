@@ -36,6 +36,7 @@ function ToolbarButton({ icon, label, shortcut, onClick, active }: ToolbarButton
         <TooltipTrigger asChild>
           <button
             type="button"
+            aria-label={label}
             onClick={onClick}
             className={cn(
               "w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200",

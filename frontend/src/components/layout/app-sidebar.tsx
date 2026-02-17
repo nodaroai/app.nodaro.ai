@@ -154,6 +154,7 @@ export function AppSidebar({
             <Button
               variant="ghost"
               size="sm"
+              aria-label="Close sidebar"
               className="h-8 w-8 p-0 md:hidden text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
               onClick={onMobileClose}
             >
@@ -184,6 +185,7 @@ export function AppSidebar({
               <Link
                 to={item.href}
                 onClick={handleNavClick}
+                aria-label={item.label}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200",
                   isCollapsed ? "justify-center px-0" : "",
@@ -246,6 +248,7 @@ export function AppSidebar({
                   <Button
                     variant="ghost"
                     size="sm"
+                    aria-label="Expand sidebar"
                     className="w-full h-9 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
                     onClick={toggleCollapsed}
                   >
@@ -286,6 +289,7 @@ export function AppSidebar({
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label="Sign out"
                       className="h-9 w-9 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
                       onClick={signOut}
                     >
@@ -315,6 +319,7 @@ export function AppSidebar({
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label="Sign out"
                         className="h-7 w-7 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800 flex-shrink-0"
                         onClick={signOut}
                       >
@@ -357,6 +362,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
       <Button
         variant="ghost"
         size="sm"
+        aria-label="Open menu"
         className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
         onClick={onMenuClick}
       >
