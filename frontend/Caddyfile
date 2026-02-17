@@ -3,7 +3,7 @@
 	admin off
 }
 
-:{$PORT:8080} {
+:{$PORT:3000} {
 	handle /v1/* {
 		reverse_proxy {$BACKEND_URL:http://localhost:9000}
 	}
