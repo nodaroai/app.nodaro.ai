@@ -146,7 +146,6 @@ export async function kling3Generate(
 
   const requestBody = {
     model: "kling-3.0/video",
-    callBackUrl: "https://callback.placeholder",
     input,
   }
 
