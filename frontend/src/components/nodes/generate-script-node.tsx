@@ -100,7 +100,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                     <div className="w-full aspect-video rounded-sm overflow-hidden bg-muted/50 flex items-center justify-center text-muted-foreground/30">
                       {scene.imageStatus === "completed" && (scene.generatedImages ?? []).length > 0 ? (
-                        <CachedImage src={(scene.generatedImages ?? [])[scene.activeImageIndex ?? 0]?.url} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
+                        <CachedImage src={(scene.generatedImages ?? [])[scene.activeImageIndex ?? 0]?.url} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" thumbnail thumbnailWidth={120} />
                       ) : scene.imageStatus === "running" ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (

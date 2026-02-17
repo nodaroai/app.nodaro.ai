@@ -582,7 +582,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 <div className="flex items-center gap-1.5">
                   {recentlyAdded.has(entry.assetId) && <Check className="w-3 h-3 text-green-500" />}
                   {asset?.referenceImageUrl && (
-                    <CachedImage src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={48} />
+                    <CachedImage src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={80} />
                   )}
                   <span className="text-xs font-medium">{asset?.name ?? "Unknown"}</span>
                 </div>
@@ -659,7 +659,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 <div className="flex items-center gap-1.5">
                   {recentlyAdded.has(loc.assetId) && <Check className="w-3 h-3 text-green-500" />}
                   {asset?.referenceImageUrl && (
-                    <CachedImage src={asset.referenceImageUrl} alt={asset?.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={48} />
+                    <CachedImage src={asset.referenceImageUrl} alt={asset?.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={80} />
                   )}
                   <span className="text-xs font-medium">{loc.name ?? asset?.name ?? "Unknown"}</span>
                   {loc.isPrimary && (
@@ -829,7 +829,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             <div key={`${entry.assetId}-${i}`} className={`flex items-center gap-1.5 p-2 rounded-md border transition-colors duration-500 ${recentlyAdded.has(entry.assetId) ? "bg-green-500/10 border-green-500/30" : "bg-muted/20"}`}>
               {recentlyAdded.has(entry.assetId) && <Check className="w-3 h-3 text-green-500" />}
               {asset?.referenceImageUrl && (
-                <CachedImage src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={48} />
+                <CachedImage src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={80} />
               )}
               <span className="text-xs font-medium flex-1">{asset?.name ?? "Unknown"}</span>
               <Input

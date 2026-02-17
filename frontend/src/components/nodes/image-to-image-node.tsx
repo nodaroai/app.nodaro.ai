@@ -82,7 +82,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
                 alt="Transformed"
                 className="w-full h-28 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
                 thumbnail
-                thumbnailWidth={800}
+                thumbnailWidth={320}
                 onClick={(e) => {
                   e.stopPropagation()
                   setPreviewOpen(true)

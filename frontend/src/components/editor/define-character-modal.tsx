@@ -168,7 +168,7 @@ export function DefineCharacterModal({
             <div>
               {referenceImageUrl ? (
                 <div className="relative">
-                  <CachedImage src={referenceImageUrl} alt="Reference" className="w-full h-32 object-contain rounded-md border" />
+                  <CachedImage src={referenceImageUrl} alt="Reference" className="w-full h-32 object-contain rounded-md border" thumbnail thumbnailWidth={480} />
                   <button
                     type="button"
                     onClick={() => setReferenceImageUrl("")}

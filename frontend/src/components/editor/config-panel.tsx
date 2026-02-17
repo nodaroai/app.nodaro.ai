@@ -1429,7 +1429,7 @@ function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAudioData
           {fetchingMeta && <p className="text-xs text-muted-foreground">Fetching video info...</p>}
           {data.videoThumbnail && (
             <div className="rounded-md overflow-hidden bg-muted border border-border">
-              <CachedImage src={data.videoThumbnail} alt="" className="w-full aspect-video object-cover" thumbnail />
+              <CachedImage src={data.videoThumbnail} alt="" className="w-full aspect-video object-cover" thumbnail thumbnailWidth={480} />
               {data.videoTitle && <p className="text-xs px-2 py-1.5 truncate text-foreground">{data.videoTitle}</p>}
             </div>
           )}

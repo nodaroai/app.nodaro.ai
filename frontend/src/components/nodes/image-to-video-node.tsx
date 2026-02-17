@@ -295,7 +295,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   alt={startFrameInfo.label}
                   className="w-full h-full object-cover"
                   thumbnail
-                  thumbnailWidth={200}
+                  thumbnailWidth={320}
                 />
                 <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/60 text-white px-1 rounded truncate max-w-[90%]">
                   {startFrameInfo.label}
@@ -327,7 +327,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   alt={endFrameInfo.label}
                   className="w-full h-full object-cover"
                   thumbnail
-                  thumbnailWidth={200}
+                  thumbnailWidth={320}
                 />
                 <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/60 text-white px-1 rounded truncate max-w-[90%]">
                   {endFrameInfo.label}

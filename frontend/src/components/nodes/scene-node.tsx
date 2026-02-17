@@ -101,7 +101,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
                 setPreviewOpen(true)
               }}
               thumbnail
-              thumbnailWidth={480}
+              thumbnailWidth={320}
             />
             <div className="absolute top-1 right-1 flex gap-1">
               <button
@@ -157,7 +157,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
                 alt={locationAsset.name}
                 className="w-full h-20 object-cover rounded-md"
                 thumbnail
-                thumbnailWidth={480}
+                thumbnailWidth={320}
               />
             ) : (
               <div className="flex items-center justify-center h-20 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">

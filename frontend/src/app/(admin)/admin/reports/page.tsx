@@ -222,7 +222,7 @@ export default function AdminGalleryReportsPage() {
                     onClick={() => setPreviewReport(report)}
                   >
                     {outputUrl && outputType === "image" ? (
-                      <CachedImage src={outputUrl} alt="" className="w-full h-full object-cover" />
+                      <CachedImage src={outputUrl} alt="" className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
                     ) : outputUrl && outputType === "video" ? (
                       <video src={outputUrl} muted className="w-full h-full object-cover" />
                     ) : (
