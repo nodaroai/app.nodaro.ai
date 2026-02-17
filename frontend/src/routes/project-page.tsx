@@ -20,26 +20,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useProjectsStore } from "@/hooks/use-projects-store"
+import { useProjects } from "@/hooks/queries/use-projects-queries"
 import { WorkflowsTab } from "@/components/dashboard/workflows-tab"
 import { AssetsTab } from "@/components/dashboard/assets-tab"
 import { JobsTab } from "@/components/dashboard/jobs-tab"
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
-  const project = useProjectsStore((s) => s.projects.find((p) => p.id === id))
-  const loading = useProjectsStore((s) => s.loading)
-  const fetchProjects = useProjectsStore((s) => s.fetchProjects)
+  const { data: projects = [], isLoading: projectsLoading } = useProjects()
+  const project = projects.find((p) => p.id === id)
   const fetchProjectData = useProjectsStore((s) => s.fetchProjectData)
   const updateProject = useProjectsStore((s) => s.updateProject)
+  const loading = projectsLoading
 
   const [renameOpen, setRenameOpen] = useState(false)
   const [newName, setNewName] = useState("")
   const [renaming, setRenaming] = useState(false)
 
   useEffect(() => {
-    fetchProjects()
     fetchProjectData(id!)
-  }, [id, fetchProjects, fetchProjectData])
+  }, [id, fetchProjectData])
 
   const handleRename = async () => {
     if (!newName.trim() || newName === project?.name) {

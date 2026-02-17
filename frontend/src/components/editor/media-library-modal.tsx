@@ -1,6 +1,4 @@
-"use client"
-
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
   X,
@@ -15,14 +13,18 @@ import {
   Globe,
   Plus,
 } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import {
-  getLibraryAssets,
-  deleteLibraryAsset,
+  useLibraryInfinite,
+  useDeleteLibraryAssetMutation,
+} from "@/hooks/queries/use-assets-queries"
+import {
   promoteToLibrary,
   demoteFromLibrary,
   type LibraryAsset,
 } from "@/lib/api"
+import { queryKeys } from "@/lib/query-keys"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 
 // ============================================================
@@ -95,66 +97,36 @@ function typeIcon(type: string) {
 
 export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibraryModalProps) {
   const { user, isAdmin } = useAuth()
-  const [assets, setAssets] = useState<LibraryAsset[]>([])
-  const [loading, setLoading] = useState(false)
+  const queryClient = useQueryClient()
   const [filterType, setFilterType] = useState<FilterType>("all")
   const [searchText, setSearchText] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [previewAsset, setPreviewAsset] = useState<LibraryAsset | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+
+  const {
+    data,
+    isLoading: loading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage: loadingMore,
+  } = useLibraryInfinite({
+    userId: user?.id,
+    type: filterType !== "all" ? filterType : undefined,
+    search: debouncedSearch || undefined,
+    limit: 40,
+  })
+
+  const assets = data?.pages.flatMap((p) => p.data) ?? []
+  const deleteMutation = useDeleteLibraryAssetMutation()
 
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchText), 300)
     return () => clearTimeout(timer)
   }, [searchText])
-
-  // Fetch assets when modal opens or filters change
-  const fetchAssets = useCallback(
-    async (cursor?: string) => {
-      if (!user?.id) return
-
-      const isLoadMore = Boolean(cursor)
-      if (isLoadMore) {
-        setLoadingMore(true)
-      } else {
-        setLoading(true)
-      }
-
-      try {
-        const result = await getLibraryAssets({
-          userId: user.id,
-          type: filterType,
-          search: debouncedSearch || undefined,
-          limit: 40,
-          cursor,
-        })
-
-        if (isLoadMore) {
-          setAssets((prev) => [...prev, ...result.data])
-        } else {
-          setAssets(result.data)
-        }
-        setNextCursor(result.nextCursor)
-      } catch (err) {
-        console.error("[media-library] Fetch failed:", err)
-      } finally {
-        setLoading(false)
-        setLoadingMore(false)
-      }
-    },
-    [user?.id, filterType, debouncedSearch],
-  )
-
-  useEffect(() => {
-    if (open) {
-      fetchAssets()
-    }
-  }, [open, fetchAssets])
 
   // Focus search on open
   useEffect(() => {
@@ -178,8 +150,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
 
     setDeletingId(asset.id)
     try {
-      await deleteLibraryAsset(asset.id, user.id)
-      setAssets((prev) => prev.filter((a) => a.id !== asset.id))
+      await deleteMutation.mutateAsync({ assetId: asset.id, userId: user.id })
       setConfirmDeleteId(null)
     } catch (err) {
       console.error("[media-library] Delete failed:", err)
@@ -203,9 +174,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
     if (!user?.id) return
     try {
       await promoteToLibrary(asset.id, user.id)
-      setAssets((prev) =>
-        prev.map((a) => (a.id === asset.id ? { ...a, isLibraryItem: true } : a)),
-      )
+      queryClient.invalidateQueries({ queryKey: queryKeys.library.all })
     } catch (err) {
       console.error("[media-library] Promote failed:", err)
     }
@@ -215,9 +184,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
     if (!user?.id) return
     try {
       await demoteFromLibrary(asset.id, user.id)
-      setAssets((prev) =>
-        prev.map((a) => (a.id === asset.id ? { ...a, isLibraryItem: false } : a)),
-      )
+      queryClient.invalidateQueries({ queryKey: queryKeys.library.all })
     } catch (err) {
       console.error("[media-library] Demote failed:", err)
     }
@@ -322,11 +289,11 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
               </div>
 
               {/* Load more */}
-              {nextCursor && (
+              {hasNextPage && (
                 <div className="flex justify-center mt-4">
                   <button
                     type="button"
-                    onClick={() => fetchAssets(nextCursor)}
+                    onClick={() => fetchNextPage()}
                     disabled={loadingMore}
                     className="px-4 py-2 text-xs font-medium rounded-lg bg-muted/50 hover:bg-muted text-muted-foreground transition-colors disabled:opacity-50"
                   >

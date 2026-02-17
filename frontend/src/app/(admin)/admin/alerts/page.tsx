@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useState } from "react"
 import { Bell, Plus, Trash2, Loader2, AlertTriangle, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +19,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 
-import { API_BASE_URL } from "@/lib/api"
+import {
+  useAdminAlerts,
+  useCreateAlertMutation,
+  useUpdateAlertMutation,
+  useDeleteAlertMutation,
+} from "@/hooks/queries/use-admin-queries"
 
 interface Alert {
   readonly id: string
@@ -37,8 +42,8 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
 }
 
 export default function AdminAlertsPage() {
-  const [alerts, setAlerts] = useState<ReadonlyArray<Alert>>([])
-  const [loading, setLoading] = useState(true)
+  const { data: alertsResult, isLoading: loading, error: queryError } = useAdminAlerts()
+  const alerts: ReadonlyArray<Alert> = (alertsResult?.data ?? []) as ReadonlyArray<Alert>
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -47,48 +52,22 @@ export default function AdminAlertsPage() {
   const [newAlertType, setNewAlertType] = useState<string>("cost_overrun")
   const [newThreshold, setNewThreshold] = useState("100")
 
-  const fetchAlerts = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(`${API_BASE_URL}/v1/admin/alerts`)
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error?.message || `Request failed: ${res.status}`)
-      }
-      const json = await res.json()
-      setAlerts(json.data ?? [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch alerts")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchAlerts()
-  }, [fetchAlerts])
+  const createAlertMut = useCreateAlertMutation()
+  const updateAlertMut = useUpdateAlertMutation()
+  const deleteAlertMut = useDeleteAlertMutation()
 
   const handleCreate = async () => {
     setSaving(true)
+    setError(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/admin/alerts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          alertType: newAlertType,
-          threshold: Number(newThreshold) || 0,
-          isEnabled: true,
-        }),
+      await createAlertMut.mutateAsync({
+        alertType: newAlertType,
+        threshold: Number(newThreshold) || 0,
+        isEnabled: true,
       })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error?.message || `Request failed: ${res.status}`)
-      }
       setDialogOpen(false)
       setNewAlertType("cost_overrun")
       setNewThreshold("100")
-      await fetchAlerts()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create alert")
     } finally {
@@ -97,32 +76,18 @@ export default function AdminAlertsPage() {
   }
 
   const handleToggle = async (alert: Alert) => {
+    setError(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/admin/alerts/${alert.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isEnabled: !alert.is_enabled }),
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error?.message || `Request failed: ${res.status}`)
-      }
-      await fetchAlerts()
+      await updateAlertMut.mutateAsync({ id: alert.id, isEnabled: !alert.is_enabled })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update alert")
     }
   }
 
   const handleDelete = async (id: string) => {
+    setError(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/admin/alerts/${id}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error?.message || `Request failed: ${res.status}`)
-      }
-      await fetchAlerts()
+      await deleteAlertMut.mutateAsync(id)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete alert")
     }
@@ -196,10 +161,10 @@ export default function AdminAlertsPage() {
         </Dialog>
       </div>
 
-      {error && (
+      {(error || queryError) && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          {error}
+          {error || (queryError instanceof Error ? queryError.message : "Failed to load alerts")}
         </div>
       )}
 

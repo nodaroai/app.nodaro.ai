@@ -1,18 +1,8 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useAdmin } from "@/hooks/use-admin"
-
-interface AdminJob {
-  readonly id: string
-  readonly status: string
-  readonly credits_used: number | null
-  readonly credits_estimated: number | null
-  readonly created_at: string
-  readonly user_email: string
-  readonly workflow_name: string
-}
+import { useAdminJobs } from "@/hooks/queries/use-admin-queries"
 
 const STATUS_OPTIONS = ["all", "pending", "queued", "processing", "completed", "failed", "cancelled"] as const
 
@@ -32,15 +22,10 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
 }
 
 export default function AdminJobsPage() {
-  const { fetchJobs, loading } = useAdmin()
-  const [jobs, setJobs] = useState<ReadonlyArray<AdminJob>>([])
   const [page, setPage] = useState(0)
   const [statusFilter, setStatusFilter] = useState<string>("all")
-
-  useEffect(() => {
-    const filter = statusFilter === "all" ? undefined : statusFilter
-    fetchJobs(page, 50, filter).then(setJobs)
-  }, [fetchJobs, page, statusFilter])
+  const filter = statusFilter === "all" ? undefined : statusFilter
+  const { data: jobs = [], isLoading: loading } = useAdminJobs(page, 50, filter)
 
   if (loading && jobs.length === 0) {
     return (

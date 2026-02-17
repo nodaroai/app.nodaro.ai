@@ -1,26 +1,12 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useAdmin } from "@/hooks/use-admin"
-
-interface AdminUsageLog {
-  readonly id: string
-  readonly action: string
-  readonly provider: string
-  readonly credits_used: number
-  readonly created_at: string
-  readonly user_email: string
-}
+import { useAdminUsageLogs } from "@/hooks/queries/use-admin-queries"
 
 export default function AdminUsagePage() {
-  const { fetchUsageLogs, loading } = useAdmin()
-  const [logs, setLogs] = useState<ReadonlyArray<AdminUsageLog>>([])
   const [page, setPage] = useState(0)
-
-  useEffect(() => {
-    fetchUsageLogs(page).then(setLogs)
-  }, [fetchUsageLogs, page])
+  const { data: logs = [], isLoading: loading } = useAdminUsageLogs(page)
 
   const totalCredits = logs.reduce((sum, log) => sum + log.credits_used, 0)
 

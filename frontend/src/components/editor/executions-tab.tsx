@@ -1,12 +1,13 @@
-"use client"
-
-import { useState, useEffect, useCallback } from "react"
+import { useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, Clock, Zap, DollarSign, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getJobs, getStats, cancelJob, cancelAllJobs, type Job, type StatsResponse } from "@/lib/api"
+import { getJobs, cancelJob, cancelAllJobs, type Job } from "@/lib/api"
 import { ExecutionDetailModal } from "./execution-detail-modal"
 import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
+import { useStats } from "@/hooks/queries/use-stats-queries"
+import { queryKeys } from "@/lib/query-keys"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -141,116 +142,82 @@ interface ExecutionsTabProps {
 
 export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
   const { user, isAdmin } = useAuth()
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const qc = useQueryClient()
+  const [cursor, setCursor] = useState<string | undefined>()
   const [prevCursors, setPrevCursors] = useState<string[]>([])
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
-  const [stats, setStats] = useState<StatsResponse | null>(null)
   const [cancelAllDialogOpen, setCancelAllDialogOpen] = useState(false)
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
   const [showDollars, setShowDollars] = useState(!isCloud())
 
   const userId = user?.id
 
-  const fetchStats = useCallback(async () => {
-    if (!userId) return
-    try {
-      const result = await getStats("user", userId)
-      setStats(result.data)
-    } catch (err) {
-      console.error("Failed to fetch stats:", err)
+  const { data: stats } = useStats("user", userId)
+
+  const { data: jobsData, isLoading: loading, error: jobsError } = useQuery({
+    queryKey: queryKeys.jobs.list(userId ?? "", cursor),
+    queryFn: () => getJobs(userId, cursor),
+    enabled: !!userId,
+    staleTime: 15_000,
+  })
+  const jobs = jobsData?.data ?? []
+  const nextCursor = jobsData?.next ?? null
+
+  const handleRefresh = () => {
+    setCursor(undefined)
+    setPrevCursors([])
+    qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
+    qc.invalidateQueries({ queryKey: queryKeys.stats.all })
+  }
+
+  const handleNext = () => {
+    if (nextCursor) {
+      setPrevCursors(prev => [...prev, cursor ?? ""])
+      setCursor(nextCursor)
     }
-  }, [userId])
+  }
 
-  const fetchData = useCallback(async (cursor?: string, direction: "next" | "prev" | "refresh" = "refresh") => {
-    if (!userId) return
-    try {
-      setLoading(true)
-      setError(null)
-      const result = await getJobs(userId, cursor)
-      setJobs(result.data)
-      setNextCursor(result.next)
-
-      // Track cursor history for pagination
-      if (direction === "next" && cursor) {
-        setPrevCursors(prev => [...prev, cursor])
-      } else if (direction === "prev") {
-        setPrevCursors(prev => prev.slice(0, -1))
-      } else if (direction === "refresh") {
-        setPrevCursors([])
-      }
-
-      // Also refresh stats
-      fetchStats()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load jobs")
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
+  const handlePrev = () => {
+    if (prevCursors.length > 0) {
+      const newPrevCursors = prevCursors.slice(0, -1)
+      const prevCursor = newPrevCursors[newPrevCursors.length - 1]
+      setPrevCursors(newPrevCursors)
+      setCursor(prevCursor ?? undefined)
+    } else {
+      setCursor(undefined)
+      setPrevCursors([])
     }
-  }, [userId, fetchStats])
+  }
 
-  const handleCancelJob = useCallback(async (jobId: string, e: React.MouseEvent) => {
+  const handleCancelJob = async (jobId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!userId) return
 
     setCancellingJobId(jobId)
     try {
       await cancelJob(jobId, userId)
-      // Optimistically update the job status
-      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: "cancelled" } : j))
-      // Refresh stats
-      fetchStats()
+      qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
+      qc.invalidateQueries({ queryKey: queryKeys.stats.all })
     } catch (err) {
       console.error("Failed to cancel job:", err)
     } finally {
       setCancellingJobId(null)
     }
-  }, [userId, fetchStats])
+  }
 
-  const handleCancelAll = useCallback(async () => {
+  const handleCancelAll = async () => {
     if (!userId) return
 
     try {
       const result = await cancelAllJobs(userId)
       if (result.cancelled > 0) {
-        // Refresh the jobs list and stats
-        fetchData(undefined, "refresh")
+        qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
+        qc.invalidateQueries({ queryKey: queryKeys.stats.all })
       }
     } catch (err) {
       console.error("Failed to cancel all jobs:", err)
     } finally {
       setCancelAllDialogOpen(false)
-    }
-  }, [userId, fetchData])
-
-  useEffect(() => {
-    if (userId) {
-      fetchData()
-      fetchStats()
-    }
-  }, [fetchData, fetchStats, userId])
-
-  const handleRefresh = () => {
-    setRefreshing(true)
-    fetchData(undefined, "refresh")
-  }
-
-  const handleNext = () => {
-    if (nextCursor) {
-      fetchData(nextCursor, "next")
-    }
-  }
-
-  const handlePrev = () => {
-    if (prevCursors.length > 0) {
-      const prevCursor = prevCursors[prevCursors.length - 2] // Go back one
-      fetchData(prevCursor, "prev")
-    } else {
-      fetchData(undefined, "refresh") // Go to first page
     }
   }
 
@@ -272,12 +239,12 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
     )
   }
 
-  if (error) {
+  if (jobsError) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
         <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Failed to load executions</h3>
-        <p className="text-sm text-gray-500 dark:text-[#94A3B8] mb-4">{error}</p>
+        <p className="text-sm text-gray-500 dark:text-[#94A3B8] mb-4">{jobsError.message}</p>
         <Button onClick={handleRefresh} variant="outline">
           <RefreshCw className="w-4 h-4 mr-2" />
           Retry
@@ -356,10 +323,10 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
             variant="outline"
             size="sm"
             onClick={handleRefresh}
-            disabled={refreshing}
+            disabled={loading}
             className="dark:border-[#2D2D2D] dark:hover:bg-[#2D2D2D]"
           >
-            <RefreshCw className={`w-4 h-4 mr-1.5 ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           <div className="flex items-center gap-1">
@@ -540,7 +507,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
         open={selectedJob !== null}
         onClose={() => setSelectedJob(null)}
         onDeleted={(jobId) => {
-          setJobs(prev => prev.filter(j => j.id !== jobId))
+          qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
           setSelectedJob(null)
         }}
         showDollars={showDollars}

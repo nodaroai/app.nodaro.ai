@@ -1,17 +1,9 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { X, ImageIcon, FileText, Loader2, Download } from "lucide-react"
+import { X, FileText, Loader2, Download } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
-import { createClient } from "@/lib/supabase"
+import { useImportableWorkflows } from "@/hooks/queries/use-editor-queries"
 import type { CharacterDefinition } from "@/types/nodes"
-
-interface WorkflowOption {
-  readonly id: string
-  readonly name: string
-  readonly characters: readonly CharacterDefinition[]
-}
 
 interface ImportCharacterModalProps {
   readonly isOpen: boolean
@@ -30,57 +22,22 @@ export function ImportCharacterModal({
   existingNames,
   projectId,
 }: ImportCharacterModalProps) {
-  const [workflows, setWorkflows] = useState<WorkflowOption[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const { data: workflows = [], isLoading: loading, error: queryError } = useImportableWorkflows(
+    projectId,
+    currentWorkflowId,
+    isOpen,
+  )
+  const error = queryError instanceof Error ? queryError.message : queryError ? "Failed to load workflows" : ""
+
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("")
   const [selectedCharIds, setSelectedCharIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (!isOpen) return
-    setLoading(true)
-    setError("")
-    setSelectedWorkflowId("")
-    setSelectedCharIds(new Set())
-
-    async function fetchWorkflows() {
-      try {
-        const supabase = createClient()
-        const query = supabase
-          .from("workflows")
-          .select("id, name, settings")
-          .order("updated_at", { ascending: false })
-
-        if (projectId) {
-          query.eq("project_id", projectId)
-        }
-
-        const { data, error: err } = await query
-
-        if (err) {
-          setError(err.message)
-          return
-        }
-
-        const results: WorkflowOption[] = (data ?? [])
-          .filter((w: { id: string }) => w.id !== currentWorkflowId)
-          .map((w: { id: string; name: string; settings: unknown }) => {
-            const settings = (w.settings ?? {}) as Record<string, unknown>
-            const chars = (settings.characterDefinitions ?? []) as CharacterDefinition[]
-            return { id: w.id, name: w.name, characters: chars }
-          })
-          .filter((w: WorkflowOption) => w.characters.length > 0)
-
-        setWorkflows(results)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load workflows")
-      } finally {
-        setLoading(false)
-      }
+    if (isOpen) {
+      setSelectedWorkflowId("")
+      setSelectedCharIds(new Set())
     }
-
-    fetchWorkflows()
-  }, [isOpen, currentWorkflowId, projectId])
+  }, [isOpen])
 
   if (!isOpen) return null
 

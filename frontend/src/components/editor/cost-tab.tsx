@@ -1,11 +1,9 @@
-"use client"
-
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useMemo, useState } from "react"
 import { RefreshCw, Loader2, DollarSign, Coins, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getWorkflowCostSummary, type CostSummary } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
+import { useWorkflowCostSummary } from "@/hooks/queries/use-editor-queries"
 import { isCloud } from "@/lib/edition"
 import {
   Tooltip,
@@ -122,51 +120,12 @@ interface CostTabProps {
 export function CostTab({ className = "" }: CostTabProps) {
   const { isAdmin } = useAuth()
   const nodes = useWorkflowStore((s) => s.nodes)
-  const [summary, setSummary] = useState<CostSummary | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const jobIds = useMemo(() => collectJobIds(nodes), [nodes])
+  const { data: summary, isLoading: loading, error, refetch } = useWorkflowCostSummary(jobIds)
   const [showDollars, setShowDollars] = useState(!isCloud())
-  const prevJobIdsRef = useRef<string>("")
 
-  const fetchCostSummary = useCallback(async (jobIds: readonly string[]) => {
-    if (jobIds.length === 0) {
-      setSummary({ total_credits: 0, total_cost_usd: 0, total_jobs: 0, breakdown: [] })
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await getWorkflowCostSummary(jobIds)
-      setSummary(result.data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch cost summary")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Fetch on mount and when nodes change (debounced via jobId set comparison)
-  useEffect(() => {
-    const jobIds = collectJobIds(nodes)
-    const key = [...jobIds].sort().join(",")
-
-    // Skip if job IDs haven't changed
-    if (key === prevJobIdsRef.current && summary !== null) return
-    prevJobIdsRef.current = key
-
-    fetchCostSummary(jobIds)
-  }, [nodes, fetchCostSummary, summary])
-
-  const handleRefresh = useCallback(() => {
-    const jobIds = collectJobIds(nodes)
-    prevJobIdsRef.current = "" // Force refresh
-    fetchCostSummary(jobIds)
-  }, [nodes, fetchCostSummary])
-
-  // Empty state - no executions at all
-  if (!loading && summary !== null && summary.total_jobs === 0) {
+  // Empty state - no executions at all (or no job IDs so query is disabled)
+  if (!loading && (!summary || summary.total_jobs === 0)) {
     return (
       <div className={`flex flex-col items-center justify-center h-full bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <BarChart3 className="w-16 h-16 text-gray-300 dark:text-[#2D2D2D] mb-4" />
@@ -216,7 +175,7 @@ export function CostTab({ className = "" }: CostTabProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleRefresh}
+            onClick={() => refetch()}
             disabled={loading}
             className="h-8 px-2.5 dark:border-[#2D2D2D]"
           >
@@ -235,7 +194,7 @@ export function CostTab({ className = "" }: CostTabProps) {
       {/* Error state */}
       {error && (
         <div className="mx-6 mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">{error instanceof Error ? error.message : "Failed to fetch cost summary"}</p>
         </div>
       )}
 

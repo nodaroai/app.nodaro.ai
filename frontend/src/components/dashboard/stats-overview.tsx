@@ -1,9 +1,10 @@
-"use client"
-
-import { useEffect, useState, useCallback } from "react"
+import { useState, useCallback } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Loader2, Activity, CheckCircle, XCircle, Percent, Image, Video, Clock, Zap } from "lucide-react"
-import { getStats, cancelAllJobs, type StatsResponse } from "@/lib/api"
+import { cancelAllJobs } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
+import { useStats } from "@/hooks/queries/use-stats-queries"
+import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -53,35 +54,12 @@ interface StatsOverviewProps {
 
 export function StatsOverview({ className }: StatsOverviewProps) {
   const { user, isAdmin } = useAuth()
-  const [stats, setStats] = useState<StatsResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const qc = useQueryClient()
   const [scope, setScope] = useState<"user" | "platform">("user")
   const [cancelAllDialogOpen, setCancelAllDialogOpen] = useState(false)
   const [cancelling, setCancelling] = useState(false)
 
-  const fetchStats = useCallback(async () => {
-    if (!user) return
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      const userIdToSend = scope === "user" ? user.id : undefined
-      console.log("[stats-overview] Fetching stats:", { scope, userId: userIdToSend, isAdmin })
-      const result = await getStats(scope, userIdToSend)
-      console.log("[stats-overview] Stats result:", result.data)
-      setStats(result.data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch stats")
-    } finally {
-      setLoading(false)
-    }
-  }, [user, scope, isAdmin])
-
-  useEffect(() => {
-    fetchStats()
-  }, [fetchStats])
+  const { data: stats, isLoading: loading, error } = useStats(scope, user?.id)
 
   const handleCancelAll = useCallback(async () => {
     if (!user) return
@@ -89,20 +67,19 @@ export function StatsOverview({ className }: StatsOverviewProps) {
     setCancelling(true)
     try {
       await cancelAllJobs(user.id)
-      // Refresh stats after cancelling
-      await fetchStats()
-    } catch (err) {
-      console.error("Failed to cancel all jobs:", err)
+      qc.invalidateQueries({ queryKey: queryKeys.stats.all })
+    } catch {
+      // Error is silently swallowed; the dialog will close and the user can retry
     } finally {
       setCancelling(false)
       setCancelAllDialogOpen(false)
     }
-  }, [user, fetchStats])
+  }, [user, qc])
 
   if (error) {
     return (
       <div className={cn("text-center py-4 text-muted-foreground text-sm", className)}>
-        {error}
+        {error instanceof Error ? error.message : "Failed to fetch stats"}
       </div>
     )
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import {
   Coins,
@@ -18,18 +18,13 @@ import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits } from "@/lib/edition"
-import { useUserCredits } from "@/components/credits/CreditBalance"
+import { useUserCredits } from "@/hooks/queries/use-credits-queries"
+import { useSubscription, useTransactions, useStorageProfile, useManageSubscriptionMutation } from "@/hooks/queries/use-billing-queries"
 import { CreditTopup } from "@/components/credits/CreditTopup"
-import {
-  getSubscription,
-  getTransactions,
-  getManageSubscriptionUrl,
-  type SubscriptionInfo,
-  type TransactionRecord,
-} from "@/lib/api"
 import { PRICING_TIERS, getBillingCycleFromPriceId } from "@/lib/pricing-data"
-import { createClient } from "@/lib/supabase"
 import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -41,49 +36,29 @@ function formatBytes(bytes: number): string {
 export default function BillingPage() {
   const { user, loading: authLoading } = useAuth()
   const [searchParams] = useSearchParams()
-  const { balance, isLoading: creditsLoading, refetch: refetchCredits } = useUserCredits(user?.id)
+  const qc = useQueryClient()
 
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
-  const [transactions, setTransactions] = useState<TransactionRecord[]>([])
-  const [subLoading, setSubLoading] = useState(true)
-  const [txLoading, setTxLoading] = useState(true)
-  const [manageLoading, setManageLoading] = useState(false)
-  const [storageUsed, setStorageUsed] = useState(0)
-  const [storageLimit, setStorageLimit] = useState(0)
+  const { data: balance, isLoading: creditsLoading } = useUserCredits(user?.id)
+  const { data: subscription, isLoading: subLoading } = useSubscription(user?.id)
+  const { data: transactions = [], isLoading: txLoading } = useTransactions(user?.id)
+  const { data: storage } = useStorageProfile(user?.id)
+  const manageMutation = useManageSubscriptionMutation()
 
-  const loadBillingData = useCallback(async () => {
-    if (!user?.id) return
-
-    setSubLoading(true)
-    setTxLoading(true)
-
-    const supabase = createClient()
-    const [sub, txs, profileRes] = await Promise.all([
-      getSubscription(user.id),
-      getTransactions(user.id),
-      supabase
-        .from("profiles")
-        .select("storage_used_bytes, storage_limit_bytes")
-        .eq("id", user.id)
-        .single(),
-    ])
-
-    setSubscription(sub)
-    setSubLoading(false)
-    setTransactions(txs)
-    setTxLoading(false)
-
-    if (profileRes.data) {
-      setStorageUsed(profileRes.data.storage_used_bytes ?? 0)
-      setStorageLimit(profileRes.data.storage_limit_bytes ?? 0)
-    }
-  }, [user?.id])
-
-  useEffect(() => {
-    loadBillingData()
-  }, [loadBillingData])
+  const storageUsed = storage?.storageUsed ?? 0
+  const storageLimit = storage?.storageLimit ?? 0
 
   // Handle success redirect from Paddle checkout
+  useEffect(() => {
+    if (!user?.id) return
+    if (!searchParams.get("success") && !searchParams.get("topup")) return
+    const timer = setTimeout(() => {
+      qc.invalidateQueries({ queryKey: queryKeys.billing.all })
+      qc.invalidateQueries({ queryKey: queryKeys.credits.balance(user.id) })
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [searchParams, user?.id, qc])
+
+  // Show toast on success redirect
   useEffect(() => {
     const isSuccess = searchParams.get("success") === "true"
     const isTopup = searchParams.get("topup") === "true"
@@ -91,20 +66,13 @@ export default function BillingPage() {
       toast.success(
         isTopup ? "Credits added to your account!" : "Subscription activated!",
       )
-      // Refresh data after a short delay to allow webhook processing
-      const timer = setTimeout(() => {
-        loadBillingData()
-        refetchCredits()
-      }, 3000)
-      return () => clearTimeout(timer)
     }
-  }, [searchParams, loadBillingData, refetchCredits])
+  }, [searchParams])
 
   async function handleManageSubscription() {
     if (!user?.id) return
-    setManageLoading(true)
     try {
-      const url = await getManageSubscriptionUrl(user.id)
+      const url = await manageMutation.mutateAsync(user.id)
       if (url) {
         window.open(url, "_blank")
       } else {
@@ -112,8 +80,6 @@ export default function BillingPage() {
       }
     } catch {
       toast.error("Failed to open subscription management")
-    } finally {
-      setManageLoading(false)
     }
   }
 
@@ -230,9 +196,9 @@ export default function BillingPage() {
               variant="outline"
               size="sm"
               onClick={handleManageSubscription}
-              disabled={manageLoading}
+              disabled={manageMutation.isPending}
             >
-              {manageLoading ? (
+              {manageMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <ExternalLink className="h-4 w-4 mr-2" />

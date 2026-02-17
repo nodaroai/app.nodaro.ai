@@ -16,12 +16,12 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
-import { createClient } from "@/lib/supabase"
 import {
-  getLibraryAssets,
-  deleteLibraryAsset,
-  type LibraryAsset,
-} from "@/lib/api"
+  useLibraryInfinite,
+  useDeleteLibraryAssetMutation,
+} from "@/hooks/queries/use-assets-queries"
+import { useStorageProfile } from "@/hooks/queries/use-billing-queries"
+import type { LibraryAsset } from "@/lib/api"
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -40,86 +40,54 @@ type TypeFilter = (typeof TYPE_FILTERS)[number]
 
 export default function LibraryPage() {
   const { user } = useAuth()
-  const [assets, setAssets] = useState<LibraryAsset[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [filter, setFilter] = useState<TypeFilter>("all")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
-  const [storageUsed, setStorageUsed] = useState(0)
-  const [storageLimit, setStorageLimit] = useState(0)
 
-  const loadStorage = useCallback(async () => {
-    if (!user?.id) return
-    const supabase = createClient()
-    const { data } = await supabase
-      .from("profiles")
-      .select("storage_used_bytes, storage_limit_bytes")
-      .eq("id", user.id)
-      .single()
-    if (data) {
-      setStorageUsed(data.storage_used_bytes ?? 0)
-      setStorageLimit(data.storage_limit_bytes ?? 0)
-    }
-  }, [user?.id])
+  // Storage profile (auto-refreshes after delete via query invalidation)
+  const { data: storageData } = useStorageProfile(user?.id)
+  const storageUsed = storageData?.storageUsed ?? 0
+  const storageLimit = storageData?.storageLimit ?? 0
 
-  const loadAssets = useCallback(async (cursor?: string) => {
-    if (!user?.id) return
-    if (!cursor) setLoading(true)
-    else setLoadingMore(true)
+  // Infinite asset list (auto-refetches when filter changes via query key)
+  const {
+    data,
+    isLoading: loading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage: loadingMore,
+  } = useLibraryInfinite({
+    userId: user?.id,
+    type: filter !== "all" ? filter : undefined,
+    owned: true,
+    limit: 40,
+  })
 
-    try {
-      const result = await getLibraryAssets({
-        userId: user.id,
-        type: filter === "all" ? undefined : filter,
-        limit: 40,
-        cursor: cursor ?? undefined,
-        owned: true,
-      })
-      const items = result.data ?? result as unknown as LibraryAsset[]
-      if (cursor) {
-        setAssets((prev) => [...prev, ...(Array.isArray(items) ? items : [])])
-      } else {
-        setAssets(Array.isArray(items) ? items : [])
-      }
-      setNextCursor(result.nextCursor ?? null)
-    } catch (err) {
-      toast.error("Failed to load files", {
-        description: err instanceof Error ? err.message : "Unknown error",
-      })
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-    }
-  }, [user?.id, filter])
+  const assets: LibraryAsset[] = data?.pages.flatMap((p) => p.data) ?? []
 
+  // Reset selection when filter changes
   useEffect(() => {
-    setAssets([])
-    setNextCursor(null)
     setSelected(new Set())
-    loadAssets()
-    loadStorage()
-  }, [loadAssets, loadStorage])
+  }, [filter])
+
+  const deleteMutation = useDeleteLibraryAssetMutation()
 
   const handleDelete = useCallback(async (assetId: string) => {
     if (!user?.id) return
     try {
-      await deleteLibraryAsset(assetId, user.id)
-      setAssets((prev) => prev.filter((a) => a.id !== assetId))
+      await deleteMutation.mutateAsync({ assetId, userId: user.id })
       setSelected((prev) => {
         const next = new Set(prev)
         next.delete(assetId)
         return next
       })
       toast.success("File deleted")
-      loadStorage()
     } catch (err) {
       toast.error("Delete failed", {
         description: err instanceof Error ? err.message : "Unknown error",
       })
     }
-  }, [user?.id, loadStorage])
+  }, [user?.id, deleteMutation])
 
   const handleDeleteSelected = useCallback(async () => {
     if (!user?.id || selected.size === 0) return
@@ -129,19 +97,17 @@ export default function LibraryPage() {
 
     for (const id of ids) {
       try {
-        await deleteLibraryAsset(id, user.id)
+        await deleteMutation.mutateAsync({ assetId: id, userId: user.id })
         deletedCount++
       } catch {
         // continue deleting others
       }
     }
 
-    setAssets((prev) => prev.filter((a) => !selected.has(a.id)))
     setSelected(new Set())
     setDeleting(false)
     toast.success(`Deleted ${deletedCount} file${deletedCount !== 1 ? "s" : ""}`)
-    loadStorage()
-  }, [user?.id, selected, loadStorage])
+  }, [user?.id, selected, deleteMutation])
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -362,11 +328,11 @@ export default function LibraryPage() {
       )}
 
       {/* Load More */}
-      {nextCursor && !loading && (
+      {hasNextPage && !loading && (
         <div className="flex justify-center pt-2">
           <Button
             variant="outline"
-            onClick={() => loadAssets(nextCursor)}
+            onClick={() => fetchNextPage()}
             disabled={loadingMore}
           >
             {loadingMore ? (

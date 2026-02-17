@@ -1,5 +1,7 @@
 import { create } from "zustand"
 import { createClient } from "@/lib/supabase"
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
 
 export interface Project {
   readonly id: string
@@ -159,6 +161,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
       const project = toProject(data)
       set((s) => ({ projects: [project, ...s.projects] }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       return project
     } catch {
       return null
@@ -176,6 +179,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         folders: s.folders.filter((f) => f.projectId !== id),
         workflowMetas: s.workflowMetas.filter((w) => w.projectId !== id),
       }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
     } catch {
       // silent
     }
@@ -192,6 +196,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p,
         ),
       }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
     } catch {
       // silent
     }
@@ -210,6 +215,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
       const folder = toFolder(data)
       set((s) => ({ folders: [...s.folders, folder] }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       return folder
     } catch {
       return null
@@ -225,6 +231,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       set((s) => ({
         folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)),
       }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
     } catch {
       // silent
     }
@@ -242,6 +249,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           w.folderId === id ? { ...w, folderId: null } : w,
         ),
       }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
     } catch {
       // silent
     }
@@ -268,6 +276,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
       const wf = toWorkflowMeta(data)
       set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       return wf
     } catch {
       return null
@@ -283,6 +292,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       set((s) => ({
         workflowMetas: s.workflowMetas.filter((w) => w.id !== id),
       }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
     } catch {
       // silent
     }
@@ -299,6 +309,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           w.id === id ? { ...w, name, updatedAt: new Date().toISOString() } : w,
         ),
       }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
     } catch {
       // silent
     }
@@ -318,6 +329,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           w.id === id ? { ...w, folderId, updatedAt: new Date().toISOString() } : w,
         ),
       }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
     } catch {
       // silent
     }
@@ -356,6 +368,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
       const wf = toWorkflowMeta(data)
       set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       return wf
     } catch {
       return null

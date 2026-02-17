@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { openCheckout } from "@/lib/paddle"
-import { getSubscription, changePlan, type SubscriptionInfo } from "@/lib/api"
 import {
   PRICING_TIERS,
   getTierPrice,
@@ -15,25 +14,18 @@ import {
 } from "@/lib/pricing-data"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
+import { useSubscription, useChangePlanMutation } from "@/hooks/queries/use-billing-queries"
 
 export default function PricingPage() {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
-  const [subLoading, setSubLoading] = useState(false)
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
   const [searchParams] = useSearchParams()
   const autoCheckoutTriggered = useRef(false)
 
-  // Fetch current subscription when user is available
-  useEffect(() => {
-    if (!user?.id) return
-    setSubLoading(true)
-    getSubscription(user.id)
-      .then((sub) => setSubscription(sub))
-      .finally(() => setSubLoading(false))
-  }, [user?.id])
+  const { data: subscription, isLoading: subLoading } = useSubscription(user?.id)
+  const changePlanMutation = useChangePlanMutation()
 
   // Derive current tier from active subscription
   const isActiveSub = subscription &&
@@ -81,7 +73,7 @@ export default function PricingPage() {
     setLoadingTier(tierId)
     try {
       if (isActiveSub) {
-        await changePlan(user.id, priceId)
+        await changePlanMutation.mutateAsync({ userId: user.id, priceId })
         toast.success("Plan changed successfully! Changes will apply shortly.")
         navigate("/billing?success=true")
       } else {

@@ -1,8 +1,7 @@
-"use client"
-
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, SmilePlus, FolderOpen } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -13,11 +12,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useAuth } from "@/hooks/use-auth"
+import { useCharacters, useObjects, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
+import { queryKeys } from "@/lib/query-keys"
 import { CharacterPageModal } from "./character-page-modal"
 import { ObjectPageModal } from "./object-page-modal"
 import { LocationPageModal } from "./location-page-modal"
-import { getCharacters, getObjects, getLocations, getFaces, type DbCharacter, type DbObject, type DbLocation, type DbFace } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
+import type { DbCharacter, DbObject, DbLocation, DbFace } from "@/lib/api"
 import type { CharacterNodeData, ObjectNodeData, LocationNodeData, FaceNodeData } from "@/types/nodes"
 
 type AssetType = "all" | "character" | "object" | "location" | "face"
@@ -29,7 +31,6 @@ interface UnifiedAsset {
   type: "character" | "object" | "location" | "face"
   thumbnailUrl?: string
   projectId?: string
-  // Store original data for populating nodes
   originalData: DbCharacter | DbObject | DbLocation | DbFace
 }
 
@@ -38,19 +39,88 @@ interface UnifiedAssetLibraryModalProps {
   readonly onClose: () => void
 }
 
+function useAssetData() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+
+  const { data: characters = [], isLoading: loadingChars, error: charError } = useCharacters(undefined, user?.id)
+  const { data: objects = [], isLoading: loadingObjs, error: objError } = useObjects(undefined, user?.id)
+  const { data: locations = [], isLoading: loadingLocs, error: locError } = useLocations(undefined, user?.id)
+  const { data: faces = [], isLoading: loadingFaces, error: faceError } = useFaces(undefined, user?.id)
+
+  const loading = loadingChars || loadingObjs || loadingLocs || loadingFaces
+  const error = charError || objError || locError || faceError
+
+  const assets = useMemo((): UnifiedAsset[] => [
+    ...characters.map((c): UnifiedAsset => ({
+      id: `char-${c.id}`,
+      dbId: c.id,
+      name: c.name,
+      type: "character",
+      thumbnailUrl: c.sourceImageUrl ?? undefined,
+      projectId: c.projectId ?? undefined,
+      originalData: c,
+    })),
+    ...objects.map((o): UnifiedAsset => ({
+      id: `obj-${o.id}`,
+      dbId: o.id,
+      name: o.name,
+      type: "object",
+      thumbnailUrl: o.sourceImageUrl ?? undefined,
+      projectId: o.projectId ?? undefined,
+      originalData: o,
+    })),
+    ...locations.map((l): UnifiedAsset => ({
+      id: `loc-${l.id}`,
+      dbId: l.id,
+      name: l.name,
+      type: "location",
+      thumbnailUrl: l.sourceImageUrl ?? undefined,
+      projectId: l.projectId ?? undefined,
+      originalData: l,
+    })),
+    ...faces.map((f): UnifiedAsset => ({
+      id: `face-${f.id}`,
+      dbId: f.id,
+      name: f.name,
+      type: "face",
+      thumbnailUrl: f.sourceImageUrl ?? undefined,
+      projectId: f.projectId ?? undefined,
+      originalData: f,
+    })),
+  ], [characters, objects, locations, faces])
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects", "list", user?.id],
+    queryFn: async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name")
+        .eq("user_id", user!.id)
+        .order("name")
+      if (error) throw error
+      return data as Array<{ id: string; name: string }>
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  })
+
+  const invalidateAssets = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.assets.all })
+  }, [queryClient])
+
+  return { assets, projects, loading, error, invalidateAssets }
+}
+
 // Standalone modal that can be controlled externally
 export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryModalProps) {
-  const [assets, setAssets] = useState<UnifiedAsset[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { assets, projects, loading, error, invalidateAssets } = useAssetData()
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<AssetType>("all")
   const [filterByProject, setFilterByProject] = useState<string>("all")
-
-  // Projects for filtering
-  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([])
 
   // Page modals
   const [characterPageNodeId, setCharacterPageNodeId] = useState<string | null>(null)
@@ -61,98 +131,6 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const addNode = useWorkflowStore((s) => s.addNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-
-  // Fetch all assets
-  const fetchAllAssets = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const userId = user?.id
-
-      const [charactersRes, objectsRes, locationsRes, facesRes] = await Promise.all([
-        getCharacters(undefined, userId),
-        getObjects(undefined, userId),
-        getLocations(undefined, userId),
-        getFaces(undefined, userId),
-      ])
-
-      const unified: UnifiedAsset[] = [
-        ...charactersRes.characters.map((c): UnifiedAsset => ({
-          id: `char-${c.id}`,
-          dbId: c.id,
-          name: c.name,
-          type: "character",
-          thumbnailUrl: c.sourceImageUrl ?? undefined,
-          projectId: c.projectId ?? undefined,
-          originalData: c,
-        })),
-        ...objectsRes.objects.map((o): UnifiedAsset => ({
-          id: `obj-${o.id}`,
-          dbId: o.id,
-          name: o.name,
-          type: "object",
-          thumbnailUrl: o.sourceImageUrl ?? undefined,
-          projectId: o.projectId ?? undefined,
-          originalData: o,
-        })),
-        ...locationsRes.locations.map((l): UnifiedAsset => ({
-          id: `loc-${l.id}`,
-          dbId: l.id,
-          name: l.name,
-          type: "location",
-          thumbnailUrl: l.sourceImageUrl ?? undefined,
-          projectId: l.projectId ?? undefined,
-          originalData: l,
-        })),
-        ...facesRes.faces.map((f): UnifiedAsset => ({
-          id: `face-${f.id}`,
-          dbId: f.id,
-          name: f.name,
-          type: "face",
-          thumbnailUrl: f.sourceImageUrl ?? undefined,
-          projectId: f.projectId ?? undefined,
-          originalData: f,
-        })),
-      ]
-
-      setAssets(unified)
-    } catch (err) {
-      console.error("[AssetLibrary] Error:", err)
-      setError(err instanceof Error ? err.message : "Failed to load assets")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Fetch projects
-  const fetchProjects = useCallback(async () => {
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id, name")
-        .eq("user_id", user.id)
-        .order("name")
-
-      if (error) throw error
-      setProjects(data ?? [])
-    } catch (err) {
-      console.error("[AssetLibrary] Error fetching projects:", err)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (open) {
-      fetchAllAssets()
-      fetchProjects()
-    }
-  }, [open, fetchAllAssets, fetchProjects])
 
   // Filter assets
   const filteredAssets = useMemo(() => {
@@ -354,7 +332,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
   )
 
   // Type badge colors and icons
-  const getTypeBadge = (type: "character" | "object" | "location" | "face") => {
+  function getTypeBadge(type: "character" | "object" | "location" | "face") {
     switch (type) {
       case "character":
         return { color: "bg-pink-500/10 text-pink-600", icon: UserCircle }
@@ -528,8 +506,8 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-12 text-red-500">
                 <AlertCircle className="w-8 h-8 mb-2" />
-                <p className="text-sm">{error}</p>
-                <Button variant="outline" size="sm" className="mt-2" onClick={fetchAllAssets}>
+                <p className="text-sm">{error.message || "Failed to load assets"}</p>
+                <Button variant="outline" size="sm" className="mt-2" onClick={invalidateAssets}>
                   Retry
                 </Button>
               </div>
@@ -615,9 +593,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           characterNodeId={characterPageNodeId}
           onClose={() => {
             setCharacterPageNodeId(null)
-            setTimeout(() => {
-              fetchAllAssets()
-            }, 300)
+            invalidateAssets()
           }}
         />
       )}
@@ -626,9 +602,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           objectNodeId={objectPageNodeId}
           onClose={() => {
             setObjectPageNodeId(null)
-            setTimeout(() => {
-              fetchAllAssets()
-            }, 300)
+            invalidateAssets()
           }}
         />
       )}
@@ -637,9 +611,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           locationNodeId={locationPageNodeId}
           onClose={() => {
             setLocationPageNodeId(null)
-            setTimeout(() => {
-              fetchAllAssets()
-            }, 300)
+            invalidateAssets()
           }}
         />
       )}
@@ -649,18 +621,12 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
 
 export function UnifiedAssetLibraryButton() {
   const [open, setOpen] = useState(false)
-  const [assets, setAssets] = useState<UnifiedAsset[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { assets, projects, loading, error, invalidateAssets } = useAssetData()
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<AssetType>("all")
   const [filterByProject, setFilterByProject] = useState<string>("all")
-
-  // Projects for filtering (workflow filtering requires data model changes - assets don't have workflowId)
-  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([])
-  const [loadingProjects, setLoadingProjects] = useState(false)
 
   // Page modals
   const [characterPageNodeId, setCharacterPageNodeId] = useState<string | null>(null)
@@ -671,139 +637,28 @@ export function UnifiedAssetLibraryButton() {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const addNode = useWorkflowStore((s) => s.addNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const projectId = useWorkflowStore((s) => s.projectId)
-
-  // Fetch all assets when modal opens
-  // NOTE: We fetch ALL user assets (not filtered by project) for a true unified library
-  const fetchAllAssets = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const userId = user?.id
-
-      console.log("[AssetLibrary] Fetching all assets for userId:", userId)
-
-      // Fetch all four types in parallel - NO projectId filter to get ALL user assets
-      const [charactersRes, objectsRes, locationsRes, facesRes] = await Promise.all([
-        getCharacters(undefined, userId),
-        getObjects(undefined, userId),
-        getLocations(undefined, userId),
-        getFaces(undefined, userId),
-      ])
-
-      // Combine into unified array
-      const unified: UnifiedAsset[] = [
-        ...charactersRes.characters.map((c): UnifiedAsset => ({
-          id: `char-${c.id}`,
-          dbId: c.id,
-          name: c.name,
-          type: "character",
-          thumbnailUrl: c.sourceImageUrl ?? undefined,
-          projectId: c.projectId ?? undefined,
-          originalData: c,
-        })),
-        ...objectsRes.objects.map((o): UnifiedAsset => ({
-          id: `obj-${o.id}`,
-          dbId: o.id,
-          name: o.name,
-          type: "object",
-          thumbnailUrl: o.sourceImageUrl ?? undefined,
-          projectId: o.projectId ?? undefined,
-          originalData: o,
-        })),
-        ...locationsRes.locations.map((l): UnifiedAsset => ({
-          id: `loc-${l.id}`,
-          dbId: l.id,
-          name: l.name,
-          type: "location",
-          thumbnailUrl: l.sourceImageUrl ?? undefined,
-          projectId: l.projectId ?? undefined,
-          originalData: l,
-        })),
-        ...facesRes.faces.map((f): UnifiedAsset => ({
-          id: `face-${f.id}`,
-          dbId: f.id,
-          name: f.name,
-          type: "face",
-          thumbnailUrl: f.sourceImageUrl ?? undefined,
-          projectId: f.projectId ?? undefined,
-          originalData: f,
-        })),
-      ]
-      setAssets(unified)
-    } catch (err) {
-      console.error("[AssetLibrary] Error:", err)
-      setError(err instanceof Error ? err.message : "Failed to load assets")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Fetch projects on mount
-  const fetchProjects = useCallback(async () => {
-    setLoadingProjects(true)
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id, name")
-        .eq("user_id", user.id)
-        .order("name")
-
-      if (error) throw error
-      setProjects(data ?? [])
-    } catch (err) {
-      console.error("[AssetLibrary] Error fetching projects:", err)
-    } finally {
-      setLoadingProjects(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (open) {
-      fetchAllAssets()
-      fetchProjects()
-    }
-  }, [open, fetchAllAssets, fetchProjects])
 
   // Filter assets based on search, type, and project
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
-      // Type filter
-      if (typeFilter !== "all" && asset.type !== typeFilter) {
-        return false
-      }
-      // Project filter
-      if (filterByProject !== "all" && asset.projectId !== filterByProject) {
-        return false
-      }
-      // Search filter
+      if (typeFilter !== "all" && asset.type !== typeFilter) return false
+      if (filterByProject !== "all" && asset.projectId !== filterByProject) return false
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase()
-        if (!asset.name.toLowerCase().includes(query)) {
-          return false
-        }
+        if (!asset.name.toLowerCase().includes(query)) return false
       }
       return true
     })
   }, [assets, typeFilter, searchQuery, filterByProject])
 
   // Count by type for badges
-  const counts = useMemo(() => {
-    return {
-      all: assets.length,
-      character: assets.filter((a) => a.type === "character").length,
-      object: assets.filter((a) => a.type === "object").length,
-      location: assets.filter((a) => a.type === "location").length,
-      face: assets.filter((a) => a.type === "face").length,
-    }
-  }, [assets])
+  const counts = useMemo(() => ({
+    all: assets.length,
+    character: assets.filter((a) => a.type === "character").length,
+    object: assets.filter((a) => a.type === "object").length,
+    location: assets.filter((a) => a.type === "location").length,
+    face: assets.filter((a) => a.type === "face").length,
+  }), [assets])
 
   // Find if asset already has a node on canvas
   const findNodeForAsset = useCallback(
@@ -983,7 +838,7 @@ export function UnifiedAssetLibraryButton() {
   )
 
   // Type badge colors and icons
-  const getTypeBadge = (type: "character" | "object" | "location" | "face") => {
+  function getTypeBadge(type: "character" | "object" | "location" | "face") {
     switch (type) {
       case "character":
         return { color: "bg-pink-500/10 text-pink-600", icon: UserCircle }
@@ -1173,8 +1028,8 @@ export function UnifiedAssetLibraryButton() {
               ) : error ? (
                 <div className="flex flex-col items-center justify-center py-12 text-red-500">
                   <AlertCircle className="w-8 h-8 mb-2" />
-                  <p className="text-sm">{error}</p>
-                  <Button variant="outline" size="sm" className="mt-2" onClick={fetchAllAssets}>
+                  <p className="text-sm">{error.message || "Failed to load assets"}</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={invalidateAssets}>
                     Retry
                   </Button>
                 </div>
@@ -1260,10 +1115,7 @@ export function UnifiedAssetLibraryButton() {
           characterNodeId={characterPageNodeId}
           onClose={() => {
             setCharacterPageNodeId(null)
-            // Small delay to ensure database writes have propagated before refetching
-            setTimeout(() => {
-              fetchAllAssets()
-            }, 300)
+            invalidateAssets()
           }}
         />
       )}
@@ -1272,10 +1124,7 @@ export function UnifiedAssetLibraryButton() {
           objectNodeId={objectPageNodeId}
           onClose={() => {
             setObjectPageNodeId(null)
-            // Small delay to ensure database writes have propagated before refetching
-            setTimeout(() => {
-              fetchAllAssets()
-            }, 300)
+            invalidateAssets()
           }}
         />
       )}
@@ -1284,10 +1133,7 @@ export function UnifiedAssetLibraryButton() {
           locationNodeId={locationPageNodeId}
           onClose={() => {
             setLocationPageNodeId(null)
-            // Small delay to ensure database writes have propagated before refetching
-            setTimeout(() => {
-              fetchAllAssets()
-            }, 300)
+            invalidateAssets()
           }}
         />
       )}

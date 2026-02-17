@@ -18,8 +18,7 @@ import {
   TEMPLATE_GROUPS,
   WRAPPER_TEMPLATE_KEY,
 } from "@/lib/prompt-templates"
-
-const API_BASE = ""
+import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation } from "@/hooks/queries/use-user-settings-queries"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
@@ -27,72 +26,37 @@ const VALID_TEMPLATE_KEYS = new Set(Object.keys(SYSTEM_PROMPT_TEMPLATES))
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth()
-  const [publicOutputs, setPublicOutputs] = useState(true)
-  const [tier, setTier] = useState<string>("free")
-  const [settingsLoading, setSettingsLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [templates, setTemplates] = useState<Record<string, string>>({})
+  const [localTemplates, setLocalTemplates] = useState<Record<string, string>>({})
   const [savedTemplates, setSavedTemplates] = useState<Record<string, string>>({})
-  const [savingTemplates, setSavingTemplates] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
 
+  const { data: settings, isLoading: settingsLoading } = useUserSettings(user?.id)
+  const toggleMutation = useUpdatePublicOutputsMutation()
+  const templatesMutation = useSaveTemplatesMutation()
+
+  const publicOutputs = settings?.publicOutputs ?? true
+  const tier = settings?.tier ?? "free"
+
   useEffect(() => {
-    if (!user?.id) return
-
-    async function fetchSettings() {
-      setSettingsLoading(true)
-      try {
-        const response = await fetch(`${API_BASE}/v1/user/settings?userId=${user!.id}`)
-        if (!response.ok) throw new Error("Failed to fetch settings")
-        const json = await response.json()
-        const data = json.data ?? json
-        setPublicOutputs(data.publicOutputs ?? true)
-        setTier(data.tier ?? "free")
-        const pt = (data.promptTemplates ?? {}) as Record<string, string>
-        setTemplates(pt)
-        setSavedTemplates(pt)
-      } catch (err) {
-        console.error("Failed to load settings:", err)
-      } finally {
-        setSettingsLoading(false)
-      }
+    if (settings?.promptTemplates) {
+      setLocalTemplates(settings.promptTemplates)
+      setSavedTemplates(settings.promptTemplates)
     }
-
-    fetchSettings()
-  }, [user?.id])
+  }, [settings?.promptTemplates])
 
   async function handleToggle() {
     if (!user?.id) return
-
-    const newValue = !publicOutputs
-    setSaving(true)
     try {
-      const response = await fetch(`${API_BASE}/v1/user/settings`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, publicOutputs: newValue }),
-      })
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: "Failed" }))
-        throw new Error(err.error ?? "Failed to update")
-      }
-
-      // Use server-confirmed value instead of optimistic update
-      const json = await response.json()
-      const confirmed = (json.data ?? json).publicOutputs
-      setPublicOutputs(confirmed ?? newValue)
-      toast.success(confirmed ? "Outputs are now public" : "Outputs are now private")
+      await toggleMutation.mutateAsync({ userId: user.id, publicOutputs: !publicOutputs })
+      toast.success(!publicOutputs ? "Outputs are now public" : "Outputs are now private")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update"
       toast.error(message)
-    } finally {
-      setSaving(false)
     }
   }
 
   function handleTemplateChange(key: string, value: string) {
-    setTemplates((prev) => {
+    setLocalTemplates((prev) => {
       const next = { ...prev }
       if (value.trim() === "") {
         delete next[key]
@@ -104,7 +68,7 @@ export default function SettingsPage() {
   }
 
   function handleResetTemplate(key: string) {
-    setTemplates((prev) => {
+    setLocalTemplates((prev) => {
       const next = { ...prev }
       delete next[key]
       return next
@@ -113,39 +77,20 @@ export default function SettingsPage() {
 
   async function handleSaveTemplates() {
     if (!user?.id) return
-
-    setSavingTemplates(true)
     try {
-      const response = await fetch(`${API_BASE}/v1/user/settings`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, promptTemplates: templates }),
-      })
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: "Failed" }))
-        throw new Error(err.error ?? "Failed to save templates")
-      }
-
-      const json = await response.json()
-      const data = json.data ?? json
-      const pt = (data.promptTemplates ?? {}) as Record<string, string>
-      setTemplates(pt)
-      setSavedTemplates(pt)
+      await templatesMutation.mutateAsync({ userId: user.id, promptTemplates: localTemplates })
       setEditingKey(null)
       toast.success("Prompt templates saved")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save"
       toast.error(message)
-    } finally {
-      setSavingTemplates(false)
     }
   }
 
   function handleExport() {
-    const hasOverrides = Object.keys(templates).length > 0
+    const hasOverrides = Object.keys(localTemplates).length > 0
     const data = hasOverrides
-      ? templates
+      ? localTemplates
       : {
           _note: "These are system defaults. Edit the values you want to customize.",
           ...Object.fromEntries(
@@ -184,7 +129,7 @@ export default function SettingsPage() {
           toast.error("No valid template overrides found in file")
           return
         }
-        setTemplates(imported)
+        setLocalTemplates(imported)
         toast.success(`Imported ${Object.keys(imported).length} template overrides`)
       } catch {
         toast.error("Invalid template file")
@@ -198,14 +143,13 @@ export default function SettingsPage() {
       "Are you sure? This will remove all your custom templates and restore system defaults.",
     )
     if (!confirmed) return
-    setTemplates({})
+    setLocalTemplates({})
     setEditingKey(null)
   }
 
-  const hasAnyOverride = Object.keys(templates).length > 0
+  const hasAnyOverride = Object.keys(localTemplates).length > 0
 
-  const hasTemplateChanges =
-    JSON.stringify(templates) !== JSON.stringify(savedTemplates)
+  const hasTemplateChanges = JSON.stringify(localTemplates) !== JSON.stringify(savedTemplates)
 
   const canToggle = PRIVATE_MODE_TIERS.has(tier)
 
@@ -247,14 +191,14 @@ export default function SettingsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={!canToggle || saving}
+                    disabled={!canToggle || toggleMutation.isPending}
                     onClick={handleToggle}
                     className={cn(
                       "min-w-[100px]",
                       !publicOutputs && canToggle && "border-[#ff0073] text-[#ff0073]",
                     )}
                   >
-                    {saving ? (
+                    {toggleMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : publicOutputs ? (
                       "Make Private"
@@ -333,7 +277,7 @@ export default function SettingsPage() {
               name={group.name}
               descriptionKey={group.descriptionKey}
               generationKey={group.generationKey}
-              templates={templates}
+              templates={localTemplates}
               editingKey={editingKey}
               onStartEdit={setEditingKey}
               onCancelEdit={() => setEditingKey(null)}
@@ -345,7 +289,7 @@ export default function SettingsPage() {
           {/* Standalone: Generate Image Wrapper */}
           <TemplateCard
             templateKey={WRAPPER_TEMPLATE_KEY}
-            value={templates[WRAPPER_TEMPLATE_KEY] ?? ""}
+            value={localTemplates[WRAPPER_TEMPLATE_KEY] ?? ""}
             isEditing={editingKey === WRAPPER_TEMPLATE_KEY}
             onStartEdit={() => setEditingKey(WRAPPER_TEMPLATE_KEY)}
             onCancelEdit={() => setEditingKey(null)}
@@ -358,10 +302,10 @@ export default function SettingsPage() {
         <div className="flex justify-end">
           <Button
             onClick={handleSaveTemplates}
-            disabled={savingTemplates || !hasTemplateChanges}
+            disabled={templatesMutation.isPending || !hasTemplateChanges}
             className="bg-[#ff0073] hover:bg-[#e00067] text-white"
           >
-            {savingTemplates ? (
+            {templatesMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
               <Save className="h-4 w-4 mr-2" />

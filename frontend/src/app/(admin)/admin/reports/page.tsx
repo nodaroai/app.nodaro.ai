@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState } from "react"
 import { Loader2, CheckCircle, XCircle, Eye, Trash2, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -10,8 +10,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog"
-
-const API_BASE = ""
+import { useAdminReports, useResolveReportMutation } from "@/hooks/queries/use-admin-queries"
 
 type ReportStatus = "pending" | "reviewed" | "dismissed"
 
@@ -109,61 +108,23 @@ function ReasonBadge({ reason }: { readonly reason: string }) {
 
 export default function AdminGalleryReportsPage() {
   const { user } = useAuth()
-  const [reports, setReports] = useState<readonly GalleryReport[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<ReportStatus | "all">("pending")
-  const [loading, setLoading] = useState(true)
   const [previewReport, setPreviewReport] = useState<GalleryReport | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const resolveReportMut = useResolveReportMutation()
 
-  const fetchReports = useCallback(async () => {
-    if (!user?.id) return
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        userId: user.id,
-        page: String(page),
-        limit: "50",
-      })
-      if (statusFilter !== "all") {
-        params.set("status", statusFilter)
-      }
+  const filter = statusFilter === "all" ? undefined : statusFilter
+  const { data: reportsResult, isLoading: loading, refetch: fetchReports } = useAdminReports(page, filter)
+  const reports = (reportsResult?.data ?? []) as readonly GalleryReport[]
+  const total = (reportsResult?.total ?? 0) as number
 
-      const response = await fetch(`${API_BASE}/v1/admin/gallery-reports?${params}`)
-      if (!response.ok) throw new Error("Failed to fetch reports")
-
-      const json = (await response.json()) as ReportsResponse
-      setReports(json.data)
-      setTotal(json.total)
-    } catch (err) {
-      console.error("Failed to fetch gallery reports:", err)
-      toast.error("Failed to fetch reports")
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.id, page, statusFilter])
-
-  useEffect(() => {
-    fetchReports()
-  }, [fetchReports])
-
-  async function updateReportStatus(reportId: string, status: "reviewed" | "dismissed") {
+  async function updateReportStatus(reportId: string, action: "reviewed" | "dismissed") {
     if (!user?.id) return
     setActionLoading(reportId)
     try {
-      const response = await fetch(`${API_BASE}/v1/admin/gallery-reports/${reportId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, status }),
-      })
-
-      if (!response.ok) throw new Error("Failed to update report")
-
-      setReports((prev) =>
-        prev.map((r) => (r.id === reportId ? { ...r, status } : r)),
-      )
-      toast.success(`Report marked as ${status}`)
+      await resolveReportMut.mutateAsync({ reportId, action })
+      toast.success(`Report marked as ${action}`)
     } catch {
       toast.error("Failed to update report")
     } finally {
@@ -175,7 +136,7 @@ export default function AdminGalleryReportsPage() {
     if (!user?.id) return
     setActionLoading(jobId)
     try {
-      const response = await fetch(`${API_BASE}/v1/gallery/${jobId}`, {
+      const response = await fetch(`/v1/gallery/${jobId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id }),
@@ -183,12 +144,7 @@ export default function AdminGalleryReportsPage() {
 
       if (!response.ok) throw new Error("Failed to remove item")
 
-      // Also mark this report as reviewed (backend auto-reviews too, but update UI immediately)
-      await fetch(`${API_BASE}/v1/admin/gallery-reports/${reportId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, status: "reviewed" }),
-      }).catch(() => {})
+      await resolveReportMut.mutateAsync({ reportId, action: "reviewed" }).catch(() => {})
 
       toast.success("Item removed from gallery")
       fetchReports()

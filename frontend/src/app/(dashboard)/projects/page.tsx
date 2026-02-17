@@ -1,16 +1,15 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Plus, Search, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useProjectsStore } from "@/hooks/use-projects-store"
+import { useProjects } from "@/hooks/queries/use-projects-queries"
 import { ProjectCard } from "@/components/dashboard/project-card"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 
 export default function ProjectsPage() {
-  const projects = useProjectsStore((s) => s.projects)
-  const loading = useProjectsStore((s) => s.loading)
-  const fetchProjects = useProjectsStore((s) => s.fetchProjects)
+  const { data: projects = [], isLoading: loading } = useProjects()
   const createProject = useProjectsStore((s) => s.createProject)
   const deleteProject = useProjectsStore((s) => s.deleteProject)
   const updateProject = useProjectsStore((s) => s.updateProject)
@@ -29,10 +28,6 @@ export default function ProjectsPage() {
   }
 
   const [search, setSearch] = useState("")
-
-  useEffect(() => {
-    fetchProjects()
-  }, [fetchProjects])
 
   const filtered = search
     ? projects.filter((p) =>

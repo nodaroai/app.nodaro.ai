@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useState, useCallback } from "react"
 import { Link } from "react-router-dom"
 import { Cpu, Loader2, Save, Check, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
@@ -12,9 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createClient } from "@/lib/supabase"
-
-const API = ""
+import { useAdminModels, useUpdateModelPricingMutation } from "@/hooks/queries/use-admin-queries"
 
 interface ModelPricing {
   readonly id: string
@@ -70,28 +68,6 @@ const TIER_OPTIONS = [
   { value: "pro", label: "Pro" },
   { value: "business", label: "Business" },
 ]
-
-// ── Auth headers helper ──────────────────────────────────────────────
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.access_token) {
-    throw new Error("Not authenticated. Please sign in.")
-  }
-  return {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${session.access_token}`,
-  }
-}
-
-function parseResponse<T>(json: unknown): ReadonlyArray<T> {
-  if (Array.isArray(json)) return json as ReadonlyArray<T>
-  if (json && typeof json === "object" && "data" in json && Array.isArray((json as Record<string, unknown>).data)) {
-    return (json as Record<string, unknown>).data as ReadonlyArray<T>
-  }
-  return []
-}
 
 // ── Summary Cards ────────────────────────────────────────────────────
 
@@ -340,34 +316,14 @@ function ModelRow({
 // ── Main Page ────────────────────────────────────────────────────────
 
 export default function AdminModelPricingPage() {
-  const [models, setModels] = useState<ReadonlyArray<ModelPricing>>([])
-  const [loading, setLoading] = useState(true)
+  const { data: modelsResult, isLoading: loading } = useAdminModels()
+  const models: ReadonlyArray<ModelPricing> = (() => {
+    const raw = modelsResult?.data ?? modelsResult
+    return (Array.isArray(raw) ? raw : []) as ReadonlyArray<ModelPricing>
+  })()
   const [pendingChanges, setPendingChanges] = useState<Record<string, PendingChange>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
-
-  const fetchModels = useCallback(async () => {
-    setLoading(true)
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${API}/v1/admin/models`, { headers })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error ?? `Request failed: ${res.status}`)
-      }
-      const json = await res.json()
-      const data = parseResponse<ModelPricing>(json)
-      setModels(data)
-      setPendingChanges({})
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to fetch models")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchModels()
-  }, [fetchModels])
+  const updatePricingMut = useUpdateModelPricingMutation()
 
   const handleFieldChange = useCallback(
     (identifier: string, field: keyof PendingChange, value: unknown) => {
@@ -389,35 +345,28 @@ export default function AdminModelPricingPage() {
 
       setSavingId(identifier)
       try {
-        const headers = await getAuthHeaders()
-        const res = await fetch(`${API}/v1/admin/models/${encodeURIComponent(identifier)}/pricing`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({
+        await updatePricingMut.mutateAsync({
+          modelId: identifier,
+          pricing: {
             creditCost: changes.creditCost ?? model.credit_cost,
             isEnabled: changes.isEnabled ?? model.is_enabled,
             tierRestriction: changes.tierRestriction !== undefined
               ? changes.tierRestriction
               : (model.tier_restriction ?? null),
-          }),
+          },
         })
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null)
-          throw new Error(errData?.error ?? `Request failed: ${res.status}`)
-        }
         toast.success(`Updated ${identifier}`)
         setPendingChanges((prev) => {
           const { [identifier]: _removed, ...rest } = prev
           return rest
         })
-        await fetchModels()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to save")
       } finally {
         setSavingId(null)
       }
     },
-    [pendingChanges, fetchModels]
+    [pendingChanges, updatePricingMut]
   )
 
   // ── Group models by detected category ──────────────────────────────
