@@ -21,24 +21,17 @@ COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
 
-# Vite inlines VITE_* env vars at build time
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
-ARG VITE_APP_URL
-ARG VITE_API_URL
-ARG VITE_EDITION
-ARG VITE_PADDLE_CLIENT_TOKEN
-ARG VITE_PADDLE_ENVIRONMENT
+# Vite inlines env vars at build time. Railway doesn't pass Docker build args,
+# so we use placeholders that get replaced at container startup with real values.
+ENV VITE_SUPABASE_URL=__VITE_SUPABASE_URL__
+ENV VITE_SUPABASE_ANON_KEY=__VITE_SUPABASE_ANON_KEY__
+ENV VITE_APP_URL=__VITE_APP_URL__
+ENV VITE_API_URL=
+ENV VITE_EDITION=__VITE_EDITION__
+ENV VITE_PADDLE_CLIENT_TOKEN=__VITE_PADDLE_CLIENT_TOKEN__
+ENV VITE_PADDLE_ENVIRONMENT=__VITE_PADDLE_ENVIRONMENT__
 
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
-ENV VITE_APP_URL=$VITE_APP_URL
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_EDITION=$VITE_EDITION
-ENV VITE_PADDLE_CLIENT_TOKEN=$VITE_PADDLE_CLIENT_TOKEN
-ENV VITE_PADDLE_ENVIRONMENT=$VITE_PADDLE_ENVIRONMENT
-
-RUN echo "DEBUG: VITE_SUPABASE_URL length=${#VITE_SUPABASE_URL} VITE_EDITION=${VITE_EDITION}" && npm run build
+RUN npm run build
 
 # ── Stage 3: Production runner ───────────────────────────────────────
 FROM node:20-alpine AS runner
@@ -58,12 +51,25 @@ COPY --from=backend-builder /app/backend/package.json ./backend/package.json
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
 
-# Startup script: run backend + worker + Caddy concurrently
+# Startup script: replace Vite placeholders, run backend + worker + Caddy
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
 
-# Railway injects PORT at runtime for routing
 echo "Starting with PORT=${PORT:-3000}"
+
+# Replace Vite build-time placeholders with actual runtime env vars
+echo "Injecting runtime env vars into frontend..."
+for f in /app/frontend/dist/assets/*.js; do
+  [ -f "$f" ] || continue
+  sed -i \
+    -e "s|__VITE_SUPABASE_URL__|${VITE_SUPABASE_URL}|g" \
+    -e "s|__VITE_SUPABASE_ANON_KEY__|${VITE_SUPABASE_ANON_KEY}|g" \
+    -e "s|__VITE_APP_URL__|${VITE_APP_URL}|g" \
+    -e "s|__VITE_EDITION__|${VITE_EDITION}|g" \
+    -e "s|__VITE_PADDLE_CLIENT_TOKEN__|${VITE_PADDLE_CLIENT_TOKEN}|g" \
+    -e "s|__VITE_PADDLE_ENVIRONMENT__|${VITE_PADDLE_ENVIRONMENT}|g" \
+    "$f"
+done
 
 # Start backend API server on fixed internal port
 cd /app/backend
@@ -75,7 +81,7 @@ node dist/worker.js &
 # Wait for backend to be ready before accepting traffic
 echo "Waiting for backend on port 9000..."
 for i in $(seq 1 30); do
-  if curl -sf http://localhost:9000/health > /dev/null 2>&1; then
+  if curl -sf http://127.0.0.1:9000/health > /dev/null 2>&1; then
     echo "Backend is ready"
     break
   fi
