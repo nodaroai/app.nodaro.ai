@@ -1,8 +1,24 @@
 # React Query Migration Guide
 
-> **Status:** Pre-migration
+> **Status:** Pre-migration (audited)
 > **Target:** Migrate ~50 manual `useEffect` + `useState` fetch patterns to `@tanstack/react-query`
 > **Stack:** Vite + React 19 + React Router DOM 7 + Zustand 5
+
+### Audit Fixes Applied (2026-02-17)
+
+The following issues were found during a 4-angle audit (file accuracy, completeness, architecture correctness, migration ordering) and have been fixed inline:
+
+| # | Severity | Fix | Location |
+|---|----------|-----|----------|
+| 1 | **CRITICAL** | Flattened query keys from object refs to primitives (assets, library, admin) | Section 1.3 |
+| 2 | **CRITICAL** | `useLoadUserSettings` tracks userId in ref (not boolean) to handle account switching | Section 3.4 Site 9 |
+| 3 | **HIGH** | Aligned `useUserCredits` staleTime=30s to match refetchInterval=30s (was 10s) | Section 2.1 |
+| 4 | **MEDIUM** | Added storage invalidation to `useChangePlanMutation` | Section 2.2 |
+| 5 | **MEDIUM** | Settings page uses local state for editable templates to prevent refetch clobbering | Section 3.4 Site 10 |
+| 6 | **LOW** | Post-checkout useEffect guards `user?.id` before non-null access | Section 3.2 Site 4, Section 4.6 |
+| 7 | **MEDIUM** | Added `useModelCredits` compat wrapper preserving `number` return type | Section 3.1 Site 3, Section 5.2 |
+| 8 | **MEDIUM** | Narrowed `useDeleteLibraryAssetMutation` to invalidate `billing.storage` not `billing.all` | Section 2.7 |
+| 9 | **LOW** | Added type re-export checklist (`AdminUser`, `AppSettings`) | Section 5.2.1 |
 
 ---
 
@@ -91,23 +107,26 @@ export const queryKeys = {
   },
 
   // Assets
+  // IMPORTANT: Keys use flattened primitives, NOT objects.
+  // Objects break React Query cache identity (new ref every render = new cache entry).
   assets: {
     all: ["assets"] as const,
     characters: (projectId?: string, userId?: string) =>
-      ["assets", "characters", { projectId, userId }] as const,
+      ["assets", "characters", projectId ?? "", userId ?? ""] as const,
     objects: (projectId?: string, userId?: string) =>
-      ["assets", "objects", { projectId, userId }] as const,
+      ["assets", "objects", projectId ?? "", userId ?? ""] as const,
     locations: (projectId?: string, userId?: string) =>
-      ["assets", "locations", { projectId, userId }] as const,
+      ["assets", "locations", projectId ?? "", userId ?? ""] as const,
     faces: (projectId?: string, userId?: string) =>
-      ["assets", "faces", { projectId, userId }] as const,
+      ["assets", "faces", projectId ?? "", userId ?? ""] as const,
   },
 
   // Library (media)
+  // Flattened primitives — same reason as assets above.
   library: {
     all: ["library"] as const,
     list: (params: { userId: string; type?: string; search?: string; owned?: boolean }) =>
-      ["library", "list", params] as const,
+      ["library", "list", params.userId, params.type ?? "", params.search ?? "", String(params.owned ?? false)] as const,
   },
 
   // Editor / workflow
@@ -145,14 +164,14 @@ export const queryKeys = {
     all: ["admin"] as const,
     stats: () => ["admin", "stats"] as const,
     users: (page: number, pageSize: number) =>
-      ["admin", "users", { page, pageSize }] as const,
+      ["admin", "users", page, pageSize] as const,
     jobs: (page: number, pageSize: number, status?: string) =>
-      ["admin", "jobs", { page, pageSize, status }] as const,
+      ["admin", "jobs", page, pageSize, status ?? ""] as const,
     usageLogs: (page: number, pageSize: number) =>
-      ["admin", "usage-logs", { page, pageSize }] as const,
+      ["admin", "usage-logs", page, pageSize] as const,
     models: () => ["admin", "models"] as const,
     reports: (page: number, status?: string) =>
-      ["admin", "reports", { page, status }] as const,
+      ["admin", "reports", page, status ?? ""] as const,
     alerts: () => ["admin", "alerts"] as const,
     settings: () => ["admin", "settings"] as const,
     userTransactions: (userId: string) =>
@@ -226,7 +245,7 @@ export function useUserCredits(userId: string | undefined) {
     },
     enabled: !!userId && hasCredits(),
     refetchInterval: 30_000,
-    staleTime: 10_000,
+    staleTime: 30_000,           // match refetchInterval to avoid stale window
   })
 }
 
@@ -341,6 +360,7 @@ export function useChangePlanMutation() {
     onSuccess: (_data, { userId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.billing.subscription(userId) })
       qc.invalidateQueries({ queryKey: queryKeys.credits.balance(userId) })
+      qc.invalidateQueries({ queryKey: queryKeys.billing.storage(userId) })  // plan change affects storage limits
     },
   })
 }
@@ -693,10 +713,10 @@ export function useDeleteLibraryAssetMutation() {
   return useMutation({
     mutationFn: ({ assetId, userId }: { assetId: string; userId: string }) =>
       deleteLibraryAsset(assetId, userId),
-    onSuccess: () => {
+    onSuccess: (_data, { userId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.library.all })
-      // Also invalidate storage since deletion frees space
-      qc.invalidateQueries({ queryKey: queryKeys.billing.all })
+      // Narrow: only invalidate storage (deletion frees space), not all billing
+      qc.invalidateQueries({ queryKey: queryKeys.billing.storage(userId) })
     },
   })
 }
@@ -1320,11 +1340,24 @@ const { data: balance } = useUserCredits(userId)
 
 **File:** `src/hooks/use-model-credits.ts`
 
-**After migration:** Gut the file's contents and re-export from the new queries file. This preserves backward compatibility for any remaining imports.
+**After migration:** Gut the file's contents and re-export from the new queries file.
+
+> **BREAKING CHANGE:** The old `useModelCredits(model, fallback)` returned a plain `number`. The new `useModelCreditCost(model)` returns `UseQueryResult<number>`. A compatibility wrapper preserves the old signature for any remaining callers.
 
 ```ts
-export { useModelCreditCost as useModelCredits } from "./queries/use-credits-queries"
+import { useModelCreditCost } from "./queries/use-credits-queries"
+
 export { getCachedCredits, prefetchModelCredits } from "./queries/use-credits-queries"
+export { useModelCreditCost } from "./queries/use-credits-queries"
+
+/**
+ * Backward-compatible wrapper: returns a plain number (matching old signature).
+ * Prefer `useModelCreditCost(model)` in new code for full React Query state.
+ */
+export function useModelCredits(modelIdentifier: string | undefined, fallback: number = 0): number {
+  const { data } = useModelCreditCost(modelIdentifier)
+  return data ?? fallback
+}
 ```
 
 Note: `getCachedCredits(model)` and `prefetchModelCredits(models)` both use a module-level `queryClient` import internally — callers pass only the model argument(s), matching the existing call sites in `workflow-editor.tsx`.
@@ -1358,10 +1391,11 @@ For the `?success=true` checkout redirect, add a `useEffect` that invalidates af
 const qc = useQueryClient()
 
 useEffect(() => {
+  if (!user?.id) return
   if (!searchParams.get("success") && !searchParams.get("topup")) return
   const timer = setTimeout(() => {
     qc.invalidateQueries({ queryKey: queryKeys.billing.all })
-    qc.invalidateQueries({ queryKey: queryKeys.credits.balance(user!.id) })
+    qc.invalidateQueries({ queryKey: queryKeys.credits.balance(user.id) })
   }, 3000)
   return () => clearTimeout(timer)
 }, [searchParams, user?.id, qc])
@@ -1458,7 +1492,7 @@ const activeJobCount = stats?.processing ?? 0
 
 **Delete:** The entire file contents.
 
-**Replace with a thin wrapper that syncs query data to Zustand (one-time init, not on background refetches):**
+**Replace with a thin wrapper that syncs query data to Zustand (one-time init per user, not on background refetches):**
 
 ```ts
 import { useEffect, useRef } from "react"
@@ -1469,17 +1503,18 @@ import { useUserSettings } from "./queries/use-user-settings-queries"
 export function useLoadUserSettings() {
   const { user } = useAuth()
   const { data } = useUserSettings(user?.id)
-  const initialized = useRef(false)
+  const initializedFor = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!data || initialized.current) return
-    initialized.current = true
+    if (!data || !user?.id) return
+    if (initializedFor.current === user.id) return
+    initializedFor.current = user.id
     useWorkflowStore.getState().setUserPromptTemplates(data.promptTemplates)
-  }, [data])
+  }, [data, user?.id])
 }
 ```
 
-> **Why the ref guard?** Without it, a background refetch that returns fresh data would fire the `useEffect` again and overwrite any locally-edited prompt templates that the user hasn't saved yet. The `initialized` ref ensures we only sync once on mount.
+> **Why the ref guard?** Without it, a background refetch that returns fresh data would fire the `useEffect` again and overwrite any locally-edited prompt templates that the user hasn't saved yet. The `initializedFor` ref ensures we only sync once per user — it tracks the userId (not just a boolean) so that logging out and back in as a different user correctly syncs the new user's templates.
 
 #### Site 10: `SettingsPage`
 
@@ -1496,14 +1531,25 @@ const { data: settings, isLoading: settingsLoading } = useUserSettings(user?.id)
 const toggleMutation = useUpdatePublicOutputsMutation()
 const templatesMutation = useSaveTemplatesMutation()
 
-// Derive local state from query data
+// Derive read-only values directly from query data
 const publicOutputs = settings?.publicOutputs ?? true
 const tier = settings?.tier ?? "free"
 
+// For editable fields (templates), use local state initialized from query data.
+// This prevents background refetches from overwriting user's in-progress edits.
+const [localTemplates, setLocalTemplates] = useState<Record<string, string>>({})
+useEffect(() => {
+  if (settings?.promptTemplates) {
+    setLocalTemplates(settings.promptTemplates)
+  }
+}, [settings?.promptTemplates])
+
 // Call mutations with userId from useAuth():
 // toggleMutation.mutate({ userId: user!.id, publicOutputs: newValue })
-// templatesMutation.mutate({ userId: user!.id, promptTemplates: newTemplates })
+// templatesMutation.mutate({ userId: user!.id, promptTemplates: localTemplates })
 ```
+
+> **Background refetch safety:** `publicOutputs` and `tier` are derived directly from `settings` (read-only display). Templates use local state initialized once from query data, so background refetches update `settings` but don't clobber the user's unsaved edits. The `useEffect` only fires when `settings.promptTemplates` reference actually changes (i.e., after a mutation's `invalidateQueries`, not on a background refetch returning identical data).
 
 ---
 
@@ -2156,13 +2202,14 @@ Alternative: Convert mutations to `useMutation` hooks and use `onMutate` for opt
 
 ```tsx
 useEffect(() => {
+  if (!user?.id) return
   if (!searchParams.get("success") && !searchParams.get("topup")) return
   const timer = setTimeout(() => {
     qc.invalidateQueries({ queryKey: queryKeys.billing.all })
-    qc.invalidateQueries({ queryKey: queryKeys.credits.balance(user!.id) })
+    qc.invalidateQueries({ queryKey: queryKeys.credits.balance(user.id) })
   }, 3000)
   return () => clearTimeout(timer)
-}, [searchParams])
+}, [searchParams, user?.id, qc])
 ```
 
 ### 4.7 Patterns NOT to migrate
@@ -2192,10 +2239,19 @@ These should NOT be moved to React Query:
 
 | File | New contents |
 |------|-------------|
-| `src/hooks/use-model-credits.ts` | Re-export `useModelCreditCost`, `getCachedCredits`, `prefetchModelCredits` from queries |
+| `src/hooks/use-model-credits.ts` | Compat wrapper `useModelCredits(model, fallback): number` + re-export `useModelCreditCost`, `getCachedCredits`, `prefetchModelCredits` from queries. See Site 3 for full code. |
 | `src/hooks/use-app-settings.ts` | Re-export `useAppSettings`, `useIsKieProvider`, `AppSettings` from queries |
-| `src/hooks/use-load-user-settings.ts` | Thin wrapper: `useUserSettings` + `useEffect` syncing to Zustand (file exists at 28 lines with `"use client"` directive) |
+| `src/hooks/use-load-user-settings.ts` | Thin wrapper: `useUserSettings` + `useEffect` syncing to Zustand per-userId (file exists at 28 lines with `"use client"` directive) |
 | `src/components/credits/CreditBalance.tsx` | Re-export `useUserCredits` from `use-credits-queries.ts`; keep `CreditBalance` component using the new hook. Required because `GenerateButton.tsx` and `billing/page.tsx` import `useUserCredits` from this file. |
+
+### 5.2.1 Type re-exports (must not be forgotten)
+
+These types are exported from files being deleted/gutted and are imported by other files. They **must** be re-exported from the new query hook files:
+
+| Type | Old location | New location | Importers |
+|------|-------------|-------------|-----------|
+| `AdminUser` | `use-admin.ts` | `use-admin-queries.ts` | `admin/users/page.tsx` |
+| `AppSettings` | `use-app-settings.ts` | `use-app-settings-queries.ts` | `admin/settings/page.tsx` |
 
 ### 5.3 Module-level caches to remove
 
@@ -2259,7 +2315,7 @@ After migration, these duplicate fetches are eliminated by shared cache:
 
 | Hook | staleTime | gcTime | refetchInterval | Rationale |
 |------|-----------|--------|-----------------|-----------|
-| `useUserCredits` | 10s | 5min (default) | 30s | Credits change on job completion; poll frequently |
+| `useUserCredits` | 30s | 5min (default) | 30s | Credits change on job completion; staleTime matches refetchInterval to avoid stale window |
 | `useModelCreditCost` | Infinity | 30min | — | Model costs are static at runtime |
 | `useSubscription` | 60s | 5min | — | Subscription changes are rare |
 | `useTransactions` | 60s | 5min | — | Only changes after new payment |
@@ -2319,3 +2375,12 @@ After completing the migration, verify each item:
 - [ ] No `API_BASE_URL` used in admin alerts page (fixed to relative path)
 - [ ] React Query DevTools show expected query count on each page
 - [ ] No console errors or warnings related to React Query
+- [ ] Query keys use only **primitives** (strings, numbers, booleans) — no object literals in key tuples
+- [ ] `useLoadUserSettings` tracks userId in ref (not boolean) — logout/login as different user syncs new templates
+- [ ] `useModelCredits()` compat wrapper returns plain `number` — existing callers unaffected
+- [ ] `AdminUser` type re-exported from `use-admin-queries.ts`
+- [ ] `AppSettings` type re-exported from `use-app-settings-queries.ts`
+- [ ] `useChangePlanMutation` invalidates storage in addition to subscription + credits
+- [ ] `useDeleteLibraryAssetMutation` invalidates `billing.storage(userId)` (not all of `billing.all`)
+- [ ] Settings page template editing not clobbered by background refetch
+- [ ] Post-checkout `useEffect` has `if (!user?.id) return` guard (no non-null assertion)
