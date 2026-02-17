@@ -1,4 +1,4 @@
-# ── Stage 1: Build backend ────────────────────────────────────────────
+# ── Stage 1: Build backend ─────────────────────────────────────────
 FROM node:20-alpine AS backend-builder
 
 RUN apk add --no-cache libc6-compat python3
