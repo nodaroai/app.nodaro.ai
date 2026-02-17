@@ -38,8 +38,13 @@ The following issues were found during a 4-angle audit (file accuracy, completen
 | 26 | **HIGH** | Sites 9 + 10 must be atomic — `useLoadUserSettings` Zustand sync must land with SettingsPage migration | Section 3.4 |
 | 27 | **HIGH** | `useResolveReportMutation` now also invalidates `gallery.all` (report removal hides item from public gallery) | Section 2.10 |
 | 28 | **HIGH** | Added explicit Zustand invalidation checklist for all 11 project mutation methods | Section 4.5 |
-| 29 | **MEDIUM** | Corrected Site 1 import chain description — consumers import via `use-model-credits.ts` compat wrapper, not directly from `CreditBalance.tsx` | Section 3.1 Site 1 |
+| 29 | **MEDIUM** | Corrected Site 1 import chain description — `GenerateButton.tsx` and `billing/page.tsx` import `useUserCredits` directly from `CreditBalance.tsx` (not via `use-model-credits.ts`). The compat wrapper in Site 3 is for `useModelCredits` (used by 34 node files), not `useUserCredits`. | Section 3.1 Site 1 |
 | 30 | **MEDIUM** | Added asset modal polling (`character-page-modal.tsx`, `object-page-modal.tsx`, `location-page-modal.tsx`) to "Patterns NOT to migrate" table | Section 4.7 |
+| 31 | **CRITICAL** | `use-app-settings.ts` has zero importers (dead code) — marked as unused in Section 5.2 with option to delete instead of re-export | Section 5.2 |
+| 32 | **HIGH** | Added 34-file dependency warning on `useModelCredits` compat wrapper — must not be deleted without migrating all node files | Section 3.1 Site 3 |
+| 33 | **HIGH** | Added explicit cross-reference: Section 4.1 (imperative credit check) must be same PR as Site 8 (stats polling) to avoid merge conflicts in `workflow-editor.tsx` | Section 4.1 |
+| 34 | **HIGH** | Corrected admin domain framing: only 5 of 9 pages import `useAdmin()`, remaining 4 use inline fetch | Section 3.10 |
+| 35 | **MEDIUM** | Added prefix-matching comments on hardcoded `["admin", "users"]` and `["admin", "reports"]` keys in mutation invalidation | Section 2.10 |
 
 ---
 
@@ -1259,7 +1264,9 @@ export function useAdminAdjustCreditsMutation() {
       return res.json()
     },
     onSuccess: (_data, { userId }) => {
-      // Invalidate ALL admin user pages, not just page 0
+      // Invalidate ALL admin user pages, not just page 0.
+      // Uses partial key ["admin", "users"] intentionally — React Query's default prefix matching
+      // will match all keys starting with this prefix (e.g., ["admin", "users", 0, 50], ["admin", "users", 1, 50]).
       qc.invalidateQueries({ queryKey: ["admin", "users"] })
       // Credit adjustment creates a transaction record — invalidate that user's transactions
       qc.invalidateQueries({ queryKey: queryKeys.admin.userTransactions(userId) })
@@ -1285,7 +1292,9 @@ export function useResolveReportMutation() {
       return res.json()
     },
     onSuccess: () => {
-      // Invalidate ALL admin report pages, not just page 0
+      // Invalidate ALL admin report pages, not just page 0.
+      // Uses partial key ["admin", "reports"] intentionally — React Query's default prefix matching
+      // will match all keys starting with this prefix (e.g., ["admin", "reports", 0, ""], ["admin", "reports", 1, "pending"]).
       qc.invalidateQueries({ queryKey: ["admin", "reports"] })
       qc.invalidateQueries({ queryKey: queryKeys.gallery.reportCount() })
       // Report removal sets is_public=false — refresh public gallery so removed item disappears
@@ -1442,7 +1451,7 @@ const { data: balance, isLoading, error } = useUserCredits(userId)
 
 The hook from `use-credits-queries.ts` already has `refetchInterval: 30_000`, so all polling is handled automatically. Every component that calls `useUserCredits(userId)` shares the same cache — no duplicate polling.
 
-> **IMPORTANT:** Sites 1, 2, 3, and 4 must be migrated atomically (same PR). `useUserCredits` is defined in `CreditBalance.tsx` and re-exported via the compat wrapper in `use-model-credits.ts` (Site 3). `GenerateButton.tsx` and `billing/page.tsx` import `useUserCredits` from `use-model-credits.ts`, not directly from `CreditBalance.tsx`. The full import chain is: `CreditBalance.tsx` (hook definition) → `use-model-credits.ts` (compat re-export) → `GenerateButton.tsx` + `billing/page.tsx` (consumers). All four must update together.
+> **IMPORTANT:** Sites 1, 2, 3, and 4 must be migrated atomically (same PR). `useUserCredits` is defined in `CreditBalance.tsx` and imported **directly** by `GenerateButton.tsx` and `billing/page.tsx` (both import from `@/components/credits/CreditBalance`). The compat wrapper in `use-model-credits.ts` (Site 3) is for the separate `useModelCredits` hook (used by 34 node files), not `useUserCredits`. The full import chain is: `CreditBalance.tsx` (defines + exports `useUserCredits`) → `GenerateButton.tsx` + `billing/page.tsx` (direct consumers). All four sites must update together because they share the `useUserCredits` hook definition and the credit cost fetch logic.
 
 #### Site 2: `GenerateButton.tsx` inline credit cost fetch
 
@@ -1482,6 +1491,8 @@ export function useModelCredits(modelIdentifier: string | undefined, fallback: n
   return data ?? fallback
 }
 ```
+
+> **CRITICAL DEPENDENCY:** This compat wrapper is imported by **34 node component files** (`generate-image-node.tsx`, `text-to-video-node.tsx`, `lip-sync-node.tsx`, `image-to-video-node.tsx`, `edit-image-node.tsx`, `video-to-video-node.tsx`, `ai-writer-node.tsx`, etc.). All of them call `useModelCredits(model, fallback)` and expect a plain `number` return. Do NOT delete this wrapper without first migrating all 34 node files to use `useModelCreditCost` directly.
 
 Note: `getCachedCredits(model)` and `prefetchModelCredits(models)` both use a module-level `queryClient` import internally — callers pass only the model argument(s), matching the existing call sites in `workflow-editor.tsx`.
 
@@ -2003,9 +2014,9 @@ qc.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) })
 
 ### 3.10 Admin Domain
 
-All 9 admin pages currently use the monolithic `useAdmin()` hook or their own inline fetch logic. After migration, each page imports from `use-admin-queries.ts`.
+5 of 9 admin pages import from the monolithic `useAdmin()` hook (`admin/page`, `users/page`, `jobs/page`, `usage/page`, `settings/page`). The remaining 4 pages (`alerts/page`, `models/page`, `pricing/page`, `reports/page`) use inline fetch logic with direct `fetch()` calls. After migration, all 9 pages import from `use-admin-queries.ts`.
 
-> **IMPORTANT:** Sites 27–35 and Section 5.1 (`use-admin.ts` deletion) must be migrated atomically (same PR). All admin pages import from `use-admin.ts` — if the file is deleted before all pages are updated, imports break. Additionally, `admin/users/page.tsx` imports `type AdminUser` and `admin/settings/page.tsx` imports `type AppSettings` from `use-admin.ts`. These types must be available from the new query files before deletion. If a single large PR is impractical, keep `use-admin.ts` as a re-export stub (see Section 5.1) and delete it in a follow-up PR after all admin pages stabilize.
+> **IMPORTANT:** Sites 27–35 and Section 5.1 (`use-admin.ts` deletion) must be migrated atomically (same PR). The 5 admin pages that import from `use-admin.ts` will break if the file is deleted before they are updated. Additionally, `admin/users/page.tsx` imports `type AdminUser` and `admin/settings/page.tsx` imports `type AppSettings` from `use-admin.ts`. These types must be available from the new query files before deletion. If a single large PR is impractical, keep `use-admin.ts` as a re-export stub (see Section 5.1) and delete it in a follow-up PR after all admin pages stabilize.
 
 #### Site 27: `AdminDashboard`
 
@@ -2256,6 +2267,8 @@ Upload calls (`uploadImage`, `uploadAudio`, `startVideoDownload`) are user-actio
 
 ### 4.1 Imperative credit check in `workflow-editor.tsx`
 
+> **IMPORTANT:** This change modifies `workflow-editor.tsx` and **must be in the same PR as Site 8** (stats polling migration) to avoid merge conflicts. See the merge conflict note in Section 3.3, Site 8.
+
 **Current:** Before execution, the editor calls `getUserCredits(userId)` imperatively (not in a hook) to check if the user has enough credits.
 
 **Migration:** Use `queryClient.fetchQuery` — this reads from cache if fresh, or fetches if stale:
@@ -2406,7 +2419,7 @@ These should NOT be moved to React Query:
 | File | New contents |
 |------|-------------|
 | `src/hooks/use-model-credits.ts` | Compat wrapper `useModelCredits(model, fallback): number` + re-export `useModelCreditCost`, `getCachedCredits`, `prefetchModelCredits` from queries. See Site 3 for full code. |
-| `src/hooks/use-app-settings.ts` | Re-export `useAppSettings`, `useIsKieProvider`, `AppSettings` from queries |
+| `src/hooks/use-app-settings.ts` | **NOTE: Currently unused (zero importers in codebase).** Re-export `useAppSettings`, `useIsKieProvider`, `AppSettings` from queries for forward compatibility — these hooks will be consumed by future features. Alternatively, delete the file entirely and have future consumers import directly from `use-app-settings-queries.ts`. |
 | `src/hooks/use-load-user-settings.ts` | Thin wrapper: `useUserSettings` + `useEffect` syncing to Zustand per-userId (file exists at 28 lines with `"use client"` directive) |
 | `src/components/credits/CreditBalance.tsx` | Re-export `useUserCredits` from `use-credits-queries.ts`; keep `CreditBalance` component using the new hook. Required because `GenerateButton.tsx` and `billing/page.tsx` import `useUserCredits` from this file. |
 
