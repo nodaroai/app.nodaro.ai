@@ -440,6 +440,7 @@ export default function GalleryPage() {
                       alt=""
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      thumbnail
                     />
                   ) : item.type === "video" ? (
                     <video
@@ -620,6 +621,8 @@ export default function GalleryPage() {
                               src={url}
                               alt={`Reference ${i + 1}`}
                               className="w-10 h-10 rounded-full object-cover"
+                              thumbnail
+                              thumbnailWidth={80}
                             />
                           )}
                         </button>

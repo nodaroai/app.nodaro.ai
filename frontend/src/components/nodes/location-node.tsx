@@ -108,6 +108,8 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
                 src={activeUrl}
                 alt={nodeData.locationName || "Location"}
                 className="w-full h-full object-cover cursor-pointer"
+                thumbnail
+                thumbnailWidth={480}
                 onClick={(e) => {
                   e.stopPropagation()
                   setLightboxSrc(activeUrl)
@@ -183,7 +185,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
                     updateNodeData(id, { activeResultIndex: i })
                   }}
                 >
-                  <CachedImage src={r.url} alt={`v${i + 1}`} className="w-full h-full object-cover" />
+                  <CachedImage src={r.url} alt={`v${i + 1}`} className="w-full h-full object-cover" thumbnail thumbnailWidth={80} />
                 </button>
                 <button
                   type="button"

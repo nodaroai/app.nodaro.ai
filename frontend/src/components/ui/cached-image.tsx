@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { optimizedImageUrl } from "@/lib/image"
 
 // In-memory image cache — keeps decoded images in browser memory
 // so <img> elements render synchronously without flash on remount.
@@ -18,26 +19,35 @@ export function CachedImage({
   onClick,
   draggable,
   onError,
+  thumbnail,
+  thumbnailWidth,
   ...props
-}: React.ImgHTMLAttributes<HTMLImageElement>) {
-  const [loaded, setLoaded] = useState(() => preloaded.has(src ?? ""))
+}: React.ImgHTMLAttributes<HTMLImageElement> & {
+  thumbnail?: boolean
+  thumbnailWidth?: number
+}) {
+  const effectiveSrc = thumbnail && src
+    ? optimizedImageUrl(src, { width: thumbnailWidth })
+    : src
+
+  const [loaded, setLoaded] = useState(() => preloaded.has(effectiveSrc ?? ""))
   const imgRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
-    if (src) preloadImage(src)
-  }, [src])
+    if (effectiveSrc) preloadImage(effectiveSrc)
+  }, [effectiveSrc])
 
   // Check if already complete (memory cache hit)
   useEffect(() => {
     if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
       setLoaded(true)
     }
-  }, [src])
+  }, [effectiveSrc])
 
   return (
     <img
       ref={imgRef}
-      src={src}
+      src={effectiveSrc}
       alt={alt}
       className={className}
       onClick={onClick}

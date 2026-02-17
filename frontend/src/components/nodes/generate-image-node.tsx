@@ -10,6 +10,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ExtractReferencesModal } from "@/components/editor/extract-references-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
@@ -83,10 +84,12 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {status !== "running" && activeUrl && (
           <div className="relative group">
-            <img
+            <CachedImage
               src={activeUrl}
               alt="Generated"
               className="w-full h-28 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+              thumbnail
+              thumbnailWidth={800}
               onClick={(e) => {
                 e.stopPropagation()
                 setPreviewOpen(true)
@@ -148,7 +151,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <img
+                <CachedImage
                   src={r.url}
                   alt={`Result ${i + 1}`}
                   className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
@@ -156,6 +159,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                       ? "opacity-100 ring-2 ring-primary"
                       : "opacity-50 hover:opacity-80"
                   }`}
+                  thumbnail
+                  thumbnailWidth={80}
                   onClick={(e) => {
                     e.stopPropagation()
                     updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
