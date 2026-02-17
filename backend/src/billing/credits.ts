@@ -558,10 +558,9 @@ export class CreditsService {
   }
 
   /**
-   * Reserve credits atomically using deduct_credits RPC.
-   * Uses FOR UPDATE row lock in the RPC to prevent race conditions.
-   * Deducts from subscription_credits first, then topup_credits.
-   * Creates a usage_log entry with status 'reserved'.
+   * Reserve credits atomically using reserve_credits RPC.
+   * Single RPC call: deducts credits (subscription first, then topup),
+   * increments daily_spent, and creates usage_log — all in one transaction.
    */
   static async reserveCredits(
     userId: string,
@@ -617,44 +616,27 @@ export class CreditsService {
       }
     }
 
-    // Atomic deduction via RPC (FOR UPDATE row lock, subscription-first)
-    const { data: deductResult, error: deductError } = await supabase.rpc("deduct_credits", {
+    // Atomic reservation via single RPC (deducts credits + increments daily spent + creates usage log)
+    const { data: usageLogId, error: reserveError } = await supabase.rpc("reserve_credits", {
       p_user_id: userId,
-      p_amount: pricing.creditCost,
+      p_credits: pricing.creditCost,
+      p_job_id: jobId,
+      p_model_identifier: modelIdentifier,
+      p_provider_cost_usd: providerCostUsd,
+      p_display_cost_usd: displayCostUsd,
     })
 
-    if (deductError) {
-      console.error("[credits] deduct_credits RPC failed:", deductError.message)
-      throw new Error(`Credit deduction failed: ${deductError.message}`)
+    if (reserveError) {
+      console.error("[credits] reserve_credits RPC failed:", reserveError.message)
+      throw new Error(`Credit reservation failed: ${reserveError.message}`)
     }
 
-    if (deductResult === false) {
-      throw new Error(`Insufficient credits: need ${pricing.creditCost}`)
+    if (!usageLogId) {
+      console.error("[credits] reserve_credits returned null usage log ID")
+      return { usageLogId: "log-failed", creditsReserved: pricing.creditCost, watermark }
     }
 
-    // Increment daily spent counter
-    const { error: dailyError } = await supabase.rpc("increment_daily_spent", {
-      p_user_id: userId,
-      p_amount: pricing.creditCost,
-    })
-
-    if (dailyError) {
-      // Fallback: direct update if RPC doesn't exist
-      const { data: p } = await supabase
-        .from("profiles")
-        .select("daily_spent_credits")
-        .eq("id", userId)
-        .single()
-
-      if (p) {
-        await supabase
-          .from("profiles")
-          .update({ daily_spent_credits: (p.daily_spent_credits ?? 0) + pricing.creditCost })
-          .eq("id", userId)
-      }
-    }
-
-    // Log credit transaction (balanceAfter=0 — exact post-deduction balance not tracked to avoid extra query)
+    // Log credit transaction (fire-and-forget, balanceAfter=0 to avoid extra query)
     await CreditsService.logTransaction({
       userId,
       amount: -pricing.creditCost,
@@ -665,30 +647,7 @@ export class CreditsService {
       balanceAfter: 0,
     })
 
-    // Create usage log entry
-    const { data: usageLog, error: logError } = await supabase
-      .from("usage_logs")
-      .insert({
-        user_id: userId,
-        job_id: jobId,
-        action: modelIdentifier,
-        provider: "reserved",
-        credits_used: pricing.creditCost,
-        cost_usd: providerCostUsd,
-        metadata: {
-          status: "reserved",
-          display_cost_usd: displayCostUsd,
-        },
-      })
-      .select("id")
-      .single()
-
-    if (logError || !usageLog) {
-      console.error("[credits] Failed to create usage log:", logError)
-      return { usageLogId: "log-failed", creditsReserved: pricing.creditCost, watermark }
-    }
-
-    return { usageLogId: usageLog.id, creditsReserved: pricing.creditCost, watermark }
+    return { usageLogId: usageLogId as string, creditsReserved: pricing.creditCost, watermark }
   }
 
   /**
@@ -766,28 +725,10 @@ export class CreditsService {
     })
 
     if (updateError) {
-      // Try direct update as fallback
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("topup_credits")
-        .eq("id", usageLog.user_id)
-        .single()
-
-      if (profile) {
-        await supabase
-          .from("profiles")
-          .update({ topup_credits: (profile.topup_credits ?? 0) + usageLog.credits_used })
-          .eq("id", usageLog.user_id)
-      }
+      console.error("[credits] add_topup_credits RPC failed for refund:", usageLogId, updateError.message)
     }
 
-    // Log the refund as a credit transaction
-    const { data: refundProfile } = await supabase
-      .from("profiles")
-      .select("subscription_credits, topup_credits")
-      .eq("id", usageLog.user_id)
-      .single()
-
+    // Log the refund (use balanceAfter=0 to avoid extra profile query)
     await CreditsService.logTransaction({
       userId: usageLog.user_id,
       amount: usageLog.credits_used,
@@ -795,7 +736,7 @@ export class CreditsService {
       source: "refund",
       description: "Refund for failed job",
       jobId: usageLogId,
-      balanceAfter: (refundProfile?.subscription_credits ?? 0) + (refundProfile?.topup_credits ?? 0),
+      balanceAfter: 0,
     })
 
     // Mark as refunded

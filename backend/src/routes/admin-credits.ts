@@ -308,32 +308,20 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // GET /v1/admin/credits/summary - Platform-wide credit stats
   app.get("/v1/admin/credits/summary", async (_request, reply) => {
-    // Run both queries in parallel
-    const [profilesResult, transactionsResult] = await Promise.all([
-      supabase.from("profiles").select("subscription_credits, topup_credits, subscription_tier"),
-      supabase.from("credit_transactions").select("id", { count: "exact", head: true }),
-    ])
+    // Use SQL aggregate RPC instead of fetching ALL profiles
+    const { data, error } = await supabase.rpc("get_credit_summary")
 
-    const profiles = profilesResult.data
-    if (!profiles) {
+    if (error || !data) {
+      console.error("[admin-credits] get_credit_summary RPC failed:", error?.message)
       return { totalUsers: 0, totalCreditsOutstanding: 0, tierBreakdown: {}, totalTransactions: 0 }
     }
 
-    const totalCreditsOutstanding = profiles.reduce(
-      (sum, p) => sum + (p.subscription_credits ?? 0) + (p.topup_credits ?? 0), 0
-    )
-
-    const tierBreakdown: Record<string, number> = {}
-    for (const p of profiles) {
-      const tier = p.subscription_tier ?? "free"
-      tierBreakdown[tier] = (tierBreakdown[tier] ?? 0) + 1
-    }
-
+    const result = data as Record<string, unknown>
     return {
-      totalUsers: profiles.length,
-      totalCreditsOutstanding,
-      tierBreakdown,
-      totalTransactions: transactionsResult.count ?? 0,
+      totalUsers: result.totalUsers ?? 0,
+      totalCreditsOutstanding: result.totalCreditsOutstanding ?? 0,
+      tierBreakdown: (result.tierBreakdown as Record<string, number>) ?? {},
+      totalTransactions: result.totalTransactions ?? 0,
     }
   })
 }
