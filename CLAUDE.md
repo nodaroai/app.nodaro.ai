@@ -2,7 +2,7 @@
 
 **After every commit, update this file** to reflect new features, fixes, or architecture changes.
 - Bump version (patch for fixes, minor for features)
-- This file is in .gitignore -- stays local only, never pushed to remote
+- This root CLAUDE.md is tracked in git. Subdirectory CLAUDE.md files are gitignored.
 - Full project spec is in `docs/FULL_SPEC.md` (reference only, don't load into context)
 
 **See also:**
@@ -82,7 +82,7 @@
 | Backend | Fastify (Node.js/TypeScript), BullMQ (Redis) |
 | Database | Supabase (PostgreSQL + Auth + Realtime) |
 | Storage | Cloudflare R2 (S3-compatible) |
-| Auth | Supabase Auth (Google OAuth) + API Keys |
+| Auth | Supabase Auth (Google OAuth) + JWT middleware (`middleware/auth.ts`, 5-min token cache) |
 | Payments | Paddle (Merchant of Record) |
 
 ---
