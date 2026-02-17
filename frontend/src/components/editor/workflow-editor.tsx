@@ -1547,7 +1547,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
-  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number, prompt?: string, mode?: string, sound?: boolean): Promise<void> {
+  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number, prompt?: string, mode?: string, sound?: boolean, aspectRatio?: string, multiShot?: boolean, shots?: Array<{ prompt: string; duration: number }>, elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined, currentJobId: undefined, currentJobProgress: undefined })
 
@@ -1562,6 +1562,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         duration,
         mode,
         sound,
+        aspectRatio,
+        multiShot,
+        shots,
+        elements,
         userId: user?.id,
       }).then(({ jobId }) => {
         toast.info("Video generation started", { description: `Job ID: ${jobId}` })
@@ -1680,12 +1684,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runTextToVideoGeneration(nodeId: string, prompt: string, provider?: string): Promise<void> {
+  function runTextToVideoGeneration(nodeId: string, prompt: string, provider?: string, kling3Options?: { duration?: number; mode?: string; sound?: boolean; aspectRatio?: string; multiShot?: boolean; shots?: Array<{ prompt: string; duration: number }>; elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }> }): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined, currentJobId: undefined, currentJobProgress: undefined })
 
     return new Promise((resolve, reject) => {
-      textToVideo(prompt, provider, user?.id).then(({ jobId }) => {
+      textToVideo(prompt, provider, user?.id, kling3Options).then(({ jobId }) => {
         toast.info("Text-to-video generation started", { description: `Job ID: ${jobId}` })
         // Store the job ID so we can track progress
         updateNodeData(nodeId, { currentJobId: jobId })
@@ -2151,7 +2155,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const prompt = inputs.prompt ?? i2vData.motionPrompt
       const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as string | undefined
       const kling3Sound = (i2vData as Record<string, unknown>).kling3Sound as boolean | undefined
-      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt, kling3Mode, kling3Sound)
+      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt, kling3Mode, kling3Sound, i2vData.aspectRatio, i2vData.multiShot, i2vData.shots, i2vData.elements)
     }
 
     if (node.type === "video-to-video") {
@@ -2170,12 +2174,25 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "text-to-video") {
-      const prompt = overridePrompt ?? (typeof inputs.prompt === "string" ? inputs.prompt : undefined) ?? (node.data as TextToVideoData).prompt?.trim()
+      const t2vData = node.data as TextToVideoData
+      const prompt = overridePrompt ?? (typeof inputs.prompt === "string" ? inputs.prompt : undefined) ?? t2vData.prompt?.trim()
       if (!prompt) {
-        toast.error(`Node "${(node.data as TextToVideoData).label}": no prompt found`)
+        toast.error(`Node "${t2vData.label}": no prompt found`)
         return Promise.reject(new Error("No prompt"))
       }
-      return runTextToVideoGeneration(node.id, prompt, (node.data as TextToVideoData).provider || undefined)
+      const t2vProvider = t2vData.provider || undefined
+      // Pass Kling 3.0 fields if present (text-to-video also supports kling-3.0)
+      const t2vRaw = t2vData as Record<string, unknown>
+      const t2vKling3Options = (t2vProvider === "kling-3.0") ? {
+        duration: t2vData.duration,
+        mode: t2vRaw.kling3Mode as string | undefined,
+        sound: t2vRaw.kling3Sound as boolean | undefined,
+        aspectRatio: t2vData.aspectRatio as string | undefined,
+        multiShot: t2vRaw.multiShot as boolean | undefined,
+        shots: t2vRaw.shots as Array<{ prompt: string; duration: number }> | undefined,
+        elements: t2vRaw.elements as Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }> | undefined,
+      } : undefined
+      return runTextToVideoGeneration(node.id, prompt, t2vProvider, t2vKling3Options)
     }
 
     if (node.type === "text-to-speech") {

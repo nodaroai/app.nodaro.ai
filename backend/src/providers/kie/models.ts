@@ -198,7 +198,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.50,
     imageParam: "image_urls",
     extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
-    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 15],
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     supportsEndFrame: true,
   },
 
@@ -284,6 +284,15 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
     allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
+  },
+
+  // Kling 3.0 - uses kling3-client.ts (unified createTask endpoint)
+  "kling-3.0": {
+    model: "kling-3.0/video",
+    credits: 10,
+    cost: 0.50,
+    extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 }
 

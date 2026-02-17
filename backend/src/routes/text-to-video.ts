@@ -12,8 +12,15 @@ const textToVideoBody = z.object({
     // Replicate-only
     "veo", "runway", "pika", "sora",
     // KIE-only
-    "kling-turbo", "grok", "sora2-pro"
+    "kling-turbo", "kling-3.0", "grok", "sora2-pro"
   ]).optional(),
+  duration: z.number().int().min(1).max(60).optional(),
+  mode: z.enum(["pro", "std"]).optional(),
+  sound: z.boolean().optional(),
+  aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
+  multiShot: z.boolean().optional(),
+  shots: z.array(z.object({ prompt: z.string().max(500), duration: z.number().int().min(1).max(12) })).max(6).optional(),
+  elements: z.array(z.object({ name: z.string().max(50), description: z.string().max(200), type: z.enum(["image", "video"]), urls: z.array(z.string().url()).min(1).max(4) })).max(5).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -29,7 +36,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, userId } = parsed.data
+    const { prompt, provider, duration, mode, sound, aspectRatio, multiShot, shots, elements, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -46,7 +53,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, provider, type: "text-to-video" },
+        input_data: { prompt, provider, duration, mode, sound, aspectRatio, multiShot, shots, elements, type: "text-to-video" },
       })
       .select("id")
       .single()
@@ -66,6 +73,13 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       jobId: job.id,
       prompt,
       provider,
+      duration,
+      mode,
+      sound,
+      aspectRatio,
+      multiShot,
+      shots,
+      elements,
       usageLogId,
     })
 

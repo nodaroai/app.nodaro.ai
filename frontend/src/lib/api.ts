@@ -670,6 +670,10 @@ export interface GenerateVideoOptions {
   duration?: number
   mode?: string            // Kling 3.0 quality mode (pro/std)
   sound?: boolean          // Kling 3.0 sound effects
+  aspectRatio?: string     // Kling 3.0 aspect ratio
+  multiShot?: boolean      // Kling 3.0 multi-shot mode
+  shots?: Array<{ prompt: string; duration: number }>     // Kling 3.0 shot list
+  elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>  // Kling 3.0 elements
   userId?: string
 }
 
@@ -699,6 +703,10 @@ export async function generateVideo(
       duration: opts.duration,
       mode: opts.mode,
       sound: opts.sound,
+      aspectRatio: opts.aspectRatio,
+      multiShot: opts.multiShot,
+      shots: opts.shots,
+      elements: opts.elements,
     }
     if (opts.userId) {
       body.userId = opts.userId
@@ -741,8 +749,16 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
   return res.json()
 }
 
-export async function textToVideo(prompt: string, provider?: string, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { prompt, provider }
+export async function textToVideo(prompt: string, provider?: string, userId?: string, options?: {
+  duration?: number
+  mode?: string
+  sound?: boolean
+  aspectRatio?: string
+  multiShot?: boolean
+  shots?: Array<{ prompt: string; duration: number }>
+  elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { prompt, provider, ...options }
   if (userId) {
     body.userId = userId
   }

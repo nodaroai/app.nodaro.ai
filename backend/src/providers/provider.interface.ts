@@ -27,6 +27,10 @@ export interface ProviderOptions {
   onProgress?: ProgressCallback
   mode?: string   // Provider-specific quality mode (e.g. "pro" | "std" for Kling 3.0)
   sound?: boolean // Enable sound effects (Kling 3.0)
+  aspectRatio?: string
+  multiShots?: boolean
+  multiPrompt?: Array<{ prompt: string; duration: number }>
+  klingElements?: Array<{ name: string; description: string; element_input_urls?: string[]; element_input_video_urls?: string[] }>
 }
 
 // Each provider implements the capabilities it supports
@@ -64,7 +68,8 @@ export interface TextToVideoProvider {
     prompt: string,
     model?: string,
     duration?: number,
-    aspectRatio?: string
+    aspectRatio?: string,
+    options?: ProviderOptions
   ): Promise<ProviderResult>
 }
 

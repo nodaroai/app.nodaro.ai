@@ -499,6 +499,10 @@ export type ImageToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  aspectRatio?: "16:9" | "9:16" | "1:1"
+  multiShot?: boolean
+  shots?: Array<{ prompt: string; duration: number }>
+  elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
   // Multi-input selection fields
   selectedStartFrameNodeId?: string  // ID of node selected for start frame
   selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)
@@ -533,7 +537,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "grok" | "sora2-pro"
+  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "kling-3.0" | "grok" | "sora2-pro"
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"

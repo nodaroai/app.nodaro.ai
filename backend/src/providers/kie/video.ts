@@ -33,6 +33,14 @@ import {
   durationToNFrames,
 } from "./models.js"
 
+function snapToAllowedDuration(requested: number, allowed: number[]): number {
+  if (!allowed || allowed.length === 0) return requested
+  if (allowed.includes(requested)) return requested
+  return allowed.reduce((best, d) =>
+    Math.abs(d - requested) < Math.abs(best - requested) ? d : best
+  )
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -105,6 +113,10 @@ export class KieVideoProvider
         sound: options?.sound ?? true,
         duration: duration ? String(duration) : "5",
         mode: (options?.mode as "std" | "pro") ?? "pro",
+        aspectRatio: options?.aspectRatio ?? "16:9",
+        multiShots: options?.multiShots,
+        multiPrompt: options?.multiPrompt,
+        klingElements: options?.klingElements,
       })
       console.log(
         `[KIE.ai] Kling 3.0 completed: ${result.videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
@@ -160,15 +172,17 @@ export class KieVideoProvider
 
     // Override duration if provided
     if (duration) {
+      const snapped = snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+      if (snapped !== duration) {
+        console.log(`[KIE.ai] Duration ${duration}s not allowed, snapped to ${snapped}s (allowed: ${JSON.stringify(modelConfig.allowedDurations)})`)
+      }
       if (modelConfig.usesNFrames) {
-        // Sora uses n_frames instead of duration
-        // n_frames 10 = ~5 seconds, n_frames 15 = ~10 seconds
-        input.n_frames = durationToNFrames(duration)
+        input.n_frames = durationToNFrames(snapped)
         console.log(
-          `[KIE.ai] Converting duration ${duration}s to n_frames: ${input.n_frames}`
+          `[KIE.ai] Converting duration ${snapped}s to n_frames: ${input.n_frames}`
         )
       } else {
-        input.duration = String(duration) // KIE expects string for duration
+        input.duration = String(snapped)
       }
     }
 
@@ -215,7 +229,8 @@ export class KieVideoProvider
     prompt: string,
     model?: string,
     duration?: number,
-    aspectRatio?: string
+    aspectRatio?: string,
+    options?: ProviderOptions
   ): Promise<ProviderResult> {
     const provider = model ?? "minimax"
     const modelConfig = KIE_TEXT_TO_VIDEO_MODELS[provider]
@@ -233,6 +248,24 @@ export class KieVideoProvider
     console.log(
       `[KIE.ai] Duration: ${duration ?? "(default)"}, Aspect ratio: ${aspectRatio ?? "(default)"}`
     )
+
+    // Kling 3.0 uses unified createTask endpoint (no start image for text-to-video)
+    if (provider === "kling-3.0") {
+      const result = await kling3Generate({
+        prompt,
+        sound: options?.sound ?? true,
+        duration: duration ? String(duration) : "5",
+        mode: (options?.mode as "std" | "pro") ?? "pro",
+        aspectRatio: aspectRatio ?? options?.aspectRatio ?? "16:9",
+        multiShots: options?.multiShots,
+        multiPrompt: options?.multiPrompt,
+        klingElements: options?.klingElements,
+      })
+      console.log(
+        `[KIE.ai] Kling 3.0 text-to-video completed: ${result.videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+      return { url: result.videoUrl, cost: modelConfig.cost }
+    }
 
     // VEO3 uses a special API endpoint
     if (provider === "veo3") {
@@ -264,14 +297,17 @@ export class KieVideoProvider
 
     // Override duration if provided
     if (duration) {
+      const snapped = snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+      if (snapped !== duration) {
+        console.log(`[KIE.ai] Duration ${duration}s not allowed, snapped to ${snapped}s (allowed: ${JSON.stringify(modelConfig.allowedDurations)})`)
+      }
       if (modelConfig.usesNFrames) {
-        // Sora uses n_frames instead of duration
-        input.n_frames = durationToNFrames(duration)
+        input.n_frames = durationToNFrames(snapped)
         console.log(
-          `[KIE.ai] Converting duration ${duration}s to n_frames: ${input.n_frames}`
+          `[KIE.ai] Converting duration ${snapped}s to n_frames: ${input.n_frames}`
         )
       } else {
-        input.duration = String(duration)
+        input.duration = String(snapped)
       }
     }
 

@@ -393,7 +393,7 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-video") {
-          const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound } = job.data as {
+          const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, aspectRatio, multiShot, shots, elements } = job.data as {
             jobId: string
             imageUrl: string
             endFrameUrl?: string      // Optional end frame for supported providers
@@ -404,8 +404,20 @@ export function createVideoWorker() {
             duration?: number
             mode?: string             // Kling 3.0 quality mode (pro/std)
             sound?: boolean           // Kling 3.0 sound effects
+            aspectRatio?: string
+            multiShot?: boolean
+            shots?: Array<{ prompt: string; duration: number }>
+            elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
           }
           console.log(`[worker] image-to-video ${jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
+
+          // Map frontend shots/elements to provider format for Kling 3.0
+          const multiPrompt = shots?.map((s) => ({ prompt: s.prompt, duration: s.duration }))
+          const klingElements = elements?.map((el) => ({
+            name: el.name,
+            description: el.description,
+            ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
+          }))
 
           // Create progress callback that updates the job record in the database
           const onProgress: ProgressCallback = async (progress: number) => {
@@ -413,7 +425,7 @@ export function createVideoWorker() {
             await supabase.from("jobs").update({ progress }).eq("id", jobId)
           }
 
-          const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound })
+          const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, aspectRatio, multiShots: multiShot, multiPrompt, klingElements })
           await job.updateProgress(40)
 
           // Upload the generated video to R2
@@ -494,15 +506,29 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-video") {
-          const { prompt, provider, duration } = job.data as {
+          const { prompt, provider, duration, mode, sound, aspectRatio, multiShot, shots, elements } = job.data as {
             jobId: string
             prompt: string
             provider?: string
             duration?: number
+            mode?: string
+            sound?: boolean
+            aspectRatio?: string
+            multiShot?: boolean
+            shots?: Array<{ prompt: string; duration: number }>
+            elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
           }
           console.log(`[worker] text-to-video ${jobId} (provider: ${provider ?? "minimax"})`)
 
-          const result = await textToVideo(prompt, provider ?? "minimax", duration)
+          // Map frontend shots/elements to provider format for Kling 3.0
+          const multiPrompt = shots?.map((s) => ({ prompt: s.prompt, duration: s.duration }))
+          const klingElements = elements?.map((el) => ({
+            name: el.name,
+            description: el.description,
+            ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
+          }))
+
+          const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, multiShots: multiShot, multiPrompt, klingElements })
           await job.updateProgress(50)
 
           const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
