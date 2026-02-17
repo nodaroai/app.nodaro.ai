@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import {
   X, Play, Loader2, Image as ImageIcon, Volume2, ChevronUp, ChevronDown,
   Trash2, Plus, Film, Settings, ChevronDown as ChevronDownIcon, Users,
+  Upload, GitBranch,
 } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
@@ -277,7 +278,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
         {/* ═══ Body ═══ */}
         <div className="flex flex-1 overflow-hidden">
           {/* ─── Left Panel: Preview ─── */}
-          <div className="w-1/2 flex flex-col border-r border-gray-200 dark:border-[#2D2D2D] overflow-y-auto bg-white dark:bg-[#1E1E1E]">
+          <div className="w-[35%] flex flex-col border-r border-gray-200 dark:border-[#2D2D2D] overflow-y-auto bg-white dark:bg-[#1E1E1E]">
             <div className="p-4 flex flex-col gap-4">
               {/* Start Frame */}
               <div>
@@ -395,7 +396,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
           </div>
 
           {/* ─── Right Panel: Config Tabs ─── */}
-          <div className="w-1/2 flex flex-col overflow-hidden bg-white dark:bg-[#1E1E1E]">
+          <div className="w-[65%] flex flex-col overflow-hidden bg-white dark:bg-[#1E1E1E]">
             {/* Tab Bar (pill style) */}
             <div className="px-5 pt-5 pb-3 shrink-0">
               <div className="flex items-center gap-2">
@@ -412,7 +413,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
             </div>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto px-5 pb-3">
+            <div className="flex-1 overflow-y-auto px-6 pb-4">
 
               {/* ═══ SCENE TAB ═══ */}
               {activeTab === "scene" && (
@@ -427,7 +428,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       value={(data as Record<string, unknown>).sceneName as string ?? ""}
                       onChange={(e) => handleUpdate({ sceneName: e.target.value })}
                       placeholder="e.g. Opening Chase, Rooftop Dialogue..."
-                      className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none transition-colors"
+                      className="w-full h-10 px-3 text-base font-medium rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none transition-colors"
                     />
                   </div>
 
@@ -441,7 +442,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       onChange={(e) => handleUpdate({ motionPrompt: e.target.value })}
                       placeholder="Describe the overall scene, characters, and setting. Use @element_name to reference elements. Add dialogue with 'character says ...'"
                       rows={5}
-                      className="w-full p-3 text-sm rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
+                      className="w-full p-3 text-sm min-h-[150px] rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
                     />
                     <p className="text-[10px] text-muted-foreground mt-1">
                       Tip: reference elements with <span className="font-mono text-[#ff0073]">@name</span> and include dialogue with quotes.
@@ -583,11 +584,11 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       {shots.map((shot, i) => (
                         <div key={i} className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-foreground shrink-0">Shot {i + 1}</span>
+                            <span className="text-base font-bold text-foreground shrink-0">Shot {i + 1}</span>
                             <select
                               value={String(shot.duration)}
                               onChange={(e) => handleUpdateShot(i, "duration", parseInt(e.target.value, 10))}
-                              className="h-7 w-20 text-xs rounded-md border border-border bg-muted/30 px-2 outline-none"
+                              className="h-8 w-24 text-sm rounded-md border border-border bg-muted/30 px-2 outline-none"
                             >
                               {Array.from({ length: 12 }, (_, k) => k + 1).map((d) => (
                                 <option key={d} value={String(d)}>{d}s</option>
@@ -628,7 +629,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                             onChange={(e) => handleUpdateShot(i, "prompt", e.target.value)}
                             placeholder="Describe what happens: camera angle, action, dialogue. e.g. Close-up, she whispers 'I knew you'd come back.' Soft rain falls."
                             rows={4}
-                            className="w-full p-3 text-sm rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
+                            className="w-full p-3 text-sm min-h-[100px] rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
                           />
                           <p className="text-[10px] text-muted-foreground/60">
                             Hint: Include dialogue in quotes, add camera directions and mood.
@@ -661,7 +662,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         type="button"
                         onClick={handleAddShot}
                         disabled={shots.length >= 6}
-                        className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 text-sm text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground flex items-center justify-center gap-2"
+                        className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 text-sm font-medium text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground disabled:hover:bg-transparent flex items-center justify-center gap-2"
                       >
                         <Plus className="w-4 h-4" /> Add Shot {shots.length < 6 && `(${shots.length}/6)`}
                       </button>
@@ -695,17 +696,17 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                   )}
 
                   {elements.map((el, i) => (
-                    <div key={i} className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-4">
+                    <div key={i} className="rounded-xl border-2 border-border hover:border-[#ff0073]/30 bg-gradient-to-b from-card to-card/80 p-5 shadow-lg space-y-4 transition-colors">
                       {/* HEADER ROW */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg text-[#ff0073] font-bold shrink-0">@</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl text-[#ff0073] font-black shrink-0">@</span>
                         <input
                           ref={(ref) => { elementNameRefs.current[i] = ref }}
                           type="text"
                           value={el.name}
                           onChange={(e) => handleUpdateElement(i, "name", e.target.value.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""))}
                           placeholder="name your character..."
-                          className={`h-8 w-32 px-1 text-sm font-medium bg-transparent border-b-2 font-mono outline-none transition-colors ${el.name === "" ? "border-red-500" : "border-[#ff0073]"} focus:border-[#ff0073]`}
+                          className={`h-9 min-w-[150px] max-w-[200px] px-1 text-base font-semibold bg-transparent border-b-2 font-mono outline-none transition-all ${el.name === "" ? "border-red-500" : "border-[#ff0073]"} focus:border-[#ff0073] focus:shadow-[0_2px_8px_rgba(255,0,115,0.15)]`}
                         />
                         <button
                           type="button"
@@ -732,12 +733,11 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       {/* DESCRIPTION */}
                       <div>
                         <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">Description</span>
-                        <input
-                          type="text"
+                        <textarea
                           value={el.description}
                           onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 200))}
                           placeholder="Describe appearance, clothing, voice tone... e.g. 'Young woman with red hair, green jacket, confident warm voice'"
-                          className="w-full h-10 px-3 text-sm rounded-lg border-2 border-border bg-background outline-none focus:border-[#ff0073] transition-colors"
+                          className="w-full min-h-[60px] px-3 py-2 text-sm rounded-xl border-2 border-border bg-background outline-none focus:border-[#ff0073] resize-none leading-relaxed transition-colors"
                         />
                       </div>
 
@@ -745,10 +745,10 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       <div>
                         <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">Reference Images (2-4 recommended)</span>
                         {el.urls.length > 0 ? (
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-3 flex-wrap">
                             {el.urls.map((url, ui) => (
-                              <div key={ui} className="relative group/thumb w-16 h-16 shrink-0">
-                                <img src={url} alt={`${el.name} ${ui + 1}`} className="w-16 h-16 rounded-lg object-cover border border-border" />
+                              <div key={ui} className="relative group/thumb w-20 h-20 shrink-0">
+                                <img src={url} alt={`${el.name} ${ui + 1}`} className="w-20 h-20 rounded-lg object-cover border border-border" />
                                 <button
                                   type="button"
                                   className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
@@ -761,32 +761,32 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                             ))}
                           </div>
                         ) : (
-                          <div className="flex flex-col items-center justify-center h-20 rounded-lg border-2 border-dashed border-border bg-muted/20 text-muted-foreground/50">
-                            <ImageIcon className="w-6 h-6 mb-1" />
-                            <span className="text-[11px]">Drop images here or use buttons below</span>
+                          <div className="flex flex-col items-center justify-center h-[100px] rounded-xl border-2 border-dashed border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073]/40">
+                            <ImageIcon className="w-8 h-8 mb-1.5" />
+                            <span className="text-xs">Drop images here or use buttons below</span>
                           </div>
                         )}
                       </div>
 
                       {/* Row 4: Add media buttons */}
-                      <div className="flex items-center gap-2 relative">
+                      <div className="flex items-center gap-2.5 relative">
                         <button
                           type="button"
-                          className="h-8 px-3 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors"
+                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors flex items-center gap-1.5"
                           onClick={() => alert("Coming soon")}
                         >
-                          + Library
+                          <ImageIcon className="w-3.5 h-3.5" /> Library
                         </button>
                         <button
                           type="button"
-                          className="h-8 px-3 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40"
+                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 flex items-center gap-1.5"
                           disabled={uploadingIndex === i}
                           onClick={() => fileInputRefs.current[i]?.click()}
                         >
                           {uploadingIndex === i ? (
-                            <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Uploading</span>
+                            <span className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading</span>
                           ) : (
-                            "+ Upload"
+                            <><Upload className="w-3.5 h-3.5" /> Upload</>
                           )}
                         </button>
                         <input
@@ -802,10 +802,10 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         />
                         <button
                           type="button"
-                          className="h-8 px-3 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-[11px] text-muted-foreground hover:text-[#ff0073] transition-colors"
+                          className="h-9 px-4 rounded-lg border border-dashed border-border hover:border-[#ff0073]/50 text-xs text-muted-foreground hover:text-[#ff0073] transition-colors flex items-center gap-1.5"
                           onClick={() => setWorkflowDropdownIndex(workflowDropdownIndex === i ? null : i)}
                         >
-                          + Workflow
+                          <GitBranch className="w-3.5 h-3.5" /> Workflow
                         </button>
 
                         {/* From Workflow dropdown */}
@@ -858,7 +858,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                     type="button"
                     onClick={handleAddElement}
                     disabled={elements.length >= 5}
-                    className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 text-sm text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl border-2 border-dashed border-border hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 text-sm font-medium text-muted-foreground hover:text-[#ff0073] transition-colors disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted-foreground disabled:hover:bg-transparent flex items-center justify-center gap-2"
                   >
                     <Plus className="w-4 h-4" /> Add Element {elements.length < 5 && `(${elements.length}/5)`}
                   </button>
