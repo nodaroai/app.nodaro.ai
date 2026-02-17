@@ -99,7 +99,7 @@ function isPublicRoute(method: string, url: string): boolean {
 // ---------------------------------------------------------------------------
 
 export function registerAuthHook(app: FastifyInstance): void {
-  app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
+  app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
     // Skip public routes
     if (isPublicRoute(req.method, req.url)) return
 

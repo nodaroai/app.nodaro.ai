@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
@@ -37,8 +38,11 @@ export function useGalleryReportCount() {
   return useQuery({
     queryKey: queryKeys.gallery.reportCount(),
     queryFn: async () => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(
         `/v1/admin/gallery-reports/count?userId=${encodeURIComponent(user!.id)}`,
+        { headers: { Authorization: `Bearer ${session?.access_token}` } },
       )
       if (!res.ok) return 0
       const json = await res.json()
@@ -53,9 +57,11 @@ export function useGalleryReportCount() {
 export function useReportGalleryItemMutation() {
   return useMutation({
     mutationFn: async ({ jobId, reason, details }: { jobId: string; reason: string; details?: string }) => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/gallery/report`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ jobId, reason, details: details || undefined }),
       })
       if (res.status === 429) throw new Error("You already reported this item recently")
@@ -69,9 +75,11 @@ export function useDeleteGalleryItemMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ itemId, userId }: { itemId: string; userId: string }) => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/gallery/${itemId}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ userId }),
       })
       if (!res.ok) throw new Error("Failed to remove item")

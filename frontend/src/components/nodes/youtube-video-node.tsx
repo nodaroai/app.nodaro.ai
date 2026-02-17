@@ -6,6 +6,7 @@ import { Link, X, Play, Video, Music2, Camera, Hash, Download, AlertCircle, Chec
 import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { createClient } from "@/lib/supabase"
 import { fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress, API_BASE_URL } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import type { YouTubeVideoData } from "@/types/nodes"
@@ -254,9 +255,11 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
     if (videoId && url) {
       updateNodeData(id, { audioDownloadStatus: "downloading", downloadedAudioUrl: "", audioDownloadError: "" })
       try {
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
         const res = await fetch(`${API_BASE_URL}/v1/youtube-audio`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
           body: JSON.stringify({ url }),
         })
         if (!res.ok) throw new Error("Audio download failed")
