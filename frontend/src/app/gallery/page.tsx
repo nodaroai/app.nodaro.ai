@@ -1,7 +1,5 @@
-"use client"
-
 import { useState, useEffect, useCallback, useRef } from "react"
-import Link from "next/link"
+import { Link } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -368,13 +366,13 @@ export default function GalleryPage() {
       <header className="border-b border-zinc-200 dark:border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <Link
-            href="/projects"
+            to="/projects"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to app
           </Link>
-          <Link href="/" className="text-lg font-bold text-[#ff0073]">
+          <Link to="/" className="text-lg font-bold text-[#ff0073]">
             SceneNode
           </Link>
           <ThemeToggle />

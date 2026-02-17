@@ -1,5 +1,3 @@
-"use client"
-
 import { useEffect, useState } from "react"
 import { Loader2, Settings, Server, Percent, Check, AlertCircle } from "lucide-react"
 import { useAdmin, type AppSettings } from "@/hooks/use-admin"

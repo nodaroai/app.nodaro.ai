@@ -1,8 +1,5 @@
-"use client"
-
 import { useEffect, useState } from "react"
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { Link, useLocation, useNavigate, Outlet } from "react-router-dom"
 import {
   BarChart3,
   Users,
@@ -48,13 +45,10 @@ const ADMIN_NAV = [
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ] as const
 
-export default function AdminLayout({
-  children,
-}: {
-  readonly children: React.ReactNode
-}) {
-  const pathname = usePathname()
-  const router = useRouter()
+export default function AdminLayout() {
+  const location = useLocation()
+  const pathname = location.pathname
+  const navigate = useNavigate()
   const { user, isAdmin, loading, roleLoaded, signOut } = useAuth()
   const [checked, setChecked] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -103,17 +97,17 @@ export default function AdminLayout({
   useEffect(() => {
     if (loading) return
     if (!user) {
-      router.replace("/projects")
+      navigate("/projects", { replace: true })
       return
     }
     // Wait for role to be fetched before making admin decision
     if (!roleLoaded) return
     if (!isFeatureEnabled("adminPanel") || !isAdmin) {
-      router.replace("/projects")
+      navigate("/projects", { replace: true })
     } else {
       setChecked(true)
     }
-  }, [user, isAdmin, loading, roleLoaded, router])
+  }, [user, isAdmin, loading, roleLoaded, navigate])
 
   const toggleCollapsed = () => {
     const newValue = !collapsed
@@ -158,7 +152,7 @@ export default function AdminLayout({
               {collapsed ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Link href="/projects">
+                    <Link to="/projects">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -174,7 +168,7 @@ export default function AdminLayout({
                 </Tooltip>
               ) : (
                 <>
-                  <Link href="/projects">
+                  <Link to="/projects">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -214,7 +208,7 @@ export default function AdminLayout({
               const linkContent = (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  to={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200",
@@ -374,7 +368,9 @@ export default function AdminLayout({
               <ThemeToggle />
             </div>
           </header>
-          <main className="flex-1 overflow-auto">{children}</main>
+          <main className="flex-1 overflow-auto">
+            <Outlet />
+          </main>
         </div>
       </div>
     </TooltipProvider>

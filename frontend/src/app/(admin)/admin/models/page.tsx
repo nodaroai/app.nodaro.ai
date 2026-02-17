@@ -1,7 +1,5 @@
-"use client"
-
 import { useEffect, useState, useCallback } from "react"
-import Link from "next/link"
+import { Link } from "react-router-dom"
 import { Cpu, Loader2, Save, Check, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -454,7 +452,7 @@ export default function AdminModelPricingPage() {
           {models.length} models
         </span>
         <Link
-          href="/admin/pricing"
+          to="/admin/pricing"
           className="ml-auto text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-colors"
         >
           <ArrowLeft className="h-3 w-3" />

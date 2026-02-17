@@ -1,7 +1,5 @@
-"use client"
-
-import { use, useEffect, useState } from "react"
-import Link from "next/link"
+import { useEffect, useState } from "react"
+import { Link, useParams } from "react-router-dom"
 import { ArrowLeft, Settings, Loader2, MoreVertical, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,12 +24,8 @@ import { WorkflowsTab } from "@/components/dashboard/workflows-tab"
 import { AssetsTab } from "@/components/dashboard/assets-tab"
 import { JobsTab } from "@/components/dashboard/jobs-tab"
 
-export default function ProjectPage({
-  params,
-}: {
-  readonly params: Promise<{ id: string }>
-}) {
-  const { id } = use(params)
+export default function ProjectPage() {
+  const { id } = useParams<{ id: string }>()
   const project = useProjectsStore((s) => s.projects.find((p) => p.id === id))
   const loading = useProjectsStore((s) => s.loading)
   const fetchProjects = useProjectsStore((s) => s.fetchProjects)
@@ -44,7 +38,7 @@ export default function ProjectPage({
 
   useEffect(() => {
     fetchProjects()
-    fetchProjectData(id)
+    fetchProjectData(id!)
   }, [id, fetchProjects, fetchProjectData])
 
   const handleRename = async () => {
@@ -54,7 +48,7 @@ export default function ProjectPage({
     }
     setRenaming(true)
     try {
-      await updateProject(id, { name: newName.trim() })
+      await updateProject(id!, { name: newName.trim() })
       setRenameOpen(false)
     } finally {
       setRenaming(false)
@@ -78,7 +72,7 @@ export default function ProjectPage({
     return (
       <div className="p-6 text-center text-muted-foreground">
         <p>Project not found.</p>
-        <Link href="/projects" className="text-primary underline text-sm mt-2 block">
+        <Link to="/projects" className="text-primary underline text-sm mt-2 block">
           Back to projects
         </Link>
       </div>
@@ -88,7 +82,7 @@ export default function ProjectPage({
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-        <Link href="/projects">
+        <Link to="/projects">
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -125,7 +119,7 @@ export default function ProjectPage({
           <TabsTrigger value="jobs">Jobs</TabsTrigger>
         </TabsList>
         <TabsContent value="workflows" className="mt-4">
-          <WorkflowsTab projectId={id} />
+          <WorkflowsTab projectId={id!} />
         </TabsContent>
         <TabsContent value="assets" className="mt-4">
           <AssetsTab />

@@ -1,8 +1,5 @@
-"use client"
-
-import { useState, useEffect, useRef, Suspense } from "react"
-import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect, useRef } from "react"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { Check, ArrowLeft, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -20,21 +17,13 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 
 export default function PricingPage() {
-  return (
-    <Suspense>
-      <PricingPageContent />
-    </Suspense>
-  )
-}
-
-function PricingPageContent() {
   const { user, loading: authLoading } = useAuth()
-  const router = useRouter()
+  const navigate = useNavigate()
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [subLoading, setSubLoading] = useState(false)
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
-  const searchParams = useSearchParams()
+  const [searchParams] = useSearchParams()
   const autoCheckoutTriggered = useRef(false)
 
   // Fetch current subscription when user is available
@@ -80,12 +69,12 @@ function PricingPageContent() {
 
   async function handleSubscribe(tierId: string, priceId: string | null) {
     if (!priceId) {
-      router.push("/projects")
+      navigate("/projects")
       return
     }
 
     if (!user) {
-      router.push(`/login?plan=${tierId}`)
+      navigate(`/login?plan=${tierId}`)
       return
     }
 
@@ -94,7 +83,7 @@ function PricingPageContent() {
       if (isActiveSub) {
         await changePlan(user.id, priceId)
         toast.success("Plan changed successfully! Changes will apply shortly.")
-        router.push("/billing?success=true")
+        navigate("/billing?success=true")
       } else {
         await openCheckout({
           priceId,
@@ -123,19 +112,19 @@ function PricingPageContent() {
       <header className="border-b border-zinc-200 dark:border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <Link
-            href="/projects"
+            to="/projects"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to app
           </Link>
-          <Link href="/" className="text-lg font-bold text-[#ff0073]">
+          <Link to="/" className="text-lg font-bold text-[#ff0073]">
             SceneNode
           </Link>
           <div className="flex items-center gap-3">
             <ThemeToggle />
             {!authLoading && !user && (
-              <Link href="/login">
+              <Link to="/login">
                 <Button variant="outline" size="sm">Sign in</Button>
               </Link>
             )}
@@ -283,7 +272,7 @@ function PricingPageContent() {
         <div className="mt-16 text-center">
           <p className="text-sm text-muted-foreground">
             Need more credits? Purchase{" "}
-            <Link href="/billing" className="text-[#ff0073] underline underline-offset-4">
+            <Link to="/billing" className="text-[#ff0073] underline underline-offset-4">
               top-up packs
             </Link>{" "}
             any time. Credits never expire.

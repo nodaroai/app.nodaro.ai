@@ -1,5 +1,3 @@
-"use client"
-
 import { useEffect, useState } from "react"
 import { Loader2, Users, FolderOpen, GitBranch, Briefcase, Coins } from "lucide-react"
 import { useAdmin } from "@/hooks/use-admin"

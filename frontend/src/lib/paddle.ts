@@ -2,13 +2,13 @@
  * Paddle.js Client Initialization
  *
  * Lazy-loads the Paddle.js SDK and provides checkout helpers.
- * Uses NEXT_PUBLIC_PADDLE_CLIENT_TOKEN and NEXT_PUBLIC_PADDLE_ENVIRONMENT.
+ * Uses VITE_PADDLE_CLIENT_TOKEN and VITE_PADDLE_ENVIRONMENT.
  */
 
 import { initializePaddle, type Paddle } from "@paddle/paddle-js"
 
-const CLIENT_TOKEN = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ?? ""
-const IS_SANDBOX = process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT === "sandbox"
+const CLIENT_TOKEN = import.meta.env.VITE_PADDLE_CLIENT_TOKEN ?? ""
+const IS_SANDBOX = import.meta.env.VITE_PADDLE_ENVIRONMENT === "sandbox"
 
 let paddleInstance: Paddle | null = null
 let initPromise: Promise<Paddle | null> | null = null
@@ -17,7 +17,7 @@ export async function getPaddle(): Promise<Paddle | null> {
   if (paddleInstance) return paddleInstance
 
   if (!CLIENT_TOKEN) {
-    console.warn("[paddle] No NEXT_PUBLIC_PADDLE_CLIENT_TOKEN configured")
+    console.warn("[paddle] No VITE_PADDLE_CLIENT_TOKEN configured")
     return null
   }
 

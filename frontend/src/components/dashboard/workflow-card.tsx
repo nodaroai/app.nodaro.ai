@@ -1,7 +1,5 @@
-"use client"
-
 import type { DragEvent } from "react"
-import Link from "next/link"
+import { Link } from "react-router-dom"
 import { MoreHorizontal, Copy, Trash2, Pencil } from "lucide-react"
 import {
   DropdownMenu,
@@ -31,7 +29,7 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete }: WorkflowCardPr
       onDragStart={handleDragStart}
     >
       <Link
-        href={`/projects/${workflow.projectId}/workflows/${workflow.id}`}
+        to={`/projects/${workflow.projectId}/workflows/${workflow.id}`}
         className="flex-1 min-w-0"
         draggable={false}
       >
