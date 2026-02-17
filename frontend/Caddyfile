@@ -5,7 +5,7 @@
 
 :3000 {
 	handle /v1/* {
-		reverse_proxy localhost:9000
+		reverse_proxy 127.0.0.1:9000
 	}
 	handle {
 		root * /app/frontend/dist
