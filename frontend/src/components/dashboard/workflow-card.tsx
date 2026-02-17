@@ -44,6 +44,7 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete }: WorkflowCardPr
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
+            aria-label={`Workflow options for ${workflow.name}`}
           >
             <MoreHorizontal className="h-4 w-4" />
           </Button>

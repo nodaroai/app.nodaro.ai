@@ -96,6 +96,7 @@ export function FolderItem({
             onCreateWorkflow(folder.id)
             setOpen(true)
           }}
+          aria-label={`New workflow in ${folder.name}`}
           title="New workflow in folder"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -106,6 +107,7 @@ export function FolderItem({
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+              aria-label={`Folder options for ${folder.name}`}
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>

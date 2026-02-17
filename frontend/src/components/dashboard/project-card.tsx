@@ -53,7 +53,7 @@ export function ProjectCard({ project, onDelete, onRename }: ProjectCardProps) {
       >
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-sm truncate">{project.name}</h3>
+            <h2 className="font-medium text-sm truncate">{project.name}</h2>
             {project.description && (
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                 {project.description}
@@ -67,6 +67,7 @@ export function ProjectCard({ project, onDelete, onRename }: ProjectCardProps) {
                 size="sm"
                 className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
                 onClick={(e) => e.preventDefault()}
+                aria-label={`Project options for ${project.name}`}
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
