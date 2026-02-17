@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress, API_BASE_URL } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import type { YouTubeVideoData } from "@/types/nodes"
+import { CachedImage } from "@/components/ui/cached-image"
 
 type VideoPlatform = "youtube" | "facebook" | "tiktok" | "instagram" | "twitter" | "unknown"
 
@@ -382,7 +383,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                   setPlayerOpen(true)
                 }}
               >
-                <img
+                <CachedImage
                   src={displayThumbnail}
                   alt={nodeData.title || "Video"}
                   className="w-full h-full object-cover"

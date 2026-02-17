@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react"
 import { UserCircle, Users, X, Loader2, AlertCircle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CharacterPageModal } from "./character-page-modal"
 import { type DbCharacter } from "@/lib/api"
@@ -191,10 +192,12 @@ export function CharacterGalleryButton() {
                         >
                           {c.sourceImageUrl ? (
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted/30">
-                              <img
+                              <CachedImage
                                 src={c.sourceImageUrl}
                                 alt={c.name}
                                 className="w-full h-full object-cover"
+                                thumbnail
+                                thumbnailWidth={160}
                               />
                             </div>
                           ) : (

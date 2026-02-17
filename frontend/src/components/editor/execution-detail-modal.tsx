@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import type { Job } from "@/lib/api"
 import { deleteJob } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
+import { CachedImage } from "@/components/ui/cached-image"
 
 function getCostDisplayForModal(job: Job, showDollars: boolean): string {
   if (showDollars) {
@@ -138,10 +139,12 @@ function InputField({ name, value }: InputFieldProps) {
             <div className="flex flex-wrap gap-2 mb-2">
               {(value as string[]).map((url, idx) => (
                 <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
-                  <img
+                  <CachedImage
                     src={url}
                     alt={`Input ${idx + 1}`}
                     className="w-10 h-10 rounded object-cover border border-gray-200 dark:border-[#2D2D2D] hover:border-[#ff0073] transition-colors"
+                    thumbnail
+                    thumbnailWidth={80}
                   />
                 </a>
               ))}
@@ -151,10 +154,12 @@ function InputField({ name, value }: InputFieldProps) {
           {/* Single image thumbnail */}
           {isImage && (
             <a href={value as string} target="_blank" rel="noopener noreferrer" className="inline-block mb-2">
-              <img
+              <CachedImage
                 src={value as string}
                 alt="Input"
                 className="w-10 h-10 rounded object-cover border border-gray-200 dark:border-[#2D2D2D] hover:border-[#ff0073] transition-colors"
+                thumbnail
+                thumbnailWidth={80}
               />
             </a>
           )}
@@ -459,7 +464,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                             <audio src={outputUrl} controls className="w-full" />
                           </div>
                         ) : (
-                          <img
+                          <CachedImage
                             src={outputUrl}
                             alt="Output"
                             className="w-full max-h-[400px] object-contain"

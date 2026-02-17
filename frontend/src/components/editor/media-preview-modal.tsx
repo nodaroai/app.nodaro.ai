@@ -3,6 +3,7 @@
 import { useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
+import { CachedImage } from "@/components/ui/cached-image"
 
 interface MediaPreviewModalProps {
   readonly isOpen: boolean
@@ -42,7 +43,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url }: MediaPreviewMo
         </button>
 
         {type === "image" ? (
-          <img
+          <CachedImage
             src={url}
             alt="Preview"
             className="max-w-full max-h-[80vh] rounded-lg object-contain"

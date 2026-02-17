@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
+import { CachedImage } from "@/components/ui/cached-image"
 
 interface ImageLightboxProps {
   readonly src: string | null
@@ -43,7 +44,7 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
       >
         <X className="w-6 h-6" />
       </button>
-      <img
+      <CachedImage
         src={src}
         alt={alt ?? "Preview"}
         className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"

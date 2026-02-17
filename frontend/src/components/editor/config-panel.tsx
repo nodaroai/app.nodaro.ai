@@ -1216,10 +1216,12 @@ function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
       )}
       {!loading && displayThumbnail && (
         <div className="rounded-md overflow-hidden">
-          <img
+          <CachedImage
             src={displayThumbnail}
             alt={data.title || "Video"}
             className="w-full rounded-md"
+            thumbnail
+            thumbnailWidth={480}
           />
         </div>
       )}
@@ -1938,10 +1940,12 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         </p>
         {data.referenceImageUrl ? (
           <div className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
-            <img
+            <CachedImage
               src={data.referenceImageUrl}
               alt="Reference"
               className="w-10 h-10 rounded object-cover flex-shrink-0"
+              thumbnail
+              thumbnailWidth={80}
             />
             <span className="text-xs text-muted-foreground truncate flex-1">Reference image</span>
             <Button
@@ -2324,10 +2328,12 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
                   title={`Click to view: ${img.label}`}
                 >
                   {img.imageUrl ? (
-                    <img
+                    <CachedImage
                       src={img.imageUrl}
                       alt={img.label}
                       className="w-full h-full object-cover"
+                      thumbnail
+                      thumbnailWidth={160}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">

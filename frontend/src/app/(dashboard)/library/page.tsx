@@ -21,6 +21,7 @@ import {
   useDeleteLibraryAssetMutation,
 } from "@/hooks/queries/use-assets-queries"
 import { useStorageProfile } from "@/hooks/queries/use-billing-queries"
+import { CachedImage } from "@/components/ui/cached-image"
 import type { LibraryAsset } from "@/lib/api"
 
 function formatBytes(bytes: number): string {
@@ -266,10 +267,12 @@ export default function LibraryPage() {
                   onClick={() => toggleSelect(asset.id)}
                 >
                   {asset.type === "image" && asset.url ? (
-                    <img
+                    <CachedImage
                       src={asset.thumbnailUrl ?? asset.url}
                       alt={asset.filename}
                       className="w-full h-full object-cover"
+                      thumbnail
+                      thumbnailWidth={320}
                     />
                   ) : asset.type === "video" ? (
                     <Film className="h-10 w-10 text-muted-foreground/30" />
