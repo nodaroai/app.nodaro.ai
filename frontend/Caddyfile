@@ -3,7 +3,7 @@
 	admin off
 }
 
-:{$PORT:3000} {
+:3000 {
 	handle /v1/* {
 		reverse_proxy localhost:9000
 	}
