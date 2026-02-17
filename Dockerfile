@@ -55,9 +55,9 @@ COPY <<'EOF' /app/start.sh
 #!/bin/sh
 set -e
 
-# Start backend API server
+# Start backend API server (fixed port 8000, Caddy proxies to it)
 cd /app/backend
-node dist/server.js &
+PORT=8000 node dist/server.js &
 BACKEND_PID=$!
 
 # Start BullMQ worker (job processor)
