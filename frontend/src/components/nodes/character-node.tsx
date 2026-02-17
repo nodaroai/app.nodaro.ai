@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
+import { CachedImage } from "@/components/ui/cached-image"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { CharacterNodeData } from "@/types/nodes"
@@ -92,7 +93,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
               )}
-              <img
+              <CachedImage
                 src={activeUrl}
                 alt={nodeData.characterName || "Character"}
                 className="w-full h-full object-cover cursor-pointer"
@@ -171,7 +172,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
                     updateNodeData(id, { activeResultIndex: i })
                   }}
                 >
-                  <img src={r.url} alt={`v${i + 1}`} className="w-full h-full object-cover" />
+                  <CachedImage src={r.url} alt={`v${i + 1}`} className="w-full h-full object-cover" />
                 </button>
                 <button
                   type="button"

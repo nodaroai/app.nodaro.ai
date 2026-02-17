@@ -3,6 +3,7 @@
 import { useState, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, Upload, ImageIcon, FileText, Loader2 } from "lucide-react"
+import { CachedImage } from "@/components/ui/cached-image"
 import { uploadImage } from "@/lib/api"
 import type { CharacterDefinition } from "@/types/nodes"
 
@@ -167,7 +168,7 @@ export function DefineCharacterModal({
             <div>
               {referenceImageUrl ? (
                 <div className="relative">
-                  <img src={referenceImageUrl} alt="Reference" className="w-full h-32 object-contain rounded-md border" />
+                  <CachedImage src={referenceImageUrl} alt="Reference" className="w-full h-32 object-contain rounded-md border" />
                   <button
                     type="button"
                     onClick={() => setReferenceImageUrl("")}

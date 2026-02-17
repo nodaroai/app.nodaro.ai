@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { ScriptPreviewModal } from "@/components/editor/script-preview-modal"
 import { ExpandStoryboardDialog, type ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
@@ -99,7 +100,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                     <div className="w-full aspect-video rounded-sm overflow-hidden bg-muted/50 flex items-center justify-center text-muted-foreground/30">
                       {scene.imageStatus === "completed" && (scene.generatedImages ?? []).length > 0 ? (
-                        <img src={(scene.generatedImages ?? [])[scene.activeImageIndex ?? 0]?.url} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
+                        <CachedImage src={(scene.generatedImages ?? [])[scene.activeImageIndex ?? 0]?.url} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
                       ) : scene.imageStatus === "running" ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (

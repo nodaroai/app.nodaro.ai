@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useState, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, Scissors, User, MapPin, Box, Loader2, AlertTriangle, Square, Pen, Check } from "lucide-react"
+import { CachedImage } from "@/components/ui/cached-image"
 import { cropImageElementToBlob, cropPolygonToBlob, polygonBoundingBox } from "@/lib/image-utils"
 import type { Point } from "@/lib/image-utils"
 import { uploadImage, getImageProxyUrl, saveCharacter, saveObject, saveLocation } from "@/lib/api"
@@ -611,7 +612,7 @@ export function ExtractReferencesModal({
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {characters.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
-                    <img src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
+                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
@@ -639,7 +640,7 @@ export function ExtractReferencesModal({
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {locations.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
-                    <img src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
+                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
@@ -667,7 +668,7 @@ export function ExtractReferencesModal({
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {objects.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
-                    <img src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
+                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
