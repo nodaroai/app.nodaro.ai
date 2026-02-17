@@ -330,6 +330,8 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         alt="Scene"
                         className="w-full rounded-xl object-contain max-h-[50vh] cursor-pointer hover:opacity-90 transition-opacity bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]"
                         onClick={() => setPreviewOpen(true)}
+                        thumbnail
+                        thumbnailWidth={800}
                       />
                       <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
