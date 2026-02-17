@@ -24,6 +24,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { Kling3DirectorModal } from "@/components/editor/kling3-director-modal"
 import { GenerateButton } from "@/components/credits/GenerateButton"
 import { createClient } from "@/lib/supabase"
 import { uploadFile, uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
@@ -333,6 +334,7 @@ export function ConfigPanel() {
   }, [selectedNode])
 
   const [expandSceneOpen, setExpandSceneOpen] = useState(false)
+  const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!selectedNode) return null
@@ -542,13 +544,37 @@ export function ConfigPanel() {
             <ImageToImageConfig data={selectedNode.data as ImageToImageData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "image-to-video" && (
-            <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} onUpdateNode={updateNodeData} />
+            <>
+              <ImageToVideoConfig data={selectedNode.data as ImageToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} onUpdateNode={updateNodeData} />
+              {(selectedNode.data as ImageToVideoData).provider === "kling-3.0" && (
+                <Button
+                  variant="outline"
+                  className="w-full mt-2"
+                  onClick={() => setExpandDirectorOpen(true)}
+                >
+                  <Maximize2 className="w-4 h-4 mr-2" />
+                  Expand Director
+                </Button>
+              )}
+            </>
           )}
           {selectedNode.type === "video-to-video" && (
             <VideoToVideoConfig data={selectedNode.data as VideoToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "text-to-video" && (
-            <TextToVideoConfig data={selectedNode.data as TextToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+            <>
+              <TextToVideoConfig data={selectedNode.data as TextToVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+              {(selectedNode.data as TextToVideoData).provider === "kling-3.0" && (
+                <Button
+                  variant="outline"
+                  className="w-full mt-2"
+                  onClick={() => setExpandDirectorOpen(true)}
+                >
+                  <Maximize2 className="w-4 h-4 mr-2" />
+                  Expand Director
+                </Button>
+              )}
+            </>
           )}
           {selectedNode.type === "text-to-speech" && (
             <TextToSpeechConfig data={selectedNode.data as TextToSpeechData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -752,6 +778,13 @@ export function ConfigPanel() {
         <SceneEditorModal
           isOpen={expandSceneOpen}
           onClose={() => setExpandSceneOpen(false)}
+          nodeId={selectedNode.id}
+        />
+      )}
+      {(selectedNode.type === "image-to-video" || selectedNode.type === "text-to-video") && (
+        <Kling3DirectorModal
+          isOpen={expandDirectorOpen}
+          onClose={() => setExpandDirectorOpen(false)}
           nodeId={selectedNode.id}
         />
       )}

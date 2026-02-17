@@ -2,13 +2,14 @@
 
 import { memo, useState, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Loader2, AlertCircle, X, Image as ImageIcon, Volume2 } from "lucide-react"
+import { Film, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { Kling3DirectorModal } from "@/components/editor/kling3-director-modal"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
@@ -65,6 +66,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [directorOpen, setDirectorOpen] = useState(false)
   const credits = useModelCredits(nodeData.provider ?? "minimax", 4)
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
@@ -177,11 +179,14 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       handles={handles}
     >
-      <div className="flex flex-col gap-2">
+      <div
+        className="flex flex-col gap-2"
+        onDoubleClick={isKling3 ? (e) => { e.stopPropagation(); setDirectorOpen(true) } : undefined}
+      >
         {isKling3 ? (
           <>
             {/* Badges Row */}
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 items-center">
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-medium">
                 {(nodeData as Record<string, unknown>).kling3Mode === "std" ? "Std" : "Pro"}
               </span>
@@ -203,6 +208,14 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   {nodeData.elements.length} elem
                 </span>
               )}
+              <button
+                type="button"
+                className="ml-auto p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-[#ff0073] transition-colors"
+                onClick={(e) => { e.stopPropagation(); setDirectorOpen(true) }}
+                title="Open Director"
+              >
+                <Maximize2 className="w-3 h-3" />
+              </button>
             </div>
 
             {/* Master Prompt Preview */}
@@ -530,6 +543,13 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       onConfirm={() => {
         if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
       }}
+    />
+
+    {/* Kling 3.0 Director Modal */}
+    <Kling3DirectorModal
+      isOpen={directorOpen}
+      onClose={() => setDirectorOpen(false)}
+      nodeId={id}
     />
     </div>
   )
