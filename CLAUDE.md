@@ -28,7 +28,7 @@
 | **Cloud** | `cloud` | Yes | Yes |
 
 **Backend helpers** (`backend/src/lib/config.ts`): `isCommunity()`, `isBusiness()`, `isCloud()`, `hasAdmin()`, `hasCredits()`
-**Frontend helpers** (`frontend/src/lib/edition.ts`): Same names, reads `NEXT_PUBLIC_EDITION`
+**Frontend helpers** (`frontend/src/lib/edition.ts`): Same names, reads `VITE_EDITION`
 
 **Rules:**
 - Never use raw `config.EDITION === "..."` -- use helper functions
@@ -37,7 +37,7 @@
 
 ### Coding Standards
 - **Backend**: Fastify plugin pattern (NOT Express Router)
-- **Frontend**: Next.js 14 App Router + shadcn/ui + Tailwind
+- **Frontend**: Vite + React Router 7 + shadcn/ui + Tailwind
 - **State**: React Query (server state) + Zustand (UI state) + React Flow (canvas state)
 - **Validation**: Zod schemas on all API endpoints
 - **Immutability**: Never mutate objects/arrays -- always create new copies
@@ -77,7 +77,7 @@
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 14 (App Router), React Flow, shadcn/ui, Tailwind |
+| Frontend | Vite 6, React Router 7, React Flow, shadcn/ui, Tailwind |
 | Backend | Fastify (Node.js/TypeScript), BullMQ (Redis) |
 | Database | Supabase (PostgreSQL + Auth + Realtime) |
 | Storage | Cloudflare R2 (S3-compatible) |
@@ -111,13 +111,15 @@
 
 ```
 frontend/src/
+  main.tsx                — Vite entry point
+  router.tsx              — React Router config (createBrowserRouter)
   app/(auth)/             — Login, signup
-  app/(dashboard)/        — Projects list, workflow list
+  app/(dashboard)/        — Projects, workflows, billing, settings, library
   app/(admin)/            — Admin panel (cloud/business only)
-  app/editor/             — React Flow editor
   app/pricing/            — Pricing page (Paddle)
-  app/billing/            — Billing dashboard
   app/gallery/            — Public community gallery
+  routes/                 — Route wrapper components (workflow-editor-page, etc.)
+  layouts/                — DashboardLayout, AdminLayout
   components/nodes/       — 30+ custom node components
   components/credits/     — CreditBalance, GenerateButton, etc.
   components/ui/          — shadcn/ui
