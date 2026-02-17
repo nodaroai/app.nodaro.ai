@@ -7,6 +7,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { CachedImage } from "@/components/ui/cached-image"
 import { ExtractReferencesModal } from "./extract-references-modal"
 import { DefineCharacterModal } from "./define-character-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -325,7 +326,7 @@ export function ScriptPreviewModal({
                   {/* Image area */}
                   <div className="relative w-full aspect-video rounded-md overflow-hidden">
                     {activeImage ? (
-                      <img
+                      <CachedImage
                         src={activeImage.url}
                         alt={`Scene ${scene.sceneNumber}`}
                         className="w-full h-full object-cover"
@@ -389,7 +390,7 @@ export function ScriptPreviewModal({
                               onSetActiveImage(i, vi)
                             }}
                           >
-                            <img src={img.url} alt={`v${vi + 1}`} className="w-full h-full object-cover" />
+                            <CachedImage src={img.url} alt={`v${vi + 1}`} className="w-full h-full object-cover" />
                           </button>
                           <button
                             type="button"

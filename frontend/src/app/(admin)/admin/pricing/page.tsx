@@ -1,7 +1,5 @@
-"use client"
-
 import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
+import { Link } from "react-router-dom"
 import {
   DollarSign,
   Wrench,
@@ -607,7 +605,7 @@ function AIModelsSection({
           </Badge>
         )}
         <Link
-          href="/admin/models"
+          to="/admin/models"
           className="ml-auto text-xs text-[#ff0073] hover:underline inline-flex items-center gap-1"
         >
           Edit model pricing

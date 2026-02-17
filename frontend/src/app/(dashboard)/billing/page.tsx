@@ -1,8 +1,5 @@
-"use client"
-
-import { Suspense, useEffect, useState, useCallback } from "react"
-import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useEffect, useState, useCallback } from "react"
+import { Link, useSearchParams } from "react-router-dom"
 import {
   Coins,
   CreditCard,
@@ -42,16 +39,8 @@ function formatBytes(bytes: number): string {
 }
 
 export default function BillingPage() {
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center h-96"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-      <BillingPageContent />
-    </Suspense>
-  )
-}
-
-function BillingPageContent() {
   const { user, loading: authLoading } = useAuth()
-  const searchParams = useSearchParams()
+  const [searchParams] = useSearchParams()
   const { balance, isLoading: creditsLoading, refetch: refetchCredits } = useUserCredits(user?.id)
 
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
@@ -251,7 +240,7 @@ function BillingPageContent() {
               Manage Subscription
             </Button>
           )}
-          <Link href="/pricing">
+          <Link to="/pricing">
             <Button
               variant="outline"
               size="sm"
@@ -348,7 +337,7 @@ function BillingPageContent() {
             </div>
 
             <div className="flex justify-end">
-              <Link href="/library">
+              <Link to="/library">
                 <Button variant="outline" size="sm">
                   <FolderOpen className="h-4 w-4 mr-2" />
                   Manage Files
@@ -361,7 +350,7 @@ function BillingPageContent() {
                 <p className="text-sm text-amber-700 dark:text-amber-400">
                   {usagePercent >= 90 ? "Storage almost full! Upgrade for more space." : "Running low on storage. Consider upgrading."}
                 </p>
-                <Link href="/pricing">
+                <Link to="/pricing">
                   <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-400">
                     <ArrowUpRight className="h-3 w-3 mr-1" />
                     Upgrade

@@ -1,6 +1,6 @@
 export type Edition = 'community' | 'business' | 'cloud'
 
-export const EDITION: Edition = (process.env.NEXT_PUBLIC_EDITION as Edition) || 'community'
+export const EDITION: Edition = (import.meta.env.VITE_EDITION as Edition) || 'community'
 
 /** community = open source, no credits, no admin */
 export function isCommunity(): boolean {

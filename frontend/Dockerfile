@@ -4,17 +4,21 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_APP_URL
+ARG VITE_API_URL
+ARG VITE_EDITION
+ARG VITE_PADDLE_CLIENT_TOKEN
+ARG VITE_PADDLE_ENVIRONMENT
+
 RUN npm run build
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+FROM caddy:2-alpine AS runner
+COPY --from=builder /app/dist /srv
+COPY Caddyfile /etc/caddy/Caddyfile
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

@@ -1,7 +1,5 @@
-"use client"
-
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { ReactFlowProvider } from "@xyflow/react"
 import { Play, Loader2, Square, DollarSign, Layers, History } from "lucide-react"
 import { WorkflowCanvas } from "./workflow-canvas"
@@ -79,7 +77,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const { user } = useAuth()
   const { save, load, saving, loading } = useWorkflowPersistence(projectId)
   const fetchProjects = useProjectsStore((s) => s.fetchProjects)
-  const router = useRouter()
+  const navigate = useNavigate()
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [activeTab, setActiveTab] = useState<"editor" | "executions" | "cost">("editor")
@@ -4380,20 +4378,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     (href: string) => {
       const isDirty = useWorkflowStore.getState().isDirty
       if (!isDirty) {
-        router.push(href)
+        navigate(href)
         return
       }
       pendingNavRef.current = href
       setShowUnsavedDialog(true)
     },
-    [router],
+    [navigate],
   )
 
   function handleDialogSave() {
     setShowUnsavedDialog(false)
     handleSave().then(() => {
       if (pendingNavRef.current) {
-        router.push(pendingNavRef.current)
+        navigate(pendingNavRef.current)
         pendingNavRef.current = null
       }
     })
@@ -4403,7 +4401,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setShowUnsavedDialog(false)
     useWorkflowStore.getState().markClean()
     if (pendingNavRef.current) {
-      router.push(pendingNavRef.current)
+      navigate(pendingNavRef.current)
       pendingNavRef.current = null
     }
   }

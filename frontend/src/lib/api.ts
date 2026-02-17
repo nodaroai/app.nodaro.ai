@@ -1669,7 +1669,7 @@ export async function generateAIWriterStream(params: {
 
   // SSE streaming must bypass the Next.js rewrite proxy (which buffers the
   // response body) and call the backend directly so tokens arrive in real-time.
-  const sseBaseUrl = process.env.NEXT_PUBLIC_API_URL || ""
+  const sseBaseUrl = import.meta.env.VITE_API_URL || ""
 
   try {
     const { streamRequest } = await import("@/lib/sse-client")

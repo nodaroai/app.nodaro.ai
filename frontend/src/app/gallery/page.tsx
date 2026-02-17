@@ -1,9 +1,8 @@
-"use client"
-
 import { useState, useEffect, useCallback, useRef } from "react"
-import Link from "next/link"
+import { Link } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { CachedImage } from "@/components/ui/cached-image"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
@@ -368,13 +367,13 @@ export default function GalleryPage() {
       <header className="border-b border-zinc-200 dark:border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <Link
-            href="/projects"
+            to="/projects"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to app
           </Link>
-          <Link href="/" className="text-lg font-bold text-[#ff0073]">
+          <Link to="/" className="text-lg font-bold text-[#ff0073]">
             SceneNode
           </Link>
           <ThemeToggle />
@@ -436,11 +435,12 @@ export default function GalleryPage() {
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setReferenceViewIndex(null); setSelectedIndex(index) } }}
                 >
                   {item.type === "image" ? (
-                    <img
+                    <CachedImage
                       src={item.outputUrl}
                       alt=""
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      thumbnail
                     />
                   ) : item.type === "video" ? (
                     <video
@@ -517,7 +517,7 @@ export default function GalleryPage() {
               {/* Preview with navigation arrows */}
               <div className="relative bg-black flex items-center justify-center min-h-[300px] max-h-[70vh]">
                 {selectedItem.type === "image" ? (
-                  <img src={selectedItem.outputUrl} alt="" className="max-w-full max-h-[70vh] object-contain" />
+                  <CachedImage src={selectedItem.outputUrl} alt="" className="max-w-full max-h-[70vh] object-contain" />
                 ) : selectedItem.type === "video" ? (
                   <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="max-w-full max-h-[70vh]" />
                 ) : (
@@ -617,10 +617,12 @@ export default function GalleryPage() {
                               className="w-10 h-10 rounded-full object-cover"
                             />
                           ) : (
-                            <img
+                            <CachedImage
                               src={url}
                               alt={`Reference ${i + 1}`}
                               className="w-10 h-10 rounded-full object-cover"
+                              thumbnail
+                              thumbnailWidth={80}
                             />
                           )}
                         </button>
@@ -661,7 +663,7 @@ export default function GalleryPage() {
       {isFullscreen && selectedItem && selectedIndex !== null && (
         <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center">
           {selectedItem.type === "image" ? (
-            <img src={selectedItem.outputUrl} alt="" className="max-w-full max-h-full object-contain" />
+            <CachedImage src={selectedItem.outputUrl} alt="" className="max-w-full max-h-full object-contain" />
           ) : selectedItem.type === "video" ? (
             <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="max-w-full max-h-full" />
           ) : (
@@ -729,7 +731,7 @@ export default function GalleryPage() {
                   className="max-w-full max-h-[60vh] object-contain"
                 />
               ) : (
-                <img
+                <CachedImage
                   src={selectedItem.referenceImages[referenceViewIndex]}
                   alt={`Reference ${referenceViewIndex + 1}`}
                   className="max-w-full max-h-[60vh] object-contain"

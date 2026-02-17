@@ -1,8 +1,5 @@
-"use client"
-
 import { useEffect, useState, useCallback } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { Link, useLocation } from "react-router-dom"
 import {
   FolderOpen,
   Settings,
@@ -67,7 +64,7 @@ export function AppSidebar({
   isMobileOpen = false,
   className,
 }: AppSidebarProps) {
-  const pathname = usePathname()
+  const pathname = useLocation().pathname
   const { user, isAdmin, signOut } = useAuth()
   const { isCollapsed, setCollapsed } = useSidebar()
   const [mounted, setMounted] = useState(false)
@@ -164,7 +161,7 @@ export function AppSidebar({
         {/* Logo - matches editor header height (h-[41px] = py-2 + border-b) */}
         <div className="flex items-center justify-between h-[41px] px-3 border-b border-zinc-200 dark:border-zinc-800">
           <Link
-            href="/projects"
+            to="/projects"
             onClick={handleNavClick}
             className={cn(
               "flex items-center gap-2 font-bold text-[#ff0073] transition-all duration-300",
@@ -210,7 +207,7 @@ export function AppSidebar({
 
             const linkContent = (
               <Link
-                href={item.href}
+                to={item.href}
                 onClick={handleNavClick}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200",

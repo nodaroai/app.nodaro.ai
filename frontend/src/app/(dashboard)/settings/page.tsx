@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import {
   Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,

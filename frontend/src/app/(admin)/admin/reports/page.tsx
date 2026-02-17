@@ -1,9 +1,8 @@
-"use client"
-
 import { useState, useEffect, useCallback } from "react"
 import { Loader2, CheckCircle, XCircle, Eye, Trash2, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { CachedImage } from "@/components/ui/cached-image"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
 import {
@@ -267,7 +266,7 @@ export default function AdminGalleryReportsPage() {
                     onClick={() => setPreviewReport(report)}
                   >
                     {outputUrl && outputType === "image" ? (
-                      <img src={outputUrl} alt="" className="w-full h-full object-cover" />
+                      <CachedImage src={outputUrl} alt="" className="w-full h-full object-cover" />
                     ) : outputUrl && outputType === "video" ? (
                       <video src={outputUrl} muted className="w-full h-full object-cover" />
                     ) : (
@@ -396,7 +395,7 @@ export default function AdminGalleryReportsPage() {
                 {/* Media preview */}
                 <div className="bg-black flex items-center justify-center min-h-[200px] max-h-[60vh]">
                   {outputUrl && outputType === "image" ? (
-                    <img src={outputUrl} alt="" className="max-w-full max-h-[60vh] object-contain" />
+                    <CachedImage src={outputUrl} alt="" className="max-w-full max-h-[60vh] object-contain" />
                   ) : outputUrl && outputType === "video" ? (
                     <video src={outputUrl} controls className="max-w-full max-h-[60vh]" />
                   ) : outputUrl && outputType === "audio" ? (

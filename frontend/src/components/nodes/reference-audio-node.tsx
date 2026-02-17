@@ -4,6 +4,7 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { CachedImage } from "@/components/ui/cached-image"
 import type { ReferenceAudioData } from "@/types/nodes"
 
 function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
@@ -27,7 +28,7 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
       <div className="flex flex-col gap-1">
         {hasThumbnail ? (
           <div className="w-full rounded overflow-hidden border border-border">
-            <img src={nodeData.videoThumbnail} alt="" className="w-full aspect-video object-cover" />
+            <CachedImage src={nodeData.videoThumbnail} alt="" className="w-full aspect-video object-cover" />
           </div>
         ) : (
           <div className="flex items-center justify-center w-full h-12 rounded border border-dashed border-muted-foreground/30 text-muted-foreground/40">

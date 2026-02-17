@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { CachedImage } from "@/components/ui/cached-image"
 import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import { TTS_VOICES } from "@/lib/tts-voices"
 import { textToSpeech, getJobStatus } from "@/lib/api"
@@ -514,7 +515,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   {characterAssets.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
                       <span className="flex items-center gap-1.5">
-                        {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                        {a.referenceImageUrl && <CachedImage src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" thumbnail thumbnailWidth={32} />}
                         {a.name}
                       </span>
                     </SelectItem>
@@ -581,7 +582,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 <div className="flex items-center gap-1.5">
                   {recentlyAdded.has(entry.assetId) && <Check className="w-3 h-3 text-green-500" />}
                   {asset?.referenceImageUrl && (
-                    <img src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" />
+                    <CachedImage src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={48} />
                   )}
                   <span className="text-xs font-medium">{asset?.name ?? "Unknown"}</span>
                 </div>
@@ -629,7 +630,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             {availableChars.map((a) => (
               <SelectItem key={a.id} value={a.id}>
                 <span className="flex items-center gap-1.5">
-                  {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                  {a.referenceImageUrl && <CachedImage src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" thumbnail thumbnailWidth={32} />}
                   {a.name}
                 </span>
               </SelectItem>
@@ -658,7 +659,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 <div className="flex items-center gap-1.5">
                   {recentlyAdded.has(loc.assetId) && <Check className="w-3 h-3 text-green-500" />}
                   {asset?.referenceImageUrl && (
-                    <img src={asset.referenceImageUrl} alt={asset?.name} className="w-6 h-6 rounded object-cover" />
+                    <CachedImage src={asset.referenceImageUrl} alt={asset?.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={48} />
                   )}
                   <span className="text-xs font-medium">{loc.name ?? asset?.name ?? "Unknown"}</span>
                   {loc.isPrimary && (
@@ -760,7 +761,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             {availableLocs.map((a) => (
               <SelectItem key={a.id} value={a.id}>
                 <span className="flex items-center gap-1.5">
-                  {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                  {a.referenceImageUrl && <CachedImage src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" thumbnail thumbnailWidth={32} />}
                   {a.name}
                 </span>
               </SelectItem>
@@ -828,7 +829,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             <div key={`${entry.assetId}-${i}`} className={`flex items-center gap-1.5 p-2 rounded-md border transition-colors duration-500 ${recentlyAdded.has(entry.assetId) ? "bg-green-500/10 border-green-500/30" : "bg-muted/20"}`}>
               {recentlyAdded.has(entry.assetId) && <Check className="w-3 h-3 text-green-500" />}
               {asset?.referenceImageUrl && (
-                <img src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" />
+                <CachedImage src={asset.referenceImageUrl} alt={asset.name} className="w-6 h-6 rounded object-cover" thumbnail thumbnailWidth={48} />
               )}
               <span className="text-xs font-medium flex-1">{asset?.name ?? "Unknown"}</span>
               <Input
@@ -852,7 +853,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
             {availableObjs.map((a) => (
               <SelectItem key={a.id} value={a.id}>
                 <span className="flex items-center gap-1.5">
-                  {a.referenceImageUrl && <img src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" />}
+                  {a.referenceImageUrl && <CachedImage src={a.referenceImageUrl} alt={a.name} className="w-4 h-4 rounded object-cover inline" thumbnail thumbnailWidth={32} />}
                   {a.name}
                 </span>
               </SelectItem>

@@ -23,6 +23,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
+import { CachedImage } from "@/components/ui/cached-image"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { Kling3DirectorModal } from "@/components/editor/kling3-director-modal"
 import { GenerateButton } from "@/components/credits/GenerateButton"
@@ -1426,7 +1427,7 @@ function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAudioData
           {fetchingMeta && <p className="text-xs text-muted-foreground">Fetching video info...</p>}
           {data.videoThumbnail && (
             <div className="rounded-md overflow-hidden bg-muted border border-border">
-              <img src={data.videoThumbnail} alt="" className="w-full aspect-video object-cover" />
+              <CachedImage src={data.videoThumbnail} alt="" className="w-full aspect-video object-cover" thumbnail />
               {data.videoTitle && <p className="text-xs px-2 py-1.5 truncate text-foreground">{data.videoTitle}</p>}
             </div>
           )}
@@ -2072,7 +2073,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           {attachedChars.map((char) => (
             <div key={char.id} className="flex items-start gap-2 p-2 rounded-md border bg-muted/30">
               {char.referenceImageUrl ? (
-                <img src={char.referenceImageUrl} alt={char.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                <CachedImage src={char.referenceImageUrl} alt={char.name} className="w-8 h-8 rounded object-cover flex-shrink-0" thumbnail thumbnailWidth={80} />
               ) : (
                 <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
                   <FileText className="w-3.5 h-3.5 text-muted-foreground" />
@@ -4373,7 +4374,7 @@ function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<GenerateMu
               </div>
               {typeof connectedRef.nodeData?.videoThumbnail === "string" && connectedRef.nodeData.videoThumbnail && (
                 <div className="rounded overflow-hidden bg-muted">
-                  <img src={connectedRef.nodeData.videoThumbnail} alt="" className="w-full h-16 object-cover" />
+                  <CachedImage src={connectedRef.nodeData.videoThumbnail} alt="" className="w-full h-16 object-cover" thumbnail thumbnailWidth={320} />
                 </div>
               )}
               {typeof connectedRef.nodeData?.videoTitle === "string" && connectedRef.nodeData.videoTitle && (
@@ -5207,7 +5208,7 @@ function CharacterAssetGrid({ items }: { readonly items: readonly { name: string
             title={`${item.name} - click to enlarge`}
           >
             <div className="w-full aspect-square rounded overflow-hidden bg-muted/30 hover:ring-2 hover:ring-primary/50 transition-shadow">
-              <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+              <CachedImage src={item.url} alt={item.name} className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
             </div>
             <span className="text-[9px] text-muted-foreground truncate w-full text-center">{item.name}</span>
           </button>
@@ -6058,7 +6059,7 @@ function ObjectAssetGrid({ items }: { readonly items: Array<{ name: string; url:
             onClick={() => setLightboxSrc(item.url)}
             title={item.name}
           >
-            <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+            <CachedImage src={item.url} alt={item.name} className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Maximize2 className="w-4 h-4 text-white" />
             </div>
@@ -6443,7 +6444,7 @@ function LocationAssetGrid({ items }: { readonly items: Array<{ name: string; ur
             onClick={() => setLightboxSrc(item.url)}
             title={item.name}
           >
-            <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+            <CachedImage src={item.url} alt={item.name} className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Maximize2 className="w-4 h-4 text-white" />
             </div>

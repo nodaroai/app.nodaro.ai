@@ -1,7 +1,5 @@
-"use client"
-
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { Plus, Search, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +15,7 @@ export default function ProjectsPage() {
   const deleteProject = useProjectsStore((s) => s.deleteProject)
   const updateProject = useProjectsStore((s) => s.updateProject)
 
-  const router = useRouter()
+  const navigate = useNavigate()
 
   const handleRenameProject = async (id: string, newName: string) => {
     await updateProject(id, { name: newName })
@@ -26,7 +24,7 @@ export default function ProjectsPage() {
   const handleCreateProject = async () => {
     const project = await createProject("Untitled Project")
     if (project) {
-      router.push(`/projects/${project.id}`)
+      navigate(`/projects/${project.id}`)
     }
   }
 

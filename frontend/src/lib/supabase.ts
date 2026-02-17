@@ -1,14 +1,17 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/database.types'
 
-let cachedClient: ReturnType<typeof createBrowserClient> | null = null
+let cachedClient: SupabaseClient<Database> | null = null
 
 export function createClient() {
   if (!cachedClient) {
-    cachedClient = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    cachedClient = createSupabaseClient<Database>(
+      import.meta.env.VITE_SUPABASE_URL!,
+      import.meta.env.VITE_SUPABASE_ANON_KEY!,
       {
         auth: {
+          flowType: "pkce",
+          detectSessionInUrl: true,
           // Bypass Navigator Lock API to prevent AbortError from
           // @supabase/auth-js/locks.ts during session synchronization.
           // Cross-tab coordination is non-critical for our use case.

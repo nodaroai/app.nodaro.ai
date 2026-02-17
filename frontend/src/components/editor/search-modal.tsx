@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase"
 interface Project {
   id: string
   name: string
-  description?: string
+  description: string | null
   created_at: string
 }
 

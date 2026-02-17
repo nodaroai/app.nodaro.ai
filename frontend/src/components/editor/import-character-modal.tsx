@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { X, ImageIcon, FileText, Loader2, Download } from "lucide-react"
+import { CachedImage } from "@/components/ui/cached-image"
 import { createClient } from "@/lib/supabase"
 import type { CharacterDefinition } from "@/types/nodes"
 
@@ -198,7 +199,7 @@ export function ImportCharacterModal({
                           }`}
                         >
                           {char.type === "reference" && char.referenceImageUrl ? (
-                            <img src={char.referenceImageUrl} alt={char.name} className="w-12 h-12 rounded object-cover" />
+                            <CachedImage src={char.referenceImageUrl} alt={char.name} className="w-12 h-12 rounded object-cover" />
                           ) : (
                             <div className="w-12 h-12 rounded bg-muted flex items-center justify-center">
                               <FileText className="w-5 h-5 text-muted-foreground" />

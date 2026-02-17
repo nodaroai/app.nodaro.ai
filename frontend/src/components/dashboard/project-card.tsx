@@ -1,7 +1,5 @@
-"use client"
-
 import { useState } from "react"
-import Link from "next/link"
+import { Link } from "react-router-dom"
 import { MoreHorizontal, Trash2, Pencil } from "lucide-react"
 import {
   DropdownMenu,
@@ -50,7 +48,7 @@ export function ProjectCard({ project, onDelete, onRename }: ProjectCardProps) {
   return (
     <>
       <Link
-        href={`/projects/${project.id}`}
+        to={`/projects/${project.id}`}
         className="group block rounded-lg border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
       >
         <div className="flex items-start justify-between">
