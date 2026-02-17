@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import {
   Loader2,
   Search,
@@ -22,9 +22,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useAdmin, type AdminUser } from "@/hooks/use-admin"
+import {
+  useAdminUsers,
+  useAdminUserTransactions,
+  useAdminAdjustCreditsMutation,
+  useAdminChangeTierMutation,
+  useAdminChangeStorageMutation,
+  useAdminChangeRoleMutation,
+  type AdminUser,
+} from "@/hooks/queries/use-admin-queries"
 import { useAuth } from "@/hooks/use-auth"
-import { createClient } from "@/lib/supabase"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,8 +50,6 @@ interface CreditTransaction {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const API = ""
 
 const TIER_COLORS: Record<string, string> = {
   free: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -102,8 +107,8 @@ function UserExpandedRow({
   readonly user: AdminUser
   readonly onCreditsAdjusted: () => void
 }) {
-  const [transactions, setTransactions] = useState<ReadonlyArray<CreditTransaction>>([])
-  const [txLoading, setTxLoading] = useState(true)
+  const { data: txResult, isLoading: txLoading } = useAdminUserTransactions(user.id)
+  const transactions = Array.isArray(txResult) ? txResult : (txResult?.data ?? []) as ReadonlyArray<CreditTransaction>
   const [adjustAmount, setAdjustAmount] = useState("")
   const [adjustType, setAdjustType] = useState<"subscription" | "topup">("topup")
   const [adjustDesc, setAdjustDesc] = useState("")
@@ -119,43 +124,11 @@ function UserExpandedRow({
   })
   const [savingStorage, setSavingStorage] = useState(false)
 
-  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    const headers: Record<string, string> = { "Content-Type": "application/json" }
-    if (session?.access_token) {
-      headers["Authorization"] = `Bearer ${session.access_token}`
-    }
-    return headers
-  }, [])
+  const adjustCreditsMut = useAdminAdjustCreditsMutation()
+  const changeTierMut = useAdminChangeTierMutation()
+  const changeStorageMut = useAdminChangeStorageMutation()
 
-  const parseResponse = (data: unknown): ReadonlyArray<CreditTransaction> => {
-    if (Array.isArray(data)) return data
-    if (data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).data)) {
-      return (data as Record<string, unknown>).data as ReadonlyArray<CreditTransaction>
-    }
-    return []
-  }
-
-  const fetchTransactions = useCallback(async () => {
-    setTxLoading(true)
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${API}/v1/admin/users/${user.id}/transactions?limit=20`, { headers })
-      const data = await res.json()
-      setTransactions(parseResponse(data))
-    } catch {
-      setTransactions([])
-    } finally {
-      setTxLoading(false)
-    }
-  }, [user.id, getAuthHeaders])
-
-  useEffect(() => {
-    fetchTransactions()
-  }, [fetchTransactions])
-
-  const handleAdjust = useCallback(async () => {
+  const handleAdjust = async () => {
     const amount = Number(adjustAmount)
     if (Number.isNaN(amount) || amount === 0) {
       toast.error("Amount must be a non-zero number")
@@ -168,79 +141,36 @@ function UserExpandedRow({
 
     setSubmitting(true)
     try {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) {
-        toast.error("Not authenticated")
-        return
-      }
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${API}/v1/admin/users/${user.id}/credits`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          amount,
-          creditType: adjustType,
-          description: adjustDesc.trim(),
-          adminUserId: authUser.id,
-        }),
+      await adjustCreditsMut.mutateAsync({
+        userId: user.id,
+        amount,
+        type: adjustType,
       })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        throw new Error(err?.error || `Request failed (${res.status})`)
-      }
-
       toast.success(`Credits adjusted: ${amount > 0 ? "+" : ""}${amount} ${adjustType}`)
       setAdjustAmount("")
       setAdjustDesc("")
       onCreditsAdjusted()
-      fetchTransactions()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to adjust credits")
     } finally {
       setSubmitting(false)
     }
-  }, [user.id, adjustAmount, adjustType, adjustDesc, onCreditsAdjusted, getAuthHeaders, fetchTransactions])
+  }
 
-  const handleTierChange = useCallback(async (newTier: string) => {
+  const handleTierChange = async (newTier: string) => {
     setChangingTier(true)
     try {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) {
-        toast.error("Not authenticated")
-        return
-      }
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${API}/v1/admin/users/${user.id}/tier`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({
-          tier: newTier,
-          adminUserId: authUser.id,
-        }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        throw new Error(err?.error || `Request failed (${res.status})`)
-      }
-
-      const result = await res.json()
-      toast.success(`Tier changed to ${newTier} (credits reset to ${result.subscription_credits ?? newTier})`)
+      const result = await changeTierMut.mutateAsync({ userId: user.id, tier: newTier })
+      toast.success(`Tier changed to ${newTier} (credits reset to ${(result as Record<string,unknown>).subscription_credits ?? newTier})`)
       onCreditsAdjusted()
-      fetchTransactions()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to change tier")
     } finally {
       setChangingTier(false)
     }
-  }, [user.id, onCreditsAdjusted, getAuthHeaders, fetchTransactions])
+  }
 
-  const handleStorageChange = useCallback(async () => {
+  const handleStorageChange = async () => {
     const bytes = storagePreset === "custom"
       ? Math.round(Number(customStorageGB) * 1024 * 1024 * 1024)
       : Number(storagePreset)
@@ -252,28 +182,7 @@ function UserExpandedRow({
 
     setSavingStorage(true)
     try {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) {
-        toast.error("Not authenticated")
-        return
-      }
-
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${API}/v1/admin/users/${user.id}/storage`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({
-          storageLimitBytes: bytes,
-          adminUserId: authUser.id,
-        }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        throw new Error(err?.error || `Request failed (${res.status})`)
-      }
-
+      await changeStorageMut.mutateAsync({ userId: user.id, storageLimitBytes: bytes })
       toast.success(`Storage limit updated to ${formatBytes(bytes)}`)
       onCreditsAdjusted()
     } catch (err) {
@@ -281,7 +190,7 @@ function UserExpandedRow({
     } finally {
       setSavingStorage(false)
     }
-  }, [user.id, storagePreset, customStorageGB, onCreditsAdjusted, getAuthHeaders])
+  }
 
   const total = user.subscription_credits + user.topup_credits
   const subPercent = total > 0 ? (user.subscription_credits / total) * 100 : 0
@@ -544,20 +453,11 @@ function UserExpandedRow({
 // ---------------------------------------------------------------------------
 
 export default function AdminUsersPage() {
-  const { fetchUsers, loading } = useAdmin()
   const { user: currentUser, role: currentUserRole } = useAuth()
-  const [users, setUsers] = useState<ReadonlyArray<AdminUser>>([])
   const [page, setPage] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
-
-  const loadUsers = useCallback(() => {
-    fetchUsers(page).then(setUsers)
-  }, [fetchUsers, page])
-
-  useEffect(() => {
-    loadUsers()
-  }, [loadUsers])
+  const { data: users = [], isLoading: loading, refetch: loadUsers } = useAdminUsers(page)
 
   const filteredUsers = searchQuery.trim()
     ? users.filter(
@@ -688,34 +588,12 @@ function UserRow({
   const isSelf = currentUserId === user.id
   const canChangeRole = isSuperAdmin && !isOwner && !isSelf
 
-  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    const headers: Record<string, string> = { "Content-Type": "application/json" }
-    if (session?.access_token) {
-      headers["Authorization"] = `Bearer ${session.access_token}`
-    }
-    return headers
-  }, [])
+  const changeRoleMut = useAdminChangeRoleMutation()
 
-  const handleRoleChange = useCallback(async (newRole: string) => {
+  const handleRoleChange = async (newRole: string) => {
     setChangingRole(true)
     try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${API}/v1/admin/users/${user.id}/role`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({
-          role: newRole,
-          adminUserId: currentUserId,
-        }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        throw new Error(err?.error || `Request failed (${res.status})`)
-      }
-
+      await changeRoleMut.mutateAsync({ userId: user.id, role: newRole })
       toast.success(`Role changed to ${newRole}`)
       onCreditsAdjusted()
     } catch (err) {
@@ -723,7 +601,7 @@ function UserRow({
     } finally {
       setChangingRole(false)
     }
-  }, [user.id, currentUserId, onCreditsAdjusted, getAuthHeaders])
+  }
 
   return (
     <>

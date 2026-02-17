@@ -1,12 +1,8 @@
-"use client"
-
-import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Loader2 } from "lucide-react"
-import { getModelCreditCost } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
-import { useUserCredits } from "@/components/credits/CreditBalance"
+import { useModelCreditCost, useUserCredits } from "@/hooks/queries/use-credits-queries"
 
 interface GenerateButtonProps {
   onClick: () => void
@@ -27,36 +23,14 @@ export function GenerateButton({
   label = "Generate",
   children,
 }: GenerateButtonProps) {
-  const [creditCost, setCreditCost] = useState<number | null>(null)
-  const { balance } = useUserCredits(userId)
+  const { data: creditCost } = useModelCreditCost(modelIdentifier)
+  const { data: balance } = useUserCredits(userId)
 
   const creditsActive = hasCredits()
   const totalBalance = balance?.total ?? 0
-  const insufficient = creditsActive && creditCost !== null && creditCost > 0 && totalBalance < creditCost
+  const insufficient = creditsActive && creditCost != null && creditCost > 0 && totalBalance < creditCost
 
-  useEffect(() => {
-    if (!creditsActive || !modelIdentifier) return
-
-    let cancelled = false
-    async function fetchCost() {
-      try {
-        const result = await getModelCreditCost(modelIdentifier)
-        const data = result.data ?? (result as unknown as { model: string; creditCost: number })
-        if (!cancelled) {
-          setCreditCost(data.creditCost)
-        }
-      } catch {
-        if (!cancelled) {
-          setCreditCost(null)
-        }
-      }
-    }
-
-    fetchCost()
-    return () => { cancelled = true }
-  }, [modelIdentifier, creditsActive])
-
-  const showCreditInfo = creditsActive && creditCost !== null && creditCost > 0
+  const showCreditInfo = creditsActive && creditCost != null && creditCost > 0
 
   const buttonContent = (
     <>

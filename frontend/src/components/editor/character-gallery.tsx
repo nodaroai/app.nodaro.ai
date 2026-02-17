@@ -1,19 +1,16 @@
-"use client"
-
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
 import { UserCircle, Users, X, Loader2, AlertCircle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CharacterPageModal } from "./character-page-modal"
-import { getCharacters, type DbCharacter } from "@/lib/api"
-import { createClient } from "@/lib/supabase"
+import { type DbCharacter } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
+import { useCharacters } from "@/hooks/queries/use-assets-queries"
 import type { CharacterNodeData } from "@/types/nodes"
 
 export function CharacterGalleryButton() {
   const [open, setOpen] = useState(false)
-  const [dbCharacters, setDbCharacters] = useState<DbCharacter[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -22,28 +19,7 @@ export function CharacterGalleryButton() {
   const projectId = useWorkflowStore((s) => s.projectId)
   const [characterPageNodeId, setCharacterPageNodeId] = useState<string | null>(null)
 
-  // Fetch characters from DB when gallery opens
-  const fetchCharacters = useCallback(async () => {
-    if (!projectId) return
-    setLoading(true)
-    setError(null)
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const { characters } = await getCharacters(projectId, user?.id)
-      setDbCharacters(characters)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load characters")
-    } finally {
-      setLoading(false)
-    }
-  }, [projectId])
-
-  useEffect(() => {
-    if (open) {
-      fetchCharacters()
-    }
-  }, [open, fetchCharacters])
+  const { data: dbCharacters = [], isLoading: loading, error, refetch } = useCharacters(projectId ?? undefined, user?.id)
 
   // Find if a DB character already has a node on canvas
   const findNodeForCharacter = useCallback(
@@ -190,8 +166,8 @@ export function CharacterGalleryButton() {
               ) : error ? (
                 <div className="flex flex-col items-center justify-center py-8 text-destructive">
                   <AlertCircle className="w-8 h-8 mb-2" />
-                  <p className="text-sm">{error}</p>
-                  <Button variant="outline" size="sm" className="mt-2" onClick={fetchCharacters}>
+                  <p className="text-sm">{error instanceof Error ? error.message : "Failed to load characters"}</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
                     Retry
                   </Button>
                 </div>

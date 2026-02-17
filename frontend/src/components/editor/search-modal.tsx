@@ -1,9 +1,9 @@
-"use client"
-
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Search, Folder, GitBranch, X, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
+import { queryKeys } from "@/lib/query-keys"
 
 interface Project {
   id: string
@@ -27,17 +27,23 @@ interface SearchModalProps {
 
 export function SearchModal({ open, onClose }: SearchModalProps) {
   const [query, setQuery] = useState("")
-  const [projects, setProjects] = useState<Project[]>([])
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [loading, setLoading] = useState(false)
+  const [debouncedQuery, setDebouncedQuery] = useState("")
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Fetch projects and workflows
-  const fetchResults = useCallback(async (searchQuery: string) => {
-    setLoading(true)
-    try {
+  // Debounce the search query
+  useEffect(() => {
+    if (!open) return
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query)
+    }, query ? 300 : 0)
+    return () => clearTimeout(timer)
+  }, [open, query])
+
+  const { data: searchResults, isLoading: loading } = useQuery({
+    queryKey: queryKeys.search.results(debouncedQuery),
+    queryFn: async () => {
       const supabase = createClient()
 
       // Fetch projects
@@ -46,13 +52,10 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
         .select("id, name, description, created_at")
         .order("updated_at", { ascending: false })
         .limit(10)
-
-      if (searchQuery) {
-        projectsQuery = projectsQuery.ilike("name", `%${searchQuery}%`)
+      if (debouncedQuery) {
+        projectsQuery = projectsQuery.ilike("name", `%${debouncedQuery}%`)
       }
-
       const { data: projectsData } = await projectsQuery
-      setProjects(projectsData || [])
 
       // Fetch workflows with project names
       let workflowsQuery = supabase
@@ -60,41 +63,32 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
         .select("id, name, project_id, created_at, projects(name)")
         .order("updated_at", { ascending: false })
         .limit(10)
-
-      if (searchQuery) {
-        workflowsQuery = workflowsQuery.ilike("name", `%${searchQuery}%`)
+      if (debouncedQuery) {
+        workflowsQuery = workflowsQuery.ilike("name", `%${debouncedQuery}%`)
       }
-
       const { data: workflowsData } = await workflowsQuery
-      setWorkflows(
-        (workflowsData || []).map((w: any) => ({
+
+      return {
+        projects: (projectsData || []) as Project[],
+        workflows: (workflowsData || []).map((w: any) => ({
           ...w,
           project_name: w.projects?.name,
-        }))
-      )
-    } catch (error) {
-      console.error("Error fetching search results:", error)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+        })) as Workflow[],
+      }
+    },
+    enabled: open,
+    staleTime: 10_000,
+  })
 
-  // Initial fetch and debounced search
-  useEffect(() => {
-    if (!open) return
+  const projects = searchResults?.projects ?? []
+  const workflows = searchResults?.workflows ?? []
 
-    const timer = setTimeout(() => {
-      fetchResults(query)
-    }, query ? 300 : 0)
-
-    return () => clearTimeout(timer)
-  }, [open, query, fetchResults])
-
-  // Focus input when modal opens
+  // Focus input and reset state when modal opens
   useEffect(() => {
     if (open && inputRef.current) {
       inputRef.current.focus()
       setQuery("")
+      setDebouncedQuery("")
       setSelectedIndex(0)
     }
   }, [open])

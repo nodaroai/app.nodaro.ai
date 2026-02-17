@@ -12,25 +12,8 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog"
-
-const API_BASE = ""
-
-interface GalleryItem {
-  readonly id: string
-  readonly type: "image" | "video" | "audio"
-  readonly jobName: string
-  readonly outputUrl: string
-  readonly thumbnailUrl: string | null
-  readonly createdAt: string
-  readonly prompt: string | null
-  readonly model: string | null
-  readonly referenceImages: readonly string[]
-}
-
-interface GalleryResponse {
-  readonly data: readonly GalleryItem[]
-  readonly nextCursor: string | null
-}
+import { useGalleryInfinite, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
+import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
 
 type FilterType = "all" | "image" | "video" | "audio"
 
@@ -40,8 +23,6 @@ const FILTERS: readonly { readonly value: FilterType; readonly label: string; re
   { value: "video", label: "Videos", icon: Video },
   { value: "audio", label: "Audio", icon: Music },
 ]
-
-const ITEMS_PER_PAGE = 20
 
 const VIDEO_EXTENSIONS = /\.(mp4|webm|mov)(\?|$)/i
 
@@ -166,141 +147,70 @@ function CopyPromptButton({ prompt }: { readonly prompt: string }) {
 
 export default function GalleryPage() {
   const { user, isAdmin } = useAuth()
-  const [items, setItems] = useState<readonly GalleryItem[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterType>("all")
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
-  const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const hasMore = nextCursor !== null
+
+  // React Query hooks
+  const { data, isLoading: loading, isFetchingNextPage: loadingMore, hasNextPage: hasMore, fetchNextPage } = useGalleryInfinite(filter)
+  const reportMutation = useReportGalleryItemMutation()
+  const deleteMutation = useDeleteGalleryItemMutation()
+
+  // Derive flat items list from infinite query pages
+  const items: readonly GalleryItem[] = data?.pages.flatMap((p) => p.data) ?? []
+
+  const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
 
   // Report dialog state
   const [reportItem, setReportItem] = useState<GalleryItem | null>(null)
   const [reportReason, setReportReason] = useState<string>("inappropriate")
   const [reportDetails, setReportDetails] = useState("")
-  const [reportSubmitting, setReportSubmitting] = useState(false)
 
   // Admin delete confirm state
   const [deleteItem, setDeleteItem] = useState<GalleryItem | null>(null)
-  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
-
-  const fetchGallery = useCallback(async (cursor: string | null, append: boolean) => {
-    if (append) {
-      setLoadingMore(true)
-    } else {
-      setLoading(true)
-    }
-    try {
-      const params = new URLSearchParams({
-        limit: String(ITEMS_PER_PAGE),
-      })
-      if (filter !== "all") {
-        params.set("type", filter)
-      }
-      if (cursor) {
-        params.set("cursor", cursor)
-      }
-
-      const response = await fetch(`${API_BASE}/v1/gallery?${params}`)
-      if (!response.ok) throw new Error("Failed to fetch gallery")
-
-      const json = (await response.json()) as GalleryResponse
-      if (append) {
-        setItems((prev) => [...prev, ...json.data])
-      } else {
-        setItems(json.data)
-      }
-      setNextCursor(json.nextCursor)
-    } catch (err) {
-      console.error("Gallery fetch failed:", err)
-      if (!append) {
-        setItems([])
-        setNextCursor(null)
-      }
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-    }
-  }, [filter])
-
-  // Initial load
-  useEffect(() => {
-    setNextCursor(null)
-    fetchGallery(null, false)
-  }, [fetchGallery])
 
   // Infinite scroll via IntersectionObserver
   useEffect(() => {
     const sentinel = sentinelRef.current
     if (!sentinel) return
-
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && hasMore && !loading && !loadingMore) {
-          fetchGallery(nextCursor, true)
+          fetchNextPage()
         }
       },
       { rootMargin: "200px" },
     )
-
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasMore, loading, loadingMore, nextCursor, fetchGallery])
+  }, [hasMore, loading, loadingMore, fetchNextPage])
 
   async function handleReport() {
     if (!reportItem) return
-    setReportSubmitting(true)
     try {
-      const response = await fetch(`${API_BASE}/v1/gallery/report`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobId: reportItem.id,
-          reason: reportReason,
-          details: reportDetails || undefined,
-        }),
+      await reportMutation.mutateAsync({
+        jobId: reportItem.id,
+        reason: reportReason,
+        details: reportDetails || undefined,
       })
-
-      if (response.status === 429) {
-        toast.error("You already reported this item recently")
-        return
-      }
-
-      if (!response.ok) throw new Error("Failed to submit report")
-
       toast.success("Report submitted. Thank you!")
       setReportItem(null)
       setReportDetails("")
       setReportReason("inappropriate")
-    } catch {
-      toast.error("Failed to submit report")
-    } finally {
-      setReportSubmitting(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit report")
     }
   }
 
   async function handleAdminDelete() {
     if (!deleteItem || !user?.id) return
-    setDeleteSubmitting(true)
     try {
-      const response = await fetch(`${API_BASE}/v1/gallery/${deleteItem.id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
-      })
-
-      if (!response.ok) throw new Error("Failed to remove item")
-
+      await deleteMutation.mutateAsync({ itemId: deleteItem.id, userId: user.id })
       toast.success("Item removed from gallery")
-      setItems((prev) => prev.filter((i) => i.id !== deleteItem.id))
       setDeleteItem(null)
       setSelectedIndex(null)
     } catch {
       toast.error("Failed to remove item from gallery")
-    } finally {
-      setDeleteSubmitting(false)
     }
   }
 
@@ -819,17 +729,17 @@ export default function GalleryPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setReportItem(null)}
-                  disabled={reportSubmitting}
+                  disabled={reportMutation.isPending}
                 >
                   Cancel
                 </Button>
                 <Button
                   size="sm"
                   onClick={handleReport}
-                  disabled={reportSubmitting}
+                  disabled={reportMutation.isPending}
                   className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
                 >
-                  {reportSubmitting ? (
+                  {reportMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     "Submit Report"
@@ -854,17 +764,17 @@ export default function GalleryPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setDeleteItem(null)}
-                disabled={deleteSubmitting}
+                disabled={deleteMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 size="sm"
                 onClick={handleAdminDelete}
-                disabled={deleteSubmitting}
+                disabled={deleteMutation.isPending}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
-                {deleteSubmitting ? (
+                {deleteMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   "Remove"

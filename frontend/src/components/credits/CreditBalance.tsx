@@ -1,56 +1,16 @@
-"use client"
-
-import { useEffect, useState, useCallback } from "react"
 import { Coins } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { getUserCredits, type UserBalance } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { useUserCredits } from "@/hooks/queries/use-credits-queries"
 
-interface UseUserCreditsResult {
-  balance: UserBalance | null
-  isLoading: boolean
-  error: string | null
-  refetch: () => Promise<void>
-}
-
-export function useUserCredits(userId: string | undefined): UseUserCreditsResult {
-  const [balance, setBalance] = useState<UserBalance | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const refetch = useCallback(async () => {
-    if (!userId || !hasCredits()) {
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      const result = await getUserCredits(userId)
-      const data = result.data ?? (result as unknown as UserBalance)
-      setBalance(data)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch credits")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [userId])
-
-  useEffect(() => {
-    refetch()
-    const interval = setInterval(refetch, 30000)
-    return () => clearInterval(interval)
-  }, [refetch])
-
-  return { balance, isLoading, error, refetch }
-}
+export { useUserCredits } from "@/hooks/queries/use-credits-queries"
 
 interface CreditBalanceProps {
   userId: string
 }
 
 export function CreditBalance({ userId }: CreditBalanceProps) {
-  const { balance, isLoading, error } = useUserCredits(userId)
+  const { data: balance, isLoading, error } = useUserCredits(userId)
 
   if (!hasCredits()) return null
 

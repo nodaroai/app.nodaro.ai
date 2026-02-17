@@ -1,25 +1,8 @@
-import { useEffect, useState } from "react"
 import { Loader2, Users, FolderOpen, GitBranch, Briefcase, Coins } from "lucide-react"
-import { useAdmin } from "@/hooks/use-admin"
-
-interface Stats {
-  readonly totalUsers: number
-  readonly totalProjects: number
-  readonly totalWorkflows: number
-  readonly totalJobs: number
-  readonly jobsByStatus: Record<string, number>
-  readonly totalCreditsUsed: number
-}
+import { useAdminStats } from "@/hooks/queries/use-admin-queries"
 
 export default function AdminDashboard() {
-  const { fetchStats, loading } = useAdmin()
-  const [stats, setStats] = useState<Stats | null>(null)
-
-  useEffect(() => {
-    fetchStats().then((data) => {
-      if (data) setStats(data)
-    })
-  }, [fetchStats])
+  const { data: stats, isLoading: loading } = useAdminStats()
 
   if (loading && !stats) {
     return (

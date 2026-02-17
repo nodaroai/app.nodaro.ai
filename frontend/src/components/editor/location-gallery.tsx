@@ -1,19 +1,16 @@
-"use client"
-
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
 import { MapPin, X, Loader2, AlertCircle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { LocationPageModal } from "./location-page-modal"
-import { getLocations, type DbLocation } from "@/lib/api"
-import { createClient } from "@/lib/supabase"
+import { type DbLocation } from "@/lib/api"
+import { useAuth } from "@/hooks/use-auth"
+import { useLocations } from "@/hooks/queries/use-assets-queries"
 import type { LocationNodeData } from "@/types/nodes"
 
 export function LocationGalleryButton() {
   const [open, setOpen] = useState(false)
-  const [dbLocations, setDbLocations] = useState<DbLocation[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -22,28 +19,7 @@ export function LocationGalleryButton() {
   const projectId = useWorkflowStore((s) => s.projectId)
   const [locationPageNodeId, setLocationPageNodeId] = useState<string | null>(null)
 
-  // Fetch locations from DB when gallery opens
-  const fetchLocations = useCallback(async () => {
-    if (!projectId) return
-    setLoading(true)
-    setError(null)
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const { locations } = await getLocations(projectId, user?.id)
-      setDbLocations(locations)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load locations")
-    } finally {
-      setLoading(false)
-    }
-  }, [projectId])
-
-  useEffect(() => {
-    if (open) {
-      fetchLocations()
-    }
-  }, [open, fetchLocations])
+  const { data: dbLocations = [], isLoading: loading, error, refetch } = useLocations(projectId ?? undefined, user?.id)
 
   // Find if a DB location already has a node on canvas
   const findNodeForLocation = useCallback(
@@ -188,8 +164,8 @@ export function LocationGalleryButton() {
               ) : error ? (
                 <div className="flex flex-col items-center justify-center py-8 text-destructive">
                   <AlertCircle className="w-8 h-8 mb-2" />
-                  <p className="text-sm">{error}</p>
-                  <Button variant="outline" size="sm" className="mt-2" onClick={fetchLocations}>
+                  <p className="text-sm">{error instanceof Error ? error.message : "Failed to load locations"}</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
                     Retry
                   </Button>
                 </div>

@@ -1,0 +1,102 @@
+import { useQuery } from "@tanstack/react-query"
+import { createClient } from "@/lib/supabase"
+import { queryKeys } from "@/lib/query-keys"
+
+export interface Project {
+  readonly id: string
+  readonly name: string
+  readonly description: string
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export interface Folder {
+  readonly id: string
+  readonly projectId: string
+  readonly name: string
+  readonly createdAt: string
+}
+
+export interface WorkflowMeta {
+  readonly id: string
+  readonly projectId: string
+  readonly folderId: string | null
+  readonly name: string
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+function toProject(row: Record<string, unknown>): Project {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: (row.description as string) ?? "",
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
+}
+
+function toFolder(row: Record<string, unknown>): Folder {
+  return {
+    id: row.id as string,
+    projectId: row.project_id as string,
+    name: row.name as string,
+    createdAt: row.created_at as string,
+  }
+}
+
+function toWorkflowMeta(row: Record<string, unknown>): WorkflowMeta {
+  return {
+    id: row.id as string,
+    projectId: row.project_id as string,
+    folderId: (row.folder_id as string) ?? null,
+    name: row.name as string,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
+}
+
+export function useProjects() {
+  return useQuery({
+    queryKey: queryKeys.projects.list(),
+    queryFn: async () => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .order("created_at", { ascending: false })
+      if (error) throw error
+      return data.map(toProject)
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useProjectData(projectId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.projects.detail(projectId ?? ""),
+    queryFn: async () => {
+      const supabase = createClient()
+      const [foldersRes, workflowsRes] = await Promise.all([
+        supabase
+          .from("folders")
+          .select("*")
+          .eq("project_id", projectId!)
+          .order("created_at"),
+        supabase
+          .from("workflows")
+          .select("id, project_id, folder_id, name, created_at, updated_at")
+          .eq("project_id", projectId!)
+          .order("created_at", { ascending: false }),
+      ])
+      if (foldersRes.error) throw foldersRes.error
+      if (workflowsRes.error) throw workflowsRes.error
+      return {
+        folders: foldersRes.data.map(toFolder),
+        workflowMetas: workflowsRes.data.map(toWorkflowMeta),
+      }
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+  })
+}

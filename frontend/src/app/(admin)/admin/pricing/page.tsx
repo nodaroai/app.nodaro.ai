@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
 import { Link } from "react-router-dom"
 import {
   DollarSign,
@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { createClient } from "@/lib/supabase"
+import { useAdminModels, useUpdateModelPricingMutation } from "@/hooks/queries/use-admin-queries"
 import {
   SUBSCRIPTION_TIERS,
   TOPUP_PACKAGES,
@@ -44,28 +44,6 @@ interface DBModelPricing {
   readonly credit_cost: number
   readonly is_enabled: boolean
   readonly tier_restriction: string | null
-}
-
-const API = ""
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.access_token) {
-    throw new Error("Not authenticated")
-  }
-  return {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${session.access_token}`,
-  }
-}
-
-function parseResponse<T>(json: unknown): ReadonlyArray<T> {
-  if (Array.isArray(json)) return json as ReadonlyArray<T>
-  if (json && typeof json === "object" && "data" in json && Array.isArray((json as Record<string, unknown>).data)) {
-    return (json as Record<string, unknown>).data as ReadonlyArray<T>
-  }
-  return []
 }
 
 // ── Dynamic Quick Stats ─────────────────────────────────────────────
@@ -538,16 +516,15 @@ type ViewMode = "db" | "llm"
 function AIModelsSection({
   models,
   loading,
-  onRefresh,
 }: {
   readonly models: ReadonlyArray<DBModelPricing>
   readonly loading: boolean
-  readonly onRefresh: () => void
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("db")
   const [search, setSearch] = useState("")
   const [pendingCosts, setPendingCosts] = useState<Record<string, number>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const updatePricingMut = useUpdateModelPricingMutation()
 
   const handleCostChange = useCallback((identifier: string, cost: number) => {
     setPendingCosts((prev) => ({ ...prev, [identifier]: cost }))
@@ -563,33 +540,26 @@ function AIModelsSection({
 
       setSavingId(identifier)
       try {
-        const headers = await getAuthHeaders()
-        const res = await fetch(`${API}/v1/admin/models/${encodeURIComponent(identifier)}/pricing`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({
+        await updatePricingMut.mutateAsync({
+          modelId: identifier,
+          pricing: {
             creditCost: newCost,
             isEnabled: model.is_enabled,
             tierRestriction: model.tier_restriction ?? null,
-          }),
+          },
         })
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null)
-          throw new Error(errData?.error ?? `Request failed: ${res.status}`)
-        }
         toast.success(`Updated ${identifier} to ${newCost} credits`)
         setPendingCosts((prev) => {
           const { [identifier]: _removed, ...rest } = prev
           return rest
         })
-        onRefresh()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to save")
       } finally {
         setSavingId(null)
       }
     },
-    [models, pendingCosts, onRefresh],
+    [models, pendingCosts, updatePricingMut],
   )
 
   const pendingCount = Object.keys(pendingCosts).length
@@ -742,30 +712,11 @@ function FFmpegSection() {
 // ── Main Page ───────────────────────────────────────────────────────
 
 export default function AdminPricingPage() {
-  const [models, setModels] = useState<ReadonlyArray<DBModelPricing>>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetchModels = useCallback(async () => {
-    setLoading(true)
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(`${API}/v1/admin/models`, { headers })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error ?? `Request failed: ${res.status}`)
-      }
-      const json = await res.json()
-      setModels(parseResponse<DBModelPricing>(json))
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to fetch model pricing")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchModels()
-  }, [fetchModels])
+  const { data: modelsResult, isLoading: loading } = useAdminModels()
+  const models: ReadonlyArray<DBModelPricing> = (() => {
+    const raw = modelsResult?.data ?? modelsResult
+    return (Array.isArray(raw) ? raw : []) as ReadonlyArray<DBModelPricing>
+  })()
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -790,7 +741,7 @@ export default function AdminPricingPage() {
       <TopUpSection />
 
       {/* 4. AI Model Pricing (from DB + reference data) */}
-      <AIModelsSection models={models} loading={loading} onRefresh={fetchModels} />
+      <AIModelsSection models={models} loading={loading} />
 
       {/* 5. FFmpeg Post-Processing (static) */}
       <FFmpegSection />

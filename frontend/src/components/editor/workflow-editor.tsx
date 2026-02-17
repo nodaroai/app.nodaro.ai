@@ -16,9 +16,12 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getStats, getUserCredits, generateAIWriter, generateAIWriterStream, StorageExceededError } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getUserCredits, generateAIWriter, generateAIWriterStream, StorageExceededError } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
 import { getCachedCredits } from "@/hooks/use-model-credits"
+import { useStats } from "@/hooks/queries/use-stats-queries"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, SplitTextData, LoopNodeData } from "@/types/nodes"
@@ -87,7 +90,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Track the workflow ID this component instance owns. Polling callbacks
   // compare against this to avoid writing results into the wrong workflow.
   const ownerWorkflowIdRef = useRef<string | null>(workflowId ?? null)
-  const [activeJobCount, setActiveJobCount] = useState(0)
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false)
   const [insufficientCreditsData, setInsufficientCreditsData] = useState<{
     required: number
@@ -121,30 +123,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }, [storeNodes])
 
   // Poll active job count for the Executions badge
-  useEffect(() => {
-    if (!user?.id) return
-
-    let cancelled = false
-
-    async function fetchActiveCount() {
-      try {
-        const result = await getStats("user", user!.id)
-        if (!cancelled) {
-          setActiveJobCount(result.data.pending + result.data.processing)
-        }
-      } catch {
-        // Silently ignore - badge is non-critical
-      }
-    }
-
-    fetchActiveCount()
-    const interval = setInterval(fetchActiveCount, 10_000)
-
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [user?.id])
+  const { data: statsData } = useStats("user", user?.id, { refetchInterval: 10_000 })
+  const activeJobCount = (statsData?.pending ?? 0) + (statsData?.processing ?? 0)
 
   useEffect(() => {
     if (workflowId) {
@@ -3180,7 +3160,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         const supabase = createClient()
         const { data: { user: authUser } } = await supabase.auth.getUser()
         if (authUser) {
-          const { data: balance } = await getUserCredits(authUser.id)
+          const balance = await queryClient.fetchQuery({
+            queryKey: queryKeys.credits.balance(authUser.id),
+            queryFn: async () => {
+              const result = await getUserCredits(authUser.id)
+              return result.data ?? (result as unknown as { total: number; tier: string })
+            },
+            staleTime: 10_000,
+          })
           const estimatedCost = executableNodes.reduce((sum, node) => {
             const data = node.data as Record<string, unknown>
             const provider = data.provider as string | undefined

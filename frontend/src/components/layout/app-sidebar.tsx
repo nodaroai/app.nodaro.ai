@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react"
 import { Link, useLocation } from "react-router-dom"
+import { useGalleryReportCount } from "@/hooks/queries/use-gallery-queries"
 import {
   FolderOpen,
   Settings,
@@ -29,8 +30,6 @@ import { APP_VERSION } from "@/lib/version"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
 
 const STORAGE_KEY = "scenenode-sidebar-collapsed"
-const API_BASE = ""
-const REPORT_POLL_INTERVAL = 60_000
 
 interface NavItem {
   readonly href: string
@@ -69,31 +68,7 @@ export function AppSidebar({
   const { isCollapsed, setCollapsed } = useSidebar()
   const [mounted, setMounted] = useState(false)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
-  const [pendingReportsCount, setPendingReportsCount] = useState(0)
-
-  // Poll pending gallery reports count for admin badge
-  useEffect(() => {
-    if (!isAdmin || !user?.id) return
-
-    let cancelled = false
-
-    async function fetchCount() {
-      try {
-        const response = await fetch(`${API_BASE}/v1/admin/gallery-reports/count?userId=${user!.id}`)
-        if (!response.ok) return
-        const json = await response.json()
-        if (!cancelled) {
-          setPendingReportsCount(json.count ?? 0)
-        }
-      } catch {
-        // Badge is non-critical
-      }
-    }
-
-    fetchCount()
-    const interval = setInterval(fetchCount, REPORT_POLL_INTERVAL)
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [isAdmin, user?.id])
+  const { data: pendingReportsCount = 0 } = useGalleryReportCount()
 
   // Load collapsed state from localStorage on mount, respecting defaultCollapsed
   useEffect(() => {

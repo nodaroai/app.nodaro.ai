@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { Loader2, Settings, Server, Percent, Check, AlertCircle } from "lucide-react"
-import { useAdmin, type AppSettings } from "@/hooks/use-admin"
+import { useAdminSettings } from "@/hooks/queries/use-admin-queries"
+import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,26 +15,26 @@ import {
 } from "@/components/ui/select"
 
 export default function AdminSettingsPage() {
-  const { fetchSettings, updateSetting, loading, error } = useAdmin()
-  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const { data: settings, isLoading: loading, error: queryError } = useAdminSettings()
+  const updateSettingMut = useUpdateSettingMutation()
   const [provider, setProvider] = useState<"replicate" | "kie">("replicate")
   const [markup, setMarkup] = useState<number>(25)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
+  // Sync settings to local form state when loaded
   useEffect(() => {
-    fetchSettings().then((data) => {
-      if (data) {
-        setSettings(data)
-        setProvider(data.ai_provider)
-        setMarkup(data.cost_markup_percent)
-      }
-    })
-  }, [fetchSettings])
+    if (settings) {
+      setProvider(settings.ai_provider)
+      setMarkup(settings.cost_markup_percent)
+    }
+  }, [settings])
 
   const handleSave = async () => {
     setSaving(true)
     setSaveSuccess(false)
+    setError(null)
 
     const updates: Array<{ key: string; value: unknown }> = []
 
@@ -47,8 +48,10 @@ export default function AdminSettingsPage() {
 
     let allSuccess = true
     for (const update of updates) {
-      const success = await updateSetting(update.key, update.value)
-      if (!success) {
+      try {
+        await updateSettingMut.mutateAsync({ key: update.key, value: update.value })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update setting")
         allSuccess = false
         break
       }
@@ -56,11 +59,6 @@ export default function AdminSettingsPage() {
 
     if (allSuccess && updates.length > 0) {
       setSaveSuccess(true)
-      // Refresh settings
-      const newSettings = await fetchSettings()
-      if (newSettings) {
-        setSettings(newSettings)
-      }
       setTimeout(() => setSaveSuccess(false), 3000)
     }
 
@@ -117,9 +115,9 @@ export default function AdminSettingsPage() {
         <h1 className="text-xl font-bold">Settings</h1>
       </div>
 
-      {error && (
+      {(error || queryError) && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm">
-          {error}
+          {error || (queryError instanceof Error ? queryError.message : "Failed to load settings")}
         </div>
       )}
 

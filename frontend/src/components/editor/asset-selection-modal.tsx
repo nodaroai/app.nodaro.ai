@@ -1,11 +1,9 @@
-"use client"
-
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { X, Loader2, AlertCircle, Search, UserCircle, Package, MapPin, SmilePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { getCharacters, getObjects, getLocations, getFaces, type DbCharacter, type DbObject, type DbLocation, type DbFace } from "@/lib/api"
-import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/hooks/use-auth"
+import { useCharacters, useObjects, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
 import { cn } from "@/lib/utils"
 
 type AssetType = "all" | "character" | "object" | "location" | "face"
@@ -41,73 +39,51 @@ export function AssetSelectionModal({
   title = "Select Asset",
   excludeIds = [],
 }: AssetSelectionModalProps) {
-  const [assets, setAssets] = useState<UnifiedAsset[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<AssetType>("all")
 
-  const fetchAllAssets = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const { data: characters = [], isLoading: loadingChars, error: charError } = useCharacters(undefined, user?.id)
+  const { data: objects = [], isLoading: loadingObjs, error: objError } = useObjects(undefined, user?.id)
+  const { data: locations = [], isLoading: loadingLocs, error: locError } = useLocations(undefined, user?.id)
+  const { data: faces = [], isLoading: loadingFaces, error: faceError } = useFaces(undefined, user?.id)
 
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const userId = user?.id
+  const loading = loadingChars || loadingObjs || loadingLocs || loadingFaces
+  const error = charError || objError || locError || faceError
 
-      const [charactersRes, objectsRes, locationsRes, facesRes] = await Promise.all([
-        getCharacters(undefined, userId),
-        getObjects(undefined, userId),
-        getLocations(undefined, userId),
-        getFaces(undefined, userId),
-      ])
-
-      const unified: UnifiedAsset[] = [
-        ...charactersRes.characters.map((c): UnifiedAsset => ({
-          id: c.id,
-          name: c.name,
-          type: "character",
-          thumbnailUrl: c.sourceImageUrl ?? undefined,
-          description: c.description ?? undefined,
-        })),
-        ...objectsRes.objects.map((o): UnifiedAsset => ({
-          id: o.id,
-          name: o.name,
-          type: "object",
-          thumbnailUrl: o.sourceImageUrl ?? undefined,
-          description: o.description ?? undefined,
-        })),
-        ...locationsRes.locations.map((l): UnifiedAsset => ({
-          id: l.id,
-          name: l.name,
-          type: "location",
-          thumbnailUrl: l.sourceImageUrl ?? undefined,
-          description: l.description ?? undefined,
-        })),
-        ...facesRes.faces.map((f): UnifiedAsset => ({
-          id: f.id,
-          name: f.name,
-          type: "face",
-          thumbnailUrl: f.sourceImageUrl ?? undefined,
-          description: f.description ?? undefined,
-        })),
-      ]
-
-      setAssets(unified)
-    } catch (err) {
-      console.error("[AssetSelectionModal] Error:", err)
-      setError(err instanceof Error ? err.message : "Failed to load assets")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchAllAssets()
-    }
-  }, [isOpen, fetchAllAssets])
+  const assets = useMemo(() => {
+    const unified: UnifiedAsset[] = [
+      ...characters.map((c): UnifiedAsset => ({
+        id: c.id,
+        name: c.name,
+        type: "character",
+        thumbnailUrl: c.sourceImageUrl ?? undefined,
+        description: c.description ?? undefined,
+      })),
+      ...objects.map((o): UnifiedAsset => ({
+        id: o.id,
+        name: o.name,
+        type: "object",
+        thumbnailUrl: o.sourceImageUrl ?? undefined,
+        description: o.description ?? undefined,
+      })),
+      ...locations.map((l): UnifiedAsset => ({
+        id: l.id,
+        name: l.name,
+        type: "location",
+        thumbnailUrl: l.sourceImageUrl ?? undefined,
+        description: l.description ?? undefined,
+      })),
+      ...faces.map((f): UnifiedAsset => ({
+        id: f.id,
+        name: f.name,
+        type: "face",
+        thumbnailUrl: f.sourceImageUrl ?? undefined,
+        description: f.description ?? undefined,
+      })),
+    ]
+    return unified
+  }, [characters, objects, locations, faces])
 
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
@@ -240,10 +216,7 @@ export function AssetSelectionModal({
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12 text-destructive">
               <AlertCircle className="w-8 h-8 mb-2" />
-              <p className="text-sm">{error}</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={fetchAllAssets}>
-                Retry
-              </Button>
+              <p className="text-sm">{error.message || "Failed to load assets"}</p>
             </div>
           ) : filteredAssets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
