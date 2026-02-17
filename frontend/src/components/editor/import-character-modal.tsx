@@ -156,7 +156,7 @@ export function ImportCharacterModal({
                           }`}
                         >
                           {char.type === "reference" && char.referenceImageUrl ? (
-                            <CachedImage src={char.referenceImageUrl} alt={char.name} className="w-12 h-12 rounded object-cover" />
+                            <CachedImage src={char.referenceImageUrl} alt={char.name} className="w-12 h-12 rounded object-cover" thumbnail thumbnailWidth={120} />
                           ) : (
                             <div className="w-12 h-12 rounded bg-muted flex items-center justify-center">
                               <FileText className="w-5 h-5 text-muted-foreground" />

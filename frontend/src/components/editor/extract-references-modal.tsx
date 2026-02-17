@@ -612,7 +612,7 @@ export function ExtractReferencesModal({
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {characters.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
-                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
+                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" thumbnail thumbnailWidth={80} />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
@@ -640,7 +640,7 @@ export function ExtractReferencesModal({
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {locations.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
-                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
+                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" thumbnail thumbnailWidth={80} />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (
@@ -668,7 +668,7 @@ export function ExtractReferencesModal({
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {objects.map((ref) => (
                   <div key={ref.id} className="flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30">
-                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" />
+                    <CachedImage src={ref.imageUrl} alt={ref.name} className="w-10 h-10 rounded object-cover" thumbnail thumbnailWidth={80} />
                     <div className="flex flex-col">
                       <span className="text-xs font-medium">{ref.name}</span>
                       {savedToDb.has(ref.id) && (

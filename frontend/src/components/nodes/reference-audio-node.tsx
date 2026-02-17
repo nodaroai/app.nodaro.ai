@@ -28,7 +28,7 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
       <div className="flex flex-col gap-1">
         {hasThumbnail ? (
           <div className="w-full rounded overflow-hidden border border-border">
-            <CachedImage src={nodeData.videoThumbnail} alt="" className="w-full aspect-video object-cover" />
+            <CachedImage src={nodeData.videoThumbnail} alt="" className="w-full aspect-video object-cover" thumbnail thumbnailWidth={480} />
           </div>
         ) : (
           <div className="flex items-center justify-center w-full h-12 rounded border border-dashed border-muted-foreground/30 text-muted-foreground/40">

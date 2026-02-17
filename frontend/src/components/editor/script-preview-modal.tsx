@@ -330,6 +330,8 @@ export function ScriptPreviewModal({
                         src={activeImage.url}
                         alt={`Scene ${scene.sceneNumber}`}
                         className="w-full h-full object-cover"
+                        thumbnail
+                        thumbnailWidth={800}
                       />
                     ) : (
                       <div className="w-full h-full bg-gray-50 dark:bg-[#121212] border border-dashed border-gray-200 dark:border-[#2D2D2D] flex items-center justify-center">
@@ -390,7 +392,7 @@ export function ScriptPreviewModal({
                               onSetActiveImage(i, vi)
                             }}
                           >
-                            <CachedImage src={img.url} alt={`v${vi + 1}`} className="w-full h-full object-cover" />
+                            <CachedImage src={img.url} alt={`v${vi + 1}`} className="w-full h-full object-cover" thumbnail thumbnailWidth={80} />
                           </button>
                           <button
                             type="button"
