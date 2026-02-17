@@ -55,9 +55,9 @@ COPY <<'EOF' /app/start.sh
 #!/bin/sh
 set -e
 
-# Start backend API server (fixed port 8000, Caddy proxies to it)
+# Start backend API server on internal port (not Railway's $PORT which Caddy uses)
 cd /app/backend
-PORT=8000 node dist/server.js &
+PORT=9000 node dist/server.js &
 BACKEND_PID=$!
 
 # Start BullMQ worker (job processor)
@@ -80,6 +80,6 @@ EOF
 
 RUN chmod +x /app/start.sh
 
-EXPOSE 3000 8000
+EXPOSE 3000 9000
 
 CMD ["/app/start.sh"]
