@@ -19,6 +19,20 @@ The following issues were found during a 4-angle audit (file accuracy, completen
 | 7 | **MEDIUM** | Added `useModelCredits` compat wrapper preserving `number` return type | Section 3.1 Site 3, Section 5.2 |
 | 8 | **MEDIUM** | Narrowed `useDeleteLibraryAssetMutation` to invalidate `billing.storage` not `billing.all` | Section 2.7 |
 | 9 | **LOW** | Added type re-export checklist (`AdminUser`, `AppSettings`) | Section 5.2.1 |
+| 10 | **CRITICAL** | Added global `onError` default for mutations (prevents silent failures after migration) | Section 1.2 |
+| 11 | **CRITICAL** | Fixed `AppSettings` type import in Site 35 (`admin/settings/page.tsx`) to avoid broken import when `use-admin.ts` is deleted | Section 3.10 Site 35 |
+| 12 | **HIGH** | Sites 25/26 (projects pages) must be atomic with Section 4.5 (Zustand invalidation additions) | Section 3.9 Sites 25–26 |
+| 13 | **HIGH** | Consolidated duplicate `AppSettings` types — `useAdminSettings` now reuses type from `use-app-settings-queries.ts` | Section 2.10 |
+| 14 | **HIGH** | `useAdminAdjustCreditsMutation` now also invalidates user transactions (credit adjustment creates a transaction record) | Section 2.10 |
+| 15 | **HIGH** | `useChangePlanMutation` now also invalidates `userSettings` (plan change affects tier) | Section 2.2 |
+| 16 | **MEDIUM** | `useUpdateSettingMutation` now invalidates both `appSettings.all` and `admin.settings()` | Section 2.5 |
+| 17 | **MEDIUM** | Added note: `owned: undefined` and `owned: false` map to same cache key (intentional — both mean "show all") | Section 2.7 |
+| 18 | **MEDIUM** | Added note: `select` transforms mean `getQueryData` returns raw data, not selected data | Section 2.7 |
+| 19 | **MEDIUM** | Documented global `onError` override pattern for mutations with custom error handling | Section 1.2 |
+| 20 | **MEDIUM** | Added `react-intersection-observer` as optional dependency in install step | Section 1.1 |
+| 21 | **LOW** | Added comment: sorted array in `costSummary` key is safe — React Query deep-compares | Section 1.3 |
+| 22 | **LOW** | Added scene editor polling to "Patterns NOT to migrate" table | Section 4.7 |
+| 23 | **LOW** | Added React 19 compatibility checklist items | Section 6.2 |
 
 ---
 
@@ -40,12 +54,15 @@ The following issues were found during a 4-angle audit (file accuracy, completen
 ```bash
 cd frontend
 bun add @tanstack/react-query @tanstack/react-query-devtools
+# Optional: for cleaner IntersectionObserver usage in gallery/library infinite scroll (Site 13, 21, 22)
+# bun add react-intersection-observer
 ```
 
 ### 1.2 Create `frontend/src/lib/query-client.ts`
 
 ```ts
-import { QueryClient } from "@tanstack/react-query"
+import { QueryClient, type Mutation } from "@tanstack/react-query"
+import { toast } from "sonner"
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,9 +72,20 @@ export const queryClient = new QueryClient({
       retry: 1,
       refetchOnWindowFocus: false,
     },
+    mutations: {
+      onError: (error) => {
+        // Global fallback — individual mutations can override with their own onError.
+        // This prevents silent failures for any mutation that doesn't handle errors itself.
+        toast.error(error instanceof Error ? error.message : "Something went wrong")
+      },
+    },
   },
 })
 ```
+
+> **Why a global `onError`?** The existing codebase uses `toast.error(...)` in every try/catch around mutations. After migration, `useMutation` hooks surface errors via `onError` callbacks — but if a hook doesn't define one, the error is silently swallowed. The global default ensures users always see feedback on failure. Individual mutations can still override with a more specific `onError` (e.g., custom messages, retry prompts).
+>
+> **Overriding the global `onError`:** When a `useMutation` hook defines its own `onError`, the global default is NOT called — the hook-level callback fully replaces it. If you want both (custom handling + toast), call `toast.error()` explicitly inside the hook's `onError`. Alternatively, the `onError` callback passed to `mutate()` at the call site runs in addition to the hook-level `onError`.
 
 ### 1.3 Create `frontend/src/lib/query-keys.ts`
 
@@ -123,6 +151,8 @@ export const queryKeys = {
 
   // Library (media)
   // Flattened primitives — same reason as assets above.
+  // NOTE: `owned: undefined` and `owned: false` both flatten to "false" (same cache entry).
+  // This is intentional — both mean "show all items" (owned=true means "mine only").
   library: {
     all: ["library"] as const,
     list: (params: { userId: string; type?: string; search?: string; owned?: boolean }) =>
@@ -132,6 +162,8 @@ export const queryKeys = {
   // Editor / workflow
   editor: {
     all: ["editor"] as const,
+    // Sorted array is safe here — React Query uses deep value comparison (not reference equality)
+    // for cache key matching, so a new array with the same sorted values hits the same cache entry.
     costSummary: (jobIds: readonly string[]) =>
       ["editor", "cost-summary", [...jobIds].sort()] as const,
     importableWorkflows: (projectId: string, currentWorkflowId: string) =>
@@ -361,6 +393,7 @@ export function useChangePlanMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.billing.subscription(userId) })
       qc.invalidateQueries({ queryKey: queryKeys.credits.balance(userId) })
       qc.invalidateQueries({ queryKey: queryKeys.billing.storage(userId) })  // plan change affects storage limits
+      qc.invalidateQueries({ queryKey: queryKeys.userSettings.detail(userId) })  // plan change affects tier
     },
   })
 }
@@ -519,6 +552,7 @@ export function useUpdateSettingMutation() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.appSettings.all })
+      qc.invalidateQueries({ queryKey: queryKeys.admin.settings() })  // admin settings page uses separate key
     },
   })
 }
@@ -674,6 +708,12 @@ export function useFaces(projectId?: string, userId?: string) {
     select: (data) => data.faces,
   })
 }
+
+// NOTE on `select` transforms above:
+// `useCharacters().data` returns the selected value (Character[]).
+// But `queryClient.getQueryData(queryKeys.assets.characters(...))` returns the RAW
+// queryFn response (the full API response object), NOT the selected value.
+// If you ever need imperative cache reads, use the raw shape or call `.select()` manually.
 
 // --- Library (paginated) ---
 export function useLibraryInfinite(params: {
@@ -901,6 +941,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
+import type { AppSettings } from "./use-app-settings-queries"
 
 // --- Types ---
 export interface AdminStats {
@@ -1132,10 +1173,11 @@ export function useAdminAlerts() {
   })
 }
 
+// Reuses AppSettings type from use-app-settings-queries.ts — do NOT define a duplicate type here.
 export function useAdminSettings() {
   return useQuery({
     queryKey: queryKeys.admin.settings(),
-    queryFn: async () => {
+    queryFn: async (): Promise<AppSettings> => {
       const res = await fetch(`/v1/admin/settings`)
       if (!res.ok) throw new Error("Failed to fetch settings")
       const data = await res.json()
@@ -1209,9 +1251,11 @@ export function useAdminAdjustCreditsMutation() {
       if (!res.ok) throw new Error("Failed to adjust credits")
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (_data, { userId }) => {
       // Invalidate ALL admin user pages, not just page 0
       qc.invalidateQueries({ queryKey: ["admin", "users"] })
+      // Credit adjustment creates a transaction record — invalidate that user's transactions
+      qc.invalidateQueries({ queryKey: queryKeys.admin.userTransactions(userId) })
     },
   })
 }
@@ -1872,6 +1916,8 @@ After mutations (createFolder, createWorkflow, etc.), invalidate:
 qc.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) })
 ```
 
+> **IMPORTANT: Sites 25, 26, and Section 4.5 must be migrated atomically (same PR).** These pages switch reads from Zustand to React Query, but the Zustand store's mutation methods (`createProject`, `deleteProject`, `createFolder`, `createWorkflow`, etc.) must simultaneously be updated to call `queryClient.invalidateQueries` (Section 4.5). If the page migrations land without the store invalidation additions, CRUD operations will not update the React Query cache — the list will appear stale until the next `staleTime` expiry (30s). This is the same atomicity pattern as Sites 1/2/4.
+
 ---
 
 ### 3.10 Admin Domain
@@ -2018,13 +2064,13 @@ const deleteAlert = useDeleteAlertMutation()
 
 **File:** `src/app/(admin)/admin/settings/page.tsx`
 
-**Delete:** `settings` useState, useEffect calling `fetchSettings()`, `updateSetting` callback, `useAdmin()` import.
+**Delete:** `settings` useState, useEffect calling `fetchSettings()`, `updateSetting` callback, `useAdmin()` import, and the `type AppSettings` import from `use-admin`.
 
 **Replace with:**
 
 ```tsx
 import { useAdminSettings } from "@/hooks/queries/use-admin-queries"
-import { useUpdateSettingMutation } from "@/hooks/queries/use-app-settings-queries"
+import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 
 const { data: settings, isLoading: loading } = useAdminSettings()
 const updateSetting = useUpdateSettingMutation()
@@ -2221,6 +2267,7 @@ These should NOT be moved to React Query:
 | `useAuth` (module-level singleton + Supabase realtime) | Not a standard fetch; uses `onAuthStateChange` subscription |
 | Job status polling (2s per-job in DAG executor) | Imperative execution loop with side effects |
 | YouTube audio extraction polling | Recursive imperative loop |
+| Scene editor polling (`scene-config.tsx`, `scene-editor-modal.tsx`) | Execution-time polling for scene generation status |
 | SSE streaming (AI Writer) | Server-sent events, not request/response |
 | File uploads | One-shot mutations, fine with local state |
 | Supabase auth calls (`getUser`, `getSession`) | Auth layer, not data fetching |
@@ -2382,5 +2429,11 @@ After completing the migration, verify each item:
 - [ ] `AppSettings` type re-exported from `use-app-settings-queries.ts`
 - [ ] `useChangePlanMutation` invalidates storage in addition to subscription + credits
 - [ ] `useDeleteLibraryAssetMutation` invalidates `billing.storage(userId)` (not all of `billing.all`)
+- [ ] `useChangePlanMutation` invalidates `userSettings.detail(userId)` (tier changes on plan change)
+- [ ] `useAdminAdjustCreditsMutation` invalidates `admin.userTransactions(userId)` (credit adjustment creates transaction)
+- [ ] `useUpdateSettingMutation` invalidates both `appSettings.all` and `admin.settings()`
+- [ ] `useAdminSettings` uses `AppSettings` type from `use-app-settings-queries.ts` (no duplicate type definition)
+- [ ] React 19 compatibility: `@tanstack/react-query` v5.x supports React 19 — verify installed version is >=5.0
+- [ ] React 19 compatibility: no usage of deprecated `ReactDOM.render` (already using `createRoot`)
 - [ ] Settings page template editing not clobbered by background refetch
 - [ ] Post-checkout `useEffect` has `if (!user?.id) return` guard (no non-null assertion)
