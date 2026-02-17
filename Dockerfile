@@ -57,6 +57,17 @@ COPY <<'EOF' /app/start.sh
 
 echo "Starting with PORT=${PORT:-3000}"
 
+# Fall back to NEXT_PUBLIC_* vars if VITE_* not set (Railway migration)
+VITE_SUPABASE_URL="${VITE_SUPABASE_URL:-$NEXT_PUBLIC_SUPABASE_URL}"
+VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY:-$NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+VITE_APP_URL="${VITE_APP_URL:-$NEXT_PUBLIC_APP_URL}"
+VITE_EDITION="${VITE_EDITION:-$NEXT_PUBLIC_EDITION}"
+VITE_PADDLE_CLIENT_TOKEN="${VITE_PADDLE_CLIENT_TOKEN:-$NEXT_PUBLIC_PADDLE_CLIENT_TOKEN}"
+VITE_PADDLE_ENVIRONMENT="${VITE_PADDLE_ENVIRONMENT:-$NEXT_PUBLIC_PADDLE_ENVIRONMENT}"
+
+# Debug: show which vars are available
+echo "ENV CHECK: VITE_SUPABASE_URL=${#VITE_SUPABASE_URL}chars VITE_EDITION=${VITE_EDITION}"
+
 # Replace Vite build-time placeholders with actual runtime env vars
 echo "Injecting runtime env vars into frontend..."
 for f in /app/frontend/dist/assets/*.js; do
