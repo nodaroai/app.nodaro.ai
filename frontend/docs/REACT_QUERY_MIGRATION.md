@@ -33,6 +33,13 @@ The following issues were found during a 4-angle audit (file accuracy, completen
 | 21 | **LOW** | Added comment: sorted array in `costSummary` key is safe — React Query deep-compares | Section 1.3 |
 | 22 | **LOW** | Added scene editor polling to "Patterns NOT to migrate" table | Section 4.7 |
 | 23 | **LOW** | Added React 19 compatibility checklist items | Section 6.2 |
+| 24 | **CRITICAL** | Added 3 missing admin user mutations (`useAdminChangeTierMutation`, `useAdminChangeStorageMutation`, `useAdminChangeRoleMutation`) | Section 2.10 |
+| 25 | **CRITICAL** | Sites 27–35 + Section 5.1 (`use-admin.ts` deletion) must be atomic — all admin pages must migrate before file is deleted | Section 3.10, Section 5.1 |
+| 26 | **HIGH** | Sites 9 + 10 must be atomic — `useLoadUserSettings` Zustand sync must land with SettingsPage migration | Section 3.4 |
+| 27 | **HIGH** | `useResolveReportMutation` now also invalidates `gallery.all` (report removal hides item from public gallery) | Section 2.10 |
+| 28 | **HIGH** | Added explicit Zustand invalidation checklist for all 11 project mutation methods | Section 4.5 |
+| 29 | **MEDIUM** | Corrected Site 1 import chain description — consumers import via `use-model-credits.ts` compat wrapper, not directly from `CreditBalance.tsx` | Section 3.1 Site 1 |
+| 30 | **MEDIUM** | Added asset modal polling (`character-page-modal.tsx`, `object-page-modal.tsx`, `location-page-modal.tsx`) to "Patterns NOT to migrate" table | Section 4.7 |
 
 ---
 
@@ -1281,6 +1288,8 @@ export function useResolveReportMutation() {
       // Invalidate ALL admin report pages, not just page 0
       qc.invalidateQueries({ queryKey: ["admin", "reports"] })
       qc.invalidateQueries({ queryKey: queryKeys.gallery.reportCount() })
+      // Report removal sets is_public=false — refresh public gallery so removed item disappears
+      qc.invalidateQueries({ queryKey: queryKeys.gallery.all })
     },
   })
 }
@@ -1334,6 +1343,76 @@ export function useDeleteAlertMutation() {
     },
   })
 }
+
+export function useAdminChangeTierMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, tier }: { userId: string; tier: string }) => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/v1/admin/users/${userId}/tier`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ tier }),
+      })
+      if (!res.ok) throw new Error("Failed to change tier")
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] })
+    },
+  })
+}
+
+export function useAdminChangeStorageMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, storageLimitBytes }: { userId: string; storageLimitBytes: number }) => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/v1/admin/users/${userId}/storage`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ storageLimitBytes }),
+      })
+      if (!res.ok) throw new Error("Failed to change storage limit")
+      return res.json()
+    },
+    onSuccess: (_data, { userId }) => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] })
+      qc.invalidateQueries({ queryKey: queryKeys.billing.storage(userId) })
+    },
+  })
+}
+
+export function useAdminChangeRoleMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/v1/admin/users/${userId}/role`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ role }),
+      })
+      if (!res.ok) throw new Error("Failed to change role")
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "users"] })
+    },
+  })
+}
 ```
 
 ---
@@ -1363,7 +1442,7 @@ const { data: balance, isLoading, error } = useUserCredits(userId)
 
 The hook from `use-credits-queries.ts` already has `refetchInterval: 30_000`, so all polling is handled automatically. Every component that calls `useUserCredits(userId)` shares the same cache — no duplicate polling.
 
-> **IMPORTANT:** Sites 1, 2, and 4 must be migrated atomically (same PR). `useUserCredits` is currently exported from `CreditBalance.tsx` and imported by `GenerateButton.tsx` and `billing/page.tsx`. If Site 1 is migrated alone without updating the other consumers, they will break.
+> **IMPORTANT:** Sites 1, 2, 3, and 4 must be migrated atomically (same PR). `useUserCredits` is defined in `CreditBalance.tsx` and re-exported via the compat wrapper in `use-model-credits.ts` (Site 3). `GenerateButton.tsx` and `billing/page.tsx` import `useUserCredits` from `use-model-credits.ts`, not directly from `CreditBalance.tsx`. The full import chain is: `CreditBalance.tsx` (hook definition) → `use-model-credits.ts` (compat re-export) → `GenerateButton.tsx` + `billing/page.tsx` (consumers). All four must update together.
 
 #### Site 2: `GenerateButton.tsx` inline credit cost fetch
 
@@ -1559,6 +1638,8 @@ export function useLoadUserSettings() {
 ```
 
 > **Why the ref guard?** Without it, a background refetch that returns fresh data would fire the `useEffect` again and overwrite any locally-edited prompt templates that the user hasn't saved yet. The `initializedFor` ref ensures we only sync once per user — it tracks the userId (not just a boolean) so that logging out and back in as a different user correctly syncs the new user's templates.
+
+> **IMPORTANT:** Sites 9 and 10 must be migrated atomically (same PR). `dashboard-layout.tsx` calls `useLoadUserSettings()` at root level to sync templates to Zustand before child pages render. If Site 10 (SettingsPage) is migrated to use `useUserSettings()` from React Query before Site 9 updates the Zustand sync, the workflow store won't receive the user's prompt templates, causing stale or missing template data in the editor.
 
 #### Site 10: `SettingsPage`
 
@@ -1924,6 +2005,8 @@ qc.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) })
 
 All 9 admin pages currently use the monolithic `useAdmin()` hook or their own inline fetch logic. After migration, each page imports from `use-admin-queries.ts`.
 
+> **IMPORTANT:** Sites 27–35 and Section 5.1 (`use-admin.ts` deletion) must be migrated atomically (same PR). All admin pages import from `use-admin.ts` — if the file is deleted before all pages are updated, imports break. Additionally, `admin/users/page.tsx` imports `type AdminUser` and `admin/settings/page.tsx` imports `type AppSettings` from `use-admin.ts`. These types must be available from the new query files before deletion. If a single large PR is impractical, keep `use-admin.ts` as a re-export stub (see Section 5.1) and delete it in a follow-up PR after all admin pages stabilize.
+
 #### Site 27: `AdminDashboard`
 
 **File:** `src/app/(admin)/admin/page.tsx`
@@ -1942,21 +2025,40 @@ const { data: stats, isLoading: loading, error } = useAdminStats()
 
 **File:** `src/app/(admin)/admin/users/page.tsx`
 
-**Delete:** `users` local state, the useEffect calling `fetchUsers(page)`, all inline mutation functions with duplicated `getAuthHeaders()`.
+**Delete:** `users` local state, the useEffect calling `fetchUsers(page)`, all inline mutation functions with duplicated `getAuthHeaders()` (including `handleTierChange`, `handleStorageChange`, `handleRoleChange`, `handleAdjust` in `UserExpandedRow`).
 
 **Replace with:**
 
 ```tsx
-import { useAdminUsers, useAdminAdjustCreditsMutation, useAdminUserTransactions } from "@/hooks/queries/use-admin-queries"
+import {
+  useAdminUsers,
+  useAdminAdjustCreditsMutation,
+  useAdminUserTransactions,
+  useAdminChangeTierMutation,
+  useAdminChangeStorageMutation,
+  useAdminChangeRoleMutation,
+} from "@/hooks/queries/use-admin-queries"
 
 const { data: users = [], isLoading: loading } = useAdminUsers(page, pageSize)
-const adjustCreditsMutation = useAdminAdjustCreditsMutation()
 ```
 
-For the `UserExpandedRow` (per-user transactions on expand):
+For the `UserExpandedRow` subcomponent (per-user expanded view with transactions + mutations):
 
 ```tsx
+// Queries
 const { data: transactions, isLoading: txLoading } = useAdminUserTransactions(userId)
+
+// Mutations (replace inline useCallback + fetch + getAuthHeaders patterns)
+const adjustCreditsMutation = useAdminAdjustCreditsMutation()
+const changeTierMutation = useAdminChangeTierMutation()
+const changeStorageMutation = useAdminChangeStorageMutation()
+const changeRoleMutation = useAdminChangeRoleMutation()
+
+// Usage:
+// adjustCreditsMutation.mutate({ userId, amount, type })
+// changeTierMutation.mutate({ userId, tier })
+// changeStorageMutation.mutate({ userId, storageLimitBytes })
+// changeRoleMutation.mutate({ userId, role })
 ```
 
 #### Site 29: `AdminJobsPage`
@@ -2238,6 +2340,22 @@ createProject: async (name, description = "") => {
 
 > **Note:** Use a static import for `queryClient` — dynamic `await import()` is unnecessarily complex here since the query client module has no side effects at import time.
 
+**Complete invalidation checklist** — add `queryClient.invalidateQueries` to EVERY mutation method in `useProjectsStore`:
+
+| Mutation Method | Invalidate |
+|----------------|------------|
+| `createProject` | `queryKeys.projects.list()` |
+| `deleteProject` | `queryKeys.projects.list()` |
+| `updateProject` | `queryKeys.projects.list()` |
+| `createFolder` | `queryKeys.projects.detail(projectId)` |
+| `renameFolder` | `queryKeys.projects.detail(projectId)` |
+| `deleteFolder` | `queryKeys.projects.detail(projectId)` |
+| `createWorkflow` | `queryKeys.projects.detail(projectId)` |
+| `deleteWorkflow` | `queryKeys.projects.detail(projectId)` |
+| `renameWorkflow` | `queryKeys.projects.detail(projectId)` |
+| `moveWorkflow` | `queryKeys.projects.detail(projectId)` (both source and target if different) |
+| `duplicateWorkflow` | `queryKeys.projects.detail(projectId)` |
+
 Alternative: Convert mutations to `useMutation` hooks and use `onMutate` for optimistic updates. This is cleaner but requires more refactoring. The hybrid approach above is the minimal-change path.
 
 ### 4.6 Post-checkout refetch with delay
@@ -2262,15 +2380,16 @@ useEffect(() => {
 
 These should NOT be moved to React Query:
 
-| Pattern | Reason |
-|---------|--------|
-| `useAuth` (module-level singleton + Supabase realtime) | Not a standard fetch; uses `onAuthStateChange` subscription |
-| Job status polling (2s per-job in DAG executor) | Imperative execution loop with side effects |
-| YouTube audio extraction polling | Recursive imperative loop |
-| Scene editor polling (`scene-config.tsx`, `scene-editor-modal.tsx`) | Execution-time polling for scene generation status |
-| SSE streaming (AI Writer) | Server-sent events, not request/response |
-| File uploads | One-shot mutations, fine with local state |
-| Supabase auth calls (`getUser`, `getSession`) | Auth layer, not data fetching |
+| Pattern | File(s) | Reason |
+|---------|---------|--------|
+| `useAuth` (module-level singleton + Supabase realtime) | `use-auth.ts` | Not a standard fetch; uses `onAuthStateChange` subscription |
+| Job status polling (2s per-job in DAG executor) | `workflow-editor.tsx` | Imperative execution loop with side effects |
+| YouTube audio extraction polling | `config-panel.tsx` | Recursive imperative loop |
+| Scene editor polling | `scene-config.tsx`, `scene-editor-modal.tsx` | Execution-time polling for scene generation status |
+| Asset generation polling (2s `setInterval` for character/object/location creation) | `character-page-modal.tsx`, `object-page-modal.tsx`, `location-page-modal.tsx` | Execution-time polling inside Promise wrappers — same pattern as DAG job polling |
+| SSE streaming (AI Writer) | `ai-writer-node.tsx` | Server-sent events, not request/response |
+| File uploads (`uploadImage`, `uploadAudio`, `startVideoDownload`) | `config-panel.tsx` | One-shot mutations, fine with local state |
+| Supabase auth calls (`getUser`, `getSession`) | various | Auth layer, not data fetching |
 
 ---
 
@@ -2278,9 +2397,9 @@ These should NOT be moved to React Query:
 
 ### 5.1 Files to delete
 
-| File | Reason |
-|------|--------|
-| `src/hooks/use-admin.ts` | Replaced by 16 hooks in `use-admin-queries.ts` |
+| File | Reason | Atomicity |
+|------|--------|-----------|
+| `src/hooks/use-admin.ts` | Replaced by 19 hooks in `use-admin-queries.ts` | **DELETE ONLY AFTER all 9 admin pages (Sites 27–35) are migrated and passing type checks.** All admin pages import from this file — premature deletion breaks imports. Safest approach: first convert to a re-export stub (`export * from "./queries/use-admin-queries"`), then delete the stub in a follow-up PR after admin pages stabilize. |
 
 ### 5.2 Files to gut and re-export
 
@@ -2437,3 +2556,9 @@ After completing the migration, verify each item:
 - [ ] React 19 compatibility: no usage of deprecated `ReactDOM.render` (already using `createRoot`)
 - [ ] Settings page template editing not clobbered by background refetch
 - [ ] Post-checkout `useEffect` has `if (!user?.id) return` guard (no non-null assertion)
+- [ ] `useAdminChangeTierMutation`, `useAdminChangeStorageMutation`, `useAdminChangeRoleMutation` defined in `use-admin-queries.ts`
+- [ ] `useResolveReportMutation` invalidates `gallery.all` in addition to report keys
+- [ ] All 11 Zustand project mutation methods call `queryClient.invalidateQueries` (Section 4.5 checklist)
+- [ ] Sites 9 + 10 migrated atomically (user settings + settings page)
+- [ ] Sites 27–35 migrated before `use-admin.ts` is deleted (or stub retained)
+- [ ] `use-admin.ts` deletion did not break any type imports (`AdminUser`, `AppSettings`)
