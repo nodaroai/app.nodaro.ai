@@ -474,7 +474,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                     <textarea
                       value={data.motionPrompt ?? ""}
                       onChange={(e) => handleUpdate({ motionPrompt: e.target.value })}
-                      placeholder="Describe the overall scene, characters, and setting. Use @element_name to reference elements. Add dialogue with 'character says ...'"
+                      placeholder="Describe the overall scene, characters, and setting. Use @name to reference elements. Add dialogue with 'character says ...'"
                       rows={5}
                       className="w-full p-3 text-sm min-h-[150px] rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
                     />
@@ -786,7 +786,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
 
                       {/* REFERENCE IMAGES */}
                       <div>
-                        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">Reference Images (2-4 recommended)</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">{`Reference ${el.type === "video" ? "Videos" : "Images"} (2-4 recommended)`}</span>
                         {el.urls.length > 0 ? (
                           <div className="flex items-center gap-3 flex-wrap">
                             {el.urls.map((url, ui) => (
@@ -806,7 +806,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                         ) : (
                           <div className="flex flex-col items-center justify-center h-[100px] rounded-xl border-2 border-dashed border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073]/40">
                             <ImageIcon className="w-8 h-8 mb-1.5" />
-                            <span className="text-xs">Drop images here or use buttons below</span>
+                            <span className="text-xs">Drop media here or use buttons below</span>
                           </div>
                         )}
                       </div>

@@ -107,16 +107,12 @@ export async function kling3Generate(
         name: prefixedName,
         description,
       }
-      // Use type field to send only the correct URL key
-      if (el.type === "video") {
-        if (el.element_input_video_urls && el.element_input_video_urls.length > 0) {
-          mapped.element_input_video_urls = el.element_input_video_urls
-        }
-      } else {
-        // Default to image URLs
-        if (el.element_input_urls && el.element_input_urls.length > 0) {
-          mapped.element_input_urls = el.element_input_urls
-        }
+      // Include whichever URL arrays are populated (field-presence, not type-based)
+      if (el.element_input_video_urls && el.element_input_video_urls.length > 0) {
+        mapped.element_input_video_urls = el.element_input_video_urls
+      }
+      if (el.element_input_urls && el.element_input_urls.length > 0) {
+        mapped.element_input_urls = el.element_input_urls
       }
       return mapped
     })

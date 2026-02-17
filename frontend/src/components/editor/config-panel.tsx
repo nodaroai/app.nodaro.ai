@@ -2524,7 +2524,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <Textarea
             value={data.motionPrompt || ""}
             onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
-            placeholder="Describe the overall scene, characters, and setting. Use @element_name to reference elements. Add dialogue with 'character says ...'"
+            placeholder="Describe the overall scene, characters, and setting. Use @name to reference elements. Add dialogue with 'character says ...'"
             rows={3}
             className="text-xs bg-muted/30 border-border resize-none"
           />
