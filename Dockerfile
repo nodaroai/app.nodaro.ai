@@ -54,6 +54,11 @@ COPY frontend/Caddyfile /etc/caddy/Caddyfile
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
 
+# Railway sets PORT for routing — Caddy must listen on it
+# If not set (local dev), default to 3000
+export PORT="${PORT:-3000}"
+echo "Starting with PORT=$PORT"
+
 # Stop all processes if any one exits
 cleanup() {
   kill $BACKEND_PID $WORKER_PID $CADDY_PID 2>/dev/null || true
@@ -72,7 +77,7 @@ WORKER_PID=$!
 
 # Start frontend (Caddy serving static files + reverse proxy)
 cd /app
-caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+PORT=$PORT caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 CADDY_PID=$!
 
 # Wait for all — if any exits, the script continues and cleans up
