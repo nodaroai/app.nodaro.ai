@@ -29,6 +29,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
 
   const videoUrl = nodeData.r2Url || nodeData.url
@@ -164,8 +165,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 >
                   <video
                     src={videoUrl}
-                    autoPlay
-                    loop
+                    autoPlay={videoAutoplay}
+                    loop={videoAutoplay}
                     muted
                     playsInline
                     className="w-full h-full object-cover"

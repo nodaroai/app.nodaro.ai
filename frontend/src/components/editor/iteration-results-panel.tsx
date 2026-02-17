@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
+import { CachedImage } from "@/components/ui/cached-image"
 
 const VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync", "suno-music-video"])
 const AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
@@ -141,10 +142,12 @@ function IterationCard({
 
         {/* Thumbnail in collapsed mode */}
         {resultIsUrl && mediaType === "image" && (
-          <img
+          <CachedImage
             src={result}
             alt={`Result ${index + 1}`}
             className="w-8 h-8 rounded object-cover shrink-0"
+            thumbnail
+            thumbnailWidth={80}
           />
         )}
         {resultIsUrl && mediaType === "video" && (
@@ -202,11 +205,13 @@ function IterationCard({
               </span>
               {resultIsUrl && mediaType === "image" && (
                 <div className="mt-1">
-                  <img
+                  <CachedImage
                     src={result}
                     alt={`Result ${index + 1}`}
                     className="w-full max-h-48 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() => setLightboxOpen(true)}
+                    thumbnail
+                    thumbnailWidth={480}
                   />
                   {lightboxOpen && (
                     <ImageLightbox

@@ -107,12 +107,13 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: "Failed to update settings" })
     }
 
-    // When gallery visibility changes, sync existing jobs to match
+    // When gallery visibility changes, sync completed jobs only (not failed/cancelled/ancient)
     if (publicOutputs !== undefined && publicOutputs !== (profile.public_outputs ?? true)) {
       const { error: jobsError } = await supabase
         .from("jobs")
         .update({ is_public: publicOutputs })
         .eq("user_id", userId)
+        .eq("status", "completed")
 
       if (jobsError) {
         console.error("[user-settings] Failed to sync jobs visibility:", jobsError)

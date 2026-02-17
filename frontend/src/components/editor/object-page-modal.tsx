@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { ObjectNodeData, ObjectAssetItem } from "@/types/nodes"
+import { CachedImage } from "@/components/ui/cached-image"
 
 type TabType = "main" | "angles" | "materials" | "variations" | "custom"
 
@@ -103,7 +104,7 @@ function DraggableImage({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="relative group">
-        <img
+        <CachedImage
           src={src}
           alt={label ?? "Object image"}
           draggable
@@ -114,6 +115,8 @@ function DraggableImage({
             "w-full rounded-lg cursor-pointer border border-border hover:border-emerald-500/50 transition-colors",
             isMainImage ? "max-h-[400px] object-contain" : "aspect-square object-cover"
           )}
+          thumbnail
+          thumbnailWidth={800}
         />
         {/* Add to canvas button */}
         {onAddToCanvas && (
@@ -933,10 +936,12 @@ no shadows, professional product photography`
                   )}
                   onClick={() => setSelectedRefinedIndex(i)}
                 >
-                  <img
+                  <CachedImage
                     src={url}
                     alt={`Refined ${i + 1}`}
                     className="w-full h-36 object-cover rounded-lg"
+                    thumbnail
+                    thumbnailWidth={320}
                   />
                   {/* Expand button */}
                   <button
@@ -986,7 +991,7 @@ no shadows, professional product photography`
           >
             <X className="w-6 h-6" />
           </button>
-          <img
+          <CachedImage
             src={refineLightboxSrc}
             alt="Full size preview"
             className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"

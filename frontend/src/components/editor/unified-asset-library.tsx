@@ -20,6 +20,7 @@ import { ObjectPageModal } from "./object-page-modal"
 import { LocationPageModal } from "./location-page-modal"
 import { createClient } from "@/lib/supabase"
 import type { DbCharacter, DbObject, DbLocation, DbFace } from "@/lib/api"
+import { CachedImage } from "@/components/ui/cached-image"
 import type { CharacterNodeData, ObjectNodeData, LocationNodeData, FaceNodeData } from "@/types/nodes"
 
 type AssetType = "all" | "character" | "object" | "location" | "face"
@@ -543,10 +544,12 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                       >
                         {asset.thumbnailUrl ? (
                           <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-[#121212]">
-                            <img
+                            <CachedImage
                               src={asset.thumbnailUrl}
                               alt={asset.name}
                               className="w-full h-full object-cover"
+                              thumbnail
+                              thumbnailWidth={160}
                             />
                           </div>
                         ) : (

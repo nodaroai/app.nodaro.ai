@@ -14,6 +14,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { ExtractReferencesModal } from "./extract-references-modal"
 import type { SceneNodeDataType, ExtractedReference, GenerateScriptData } from "@/types/nodes"
 import { mapScriptSceneToNodeData } from "@/types/nodes"
+import { CachedImage } from "@/components/ui/cached-image"
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -324,7 +325,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
 
                   {status !== "running" && activeUrl && (
                     <div className="relative group">
-                      <img
+                      <CachedImage
                         src={activeUrl}
                         alt="Scene"
                         className="w-full rounded-xl object-contain max-h-[50vh] cursor-pointer hover:opacity-90 transition-opacity bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]"
@@ -377,7 +378,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     <div className="flex gap-1.5 overflow-x-auto pb-1">
                       {results.map((r, i) => (
                         <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                          <img
+                          <CachedImage
                             src={r.url}
                             alt={`Result ${i + 1}`}
                             className={`w-14 h-14 object-cover rounded-md cursor-pointer transition-opacity ${
@@ -386,6 +387,8 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                                 : "opacity-50 hover:opacity-80"
                             }`}
                             onClick={() => updateNodeData(nodeId, { activeResultIndex: i, generatedImageUrl: r.url })}
+                            thumbnail
+                            thumbnailWidth={120}
                           />
                           <button
                             type="button"

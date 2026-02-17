@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react"
 import { MapPin, X, Loader2, AlertCircle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { LocationPageModal } from "./location-page-modal"
 import { type DbLocation } from "@/lib/api"
@@ -189,10 +190,12 @@ export function LocationGalleryButton() {
                         >
                           {loc.sourceImageUrl ? (
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted/30">
-                              <img
+                              <CachedImage
                                 src={loc.sourceImageUrl}
                                 alt={loc.name}
                                 className="w-full h-full object-cover"
+                                thumbnail
+                                thumbnailWidth={160}
                               />
                             </div>
                           ) : (

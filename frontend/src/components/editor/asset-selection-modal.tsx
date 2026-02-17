@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/hooks/use-auth"
 import { useCharacters, useObjects, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
+import { CachedImage } from "@/components/ui/cached-image"
 import { cn } from "@/lib/utils"
 
 type AssetType = "all" | "character" | "object" | "location" | "face"
@@ -242,10 +243,12 @@ export function AssetSelectionModal({
                   )}
                 >
                   {asset.thumbnailUrl ? (
-                    <img
+                    <CachedImage
                       src={asset.thumbnailUrl}
                       alt={asset.name}
                       className="w-full aspect-square object-cover rounded-md"
+                      thumbnail
+                      thumbnailWidth={320}
                     />
                   ) : (
                     <div className={cn(

@@ -25,6 +25,7 @@ import {
   type LibraryAsset,
 } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 
 // ============================================================
@@ -381,23 +382,29 @@ function AssetCard({
         }}
       >
         {asset.type === "image" && asset.thumbnailUrl ? (
-          <img
+          <CachedImage
             src={asset.thumbnailUrl}
             alt={asset.filename}
             className="w-full h-full object-cover"
+            thumbnail
+            thumbnailWidth={320}
           />
         ) : asset.type === "image" && asset.url ? (
-          <img
+          <CachedImage
             src={asset.url}
             alt={asset.filename}
             className="w-full h-full object-cover"
+            thumbnail
+            thumbnailWidth={320}
           />
         ) : asset.type === "video" && asset.thumbnailUrl ? (
           <div className="relative w-full h-full">
-            <img
+            <CachedImage
               src={asset.thumbnailUrl}
               alt={asset.filename}
               className="w-full h-full object-cover"
+              thumbnail
+              thumbnailWidth={320}
             />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
