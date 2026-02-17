@@ -38,7 +38,7 @@ ENV VITE_EDITION=$VITE_EDITION
 ENV VITE_PADDLE_CLIENT_TOKEN=$VITE_PADDLE_CLIENT_TOKEN
 ENV VITE_PADDLE_ENVIRONMENT=$VITE_PADDLE_ENVIRONMENT
 
-RUN npm run build
+RUN echo "DEBUG: VITE_SUPABASE_URL length=${#VITE_SUPABASE_URL} VITE_EDITION=${VITE_EDITION}" && npm run build
 
 # ── Stage 3: Production runner ───────────────────────────────────────
 FROM node:20-alpine AS runner
