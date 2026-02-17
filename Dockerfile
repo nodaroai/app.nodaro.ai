@@ -53,7 +53,13 @@ COPY frontend/Caddyfile /etc/caddy/Caddyfile
 # Startup script: run backend + worker + Caddy concurrently
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
-set -e
+
+# Stop all processes if any one exits
+cleanup() {
+  kill $BACKEND_PID $WORKER_PID $CADDY_PID 2>/dev/null || true
+  exit 1
+}
+trap cleanup TERM INT
 
 # Start backend API server on internal port (not Railway's $PORT which Caddy uses)
 cd /app/backend
@@ -69,13 +75,9 @@ cd /app
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 CADDY_PID=$!
 
-# Wait for any process to exit
-wait -n $BACKEND_PID $WORKER_PID $CADDY_PID
-EXIT_CODE=$?
-
-# If one exits, stop the others
-kill $BACKEND_PID $WORKER_PID $CADDY_PID 2>/dev/null || true
-exit $EXIT_CODE
+# Wait for all — if any exits, the script continues and cleans up
+wait
+cleanup
 EOF
 
 RUN chmod +x /app/start.sh
