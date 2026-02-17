@@ -185,11 +185,12 @@ export async function reserveCreditsForJob(
 
     return reservation
   } catch (err) {
-    console.error(`[credit-guard] ${routeName} credit reservation failed:`, err)
+    const detail = err instanceof Error ? err.message : String(err)
+    console.error(`[credit-guard] ${routeName} credit reservation failed:`, detail)
     // Delete the job if reservation fails
     await supabase.from("jobs").delete().eq("id", jobId)
     reply.status(500).send({
-      error: { code: "credit_reservation_failed", message: "Failed to reserve credits" },
+      error: { code: "credit_reservation_failed", message: `Failed to reserve credits: ${detail}` },
     })
     return undefined
   }

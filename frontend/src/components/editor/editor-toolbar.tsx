@@ -723,6 +723,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               size="sm"
               onClick={onSave}
               disabled={isSaving || isIdle}
+              aria-label={buttonText}
               className={buttonClassName}
               style={buttonStyle}
               title={hasError ? saveError ?? "Save failed" : undefined}
