@@ -111,7 +111,14 @@ export function useAdmin() {
         setError(err.message)
         return []
       }
-      return data ?? []
+      return (data ?? []).map((row) => ({
+        ...row,
+        subscription_tier: row.subscription_tier ?? "free",
+        subscription_credits: row.subscription_credits ?? 0,
+        topup_credits: row.topup_credits ?? 0,
+        daily_spent_credits: row.daily_spent_credits ?? 0,
+        storage_limit_bytes: row.storage_limit_bytes ?? 524288000,
+      }))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch users")
       return []
@@ -144,25 +151,25 @@ export function useAdmin() {
 
       if (!jobs || jobs.length === 0) return []
 
-      const userIds = [...new Set(jobs.map((j: Record<string, string>) => j.user_id))]
-      const workflowIds = [...new Set(jobs.map((j: Record<string, string>) => j.workflow_id))]
+      const userIds = [...new Set(jobs.map((j) => j.user_id))]
+      const workflowIds = [...new Set(jobs.map((j) => j.workflow_id).filter(Boolean) as string[])]
 
       const [usersRes, workflowsRes] = await Promise.all([
         supabase.from("profiles").select("id, email").in("id", userIds),
         supabase.from("workflows").select("id, name").in("id", workflowIds),
       ])
 
-      const userMap = new Map((usersRes.data ?? []).map((u: Record<string, string>) => [u.id, u.email]))
-      const wfMap = new Map((workflowsRes.data ?? []).map((w: Record<string, string>) => [w.id, w.name]))
+      const userMap = new Map((usersRes.data ?? []).map((u) => [u.id, u.email]))
+      const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, w.name]))
 
-      return jobs.map((j: Record<string, unknown>) => ({
+      return jobs.map((j) => ({
         id: j.id,
         status: j.status,
         credits_used: j.credits_used,
         credits_estimated: j.credits_estimated,
         created_at: j.created_at,
         user_email: userMap.get(j.user_id) ?? "Unknown",
-        workflow_name: wfMap.get(j.workflow_id) ?? "Unknown",
+        workflow_name: wfMap.get(j.workflow_id ?? "") ?? "Unknown",
       }))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch jobs")
@@ -190,15 +197,15 @@ export function useAdmin() {
 
       if (!logs || logs.length === 0) return []
 
-      const userIds = [...new Set(logs.map((l: Record<string, string>) => l.user_id))]
+      const userIds = [...new Set(logs.map((l) => l.user_id))]
       const { data: users } = await supabase
         .from("profiles")
         .select("id, email")
         .in("id", userIds)
 
-      const userMap = new Map((users ?? []).map((u: Record<string, string>) => [u.id, u.email]))
+      const userMap = new Map((users ?? []).map((u) => [u.id, u.email]))
 
-      return logs.map((l: Record<string, unknown>) => ({
+      return logs.map((l) => ({
         id: l.id,
         action: l.action,
         provider: l.provider,

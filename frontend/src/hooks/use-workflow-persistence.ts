@@ -299,8 +299,8 @@ export function useWorkflowPersistence(projectId?: string) {
         const settings = (data.settings ?? {}) as Record<string, unknown>
         const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
         const flowTemplates = (settings.flowPromptTemplates ?? {}) as Record<string, string>
-        let nodes = data.nodes as WorkflowNode[]
-        const edges = data.edges as WorkflowEdge[]
+        let nodes = data.nodes as unknown as WorkflowNode[]
+        const edges = data.edges as unknown as WorkflowEdge[]
 
         // Sync node results from jobs table via backend API
         // This handles the case where user left while jobs were running

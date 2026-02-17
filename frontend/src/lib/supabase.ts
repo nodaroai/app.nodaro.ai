@@ -1,10 +1,11 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/database.types'
 
-let cachedClient: ReturnType<typeof createSupabaseClient> | null = null
+let cachedClient: SupabaseClient<Database> | null = null
 
 export function createClient() {
   if (!cachedClient) {
-    cachedClient = createSupabaseClient(
+    cachedClient = createSupabaseClient<Database>(
       import.meta.env.VITE_SUPABASE_URL!,
       import.meta.env.VITE_SUPABASE_ANON_KEY!,
       {
