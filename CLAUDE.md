@@ -8,6 +8,7 @@
 **See also:**
 - `frontend/CLAUDE.md` — Frontend patterns (API proxy, SSE client, UI styling)
 - `backend/CLAUDE.md` — Backend patterns (providers, credits, billing, worker)
+- `backend/src/providers/kie/CLAUDE.md` — KIE.ai API docs, model key → doc map, param gotchas
 
 # SceneNode.ai — Claude Code Reference
 
