@@ -75,6 +75,15 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
     return getNodeThumbnail(srcNode.data as Record<string, unknown>, String(srcNode.type ?? ""))
   }, [edges, nodes, nodeId])
 
+  // ── Resolve connected end frame ──
+  const endFrameUrl = useMemo(() => {
+    const edge = edges.find((e) => e.target === nodeId && e.targetHandle === "endFrame")
+    if (!edge) return undefined
+    const srcNode = nodes.find((n) => n.id === edge.source)
+    if (!srcNode) return undefined
+    return getNodeThumbnail(srcNode.data as Record<string, unknown>, String(srcNode.type ?? ""))
+  }, [edges, nodes, nodeId])
+
   // ── Resolve connected audio ──
   const audioLabel = useMemo(() => {
     const edge = edges.find((e) => e.target === nodeId && e.targetHandle === "audio")
@@ -300,6 +309,31 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                   </div>
                 )}
               </div>
+
+              {/* End Frame */}
+              {data.multiShot ? (
+                <p className="text-[10px] text-muted-foreground italic">End frame not available in multi-shot mode</p>
+              ) : (
+                <div>
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
+                    End Frame
+                  </span>
+                  {endFrameUrl ? (
+                    <img
+                      src={endFrameUrl}
+                      alt="End frame"
+                      className="w-full rounded-xl object-contain max-h-[30vh] bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D]"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-32 rounded-xl border-2 border-dashed border-gray-300 dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212] text-gray-400 dark:text-[#64748B]">
+                      <div className="flex flex-col items-center gap-1.5">
+                        <ImageIcon className="w-6 h-6" />
+                        <span className="text-[10px] font-mono">Connect an image node to End Frame</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Video Player / Loading / Placeholder */}
               <div>
