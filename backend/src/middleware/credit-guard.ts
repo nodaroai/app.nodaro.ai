@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify"
 import { hasCredits } from "../lib/config.js"
 import { CreditsService, type ReserveResult, type CreditProfile, type StorageProfile } from "../billing/credits.js"
 import { supabase } from "../lib/supabase.js"
+import { warmAdminCache } from "../lib/admin-check.js"
 
 /**
  * Credit reservation attached to the request by creditGuard middleware.
@@ -70,7 +71,7 @@ export function creditGuard(
     // Fetch profile ONCE with all columns needed by both storage + credit checks
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset, storage_used_bytes, storage_limit_bytes")
+      .select("role, tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset, storage_used_bytes, storage_limit_bytes")
       .eq("id", userId)
       .single()
 
@@ -80,6 +81,9 @@ export function creditGuard(
       })
       return
     }
+
+    // Pre-warm admin cache so subsequent checkIsAdmin() calls skip the DB
+    warmAdminCache(userId, (profile as Record<string, unknown>).role as string | undefined)
 
     // Step 1: Check storage limit BEFORE credit check (for routes that produce output files)
     try {
