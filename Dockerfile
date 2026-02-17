@@ -54,39 +54,21 @@ COPY frontend/Caddyfile /etc/caddy/Caddyfile
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
 
-# Railway sets PORT for routing — Caddy must listen on it
-# If not set (local dev), default to 3000
-export PORT="${PORT:-3000}"
-echo "Starting with PORT=$PORT"
+# Railway injects PORT=8080 at runtime for routing
+echo "Starting with PORT=${PORT:-8080}"
 
-# Stop all processes if any one exits
-cleanup() {
-  kill $BACKEND_PID $WORKER_PID $CADDY_PID 2>/dev/null || true
-  exit 1
-}
-trap cleanup TERM INT
-
-# Start backend API server on internal port (not Railway's $PORT which Caddy uses)
+# Start backend API server on fixed internal port
 cd /app/backend
 PORT=9000 node dist/server.js &
-BACKEND_PID=$!
 
 # Start BullMQ worker (job processor)
 node dist/worker.js &
-WORKER_PID=$!
 
-# Start frontend (Caddy serving static files + reverse proxy)
+# Start Caddy as main process (PID 1 for signal handling)
 cd /app
-PORT=$PORT caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
-CADDY_PID=$!
-
-# Wait for all — if any exits, the script continues and cleans up
-wait
-cleanup
+exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 EOF
 
 RUN chmod +x /app/start.sh
-
-EXPOSE 3000
 
 CMD ["/app/start.sh"]
