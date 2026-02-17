@@ -8,37 +8,37 @@ import NotFound from "@/components/not-found"
 
 // Layouts
 import DashboardLayout from "@/layouts/dashboard-layout"
-import AdminLayout from "@/layouts/admin-layout"
 
 // Auth callback (eager — critical path)
 import AuthCallback from "@/routes/auth-callback"
 
-// Dashboard pages (eager — instant tab switching)
+// Dashboard pages (eager — /projects is the landing page)
 import ProjectsPage from "@/app/(dashboard)/projects/page"
 import ProjectPage from "@/routes/project-page"
-import WorkflowEditorPage from "@/routes/workflow-editor-page"
-import BillingPage from "@/app/(dashboard)/billing/page"
-import SettingsPage from "@/app/(dashboard)/settings/page"
-import LibraryPage from "@/app/(dashboard)/library/page"
 
-// Admin pages (eager — instant tab switching)
-import AdminDashboard from "@/app/(admin)/admin/page"
-import AdminUsers from "@/app/(admin)/admin/users/page"
-import AdminJobs from "@/app/(admin)/admin/jobs/page"
-import AdminUsage from "@/app/(admin)/admin/usage/page"
-import AdminAlerts from "@/app/(admin)/admin/alerts/page"
-import AdminModels from "@/app/(admin)/admin/models/page"
-import AdminReports from "@/app/(admin)/admin/reports/page"
-import AdminPricingPage from "@/app/(admin)/admin/pricing/page"
-import AdminSettings from "@/app/(admin)/admin/settings/page"
+// Lazy-loaded routes — not needed for initial /projects page load
+const WorkflowEditorPage = lazy(() => import("@/routes/workflow-editor-page"))
+const BillingPage = lazy(() => import("@/app/(dashboard)/billing/page"))
+const SettingsPage = lazy(() => import("@/app/(dashboard)/settings/page"))
+const LibraryPage = lazy(() => import("@/app/(dashboard)/library/page"))
+const GalleryPage = lazy(() => import("@/app/gallery/page"))
+const PricingPage = lazy(() => import("@/app/pricing/page"))
 
-// All pages eager for instant navigation
-import GalleryPage from "@/app/gallery/page"
-import PricingPage from "@/app/pricing/page"
-
-// Lazy-loaded routes (auth pages — rarely revisited)
+// Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
 const SignupPage = lazy(() => import("@/app/(auth)/signup/page"))
+
+// Admin layout + all admin pages (lazy — admin-only, most users never visit)
+const AdminLayout = lazy(() => import("@/layouts/admin-layout"))
+const AdminDashboard = lazy(() => import("@/app/(admin)/admin/page"))
+const AdminUsers = lazy(() => import("@/app/(admin)/admin/users/page"))
+const AdminJobs = lazy(() => import("@/app/(admin)/admin/jobs/page"))
+const AdminUsage = lazy(() => import("@/app/(admin)/admin/usage/page"))
+const AdminAlerts = lazy(() => import("@/app/(admin)/admin/alerts/page"))
+const AdminModels = lazy(() => import("@/app/(admin)/admin/models/page"))
+const AdminReports = lazy(() => import("@/app/(admin)/admin/reports/page"))
+const AdminPricingPage = lazy(() => import("@/app/(admin)/admin/pricing/page"))
+const AdminSettings = lazy(() => import("@/app/(admin)/admin/settings/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -74,11 +74,11 @@ export const router = createBrowserRouter([
   },
   {
     path: "/gallery",
-    element: <GalleryPage />,
+    element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
   },
   {
     path: "/pricing",
-    element: <PricingPage />,
+    element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
   },
   {
     element: <DashboardLayout />,
@@ -94,62 +94,62 @@ export const router = createBrowserRouter([
       },
       {
         path: "/projects/:id/workflows/:workflowId",
-        element: <WorkflowEditorPage />,
+        element: <SuspenseWrapper><WorkflowEditorPage /></SuspenseWrapper>,
       },
       {
         path: "/billing",
-        element: <BillingPage />,
+        element: <SuspenseWrapper><BillingPage /></SuspenseWrapper>,
       },
       {
         path: "/settings",
-        element: <SettingsPage />,
+        element: <SuspenseWrapper><SettingsPage /></SuspenseWrapper>,
       },
       {
         path: "/library",
-        element: <LibraryPage />,
+        element: <SuspenseWrapper><LibraryPage /></SuspenseWrapper>,
       },
     ],
   },
   {
     path: "/admin",
-    element: <AdminLayout />,
+    element: <SuspenseWrapper><AdminLayout /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
     children: [
       {
         index: true,
-        element: <AdminDashboard />,
+        element: <SuspenseWrapper><AdminDashboard /></SuspenseWrapper>,
       },
       {
         path: "users",
-        element: <AdminUsers />,
+        element: <SuspenseWrapper><AdminUsers /></SuspenseWrapper>,
       },
       {
         path: "jobs",
-        element: <AdminJobs />,
+        element: <SuspenseWrapper><AdminJobs /></SuspenseWrapper>,
       },
       {
         path: "usage",
-        element: <AdminUsage />,
+        element: <SuspenseWrapper><AdminUsage /></SuspenseWrapper>,
       },
       {
         path: "alerts",
-        element: <AdminAlerts />,
+        element: <SuspenseWrapper><AdminAlerts /></SuspenseWrapper>,
       },
       {
         path: "models",
-        element: <AdminModels />,
+        element: <SuspenseWrapper><AdminModels /></SuspenseWrapper>,
       },
       {
         path: "reports",
-        element: <AdminReports />,
+        element: <SuspenseWrapper><AdminReports /></SuspenseWrapper>,
       },
       {
         path: "pricing",
-        element: <AdminPricingPage />,
+        element: <SuspenseWrapper><AdminPricingPage /></SuspenseWrapper>,
       },
       {
         path: "settings",
-        element: <AdminSettings />,
+        element: <SuspenseWrapper><AdminSettings /></SuspenseWrapper>,
       },
     ],
   },
