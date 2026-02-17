@@ -2,6 +2,10 @@ import { createBrowserRouter, Navigate } from "react-router-dom"
 import { lazy, Suspense } from "react"
 import { Loader2 } from "lucide-react"
 
+// Error handling
+import RouteErrorBoundary from "@/components/route-error-boundary"
+import NotFound from "@/components/not-found"
+
 // Layouts
 import DashboardLayout from "@/layouts/dashboard-layout"
 import AdminLayout from "@/layouts/admin-layout"
@@ -53,6 +57,7 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
 export const router = createBrowserRouter([
   {
     path: "/",
+    errorElement: <RouteErrorBoundary />,
     element: <Navigate to="/projects" replace />,
   },
   {
@@ -77,6 +82,7 @@ export const router = createBrowserRouter([
   },
   {
     element: <DashboardLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         path: "/projects",
@@ -107,6 +113,7 @@ export const router = createBrowserRouter([
   {
     path: "/admin",
     element: <AdminLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         index: true,
@@ -145,5 +152,9 @@ export const router = createBrowserRouter([
         element: <AdminSettings />,
       },
     ],
+  },
+  {
+    path: "*",
+    element: <NotFound />,
   },
 ])
