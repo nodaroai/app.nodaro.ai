@@ -177,6 +177,45 @@ export async function processVideo(
   }
 }
 
+/**
+ * Generate a thumbnail from a video URL (downloads, extracts frame, resizes).
+ * Used by the worker to create thumbnails for AI-generated videos.
+ */
+export async function generateThumbnailFromUrl(videoUrl: string): Promise<Buffer> {
+  const workDir = join(tmpdir(), `thumb-gen-${randomUUID()}`)
+  await fs.mkdir(workDir, { recursive: true })
+
+  const videoPath = join(workDir, "input.mp4")
+  const framePath = join(workDir, "frame.jpg")
+
+  try {
+    // Download video to temp file
+    const response = await fetch(videoUrl, { signal: AbortSignal.timeout(60_000) })
+    if (!response.ok) throw new Error(`Failed to download video: ${response.status}`)
+    const buffer = Buffer.from(await response.arrayBuffer())
+    await fs.writeFile(videoPath, buffer)
+
+    // Get duration so we can seek to ~1s
+    const probeJson = await runFfprobe(videoPath)
+    const probe = JSON.parse(probeJson)
+    const durationSeconds = parseFloat(probe.format?.duration ?? "0")
+    const seekTime = Math.min(1, durationSeconds * 0.1)
+
+    await extractFrame(videoPath, framePath, seekTime)
+
+    const frameBuffer = await fs.readFile(framePath)
+    return await sharp(frameBuffer)
+      .resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: THUMBNAIL_QUALITY })
+      .toBuffer()
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 // ============================================================
 // Audio Metadata (no thumbnail)
 // ============================================================

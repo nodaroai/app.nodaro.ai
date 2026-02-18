@@ -41,6 +41,7 @@ import { tmpdir } from "node:os"
 import { randomUUID } from "node:crypto"
 import youtubedl from "youtube-dl-exec"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
+import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 
 const SOCIAL_HOSTNAMES = [
@@ -235,6 +236,24 @@ async function watermarkLocalVideoAndUpload(
   const wmPath = localPath.replace(/\.mp4$/, "-wm.mp4")
   await applyVideoWatermark(localPath, wmPath)
   return uploadFileToR2(wmPath, jobId, "video", jobUserId)
+}
+
+/**
+ * Generate a thumbnail for a video and upload it to R2.
+ * Returns the thumbnail URL, or null if generation fails (non-blocking).
+ */
+async function generateAndUploadThumbnail(
+  videoUrl: string,
+  jobId: string,
+  jobUserId: string | undefined,
+): Promise<string | null> {
+  try {
+    const thumbBuffer = await generateThumbnailFromUrl(videoUrl)
+    return await uploadBufferToR2(thumbBuffer, `thumbnails/${jobId}.jpg`, "image/jpeg", jobUserId)
+  } catch (err) {
+    console.error(`[worker] Thumbnail generation failed for job ${jobId}:`, err)
+    return null
+  }
 }
 
 export function createVideoWorker() {
@@ -454,6 +473,8 @@ export function createVideoWorker() {
 
           await job.updateProgress(100)
 
+          const i2vThumbUrl = await generateAndUploadThumbnail(finalVideoUrl, jobId, jobUserId)
+
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
 
@@ -462,7 +483,7 @@ export function createVideoWorker() {
             .update({
               status: "completed",
               progress: 100,
-              output_data: { videoUrl: finalVideoUrl },
+              output_data: { videoUrl: finalVideoUrl, thumbnailUrl: i2vThumbUrl },
               completed_at: new Date().toISOString(),
               provider: result.providerUsed,
               provider_cost: result.cost,
@@ -487,6 +508,8 @@ export function createVideoWorker() {
           const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
+          const v2vThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
 
@@ -495,7 +518,7 @@ export function createVideoWorker() {
             .update({
               status: "completed",
               progress: 100,
-              output_data: { videoUrl: r2Url },
+              output_data: { videoUrl: r2Url, thumbnailUrl: v2vThumbUrl },
               completed_at: new Date().toISOString(),
               provider: result.providerUsed,
               provider_cost: result.cost,
@@ -534,6 +557,8 @@ export function createVideoWorker() {
           const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
+          const t2vThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
 
@@ -542,7 +567,7 @@ export function createVideoWorker() {
             .update({
               status: "completed",
               progress: 100,
-              output_data: { videoUrl: r2Url },
+              output_data: { videoUrl: r2Url, thumbnailUrl: t2vThumbUrl },
               completed_at: new Date().toISOString(),
               provider: result.providerUsed,
               provider_cost: result.cost,
@@ -569,6 +594,8 @@ export function createVideoWorker() {
           const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
+          const lsThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
 
@@ -577,7 +604,7 @@ export function createVideoWorker() {
             .update({
               status: "completed",
               progress: 100,
-              output_data: { videoUrl: r2Url },
+              output_data: { videoUrl: r2Url, thumbnailUrl: lsThumbUrl },
               completed_at: new Date().toISOString(),
               provider: result.providerUsed,
               provider_cost: result.cost,
@@ -679,6 +706,8 @@ export function createVideoWorker() {
           // Cleanup temp files
           await fs.rm(dirname(outputPath), { recursive: true, force: true }).catch(() => {})
 
+          const cvThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
 
@@ -687,7 +716,7 @@ export function createVideoWorker() {
             .update({
               status: "completed",
               progress: 100,
-              output_data: { videoUrl: r2Url },
+              output_data: { videoUrl: r2Url, thumbnailUrl: cvThumbUrl },
               completed_at: new Date().toISOString(),
             })
             .eq("id", jobId)
@@ -706,9 +735,10 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          const mvaThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: mvaThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -742,9 +772,10 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          const tvThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: tvThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -758,9 +789,10 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          const rvThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: rvThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -774,9 +806,10 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, inputType, jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          const avThumbUrl = inputType === "video" ? await generateAndUploadThumbnail(r2Url, jobId, jobUserId) : null
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
-          const outputData = inputType === "video" ? { videoUrl: r2Url } : { audioUrl: r2Url }
+          const outputData = inputType === "video" ? { videoUrl: r2Url, thumbnailUrl: avThumbUrl } : { audioUrl: r2Url }
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { ...outputData, inputType }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
@@ -791,9 +824,10 @@ export function createVideoWorker() {
           const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
           await job.updateProgress(100)
+          const acThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
-          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: acThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
@@ -1008,11 +1042,12 @@ export function createVideoWorker() {
           await job.updateProgress(50)
           const r2Url = await uploadToR2(result.videoUrl, jobId, "video", jobUserId)
           await job.updateProgress(100)
+          const smvThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({
             status: "completed",
             progress: 100,
-            output_data: { videoUrl: r2Url, sunoTaskId: result.taskId },
+            output_data: { videoUrl: r2Url, thumbnailUrl: smvThumbUrl, sunoTaskId: result.taskId },
             completed_at: new Date().toISOString(),
           }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
@@ -1236,13 +1271,15 @@ export function createVideoWorker() {
           const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
+          const mtThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
 
           await supabase.from("jobs").update({
             status: "completed",
             progress: 100,
-            output_data: { videoUrl: r2Url },
+            output_data: { videoUrl: r2Url, thumbnailUrl: mtThumbUrl },
             completed_at: new Date().toISOString(),
             provider: result.providerUsed,
             provider_cost: result.cost,
@@ -1277,13 +1314,15 @@ export function createVideoWorker() {
           const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)
           await job.updateProgress(100)
 
+          const vuThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
 
           await supabase.from("jobs").update({
             status: "completed",
             progress: 100,
-            output_data: { videoUrl: r2Url },
+            output_data: { videoUrl: r2Url, thumbnailUrl: vuThumbUrl },
             completed_at: new Date().toISOString(),
             provider: result.providerUsed,
             provider_cost: result.cost,

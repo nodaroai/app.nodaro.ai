@@ -120,6 +120,85 @@ function AudioCard({ url }: { readonly url: string }) {
   )
 }
 
+function VideoCard({ item }: { readonly item: GalleryItem }) {
+  const [hovered, setHovered] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const hasThumbnail = !!item.thumbnailUrl
+
+  function handleMouseEnter() {
+    setHovered(true)
+    if (hasThumbnail) {
+      // Video mounts on hover — give it a frame to render before playing
+      requestAnimationFrame(() => {
+        videoRef.current?.play().catch(() => {})
+      })
+    } else {
+      // Video is always mounted (preload="metadata"), just play it
+      videoRef.current?.play().catch(() => {})
+    }
+  }
+
+  function handleMouseLeave() {
+    if (videoRef.current) {
+      videoRef.current.pause()
+      videoRef.current.currentTime = 0
+    }
+    setHovered(false)
+  }
+
+  return (
+    <div
+      className="w-full h-full relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {hasThumbnail ? (
+        <>
+          {/* Cloudflare-optimized thumbnail shown by default */}
+          <CachedImage
+            src={item.thumbnailUrl!}
+            alt=""
+            className={cn("w-full h-full object-cover absolute inset-0", hovered && "invisible")}
+            loading="lazy"
+            thumbnail
+          />
+          {/* Video only mounts on hover to avoid downloading all videos upfront */}
+          {hovered && (
+            <video
+              ref={videoRef}
+              src={item.outputUrl}
+              muted
+              loop
+              playsInline
+              preload="auto"
+              className="w-full h-full object-cover"
+            />
+          )}
+        </>
+      ) : (
+        // No thumbnail available — fall back to native video with metadata preload
+        <video
+          ref={videoRef}
+          src={item.outputUrl}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="w-full h-full object-cover"
+        />
+      )}
+      {/* Play icon hint */}
+      {!hovered && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="rounded-full bg-black/40 p-2">
+            <Play className="h-4 w-4 text-white fill-white" />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CopyPromptButton({ prompt }: { readonly prompt: string }) {
   const [copied, setCopied] = useState(false)
 
@@ -353,16 +432,7 @@ export default function GalleryPage() {
                       thumbnail
                     />
                   ) : item.type === "video" ? (
-                    <video
-                      src={item.outputUrl}
-                      muted
-                      loop
-                      playsInline
-                      preload="metadata"
-                      className="w-full h-full object-cover"
-                      onMouseEnter={(e) => { e.currentTarget.play().catch(() => {}) }}
-                      onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
-                    />
+                    <VideoCard item={item} />
                   ) : (
                     <AudioCard url={item.outputUrl} />
                   )}
