@@ -190,6 +190,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
+  const MAX_CONSECUTIVE_POLL_FAILURES = 5
+
   function handleStop() {
     for (const interval of pollIntervalsRef.current) {
       clearInterval(interval)
@@ -741,10 +743,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       generateImage(prompt, referenceImageUrls, provider, undefined, aspectRatio, user?.id).then(({ jobId }) => {
         toast.info("Image generation started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const imageUrl = job.output_data?.imageUrl
@@ -766,11 +770,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
-            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-            toast.error("Failed to check job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Failed to check job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -792,10 +799,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       editImage(imageUrl, prompt, provider, user?.id).then(({ jobId }) => {
         toast.info("Image editing started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const outputUrl = job.output_data?.imageUrl
@@ -817,11 +826,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
-            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-            toast.error("Failed to check job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Failed to check job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -843,10 +855,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       imageToImage(imageUrl, prompt, provider, user?.id, referenceImageUrls).then(({ jobId }) => {
         toast.info("Image transformation started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const outputUrl = job.output_data?.imageUrl
@@ -868,11 +882,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
-            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-            toast.error("Failed to check job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Failed to check job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -902,10 +919,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).then(({ jobId }) => {
         toast.info("Character generation started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const imageUrl = job.output_data?.imageUrl
@@ -957,11 +976,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
-            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-            toast.error("Failed to check job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Failed to check job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1000,10 +1022,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).then(({ jobId }) => {
         toast.info("Face headshot generation started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const imageUrl = job.output_data?.imageUrl
@@ -1048,11 +1072,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
-            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-            toast.error("Failed to check job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Failed to check job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1081,10 +1108,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).then(({ jobId }) => {
         toast.info("Object generation started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const imageUrl = job.output_data?.imageUrl
@@ -1131,11 +1160,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            const errMsg = err instanceof Error ? err.message : "Failed to check job status"
-            updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
-            toast.error("Failed to check job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              const errMsg = err instanceof Error ? err.message : "Failed to check job status"
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              toast.error("Failed to check job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1164,10 +1196,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       }).then(({ jobId }) => {
         toast.info("Location generation started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const imageUrl = job.output_data?.imageUrl
@@ -1214,10 +1248,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
-            toast.error("Failed to check job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Failed to check job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1253,10 +1290,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   function pollJobToCompletion(jobId: string): Promise<string> {
     return new Promise((resolve, reject) => {
+      let pollFailures = 0
       const poll = trackInterval(setInterval(async () => {
         if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
         try {
           const job = await getJobStatus(jobId)
+          pollFailures = 0
           if (job.status === "completed") {
             untrackInterval(poll)
             resolve(job.output_data?.imageUrl ?? "")
@@ -1265,8 +1304,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             reject(new Error(job.error_message ?? "Failed"))
           }
         } catch (err) {
-          untrackInterval(poll)
-          reject(err)
+          pollFailures++
+          if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+            untrackInterval(poll)
+            reject(err)
+          }
         }
       }, 2000))
     })
@@ -1550,10 +1592,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Store the job ID so we can track progress
         updateNodeData(nodeId, { currentJobId: jobId })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
 
             // Update progress if available (KIE.ai providers report progress)
             if (job.progress != null && job.progress > 0) {
@@ -1583,10 +1627,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-            toast.error("Failed to check video job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
+              toast.error("Failed to check video job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1611,10 +1658,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Store the job ID so we can track progress
         updateNodeData(nodeId, { currentJobId: jobId })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
 
             // Update progress if available (KIE.ai providers report progress)
             if (job.progress != null && job.progress > 0) {
@@ -1644,10 +1693,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-            toast.error("Failed to check video-to-video job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
+              toast.error("Failed to check video-to-video job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1672,10 +1724,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Store the job ID so we can track progress
         updateNodeData(nodeId, { currentJobId: jobId })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
 
             // Update progress if available (KIE.ai providers report progress)
             if (job.progress != null && job.progress > 0) {
@@ -1705,10 +1759,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-            toast.error("Failed to check text-to-video job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
+              toast.error("Failed to check text-to-video job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1731,10 +1788,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       textToSpeech(text, voice, provider, user?.id, options).then(({ jobId }) => {
         toast.info("Text-to-speech generation started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const audioUrl = job.output_data?.audioUrl
@@ -1756,10 +1815,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
-            toast.error("Failed to check text-to-speech job status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Failed to check text-to-speech job status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1782,10 +1844,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       generateScriptApi(prompt, sceneCount, tone, targetDuration, provider, user?.id).then(({ jobId }) => {
         toast.info("Script generation started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const script = job.output_data?.script as GeneratedScript | undefined
@@ -1807,10 +1871,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
-            toast.error("Failed to check script generation status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Failed to check script generation status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1833,10 +1900,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       combineVideos(videoUrls, transition, transitionDuration, user?.id).then(({ jobId }) => {
         toast.info("Combine videos started", { description: `Job ID: ${jobId}` })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const videoUrl = job.output_data?.videoUrl
@@ -1858,10 +1927,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed" })
-            toast.error("Failed to check combine videos status")
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed" })
+              toast.error("Failed to check combine videos status")
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -1886,10 +1958,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         // Store the job ID on the node for progress tracking
         updateNodeData(nodeId, { currentJobId: jobId })
 
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
 
             // Update progress while processing
             if (job.status === "processing" && job.progress != null) {
@@ -1931,10 +2005,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(errMsg))
             }
           } catch (err) {
-            untrackInterval(poll)
-            updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-            toast.error(`Failed to check ${label} status`)
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              updateNodeData(nodeId, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
+              toast.error(`Failed to check ${label} status`)
+              reject(err)
+            }
           }
         }, 2000))
       }).catch((err) => {
@@ -2308,10 +2385,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           toast.info("Lyrics generation started", { description: `Job ID: ${jobId}` })
           updateNodeData(node.id, { currentJobId: jobId })
 
+          let pollFailures = 0
           const poll = trackInterval(setInterval(async () => {
             if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
             try {
               const job = await getJobStatus(jobId)
+              pollFailures = 0
               if (job.progress) updateNodeData(node.id, { currentJobProgress: job.progress })
 
               if (job.status === "completed") {
@@ -2337,10 +2416,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 reject(new Error(errMsg))
               }
             } catch (err) {
-              untrackInterval(poll)
-              updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
-              toast.error("Failed to check lyrics status")
-              reject(err)
+              pollFailures++
+              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                untrackInterval(poll)
+                updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
+                toast.error("Failed to check lyrics status")
+                reject(err)
+              }
             }
           }, 3000))
         }).catch((err) => {
@@ -2431,10 +2513,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           toast.info("Transcription started", { description: `Job ID: ${jobId}` })
           updateNodeData(node.id, { currentJobId: jobId })
 
+          let pollFailures = 0
           const poll = trackInterval(setInterval(async () => {
             if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
             try {
               const job = await getJobStatus(jobId)
+              pollFailures = 0
               if (job.status === "processing" && job.progress != null) {
                 updateNodeData(node.id, { currentJobProgress: job.progress })
               }
@@ -2469,7 +2553,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 reject(new Error(errMsg))
               }
             } catch (err) {
-              console.error("[transcribe] Poll error:", err)
+              pollFailures++
+              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                untrackInterval(poll)
+                updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined, currentJobProgress: undefined })
+                toast.error("Failed to check transcription status")
+                reject(err)
+              }
             }
           }, 2000))
         }).catch((err: unknown) => {
@@ -3543,10 +3633,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const { jobId } = await generateImage(finalPrompt, allRefImages.length > 0 ? allRefImages : undefined, undefined, undefined, undefined, user?.id)
 
       await new Promise<void>((resolve, reject) => {
+        let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
           if (isWorkflowStale()) { untrackInterval(poll); reject(new WorkflowStaleError()); return }
           try {
             const job = await getJobStatus(jobId)
+            pollFailures = 0
             if (job.status === "completed") {
               untrackInterval(poll)
               const imageUrl = (job.output_data?.imageUrl as string | undefined) ?? ""
@@ -3571,8 +3663,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               reject(new Error(job.error_message ?? "Image generation failed"))
             }
           } catch (err) {
-            untrackInterval(poll)
-            reject(err)
+            pollFailures++
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              untrackInterval(poll)
+              reject(err)
+            }
           }
         }, 2000))
       })
