@@ -528,7 +528,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => n !== undefined)
 
-    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>; audioUrl?: string; audioUrls?: string[]; audioSources?: { url: string; sourceNodeId: string; sourceType?: "audio" | "video" }[]; referenceImageUrls?: string[]; sunoTrackId?: string; sunoTaskId?: string; uploadUrl?: string } = {}
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>; audioUrl?: string; audioUrls?: string[]; audioUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>; audioSources?: { url: string; sourceNodeId: string; sourceType?: "audio" | "video" }[]; referenceImageUrls?: string[]; sunoTrackId?: string; sunoTaskId?: string; uploadUrl?: string } = {}
 
     for (const src of sourceNodes) {
       const output = extractNodeOutput(src)
@@ -652,6 +652,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           inputs.audioUrl = output
         } else if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+          inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }]
         } else {
           inputs.audioUrl = output
         }
@@ -686,6 +687,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "upload-audio") {
         if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+          inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }]
         } else if (node.type === "merge-video-audio") {
           inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
         } else {
@@ -698,6 +700,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           inputs.videoUrl = output
         } else if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+          inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }]
         } else if (node.type === "merge-video-audio") {
           inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
         } else {
@@ -706,6 +709,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "text-to-speech" || src.type === "generate-music" || src.type === "text-to-audio" || src.type === "suno-generate" || src.type === "suno-cover" || src.type === "suno-extend" || src.type === "suno-separate" || src.type === "extract-audio" || src.type === "mix-audio") {
         if (node.type === "mix-audio") {
           inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+          inputs.audioUrlsWithSourceIds = [...(inputs.audioUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }]
         } else if (node.type === "merge-video-audio") {
           inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id }]
         } else {
@@ -2761,7 +2765,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (node.type === "mix-audio") {
       const audioUrls = inputs.audioUrls ?? []
       if (audioUrls.length < 2) { toast.error(`Node "${(node.data as MixAudioData).label}": need at least 2 audio inputs`); return Promise.reject(new Error("Need at least 2 audio tracks")) }
-      return runProcessingNode(node.id, () => mixAudioApi(audioUrls, user?.id), "generatedAudioUrl", "Mix Audio")
+      const mixData = node.data as MixAudioData
+      const sourceEntries = inputs.audioUrlsWithSourceIds ?? []
+      const volumes = sourceEntries.map((e) => mixData.trackVolumes?.[e.nodeId] ?? 100)
+      return runProcessingNode(node.id, () => mixAudioApi(audioUrls, volumes, user?.id), "generatedAudioUrl", "Mix Audio")
     }
 
     if (node.type === "character") {

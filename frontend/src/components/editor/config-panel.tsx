@@ -5051,20 +5051,48 @@ function ExtractAudioConfig({ data, onUpdate }: ConfigProps<ExtractAudioData>) {
   )
 }
 
-function MixAudioConfig({ data, onUpdate }: ConfigProps<MixAudioData>) {
+function MixAudioConfig({ data, onUpdate, nodes }: ConfigProps<MixAudioData>) {
+  const edges = useWorkflowStore((s) => s.edges)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+
+  const connectedNodeIds = edges
+    .filter((e) => e.target === selectedNodeId)
+    .map((e) => e.source)
+
+  const connectedNodes = connectedNodeIds
+    .map((id) => nodes?.find((n) => n.id === id))
+    .filter(Boolean) as ReadonlyArray<WorkflowNode>
+
+  const trackVolumes = data.trackVolumes ?? {}
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label htmlFor="track-count">Track Count</Label>
-        <Input
-          id="track-count"
-          type="number"
-          min={2}
-          max={8}
-          value={data.trackCount}
-          onChange={(e) => onUpdate({ trackCount: parseInt(e.target.value, 10) || 2 })}
-        />
-      </div>
+      {connectedNodes.length === 0 && (
+        <p className="text-xs text-muted-foreground">Connect audio nodes to set per-track volumes.</p>
+      )}
+      {connectedNodes.map((node) => {
+        const volume = trackVolumes[node.id] ?? 100
+        const label = (node.data as Record<string, unknown>)?.label as string ?? node.type ?? node.id
+        return (
+          <div key={node.id}>
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-xs truncate flex-1">{label}</Label>
+              <span className="text-xs text-muted-foreground ml-2 tabular-nums">{volume}%</span>
+            </div>
+            <Input
+              type="range"
+              min={0}
+              max={200}
+              step={1}
+              value={volume}
+              onChange={(e) => onUpdate({
+                trackVolumes: { ...trackVolumes, [node.id]: parseInt(e.target.value, 10) },
+              })}
+              className="w-full h-2 accent-[#ff0073]"
+            />
+          </div>
+        )
+      })}
     </div>
   )
 }

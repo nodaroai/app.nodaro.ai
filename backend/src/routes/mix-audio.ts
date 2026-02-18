@@ -6,6 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 
 const mixAudioBody = z.object({
   audioUrls: z.array(z.string().url()).min(2),
+  trackVolumes: z.array(z.number().min(0).max(200)).optional(),
   userId: z.string().uuid().optional(),
 })
 

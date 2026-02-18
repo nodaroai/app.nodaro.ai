@@ -893,6 +893,7 @@ export type MixAudioData = {
   [key: string]: unknown
   label: string
   trackCount: number
+  trackVolumes: Record<string, number>
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1760,7 +1761,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 1,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Mix Audio", trackCount: 2, fieldMappings: {} },
+    defaultData: { label: "Mix Audio", trackCount: 2, trackVolumes: {}, fieldMappings: {} },
   },
   {
     type: "adjust-volume",

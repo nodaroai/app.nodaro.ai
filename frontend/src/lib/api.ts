@@ -990,8 +990,11 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   return res.json()
 }
 
-export async function mixAudioApi(audioUrls: string[], userId?: string): Promise<{ jobId: string }> {
+export async function mixAudioApi(audioUrls: string[], trackVolumes?: number[], userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrls }
+  if (trackVolumes?.length) {
+    body.trackVolumes = trackVolumes
+  }
   if (userId) {
     body.userId = userId
   }

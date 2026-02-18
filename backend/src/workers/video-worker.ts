@@ -833,9 +833,9 @@ export function createVideoWorker() {
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "mix-audio") {
-          const { audioUrls } = job.data as { jobId: string; audioUrls: string[] }
+          const { audioUrls, trackVolumes } = job.data as { jobId: string; audioUrls: string[]; trackVolumes?: number[] }
           console.log(`[worker] mix-audio ${jobId}: ${audioUrls.length} tracks`)
-          const outputPath = await mixAudio({ audioUrls })
+          const outputPath = await mixAudio({ audioUrls, trackVolumes })
           await job.updateProgress(80)
           const r2Url = await uploadFileToR2(outputPath, jobId, "audio", jobUserId)
           await cleanupWorkDir(dirname(outputPath))
