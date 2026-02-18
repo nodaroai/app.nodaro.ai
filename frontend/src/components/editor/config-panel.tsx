@@ -86,6 +86,7 @@ import type {
   MixAudioData,
   AdjustVolumeData,
   TrimVideoData,
+  RenderVideoData,
   LipSyncData,
   MotionTransferData,
   VideoUpscaleData,
@@ -681,6 +682,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "trim-video" && (
             <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "render-video" && (
+            <RenderVideoConfig data={selectedNode.data as RenderVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "combine-text" && (
             <CombineTextConfig data={selectedNode.data as CombineTextNodeData} onUpdate={update} />
@@ -4667,6 +4671,170 @@ function CombineVideosConfig({ data, onUpdate }: ConfigProps<CombineVideosData>)
   )
 }
 
+function RenderVideoConfig({ data, onUpdate }: ConfigProps<RenderVideoData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Template</Label>
+        <Select
+          value={data.template}
+          onValueChange={(v) => onUpdate({ template: v as RenderVideoData["template"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="slideshow">Slideshow</SelectItem>
+            <SelectItem value="explainer">Explainer</SelectItem>
+            <SelectItem value="social-reel">Social Reel</SelectItem>
+            <SelectItem value="documentary">Documentary</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Aspect Ratio</Label>
+        <Select
+          value={data.aspectRatio}
+          onValueChange={(v) => onUpdate({ aspectRatio: v as RenderVideoData["aspectRatio"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+            <SelectItem value="1:1">1:1 (Square)</SelectItem>
+            <SelectItem value="4:5">4:5 (Social)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="render-fps">FPS</Label>
+        <Select
+          value={String(data.fps)}
+          onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="24">24 fps (Film)</SelectItem>
+            <SelectItem value="30">30 fps (Standard)</SelectItem>
+            <SelectItem value="60">60 fps (Smooth)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="render-duration">Duration (seconds)</Label>
+        <Input
+          id="render-duration"
+          type="number"
+          min={1}
+          max={300}
+          value={data.durationSeconds}
+          onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
+        />
+      </div>
+      <div>
+        <Label>Transition</Label>
+        <Select
+          value={data.transitionStyle}
+          onValueChange={(v) => onUpdate({ transitionStyle: v as RenderVideoData["transitionStyle"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fade">Fade</SelectItem>
+            <SelectItem value="slide">Slide</SelectItem>
+            <SelectItem value="dissolve">Dissolve</SelectItem>
+            <SelectItem value="zoom">Zoom</SelectItem>
+            <SelectItem value="none">None</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="render-transition-frames">Transition Duration (frames)</Label>
+        <Input
+          id="render-transition-frames"
+          type="number"
+          min={0}
+          max={60}
+          value={data.transitionDurationFrames}
+          onChange={(e) => onUpdate({ transitionDurationFrames: parseInt(e.target.value, 10) || 15 })}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="render-ken-burns"
+          checked={data.kenBurnsEnabled}
+          onChange={(e) => onUpdate({ kenBurnsEnabled: e.target.checked })}
+          className="rounded border-muted-foreground/30"
+        />
+        <Label htmlFor="render-ken-burns" className="text-sm cursor-pointer">Ken Burns Effect</Label>
+      </div>
+      <Separator />
+      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Captions</div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="render-captions"
+          checked={data.captions.enabled}
+          onChange={(e) => onUpdate({ captions: { ...data.captions, enabled: e.target.checked } })}
+          className="rounded border-muted-foreground/30"
+        />
+        <Label htmlFor="render-captions" className="text-sm cursor-pointer">Enable Captions</Label>
+      </div>
+      {data.captions.enabled && (
+        <>
+          <div>
+            <Label>Caption Style</Label>
+            <Select
+              value={data.captions.style}
+              onValueChange={(v) => onUpdate({ captions: { ...data.captions, style: v as RenderVideoData["captions"]["style"] } })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="subtitle">Subtitle</SelectItem>
+                <SelectItem value="word-highlight">Word Highlight</SelectItem>
+                <SelectItem value="karaoke">Karaoke</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Caption Position</Label>
+            <Select
+              value={data.captions.position}
+              onValueChange={(v) => onUpdate({ captions: { ...data.captions, position: v as RenderVideoData["captions"]["position"] } })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bottom">Bottom</SelectItem>
+                <SelectItem value="top">Top</SelectItem>
+                <SelectItem value="center">Center</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="render-caption-font-size">Caption Font Size</Label>
+            <Input
+              id="render-caption-font-size"
+              type="number"
+              min={12}
+              max={72}
+              value={data.captions.fontSize}
+              onChange={(e) => onUpdate({ captions: { ...data.captions, fontSize: parseInt(e.target.value, 10) || 24 } })}
+            />
+          </div>
+        </>
+      )}
+      <div>
+        <Label htmlFor="render-bg">Background Color</Label>
+        <Input
+          id="render-bg"
+          type="color"
+          value={data.backgroundColor}
+          onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+          className="h-8 w-full"
+        />
+      </div>
+    </div>
+  )
+}
+
 const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
   "upload-audio", "reference-audio", "extract-audio",
@@ -4677,7 +4845,7 @@ const VIDEO_SOURCE_TYPES = new Set([
   "image-to-video", "video-to-video", "text-to-video",
   "lip-sync", "motion-transfer", "video-upscale",
   "combine-videos", "add-captions", "resize-video", "trim-video",
-  "upload-video", "youtube-video",
+  "render-video", "upload-video", "youtube-video",
 ])
 
 const TRACK_ROLE_OPTIONS = [

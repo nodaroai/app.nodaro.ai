@@ -16,7 +16,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getUserCredits, generateAIWriter, generateAIWriterStream, StorageExceededError } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, renderVideoApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getUserCredits, generateAIWriter, generateAIWriterStream, StorageExceededError } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -24,7 +24,7 @@ import { getCachedCredits } from "@/hooks/use-model-credits"
 import { useStats } from "@/hooks/queries/use-stats-queries"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, SplitTextData, LoopNodeData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, RenderVideoData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, SplitTextData, LoopNodeData } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
@@ -66,6 +66,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "adjust-volume": 0,
   "add-captions": 2,
   "mix-audio": 1,
+  "render-video": 3,
   "character": 5,
   "object": 5,
   "location": 5,
@@ -428,7 +429,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer", "combine-text", "split-text"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "render-video", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer", "combine-text", "split-text"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -586,7 +587,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
     }
-    if (type === "image-to-video" || type === "video-to-video" || type === "text-to-video" || type === "lip-sync" || type === "motion-transfer" || type === "video-upscale" || type === "suno-music-video") {
+    if (type === "image-to-video" || type === "video-to-video" || type === "text-to-video" || type === "lip-sync" || type === "motion-transfer" || type === "video-upscale" || type === "suno-music-video" || type === "render-video") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
@@ -846,7 +847,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.imageUrl = output
         }
-      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "lip-sync" || src.type === "motion-transfer" || src.type === "video-upscale" || src.type === "suno-music-video" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
+      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "lip-sync" || src.type === "motion-transfer" || src.type === "video-upscale" || src.type === "suno-music-video" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video" || src.type === "render-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
         } else if (node.type === "merge-video-audio") {
@@ -3080,6 +3081,51 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return runProcessingNode(node.id, () => mixAudioApi(audioUrls, user?.id), "generatedAudioUrl", "Mix Audio")
     }
 
+    if (node.type === "render-video") {
+      const d = node.data as RenderVideoData
+      // Collect media assets from connected upstream nodes
+      const mediaAssets: Array<{ url: string; type: "image" | "video" | "audio"; durationSeconds?: number }> = []
+      const incomingEdges = edges.filter((e) => e.target === node.id)
+      for (const edge of incomingEdges) {
+        const sourceNode = nodes.find((n) => n.id === edge.source)
+        if (!sourceNode) continue
+        const output = extractNodeOutput(sourceNode)
+        if (!output) continue
+        const srcType = sourceNode.type ?? ""
+        if (srcType === "generate-image" || srcType === "upload-image" || srcType === "edit-image" || srcType === "image-to-image") {
+          mediaAssets.push({ url: output, type: "image" })
+        } else if (srcType === "image-to-video" || srcType === "video-to-video" || srcType === "text-to-video" || srcType === "upload-video" || srcType === "youtube-video" || srcType === "combine-videos" || srcType === "lip-sync" || srcType === "motion-transfer" || srcType === "video-upscale" || srcType === "suno-music-video" || srcType === "merge-video-audio" || srcType === "add-captions" || srcType === "resize-video" || srcType === "trim-video") {
+          mediaAssets.push({ url: output, type: "video" })
+        }
+      }
+      if (mediaAssets.length === 0) {
+        toast.error(`Node "${d.label}": no media assets connected`)
+        return Promise.reject(new Error("No media assets"))
+      }
+      // Audio track from connected audio source
+      const audioTrackUrl = inputs.audioUrl
+      return runProcessingNode(
+        node.id,
+        () => renderVideoApi({
+          template: d.template,
+          fps: d.fps,
+          aspectRatio: d.aspectRatio,
+          durationSeconds: d.durationSeconds,
+          transitionStyle: d.transitionStyle,
+          transitionDurationFrames: d.transitionDurationFrames,
+          mediaAssets,
+          audioTrackUrl,
+          textOverlays: [],
+          captions: d.captions,
+          backgroundColor: d.backgroundColor,
+          kenBurnsEnabled: d.kenBurnsEnabled,
+          userId: user?.id,
+        }),
+        "generatedVideoUrl",
+        "Render Video",
+      )
+    }
+
     if (node.type === "character") {
       const charData = node.data as CharacterNodeData
       if (!charData.characterName) {
@@ -3388,7 +3434,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const newEdges: typeof edges = []
 
     // Determine output URL field per node type
-    const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync", "suno-music-video", "combine-videos"])
+    const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync", "suno-music-video", "combine-videos", "render-video"])
     const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
 
     function getOutputUrlField(nodeType: string): string {

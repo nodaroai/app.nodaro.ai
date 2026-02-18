@@ -1688,6 +1688,35 @@ export async function videoUpscaleApi(
   return res.json()
 }
 
+// --- Render Video (Remotion) ---
+
+export async function renderVideoApi(params: {
+  template: string
+  fps?: number
+  aspectRatio?: string
+  durationSeconds?: number
+  transitionStyle?: string
+  transitionDurationFrames?: number
+  mediaAssets: Array<{ url: string; type: "image" | "video" | "audio"; durationSeconds?: number }>
+  audioTrackUrl?: string
+  textOverlays?: Array<{ text: string; position: string; fontSize: number; color: string; startFrame: number; endFrame: number }>
+  captions?: { enabled: boolean; style: string; position: string; fontSize: number; color: string }
+  backgroundColor?: string
+  kenBurnsEnabled?: boolean
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/render-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start video render")
+  }
+  return res.json()
+}
+
 // --- AI Writer ---
 
 export async function generateAIWriter(params: {
