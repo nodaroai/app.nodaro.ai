@@ -7,9 +7,16 @@ import { getBatchJobStatus, type BatchJobStatus } from "@/lib/api"
 import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 
+interface StillRunningJob {
+  readonly nodeId: string
+  readonly jobId: string
+  readonly nodeType: string
+}
+
 interface SaveResult {
   readonly success: boolean
   readonly error?: string
+  readonly stillRunningJobs?: StillRunningJob[]
 }
 
 const SAVED_DISPLAY_DURATION = 2000
@@ -30,7 +37,7 @@ function isValidUuid(id: string): boolean {
  * This function checks for any nodes with "running" status and updates them
  * with the actual job results from the database.
  */
-async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNode[]> {
+async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: WorkflowNode[]; stillRunningJobs: StillRunningJob[] }> {
   // Find all nodes that might need syncing:
   // 1. Nodes with executionStatus === "running" or "pending"
   // 2. Nodes with generatedResults that have jobIds we can check
@@ -41,10 +48,16 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
     const status = data.executionStatus as string | undefined
     const results = (data.generatedResults ?? []) as GeneratedResult[]
 
-    // Collect jobIds from this node (only valid UUIDs, skip imported/local IDs)
+    // Collect jobIds from generatedResults (only valid UUIDs, skip imported/local IDs)
     const jobIds = results
       .map(r => r.jobId)
       .filter((id): id is string => Boolean(id) && isValidUuid(id))
+
+    // Also check currentJobId as a source (persisted during active runs)
+    const currentJobId = data.currentJobId as string | undefined
+    if (currentJobId && isValidUuid(currentJobId) && !jobIds.includes(currentJobId)) {
+      jobIds.unshift(currentJobId)
+    }
 
     // Only sync nodes that are still in running/pending state
     if (status === "running" || status === "pending") {
@@ -53,7 +66,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
   }
 
   if (nodesToSync.length === 0) {
-    return nodes
+    return { nodes, stillRunningJobs: [] }
   }
 
   // Collect all unique jobIds
@@ -61,7 +74,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
 
   if (allJobIds.length === 0) {
     // No jobIds to check - just reset running/pending nodes to idle
-    return nodes.map(node => {
+    const resetNodes = nodes.map(node => {
       const data = node.data as Record<string, unknown>
       const status = data.executionStatus as string | undefined
       if (status === "running" || status === "pending") {
@@ -72,6 +85,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
       }
       return node
     })
+    return { nodes: resetNodes, stillRunningJobs: [] }
   }
 
   // Query all jobs at once via backend API
@@ -81,10 +95,10 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
   } catch (err) {
     // Ignore abort errors (component unmounted during fetch)
     if (err instanceof DOMException && err.name === "AbortError") {
-      return nodes
+      return { nodes, stillRunningJobs: [] }
     }
     console.error("[sync] Failed to fetch jobs:", err)
-    return nodes
+    return { nodes, stillRunningJobs: [] }
   }
 
   // Create a map of jobId -> job for quick lookup
@@ -92,6 +106,9 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
   for (const job of jobs) {
     jobMap.set(job.id, job)
   }
+
+  // Track jobs that are still running so caller can restore polling
+  const stillRunningJobs: StillRunningJob[] = []
 
   // Update nodes based on job status
   const updatedNodes = nodes.map(node => {
@@ -104,22 +121,27 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
       return node
     }
 
-    // Find the most recent job for this node
+    // Find the job ID to check: prefer currentJobId, fallback to most recent result
+    const currentJobId = data.currentJobId as string | undefined
     const mostRecentResult = results[0]
-    if (!mostRecentResult?.jobId) {
+    const jobIdToCheck = (currentJobId && isValidUuid(currentJobId))
+      ? currentJobId
+      : mostRecentResult?.jobId
+
+    if (!jobIdToCheck) {
       // No job to check - reset to idle
       return {
         ...node,
-        data: { ...data, executionStatus: "idle" }
+        data: { ...data, executionStatus: "idle", currentJobId: undefined }
       }
     }
 
-    const job = jobMap.get(mostRecentResult.jobId)
+    const job = jobMap.get(jobIdToCheck)
     if (!job) {
       // Job not found - reset to idle
       return {
         ...node,
-        data: { ...data, executionStatus: "idle" }
+        data: { ...data, executionStatus: "idle", currentJobId: undefined }
       }
     }
 
@@ -135,16 +157,30 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
         return r
       })
 
+      // If the job was tracked by currentJobId but has no result entry, prepend one
+      const hasResultForJob = updatedResults.some(r => r.jobId === job.id)
+      if (!hasResultForJob && outputUrl) {
+        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id })
+      }
+
       const newData: Record<string, unknown> = {
         ...data,
         executionStatus: "completed",
         generatedResults: updatedResults,
         activeResultIndex: 0,
+        currentJobId: undefined,
+        currentJobProgress: undefined,
       }
 
-      // Set the appropriate URL field based on node type
+      // Set the appropriate URL field based on output type
+      const nodeType = node.type ?? ""
       if (job.output_data?.imageUrl) {
-        newData.generatedImageUrl = job.output_data.imageUrl
+        // Character/face/object/location nodes use sourceImageUrl
+        if (["character", "face", "object", "location"].includes(nodeType)) {
+          newData.sourceImageUrl = job.output_data.imageUrl
+        } else {
+          newData.generatedImageUrl = job.output_data.imageUrl
+        }
       } else if (job.output_data?.videoUrl) {
         newData.generatedVideoUrl = job.output_data.videoUrl
       } else if (job.output_data?.audioUrl) {
@@ -163,7 +199,9 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
         data: {
           ...data,
           executionStatus: "failed",
-          errorMessage: job.error_message ?? "Job failed"
+          errorMessage: job.error_message ?? "Job failed",
+          currentJobId: undefined,
+          currentJobProgress: undefined,
         }
       }
     } else if (job.status === "cancelled") {
@@ -171,15 +209,20 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
       console.log(`[sync] Updated node ${node.id} - job ${job.id} was cancelled`)
       return {
         ...node,
-        data: { ...data, executionStatus: "idle" }
+        data: { ...data, executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined }
       }
     }
 
-    // Job is still pending/processing - keep as running
+    // Job is still pending/processing - collect for polling restoration
+    stillRunningJobs.push({
+      nodeId: node.id,
+      jobId: jobIdToCheck,
+      nodeType: node.type ?? "",
+    })
     return node
   })
 
-  return updatedNodes as WorkflowNode[]
+  return { nodes: updatedNodes as WorkflowNode[], stillRunningJobs }
 }
 
 export function useWorkflowPersistence(projectId?: string) {
@@ -305,9 +348,9 @@ export function useWorkflowPersistence(projectId?: string) {
 
         // Sync node results from jobs table via backend API
         // This handles the case where user left while jobs were running
-        const syncedNodes = await syncNodeResultsFromDB(nodes)
-        const nodesChanged = JSON.stringify(syncedNodes) !== JSON.stringify(nodes)
-        nodes = syncedNodes
+        const syncResult = await syncNodeResultsFromDB(nodes)
+        const nodesChanged = JSON.stringify(syncResult.nodes) !== JSON.stringify(nodes)
+        nodes = syncResult.nodes
 
         loadWorkflow(
           data.id,
@@ -341,7 +384,7 @@ export function useWorkflowPersistence(projectId?: string) {
           }
         }
 
-        return { success: true }
+        return { success: true, stillRunningJobs: syncResult.stillRunningJobs }
       } catch (err) {
         return {
           success: false,
