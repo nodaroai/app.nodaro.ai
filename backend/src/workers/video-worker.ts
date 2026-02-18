@@ -30,6 +30,7 @@ import { addCaptions } from "../providers/video/add-captions.js"
 import { mixAudio } from "../providers/video/mix-audio.js"
 import { speedRamp } from "../providers/video/speed-ramp.js"
 import { loopVideo } from "../providers/video/loop-video.js"
+import { fadeVideo } from "../providers/video/fade-video.js"
 import { cleanupWorkDir, createWorkDir, downloadFile } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
@@ -811,6 +812,22 @@ export function createVideoWorker() {
           const lvThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: lvThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "fade-video") {
+          const { videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color } = job.data as {
+            jobId: string; videoUrl: string; fadeIn: boolean; fadeInDuration: number; fadeOut: boolean; fadeOutDuration: number; color: "black" | "white"
+          }
+          console.log(`[worker] fade-video ${jobId}`)
+          const outputPath = await fadeVideo({ videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          const fvThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: fvThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 

@@ -968,6 +968,23 @@ export async function loopVideoApi(videoUrl: string, mode: "repeat" | "duration"
   return res.json()
 }
 
+export async function fadeVideoApi(videoUrl: string, fadeIn: boolean, fadeInDuration: number, fadeOut: boolean, fadeOutDuration: number, color: "black" | "white", userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/fade-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start fade-video")
+  }
+  return res.json()
+}
+
 export async function resizeVideoApi(videoUrl: string, targetAspect: string, method: string, padColor?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, targetAspect, method, padColor }
   if (userId) {

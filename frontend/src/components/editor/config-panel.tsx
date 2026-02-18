@@ -86,6 +86,7 @@ import type {
   TrimVideoData,
   SpeedRampData,
   LoopVideoData,
+  FadeVideoData,
   LipSyncData,
   MotionTransferData,
   VideoUpscaleData,
@@ -412,6 +413,7 @@ export function ConfigPanel() {
       "trim-video": "Trim Video",
       "speed-ramp": "Adjust Speed",
       "loop-video": "Loop Video",
+      "fade-video": "Fade In/Out",
       "combine-text": "Combine Text",
       "split-text": "Split Text",
       "loop": "Loop",
@@ -659,6 +661,9 @@ export function ConfigPanel() {
           {selectedNode.type === "loop-video" && (
             <LoopVideoConfig data={selectedNode.data as LoopVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "fade-video" && (
+            <FadeVideoConfig data={selectedNode.data as FadeVideoData} onUpdate={update} />
+          )}
           {selectedNode.type === "combine-text" && (
             <CombineTextConfig data={selectedNode.data as CombineTextNodeData} onUpdate={update} />
           )}
@@ -722,7 +727,7 @@ export function ConfigPanel() {
               />
             )}
 
-            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "loop-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text") && (
+            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "loop-video" || selectedNode.type === "fade-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text") && (
               <button
                 type="button"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -4620,7 +4625,7 @@ const AUDIO_SOURCE_TYPES = new Set([
 const VIDEO_SOURCE_TYPES = new Set([
   "image-to-video", "video-to-video", "text-to-video",
   "lip-sync", "motion-transfer", "video-upscale",
-  "combine-videos", "add-captions", "resize-video", "trim-video", "speed-ramp", "loop-video",
+  "combine-videos", "add-captions", "resize-video", "trim-video", "speed-ramp", "loop-video", "fade-video",
   "upload-video", "youtube-video",
 ])
 
@@ -5286,6 +5291,89 @@ function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) {
         {mode === "repeat"
           ? "The input video will be repeated the specified number of times."
           : "The input video will loop until the target duration is reached, then trim to exact length."}
+      </p>
+    </div>
+  )
+}
+
+function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpdate: (patch: Partial<FadeVideoData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Fade Color</Label>
+        <Select value={data.color ?? "black"} onValueChange={(v) => onUpdate({ color: v as "black" | "white" })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="black">Black</SelectItem>
+            <SelectItem value="white">White</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="fade-in-toggle"
+          checked={data.fadeIn !== false}
+          onChange={(e) => onUpdate({ fadeIn: e.target.checked })}
+          className="accent-[#ff0073]"
+        />
+        <Label htmlFor="fade-in-toggle" className="mb-0">Fade In</Label>
+      </div>
+      {data.fadeIn !== false && (
+        <div>
+          <Label htmlFor="fade-in-dur">Duration: {data.fadeInDuration ?? 0.5}s</Label>
+          <input
+            id="fade-in-dur"
+            type="range"
+            min={0.1}
+            max={3}
+            step={0.1}
+            value={data.fadeInDuration ?? 0.5}
+            onChange={(e) => onUpdate({ fadeInDuration: parseFloat(e.target.value) })}
+            className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>0.1s</span>
+            <span>1.5s</span>
+            <span>3s</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="fade-out-toggle"
+          checked={data.fadeOut !== false}
+          onChange={(e) => onUpdate({ fadeOut: e.target.checked })}
+          className="accent-[#ff0073]"
+        />
+        <Label htmlFor="fade-out-toggle" className="mb-0">Fade Out</Label>
+      </div>
+      {data.fadeOut !== false && (
+        <div>
+          <Label htmlFor="fade-out-dur">Duration: {data.fadeOutDuration ?? 0.5}s</Label>
+          <input
+            id="fade-out-dur"
+            type="range"
+            min={0.1}
+            max={3}
+            step={0.1}
+            value={data.fadeOutDuration ?? 0.5}
+            onChange={(e) => onUpdate({ fadeOutDuration: parseFloat(e.target.value) })}
+            className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>0.1s</span>
+            <span>1.5s</span>
+            <span>3s</span>
+          </div>
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground">
+        Apply fade in/out transitions to video. Audio fades are applied automatically when the video has an audio track.
       </p>
     </div>
   )

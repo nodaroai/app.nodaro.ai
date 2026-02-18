@@ -959,6 +959,22 @@ export type LoopVideoData = {
   activeResultIndex?: number
 }
 
+export type FadeVideoData = {
+  [key: string]: unknown
+  label: string
+  fadeIn: boolean
+  fadeInDuration: number
+  fadeOut: boolean
+  fadeOutDuration: number
+  color: "black" | "white"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 // --- Output Node Data ---
 
 export type SaveToStorageData = {
@@ -1328,6 +1344,7 @@ export type SceneNodeData =
   | TrimVideoData
   | SpeedRampData
   | LoopVideoData
+  | FadeVideoData
   | LipSyncData
   | MotionTransferData
   | VideoUpscaleData
@@ -1391,6 +1408,7 @@ export type SceneNodeType =
   | "trim-video"
   | "speed-ramp"
   | "loop-video"
+  | "fade-video"
   | "lip-sync"
   | "motion-transfer"
   | "video-upscale"
@@ -1829,6 +1847,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Loop Video", mode: "repeat", repeatCount: 2, targetDuration: 10, fieldMappings: {} },
+  },
+  {
+    type: "fade-video",
+    label: "Fade In/Out",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: { label: "Fade In/Out", fadeIn: true, fadeInDuration: 0.5, fadeOut: true, fadeOutDuration: 0.5, color: "black", fieldMappings: {} },
   },
   // Lip Sync / AI Avatar
   {
