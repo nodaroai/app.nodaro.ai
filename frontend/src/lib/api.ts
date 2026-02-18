@@ -951,6 +951,23 @@ export async function speedRampApi(videoUrl: string, speed: number, adjustAudio:
   return res.json()
 }
 
+export async function loopVideoApi(videoUrl: string, mode: "repeat" | "duration", repeatCount?: number, targetDuration?: number, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, mode, repeatCount, targetDuration }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/loop-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start loop-video")
+  }
+  return res.json()
+}
+
 export async function resizeVideoApi(videoUrl: string, targetAspect: string, method: string, padColor?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, targetAspect, method, padColor }
   if (userId) {

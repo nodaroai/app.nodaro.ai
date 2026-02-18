@@ -945,6 +945,20 @@ export type SpeedRampData = {
   activeResultIndex?: number
 }
 
+export type LoopVideoData = {
+  [key: string]: unknown
+  label: string
+  mode: "repeat" | "duration"
+  repeatCount: number
+  targetDuration: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 // --- Output Node Data ---
 
 export type SaveToStorageData = {
@@ -1313,6 +1327,7 @@ export type SceneNodeData =
   | AdjustVolumeData
   | TrimVideoData
   | SpeedRampData
+  | LoopVideoData
   | LipSyncData
   | MotionTransferData
   | VideoUpscaleData
@@ -1375,6 +1390,7 @@ export type SceneNodeType =
   | "adjust-volume"
   | "trim-video"
   | "speed-ramp"
+  | "loop-video"
   | "lip-sync"
   | "motion-transfer"
   | "video-upscale"
@@ -1804,6 +1820,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Adjust Speed", speed: 1.0, adjustAudio: true, fieldMappings: {} },
+  },
+  {
+    type: "loop-video",
+    label: "Loop Video",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: { label: "Loop Video", mode: "repeat", repeatCount: 2, targetDuration: 10, fieldMappings: {} },
   },
   // Lip Sync / AI Avatar
   {

@@ -144,6 +144,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "adjust-volume": 0,
   "trim-video": 0,
   "speed-ramp": 0,
+  "loop-video": 0,
   "generate-music": 1,
   "text-to-audio": 1,
 }

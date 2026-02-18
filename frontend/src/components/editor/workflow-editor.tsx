@@ -16,7 +16,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
-import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, speedRampApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getUserCredits, generateAIWriter, generateAIWriterStream, StorageExceededError } from "@/lib/api"
+import { generateImage, editImage, imageToImage, generateVideo, videoToVideo, textToVideo, textToSpeech, generateScriptApi, combineVideos, mergeVideoAudioApi, extractAudioApi, trimVideoApi, speedRampApi, loopVideoApi, resizeVideoApi, adjustVolumeApi, addCaptionsApi, mixAudioApi, generateMusicApi, textToAudioApi, sunoGenerateApi, sunoCoverApi, sunoExtendApi, sunoLyricsApi, sunoSeparateApi, sunoMusicVideoApi, transcribeApi, downloadYouTubeAudio, lipSyncApi, motionTransferApi, videoUpscaleApi, generateCharacter, generateCharacterAsset, saveCharacter, generateFace, saveFace, generateObject, generateObjectAsset, saveObject, generateLocation, generateLocationAsset, saveLocation, getJobStatus, getUserCredits, generateAIWriter, generateAIWriterStream, StorageExceededError } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -24,7 +24,7 @@ import { getCachedCredits } from "@/hooks/use-model-credits"
 import { useStats } from "@/hooks/queries/use-stats-queries"
 import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal"
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
-import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, SpeedRampData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, SplitTextData, LoopNodeData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, TextPromptData, UploadImageData, UploadVideoData, GenerateImageData, EditImageData, ImageToImageData, GenerateScriptData, ImageToVideoData, VideoToVideoData, TextToVideoData, TextToSpeechData, GenerateMusicData, TextToAudioData, SunoGenerateData, SunoCoverData, SunoExtendData, SunoLyricsData, SunoSeparateData, SunoMusicVideoData, TranscribeData, AIWriterNodeData, LipSyncData, MotionTransferData, VideoUpscaleData, CombineVideosData, MergeVideoAudioData, ExtractAudioData, TrimVideoData, SpeedRampData, LoopVideoData, ResizeVideoData, AdjustVolumeData, AddCaptionsData, MixAudioData, CharacterNodeData, FaceNodeData, ObjectNodeData, LocationNodeData, GeneratedResult, GeneratedScript, GeneratedScriptResult, SceneImageVersion, SceneNodeDataType, CombineTextNodeData, SplitTextData, LoopNodeData } from "@/types/nodes"
 import { getSceneCharacterNames, mapScriptSceneToNodeData, NODE_DEFINITIONS } from "@/types/nodes"
 import { buildScenePrompt } from "@/lib/prompt-builder"
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates"
@@ -63,6 +63,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "extract-audio": 1,
   "trim-video": 0,
   "speed-ramp": 0,
+  "loop-video": 0,
   "resize-video": 1,
   "adjust-volume": 0,
   "add-captions": 2,
@@ -109,7 +110,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const storeNodes = useWorkflowStore((s) => s.nodes)
   useEffect(() => {
     if (!hasCredits()) return
-    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "speed-ramp", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location", "ai-writer"])
+    const execTypes = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "speed-ramp", "loop-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "object", "location", "ai-writer"])
     const executableNodes = storeNodes.filter((n) => execTypes.has(n.type ?? ""))
     const total = executableNodes.reduce((sum, node) => {
       const data = node.data as Record<string, unknown>
@@ -209,7 +210,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   // --- Graph execution helpers ---
 
-  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "speed-ramp", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer", "combine-text", "split-text"])
+  const EXECUTABLE_TYPES = new Set(["generate-script", "generate-image", "edit-image", "image-to-image", "image-to-video", "video-to-video", "text-to-video", "text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-separate", "suno-music-video", "transcribe", "lip-sync", "motion-transfer", "video-upscale", "combine-videos", "merge-video-audio", "extract-audio", "trim-video", "speed-ramp", "loop-video", "resize-video", "adjust-volume", "add-captions", "mix-audio", "scene", "character", "face", "object", "location", "ai-writer", "combine-text", "split-text"])
 
   function isExecutableNode(node: WorkflowNode): boolean {
     return EXECUTABLE_TYPES.has(node.type ?? "")
@@ -393,7 +394,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return activeScript.scenes[0].imagePrompt
       }
     }
-    if (type === "merge-video-audio" || type === "add-captions" || type === "resize-video" || type === "trim-video" || type === "speed-ramp") {
+    if (type === "merge-video-audio" || type === "add-captions" || type === "resize-video" || type === "trim-video" || type === "speed-ramp" || type === "loop-video") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined)
@@ -631,7 +632,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         } else {
           inputs.imageUrl = output
         }
-      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "lip-sync" || src.type === "motion-transfer" || src.type === "video-upscale" || src.type === "suno-music-video" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video" || src.type === "speed-ramp") {
+      } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "lip-sync" || src.type === "motion-transfer" || src.type === "video-upscale" || src.type === "suno-music-video" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video" || src.type === "speed-ramp" || src.type === "loop-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
           inputs.videoUrlsWithSourceIds = [
@@ -2739,6 +2740,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (!videoUrl) { toast.error(`Node "${(node.data as SpeedRampData).label}": no video input`); return Promise.reject(new Error("No video")) }
       const d = node.data as SpeedRampData
       return runProcessingNode(node.id, () => speedRampApi(videoUrl, d.speed, d.adjustAudio, user?.id), "generatedVideoUrl", "Adjust Speed")
+    }
+
+    if (node.type === "loop-video") {
+      const videoUrl = overrideMediaUrl ?? inputs.videoUrl
+      if (!videoUrl) { toast.error(`Node "${(node.data as LoopVideoData).label}": no video input`); return Promise.reject(new Error("No video")) }
+      const d = node.data as LoopVideoData
+      return runProcessingNode(node.id, () => loopVideoApi(videoUrl, d.mode ?? "repeat", d.repeatCount, d.targetDuration, user?.id), "generatedVideoUrl", "Loop Video")
     }
 
     if (node.type === "resize-video") {

@@ -85,6 +85,7 @@ import type {
   AdjustVolumeData,
   TrimVideoData,
   SpeedRampData,
+  LoopVideoData,
   LipSyncData,
   MotionTransferData,
   VideoUpscaleData,
@@ -410,6 +411,7 @@ export function ConfigPanel() {
       "adjust-volume": "Adjust Volume",
       "trim-video": "Trim Video",
       "speed-ramp": "Adjust Speed",
+      "loop-video": "Loop Video",
       "combine-text": "Combine Text",
       "split-text": "Split Text",
       "loop": "Loop",
@@ -654,6 +656,9 @@ export function ConfigPanel() {
           {selectedNode.type === "speed-ramp" && (
             <SpeedRampConfig data={selectedNode.data as SpeedRampData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "loop-video" && (
+            <LoopVideoConfig data={selectedNode.data as LoopVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
           {selectedNode.type === "combine-text" && (
             <CombineTextConfig data={selectedNode.data as CombineTextNodeData} onUpdate={update} />
           )}
@@ -717,7 +722,7 @@ export function ConfigPanel() {
               />
             )}
 
-            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text") && (
+            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "loop-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text") && (
               <button
                 type="button"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -4615,7 +4620,7 @@ const AUDIO_SOURCE_TYPES = new Set([
 const VIDEO_SOURCE_TYPES = new Set([
   "image-to-video", "video-to-video", "text-to-video",
   "lip-sync", "motion-transfer", "video-upscale",
-  "combine-videos", "add-captions", "resize-video", "trim-video", "speed-ramp",
+  "combine-videos", "add-captions", "resize-video", "trim-video", "speed-ramp", "loop-video",
   "upload-video", "youtube-video",
 ])
 
@@ -5215,6 +5220,72 @@ function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) {
       </div>
       <p className="text-[10px] text-muted-foreground">
         When audio adjustment is off, the audio track is removed entirely.
+      </p>
+    </div>
+  )
+}
+
+function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) {
+  const mode = data.mode ?? "repeat"
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Mode</Label>
+        <Select value={mode} onValueChange={(v) => onUpdate({ mode: v as LoopVideoData["mode"] })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="repeat">Repeat N times</SelectItem>
+            <SelectItem value="duration">Loop to duration</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {mode === "repeat" && (
+        <div>
+          <Label htmlFor="repeat-count">Repeat: {data.repeatCount ?? 2}x</Label>
+          <input
+            id="repeat-count"
+            type="range"
+            min={2}
+            max={20}
+            step={1}
+            value={data.repeatCount ?? 2}
+            onChange={(e) => onUpdate({ repeatCount: parseInt(e.target.value, 10) })}
+            className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>2x</span>
+            <span>10x</span>
+            <span>20x</span>
+          </div>
+        </div>
+      )}
+
+      {mode === "duration" && (
+        <div>
+          <Label htmlFor="target-duration">Target Duration: {data.targetDuration ?? 10}s</Label>
+          <input
+            id="target-duration"
+            type="range"
+            min={1}
+            max={300}
+            step={1}
+            value={data.targetDuration ?? 10}
+            onChange={(e) => onUpdate({ targetDuration: parseInt(e.target.value, 10) })}
+            className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>1s</span>
+            <span>150s</span>
+            <span>300s</span>
+          </div>
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground">
+        {mode === "repeat"
+          ? "The input video will be repeated the specified number of times."
+          : "The input video will loop until the target duration is reached, then trim to exact length."}
       </p>
     </div>
   )
