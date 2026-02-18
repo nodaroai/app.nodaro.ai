@@ -5,6 +5,35 @@ import { CreditsService } from "../services/credits.js"
 // Credits Routes
 // ============================================================
 
+// In-memory cache for credit balance (keyed by userId)
+const BALANCE_CACHE_TTL_MS = 15_000 // 15 seconds
+const balanceCache = new Map<string, { data: unknown; expiry: number }>()
+
+function getCachedBalance(userId: string): unknown | null {
+  const entry = balanceCache.get(userId)
+  if (!entry) return null
+  if (Date.now() > entry.expiry) {
+    balanceCache.delete(userId)
+    return null
+  }
+  return entry.data
+}
+
+function setCachedBalance(userId: string, data: unknown): void {
+  balanceCache.set(userId, { data, expiry: Date.now() + BALANCE_CACHE_TTL_MS })
+  if (balanceCache.size > 10_000) {
+    const now = Date.now()
+    for (const [k, v] of balanceCache) {
+      if (now > v.expiry) balanceCache.delete(k)
+    }
+  }
+}
+
+/** Invalidate cached balance for a user (call after credit mutations) */
+export function invalidateBalanceCache(userId: string): void {
+  balanceCache.delete(userId)
+}
+
 export async function creditsRoutes(app: FastifyInstance) {
   /**
    * GET /v1/user/credits
@@ -21,8 +50,14 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
+    const cached = getCachedBalance(userId)
+    if (cached) {
+      return { data: cached }
+    }
+
     try {
       const balance = await CreditsService.getBalance(userId)
+      setCachedBalance(userId, balance)
       return { data: balance }
     } catch (error) {
       console.error("[credits] Failed to get balance:", error)
@@ -120,6 +155,7 @@ export async function creditsRoutes(app: FastifyInstance) {
         providerCostUsd,
         displayCostUsd
       )
+      invalidateBalanceCache(userId)
       return { data: result }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to reserve credits"
