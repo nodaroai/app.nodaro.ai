@@ -249,7 +249,7 @@ async function generateAndUploadThumbnail(
 ): Promise<string | null> {
   try {
     const thumbBuffer = await generateThumbnailFromUrl(videoUrl)
-    return await uploadBufferToR2(thumbBuffer, `thumbnails/${jobId}.jpg`, "image/jpeg", jobUserId)
+    return await uploadBufferToR2(thumbBuffer, `thumbnails/${jobId}.png`, "image/png", jobUserId)
   } catch (err) {
     console.error(`[worker] Thumbnail generation failed for job ${jobId}:`, err)
     return null

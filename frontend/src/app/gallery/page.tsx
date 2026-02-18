@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
+import { optimizedImageUrl } from "@/lib/image"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
@@ -109,6 +110,7 @@ function AudioCard({ url }: { readonly url: string }) {
       <button
         onClick={toggle}
         className="rounded-full bg-amber-500/10 p-2 hover:bg-amber-500/20 transition-colors"
+        aria-label={playing ? "Pause audio" : "Play audio"}
       >
         {playing ? (
           <Pause className="h-5 w-5 text-amber-600 dark:text-amber-400" />
@@ -120,23 +122,54 @@ function AudioCard({ url }: { readonly url: string }) {
   )
 }
 
-function VideoCard({ item }: { readonly item: GalleryItem }) {
+function VideoCard({ item, children }: { readonly item: GalleryItem; readonly children?: React.ReactNode }) {
   const [hovered, setHovered] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const hasThumbnail = !!item.thumbnailUrl
+
+  // Preload video when card scrolls into view, unload when it leaves
+  useEffect(() => {
+    const container = containerRef.current
+    const video = videoRef.current
+    if (!container || !video) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          // Restore src if it was cleared and preload metadata (first frames)
+          if (!video.src || video.src === "") {
+            video.src = item.outputUrl
+          }
+          video.preload = "metadata"
+          video.load()
+        } else {
+          // Out of view — stop buffering to free memory
+          video.pause()
+          video.currentTime = 0
+          video.preload = "none"
+          video.removeAttribute("src")
+          video.load()
+          setVideoReady(false)
+          setHovered(false)
+        }
+      },
+      { rootMargin: "200px" },
+    )
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
 
   function handleMouseEnter() {
     setHovered(true)
     const video = videoRef.current
     if (!video) return
-    // Restore src if it was cleared on mouse leave
+    // Restore src if it was cleared when out of view
     if (!video.src || video.src === "") {
       video.src = item.outputUrl
+      video.preload = "auto"
     }
-    // Start loading + playing; thumbnail stays visible until onPlaying fires
-    video.preload = "auto"
-    video.load()
     video.play().catch(() => {})
   }
 
@@ -145,10 +178,6 @@ function VideoCard({ item }: { readonly item: GalleryItem }) {
     if (video) {
       video.pause()
       video.currentTime = 0
-      // Stop buffering by clearing the source
-      video.preload = "none"
-      video.removeAttribute("src")
-      video.load()
     }
     setVideoReady(false)
     setHovered(false)
@@ -156,6 +185,7 @@ function VideoCard({ item }: { readonly item: GalleryItem }) {
 
   return (
     <div
+      ref={containerRef}
       className="w-full h-full relative"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -164,16 +194,14 @@ function VideoCard({ item }: { readonly item: GalleryItem }) {
         <>
           {/* Thumbnail stays visible until video is actually playing */}
           <CachedImage
-            src={item.thumbnailUrl!}
+            src={optimizedImageUrl(item.thumbnailUrl!, { width: 768, quality: 90 })}
             alt=""
             className={cn(
               "w-full h-full object-cover absolute inset-0 z-[1]",
               hovered && videoReady && "invisible",
             )}
             loading="lazy"
-            thumbnail
           />
-          {/* Video always mounted (hidden behind thumbnail), no download until hover */}
           <video
             ref={videoRef}
             src={item.outputUrl}
@@ -205,6 +233,7 @@ function VideoCard({ item }: { readonly item: GalleryItem }) {
           </div>
         </div>
       )}
+      {children}
     </div>
   )
 }
@@ -424,60 +453,72 @@ export default function GalleryPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {items.map((item, index) => (
-                <div
-                  key={`${item.id}-${index}`}
-                  role="button"
-                  tabIndex={0}
-                  className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
-                  onClick={() => { setReferenceViewIndex(null); setSelectedIndex(index) }}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setReferenceViewIndex(null); setSelectedIndex(index) } }}
-                >
-                  {item.type === "image" ? (
-                    <CachedImage
-                      src={item.outputUrl}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      thumbnail
-                    />
-                  ) : item.type === "video" ? (
-                    <VideoCard item={item} />
-                  ) : (
-                    <AudioCard url={item.outputUrl} />
-                  )}
-
-                  {/* Overlay */}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="flex items-center justify-between">
-                      <TypeBadge type={item.type} />
-                      <span className="text-white/60 text-xs">
-                        {formatDate(item.createdAt)}
-                      </span>
+              {items.map((item, index) => {
+                const overlay = (
+                  <>
+                    {/* Overlay */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
+                      <div className="flex items-center justify-between">
+                        <TypeBadge type={item.type} />
+                        <span className="text-white/60 text-xs">
+                          {formatDate(item.createdAt)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Action buttons (top-right corner on hover) */}
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => openReportDialog(item, e)}
-                      className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
-                      title="Report"
-                    >
-                      <Flag className="h-3.5 w-3.5 text-white" />
-                    </button>
-                    {isAdmin && (
+                    {/* Action buttons (top-right corner on hover) */}
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
                       <button
-                        onClick={(e) => openDeleteDialog(item, e)}
-                        className="rounded-full bg-red-500/70 p-1.5 hover:bg-red-500/90 transition-colors"
-                        title="Remove from gallery"
+                        onClick={(e) => openReportDialog(item, e)}
+                        className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
+                        title="Report"
                       >
-                        <Trash2 className="h-3.5 w-3.5 text-white" />
+                        <Flag className="h-3.5 w-3.5 text-white" />
                       </button>
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => openDeleteDialog(item, e)}
+                          className="rounded-full bg-red-500/70 p-1.5 hover:bg-red-500/90 transition-colors"
+                          title="Remove from gallery"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-white" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )
+
+                return (
+                  <div
+                    key={`${item.id}-${index}`}
+                    role="button"
+                    tabIndex={0}
+                    className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
+                    onClick={() => { setReferenceViewIndex(null); setSelectedIndex(index) }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setReferenceViewIndex(null); setSelectedIndex(index) } }}
+                  >
+                    {item.type === "image" ? (
+                      <>
+                        <CachedImage
+                          src={item.outputUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          thumbnail
+                        />
+                        {overlay}
+                      </>
+                    ) : item.type === "video" ? (
+                      <VideoCard item={item}>{overlay}</VideoCard>
+                    ) : (
+                      <>
+                        <AudioCard url={item.outputUrl} />
+                        {overlay}
+                      </>
                     )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Infinite scroll sentinel */}

@@ -67,8 +67,8 @@ async function processJob(
     const thumbBuffer = await generateThumbnailFromUrl(videoUrl)
     const thumbUrl = await uploadBufferToR2(
       thumbBuffer,
-      `thumbnails/${job.id}.jpg`,
-      "image/jpeg",
+      `thumbnails/${job.id}.png`,
+      "image/png",
       job.user_id ?? undefined,
     )
 
