@@ -1,7 +1,10 @@
 "use client"
 
 import { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward, Trash2, ChevronUp, ChevronDown, Users } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward, Trash2, ChevronUp, ChevronDown, Users, GripVertical } from "lucide-react"
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -4671,28 +4674,57 @@ function CombineVideosConfig({ data, onUpdate }: ConfigProps<CombineVideosData>)
   )
 }
 
-function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
-  // Build ordered list of connected media sources
-  const mediaSources = sources.filter((s) =>
-    s.type === "generate-image" || s.type === "upload-image" || s.type === "edit-image" || s.type === "image-to-image" ||
-    s.type === "image-to-video" || s.type === "video-to-video" || s.type === "text-to-video" || s.type === "upload-video" ||
-    s.type === "youtube-video" || s.type === "combine-videos" || s.type === "lip-sync" || s.type === "motion-transfer" ||
-    s.type === "video-upscale" || s.type === "suno-music-video" || s.type === "merge-video-audio" || s.type === "add-captions" ||
-    s.type === "resize-video" || s.type === "trim-video"
+function SortableAssetItem({ id, index, label, typeLabel }: { id: string; index: number; label: string; typeLabel: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  }
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-muted/50 text-xs">
+      <span {...listeners} className="cursor-grab active:cursor-grabbing shrink-0 touch-none">
+        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
+      </span>
+      <span className="text-muted-foreground w-4 text-center shrink-0">{index + 1}</span>
+      <span className="truncate flex-1" title={label}>{label}</span>
+      <span className="text-muted-foreground/60 text-[10px] shrink-0">{typeLabel}</span>
+    </div>
   )
+}
+
+const RENDER_MEDIA_SOURCE_TYPES = new Set([
+  "generate-image", "upload-image", "edit-image", "image-to-image",
+  "image-to-video", "video-to-video", "text-to-video", "upload-video",
+  "youtube-video", "combine-videos", "lip-sync", "motion-transfer",
+  "video-upscale", "suno-music-video", "merge-video-audio", "add-captions",
+  "resize-video", "trim-video",
+])
+
+function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const mediaSources = sources.filter((s) => RENDER_MEDIA_SOURCE_TYPES.has(s.type))
   const currentOrder = data.assetOrder ?? []
-  // Merge: keep existing order for still-connected nodes, append new ones at end
   const orderedIds = [
     ...currentOrder.filter((id) => mediaSources.some((s) => s.id === id)),
     ...mediaSources.filter((s) => !currentOrder.includes(s.id)).map((s) => s.id),
   ]
   const orderedSources = orderedIds.map((id) => mediaSources.find((s) => s.id === id)!).filter(Boolean)
 
-  function moveAsset(index: number, direction: -1 | 1) {
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = orderedIds.indexOf(String(active.id))
+    const newIndex = orderedIds.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
     const newOrder = [...orderedIds]
-    const target = index + direction
-    if (target < 0 || target >= newOrder.length) return
-    ;[newOrder[index], newOrder[target]] = [newOrder[target], newOrder[index]]
+    const [moved] = newOrder.splice(oldIndex, 1)
+    newOrder.splice(newIndex, 0, moved)
     onUpdate({ assetOrder: newOrder })
   }
 
@@ -4701,31 +4733,21 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
       {orderedSources.length > 0 && (
         <div>
           <Label className="mb-1.5 block">Media Order</Label>
-          <div className="flex flex-col gap-1">
-            {orderedSources.map((s, i) => (
-              <div key={s.id} className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-muted/50 text-xs">
-                <span className="text-muted-foreground w-4 text-center shrink-0">{i + 1}</span>
-                <span className="truncate flex-1" title={s.label}>{s.label}</span>
-                <span className="text-muted-foreground/60 text-[10px] shrink-0">{s.type.includes("image") ? "img" : "vid"}</span>
-                <button
-                  type="button"
-                  disabled={i === 0}
-                  className="p-0.5 rounded hover:bg-muted disabled:opacity-20"
-                  onClick={() => moveAsset(i, -1)}
-                >
-                  <ChevronUp className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  disabled={i === orderedSources.length - 1}
-                  className="p-0.5 rounded hover:bg-muted disabled:opacity-20"
-                  onClick={() => moveAsset(i, 1)}
-                >
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-1">
+                {orderedSources.map((s, i) => (
+                  <SortableAssetItem
+                    key={s.id}
+                    id={s.id}
+                    index={i}
+                    label={s.label}
+                    typeLabel={s.type.includes("image") ? "img" : "vid"}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         </div>
       )}
       <div>
