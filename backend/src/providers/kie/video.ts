@@ -117,6 +117,7 @@ export class KieVideoProvider
         multiShots: options?.multiShots,
         multiPrompt: options?.multiPrompt,
         klingElements: options?.klingElements,
+        onProgress: options?.onProgress,
       })
       console.log(
         `[KIE.ai] Kling 3.0 completed: ${result.videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
@@ -260,6 +261,7 @@ export class KieVideoProvider
         multiShots: options?.multiShots,
         multiPrompt: options?.multiPrompt,
         klingElements: options?.klingElements,
+        onProgress: options?.onProgress,
       })
       console.log(
         `[KIE.ai] Kling 3.0 text-to-video completed: ${result.videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
@@ -324,7 +326,8 @@ export class KieVideoProvider
     const { resultJson } = await runKieTask(
       modelConfig.model,
       input,
-      MAX_POLL_ATTEMPTS_VIDEO
+      MAX_POLL_ATTEMPTS_VIDEO,
+      options?.onProgress
     )
 
     const videoUrl =

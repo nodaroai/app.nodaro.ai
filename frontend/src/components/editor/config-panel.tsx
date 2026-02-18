@@ -2258,6 +2258,9 @@ function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField
   )
 }
 
+// Kling 3.0 supports continuous durations from 3s to 15s
+const KLING3_DURATIONS = Array.from({ length: 13 }, (_, i) => i + 3)
+
 // KIE.ai allowed durations per video provider
 const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "minimax": [5],
@@ -2265,7 +2268,7 @@ const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "veo3.1": [8],
   "kling": [5, 10],
   "kling-turbo": [5, 10],
-  "kling-3.0": [3, 4, 5, 6, 7, 8, 9, 10, 15],
+  "kling-3.0": KLING3_DURATIONS,
   "grok-i2v": [10],
   "sora2-pro": [5, 10],
 }
@@ -3389,7 +3392,7 @@ const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "kling-turbo": [5, 10],
   "grok": [10],
   "sora2-pro": [5, 10],
-  "kling-3.0": [3, 4, 5, 6, 7, 8, 9, 10, 15],
+  "kling-3.0": KLING3_DURATIONS,
 }
 
 function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes }: ConfigProps<TextToVideoData>) {

@@ -28,6 +28,7 @@ export interface Kling3Params {
   multiShots?: boolean
   multiPrompt?: Array<{ prompt: string; duration: number }>
   klingElements?: Array<{ name: string; description: string; type?: "image" | "video"; element_input_urls?: string[]; element_input_video_urls?: string[] }>
+  onProgress?: (progress: number) => Promise<void> | void
 }
 
 export interface Kling3Result {
@@ -49,7 +50,7 @@ export async function kling3Generate(
   const multiShots = params.multiShots ?? false
 
   // Multi-shot mode requires sound to be enabled
-  const soundOn = multiShots ? true : (params.sound ?? true)
+  const soundOn = multiShots || (params.sound ?? true)
 
   const hasMultiPrompt = multiShots && params.multiPrompt && params.multiPrompt.length > 0
 
@@ -92,7 +93,7 @@ export async function kling3Generate(
     input.kling_elements = params.klingElements.map((el) => {
       let description = el.description
       if (description.length > 100) {
-        console.log(`[Kling3] Truncated element "${el.name}" description from ${description.length} to 100 chars`)
+        if (DEBUG) console.log(`[Kling3] Truncated element "${el.name}" description from ${description.length} to 100 chars`)
         description = description.slice(0, 100)
       }
 
@@ -121,7 +122,7 @@ export async function kling3Generate(
     if (Object.keys(namePrefixMap).length > 0) {
       const originalNames = Object.keys(namePrefixMap)
       const newNames = Object.values(namePrefixMap)
-      console.log(`[Kling3] Prefixed element names: ${originalNames.join(", ")} -> ${newNames.join(", ")}`)
+      if (DEBUG) console.log(`[Kling3] Prefixed element names: ${originalNames.join(", ")} -> ${newNames.join(", ")}`)
 
       // Replace in main prompt (sort by length descending to avoid partial matches)
       const sortedEntries = Object.entries(namePrefixMap).sort((a, b) => b[0].length - a[0].length)
@@ -207,14 +208,15 @@ export async function kling3Generate(
 
   if (DEBUG) console.log(`[Kling3] Task created: ${taskId}`)
 
-  const videoUrl = await pollKling3Task(taskId, apiKey)
+  const videoUrl = await pollKling3Task(taskId, apiKey, params.onProgress)
 
   return { taskId, videoUrl }
 }
 
 async function pollKling3Task(
   taskId: string,
-  apiKey: string
+  apiKey: string,
+  onProgress?: (progress: number) => Promise<void> | void
 ): Promise<string> {
   const maxAttempts = MAX_POLL_ATTEMPTS_VIDEO
   let attempts = 0
@@ -238,7 +240,7 @@ async function pollKling3Task(
     }
 
     if (!detailResponse.ok) {
-      console.warn(
+      if (DEBUG) console.warn(
         `[Kling3] Poll attempt ${attempts} failed: ${detailResponse.status}`
       )
       continue
@@ -251,19 +253,23 @@ async function pollKling3Task(
     try {
       detailData = JSON.parse(detailText)
     } catch {
-      console.warn(`[Kling3] Poll attempt ${attempts} invalid JSON`)
+      if (DEBUG) console.warn(`[Kling3] Poll attempt ${attempts} invalid JSON`)
       continue
     }
 
     const data = detailData.data as Record<string, unknown> | undefined
     if (!data) {
-      console.warn(`[Kling3] Poll attempt ${attempts} missing data`)
+      if (DEBUG) console.warn(`[Kling3] Poll attempt ${attempts} missing data`)
       continue
     }
 
     const state = (data.state as string) ?? (data.status as string)
     const progress = data.progress as number | undefined
     if (DEBUG) console.log(`[Kling3] Task ${taskId} state: ${state}${progress !== undefined ? ` (${progress}%)` : ""} (attempt ${attempts})`)
+
+    if (onProgress && progress !== undefined) {
+      await onProgress(progress)
+    }
 
     if (state === "success" || state === "completed") {
       // Try multiple possible video URL locations
