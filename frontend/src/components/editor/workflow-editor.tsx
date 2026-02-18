@@ -144,17 +144,73 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }, [workflowId, load])
 
-  // Cleanup all polling intervals when the component unmounts so stale
-  // callbacks cannot write results into a different workflow's nodes.
+  // Keep a cached copy of the auth token for use in synchronous
+  // beforeunload handler (can't do async getSession there).
+  const cachedAccessTokenRef = useRef<string | null>(null)
   useEffect(() => {
+    const supabase = createClient()
+    // Initial fetch
+    supabase.auth.getSession().then(({ data }) => {
+      cachedAccessTokenRef.current = data.session?.access_token ?? null
+    })
+    // Keep it fresh on auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      cachedAccessTokenRef.current = session?.access_token ?? null
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Flush save on page unload so currentJobId + running status survive a
+  // refresh. Uses fetch with keepalive for reliable delivery during unload.
+  useEffect(() => {
+    function handleBeforeUnload() {
+      if (!projectId) return
+      const state = useWorkflowStore.getState()
+      if (!state.isDirty || state.nodes.length === 0) return
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+      const wfId = state.workflowId
+      const token = cachedAccessTokenRef.current
+      if (!supabaseUrl || !supabaseKey || !wfId || !token) return
+
+      const payload = {
+        nodes: JSON.parse(JSON.stringify(state.nodes)),
+        edges: JSON.parse(JSON.stringify(state.edges)),
+        settings: {
+          characterDefinitions: JSON.parse(JSON.stringify(state.characterDefinitions)),
+          flowPromptTemplates: JSON.parse(JSON.stringify(state.flowPromptTemplates)),
+        },
+      }
+
+      // fetch with keepalive survives page unload (up to 64KB)
+      fetch(`${supabaseUrl}/rest/v1/workflows?id=eq.${wfId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseKey,
+          Authorization: `Bearer ${token}`,
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => {})
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
     return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
       ownerWorkflowIdRef.current = null
+      if (executionSaveTimerRef.current) {
+        clearTimeout(executionSaveTimerRef.current)
+        executionSaveTimerRef.current = null
+      }
       for (const interval of pollIntervalsRef.current) {
         clearInterval(interval)
       }
       pollIntervalsRef.current.clear()
     }
-  }, [])
+  }, [projectId])
 
   useEffect(() => {
     fetchProjects()
@@ -171,30 +227,44 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }, [projectId, save])
 
-  // Auto-save: debounce 3 seconds after the last mutation
+  // Auto-save: debounce 3 seconds after the last mutation, but always save
+  // within 10 seconds max. During execution, poll callbacks update node
+  // progress every 2-3s which constantly resets the debounce timer.
+  // Without the max-wait ceiling, auto-save can be starved indefinitely.
   useEffect(() => {
     if (!projectId || loading) return
 
     let timer: ReturnType<typeof setTimeout> | null = null
+    let maxTimer: ReturnType<typeof setTimeout> | null = null
+
+    function doSave() {
+      if (timer) { clearTimeout(timer); timer = null }
+      if (maxTimer) { clearTimeout(maxTimer); maxTimer = null }
+      const current = useWorkflowStore.getState()
+      if (current.isDirty && current.saveStatus !== "saving" && current.nodes.length > 0) {
+        save(projectId)
+      }
+    }
 
     const unsub = useWorkflowStore.subscribe((state) => {
       if (state.isDirty && state.saveStatus !== "saving") {
         if (timer) clearTimeout(timer)
-        timer = setTimeout(() => {
-          const current = useWorkflowStore.getState()
-          if (current.isDirty && current.saveStatus !== "saving" && current.nodes.length > 0) {
-            save(projectId)
-          }
-        }, 3000)
-      } else if (!state.isDirty && timer) {
-        clearTimeout(timer)
-        timer = null
+        timer = setTimeout(doSave, 3000)
+
+        // Max-wait: guarantee a save within 10s of first becoming dirty
+        if (!maxTimer) {
+          maxTimer = setTimeout(doSave, 10_000)
+        }
+      } else if (!state.isDirty) {
+        if (timer) { clearTimeout(timer); timer = null }
+        if (maxTimer) { clearTimeout(maxTimer); maxTimer = null }
       }
     })
 
     return () => {
       unsub()
       if (timer) clearTimeout(timer)
+      if (maxTimer) clearTimeout(maxTimer)
     }
   }, [projectId, loading, save])
 
@@ -208,8 +278,24 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return currentId !== ownerWorkflowIdRef.current
   }
 
+  // When the first poll interval starts, schedule an immediate save so that
+  // currentJobId + executionStatus:"running" are persisted to the DB. This
+  // prevents the scenario where the user refreshes before the debounced
+  // auto-save fires and loses the running state.
+  const executionSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   function trackInterval(interval: ReturnType<typeof setInterval>) {
+    const wasEmpty = pollIntervalsRef.current.size === 0
     pollIntervalsRef.current.add(interval)
+
+    // Force a save 500ms after the first poll starts (batches multiple node starts)
+    if (wasEmpty && projectId && !executionSaveTimerRef.current) {
+      executionSaveTimerRef.current = setTimeout(() => {
+        executionSaveTimerRef.current = null
+        save(projectId)
+      }, 500)
+    }
+
     return interval
   }
 
