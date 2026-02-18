@@ -129,22 +129,31 @@ function VideoCard({ item, children }: { readonly item: GalleryItem; readonly ch
   const containerRef = useRef<HTMLDivElement>(null)
   const hasThumbnail = !!item.thumbnailUrl
 
-  // Preload video when card scrolls into view, unload when it leaves
+  // Preload video when card scrolls into view (debounced), unload when it leaves
   useEffect(() => {
     const container = containerRef.current
     const video = videoRef.current
     if (!container || !video) return
 
+    let preloadTimer: ReturnType<typeof setTimeout> | null = null
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
-          // Restore src if it was cleared and preload metadata (first frames)
-          if (!video.src || video.src === "") {
-            video.src = item.outputUrl
-          }
-          video.preload = "metadata"
-          video.load()
+          // Debounce: only preload if card stays visible for 300ms (skip during fast scroll)
+          preloadTimer = setTimeout(() => {
+            if (!video.src || video.src === "") {
+              video.src = item.outputUrl
+            }
+            video.preload = "metadata"
+            video.load()
+          }, 300)
         } else {
+          // Cancel pending preload if user scrolled past quickly
+          if (preloadTimer) {
+            clearTimeout(preloadTimer)
+            preloadTimer = null
+          }
           // Out of view — stop buffering to free memory
           video.pause()
           video.currentTime = 0
@@ -158,7 +167,10 @@ function VideoCard({ item, children }: { readonly item: GalleryItem; readonly ch
       { rootMargin: "200px" },
     )
     observer.observe(container)
-    return () => observer.disconnect()
+    return () => {
+      if (preloadTimer) clearTimeout(preloadTimer)
+      observer.disconnect()
+    }
   }, [])
 
   function handleMouseEnter() {
@@ -297,7 +309,7 @@ export default function GalleryPage() {
           fetchNextPage()
         }
       },
-      { rootMargin: "200px" },
+      { rootMargin: "800px" },
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
@@ -494,6 +506,7 @@ export default function GalleryPage() {
                     role="button"
                     tabIndex={0}
                     className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
+                    style={{ contentVisibility: "auto", containIntrinsicSize: "auto 200px" }}
                     onClick={() => { setReferenceViewIndex(null); setSelectedIndex(index) }}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { setReferenceViewIndex(null); setSelectedIndex(index) } }}
                   >
@@ -521,14 +534,20 @@ export default function GalleryPage() {
               })}
             </div>
 
-            {/* Infinite scroll sentinel */}
-            <div ref={sentinelRef} className="h-1" />
-
+            {/* Skeleton placeholders while loading next page */}
             {loadingMore && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-4">
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <div
+                    key={`skeleton-${i}`}
+                    className="aspect-square rounded-lg bg-zinc-200 dark:bg-zinc-800 animate-pulse"
+                  />
+                ))}
               </div>
             )}
+
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="h-1" />
 
             {!hasMore && items.length > 0 && (
               <p className="text-center text-sm text-muted-foreground py-8">
