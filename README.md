@@ -11,7 +11,7 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 - **Scene Node**: Cinematic control center combining characters, cinematography, mood, and dialogue
 - **SSE Streaming**: Real-time token streaming for AI Writer with live preview in node and config panel
 - **Model Agnostic**: Swap AI providers without changing workflows
-- **45 Node Types**: Input (5), Parameter (8), AI (16), Scene (1), Assets (3), Processing (9), Output (2), Utility (1)
+- **48 Node Types**: Input (5), Parameter (8), AI (16), Scene (1), Assets (3), Processing (12), Output (2), Utility (1)
 - **Light/Dark Mode**: Premium styling with glassmorphism effects
 - **Organized Node Menus**: Sub-group headers in sidebar and popup (AI: Script & Text, Image, Video, Audio & Speech, Suno Music, Quality; Processing: Video, Audio)
 - **Keyboard Shortcuts**: Tab (add node), Ctrl+K (search), Ctrl+L (assets), Shift+S (sticky note)
@@ -61,6 +61,22 @@ Full Suno music pipeline via KIE.ai API:
 - **Suno Music Video** (3 credits) -- Generate MP4 visualizer video from Suno audio tracks
 
 Video URL nodes automatically download audio for Suno Cover compatibility. Social media URLs are resolved to direct audio files via yt-dlp before sending to the API.
+
+## Processing Nodes (FFmpeg)
+
+Video and audio post-processing via FFmpeg -- all run locally, 0 credits:
+
+- **Combine Videos** -- Concatenate clips with optional transitions (Cut, Crossfade, Dip to Black, Dip to White), configurable transition duration, audio mode (keep/crossfade/remove), drag-to-reorder clip order
+- **Merge Video & Audio** -- Replace or mix audio tracks on a video
+- **Extract Audio** -- Pull audio track from a video file
+- **Add Captions** -- Burn subtitles into video
+- **Resize Video** -- Change aspect ratio (crop, pad, or stretch)
+- **Trim Video** -- Cut video to start/end timestamps
+- **Adjust Speed** -- Slow motion / fast forward (0.25x-4x) with optional audio re-timing via chained atempo filters
+- **Loop Video** -- Repeat N times (2-20) or loop to a target duration (1-300s)
+- **Fade In/Out** -- Fade in/out to black or white with configurable duration (0.1-3s), audio fades included automatically
+- **Mix Audio** -- Layer multiple audio tracks with per-track volume control (0-200%)
+- **Adjust Volume** -- Volume, normalize, fade in/out for audio or video
 
 ## Quick Start
 
@@ -176,7 +192,10 @@ REST API at `http://localhost:8000`. Key endpoints:
 | `POST /v1/suno/music-video` | Generate music video from Suno track |
 | `POST /v1/ai-writer/generate` | AI Writer (sync, returns full JSON) |
 | `POST /v1/ai-writer/generate-stream` | AI Writer (SSE streaming, real-time tokens) |
-| `POST /v1/combine-videos` | FFmpeg video concatenation |
+| `POST /v1/combine-videos` | FFmpeg video concatenation (transitions, reorder) |
+| `POST /v1/speed-ramp` | Adjust video speed (0.25x-4x) |
+| `POST /v1/loop-video` | Loop/repeat video |
+| `POST /v1/fade-video` | Fade in/out (black/white) |
 | `POST /v1/workflows/:id/run` | Execute workflow |
 
 Full API documentation in [CLAUDE.md](./CLAUDE.md).
