@@ -4738,7 +4738,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
         {/* Tab Content */}
         {activeTab === "editor" && (
-          <div className="absolute inset-0">
+          <div className="absolute inset-0 overflow-hidden">
             <ReactFlowProvider>
               <WorkflowCanvas
                 sidebarVisible={sidebarVisible}

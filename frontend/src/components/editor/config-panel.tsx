@@ -10,6 +10,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectItemWithMeta,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -317,7 +318,7 @@ export function ConfigPanel() {
     })
   }, [])
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId)
+  const foundNode = nodes.find((n) => n.id === selectedNodeId)
 
   const sources = useMemo(() => {
     if (!selectedNodeId) return [] as SourceNodeInfo[]
@@ -330,19 +331,31 @@ export function ConfigPanel() {
   }, [selectedNodeId, edges])
 
   const fieldMappings: FieldMappings = useMemo(() => {
-    if (!selectedNode) return {}
-    const d = selectedNode.data as Record<string, unknown>
+    if (!foundNode) return {}
+    const d = foundNode.data as Record<string, unknown>
     return (d.fieldMappings as FieldMappings) ?? {}
-  }, [selectedNode])
+  }, [foundNode])
 
   const [expandSceneOpen, setExpandSceneOpen] = useState(false)
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
-  if (!selectedNode) return null
+  // Slide-in/out: compute visibility, keep last node for exit animation content
+  const isVisible = !!foundNode && foundNode.type !== "sticky-note"
+  const lastNodeRef = useRef(foundNode)
+  if (foundNode) lastNodeRef.current = foundNode
+  const displayNode = foundNode ?? lastNodeRef.current
 
-  // Sticky notes are edited directly on the canvas, not in the config panel
-  if (selectedNode.type === "sticky-note") return null
+  // Reset expanded state when panel closes
+  useEffect(() => {
+    if (!isVisible) setIsExpanded(false)
+  }, [isVisible])
+
+  // Nothing to render if we've never had a node selected
+  if (!displayNode) return null
+
+  // displayNode is the node to render (current or last-selected during exit animation)
+  const selectedNode = displayNode
 
   function update(data: Record<string, unknown>) {
     if (!selectedNodeId) return
@@ -424,7 +437,7 @@ export function ConfigPanel() {
   const panelContent = (
     <div className={isExpanded
       ? "fixed inset-0 z-50 flex items-center justify-center"
-      : "absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D]"
+      : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-300 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
     }>
       {/* Backdrop (expanded mode only) */}
       {isExpanded && (
@@ -1889,6 +1902,24 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   )
 }
 
+const IMAGE_GEN_MODELS = [
+  { value: "nano-banana", label: "Nano Banana", badge: "4 CR", desc: "Fast drafts, iteration, storyboards" },
+  { value: "nano-banana-pro", label: "Nano Banana Pro", badge: "6 CR", desc: "Higher detail, production-ready images" },
+  { value: "flux", label: "Flux", badge: "10 CR", desc: "Photorealistic, highest quality output" },
+  { value: "grok", label: "Grok", badge: "8 CR", desc: "Creative and stylized imagery" },
+  { value: "gpt-image", label: "GPT Image", badge: "12 CR", desc: "Text rendering, complex compositions" },
+  { value: "dalle", label: "DALL-E", badge: null, desc: "Legacy model (via Replicate)" },
+] as const
+
+const IMAGE_I2I_MODELS = [
+  { value: "nano-banana", label: "Nano Banana", badge: "4 CR", desc: "Fast iteration, quick transforms" },
+  { value: "nano-banana-pro", label: "Nano Banana Pro", badge: "6 CR", desc: "Higher detail, production images" },
+  { value: "flux-i2i", label: "Flux-2", badge: "8 CR", desc: "Style-faithful transformations" },
+  { value: "flux-pro-i2i", label: "Flux-2 Pro", badge: "10 CR", desc: "Premium quality image transforms" },
+  { value: "grok-i2i", label: "Grok", badge: "8 CR", desc: "Creative and stylized imagery" },
+  { value: "gpt-image-i2i", label: "GPT Image", badge: "12 CR", desc: "Text rendering, complex compositions" },
+] as const
+
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
@@ -2035,12 +2066,11 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
-            <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
-            <SelectItem value="flux">Flux</SelectItem>
-            <SelectItem value="grok">Grok</SelectItem>
-            <SelectItem value="gpt-image">GPT Image</SelectItem>
-            <SelectItem value="dalle">DALL-E</SelectItem>
+            {IMAGE_GEN_MODELS.map((m) => (
+              <SelectItemWithMeta key={m.value} value={m.value} badge={m.badge ?? undefined} description={m.desc}>
+                {m.label}
+              </SelectItemWithMeta>
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
@@ -2234,12 +2264,11 @@ function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
-            <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
-            <SelectItem value="flux-i2i">Flux-2</SelectItem>
-            <SelectItem value="flux-pro-i2i">Flux-2 Pro</SelectItem>
-            <SelectItem value="grok-i2i">Grok</SelectItem>
-            <SelectItem value="gpt-image-i2i">GPT Image</SelectItem>
+            {IMAGE_I2I_MODELS.map((m) => (
+              <SelectItemWithMeta key={m.value} value={m.value} badge={m.badge ?? undefined} description={m.desc}>
+                {m.label}
+              </SelectItemWithMeta>
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
