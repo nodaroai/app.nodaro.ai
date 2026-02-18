@@ -118,7 +118,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
               {results.length > 0 && (
                 <button
                   type="button"
-                  className="w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
+                  aria-label="Remove" className="w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)
