@@ -36,6 +36,77 @@ export interface Kling3Result {
   videoUrl: string
 }
 
+type KlingElementParam = NonNullable<Kling3Params["klingElements"]>[number]
+
+/**
+ * Build kling_elements array on the input object, prefixing names with "element_".
+ * Returns a map of original -> prefixed names for prompt replacement.
+ */
+function buildKlingElements(
+  input: Record<string, unknown>,
+  elements: KlingElementParam[],
+): Record<string, string> {
+  const namePrefixMap: Record<string, string> = {}
+
+  input.kling_elements = elements.map((el) => {
+    const description = el.description.length > 100
+      ? el.description.slice(0, 100)
+      : el.description
+
+    const prefixedName = el.name.startsWith("element_")
+      ? el.name
+      : `element_${el.name}`
+
+    if (el.name !== prefixedName) {
+      namePrefixMap[el.name] = prefixedName
+    }
+
+    const mapped: Record<string, unknown> = { name: prefixedName, description }
+    if (el.element_input_video_urls?.length) {
+      mapped.element_input_video_urls = el.element_input_video_urls
+    }
+    if (el.element_input_urls?.length) {
+      mapped.element_input_urls = el.element_input_urls
+    }
+    return mapped
+  })
+
+  return namePrefixMap
+}
+
+/** Replace @name references in prompt and multi_prompt with @element_name prefixes. */
+function applyElementNamePrefixes(
+  input: Record<string, unknown>,
+  namePrefixMap: Record<string, string>,
+): void {
+  const entries = Object.entries(namePrefixMap)
+  if (entries.length === 0) return
+
+  if (DEBUG) {
+    const mapping = entries.map(([orig, prefixed]) => `${orig} -> ${prefixed}`).join(", ")
+    console.log(`[Kling3] Prefixed element names: ${mapping}`)
+  }
+
+  // Sort by length descending to avoid partial matches (e.g. "cat" before "cat2")
+  const sorted = entries.sort((a, b) => b[0].length - a[0].length)
+
+  function replaceRefs(text: string): string {
+    let result = text
+    for (const [orig, prefixed] of sorted) {
+      result = result.replaceAll(`@${orig}`, `@${prefixed}`)
+    }
+    return result
+  }
+
+  input.prompt = replaceRefs(input.prompt as string)
+
+  if (input.multi_prompt) {
+    input.multi_prompt = (input.multi_prompt as Array<{ prompt: string; duration: number }>).map(
+      (shot) => ({ ...shot, prompt: replaceRefs(shot.prompt) })
+    )
+  }
+}
+
 export async function kling3Generate(
   params: Kling3Params
 ): Promise<Kling3Result> {
@@ -48,20 +119,22 @@ export async function kling3Generate(
   }
 
   const multiShots = params.multiShots ?? false
+  const multiPrompt = multiShots && params.multiPrompt?.length
+    ? params.multiPrompt
+    : undefined
 
   // Multi-shot mode requires sound to be enabled
   const soundOn = multiShots || (params.sound ?? true)
 
-  const hasMultiPrompt = multiShots && params.multiPrompt && params.multiPrompt.length > 0
-
-  // When multi_shots is true: prompt must be "", duration must be sum of all shots (number)
-  const totalShotDuration = hasMultiPrompt
-    ? params.multiPrompt!.reduce((sum, s) => sum + s.duration, 0)
-    : 0
-
-  const durationNum = hasMultiPrompt
-    ? totalShotDuration
-    : (typeof params.duration === "string" ? parseInt(params.duration, 10) : (params.duration ?? 5))
+  // When multi_shots is true: duration must be sum of all shot durations
+  let durationNum: number
+  if (multiPrompt) {
+    durationNum = multiPrompt.reduce((sum, s) => sum + s.duration, 0)
+  } else if (typeof params.duration === "string") {
+    durationNum = parseInt(params.duration, 10) || 5
+  } else {
+    durationNum = params.duration ?? 5
+  }
 
   if (durationNum < 3 || durationNum > 15) {
     throw createSanitizedError(
@@ -71,7 +144,7 @@ export async function kling3Generate(
   }
 
   const input: Record<string, unknown> = {
-    prompt: hasMultiPrompt ? "" : params.prompt,
+    prompt: multiPrompt ? "" : params.prompt,
     sound: soundOn,
     duration: String(durationNum),
     mode: params.mode ?? "pro",
@@ -83,72 +156,17 @@ export async function kling3Generate(
     input.image_urls = params.imageUrls
   }
 
-  if (hasMultiPrompt) {
-    // Duration as number per shot
-    input.multi_prompt = params.multiPrompt!.map((shot) => ({
+  if (multiPrompt) {
+    input.multi_prompt = multiPrompt.map((shot) => ({
       prompt: shot.prompt,
       duration: shot.duration,
     }))
   }
 
-  // Build name prefix map: originalName -> prefixedName
-  // Kling API requires element names to start with "element_"
-  const namePrefixMap: Record<string, string> = {}
-
+  // Build elements and apply "element_" name prefix required by the Kling API
   if (params.klingElements && params.klingElements.length > 0) {
-    input.kling_elements = params.klingElements.map((el) => {
-      let description = el.description
-      if (description.length > 100) {
-        if (DEBUG) console.log(`[Kling3] Truncated element "${el.name}" description from ${description.length} to 100 chars`)
-        description = description.slice(0, 100)
-      }
-
-      // Prefix name with "element_" if not already present
-      const originalName = el.name
-      const prefixedName = originalName.startsWith("element_") ? originalName : `element_${originalName}`
-      if (originalName !== prefixedName) {
-        namePrefixMap[originalName] = prefixedName
-      }
-
-      const mapped: Record<string, unknown> = {
-        name: prefixedName,
-        description,
-      }
-      // Include whichever URL arrays are populated (field-presence, not type-based)
-      if (el.element_input_video_urls && el.element_input_video_urls.length > 0) {
-        mapped.element_input_video_urls = el.element_input_video_urls
-      }
-      if (el.element_input_urls && el.element_input_urls.length > 0) {
-        mapped.element_input_urls = el.element_input_urls
-      }
-      return mapped
-    })
-
-    // Replace @name references in prompts with @element_name
-    if (Object.keys(namePrefixMap).length > 0) {
-      const originalNames = Object.keys(namePrefixMap)
-      const newNames = Object.values(namePrefixMap)
-      if (DEBUG) console.log(`[Kling3] Prefixed element names: ${originalNames.join(", ")} -> ${newNames.join(", ")}`)
-
-      // Replace in main prompt (sort by length descending to avoid partial matches)
-      const sortedEntries = Object.entries(namePrefixMap).sort((a, b) => b[0].length - a[0].length)
-      let mainPrompt = input.prompt as string
-      for (const [orig, prefixed] of sortedEntries) {
-        mainPrompt = mainPrompt.replaceAll(`@${orig}`, `@${prefixed}`)
-      }
-      input.prompt = mainPrompt
-
-      // Replace in multi_prompt shot prompts
-      if (input.multi_prompt) {
-        input.multi_prompt = (input.multi_prompt as Array<{ prompt: string; duration: number }>).map((shot) => {
-          let shotPrompt = shot.prompt
-          for (const [orig, prefixed] of sortedEntries) {
-            shotPrompt = shotPrompt.replaceAll(`@${orig}`, `@${prefixed}`)
-          }
-          return { ...shot, prompt: shotPrompt }
-        })
-      }
-    }
+    const namePrefixMap = buildKlingElements(input, params.klingElements)
+    applyElementNamePrefixes(input, namePrefixMap)
   }
 
   const requestBody = {

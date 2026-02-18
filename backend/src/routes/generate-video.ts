@@ -2,38 +2,27 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const generateVideoBody = z.object({
-  imageUrl: z.string().url(),                      // Start frame image
-  endFrameUrl: z.string().url().optional(),        // Optional end frame (for supported providers)
-  audioUrl: z.string().url().optional(),           // Optional audio track to merge after generation
+  imageUrl: z.string().url(),
+  endFrameUrl: z.string().url().optional(),
+  audioUrl: z.string().url().optional(),
   prompt: z.string().max(2000).optional(),
-  // Replicate providers + KIE-only providers
   provider: z.enum([
-    // Available on both Replicate and KIE
     "veo3", "veo3.1", "kling", "minimax",
-    // Replicate only
     "veo", "runway", "pika", "sora",
-    // KIE only
-    "kling-turbo", "kling-3.0", "grok-i2v", "sora2-pro"
+    "kling-turbo", "kling-3.0", "grok-i2v", "sora2-pro",
   ]).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
-  mode: z.enum(["pro", "std"]).optional(),       // Kling 3.0 quality mode
-  sound: z.boolean().optional(),                  // Kling 3.0 sound effects
+  mode: z.enum(["pro", "std"]).optional(),
+  sound: z.boolean().optional(),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
   multiShot: z.boolean().optional(),
-  shots: z.array(z.object({ prompt: z.string().max(500), duration: z.number().int().min(1).max(12) })).max(6).optional(),
-  elements: z.array(z.object({
-    name: z.string().max(50),
-    description: z.string().max(200),
-    type: z.enum(["image", "video"]),
-    urls: z.array(z.string().url()).min(1).max(4),
-  }).refine(
-    (el) => el.type === "video" ? el.urls.length === 1 : el.urls.length >= 2,
-    { message: "Image elements require 2-4 URLs, video elements require exactly 1 URL" }
-  )).max(5).optional(),
+  shots: shotsSchema.optional(),
+  elements: elementsSchema.optional(),
   userId: z.string().uuid().optional(),
 })
 

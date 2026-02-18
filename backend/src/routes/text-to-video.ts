@@ -2,33 +2,23 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const textToVideoBody = z.object({
   prompt: z.string().min(1).max(2000),
   provider: z.enum([
-    // Available on both Replicate and KIE
     "veo3", "kling", "minimax",
-    // Replicate-only
     "veo", "runway", "pika", "sora",
-    // KIE-only
-    "kling-turbo", "kling-3.0", "grok", "sora2-pro"
+    "kling-turbo", "kling-3.0", "grok", "sora2-pro",
   ]).optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std"]).optional(),
   sound: z.boolean().optional(),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
   multiShot: z.boolean().optional(),
-  shots: z.array(z.object({ prompt: z.string().max(500), duration: z.number().int().min(1).max(12) })).max(6).optional(),
-  elements: z.array(z.object({
-    name: z.string().max(50),
-    description: z.string().max(200),
-    type: z.enum(["image", "video"]),
-    urls: z.array(z.string().url()).min(1).max(4),
-  }).refine(
-    (el) => el.type === "video" ? el.urls.length === 1 : el.urls.length >= 2,
-    { message: "Image elements require 2-4 URLs, video elements require exactly 1 URL" }
-  )).max(5).optional(),
+  shots: shotsSchema.optional(),
+  elements: elementsSchema.optional(),
   userId: z.string().uuid().optional(),
 })
 
