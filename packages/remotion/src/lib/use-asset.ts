@@ -2,6 +2,7 @@ import { interpolate, useCurrentFrame } from "remotion"
 
 /**
  * Calculate opacity for a crossfade transition between media segments.
+ * NOTE: useCurrentFrame() returns local frames inside a <Sequence>, starting from 0.
  */
 export function useAssetTransition(
   assetIndex: number,
@@ -9,27 +10,25 @@ export function useAssetTransition(
   framesPerAsset: number,
   transitionFrames: number,
 ): { opacity: number; visible: boolean } {
-  const frame = useCurrentFrame()
-  const startFrame = assetIndex * framesPerAsset
-  const endFrame = startFrame + framesPerAsset
+  const frame = useCurrentFrame() // local frame within the Sequence (0-based)
 
-  if (frame < startFrame - transitionFrames || frame > endFrame + transitionFrames) {
+  if (frame > framesPerAsset + transitionFrames) {
     return { opacity: 0, visible: false }
   }
 
   let opacity = 1
 
-  // Fade in
-  if (transitionFrames > 0 && assetIndex > 0 && frame < startFrame + transitionFrames) {
-    opacity = interpolate(frame, [startFrame, startFrame + transitionFrames], [0, 1], {
+  // Fade in (not for the first asset)
+  if (transitionFrames > 0 && assetIndex > 0 && frame < transitionFrames) {
+    opacity = interpolate(frame, [0, transitionFrames], [0, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     })
   }
 
-  // Fade out
-  if (transitionFrames > 0 && assetIndex < assetCount - 1 && frame > endFrame - transitionFrames) {
-    opacity = interpolate(frame, [endFrame - transitionFrames, endFrame], [1, 0], {
+  // Fade out (not for the last asset)
+  if (transitionFrames > 0 && assetIndex < assetCount - 1 && frame > framesPerAsset - transitionFrames) {
+    opacity = interpolate(frame, [framesPerAsset - transitionFrames, framesPerAsset], [1, 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     })
