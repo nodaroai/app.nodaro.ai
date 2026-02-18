@@ -71,6 +71,9 @@ PORT=9000 node dist/server.js &
 # Start BullMQ worker (job processor)
 node dist/worker.js &
 
+# Start BullMQ render worker (Remotion video rendering)
+node dist/render-worker.js &
+
 # Wait for backend to be ready before accepting traffic
 echo "Waiting for backend on port 9000..."
 for i in $(seq 1 30); do
