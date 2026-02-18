@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState, useMemo } from "react"
+import { useCallback, useEffect, useState, useMemo, lazy, Suspense } from "react"
 import {
   ReactFlow,
   MiniMap,
@@ -18,10 +18,10 @@ import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
 import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
-import { SearchModal } from "./search-modal"
+const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
-import { UnifiedAssetLibraryModal } from "./unified-asset-library"
-import { MediaLibraryModal } from "./media-library-modal"
+const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
+const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 import { SelectionActionBar } from "./selection-action-bar"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
@@ -430,23 +430,35 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       />
 
       {/* Search Modal */}
-      <SearchModal
-        open={searchModalOpen}
-        onClose={() => setSearchModalOpen(false)}
-      />
+      {searchModalOpen && (
+        <Suspense fallback={null}>
+          <SearchModal
+            open={searchModalOpen}
+            onClose={() => setSearchModalOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* My Library Modal */}
-      <UnifiedAssetLibraryModal
-        open={assetLibraryOpen}
-        onClose={() => setAssetLibraryOpen(false)}
-      />
+      {assetLibraryOpen && (
+        <Suspense fallback={null}>
+          <UnifiedAssetLibraryModal
+            open={assetLibraryOpen}
+            onClose={() => setAssetLibraryOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* Media Library Modal */}
-      <MediaLibraryModal
-        open={mediaLibraryOpen}
-        onClose={() => setMediaLibraryOpen(false)}
-        onAddToCanvas={handleAddAssetToCanvas}
-      />
+      {mediaLibraryOpen && (
+        <Suspense fallback={null}>
+          <MediaLibraryModal
+            open={mediaLibraryOpen}
+            onClose={() => setMediaLibraryOpen(false)}
+            onAddToCanvas={handleAddAssetToCanvas}
+          />
+        </Suspense>
+      )}
 
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
         <ReactFlow

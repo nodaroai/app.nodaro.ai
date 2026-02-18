@@ -1,14 +1,14 @@
 "use client"
 
-import { memo, useState, useEffect } from "react"
+import { memo, useState, useEffect, lazy, Suspense } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Maximize2, Scissors, Play } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { SceneEditorModal } from "@/components/editor/scene-editor-modal"
-import { ExtractReferencesModal } from "@/components/editor/extract-references-modal"
+const SceneEditorModal = lazy(() => import("@/components/editor/scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
+const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -280,33 +280,39 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
         if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
       }}
     />
-    <SceneEditorModal
-      isOpen={editorOpen}
-      onClose={() => setEditorOpen(false)}
-      nodeId={id}
-    />
-    {activeUrl && (
-      <ExtractReferencesModal
-        isOpen={extractOpen}
-        onClose={() => setExtractOpen(false)}
-        imageUrl={activeUrl}
-        sceneIndex={0}
-        sceneCharacters={[]}
-        existingReferences={extractedRefs}
-        onSave={(refs) => {
-          setExtractedRefs(refs)
-          for (const ref of refs) {
-            if (!ref.imageUrl) continue
-            addCharacterDefinition({
-              id: crypto.randomUUID(),
-              name: ref.name,
-              type: "reference",
-              category: ref.type,
-              referenceImageUrl: ref.imageUrl,
-            })
-          }
-        }}
-      />
+    {editorOpen && (
+      <Suspense fallback={null}>
+        <SceneEditorModal
+          isOpen={editorOpen}
+          onClose={() => setEditorOpen(false)}
+          nodeId={id}
+        />
+      </Suspense>
+    )}
+    {activeUrl && extractOpen && (
+      <Suspense fallback={null}>
+        <ExtractReferencesModal
+          isOpen={extractOpen}
+          onClose={() => setExtractOpen(false)}
+          imageUrl={activeUrl}
+          sceneIndex={0}
+          sceneCharacters={[]}
+          existingReferences={extractedRefs}
+          onSave={(refs) => {
+            setExtractedRefs(refs)
+            for (const ref of refs) {
+              if (!ref.imageUrl) continue
+              addCharacterDefinition({
+                id: crypto.randomUUID(),
+                name: ref.name,
+                type: "reference",
+                category: ref.type,
+                referenceImageUrl: ref.imageUrl,
+              })
+            }
+          }}
+        />
+      </Suspense>
     )}
     </div>
   )

@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo } from "react"
+import { memo, useState, useMemo, lazy, Suspense } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2 } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -9,7 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
-import { Kling3DirectorModal } from "@/components/editor/kling3-director-modal"
+const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
@@ -551,11 +551,15 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     />
 
     {/* Kling 3.0 Director Modal */}
-    <Kling3DirectorModal
-      isOpen={directorOpen}
-      onClose={() => setDirectorOpen(false)}
-      nodeId={id}
-    />
+    {directorOpen && (
+      <Suspense fallback={null}>
+        <Kling3DirectorModal
+          isOpen={directorOpen}
+          onClose={() => setDirectorOpen(false)}
+          nodeId={id}
+        />
+      </Suspense>
+    )}
     </div>
   )
 }

@@ -1,12 +1,13 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, lazy, Suspense } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
-import { ScriptPreviewModal } from "@/components/editor/script-preview-modal"
-import { ExpandStoryboardDialog, type ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
+import type { ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
+const ScriptPreviewModal = lazy(() => import("@/components/editor/script-preview-modal").then(m => ({ default: m.ScriptPreviewModal })))
+const ExpandStoryboardDialog = lazy(() => import("@/components/editor/expand-storyboard-dialog").then(m => ({ default: m.ExpandStoryboardDialog })))
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -217,7 +218,8 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
-    {activeScript && (
+    {activeScript && showFullscreen && (
+      <Suspense fallback={null}>
       <ScriptPreviewModal
         isOpen={showFullscreen}
         onClose={() => setShowFullscreen(false)}
@@ -329,6 +331,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
           })
         }}
       />
+      </Suspense>
     )}
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
@@ -337,15 +340,17 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
       }}
     />
-    {activeScript && (
-      <ExpandStoryboardDialog
-        isOpen={showExpandDialog}
-        onClose={() => setShowExpandDialog(false)}
-        script={activeScript}
-        onConfirm={(options: ExpandOptions) => {
-          expandStoryboard?.(id, options)
-        }}
-      />
+    {activeScript && showExpandDialog && (
+      <Suspense fallback={null}>
+        <ExpandStoryboardDialog
+          isOpen={showExpandDialog}
+          onClose={() => setShowExpandDialog(false)}
+          script={activeScript}
+          onConfirm={(options: ExpandOptions) => {
+            expandStoryboard?.(id, options)
+          }}
+        />
+      </Suspense>
     )}
     </div>
   )

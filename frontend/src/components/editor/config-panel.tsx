@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useCallback, useRef, useEffect } from "react"
+import { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"
 import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward, Trash2, ChevronUp, ChevronDown, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,7 +25,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
-import { Kling3DirectorModal } from "@/components/editor/kling3-director-modal"
+const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/components/credits/GenerateButton"
 import { createClient } from "@/lib/supabase"
 import { uploadFile, uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
@@ -104,8 +104,9 @@ import type {
 import type { WorkflowNode, WorkflowEdge, SceneNodeDataType } from "@/types/nodes"
 import { AI_WRITER_TEMPLATES, getAIWriterTemplate } from "@/lib/ai-writer-templates"
 import { SceneConfig } from "./scene-config"
-import { SceneEditorModal } from "./scene-editor-modal"
-import { AssetSelectionModal, type SelectedAsset } from "./asset-selection-modal"
+const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
+import type { SelectedAsset } from "./asset-selection-modal"
+const AssetSelectionModal = lazy(() => import("./asset-selection-modal").then(m => ({ default: m.AssetSelectionModal })))
 import { IterationResultsPanel } from "./iteration-results-panel"
 
 interface SourceNodeInfo {
@@ -775,19 +776,23 @@ export function ConfigPanel() {
           </div>
         </div>
       </div>
-      {selectedNode.type === "scene" && (
-        <SceneEditorModal
-          isOpen={expandSceneOpen}
-          onClose={() => setExpandSceneOpen(false)}
-          nodeId={selectedNode.id}
-        />
+      {selectedNode.type === "scene" && expandSceneOpen && (
+        <Suspense fallback={null}>
+          <SceneEditorModal
+            isOpen={expandSceneOpen}
+            onClose={() => setExpandSceneOpen(false)}
+            nodeId={selectedNode.id}
+          />
+        </Suspense>
       )}
-      {(selectedNode.type === "image-to-video" || selectedNode.type === "text-to-video") && (
-        <Kling3DirectorModal
-          isOpen={expandDirectorOpen}
-          onClose={() => setExpandDirectorOpen(false)}
-          nodeId={selectedNode.id}
-        />
+      {(selectedNode.type === "image-to-video" || selectedNode.type === "text-to-video") && expandDirectorOpen && (
+        <Suspense fallback={null}>
+          <Kling3DirectorModal
+            isOpen={expandDirectorOpen}
+            onClose={() => setExpandDirectorOpen(false)}
+            nodeId={selectedNode.id}
+          />
+        </Suspense>
       )}
       </div>
     </div>
@@ -2165,13 +2170,17 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         </div>
       </div>
 
-      <AssetSelectionModal
-        isOpen={showAssetLibrary}
-        onClose={() => setShowAssetLibrary(false)}
-        onSelect={handleAssetSelected}
-        title="Select Asset from Library"
-        excludeIds={attachedIds}
-      />
+      {showAssetLibrary && (
+        <Suspense fallback={null}>
+          <AssetSelectionModal
+            isOpen={showAssetLibrary}
+            onClose={() => setShowAssetLibrary(false)}
+            onSelect={handleAssetSelected}
+            title="Select Asset from Library"
+            excludeIds={attachedIds}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

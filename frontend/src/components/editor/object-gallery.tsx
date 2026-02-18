@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, lazy, Suspense } from "react"
 import { Package, X, Loader2, AlertCircle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { ObjectPageModal } from "./object-page-modal"
+const ObjectPageModal = lazy(() => import("./object-page-modal").then(m => ({ default: m.ObjectPageModal })))
 import { type DbObject } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { useObjects } from "@/hooks/queries/use-assets-queries"
@@ -228,10 +228,12 @@ export function ObjectGalleryButton() {
       )}
 
       {objectPageNodeId && (
-        <ObjectPageModal
-          objectNodeId={objectPageNodeId}
-          onClose={() => setObjectPageNodeId(null)}
-        />
+        <Suspense fallback={null}>
+          <ObjectPageModal
+            objectNodeId={objectPageNodeId}
+            onClose={() => setObjectPageNodeId(null)}
+          />
+        </Suspense>
       )}
     </>
   )

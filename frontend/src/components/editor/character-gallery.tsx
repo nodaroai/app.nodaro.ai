@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, lazy, Suspense } from "react"
 import { UserCircle, Users, X, Loader2, AlertCircle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { CharacterPageModal } from "./character-page-modal"
+const CharacterPageModal = lazy(() => import("./character-page-modal").then(m => ({ default: m.CharacterPageModal })))
 import { type DbCharacter } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { useCharacters } from "@/hooks/queries/use-assets-queries"
@@ -230,10 +230,12 @@ export function CharacterGalleryButton() {
       )}
 
       {characterPageNodeId && (
-        <CharacterPageModal
-          characterNodeId={characterPageNodeId}
-          onClose={() => setCharacterPageNodeId(null)}
-        />
+        <Suspense fallback={null}>
+          <CharacterPageModal
+            characterNodeId={characterPageNodeId}
+            onClose={() => setCharacterPageNodeId(null)}
+          />
+        </Suspense>
       )}
     </>
   )

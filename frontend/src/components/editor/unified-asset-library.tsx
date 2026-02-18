@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, lazy, Suspense } from "react"
 import { createPortal } from "react-dom"
 import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, SmilePlus, FolderOpen } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
@@ -15,9 +15,9 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useCharacters, useObjects, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
 import { queryKeys } from "@/lib/query-keys"
-import { CharacterPageModal } from "./character-page-modal"
-import { ObjectPageModal } from "./object-page-modal"
-import { LocationPageModal } from "./location-page-modal"
+const CharacterPageModal = lazy(() => import("./character-page-modal").then(m => ({ default: m.CharacterPageModal })))
+const ObjectPageModal = lazy(() => import("./object-page-modal").then(m => ({ default: m.ObjectPageModal })))
+const LocationPageModal = lazy(() => import("./location-page-modal").then(m => ({ default: m.LocationPageModal })))
 import { createClient } from "@/lib/supabase"
 import type { DbCharacter, DbObject, DbLocation, DbFace } from "@/lib/api"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -592,31 +592,37 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
 
       {/* Page Modals - rendered outside the library modal so they stay open when library closes */}
       {characterPageNodeId && (
-        <CharacterPageModal
-          characterNodeId={characterPageNodeId}
-          onClose={() => {
-            setCharacterPageNodeId(null)
-            invalidateAssets()
-          }}
-        />
+        <Suspense fallback={null}>
+          <CharacterPageModal
+            characterNodeId={characterPageNodeId}
+            onClose={() => {
+              setCharacterPageNodeId(null)
+              invalidateAssets()
+            }}
+          />
+        </Suspense>
       )}
       {objectPageNodeId && (
-        <ObjectPageModal
-          objectNodeId={objectPageNodeId}
-          onClose={() => {
-            setObjectPageNodeId(null)
-            invalidateAssets()
-          }}
-        />
+        <Suspense fallback={null}>
+          <ObjectPageModal
+            objectNodeId={objectPageNodeId}
+            onClose={() => {
+              setObjectPageNodeId(null)
+              invalidateAssets()
+            }}
+          />
+        </Suspense>
       )}
       {locationPageNodeId && (
-        <LocationPageModal
-          locationNodeId={locationPageNodeId}
-          onClose={() => {
-            setLocationPageNodeId(null)
-            invalidateAssets()
-          }}
-        />
+        <Suspense fallback={null}>
+          <LocationPageModal
+            locationNodeId={locationPageNodeId}
+            onClose={() => {
+              setLocationPageNodeId(null)
+              invalidateAssets()
+            }}
+          />
+        </Suspense>
       )}
     </>
   )
@@ -1114,31 +1120,37 @@ export function UnifiedAssetLibraryButton() {
 
       {/* Page Modals */}
       {characterPageNodeId && (
-        <CharacterPageModal
-          characterNodeId={characterPageNodeId}
-          onClose={() => {
-            setCharacterPageNodeId(null)
-            invalidateAssets()
-          }}
-        />
+        <Suspense fallback={null}>
+          <CharacterPageModal
+            characterNodeId={characterPageNodeId}
+            onClose={() => {
+              setCharacterPageNodeId(null)
+              invalidateAssets()
+            }}
+          />
+        </Suspense>
       )}
       {objectPageNodeId && (
-        <ObjectPageModal
-          objectNodeId={objectPageNodeId}
-          onClose={() => {
-            setObjectPageNodeId(null)
-            invalidateAssets()
-          }}
-        />
+        <Suspense fallback={null}>
+          <ObjectPageModal
+            objectNodeId={objectPageNodeId}
+            onClose={() => {
+              setObjectPageNodeId(null)
+              invalidateAssets()
+            }}
+          />
+        </Suspense>
       )}
       {locationPageNodeId && (
-        <LocationPageModal
-          locationNodeId={locationPageNodeId}
-          onClose={() => {
-            setLocationPageNodeId(null)
-            invalidateAssets()
-          }}
-        />
+        <Suspense fallback={null}>
+          <LocationPageModal
+            locationNodeId={locationPageNodeId}
+            onClose={() => {
+              setLocationPageNodeId(null)
+              invalidateAssets()
+            }}
+          />
+        </Suspense>
       )}
     </>
   )
