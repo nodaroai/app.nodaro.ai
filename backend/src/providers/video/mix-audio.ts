@@ -3,10 +3,11 @@ import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg
 
 interface MixAudioOptions {
   readonly audioUrls: readonly string[]
+  readonly trackVolumes?: readonly number[]
 }
 
 export async function mixAudio(options: MixAudioOptions): Promise<string> {
-  const { audioUrls } = options
+  const { audioUrls, trackVolumes } = options
   const workDir = await createWorkDir("mix-audio")
 
   try {
@@ -25,10 +26,21 @@ export async function mixAudio(options: MixAudioOptions): Promise<string> {
       inputs.push("-i", p)
     }
 
+    const volumeParts = inputPaths.map((_, i) => {
+      const vol = (trackVolumes?.[i] ?? 100) / 100
+      return `[${i}:a]volume=${vol}[a${i}]`
+    })
+    const mixInputs = inputPaths.map((_, i) => `[a${i}]`).join("")
+    const filterComplex = [
+      ...volumeParts,
+      `${mixInputs}amix=inputs=${inputPaths.length}:duration=longest[aout]`,
+    ].join(";")
+
     await runFfmpeg([
       "-y",
       ...inputs,
-      "-filter_complex", `amix=inputs=${inputPaths.length}:duration=longest`,
+      "-filter_complex", filterComplex,
+      "-map", "[aout]",
       outputPath,
     ])
 

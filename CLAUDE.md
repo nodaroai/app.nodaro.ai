@@ -156,7 +156,7 @@ backend/src/
 | Job queue | BullMQ | Best for Node.js, excellent dashboard |
 | Execution model | Frontend DAG engine | Topological sort, parallel per level |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
-| Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
+| Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
 
@@ -179,4 +179,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-18*
-*Version: 1.25.1*
+*Version: 1.26.0*

@@ -6,8 +6,9 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 
 const combineVideosBody = z.object({
   videoUrls: z.array(z.string().url()).min(2, "At least 2 video URLs required"),
-  transition: z.enum(["cut", "fade", "dissolve"]).optional().default("cut"),
+  transition: z.enum(["cut", "fade", "dissolve", "dip-to-black", "dip-to-white"]).optional().default("cut"),
   transitionDuration: z.number().min(0).max(5).optional().default(0.5),
+  audioMode: z.enum(["keep", "crossfade", "remove"]).optional().default("crossfade"),
   userId: z.string().uuid().optional(),
 })
 
@@ -23,7 +24,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrls, transition, transitionDuration, userId } = parsed.data
+    const { videoUrls, transition, transitionDuration, audioMode, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -40,7 +41,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { videoUrls, transition, transitionDuration, type: "combine-videos" },
+        input_data: { videoUrls, transition, transitionDuration, audioMode, type: "combine-videos" },
       })
       .select("id")
       .single()
@@ -61,6 +62,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       videoUrls,
       transition,
       transitionDuration,
+      audioMode,
       usageLogId,
     })
 
