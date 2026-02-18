@@ -9,9 +9,9 @@ import { randomUUID } from "node:crypto"
 // Constants
 // ============================================================
 
-const THUMBNAIL_WIDTH = 320
-const THUMBNAIL_HEIGHT = 320
-const THUMBNAIL_QUALITY = 80
+const THUMBNAIL_WIDTH = 640
+const THUMBNAIL_HEIGHT = 640
+const THUMBNAIL_QUALITY = 90
 
 // ============================================================
 // Types
@@ -154,9 +154,8 @@ export async function processVideo(
     const height = videoStream?.height ?? 0
     const codec = videoStream?.codec_name ?? "unknown"
 
-    // Extract frame at 1 second (or 0 if video is shorter)
-    const seekTime = Math.min(1, durationSeconds * 0.1)
-    await extractFrame(videoPath, framePath, seekTime)
+    // Extract the very first frame
+    await extractFrame(videoPath, framePath, 0)
 
     // Resize frame to thumbnail
     const frameBuffer = await fs.readFile(framePath)
@@ -195,13 +194,8 @@ export async function generateThumbnailFromUrl(videoUrl: string): Promise<Buffer
     const buffer = Buffer.from(await response.arrayBuffer())
     await fs.writeFile(videoPath, buffer)
 
-    // Get duration so we can seek to ~1s
-    const probeJson = await runFfprobe(videoPath)
-    const probe = JSON.parse(probeJson)
-    const durationSeconds = parseFloat(probe.format?.duration ?? "0")
-    const seekTime = Math.min(1, durationSeconds * 0.1)
-
-    await extractFrame(videoPath, framePath, seekTime)
+    // Extract the very first frame
+    await extractFrame(videoPath, framePath, 0)
 
     const frameBuffer = await fs.readFile(framePath)
     return await sharp(frameBuffer)

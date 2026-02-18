@@ -3,9 +3,10 @@
  *
  * Usage:
  *   npm run backfill-video-thumbnails
- *   npm run backfill-video-thumbnails -- --dry-run     # preview without changes
- *   npm run backfill-video-thumbnails -- --limit 50    # process at most 50 jobs
+ *   npm run backfill-video-thumbnails -- --dry-run        # preview without changes
+ *   npm run backfill-video-thumbnails -- --limit 50       # process at most 50 jobs
  *   npm run backfill-video-thumbnails -- --concurrency 3  # parallel jobs (default 2)
+ *   npm run backfill-video-thumbnails -- --regenerate     # re-generate ALL thumbnails (not just missing)
  */
 
 import { supabase } from "../lib/supabase.js"
@@ -24,11 +25,12 @@ const PAGE_SIZE = 100
 function parseArgs() {
   const args = process.argv.slice(2)
   const dryRun = args.includes("--dry-run")
+  const regenerate = args.includes("--regenerate")
   const limitIdx = args.indexOf("--limit")
   const limit = limitIdx !== -1 ? parseInt(args[limitIdx + 1] ?? "0", 10) || Infinity : Infinity
   const concIdx = args.indexOf("--concurrency")
   const concurrency = concIdx !== -1 ? parseInt(args[concIdx + 1] ?? "2", 10) || 2 : 2
-  return { dryRun, limit, concurrency }
+  return { dryRun, regenerate, limit, concurrency }
 }
 
 async function fetchJobsBatch(offset: number): Promise<Array<{ id: string; output_data: Record<string, unknown>; user_id: string | null }>> {
@@ -48,12 +50,13 @@ async function fetchJobsBatch(offset: number): Promise<Array<{ id: string; outpu
 async function processJob(
   job: { id: string; output_data: Record<string, unknown>; user_id: string | null },
   dryRun: boolean,
+  regenerate: boolean,
 ): Promise<"ok" | "skipped" | "failed"> {
   const videoUrl = job.output_data?.videoUrl as string | undefined
   if (!videoUrl) return "skipped"
 
-  // Already has a thumbnail
-  if (job.output_data?.thumbnailUrl) return "skipped"
+  // Already has a thumbnail — skip unless regenerating
+  if (job.output_data?.thumbnailUrl && !regenerate) return "skipped"
 
   if (dryRun) {
     console.log(`  [dry-run] Would generate thumbnail for job ${job.id}`)
@@ -90,10 +93,10 @@ async function processJob(
 }
 
 async function main() {
-  const { dryRun, limit, concurrency } = parseArgs()
+  const { dryRun, regenerate, limit, concurrency } = parseArgs()
 
   console.log(`Backfill video thumbnails`)
-  console.log(`  dry-run: ${dryRun}, limit: ${limit === Infinity ? "none" : limit}, concurrency: ${concurrency}`)
+  console.log(`  dry-run: ${dryRun}, regenerate: ${regenerate}, limit: ${limit === Infinity ? "none" : limit}, concurrency: ${concurrency}`)
   console.log()
 
   let offset = 0
@@ -106,22 +109,23 @@ async function main() {
     const batch = await fetchJobsBatch(offset)
     if (batch.length === 0) break
 
-    // Filter to only jobs missing thumbnails
+    // Filter to jobs that need a thumbnail (or all with a videoUrl when regenerating)
     const needsThumbnail = batch.filter((j) => {
       const od = j.output_data
-      return od?.videoUrl && !od?.thumbnailUrl
+      if (!od?.videoUrl) return false
+      return regenerate || !od?.thumbnailUrl
     })
 
     // Cap to remaining limit
     const toProcess = needsThumbnail.slice(0, limit - processed)
 
     if (toProcess.length > 0) {
-      console.log(`Batch at offset ${offset}: ${toProcess.length} jobs to process (${batch.length - needsThumbnail.length} already have thumbnails)`)
+      console.log(`Batch at offset ${offset}: ${toProcess.length} jobs to process (${batch.length - needsThumbnail.length} skipped)`)
 
       // Process in chunks of `concurrency`
       for (let i = 0; i < toProcess.length; i += concurrency) {
         const chunk = toProcess.slice(i, i + concurrency)
-        const results = await Promise.all(chunk.map((j) => processJob(j, dryRun)))
+        const results = await Promise.all(chunk.map((j) => processJob(j, dryRun, regenerate)))
         for (const r of results) {
           if (r === "ok") ok++
           else if (r === "skipped") skipped++

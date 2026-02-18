@@ -122,27 +122,31 @@ function AudioCard({ url }: { readonly url: string }) {
 
 function VideoCard({ item }: { readonly item: GalleryItem }) {
   const [hovered, setHovered] = useState(false)
+  const [videoReady, setVideoReady] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const hasThumbnail = !!item.thumbnailUrl
 
   function handleMouseEnter() {
     setHovered(true)
-    if (hasThumbnail) {
-      // Video mounts on hover — give it a frame to render before playing
-      requestAnimationFrame(() => {
-        videoRef.current?.play().catch(() => {})
-      })
-    } else {
-      // Video is always mounted (preload="metadata"), just play it
-      videoRef.current?.play().catch(() => {})
-    }
+    const video = videoRef.current
+    if (!video) return
+    // Start loading + playing; thumbnail stays visible until onPlaying fires
+    video.preload = "auto"
+    video.load()
+    video.play().catch(() => {})
   }
 
   function handleMouseLeave() {
-    if (videoRef.current) {
-      videoRef.current.pause()
-      videoRef.current.currentTime = 0
+    const video = videoRef.current
+    if (video) {
+      video.pause()
+      video.currentTime = 0
+      // Stop buffering by clearing the source
+      video.preload = "none"
+      video.removeAttribute("src")
+      video.load()
     }
+    setVideoReady(false)
     setHovered(false)
   }
 
@@ -154,29 +158,30 @@ function VideoCard({ item }: { readonly item: GalleryItem }) {
     >
       {hasThumbnail ? (
         <>
-          {/* Cloudflare-optimized thumbnail shown by default */}
+          {/* Thumbnail stays visible until video is actually playing */}
           <CachedImage
             src={item.thumbnailUrl!}
             alt=""
-            className={cn("w-full h-full object-cover absolute inset-0", hovered && "invisible")}
+            className={cn(
+              "w-full h-full object-cover absolute inset-0 z-[1]",
+              hovered && videoReady && "invisible",
+            )}
             loading="lazy"
             thumbnail
           />
-          {/* Video only mounts on hover to avoid downloading all videos upfront */}
-          {hovered && (
-            <video
-              ref={videoRef}
-              src={item.outputUrl}
-              muted
-              loop
-              playsInline
-              preload="auto"
-              className="w-full h-full object-cover"
-            />
-          )}
+          {/* Video always mounted (hidden behind thumbnail), no download until hover */}
+          <video
+            ref={videoRef}
+            src={item.outputUrl}
+            muted
+            loop
+            playsInline
+            preload="none"
+            onPlaying={() => setVideoReady(true)}
+            className="w-full h-full object-cover absolute inset-0"
+          />
         </>
       ) : (
-        // No thumbnail available — fall back to native video with metadata preload
         <video
           ref={videoRef}
           src={item.outputUrl}
@@ -184,12 +189,13 @@ function VideoCard({ item }: { readonly item: GalleryItem }) {
           loop
           playsInline
           preload="metadata"
+          onPlaying={() => setVideoReady(true)}
           className="w-full h-full object-cover"
         />
       )}
       {/* Play icon hint */}
       {!hovered && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[2]">
           <div className="rounded-full bg-black/40 p-2">
             <Play className="h-4 w-4 text-white fill-white" />
           </div>
