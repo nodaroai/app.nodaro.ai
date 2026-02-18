@@ -1,5 +1,5 @@
 import React from "react"
-import { Composition } from "remotion"
+import { Composition, registerRoot } from "remotion"
 import type { RenderVideoInputProps, TemplateId } from "./types"
 import { Slideshow } from "./compositions/slideshow"
 import { Explainer } from "./compositions/explainer"
@@ -40,7 +40,7 @@ const COMPOSITIONS: Array<{
   { id: "documentary", component: Documentary, width: 1920, height: 1080, extraProps: { kenBurnsEnabled: true } },
 ]
 
-export function RemotionRoot() {
+function RemotionRoot() {
   return (
     <>
       {COMPOSITIONS.map(({ id, component, width, height, extraProps }) => (
@@ -58,3 +58,5 @@ export function RemotionRoot() {
     </>
   )
 }
+
+registerRoot(RemotionRoot)

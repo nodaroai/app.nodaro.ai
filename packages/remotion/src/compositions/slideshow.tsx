@@ -1,5 +1,5 @@
 import React from "react"
-import { AbsoluteFill, Audio, Sequence, staticFile } from "remotion"
+import { AbsoluteFill, Audio, Sequence } from "remotion"
 import type { RenderVideoInputProps } from "../types"
 import { useAssetTransition } from "../lib/use-asset"
 import { MediaItem } from "../lib/media-item"
@@ -78,7 +78,7 @@ export function Slideshow(props: RenderVideoInputProps) {
       <TextOverlayLayer overlays={textOverlays} />
 
       {audioTrackLocalPath && (
-        <Audio src={staticFile(audioTrackLocalPath)} />
+        <Audio src={audioTrackLocalPath} />
       )}
     </AbsoluteFill>
   )

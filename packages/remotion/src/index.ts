@@ -8,5 +8,3 @@ export type {
   TransitionStyle,
   TemplateId,
 } from "./types"
-
-export { RemotionRoot } from "./Root"

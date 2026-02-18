@@ -140,22 +140,23 @@ export function createRenderWorker() {
       try {
         await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", jobId)
 
-        // 1. Download all media assets to temp dir
+        // 1. Download all media assets to temp dir (use file:// URLs for Remotion)
         console.log(`[render-worker] Downloading ${data.mediaAssets.length} assets for job ${jobId}`)
         const localAssets: RenderInputProps["mediaAssets"] = await Promise.all(
           data.mediaAssets.map(async (asset, i) => {
             const ext = getFileExtension(asset.type)
-            const localPath = `asset_${i}.${ext}`
-            await downloadFile(asset.url, join(workDir, localPath))
-            return { localPath, type: asset.type, durationSeconds: asset.durationSeconds }
+            const absPath = join(workDir, `asset_${i}.${ext}`)
+            await downloadFile(asset.url, absPath)
+            return { localPath: `file://${absPath}`, type: asset.type, durationSeconds: asset.durationSeconds }
           }),
         )
 
         // Download audio track if present
         let audioTrackLocalPath: string | undefined
         if (data.audioTrackUrl) {
-          await downloadFile(data.audioTrackUrl, join(workDir, "audio_track.mp3"))
-          audioTrackLocalPath = "audio_track.mp3"
+          const audioAbsPath = join(workDir, "audio_track.mp3")
+          await downloadFile(data.audioTrackUrl, audioAbsPath)
+          audioTrackLocalPath = `file://${audioAbsPath}`
         }
 
         await bullJob.updateProgress(30)
@@ -188,7 +189,6 @@ export function createRenderWorker() {
           serveUrl: bundlePath,
           id: data.template,
           inputProps,
-          publicDir: workDir,
         })
 
         const outputPath = join(workDir, "output.mp4")
@@ -206,7 +206,6 @@ export function createRenderWorker() {
           codec: "h264",
           outputLocation: outputPath,
           inputProps,
-          publicDir: workDir,
           onProgress: ({ progress }: { progress: number }) => {
             const overall = 40 + Math.round(progress * 50)
             bullJob.updateProgress(overall).catch(() => {})

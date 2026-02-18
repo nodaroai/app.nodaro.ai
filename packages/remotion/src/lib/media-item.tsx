@@ -1,5 +1,5 @@
 import React from "react"
-import { Img, Video, staticFile } from "remotion"
+import { Img, Video } from "remotion"
 import type { MediaAsset } from "../types"
 import { useKenBurns } from "./use-asset"
 
@@ -31,11 +31,11 @@ export function MediaItem({
 
   if (asset.type === "image") {
     return (
-      <Img src={staticFile(asset.localPath)} style={mediaStyle} />
+      <Img src={asset.localPath} style={mediaStyle} />
     )
   }
 
   return (
-    <Video src={staticFile(asset.localPath)} style={{ width, height, objectFit: "cover" }} />
+    <Video src={asset.localPath} style={{ width, height, objectFit: "cover" }} />
   )
 }

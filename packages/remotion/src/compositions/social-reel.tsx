@@ -3,7 +3,6 @@ import {
   AbsoluteFill,
   Audio,
   Sequence,
-  staticFile,
   useCurrentFrame,
   interpolate,
   spring,
@@ -141,7 +140,7 @@ export function SocialReel(props: RenderVideoInputProps) {
         />
       )}
 
-      {audioTrackLocalPath && <Audio src={staticFile(audioTrackLocalPath)} />}
+      {audioTrackLocalPath && <Audio src={audioTrackLocalPath} />}
     </AbsoluteFill>
   )
 }

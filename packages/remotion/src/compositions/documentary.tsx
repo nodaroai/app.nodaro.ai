@@ -3,7 +3,6 @@ import {
   AbsoluteFill,
   Audio,
   Sequence,
-  staticFile,
   useCurrentFrame,
   interpolate,
 } from "remotion"
@@ -93,7 +92,7 @@ export function Documentary(props: RenderVideoInputProps) {
         }}
       />
 
-      {audioTrackLocalPath && <Audio src={staticFile(audioTrackLocalPath)} />}
+      {audioTrackLocalPath && <Audio src={audioTrackLocalPath} />}
     </AbsoluteFill>
   )
 }

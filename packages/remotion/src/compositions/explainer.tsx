@@ -4,7 +4,6 @@ import {
   Audio,
   Img,
   Sequence,
-  staticFile,
   useCurrentFrame,
   interpolate,
 } from "remotion"
@@ -48,7 +47,7 @@ export function Explainer(props: RenderVideoInputProps) {
               }}
             >
               <Img
-                src={staticFile(asset.localPath)}
+                src={asset.localPath}
                 style={{ width, height, objectFit: "cover" }}
               />
             </AbsoluteFill>
@@ -67,7 +66,7 @@ export function Explainer(props: RenderVideoInputProps) {
       />
 
       {audioTrackLocalPath && (
-        <Audio src={staticFile(audioTrackLocalPath)} />
+        <Audio src={audioTrackLocalPath} />
       )}
     </AbsoluteFill>
   )
