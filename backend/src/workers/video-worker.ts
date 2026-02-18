@@ -28,6 +28,9 @@ import { resizeVideo } from "../providers/video/resize-video.js"
 import { adjustVolume } from "../providers/video/adjust-volume.js"
 import { addCaptions } from "../providers/video/add-captions.js"
 import { mixAudio } from "../providers/video/mix-audio.js"
+import { speedRamp } from "../providers/video/speed-ramp.js"
+import { loopVideo } from "../providers/video/loop-video.js"
+import { fadeVideo } from "../providers/video/fade-video.js"
 import { cleanupWorkDir, createWorkDir, downloadFile } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
@@ -693,15 +696,16 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: "${script.title}" (${script.scenes.length} scenes)`)
         } else if (job.name === "combine-videos") {
-          const { videoUrls, transition, transitionDuration } = job.data as {
+          const { videoUrls, transition, transitionDuration, audioMode } = job.data as {
             jobId: string
             videoUrls: string[]
-            transition: "cut" | "fade" | "dissolve"
+            transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
             transitionDuration: number
+            audioMode?: "keep" | "crossfade" | "remove"
           }
-          console.log(`[worker] combine-videos ${jobId}: ${videoUrls.length} videos, transition=${transition}`)
+          console.log(`[worker] combine-videos ${jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}`)
 
-          const outputPath = await combineVideos({ videoUrls, transition, transitionDuration })
+          const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade" })
           await job.updateProgress(80)
 
           const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
@@ -783,6 +787,54 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
+        } else if (job.name === "speed-ramp") {
+          const { videoUrl, speed, adjustAudio } = job.data as {
+            jobId: string; videoUrl: string; speed: number; adjustAudio: boolean
+          }
+          console.log(`[worker] speed-ramp ${jobId}`)
+          const outputPath = await speedRamp({ videoUrl, speed, adjustAudio })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          const srThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: srThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "loop-video") {
+          const { videoUrl, mode, repeatCount, targetDuration } = job.data as {
+            jobId: string; videoUrl: string; mode: "repeat" | "duration"; repeatCount?: number; targetDuration?: number
+          }
+          console.log(`[worker] loop-video ${jobId}`)
+          const outputPath = await loopVideo({ videoUrl, mode, repeatCount, targetDuration })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          const lvThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: lvThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "fade-video") {
+          const { videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color } = job.data as {
+            jobId: string; videoUrl: string; fadeIn: boolean; fadeInDuration: number; fadeOut: boolean; fadeOutDuration: number; color: "black" | "white"
+          }
+          console.log(`[worker] fade-video ${jobId}`)
+          const outputPath = await fadeVideo({ videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          const fvThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: fvThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
         } else if (job.name === "resize-video") {
           const { videoUrl, targetAspect, method, padColor } = job.data as {
             jobId: string; videoUrl: string; targetAspect: string; method: "crop" | "pad" | "stretch"; padColor?: string
@@ -836,9 +888,9 @@ export function createVideoWorker() {
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 
         } else if (job.name === "mix-audio") {
-          const { audioUrls } = job.data as { jobId: string; audioUrls: string[] }
+          const { audioUrls, trackVolumes } = job.data as { jobId: string; audioUrls: string[]; trackVolumes?: number[] }
           console.log(`[worker] mix-audio ${jobId}: ${audioUrls.length} tracks`)
-          const outputPath = await mixAudio({ audioUrls })
+          const outputPath = await mixAudio({ audioUrls, trackVolumes })
           await job.updateProgress(80)
           const r2Url = await uploadFileToR2(outputPath, jobId, "audio", jobUserId)
           await cleanupWorkDir(dirname(outputPath))

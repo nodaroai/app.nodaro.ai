@@ -802,8 +802,10 @@ export type TranscribeData = {
 export type CombineVideosData = {
   [key: string]: unknown
   label: string
-  transition: "cut" | "fade" | "dissolve"
+  transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
   transitionDuration: number
+  audioMode: "keep" | "crossfade" | "remove"
+  clipOrder?: string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -891,6 +893,7 @@ export type MixAudioData = {
   [key: string]: unknown
   label: string
   trackCount: number
+  trackVolumes: Record<string, number>
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -948,6 +951,49 @@ export type RenderVideoData = {
     color: string
   }
   assetOrder?: string[] // ordered source node IDs for media input sequence
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
+export type SpeedRampData = {
+  [key: string]: unknown
+  label: string
+  speed: number
+  adjustAudio: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
+export type LoopVideoData = {
+  [key: string]: unknown
+  label: string
+  mode: "repeat" | "duration"
+  repeatCount: number
+  targetDuration: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
+export type FadeVideoData = {
+  [key: string]: unknown
+  label: string
+  fadeIn: boolean
+  fadeInDuration: number
+  fadeOut: boolean
+  fadeOutDuration: number
+  color: "black" | "white"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1324,6 +1370,9 @@ export type SceneNodeData =
   | AdjustVolumeData
   | TrimVideoData
   | RenderVideoData
+  | SpeedRampData
+  | LoopVideoData
+  | FadeVideoData
   | LipSyncData
   | MotionTransferData
   | VideoUpscaleData
@@ -1386,6 +1435,9 @@ export type SceneNodeType =
   | "adjust-volume"
   | "trim-video"
   | "render-video"
+  | "speed-ramp"
+  | "loop-video"
+  | "fade-video"
   | "lip-sync"
   | "motion-transfer"
   | "video-upscale"
@@ -1742,7 +1794,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 2,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, fieldMappings: {} },
+    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", fieldMappings: {} },
   },
   {
     type: "merge-video-audio",
@@ -1787,7 +1839,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 1,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Mix Audio", trackCount: 2, fieldMappings: {} },
+    defaultData: { label: "Mix Audio", trackCount: 2, trackVolumes: {}, fieldMappings: {} },
   },
   {
     type: "adjust-volume",
@@ -1830,6 +1882,33 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as RenderVideoData,
+  },
+  {
+    type: "speed-ramp",
+    label: "Adjust Speed",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: { label: "Adjust Speed", speed: 1.0, adjustAudio: true, fieldMappings: {} },
+  },
+  {
+    type: "loop-video",
+    label: "Loop Video",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: { label: "Loop Video", mode: "repeat", repeatCount: 2, targetDuration: 10, fieldMappings: {} },
+  },
+  {
+    type: "fade-video",
+    label: "Fade In/Out",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: { label: "Fade In/Out", fadeIn: true, fadeInDuration: 0.5, fadeOut: true, fadeOutDuration: 0.5, color: "black", fieldMappings: {} },
   },
   // Lip Sync / AI Avatar
   {

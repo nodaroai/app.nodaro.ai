@@ -4,15 +4,19 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
-const mixAudioBody = z.object({
-  audioUrls: z.array(z.string().url()).min(2),
-  trackVolumes: z.array(z.number().min(0).max(200)).optional(),
+const fadeVideoBody = z.object({
+  videoUrl: z.string().url(),
+  fadeIn: z.boolean(),
+  fadeInDuration: z.number().min(0.1).max(3.0),
+  fadeOut: z.boolean(),
+  fadeOutDuration: z.number().min(0.1).max(3.0),
+  color: z.enum(["black", "white"]),
   userId: z.string().uuid().optional(),
 })
 
-export async function mixAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/mix-audio", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
-    const parsed = mixAudioBody.safeParse(req.body)
+export async function fadeVideoRoutes(app: FastifyInstance) {
+  app.post("/v1/fade-video", { preHandler: creditGuard(() => "ffmpeg") }, async (req, reply) => {
+    const parsed = fadeVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
@@ -27,7 +31,6 @@ export async function mixAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    // Model identifier for credit check (FFmpeg processing = 0 credits)
     const modelIdentifier = "ffmpeg"
 
     const { data: job, error } = await supabase
@@ -36,7 +39,7 @@ export async function mixAudioRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { ...restData, type: "mix-audio" },
+        input_data: { ...restData, type: "fade-video" },
       })
       .select("id")
       .single()
@@ -45,12 +48,11 @@ export async function mixAudioRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    // Reserve credits
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("mix-audio", { jobId: job.id, ...restData, usageLogId })
+    await videoQueue.add("fade-video", { jobId: job.id, ...restData, usageLogId })
     return { jobId: job.id }
   })
 }

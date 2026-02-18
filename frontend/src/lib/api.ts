@@ -862,11 +862,12 @@ export async function generateScriptApi(prompt: string, sceneCount?: number, ton
 
 export async function combineVideos(
   videoUrls: string[],
-  transition: "cut" | "fade" | "dissolve" = "cut",
+  transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white" = "cut",
   transitionDuration: number = 0.5,
+  audioMode: "keep" | "crossfade" | "remove" = "crossfade",
   userId?: string,
 ): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrls, transition, transitionDuration }
+  const body: Record<string, unknown> = { videoUrls, transition, transitionDuration, audioMode }
   if (userId) {
     body.userId = userId
   }
@@ -939,6 +940,57 @@ export async function trimVideoApi(videoUrl: string, startTime: number, endTime?
   return res.json()
 }
 
+export async function speedRampApi(videoUrl: string, speed: number, adjustAudio: boolean, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, speed, adjustAudio }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/speed-ramp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start speed-ramp")
+  }
+  return res.json()
+}
+
+export async function loopVideoApi(videoUrl: string, mode: "repeat" | "duration", repeatCount?: number, targetDuration?: number, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, mode, repeatCount, targetDuration }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/loop-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start loop-video")
+  }
+  return res.json()
+}
+
+export async function fadeVideoApi(videoUrl: string, fadeIn: boolean, fadeInDuration: number, fadeOut: boolean, fadeOutDuration: number, color: "black" | "white", userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, fadeIn, fadeInDuration, fadeOut, fadeOutDuration, color }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/fade-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start fade-video")
+  }
+  return res.json()
+}
+
 export async function resizeVideoApi(videoUrl: string, targetAspect: string, method: string, padColor?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, targetAspect, method, padColor }
   if (userId) {
@@ -995,8 +1047,11 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   return res.json()
 }
 
-export async function mixAudioApi(audioUrls: string[], userId?: string): Promise<{ jobId: string }> {
+export async function mixAudioApi(audioUrls: string[], trackVolumes?: number[], userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrls }
+  if (trackVolumes?.length) {
+    body.trackVolumes = trackVolumes
+  }
   if (userId) {
     body.userId = userId
   }

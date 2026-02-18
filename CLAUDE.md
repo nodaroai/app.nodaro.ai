@@ -161,6 +161,7 @@ backend/src/
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
 | Video composition | Remotion (`packages/remotion/`) | Template-based rendering via separate BullMQ worker |
+| Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
 

@@ -34,7 +34,7 @@ export function useAssetTransition(
     })
   }
 
-  return { opacity, visible: opacity > 0 }
+  return { opacity, visible: opacity >= 0 }
 }
 
 /**

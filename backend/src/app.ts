@@ -21,6 +21,9 @@ import { extractAudioRoutes } from "./routes/extract-audio.js"
 import { trimVideoRoutes } from "./routes/trim-video.js"
 import { resizeVideoRoutes } from "./routes/resize-video.js"
 import { adjustVolumeRoutes } from "./routes/adjust-volume.js"
+import { speedRampRoutes } from "./routes/speed-ramp.js"
+import { loopVideoRoutes } from "./routes/loop-video.js"
+import { fadeVideoRoutes } from "./routes/fade-video.js"
 import { addCaptionsRoutes } from "./routes/add-captions.js"
 import { mixAudioRoutes } from "./routes/mix-audio.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
@@ -110,6 +113,9 @@ export async function buildApp() {
   await app.register(trimVideoRoutes)
   await app.register(resizeVideoRoutes)
   await app.register(adjustVolumeRoutes)
+  await app.register(speedRampRoutes)
+  await app.register(loopVideoRoutes)
+  await app.register(fadeVideoRoutes)
   await app.register(addCaptionsRoutes)
   await app.register(mixAudioRoutes)
   await app.register(generateMusicRoutes)
