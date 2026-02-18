@@ -528,7 +528,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       .map((e) => nodes.find((n) => n.id === e.source))
       .filter((n): n is WorkflowNode => n !== undefined)
 
-    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; audioUrl?: string; audioUrls?: string[]; audioSources?: { url: string; sourceNodeId: string; sourceType?: "audio" | "video" }[]; referenceImageUrls?: string[]; sunoTrackId?: string; sunoTaskId?: string; uploadUrl?: string } = {}
+    const inputs: { prompt?: string; imageUrl?: string; videoUrl?: string; videoUrls?: string[]; videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>; audioUrl?: string; audioUrls?: string[]; audioSources?: { url: string; sourceNodeId: string; sourceType?: "audio" | "video" }[]; referenceImageUrls?: string[]; sunoTrackId?: string; sunoTaskId?: string; uploadUrl?: string } = {}
 
     for (const src of sourceNodes) {
       const output = extractNodeOutput(src)
@@ -594,6 +594,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           inputs.uploadUrl = audioUrl || output
         } else if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+          inputs.videoUrlsWithSourceIds = [
+            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
+            { nodeId: src.id, url: output },
+          ]
         } else if (node.type === "merge-video-audio") {
           // First video → main video; additional videos → audio extraction sources
           if (!inputs.videoUrl) {
@@ -629,6 +633,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       } else if (src.type === "image-to-video" || src.type === "video-to-video" || src.type === "text-to-video" || src.type === "lip-sync" || src.type === "motion-transfer" || src.type === "video-upscale" || src.type === "suno-music-video" || src.type === "combine-videos" || src.type === "merge-video-audio" || src.type === "add-captions" || src.type === "resize-video" || src.type === "trim-video") {
         if (node.type === "combine-videos") {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
+          inputs.videoUrlsWithSourceIds = [
+            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
+            { nodeId: src.id, url: output },
+          ]
         } else if (node.type === "merge-video-audio") {
           // First video → main video; additional videos → audio extraction sources
           if (!inputs.videoUrl) {
@@ -2666,12 +2674,23 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
 
     if (node.type === "combine-videos") {
-      const videoUrls = inputs.videoUrls ?? []
+      const combineData = node.data as CombineVideosData
+      let videoUrls = inputs.videoUrls ?? []
+
+      if (combineData.clipOrder?.length) {
+        const sourceEntries = (inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []
+        const ordered: string[] = []
+        for (const nodeId of combineData.clipOrder) {
+          const entry = sourceEntries.find((e) => e.nodeId === nodeId)
+          if (entry) ordered.push(entry.url)
+        }
+        if (ordered.length >= 2) videoUrls = ordered
+      }
+
       if (videoUrls.length < 2) {
-        toast.error(`Node "${(node.data as CombineVideosData).label}": need at least 2 video inputs`)
+        toast.error(`Node "${combineData.label}": need at least 2 video inputs`)
         return Promise.reject(new Error("Need at least 2 videos"))
       }
-      const combineData = node.data as CombineVideosData
       return runCombineVideos(node.id, videoUrls, combineData.transition ?? "cut", combineData.transitionDuration ?? 0.5, combineData.audioMode ?? "crossfade")
     }
 

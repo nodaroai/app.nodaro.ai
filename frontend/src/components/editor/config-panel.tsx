@@ -4491,9 +4491,64 @@ function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<GenerateMu
 
 /* ── Processing Node Configs ── */
 
-function CombineVideosConfig({ data, onUpdate }: ConfigProps<CombineVideosData>) {
+function CombineVideosConfig({ data, onUpdate, nodes }: ConfigProps<CombineVideosData>) {
+  const edges = useWorkflowStore((s) => s.edges)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+
+  const connectedNodeIds = edges
+    .filter((e) => e.target === selectedNodeId)
+    .map((e) => e.source)
+
+  const connectedNodes = connectedNodeIds
+    .map((id) => nodes?.find((n) => n.id === id))
+    .filter(Boolean) as ReadonlyArray<WorkflowNode>
+
+  const clipOrder: string[] = data.clipOrder?.length
+    ? data.clipOrder.filter((id) => connectedNodeIds.includes(id))
+    : connectedNodeIds
+
+  const orderedClips = clipOrder
+    .map((id) => connectedNodes.find((n) => n.id === id))
+    .filter(Boolean) as ReadonlyArray<WorkflowNode>
+
   return (
     <div className="flex flex-col gap-3">
+      {orderedClips.length > 1 && (
+        <div>
+          <Label>Clip Order</Label>
+          <p className="text-xs text-muted-foreground mb-2">Drag to reorder</p>
+          <div className="flex flex-col gap-1">
+            {orderedClips.map((clip, index) => (
+              <div
+                key={clip.id}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData("text/plain", String(index))}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const fromIndex = Number(e.dataTransfer.getData("text/plain"))
+                  const toIndex = index
+                  if (fromIndex === toIndex) return
+                  const newOrder = [...clipOrder]
+                  const [moved] = newOrder.splice(fromIndex, 1)
+                  newOrder.splice(toIndex, 0, moved)
+                  onUpdate({ clipOrder: newOrder })
+                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-md bg-white/5 border border-white/10 cursor-grab active:cursor-grabbing select-none"
+              >
+                <span className="text-muted-foreground text-xs w-4">{index + 1}</span>
+                <svg className="w-3 h-3 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M7 2a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM7 8a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM7 14a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z" />
+                </svg>
+                <span className="text-sm truncate flex-1">
+                  {(clip.data as Record<string, unknown>)?.label as string ?? clip.type ?? clip.id}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <Label>Transition</Label>
         <Select
