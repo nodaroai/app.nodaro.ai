@@ -316,8 +316,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Delete
-      if (e.key === "Delete" && selectedNodeId) {
+      // Delete / Backspace
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedNodeId) {
         deleteNode(selectedNodeId)
         return
       }
@@ -478,7 +478,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           defaultEdgeOptions={{ type: 'default' }}
           connectionMode={ConnectionMode.Loose}
           fitView
-          deleteKeyCode="Delete"
+          deleteKeyCode={["Delete", "Backspace"]}
           className="bg-background touch-manipulation"
           zoomOnPinch
           panOnDrag
