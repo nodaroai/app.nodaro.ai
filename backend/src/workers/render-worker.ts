@@ -4,7 +4,7 @@ import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
 import { uploadFileToR2, uploadBufferToR2 } from "../lib/storage.js"
-import { createWorkDir, cleanupWorkDir, downloadFile } from "../providers/video/ffmpeg-utils.js"
+import { createWorkDir, cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { join, dirname } from "node:path"
@@ -101,14 +101,6 @@ async function generateAndUploadThumbnail(
   }
 }
 
-function getFileExtension(type: "image" | "video" | "audio"): string {
-  switch (type) {
-    case "image": return "png"
-    case "video": return "mp4"
-    case "audio": return "mp3"
-  }
-}
-
 export function createRenderWorker() {
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
@@ -140,24 +132,15 @@ export function createRenderWorker() {
       try {
         await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", jobId)
 
-        // 1. Download all media assets to temp dir (use file:// URLs for Remotion)
-        console.log(`[render-worker] Downloading ${data.mediaAssets.length} assets for job ${jobId}`)
-        const localAssets: RenderInputProps["mediaAssets"] = await Promise.all(
-          data.mediaAssets.map(async (asset, i) => {
-            const ext = getFileExtension(asset.type)
-            const absPath = join(workDir, `asset_${i}.${ext}`)
-            await downloadFile(asset.url, absPath)
-            return { localPath: `file://${absPath}`, type: asset.type, durationSeconds: asset.durationSeconds }
-          }),
-        )
+        // 1. Pass original HTTP URLs to Remotion (Chrome fetches them directly)
+        console.log(`[render-worker] Preparing ${data.mediaAssets.length} assets for job ${jobId}`)
+        const localAssets: RenderInputProps["mediaAssets"] = data.mediaAssets.map((asset) => ({
+          localPath: asset.url,
+          type: asset.type,
+          durationSeconds: asset.durationSeconds,
+        }))
 
-        // Download audio track if present
-        let audioTrackLocalPath: string | undefined
-        if (data.audioTrackUrl) {
-          const audioAbsPath = join(workDir, "audio_track.mp3")
-          await downloadFile(data.audioTrackUrl, audioAbsPath)
-          audioTrackLocalPath = `file://${audioAbsPath}`
-        }
+        const audioTrackLocalPath = data.audioTrackUrl
 
         await bullJob.updateProgress(30)
 
