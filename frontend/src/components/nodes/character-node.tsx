@@ -124,7 +124,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             {results.length > 0 && (
               <button
                 type="button"
-                className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => {
                   e.stopPropagation()
                   setDeleteConfirm(activeIndex)

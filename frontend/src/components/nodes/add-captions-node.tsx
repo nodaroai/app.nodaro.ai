@@ -53,7 +53,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
             <video src={activeUrl} className="w-full h-28 object-cover rounded-md cursor-pointer" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline />
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Captioned</div>
             {results.length > 0 && (
-              <button type="button" className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+              <button type="button" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
             )}
           </div>
         )}
