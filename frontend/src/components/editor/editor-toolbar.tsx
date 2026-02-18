@@ -701,16 +701,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           let buttonStyle: React.CSSProperties = {}
           let buttonClassName = "transition-all duration-300 "
 
-          if (isSaving || isUnsaved || isSaved) {
-            // Pink for unsaved, saving, and saved states
-            buttonStyle = { backgroundColor: '#ff0073', borderColor: '#ff0073' }
-            buttonClassName += "text-white hover:opacity-90"
-          } else if (hasError) {
-            // Red for error state
+          if (hasError) {
             buttonStyle = { backgroundColor: '#ef4444', borderColor: '#ef4444' }
             buttonClassName += "text-white hover:opacity-90"
+          } else if (isUnsaved || isSaving) {
+            buttonClassName += "bg-gray-100 text-gray-800 border-gray-200 dark:bg-muted dark:text-white dark:border-border hover:opacity-90"
           } else {
-            // Muted for idle state
             buttonClassName += "bg-gray-100 text-gray-400 border-gray-200 dark:bg-muted dark:text-muted-foreground dark:border-border cursor-default"
           }
 
