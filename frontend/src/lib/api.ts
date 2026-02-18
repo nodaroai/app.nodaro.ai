@@ -698,7 +698,9 @@ export interface GenerateVideoOptions {
   generateAudio?: boolean
   duration?: number
   mode?: string            // Kling 3.0 quality mode (pro/std)
-  sound?: boolean          // Kling 3.0 sound effects
+  sound?: boolean          // Kling 2.6 / 3.0 sound effects
+  negativePrompt?: string  // Kling Turbo negative prompt
+  cfgScale?: number        // Kling Turbo cfg_scale (0-1)
   aspectRatio?: string     // Kling 3.0 aspect ratio
   multiShot?: boolean      // Kling 3.0 multi-shot mode
   shots?: Array<{ prompt: string; duration: number }>     // Kling 3.0 shot list
@@ -732,6 +734,8 @@ export async function generateVideo(
       duration: opts.duration,
       mode: opts.mode,
       sound: opts.sound,
+      negativePrompt: opts.negativePrompt,
+      cfgScale: opts.cfgScale,
       aspectRatio: opts.aspectRatio,
       multiShot: opts.multiShot,
       shots: opts.shots,
@@ -782,6 +786,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   duration?: number
   mode?: string
   sound?: boolean
+  negativePrompt?: string
+  cfgScale?: number
   aspectRatio?: string
   multiShot?: boolean
   shots?: Array<{ prompt: string; duration: number }>

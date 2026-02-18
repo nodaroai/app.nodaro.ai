@@ -10,6 +10,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectItemWithMeta,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -27,6 +28,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/components/credits/GenerateButton"
+import { useModelCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
 import { createClient } from "@/lib/supabase"
 import { uploadFile, uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
@@ -317,33 +319,53 @@ export function ConfigPanel() {
     })
   }, [])
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId)
+  const foundNode = nodes.find((n) => n.id === selectedNodeId)
 
-  const sources = useMemo(() => {
+  const liveSources = useMemo(() => {
     if (!selectedNodeId) return [] as SourceNodeInfo[]
     return getConnectedSources(selectedNodeId, edges, nodes)
   }, [edges, nodes, selectedNodeId])
 
-  const hasDownstream = useMemo(() => {
+  const liveHasDownstream = useMemo(() => {
     if (!selectedNodeId) return false
     return edges.some((e) => e.source === selectedNodeId)
   }, [selectedNodeId, edges])
 
-  const fieldMappings: FieldMappings = useMemo(() => {
-    if (!selectedNode) return {}
-    const d = selectedNode.data as Record<string, unknown>
+  const liveFieldMappings: FieldMappings = useMemo(() => {
+    if (!foundNode) return {}
+    const d = foundNode.data as Record<string, unknown>
     return (d.fieldMappings as FieldMappings) ?? {}
-  }, [selectedNode])
+  }, [foundNode])
 
   const [expandSceneOpen, setExpandSceneOpen] = useState(false)
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
-  if (!selectedNode) return null
+  // Slide-in/out: compute visibility, keep last node for exit animation content
+  const isVisible = !!foundNode && foundNode.type !== "sticky-note"
+  const lastNodeRef = useRef(foundNode)
+  if (foundNode) lastNodeRef.current = foundNode
+  const displayNode = foundNode ?? lastNodeRef.current
 
-  // Sticky notes are edited directly on the canvas, not in the config panel
-  if (selectedNode.type === "sticky-note") return null
+  // Freeze derived data during exit animation so content doesn't shift
+  const frozenSourcesRef = useRef(liveSources)
+  const frozenFieldMappingsRef = useRef(liveFieldMappings)
+  const frozenHasDownstreamRef = useRef(liveHasDownstream)
+  if (isVisible) {
+    frozenSourcesRef.current = liveSources
+    frozenFieldMappingsRef.current = liveFieldMappings
+    frozenHasDownstreamRef.current = liveHasDownstream
+  }
+  const sources = isVisible ? liveSources : frozenSourcesRef.current
+  const fieldMappings = isVisible ? liveFieldMappings : frozenFieldMappingsRef.current
+  const hasDownstream = isVisible ? liveHasDownstream : frozenHasDownstreamRef.current
 
+  // Reset expanded state when panel closes
+  useEffect(() => {
+    if (!isVisible) setIsExpanded(false)
+  }, [isVisible])
+
+  // Functions only depend on selectedNodeId (not selectedNode), safe to declare before guard
   function update(data: Record<string, unknown>) {
     if (!selectedNodeId) return
     updateNodeData(selectedNodeId, data)
@@ -363,6 +385,17 @@ export function ConfigPanel() {
     if (!selectedNodeId) return
     deleteNode(selectedNodeId)
   }
+
+  // Always render the outer wrapper so the CSS transition has a DOM element to animate.
+  // When no node has ever been selected, render an empty off-screen shell.
+  if (!displayNode) {
+    return (
+      <div className="absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out translate-x-full pointer-events-none" />
+    )
+  }
+
+  // displayNode is the node to render (current or last-selected during exit animation)
+  const selectedNode = displayNode
 
   // Get display name for node type
   const getNodeTypeDisplayName = (type: string): string => {
@@ -424,7 +457,7 @@ export function ConfigPanel() {
   const panelContent = (
     <div className={isExpanded
       ? "fixed inset-0 z-50 flex items-center justify-center"
-      : "absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D]"
+      : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
     }>
       {/* Backdrop (expanded mode only) */}
       {isExpanded && (
@@ -1889,7 +1922,38 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   )
 }
 
+const IMAGE_GEN_MODELS = [
+  { value: "nano-banana", label: "Nano Banana", desc: "Fast drafts, iteration, storyboards" },
+  { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },
+  { value: "grok", label: "Grok", desc: "Creative and stylized imagery" },
+  { value: "flux", label: "Flux", desc: "Photorealistic, highest quality output" },
+  { value: "gpt-image", label: "GPT Image", desc: "Text rendering, complex compositions" },
+] as const
+
+const IMAGE_I2I_MODELS = [
+  { value: "nano-banana", label: "Nano Banana", desc: "Fast iteration, quick transforms" },
+  { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production images" },
+  { value: "grok-i2i", label: "Grok", desc: "Creative and stylized imagery" },
+  { value: "flux-i2i", label: "Flux-2", desc: "Style-faithful transformations" },
+  { value: "flux-pro-i2i", label: "Flux-2 Pro", desc: "Premium quality image transforms" },
+  { value: "gpt-image-i2i", label: "GPT Image", desc: "Text rendering, complex compositions" },
+] as const
+
+function ModelSelectOption({ value, label, desc }: { value: string; label: string; desc: string }) {
+  const credits = useModelCredits(value)
+  return (
+    <SelectItemWithMeta
+      value={value}
+      badge={credits > 0 ? `${credits} CR` : undefined}
+      description={desc}
+    >
+      {label}
+    </SelectItemWithMeta>
+  )
+}
+
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
+  useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -2035,12 +2099,9 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
-            <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
-            <SelectItem value="flux">Flux</SelectItem>
-            <SelectItem value="grok">Grok</SelectItem>
-            <SelectItem value="gpt-image">GPT Image</SelectItem>
-            <SelectItem value="dalle">DALL-E</SelectItem>
+            {IMAGE_GEN_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
@@ -2225,6 +2286,7 @@ function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }:
 }
 
 function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToImageData>) {
+  useEffect(() => { prefetchModelCredits(IMAGE_I2I_MODELS.map((m) => m.value)) }, [])
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -2234,12 +2296,9 @@ function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="nano-banana">Nano Banana (default)</SelectItem>
-            <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
-            <SelectItem value="flux-i2i">Flux-2</SelectItem>
-            <SelectItem value="flux-pro-i2i">Flux-2 Pro</SelectItem>
-            <SelectItem value="grok-i2i">Grok</SelectItem>
-            <SelectItem value="gpt-image-i2i">GPT Image</SelectItem>
+            {IMAGE_I2I_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
@@ -2258,6 +2317,9 @@ function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField
   )
 }
 
+// Kling 3.0 supports continuous durations from 3s to 15s
+const KLING3_DURATIONS = Array.from({ length: 13 }, (_, i) => i + 3)
+
 // KIE.ai allowed durations per video provider
 const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "minimax": [5],
@@ -2265,7 +2327,7 @@ const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "veo3.1": [8],
   "kling": [5, 10],
   "kling-turbo": [5, 10],
-  "kling-3.0": [3, 4, 5, 6, 7, 8, 9, 10, 15],
+  "kling-3.0": KLING3_DURATIONS,
   "grok-i2v": [10],
   "sora2-pro": [5, 10],
 }
@@ -3285,6 +3347,49 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         </Select>
       </MappableField>
 
+      {/* Kling 2.6 sound toggle */}
+      {data.provider === "kling" && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="klingSound"
+            checked={(data as Record<string, unknown>).kling3Sound !== false}
+            onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="klingSound" className="text-xs">Enable Sound</label>
+        </div>
+      )}
+
+      {/* Kling Turbo negative prompt */}
+      {data.provider === "kling-turbo" && (
+        <div>
+          <Label className="text-xs">Negative Prompt</Label>
+          <Textarea
+            rows={2}
+            value={(data as Record<string, unknown>).negativePrompt as string || ""}
+            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+            placeholder="Things to avoid..."
+          />
+        </div>
+      )}
+
+      {/* Kling Turbo CFG scale */}
+      {data.provider === "kling-turbo" && (
+        <div>
+          <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
+          <Input
+            type="number"
+            min={0}
+            max={1}
+            step={0.1}
+            value={(data as Record<string, unknown>).cfgScale as number ?? 0.5}
+            onChange={(e) => onUpdate({ cfgScale: parseFloat(e.target.value) || 0.5 })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+        </div>
+      )}
+
       {/* Image Lightbox */}
       {lightboxImage && (
         <ImageLightbox
@@ -3389,7 +3494,7 @@ const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "kling-turbo": [5, 10],
   "grok": [10],
   "sora2-pro": [5, 10],
-  "kling-3.0": [3, 4, 5, 6, 7, 8, 9, 10, 15],
+  "kling-3.0": KLING3_DURATIONS,
 }
 
 function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes }: ConfigProps<TextToVideoData>) {
@@ -3487,6 +3592,36 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
             : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
       )}
+      {/* Kling 2.6 sound toggle */}
+      {data.provider === "kling" && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="t2vKlingSound"
+            checked={(data as Record<string, unknown>).kling3Sound !== false}
+            onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="t2vKlingSound" className="text-xs">Enable Sound</label>
+        </div>
+      )}
+
+      {/* Kling Turbo CFG scale */}
+      {data.provider === "kling-turbo" && (
+        <div>
+          <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
+          <Input
+            type="number"
+            min={0}
+            max={1}
+            step={0.1}
+            value={(data as Record<string, unknown>).cfgScale as number ?? 0.5}
+            onChange={(e) => onUpdate({ cfgScale: parseFloat(e.target.value) || 0.5 })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+        </div>
+      )}
+
       <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.aspectRatio}

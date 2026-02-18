@@ -41,6 +41,33 @@ function snapToAllowedDuration(requested: number, allowed: number[]): number {
   )
 }
 
+/** Shared helper for Kling 3.0 calls from both imageToVideo and textToVideo. */
+async function runKling3(
+  modelConfig: { allowedDurations?: number[]; cost: number },
+  prompt: string,
+  duration: number | undefined,
+  aspectRatio: string,
+  options: ProviderOptions | undefined,
+  imageUrls?: string[],
+): Promise<ProviderResult> {
+  const snappedDuration = duration
+    ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+    : 5
+  const result = await kling3Generate({
+    prompt,
+    imageUrls,
+    sound: options?.sound ?? true,
+    duration: String(snappedDuration),
+    mode: (options?.mode as "std" | "pro") ?? "pro",
+    aspectRatio,
+    multiShots: options?.multiShots,
+    multiPrompt: options?.multiPrompt,
+    klingElements: options?.klingElements,
+    onProgress: options?.onProgress,
+  })
+  return { url: result.videoUrl, cost: modelConfig.cost }
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -104,24 +131,17 @@ export class KieVideoProvider
 
     // Kling 3.0 uses the unified createTask/getTaskDetail endpoints
     if (provider === "kling-3.0") {
-      const imageUrls = endFrameUrl
+      const imageUrls = (endFrameUrl && !options?.multiShots)
         ? [imageUrl, endFrameUrl]
         : [imageUrl]
-      const result = await kling3Generate({
-        prompt: prompt ?? "smooth cinematic motion",
+      return runKling3(
+        modelConfig,
+        prompt ?? "smooth cinematic motion",
+        duration,
+        options?.aspectRatio ?? "16:9",
+        options,
         imageUrls,
-        sound: options?.sound ?? true,
-        duration: duration ? String(duration) : "5",
-        mode: (options?.mode as "std" | "pro") ?? "pro",
-        aspectRatio: options?.aspectRatio ?? "16:9",
-        multiShots: options?.multiShots,
-        multiPrompt: options?.multiPrompt,
-        klingElements: options?.klingElements,
-      })
-      console.log(
-        `[KIE.ai] Kling 3.0 completed: ${result.videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
-      return { url: result.videoUrl, cost: modelConfig.cost }
     }
 
     // VEO3 uses a special API endpoint
@@ -197,6 +217,18 @@ export class KieVideoProvider
       }
     }
 
+    // Override sound from options (Kling 2.6 supports sound toggle)
+    if (options?.sound !== undefined) {
+      input.sound = options.sound
+    }
+    // Kling Turbo supports negative_prompt and cfg_scale
+    if (options?.negativePrompt) {
+      input.negative_prompt = options.negativePrompt
+    }
+    if (options?.cfgScale !== undefined) {
+      input.cfg_scale = options.cfgScale
+    }
+
     console.log(
       `[KIE.ai] Final input:`,
       JSON.stringify(input, null, 2)
@@ -251,20 +283,13 @@ export class KieVideoProvider
 
     // Kling 3.0 uses unified createTask endpoint (no start image for text-to-video)
     if (provider === "kling-3.0") {
-      const result = await kling3Generate({
+      return runKling3(
+        modelConfig,
         prompt,
-        sound: options?.sound ?? true,
-        duration: duration ? String(duration) : "5",
-        mode: (options?.mode as "std" | "pro") ?? "pro",
-        aspectRatio: aspectRatio ?? options?.aspectRatio ?? "16:9",
-        multiShots: options?.multiShots,
-        multiPrompt: options?.multiPrompt,
-        klingElements: options?.klingElements,
-      })
-      console.log(
-        `[KIE.ai] Kling 3.0 text-to-video completed: ${result.videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+        duration,
+        aspectRatio ?? options?.aspectRatio ?? "16:9",
+        options,
       )
-      return { url: result.videoUrl, cost: modelConfig.cost }
     }
 
     // VEO3 uses a special API endpoint
@@ -316,6 +341,18 @@ export class KieVideoProvider
       input.aspect_ratio = aspectRatio
     }
 
+    // Override sound from options (Kling 2.6 supports sound toggle)
+    if (options?.sound !== undefined) {
+      input.sound = options.sound
+    }
+    // Kling Turbo supports negative_prompt and cfg_scale
+    if (options?.negativePrompt) {
+      input.negative_prompt = options.negativePrompt
+    }
+    if (options?.cfgScale !== undefined) {
+      input.cfg_scale = options.cfgScale
+    }
+
     console.log(
       `[KIE.ai] Final input:`,
       JSON.stringify(input, null, 2)
@@ -324,7 +361,8 @@ export class KieVideoProvider
     const { resultJson } = await runKieTask(
       modelConfig.model,
       input,
-      MAX_POLL_ATTEMPTS_VIDEO
+      MAX_POLL_ATTEMPTS_VIDEO,
+      options?.onProgress
     )
 
     const videoUrl =
