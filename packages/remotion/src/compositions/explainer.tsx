@@ -9,12 +9,15 @@ import {
   interpolate,
 } from "remotion"
 import type { RenderVideoInputProps } from "../types"
+import { TextOverlayLayer } from "../lib/text-overlay"
+
+const CLAMP = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
 
 /**
- * Explainer template: alternates between text overlays and images,
+ * Explainer template: slide-in transitions on images with text overlays,
  * synced to optional voiceover audio.
  */
-export const Explainer: React.FC<RenderVideoInputProps> = (props) => {
+export function Explainer(props: RenderVideoInputProps) {
   const {
     mediaAssets,
     audioTrackLocalPath,
@@ -35,71 +38,33 @@ export const Explainer: React.FC<RenderVideoInputProps> = (props) => {
     <AbsoluteFill style={{ backgroundColor }}>
       {imageAssets.map((asset, i) => {
         const from = i * framesPerSegment
+        const localFrame = frame - from
         return (
           <Sequence key={i} from={from} durationInFrames={framesPerSegment}>
-            <AbsoluteFill>
-              {/* Image slides in from the right */}
-              <AbsoluteFill
-                style={{
-                  opacity: interpolate(
-                    frame - from,
-                    [0, transitionDurationFrames],
-                    [0, 1],
-                    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-                  ),
-                  transform: `translateX(${interpolate(
-                    frame - from,
-                    [0, transitionDurationFrames],
-                    [30, 0],
-                    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-                  )}px)`,
-                }}
-              >
-                <Img
-                  src={staticFile(asset.localPath)}
-                  style={{ width, height, objectFit: "cover" }}
-                />
-              </AbsoluteFill>
+            <AbsoluteFill
+              style={{
+                opacity: interpolate(localFrame, [0, transitionDurationFrames], [0, 1], CLAMP),
+                transform: `translateX(${interpolate(localFrame, [0, transitionDurationFrames], [30, 0], CLAMP)}px)`,
+              }}
+            >
+              <Img
+                src={staticFile(asset.localPath)}
+                style={{ width, height, objectFit: "cover" }}
+              />
             </AbsoluteFill>
           </Sequence>
         )
       })}
 
-      {/* Text overlays rendered on top */}
-      {textOverlays.map((overlay, i) => {
-        if (frame < overlay.startFrame || frame > overlay.endFrame) return null
-        const opacity = interpolate(
-          frame,
-          [overlay.startFrame, overlay.startFrame + 15, overlay.endFrame - 15, overlay.endFrame],
-          [0, 1, 1, 0],
-          { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-        )
-
-        const yPos = overlay.position === "top" ? "15%" : overlay.position === "center" ? "50%" : "80%"
-
-        return (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              top: yPos,
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              opacity,
-              color: overlay.color,
-              fontSize: overlay.fontSize,
-              fontWeight: "bold",
-              textAlign: "center",
-              textShadow: "2px 2px 12px rgba(0,0,0,0.9)",
-              maxWidth: "85%",
-              lineHeight: 1.3,
-              zIndex: 10,
-            }}
-          >
-            {overlay.text}
-          </div>
-        )
-      })}
+      <TextOverlayLayer
+        overlays={textOverlays}
+        fadeFrames={15}
+        style={{
+          textShadow: "2px 2px 12px rgba(0,0,0,0.9)",
+          maxWidth: "85%",
+          lineHeight: 1.3,
+        }}
+      />
 
       {audioTrackLocalPath && (
         <Audio src={staticFile(audioTrackLocalPath)} />

@@ -1,6 +1,6 @@
 import React from "react"
 import { Composition } from "remotion"
-import type { RenderVideoInputProps } from "./types"
+import type { RenderVideoInputProps, TemplateId } from "./types"
 import { Slideshow } from "./compositions/slideshow"
 import { Explainer } from "./compositions/explainer"
 import { SocialReel } from "./compositions/social-reel"
@@ -27,45 +27,34 @@ const DEFAULT_PROPS: RenderVideoInputProps = {
   kenBurnsEnabled: false,
 }
 
-export const RemotionRoot: React.FC = () => {
+const COMPOSITIONS: Array<{
+  id: TemplateId
+  component: React.FC<RenderVideoInputProps>
+  width: number
+  height: number
+  extraProps?: Partial<RenderVideoInputProps>
+}> = [
+  { id: "slideshow", component: Slideshow, width: 1920, height: 1080 },
+  { id: "explainer", component: Explainer, width: 1920, height: 1080 },
+  { id: "social-reel", component: SocialReel, width: 1080, height: 1920 },
+  { id: "documentary", component: Documentary, width: 1920, height: 1080, extraProps: { kenBurnsEnabled: true } },
+]
+
+export function RemotionRoot() {
   return (
     <>
-      <Composition
-        id="slideshow"
-        component={Slideshow}
-        durationInFrames={300}
-        fps={30}
-        width={1920}
-        height={1080}
-        defaultProps={DEFAULT_PROPS}
-      />
-      <Composition
-        id="explainer"
-        component={Explainer}
-        durationInFrames={300}
-        fps={30}
-        width={1920}
-        height={1080}
-        defaultProps={{ ...DEFAULT_PROPS, template: "explainer" }}
-      />
-      <Composition
-        id="social-reel"
-        component={SocialReel}
-        durationInFrames={300}
-        fps={30}
-        width={1080}
-        height={1920}
-        defaultProps={{ ...DEFAULT_PROPS, template: "social-reel", width: 1080, height: 1920 }}
-      />
-      <Composition
-        id="documentary"
-        component={Documentary}
-        durationInFrames={300}
-        fps={30}
-        width={1920}
-        height={1080}
-        defaultProps={{ ...DEFAULT_PROPS, template: "documentary", kenBurnsEnabled: true }}
-      />
+      {COMPOSITIONS.map(({ id, component, width, height, extraProps }) => (
+        <Composition
+          key={id}
+          id={id}
+          component={component}
+          durationInFrames={300}
+          fps={30}
+          width={width}
+          height={height}
+          defaultProps={{ ...DEFAULT_PROPS, template: id, width, height, ...extraProps }}
+        />
+      ))}
     </>
   )
 }

@@ -62,28 +62,3 @@ export function useKenBurns(
 
   return { scale, translateX, translateY }
 }
-
-/**
- * Calculate which caption word should be highlighted at the current frame.
- */
-export function useCaptionTiming(
-  text: string,
-  startFrame: number,
-  endFrame: number,
-): { visibleText: string; highlightedWordIndex: number } {
-  const frame = useCurrentFrame()
-  const words = text.split(/\s+/)
-  const totalFrames = endFrame - startFrame
-
-  if (frame < startFrame || frame > endFrame || words.length === 0) {
-    return { visibleText: "", highlightedWordIndex: -1 }
-  }
-
-  const progress = (frame - startFrame) / totalFrames
-  const highlightedWordIndex = Math.min(
-    Math.floor(progress * words.length),
-    words.length - 1,
-  )
-
-  return { visibleText: text, highlightedWordIndex }
-}

@@ -10,47 +10,40 @@ import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
 // Remotion types (inline to avoid cross-package import at compile time)
-interface MediaAsset {
-  readonly localPath: string
-  readonly type: "image" | "video" | "audio"
-  readonly durationSeconds?: number
+// Index signature required for Remotion's selectComposition/renderMedia APIs
+interface RenderInputProps extends Record<string, unknown> {
+  template: string
+  fps: number
+  width: number
+  height: number
+  durationInFrames: number
+  transitionStyle: string
+  transitionDurationFrames: number
+  mediaAssets: Array<{ localPath: string; type: "image" | "video" | "audio"; durationSeconds?: number }>
+  audioTrackLocalPath?: string
+  textOverlays: Array<{ text: string; position: "top" | "center" | "bottom"; fontSize: number; color: string; startFrame: number; endFrame: number }>
+  captions: { enabled: boolean; style: string; position: string; fontSize: number; color: string }
+  backgroundColor: string
+  kenBurnsEnabled: boolean
 }
 
-interface TextOverlay {
-  readonly text: string
-  readonly position: "top" | "center" | "bottom"
-  readonly fontSize: number
-  readonly color: string
-  readonly startFrame: number
-  readonly endFrame: number
-}
-
-interface CaptionSettings {
-  readonly enabled: boolean
-  readonly style: "subtitle" | "word-highlight" | "karaoke"
-  readonly position: "bottom" | "top" | "center"
-  readonly fontSize: number
-  readonly color: string
-}
-
-interface RenderVideoInputProps {
-  readonly template: string
-  readonly fps: number
-  readonly width: number
-  readonly height: number
-  readonly durationInFrames: number
-  readonly transitionStyle: string
-  readonly transitionDurationFrames: number
-  readonly mediaAssets: readonly MediaAsset[]
-  readonly audioTrackLocalPath?: string
-  readonly textOverlays: readonly TextOverlay[]
-  readonly captions: CaptionSettings
-  readonly backgroundColor: string
-  readonly kenBurnsEnabled: boolean
+interface RenderJobData {
+  jobId: string
+  template: string
+  fps: number
+  width: number
+  height: number
+  durationInFrames: number
+  transitionStyle: string
+  transitionDurationFrames: number
+  mediaAssets: Array<{ url: string; type: "image" | "video" | "audio"; durationSeconds?: number }>
+  audioTrackUrl?: string
+  textOverlays: RenderInputProps["textOverlays"]
+  captions: RenderInputProps["captions"]
+  backgroundColor: string
+  kenBurnsEnabled: boolean
+  usageLogId?: string
 }
 
 // Cache the Remotion bundle after first build
@@ -59,12 +52,12 @@ let cachedBundlePath: string | null = null
 async function getBundlePath(): Promise<string> {
   if (cachedBundlePath) return cachedBundlePath
 
-  // Dynamic import to avoid compile-time dependency
   const { bundle } = await import("@remotion/bundler")
+  const currentDir = dirname(fileURLToPath(import.meta.url))
+  const entryPoint = join(currentDir, "../../../packages/remotion/src/Root.tsx")
 
   console.log("[render-worker] Bundling Remotion compositions...")
-  const entryPoint = join(__dirname, "../../packages/remotion/src/Root.tsx")
-  const result = await bundle({
+  cachedBundlePath = await bundle({
     entryPoint,
     onProgress: (progress: number) => {
       if (progress % 25 === 0) {
@@ -72,28 +65,25 @@ async function getBundlePath(): Promise<string> {
       }
     },
   })
-  cachedBundlePath = result
   console.log("[render-worker] Bundle complete:", cachedBundlePath)
   return cachedBundlePath
 }
 
-async function commitJobCredits(usageLogId: string | null | undefined, jobId: string): Promise<void> {
+async function handleCredits(
+  action: "commit" | "refund",
+  usageLogId: string | null | undefined,
+  jobId: string,
+): Promise<void> {
   if (!hasCredits() || !usageLogId) return
   try {
-    await CreditsService.commitCredits(usageLogId)
-    console.log(`[render-worker] Credits committed for job ${jobId}`)
+    if (action === "commit") {
+      await CreditsService.commitCredits(usageLogId)
+    } else {
+      await CreditsService.refundCredits(usageLogId)
+    }
+    console.log(`[render-worker] Credits ${action}ed for job ${jobId}`)
   } catch (error) {
-    console.error(`[render-worker] Failed to commit credits for job ${jobId}:`, error)
-  }
-}
-
-async function refundJobCredits(usageLogId: string | null | undefined, jobId: string): Promise<void> {
-  if (!hasCredits() || !usageLogId) return
-  try {
-    await CreditsService.refundCredits(usageLogId)
-    console.log(`[render-worker] Credits refunded for job ${jobId}`)
-  } catch (error) {
-    console.error(`[render-worker] Failed to refund credits for job ${jobId}:`, error)
+    console.error(`[render-worker] Failed to ${action} credits for job ${jobId}:`, error)
   }
 }
 
@@ -111,22 +101,12 @@ async function generateAndUploadThumbnail(
   }
 }
 
-interface RenderJobData {
-  jobId: string
-  template: string
-  fps: number
-  width: number
-  height: number
-  durationInFrames: number
-  transitionStyle: string
-  transitionDurationFrames: number
-  mediaAssets: Array<{ url: string; type: "image" | "video" | "audio"; durationSeconds?: number }>
-  audioTrackUrl?: string
-  textOverlays: TextOverlay[]
-  captions: CaptionSettings
-  backgroundColor: string
-  kenBurnsEnabled: boolean
-  usageLogId?: string
+function getFileExtension(type: "image" | "video" | "audio"): string {
+  switch (type) {
+    case "image": return "png"
+    case "video": return "mp4"
+    case "audio": return "mp3"
+  }
 }
 
 export function createRenderWorker() {
@@ -150,7 +130,6 @@ export function createRenderWorker() {
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
       const effectiveUsageLogId = usageLogId ?? jobRecord?.usage_log_id as string | undefined
 
-      // Check if user is on free tier (needs watermark)
       const profileData = (jobRecord as Record<string, unknown>)?.profiles as Record<string, unknown> | null
       const userTier = (profileData?.tier as string) ?? "free"
       const shouldWatermark = userTier === "free"
@@ -159,29 +138,23 @@ export function createRenderWorker() {
       const workDir = await createWorkDir("render")
 
       try {
-        // Update job status to processing
         await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", jobId)
 
         // 1. Download all media assets to temp dir
         console.log(`[render-worker] Downloading ${data.mediaAssets.length} assets for job ${jobId}`)
-        const localAssets: MediaAsset[] = []
-        for (let i = 0; i < data.mediaAssets.length; i++) {
-          const asset = data.mediaAssets[i]
-          const ext = asset.type === "image" ? "png" : asset.type === "video" ? "mp4" : "mp3"
-          const localPath = join(workDir, `asset_${i}.${ext}`)
-          await downloadFile(asset.url, localPath)
-          localAssets.push({
-            localPath: `asset_${i}.${ext}`,
-            type: asset.type,
-            durationSeconds: asset.durationSeconds,
-          })
-        }
+        const localAssets: RenderInputProps["mediaAssets"] = await Promise.all(
+          data.mediaAssets.map(async (asset, i) => {
+            const ext = getFileExtension(asset.type)
+            const localPath = `asset_${i}.${ext}`
+            await downloadFile(asset.url, join(workDir, localPath))
+            return { localPath, type: asset.type, durationSeconds: asset.durationSeconds }
+          }),
+        )
 
         // Download audio track if present
         let audioTrackLocalPath: string | undefined
         if (data.audioTrackUrl) {
-          const audioPath = join(workDir, "audio_track.mp3")
-          await downloadFile(data.audioTrackUrl, audioPath)
+          await downloadFile(data.audioTrackUrl, join(workDir, "audio_track.mp3"))
           audioTrackLocalPath = "audio_track.mp3"
         }
 
@@ -192,13 +165,13 @@ export function createRenderWorker() {
         await bullJob.updateProgress(40)
 
         // 3. Build input props
-        const inputProps: RenderVideoInputProps = {
-          template: data.template as RenderVideoInputProps["template"],
+        const inputProps: RenderInputProps = {
+          template: data.template,
           fps: data.fps,
           width: data.width,
           height: data.height,
           durationInFrames: data.durationInFrames,
-          transitionStyle: data.transitionStyle as RenderVideoInputProps["transitionStyle"],
+          transitionStyle: data.transitionStyle,
           transitionDurationFrames: data.transitionDurationFrames,
           mediaAssets: localAssets,
           audioTrackLocalPath,
@@ -208,19 +181,19 @@ export function createRenderWorker() {
           kenBurnsEnabled: data.kenBurnsEnabled,
         }
 
-        // 4. Select composition and render (dynamic import to avoid compile-time dependency)
+        // 4. Select composition and render
         const { selectComposition, renderMedia } = await import("@remotion/renderer")
 
-        const compositionId = data.template
         const composition = await selectComposition({
           serveUrl: bundlePath,
-          id: compositionId,
+          id: data.template,
           inputProps,
+          publicDir: workDir,
         })
 
         const outputPath = join(workDir, "output.mp4")
 
-        console.log(`[render-worker] Rendering ${compositionId} for job ${jobId}`)
+        console.log(`[render-worker] Rendering ${data.template} for job ${jobId}`)
         await renderMedia({
           composition: {
             ...composition,
@@ -233,6 +206,7 @@ export function createRenderWorker() {
           codec: "h264",
           outputLocation: outputPath,
           inputProps,
+          publicDir: workDir,
           onProgress: ({ progress }: { progress: number }) => {
             const overall = 40 + Math.round(progress * 50)
             bullJob.updateProgress(overall).catch(() => {})
@@ -269,7 +243,7 @@ export function createRenderWorker() {
           .eq("id", jobId)
 
         // 9. Commit credits
-        await commitJobCredits(effectiveUsageLogId, jobId)
+        await handleCredits("commit", effectiveUsageLogId, jobId)
 
         console.log(`[render-worker] Job ${jobId} completed successfully`)
       } catch (error) {
@@ -285,7 +259,7 @@ export function createRenderWorker() {
           })
           .eq("id", jobId)
 
-        await refundJobCredits(effectiveUsageLogId, jobId)
+        await handleCredits("refund", effectiveUsageLogId, jobId)
         throw error
       } finally {
         await cleanupWorkDir(workDir)

@@ -1,5 +1,3 @@
-"use client"
-
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X } from "lucide-react"
@@ -20,10 +18,10 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
+  const isRunning = status === "running"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
-  const activeResult = results[activeIndex]
-  const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  const activeUrl = results[activeIndex]?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
 
@@ -51,20 +49,20 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
       category="processing"
       credits={credits}
       selected={selected}
-      isRunning={status === "running"}
+      isRunning={isRunning}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input" },
         { id: "video", type: "source", position: Position.Right, label: "Video" },
       ]}
     >
       <div className="flex flex-col gap-1">
-        {status === "running" && (
+        {isRunning && (
           <div className="flex items-center justify-center h-28 rounded-md bg-muted/30">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {status !== "running" && activeUrl && (
+        {!isRunning && activeUrl && (
           <div className="relative group">
             <video
               src={activeUrl}
@@ -112,7 +110,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {status !== "running" && !activeUrl && status !== "failed" && (
+        {!isRunning && !activeUrl && status !== "failed" && (
           <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
             <Film className="w-5 h-5" />
           </div>
@@ -158,7 +156,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <RunNodeButton nodeId={id} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}
