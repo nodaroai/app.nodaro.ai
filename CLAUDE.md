@@ -131,10 +131,13 @@ frontend/src/
   lib/pricing-data.ts     — Tier/model pricing constants
   types/nodes.ts          — Node data types
 
+packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary)
+
 backend/src/
   server.ts               — Entry point
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
+  render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
   routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
@@ -156,6 +159,8 @@ backend/src/
 | Job queue | BullMQ | Best for Node.js, excellent dashboard |
 | Execution model | Frontend DAG engine | Topological sort, parallel per level |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
+| Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
+| Video composition | Remotion (`packages/remotion/`) | Template-based rendering via separate BullMQ worker |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
@@ -178,5 +183,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-02-18*
+*Last updated: 2026-02-19*
 *Version: 1.26.0*

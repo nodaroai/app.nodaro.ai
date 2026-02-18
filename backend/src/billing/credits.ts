@@ -121,6 +121,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Processing ──
   "topaz": 0,
   "ffmpeg": 0,
+  "render-video": 3,
   // ── Replicate (dynamic per-second) ──
   "runway": 0,
   "pika": 0,

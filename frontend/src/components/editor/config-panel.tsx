@@ -1,7 +1,10 @@
 "use client"
 
 import { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward, Trash2, ChevronUp, ChevronDown, Users } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward, Trash2, ChevronUp, ChevronDown, Users, GripVertical } from "lucide-react"
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -86,6 +89,7 @@ import type {
   MixAudioData,
   AdjustVolumeData,
   TrimVideoData,
+  RenderVideoData,
   SpeedRampData,
   LoopVideoData,
   FadeVideoData,
@@ -687,6 +691,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "trim-video" && (
             <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "render-video" && (
+            <RenderVideoConfig data={selectedNode.data as RenderVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "speed-ramp" && (
             <SpeedRampConfig data={selectedNode.data as SpeedRampData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -4757,6 +4764,243 @@ function CombineVideosConfig({ data, onUpdate, nodes }: ConfigProps<CombineVideo
   )
 }
 
+function SortableAssetItem({ id, index, label, typeLabel }: { id: string; index: number; label: string; typeLabel: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  }
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-muted/50 text-xs">
+      <span {...listeners} className="cursor-grab active:cursor-grabbing shrink-0 touch-none">
+        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
+      </span>
+      <span className="text-muted-foreground w-4 text-center shrink-0">{index + 1}</span>
+      <span className="truncate flex-1" title={label}>{label}</span>
+      <span className="text-muted-foreground/60 text-[10px] shrink-0">{typeLabel}</span>
+    </div>
+  )
+}
+
+const RENDER_MEDIA_SOURCE_TYPES = new Set([
+  "generate-image", "upload-image", "edit-image", "image-to-image",
+  "image-to-video", "video-to-video", "text-to-video", "upload-video",
+  "youtube-video", "combine-videos", "lip-sync", "motion-transfer",
+  "video-upscale", "suno-music-video", "merge-video-audio", "add-captions",
+  "resize-video", "trim-video",
+])
+
+function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const mediaSources = sources.filter((s) => RENDER_MEDIA_SOURCE_TYPES.has(s.type))
+  const currentOrder = data.assetOrder ?? []
+  const orderedIds = [
+    ...currentOrder.filter((id) => mediaSources.some((s) => s.id === id)),
+    ...mediaSources.filter((s) => !currentOrder.includes(s.id)).map((s) => s.id),
+  ]
+  const orderedSources = orderedIds.map((id) => mediaSources.find((s) => s.id === id)!).filter(Boolean)
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = orderedIds.indexOf(String(active.id))
+    const newIndex = orderedIds.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    const newOrder = [...orderedIds]
+    const [moved] = newOrder.splice(oldIndex, 1)
+    newOrder.splice(newIndex, 0, moved)
+    onUpdate({ assetOrder: newOrder })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {orderedSources.length > 0 && (
+        <div>
+          <Label className="mb-1.5 block">Media Order</Label>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-1">
+                {orderedSources.map((s, i) => (
+                  <SortableAssetItem
+                    key={s.id}
+                    id={s.id}
+                    index={i}
+                    label={s.label}
+                    typeLabel={s.type.includes("image") ? "img" : "vid"}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+      <div>
+        <Label>Template</Label>
+        <Select
+          value={data.template}
+          onValueChange={(v) => onUpdate({ template: v as RenderVideoData["template"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="slideshow">Slideshow</SelectItem>
+            <SelectItem value="explainer">Explainer</SelectItem>
+            <SelectItem value="social-reel">Social Reel</SelectItem>
+            <SelectItem value="documentary">Documentary</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Aspect Ratio</Label>
+        <Select
+          value={data.aspectRatio}
+          onValueChange={(v) => onUpdate({ aspectRatio: v as RenderVideoData["aspectRatio"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+            <SelectItem value="1:1">1:1 (Square)</SelectItem>
+            <SelectItem value="4:5">4:5 (Social)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="render-fps">FPS</Label>
+        <Select
+          value={String(data.fps)}
+          onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="24">24 fps (Film)</SelectItem>
+            <SelectItem value="30">30 fps (Standard)</SelectItem>
+            <SelectItem value="60">60 fps (Smooth)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="render-duration">Duration (seconds)</Label>
+        <Input
+          id="render-duration"
+          type="number"
+          min={1}
+          max={300}
+          value={data.durationSeconds}
+          onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
+        />
+      </div>
+      <div>
+        <Label>Transition</Label>
+        <Select
+          value={data.transitionStyle}
+          onValueChange={(v) => onUpdate({ transitionStyle: v as RenderVideoData["transitionStyle"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fade">Fade</SelectItem>
+            <SelectItem value="slide">Slide</SelectItem>
+            <SelectItem value="dissolve">Dissolve</SelectItem>
+            <SelectItem value="zoom">Zoom</SelectItem>
+            <SelectItem value="none">None</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="render-transition-frames">Transition Duration (frames)</Label>
+        <Input
+          id="render-transition-frames"
+          type="number"
+          min={0}
+          max={60}
+          value={data.transitionDurationFrames}
+          onChange={(e) => onUpdate({ transitionDurationFrames: parseInt(e.target.value, 10) || 15 })}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="render-ken-burns"
+          checked={data.kenBurnsEnabled}
+          onChange={(e) => onUpdate({ kenBurnsEnabled: e.target.checked })}
+          className="rounded border-muted-foreground/30"
+        />
+        <Label htmlFor="render-ken-burns" className="text-sm cursor-pointer">Ken Burns Effect</Label>
+      </div>
+      <Separator />
+      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Captions</div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="render-captions"
+          checked={data.captions.enabled}
+          onChange={(e) => onUpdate({ captions: { ...data.captions, enabled: e.target.checked } })}
+          className="rounded border-muted-foreground/30"
+        />
+        <Label htmlFor="render-captions" className="text-sm cursor-pointer">Enable Captions</Label>
+      </div>
+      {data.captions.enabled && (
+        <>
+          <div>
+            <Label>Caption Style</Label>
+            <Select
+              value={data.captions.style}
+              onValueChange={(v) => onUpdate({ captions: { ...data.captions, style: v as RenderVideoData["captions"]["style"] } })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="subtitle">Subtitle</SelectItem>
+                <SelectItem value="word-highlight">Word Highlight</SelectItem>
+                <SelectItem value="karaoke">Karaoke</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Caption Position</Label>
+            <Select
+              value={data.captions.position}
+              onValueChange={(v) => onUpdate({ captions: { ...data.captions, position: v as RenderVideoData["captions"]["position"] } })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bottom">Bottom</SelectItem>
+                <SelectItem value="top">Top</SelectItem>
+                <SelectItem value="center">Center</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="render-caption-font-size">Caption Font Size</Label>
+            <Input
+              id="render-caption-font-size"
+              type="number"
+              min={12}
+              max={72}
+              value={data.captions.fontSize}
+              onChange={(e) => onUpdate({ captions: { ...data.captions, fontSize: parseInt(e.target.value, 10) || 24 } })}
+            />
+          </div>
+        </>
+      )}
+      <div>
+        <Label htmlFor="render-bg">Background Color</Label>
+        <Input
+          id="render-bg"
+          type="color"
+          value={data.backgroundColor}
+          onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+          className="h-8 w-full"
+        />
+      </div>
+    </div>
+  )
+}
+
 const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
   "upload-audio", "reference-audio", "extract-audio",
@@ -4767,7 +5011,7 @@ const VIDEO_SOURCE_TYPES = new Set([
   "image-to-video", "video-to-video", "text-to-video",
   "lip-sync", "motion-transfer", "video-upscale",
   "combine-videos", "add-captions", "resize-video", "trim-video", "speed-ramp", "loop-video", "fade-video",
-  "upload-video", "youtube-video",
+  "render-video", "upload-video", "youtube-video",
 ])
 
 const TRACK_ROLE_OPTIONS = [

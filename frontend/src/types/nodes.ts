@@ -932,6 +932,33 @@ export type TrimVideoData = {
   activeResultIndex?: number
 }
 
+export type RenderVideoData = {
+  [key: string]: unknown
+  label: string
+  template: "slideshow" | "explainer" | "social-reel" | "documentary"
+  fps: number
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
+  durationSeconds: number
+  transitionStyle: "fade" | "slide" | "dissolve" | "zoom" | "none"
+  transitionDurationFrames: number
+  backgroundColor: string
+  kenBurnsEnabled: boolean
+  captions: {
+    enabled: boolean
+    style: "subtitle" | "word-highlight" | "karaoke"
+    position: "bottom" | "top" | "center"
+    fontSize: number
+    color: string
+  }
+  assetOrder?: string[] // ordered source node IDs for media input sequence
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type SpeedRampData = {
   [key: string]: unknown
   label: string
@@ -1342,6 +1369,7 @@ export type SceneNodeData =
   | MixAudioData
   | AdjustVolumeData
   | TrimVideoData
+  | RenderVideoData
   | SpeedRampData
   | LoopVideoData
   | FadeVideoData
@@ -1406,6 +1434,7 @@ export type SceneNodeType =
   | "mix-audio"
   | "adjust-volume"
   | "trim-video"
+  | "render-video"
   | "speed-ramp"
   | "loop-video"
   | "fade-video"
@@ -1829,6 +1858,30 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Trim Video", startTime: 0, endTime: 0, fieldMappings: {} },
+  },
+  {
+    type: "render-video",
+    label: "Render Video",
+    category: "processing",
+    creditCost: 3,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Render Video",
+      template: "slideshow",
+      fps: 30,
+      aspectRatio: "16:9",
+      durationSeconds: 30,
+      transitionStyle: "fade",
+      transitionDurationFrames: 15,
+      backgroundColor: "#000000",
+      kenBurnsEnabled: false,
+      captions: { enabled: false, style: "subtitle", position: "bottom", fontSize: 24, color: "#ffffff" },
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as RenderVideoData,
   },
   {
     type: "speed-ramp",
