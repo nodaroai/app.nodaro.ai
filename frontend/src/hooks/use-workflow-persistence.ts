@@ -45,8 +45,8 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
       .map(r => r.jobId)
       .filter((id): id is string => Boolean(id) && isValidUuid(id))
 
-    // If node is in running/pending state or has jobs to check
-    if (status === "running" || status === "pending" || jobIds.length > 0) {
+    // Only sync nodes that are still in running/pending state
+    if (status === "running" || status === "pending") {
       nodesToSync.push({ node, jobIds })
     }
   }
