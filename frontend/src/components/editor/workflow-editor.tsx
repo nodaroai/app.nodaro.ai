@@ -167,6 +167,33 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }, [projectId, save])
 
+  // Auto-save: debounce 3 seconds after the last mutation
+  useEffect(() => {
+    if (!projectId || loading) return
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const unsub = useWorkflowStore.subscribe((state) => {
+      if (state.isDirty && state.saveStatus !== "saving") {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(() => {
+          const current = useWorkflowStore.getState()
+          if (current.isDirty && current.saveStatus !== "saving" && current.nodes.length > 0) {
+            save(projectId)
+          }
+        }, 3000)
+      } else if (!state.isDirty && timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+    })
+
+    return () => {
+      unsub()
+      if (timer) clearTimeout(timer)
+    }
+  }, [projectId, loading, save])
+
   /**
    * Returns true when the store's active workflow no longer matches the
    * workflow that this component instance owns.  Polling callbacks should
