@@ -13,6 +13,7 @@ import {
   TIER_CREDITS,
   TIER_STORAGE_LIMITS,
 } from "./paddle-config.js"
+import { invalidateBalanceCache } from "../routes/credits.js"
 
 // ── Paddle Customer Mapping ──────────────────────────────────────
 
@@ -132,6 +133,8 @@ export async function handleSubscriptionCreated(
   if (profileError) {
     console.error("[paddle] subscription.created: profile update failed:", profileError.message)
   }
+
+  invalidateBalanceCache(userId)
 
   // Insert transaction record (if transaction info provided)
   if (data.transactionId) {
@@ -255,6 +258,8 @@ export async function handleSubscriptionUpdated(
   if (profileError) {
     console.error("[paddle] subscription.updated: profile update failed:", profileError.message)
   }
+
+  invalidateBalanceCache(userId)
 }
 
 // ── Subscription Canceled ────────────────────────────────────────
@@ -320,6 +325,8 @@ export async function handleSubscriptionCanceled(
   if (profileError) {
     console.error("[paddle] subscription.canceled: profile downgrade failed:", profileError.message)
   }
+
+  invalidateBalanceCache(userId)
 
   console.log(
     `[paddle] subscription.canceled: sub=${data.subscriptionId} user=${userId} downgraded to free (credits: ${cappedCredits})`
@@ -419,6 +426,8 @@ export async function handleTransactionCompleted(
     amountUsd: data.totalAmount / 100, // Paddle amounts in cents
     creditsGranted: totalCredits,
   })
+
+  invalidateBalanceCache(userId)
 
   console.log(`[paddle] transaction.completed: user=${userId} topup +${totalCredits} credits`)
 }

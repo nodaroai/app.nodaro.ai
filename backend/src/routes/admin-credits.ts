@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService, invalidateModelPricingCache } from "../billing/credits.js"
+import { invalidateBalanceCache } from "./credits.js"
 
 export async function adminCreditsRoutes(app: FastifyInstance) {
   // GET /v1/admin/users - List all users with credit info (paginated)
@@ -65,6 +66,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
         description,
         adminUserId,
       })
+      invalidateBalanceCache(id)
       return result
     } catch (err) {
       return reply.code(500).send({ error: (err as Error).message })
@@ -159,6 +161,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       // Transaction log failure is non-critical; tier already updated
     }
 
+    invalidateBalanceCache(id)
     return { tier, subscription_credits: newCredits, total_credits: totalAfter, credit_delta: creditDelta }
   })
 
