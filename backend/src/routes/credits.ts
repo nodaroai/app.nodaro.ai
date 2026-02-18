@@ -127,6 +127,43 @@ export async function creditsRoutes(app: FastifyInstance) {
   })
 
   /**
+   * POST /v1/credits/model-costs
+   * Get credit costs for multiple models in a single request
+   */
+  app.post<{
+    Body: { models: string[] }
+  }>("/v1/credits/model-costs", async (req, reply) => {
+    const { models } = req.body
+
+    if (!models || !Array.isArray(models) || models.length === 0) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "models array is required" },
+      })
+    }
+
+    if (models.length > 50) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "Maximum 50 models per request" },
+      })
+    }
+
+    try {
+      const costs: Record<string, number> = {}
+      await Promise.all(
+        models.map(async (model) => {
+          costs[model] = await CreditsService.getModelCreditCost(model)
+        }),
+      )
+      return { data: costs }
+    } catch (error) {
+      console.error("[credits] Failed to get model costs:", error)
+      return reply.status(500).send({
+        error: { code: "internal_error", message: "Failed to get model costs" },
+      })
+    }
+  })
+
+  /**
    * POST /v1/credits/reserve
    * Reserve credits for a job (internal use)
    */

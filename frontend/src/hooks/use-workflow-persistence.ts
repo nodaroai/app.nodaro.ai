@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, type BatchJobStatus } from "@/lib/api"
+import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 
 interface SaveResult {
@@ -316,6 +317,16 @@ export function useWorkflowPersistence(projectId?: string) {
           charDefs,
           flowTemplates,
         )
+
+        // Prefetch model credit costs for all nodes in one batch request
+        const modelIds = [...new Set(
+          nodes
+            .map((n) => (n.data as Record<string, unknown>).provider as string | undefined)
+            .filter(Boolean) as string[],
+        )]
+        if (modelIds.length > 0) {
+          prefetchModelCredits(modelIds).catch(() => {})
+        }
 
         // If nodes were updated during sync, save the updated workflow
         if (nodesChanged && projectId) {
