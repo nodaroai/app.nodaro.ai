@@ -130,6 +130,10 @@ function VideoCard({ item }: { readonly item: GalleryItem }) {
     setHovered(true)
     const video = videoRef.current
     if (!video) return
+    // Restore src if it was cleared on mouse leave
+    if (!video.src || video.src === "") {
+      video.src = item.outputUrl
+    }
     // Start loading + playing; thumbnail stays visible until onPlaying fires
     video.preload = "auto"
     video.load()
