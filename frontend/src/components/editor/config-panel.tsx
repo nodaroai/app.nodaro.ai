@@ -3288,6 +3288,49 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         </Select>
       </MappableField>
 
+      {/* Kling 2.6 sound toggle */}
+      {data.provider === "kling" && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="klingSound"
+            checked={(data as Record<string, unknown>).kling3Sound !== false}
+            onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="klingSound" className="text-xs">Enable Sound</label>
+        </div>
+      )}
+
+      {/* Kling Turbo negative prompt */}
+      {data.provider === "kling-turbo" && (
+        <div>
+          <Label className="text-xs">Negative Prompt</Label>
+          <Textarea
+            rows={2}
+            value={(data as Record<string, unknown>).negativePrompt as string || ""}
+            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+            placeholder="Things to avoid..."
+          />
+        </div>
+      )}
+
+      {/* Kling Turbo CFG scale */}
+      {data.provider === "kling-turbo" && (
+        <div>
+          <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
+          <Input
+            type="number"
+            min={0}
+            max={1}
+            step={0.1}
+            value={(data as Record<string, unknown>).cfgScale as number ?? 0.5}
+            onChange={(e) => onUpdate({ cfgScale: parseFloat(e.target.value) || 0.5 })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+        </div>
+      )}
+
       {/* Image Lightbox */}
       {lightboxImage && (
         <ImageLightbox
@@ -3490,6 +3533,36 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
             : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
       )}
+      {/* Kling 2.6 sound toggle */}
+      {data.provider === "kling" && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="t2vKlingSound"
+            checked={(data as Record<string, unknown>).kling3Sound !== false}
+            onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="t2vKlingSound" className="text-xs">Enable Sound</label>
+        </div>
+      )}
+
+      {/* Kling Turbo CFG scale */}
+      {data.provider === "kling-turbo" && (
+        <div>
+          <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
+          <Input
+            type="number"
+            min={0}
+            max={1}
+            step={0.1}
+            value={(data as Record<string, unknown>).cfgScale as number ?? 0.5}
+            onChange={(e) => onUpdate({ cfgScale: parseFloat(e.target.value) || 0.5 })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+        </div>
+      )}
+
       <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.aspectRatio}

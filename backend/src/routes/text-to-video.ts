@@ -6,7 +6,7 @@ import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const textToVideoBody = z.object({
-  prompt: z.string().min(1).max(2000),
+  prompt: z.string().min(1).max(2500),
   provider: z.enum([
     "veo3", "kling", "minimax",
     "veo", "runway", "pika", "sora",
@@ -15,6 +15,8 @@ const textToVideoBody = z.object({
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std"]).optional(),
   sound: z.boolean().optional(),
+  negativePrompt: z.string().max(2500).optional(),
+  cfgScale: z.number().min(0).max(1).optional(),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
@@ -34,7 +36,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, mode, sound, aspectRatio, multiShot, shots, elements, userId } = parsed.data
+    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -51,7 +53,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { prompt, provider, duration, mode, sound, aspectRatio, multiShot, shots, elements, type: "text-to-video" },
+        input_data: { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, type: "text-to-video" },
       })
       .select("id")
       .single()
@@ -74,6 +76,8 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       duration,
       mode,
       sound,
+      negativePrompt,
+      cfgScale,
       aspectRatio,
       multiShot,
       shots,

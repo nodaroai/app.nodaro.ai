@@ -217,6 +217,18 @@ export class KieVideoProvider
       }
     }
 
+    // Override sound from options (Kling 2.6 supports sound toggle)
+    if (options?.sound !== undefined) {
+      input.sound = options.sound
+    }
+    // Kling Turbo supports negative_prompt and cfg_scale
+    if (options?.negativePrompt) {
+      input.negative_prompt = options.negativePrompt
+    }
+    if (options?.cfgScale !== undefined) {
+      input.cfg_scale = options.cfgScale
+    }
+
     console.log(
       `[KIE.ai] Final input:`,
       JSON.stringify(input, null, 2)
@@ -327,6 +339,18 @@ export class KieVideoProvider
     // Override aspect ratio if provided
     if (aspectRatio) {
       input.aspect_ratio = aspectRatio
+    }
+
+    // Override sound from options (Kling 2.6 supports sound toggle)
+    if (options?.sound !== undefined) {
+      input.sound = options.sound
+    }
+    // Kling Turbo supports negative_prompt and cfg_scale
+    if (options?.negativePrompt) {
+      input.negative_prompt = options.negativePrompt
+    }
+    if (options?.cfgScale !== undefined) {
+      input.cfg_scale = options.cfgScale
     }
 
     console.log(

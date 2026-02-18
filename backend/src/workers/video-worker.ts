@@ -412,7 +412,7 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "image-to-video") {
-          const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, aspectRatio, multiShot, shots, elements } = job.data as {
+          const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements } = job.data as {
             jobId: string
             imageUrl: string
             endFrameUrl?: string      // Optional end frame for supported providers
@@ -422,7 +422,9 @@ export function createVideoWorker() {
             generateAudio?: boolean
             duration?: number
             mode?: string             // Kling 3.0 quality mode (pro/std)
-            sound?: boolean           // Kling 3.0 sound effects
+            sound?: boolean           // Kling 2.6 / 3.0 sound effects
+            negativePrompt?: string   // Kling Turbo negative prompt
+            cfgScale?: number         // Kling Turbo cfg_scale (0-1)
             aspectRatio?: string
             multiShot?: boolean
             shots?: Array<{ prompt: string; duration: number }>
@@ -444,7 +446,7 @@ export function createVideoWorker() {
             await supabase.from("jobs").update({ progress }).eq("id", jobId)
           }
 
-          const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, aspectRatio, multiShots: multiShot, multiPrompt, klingElements })
+          const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements })
           await job.updateProgress(40)
 
           // Upload the generated video to R2
@@ -529,13 +531,15 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
         } else if (job.name === "text-to-video") {
-          const { prompt, provider, duration, mode, sound, aspectRatio, multiShot, shots, elements } = job.data as {
+          const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements } = job.data as {
             jobId: string
             prompt: string
             provider?: string
             duration?: number
             mode?: string
             sound?: boolean
+            negativePrompt?: string   // Kling Turbo negative prompt
+            cfgScale?: number         // Kling Turbo cfg_scale (0-1)
             aspectRatio?: string
             multiShot?: boolean
             shots?: Array<{ prompt: string; duration: number }>
@@ -551,7 +555,7 @@ export function createVideoWorker() {
             ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
           }))
 
-          const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, multiShots: multiShot, multiPrompt, klingElements })
+          const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements })
           await job.updateProgress(50)
 
           const r2Url = await uploadVideoMaybeWatermark(result.url, jobId, jobUserId, shouldWatermark)

@@ -214,6 +214,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     pollIntervalsRef.current.delete(interval)
     if (pollIntervalsRef.current.size === 0) {
       setIsRunning(false)
+      // Save after all polls complete so execution results are persisted.
+      // During execution the auto-save debounce timer keeps getting reset
+      // by frequent node status updates and may never fire.
+      if (projectId) {
+        save(projectId)
+      }
     }
   }
 
@@ -769,6 +775,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return new Promise((resolve, reject) => {
       generateImage(prompt, referenceImageUrls, provider, undefined, aspectRatio, user?.id).then(({ jobId }) => {
         toast.info("Image generation started", { description: `Job ID: ${jobId}` })
+        updateNodeData(nodeId, { currentJobId: jobId })
 
         let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
@@ -786,13 +793,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 generatedImageUrl: imageUrl,
                 generatedResults: [newResult, ...existingResults],
                 activeResultIndex: 0,
+                currentJobId: undefined,
               })
               toast.success("Image generated")
               resolve()
             } else if (job.status === "failed") {
               untrackInterval(poll)
               const errMsg = job.error_message ?? "Unknown error"
-              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined })
               toast.error("Image generation failed", { description: errMsg })
               reject(new Error(errMsg))
             }
@@ -801,7 +809,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
               untrackInterval(poll)
               const errMsg = err instanceof Error ? err.message : "Failed to check job status"
-              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+              updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined })
               toast.error("Failed to check job status")
               reject(err)
             }
@@ -809,7 +817,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }, 2000))
       }).catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error"
-        updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg })
+        updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, currentJobId: undefined })
         if (!isStorageError(err)) {
           toast.error("Failed to start image generation", { description: errMsg })
         }
@@ -825,6 +833,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return new Promise((resolve, reject) => {
       editImage(imageUrl, prompt, provider, user?.id).then(({ jobId }) => {
         toast.info("Image editing started", { description: `Job ID: ${jobId}` })
+        updateNodeData(nodeId, { currentJobId: jobId })
 
         let pollFailures = 0
         const poll = trackInterval(setInterval(async () => {
@@ -1594,7 +1603,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
-  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number, prompt?: string, mode?: string, sound?: boolean, aspectRatio?: string, multiShot?: boolean, shots?: Array<{ prompt: string; duration: number }>, elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>): Promise<void> {
+  function runVideoGeneration(nodeId: string, startFrameUrl: string, endFrameUrl?: string, audioUrl?: string, provider?: string, generateAudio?: boolean, duration?: number, prompt?: string, mode?: string, sound?: boolean, aspectRatio?: string, multiShot?: boolean, shots?: Array<{ prompt: string; duration: number }>, elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>, negativePrompt?: string, cfgScale?: number): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined, currentJobId: undefined, currentJobProgress: undefined })
 
@@ -1609,6 +1618,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         duration,
         mode,
         sound,
+        negativePrompt,
+        cfgScale,
         aspectRatio,
         multiShot,
         shots,
@@ -1741,7 +1752,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runTextToVideoGeneration(nodeId: string, prompt: string, provider?: string, kling3Options?: { duration?: number; mode?: string; sound?: boolean; aspectRatio?: string; multiShot?: boolean; shots?: Array<{ prompt: string; duration: number }>; elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }> }): Promise<void> {
+  function runTextToVideoGeneration(nodeId: string, prompt: string, provider?: string, kling3Options?: { duration?: number; mode?: string; sound?: boolean; negativePrompt?: string; cfgScale?: number; aspectRatio?: string; multiShot?: boolean; shots?: Array<{ prompt: string; duration: number }>; elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }> }): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined, currentJobId: undefined, currentJobProgress: undefined })
 
@@ -2237,7 +2248,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const prompt = inputs.prompt ?? i2vData.motionPrompt
       const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as string | undefined
       const kling3Sound = (i2vData as Record<string, unknown>).kling3Sound as boolean | undefined
-      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt, kling3Mode, kling3Sound, i2vData.aspectRatio, i2vData.multiShot, i2vData.shots, i2vData.elements)
+      const i2vNegativePrompt = (i2vData as Record<string, unknown>).negativePrompt as string | undefined
+      const i2vCfgScale = (i2vData as Record<string, unknown>).cfgScale as number | undefined
+      return runVideoGeneration(node.id, startFrameUrl, endFrameUrl, audioUrl, nodeProvider || undefined, i2vData.generateAudio, i2vData.duration, prompt, kling3Mode, kling3Sound, i2vData.aspectRatio, i2vData.multiShot, i2vData.shots, i2vData.elements, i2vNegativePrompt, i2vCfgScale)
     }
 
     if (node.type === "video-to-video") {
@@ -2263,18 +2276,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("No prompt"))
       }
       const t2vProvider = t2vData.provider || undefined
-      // Pass Kling 3.0 fields if present (text-to-video also supports kling-3.0)
+      // Pass options for all kling variants (kling, kling-turbo, kling-3.0) so duration/sound/negativePrompt/cfgScale flow through
       const t2vRaw = t2vData as Record<string, unknown>
-      const t2vKling3Options = (t2vProvider === "kling-3.0") ? {
+      const isKlingVariant = t2vProvider === "kling" || t2vProvider === "kling-turbo" || t2vProvider === "kling-3.0"
+      const t2vOptions = isKlingVariant ? {
         duration: t2vData.duration,
         mode: t2vRaw.kling3Mode as string | undefined,
         sound: t2vRaw.kling3Sound as boolean | undefined,
+        negativePrompt: t2vData.negativePrompt || undefined,
+        cfgScale: t2vRaw.cfgScale as number | undefined,
         aspectRatio: t2vData.aspectRatio as string | undefined,
         multiShot: t2vRaw.multiShot as boolean | undefined,
         shots: t2vRaw.shots as Array<{ prompt: string; duration: number }> | undefined,
         elements: t2vRaw.elements as Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }> | undefined,
-      } : undefined
-      return runTextToVideoGeneration(node.id, prompt, t2vProvider, t2vKling3Options)
+      } : (t2vData.negativePrompt ? { negativePrompt: t2vData.negativePrompt } : undefined)
+      return runTextToVideoGeneration(node.id, prompt, t2vProvider, t2vOptions)
     }
 
     if (node.type === "text-to-speech") {
@@ -3288,6 +3304,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return
     }
 
+    // Save workflow before execution so nodes are persisted in DB.
+    // The auto-save debounce timer gets repeatedly reset by execution
+    // status updates, so without this explicit save the workflow may
+    // never be persisted while jobs are running.
+    if (projectId) {
+      await save(projectId)
+    }
+
     // Credit check before workflow execution (cloud edition only)
     if (hasCredits()) {
       try {
@@ -3382,7 +3406,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
   }
 
-  function handleRunSingleNode(nodeId: string) {
+  async function handleRunSingleNode(nodeId: string) {
     const { nodes, edges } = useWorkflowStore.getState()
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return
@@ -3390,6 +3414,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (!isExecutableNode(node)) {
       toast.error("This node type cannot be run individually.")
       return
+    }
+
+    // Save workflow before execution to persist node state
+    if (projectId) {
+      await save(projectId)
     }
 
     setIsRunning(true)
@@ -3415,6 +3444,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const { nodes, edges } = collapseExpandedClones()
     const startNode = nodes.find((n) => n.id === nodeId)
     if (!startNode) return
+
+    // Save workflow before execution to persist node state
+    if (projectId) {
+      await save(projectId)
+    }
 
     // BFS forward to collect all downstream node IDs (including start)
     const downstream = new Set<string>([nodeId])
@@ -3498,6 +3532,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (selectedNodes.length === 0) {
       toast.error("No nodes selected.")
       return
+    }
+
+    // Save workflow before execution to persist node state
+    if (projectId) {
+      await save(projectId)
     }
 
     const selectedIds = new Set(selectedNodes.map((n) => n.id))

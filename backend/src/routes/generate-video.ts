@@ -9,7 +9,7 @@ const generateVideoBody = z.object({
   imageUrl: z.string().url(),
   endFrameUrl: z.string().url().optional(),
   audioUrl: z.string().url().optional(),
-  prompt: z.string().max(2000).optional(),
+  prompt: z.string().max(2500).optional(),
   provider: z.enum([
     "veo3", "veo3.1", "kling", "minimax",
     "veo", "runway", "pika", "sora",
@@ -19,6 +19,8 @@ const generateVideoBody = z.object({
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std"]).optional(),
   sound: z.boolean().optional(),
+  negativePrompt: z.string().max(2500).optional(),
+  cfgScale: z.number().min(0).max(1).optional(),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
@@ -38,7 +40,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, aspectRatio, multiShot, shots, elements, userId } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -55,7 +57,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, aspectRatio, multiShot, shots, elements, type: "image-to-video" },
+        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, type: "image-to-video" },
       })
       .select("id")
       .single()
@@ -82,6 +84,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       duration,
       mode,
       sound,
+      negativePrompt,
+      cfgScale,
       aspectRatio,
       multiShot,
       shots,

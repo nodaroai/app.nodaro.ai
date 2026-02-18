@@ -26,7 +26,9 @@ export type ProgressCallback = (progress: number) => Promise<void>
 export interface ProviderOptions {
   onProgress?: ProgressCallback
   mode?: string   // Provider-specific quality mode (e.g. "pro" | "std" for Kling 3.0)
-  sound?: boolean // Enable sound effects (Kling 3.0)
+  sound?: boolean // Enable sound effects (Kling 2.6 / 3.0)
+  negativePrompt?: string // Negative prompt (Kling Turbo)
+  cfgScale?: number       // CFG scale 0-1 (Kling Turbo)
   aspectRatio?: string
   multiShots?: boolean
   multiPrompt?: Array<{ prompt: string; duration: number }>
