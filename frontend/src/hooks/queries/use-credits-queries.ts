@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { getUserCredits, getModelCreditCost, type UserBalance } from "@/lib/api"
+import { getUserCredits, getModelCreditCost, getBatchModelCreditCosts, type UserBalance } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -36,17 +36,33 @@ export function getCachedCredits(model: string): number | undefined {
 }
 
 export async function prefetchModelCredits(models: string[]): Promise<void> {
-  if (!hasCredits()) return
-  await Promise.allSettled(
-    models.map((model) =>
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.credits.modelCost(model),
-        queryFn: async () => {
-          const { data } = await getModelCreditCost(model)
-          return data.creditCost
-        },
-        staleTime: Infinity,
-      }),
-    ),
+  if (!hasCredits() || models.length === 0) return
+
+  // Filter out models already cached
+  const uncached = models.filter(
+    (m) => queryClient.getQueryData(queryKeys.credits.modelCost(m)) === undefined,
   )
+  if (uncached.length === 0) return
+
+  // Batch fetch all uncached model costs in a single request
+  try {
+    const costs = await getBatchModelCreditCosts(uncached)
+    for (const [model, cost] of Object.entries(costs)) {
+      queryClient.setQueryData(queryKeys.credits.modelCost(model), cost)
+    }
+  } catch {
+    // Fallback: fetch individually
+    await Promise.allSettled(
+      uncached.map((model) =>
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.credits.modelCost(model),
+          queryFn: async () => {
+            const { data } = await getModelCreditCost(model)
+            return data.creditCost
+          },
+          staleTime: Infinity,
+        }),
+      ),
+    )
+  }
 }

@@ -157,13 +157,13 @@ export async function uploadRoutes(app: FastifyInstance) {
       if (category === "image") {
         const result = await processImage(buffer)
         metadata = result.metadata
-        const thumbKey = `uploads/${category}s/${fileId}_thumb.jpg`
-        thumbnailUrl = await uploadBufferToS3(result.thumbnail, thumbKey, "image/jpeg")
+        const thumbKey = `uploads/${category}s/${fileId}_thumb.${ext}`
+        thumbnailUrl = await uploadBufferToS3(result.thumbnail, thumbKey, mimeType)
       } else if (category === "video") {
         const result = await processVideo(buffer)
         metadata = result.metadata
-        const thumbKey = `uploads/${category}s/${fileId}_thumb.jpg`
-        thumbnailUrl = await uploadBufferToS3(result.thumbnail, thumbKey, "image/jpeg")
+        const thumbKey = `uploads/${category}s/${fileId}_thumb.png`
+        thumbnailUrl = await uploadBufferToS3(result.thumbnail, thumbKey, "image/png")
       } else if (category === "audio") {
         const result = await processAudio(buffer)
         metadata = result.metadata

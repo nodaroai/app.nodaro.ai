@@ -123,7 +123,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }, [storeNodes])
 
   // Poll active job count for the Executions badge
-  const { data: statsData } = useStats("user", user?.id, { refetchInterval: 10_000 })
+  const { data: statsData } = useStats("user", user?.id, { refetchInterval: 30_000 })
   const activeJobCount = (statsData?.pending ?? 0) + (statsData?.processing ?? 0)
 
   useEffect(() => {

@@ -445,7 +445,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
               {results.length > 0 && (
                 <button
                   type="button"
-                  className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
+                  aria-label="Remove" className="w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)
@@ -503,7 +503,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 />
                 <button
                   type="button"
-                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(i)

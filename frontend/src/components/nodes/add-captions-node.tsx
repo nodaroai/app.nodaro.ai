@@ -53,7 +53,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
             <video src={activeUrl} className="w-full h-28 object-cover rounded-md cursor-pointer" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline />
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Captioned</div>
             {results.length > 0 && (
-              <button type="button" className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+              <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
             )}
           </div>
         )}
@@ -78,7 +78,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                 <video src={r.url} className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
-                <button type="button" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                <button type="button" aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
               </div>
             ))}
           </div>

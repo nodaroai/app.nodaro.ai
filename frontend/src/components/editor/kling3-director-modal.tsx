@@ -794,7 +794,8 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                                 <img src={url} alt={`${el.name} ${ui + 1}`} className="w-20 h-20 rounded-lg object-cover border border-border" />
                                 <button
                                   type="button"
-                                  className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
+                                  aria-label="Remove"
+                                  className="absolute -top-1.5 -right-1.5 w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
                                   onClick={() => handleRemoveElementUrl(i, ui)}
                                   title="Remove"
                                 >

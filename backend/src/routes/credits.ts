@@ -5,6 +5,35 @@ import { CreditsService } from "../services/credits.js"
 // Credits Routes
 // ============================================================
 
+// In-memory cache for credit balance (keyed by userId)
+const BALANCE_CACHE_TTL_MS = 15_000 // 15 seconds
+const balanceCache = new Map<string, { data: unknown; expiry: number }>()
+
+function getCachedBalance(userId: string): unknown | null {
+  const entry = balanceCache.get(userId)
+  if (!entry) return null
+  if (Date.now() > entry.expiry) {
+    balanceCache.delete(userId)
+    return null
+  }
+  return entry.data
+}
+
+function setCachedBalance(userId: string, data: unknown): void {
+  balanceCache.set(userId, { data, expiry: Date.now() + BALANCE_CACHE_TTL_MS })
+  if (balanceCache.size > 10_000) {
+    const now = Date.now()
+    for (const [k, v] of balanceCache) {
+      if (now > v.expiry) balanceCache.delete(k)
+    }
+  }
+}
+
+/** Invalidate cached balance for a user (call after credit mutations) */
+export function invalidateBalanceCache(userId: string): void {
+  balanceCache.delete(userId)
+}
+
 export async function creditsRoutes(app: FastifyInstance) {
   /**
    * GET /v1/user/credits
@@ -21,8 +50,14 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
+    const cached = getCachedBalance(userId)
+    if (cached) {
+      return { data: cached }
+    }
+
     try {
       const balance = await CreditsService.getBalance(userId)
+      setCachedBalance(userId, balance)
       return { data: balance }
     } catch (error) {
       console.error("[credits] Failed to get balance:", error)
@@ -92,6 +127,43 @@ export async function creditsRoutes(app: FastifyInstance) {
   })
 
   /**
+   * POST /v1/credits/model-costs
+   * Get credit costs for multiple models in a single request
+   */
+  app.post<{
+    Body: { models: string[] }
+  }>("/v1/credits/model-costs", async (req, reply) => {
+    const { models } = req.body
+
+    if (!models || !Array.isArray(models) || models.length === 0) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "models array is required" },
+      })
+    }
+
+    if (models.length > 50) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "Maximum 50 models per request" },
+      })
+    }
+
+    try {
+      const costs: Record<string, number> = {}
+      await Promise.all(
+        models.map(async (model) => {
+          costs[model] = await CreditsService.getModelCreditCost(model)
+        }),
+      )
+      return { data: costs }
+    } catch (error) {
+      console.error("[credits] Failed to get model costs:", error)
+      return reply.status(500).send({
+        error: { code: "internal_error", message: "Failed to get model costs" },
+      })
+    }
+  })
+
+  /**
    * POST /v1/credits/reserve
    * Reserve credits for a job (internal use)
    */
@@ -120,6 +192,7 @@ export async function creditsRoutes(app: FastifyInstance) {
         providerCostUsd,
         displayCostUsd
       )
+      invalidateBalanceCache(userId)
       return { data: result }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to reserve credits"

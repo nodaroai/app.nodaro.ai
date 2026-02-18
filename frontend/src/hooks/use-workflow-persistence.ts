@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, type BatchJobStatus } from "@/lib/api"
+import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 
 interface SaveResult {
@@ -45,8 +46,8 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<WorkflowNod
       .map(r => r.jobId)
       .filter((id): id is string => Boolean(id) && isValidUuid(id))
 
-    // If node is in running/pending state or has jobs to check
-    if (status === "running" || status === "pending" || jobIds.length > 0) {
+    // Only sync nodes that are still in running/pending state
+    if (status === "running" || status === "pending") {
       nodesToSync.push({ node, jobIds })
     }
   }
@@ -316,6 +317,16 @@ export function useWorkflowPersistence(projectId?: string) {
           charDefs,
           flowTemplates,
         )
+
+        // Prefetch model credit costs for all nodes in one batch request
+        const modelIds = [...new Set(
+          nodes
+            .map((n) => (n.data as Record<string, unknown>).provider as string | undefined)
+            .filter(Boolean) as string[],
+        )]
+        if (modelIds.length > 0) {
+          prefetchModelCredits(modelIds).catch(() => {})
+        }
 
         // If nodes were updated during sync, save the updated workflow
         if (nodesChanged && projectId) {

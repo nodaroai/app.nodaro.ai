@@ -6,14 +6,6 @@ import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 
 // ============================================================
-// Constants
-// ============================================================
-
-const THUMBNAIL_WIDTH = 320
-const THUMBNAIL_HEIGHT = 320
-const THUMBNAIL_QUALITY = 80
-
-// ============================================================
 // Types
 // ============================================================
 
@@ -48,19 +40,10 @@ export type FileMetadata = ImageMetadata | VideoMetadata | AudioMetadata
 export async function processImage(
   buffer: Buffer,
 ): Promise<{ thumbnail: Buffer; metadata: ImageMetadata }> {
-  const image = sharp(buffer)
-  const meta = await image.metadata()
-
-  const thumbnail = await sharp(buffer)
-    .resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, {
-      fit: "inside",
-      withoutEnlargement: true,
-    })
-    .jpeg({ quality: THUMBNAIL_QUALITY })
-    .toBuffer()
+  const meta = await sharp(buffer).metadata()
 
   return {
-    thumbnail,
+    thumbnail: buffer,
     metadata: {
       width: meta.width ?? 0,
       height: meta.height ?? 0,
@@ -108,13 +91,12 @@ function extractFrame(videoPath: string, outputPath: string, timeSeconds: number
       "ffmpeg",
       [
         "-y",
-        "-ss", String(timeSeconds),
         "-i", videoPath,
+        "-ss", String(timeSeconds),
         "-vframes", "1",
-        "-q:v", "3",
         outputPath,
       ],
-      { maxBuffer: 5 * 1024 * 1024 },
+      { maxBuffer: 10 * 1024 * 1024 },
       (error, _stdout, stderr) => {
         if (error) {
           reject(new Error(`ffmpeg frame extraction failed: ${stderr || error.message}`))
@@ -136,7 +118,7 @@ export async function processVideo(
   await fs.mkdir(workDir, { recursive: true })
 
   const videoPath = join(workDir, "input.mp4")
-  const framePath = join(workDir, "frame.jpg")
+  const framePath = join(workDir, "frame.png")
 
   try {
     await fs.writeFile(videoPath, buffer)
@@ -154,22 +136,11 @@ export async function processVideo(
     const height = videoStream?.height ?? 0
     const codec = videoStream?.codec_name ?? "unknown"
 
-    // Extract frame at 1 second (or 0 if video is shorter)
-    const seekTime = Math.min(1, durationSeconds * 0.1)
-    await extractFrame(videoPath, framePath, seekTime)
-
-    // Resize frame to thumbnail
-    const frameBuffer = await fs.readFile(framePath)
-    const thumbnail = await sharp(frameBuffer)
-      .resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, {
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: THUMBNAIL_QUALITY })
-      .toBuffer()
+    // Extract the very first frame at original resolution (lossless PNG)
+    await extractFrame(videoPath, framePath, 0)
 
     return {
-      thumbnail,
+      thumbnail: await fs.readFile(framePath),
       metadata: { width, height, durationSeconds, codec },
     }
   } finally {
@@ -178,15 +149,15 @@ export async function processVideo(
 }
 
 /**
- * Generate a thumbnail from a video URL (downloads, extracts frame, resizes).
- * Used by the worker to create thumbnails for AI-generated videos.
+ * Generate a thumbnail from a video URL (downloads, extracts first frame).
+ * Stored at original resolution as JPEG — Cloudflare Image Resizing handles downsizing on the edge.
  */
 export async function generateThumbnailFromUrl(videoUrl: string): Promise<Buffer> {
   const workDir = join(tmpdir(), `thumb-gen-${randomUUID()}`)
   await fs.mkdir(workDir, { recursive: true })
 
   const videoPath = join(workDir, "input.mp4")
-  const framePath = join(workDir, "frame.jpg")
+  const framePath = join(workDir, "frame.png")
 
   try {
     // Download video to temp file
@@ -195,22 +166,10 @@ export async function generateThumbnailFromUrl(videoUrl: string): Promise<Buffer
     const buffer = Buffer.from(await response.arrayBuffer())
     await fs.writeFile(videoPath, buffer)
 
-    // Get duration so we can seek to ~1s
-    const probeJson = await runFfprobe(videoPath)
-    const probe = JSON.parse(probeJson)
-    const durationSeconds = parseFloat(probe.format?.duration ?? "0")
-    const seekTime = Math.min(1, durationSeconds * 0.1)
+    // Extract the very first frame at original resolution (lossless PNG)
+    await extractFrame(videoPath, framePath, 0)
 
-    await extractFrame(videoPath, framePath, seekTime)
-
-    const frameBuffer = await fs.readFile(framePath)
-    return await sharp(frameBuffer)
-      .resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, {
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: THUMBNAIL_QUALITY })
-      .toBuffer()
+    return await fs.readFile(framePath)
   } finally {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
   }

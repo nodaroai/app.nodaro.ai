@@ -2035,6 +2035,20 @@ export async function getModelCreditCost(model: string): Promise<{ data: { model
   return res.json()
 }
 
+export async function getBatchModelCreditCosts(models: string[]): Promise<Record<string, number>> {
+  const res = await fetch(`${API_BASE_URL}/v1/credits/model-costs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ models }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to get model costs")
+  }
+  const body = await res.json()
+  return body.data
+}
+
 // ============================================================
 // Billing API
 // ============================================================
