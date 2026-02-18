@@ -28,6 +28,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/components/credits/GenerateButton"
+import { useModelCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
 import { createClient } from "@/lib/supabase"
 import { uploadFile, uploadAudio, uploadImage, downloadYouTubeAudio, extractYouTubeAudioApi, fetchYouTubeOEmbed, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
@@ -320,17 +321,17 @@ export function ConfigPanel() {
 
   const foundNode = nodes.find((n) => n.id === selectedNodeId)
 
-  const sources = useMemo(() => {
+  const liveSources = useMemo(() => {
     if (!selectedNodeId) return [] as SourceNodeInfo[]
     return getConnectedSources(selectedNodeId, edges, nodes)
   }, [edges, nodes, selectedNodeId])
 
-  const hasDownstream = useMemo(() => {
+  const liveHasDownstream = useMemo(() => {
     if (!selectedNodeId) return false
     return edges.some((e) => e.source === selectedNodeId)
   }, [selectedNodeId, edges])
 
-  const fieldMappings: FieldMappings = useMemo(() => {
+  const liveFieldMappings: FieldMappings = useMemo(() => {
     if (!foundNode) return {}
     const d = foundNode.data as Record<string, unknown>
     return (d.fieldMappings as FieldMappings) ?? {}
@@ -346,17 +347,25 @@ export function ConfigPanel() {
   if (foundNode) lastNodeRef.current = foundNode
   const displayNode = foundNode ?? lastNodeRef.current
 
+  // Freeze derived data during exit animation so content doesn't shift
+  const frozenSourcesRef = useRef(liveSources)
+  const frozenFieldMappingsRef = useRef(liveFieldMappings)
+  const frozenHasDownstreamRef = useRef(liveHasDownstream)
+  if (isVisible) {
+    frozenSourcesRef.current = liveSources
+    frozenFieldMappingsRef.current = liveFieldMappings
+    frozenHasDownstreamRef.current = liveHasDownstream
+  }
+  const sources = isVisible ? liveSources : frozenSourcesRef.current
+  const fieldMappings = isVisible ? liveFieldMappings : frozenFieldMappingsRef.current
+  const hasDownstream = isVisible ? liveHasDownstream : frozenHasDownstreamRef.current
+
   // Reset expanded state when panel closes
   useEffect(() => {
     if (!isVisible) setIsExpanded(false)
   }, [isVisible])
 
-  // Nothing to render if we've never had a node selected
-  if (!displayNode) return null
-
-  // displayNode is the node to render (current or last-selected during exit animation)
-  const selectedNode = displayNode
-
+  // Functions only depend on selectedNodeId (not selectedNode), safe to declare before guard
   function update(data: Record<string, unknown>) {
     if (!selectedNodeId) return
     updateNodeData(selectedNodeId, data)
@@ -376,6 +385,17 @@ export function ConfigPanel() {
     if (!selectedNodeId) return
     deleteNode(selectedNodeId)
   }
+
+  // Always render the outer wrapper so the CSS transition has a DOM element to animate.
+  // When no node has ever been selected, render an empty off-screen shell.
+  if (!displayNode) {
+    return (
+      <div className="absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out translate-x-full pointer-events-none" />
+    )
+  }
+
+  // displayNode is the node to render (current or last-selected during exit animation)
+  const selectedNode = displayNode
 
   // Get display name for node type
   const getNodeTypeDisplayName = (type: string): string => {
@@ -437,7 +457,7 @@ export function ConfigPanel() {
   const panelContent = (
     <div className={isExpanded
       ? "fixed inset-0 z-50 flex items-center justify-center"
-      : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-300 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
+      : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
     }>
       {/* Backdrop (expanded mode only) */}
       {isExpanded && (
@@ -1903,24 +1923,37 @@ function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 }
 
 const IMAGE_GEN_MODELS = [
-  { value: "nano-banana", label: "Nano Banana", badge: "4 CR", desc: "Fast drafts, iteration, storyboards" },
-  { value: "nano-banana-pro", label: "Nano Banana Pro", badge: "6 CR", desc: "Higher detail, production-ready images" },
-  { value: "flux", label: "Flux", badge: "10 CR", desc: "Photorealistic, highest quality output" },
-  { value: "grok", label: "Grok", badge: "8 CR", desc: "Creative and stylized imagery" },
-  { value: "gpt-image", label: "GPT Image", badge: "12 CR", desc: "Text rendering, complex compositions" },
-  { value: "dalle", label: "DALL-E", badge: null, desc: "Legacy model (via Replicate)" },
+  { value: "nano-banana", label: "Nano Banana", desc: "Fast drafts, iteration, storyboards" },
+  { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },
+  { value: "grok", label: "Grok", desc: "Creative and stylized imagery" },
+  { value: "flux", label: "Flux", desc: "Photorealistic, highest quality output" },
+  { value: "gpt-image", label: "GPT Image", desc: "Text rendering, complex compositions" },
 ] as const
 
 const IMAGE_I2I_MODELS = [
-  { value: "nano-banana", label: "Nano Banana", badge: "4 CR", desc: "Fast iteration, quick transforms" },
-  { value: "nano-banana-pro", label: "Nano Banana Pro", badge: "6 CR", desc: "Higher detail, production images" },
-  { value: "flux-i2i", label: "Flux-2", badge: "8 CR", desc: "Style-faithful transformations" },
-  { value: "flux-pro-i2i", label: "Flux-2 Pro", badge: "10 CR", desc: "Premium quality image transforms" },
-  { value: "grok-i2i", label: "Grok", badge: "8 CR", desc: "Creative and stylized imagery" },
-  { value: "gpt-image-i2i", label: "GPT Image", badge: "12 CR", desc: "Text rendering, complex compositions" },
+  { value: "nano-banana", label: "Nano Banana", desc: "Fast iteration, quick transforms" },
+  { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production images" },
+  { value: "grok-i2i", label: "Grok", desc: "Creative and stylized imagery" },
+  { value: "flux-i2i", label: "Flux-2", desc: "Style-faithful transformations" },
+  { value: "flux-pro-i2i", label: "Flux-2 Pro", desc: "Premium quality image transforms" },
+  { value: "gpt-image-i2i", label: "GPT Image", desc: "Text rendering, complex compositions" },
 ] as const
 
+function ModelSelectOption({ value, label, desc }: { value: string; label: string; desc: string }) {
+  const credits = useModelCredits(value)
+  return (
+    <SelectItemWithMeta
+      value={value}
+      badge={credits > 0 ? `${credits} CR` : undefined}
+      description={desc}
+    >
+      {label}
+    </SelectItemWithMeta>
+  )
+}
+
 function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
+  useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -2067,9 +2100,7 @@ function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {IMAGE_GEN_MODELS.map((m) => (
-              <SelectItemWithMeta key={m.value} value={m.value} badge={m.badge ?? undefined} description={m.desc}>
-                {m.label}
-              </SelectItemWithMeta>
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>
         </Select>
@@ -2255,6 +2286,7 @@ function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }:
 }
 
 function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ImageToImageData>) {
+  useEffect(() => { prefetchModelCredits(IMAGE_I2I_MODELS.map((m) => m.value)) }, [])
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -2265,9 +2297,7 @@ function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {IMAGE_I2I_MODELS.map((m) => (
-              <SelectItemWithMeta key={m.value} value={m.value} badge={m.badge ?? undefined} description={m.desc}>
-                {m.label}
-              </SelectItemWithMeta>
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>
         </Select>

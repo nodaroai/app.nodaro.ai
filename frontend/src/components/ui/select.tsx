@@ -127,6 +127,52 @@ function SelectItem({
   )
 }
 
+function SelectItemWithMeta({
+  className,
+  children,
+  badge,
+  description,
+  descriptionClassName,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Item> & {
+  badge?: string
+  description?: string
+  descriptionClassName?: string
+}) {
+  return (
+    <SelectPrimitive.Item
+      data-slot="select-item"
+      className={cn(
+        "focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-default flex-col gap-0.5 rounded-sm py-2 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        className
+      )}
+      {...props}
+    >
+      <span
+        data-slot="select-item-indicator"
+        className="absolute right-2 top-2.5 flex size-3.5 items-center justify-center"
+      >
+        <SelectPrimitive.ItemIndicator>
+          <CheckIcon className="size-4" />
+        </SelectPrimitive.ItemIndicator>
+      </span>
+      <span className="flex w-full items-center gap-2">
+        <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+        {badge && (
+          <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
+            {badge}
+          </span>
+        )}
+      </span>
+      {description && (
+        <span className={cn("text-[11px] leading-tight text-muted-foreground/70", descriptionClassName)}>
+          {description}
+        </span>
+      )}
+    </SelectPrimitive.Item>
+  )
+}
+
 function SelectSeparator({
   className,
   ...props
@@ -181,6 +227,7 @@ export {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectItemWithMeta,
   SelectLabel,
   SelectScrollDownButton,
   SelectScrollUpButton,
