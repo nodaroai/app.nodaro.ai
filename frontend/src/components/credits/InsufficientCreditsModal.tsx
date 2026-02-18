@@ -67,7 +67,7 @@ export function InsufficientCreditsModal({
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button asChild className="flex-1">
-            <a href="/pricing">
+            <a href="/_pricing">
               <ArrowUpCircle className="w-4 h-4" />
               Upgrade Plan
             </a>
