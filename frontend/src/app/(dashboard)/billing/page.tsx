@@ -206,7 +206,7 @@ export default function BillingPage() {
               Manage Subscription
             </Button>
           )}
-          <Link to="/pricing">
+          <Link to="/_pricing">
             <Button
               variant="outline"
               size="sm"
@@ -316,7 +316,7 @@ export default function BillingPage() {
                 <p className="text-sm text-amber-700 dark:text-amber-400">
                   {usagePercent >= 90 ? "Storage almost full! Upgrade for more space." : "Running low on storage. Consider upgrading."}
                 </p>
-                <Link to="/pricing">
+                <Link to="/_pricing">
                   <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-400">
                     <ArrowUpRight className="h-3 w-3 mr-1" />
                     Upgrade

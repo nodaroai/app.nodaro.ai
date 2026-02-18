@@ -41,9 +41,9 @@ interface NavItem {
 
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/projects", label: "Projects", icon: FolderOpen },
-  { href: "/gallery", label: "Gallery", icon: Images },
+  { href: "/_gallery", label: "Gallery", icon: Images },
   { href: "/library", label: "Library", icon: Archive },
-  { href: "/pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
+  { href: "/_pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
   { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },

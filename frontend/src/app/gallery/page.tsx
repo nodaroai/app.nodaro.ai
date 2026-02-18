@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -277,6 +277,8 @@ function CopyPromptButton({ prompt }: { readonly prompt: string }) {
 
 export default function GalleryPage() {
   const { user, isAdmin } = useAuth()
+  const location = useLocation()
+  const isEmbedded = location.pathname.startsWith("/_")
   const [filter, setFilter] = useState<FilterType>("all")
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -403,22 +405,24 @@ export default function GalleryPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <Link
-            to="/projects"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to app
-          </Link>
-          <Link to="/" className="text-lg font-bold text-[#ff0073]">
-            SceneNode
-          </Link>
-          <ThemeToggle />
-        </div>
-      </header>
+      {/* Header — hidden when rendered inside DashboardLayout (/_gallery) */}
+      {!isEmbedded && (
+        <header className="border-b border-zinc-200 dark:border-zinc-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+            <Link
+              to="/projects"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to app
+            </Link>
+            <Link to="/" className="text-lg font-bold text-[#ff0073]">
+              SceneNode
+            </Link>
+            <ThemeToggle />
+          </div>
+        </header>
+      )}
 
       {/* Hero */}
       <section className="py-12 text-center">

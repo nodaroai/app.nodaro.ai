@@ -108,6 +108,14 @@ export const router = createBrowserRouter([
         path: "/library",
         element: <SuspenseWrapper><LibraryPage /></SuspenseWrapper>,
       },
+      {
+        path: "/_gallery",
+        element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/_pricing",
+        element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
+      },
     ],
   },
   {

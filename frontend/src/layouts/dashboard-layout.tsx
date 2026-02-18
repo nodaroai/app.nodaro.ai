@@ -30,7 +30,7 @@ export default function DashboardLayout() {
     const pendingPlan = localStorage.getItem("scenenode_pending_plan")
     if (pendingPlan) {
       localStorage.removeItem("scenenode_pending_plan")
-      navigate(`/pricing?plan=${encodeURIComponent(pendingPlan)}`, { replace: true })
+      navigate(`/_pricing?plan=${encodeURIComponent(pendingPlan)}`, { replace: true })
     }
   }, [])
 
