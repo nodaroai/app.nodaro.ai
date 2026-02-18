@@ -1939,6 +1939,35 @@ const IMAGE_I2I_MODELS = [
   { value: "gpt-image-i2i", label: "GPT Image", desc: "Text rendering, complex compositions" },
 ] as const
 
+const VIDEO_I2V_MODELS = [
+  { value: "minimax", label: "MiniMax", desc: "Fast, reliable 5s clips" },
+  { value: "veo3", label: "VEO 3", desc: "Top quality, 8s with audio" },
+  { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 8s with audio" },
+  { value: "kling", label: "Kling", desc: "Versatile, 5-10s clips" },
+  { value: "kling-turbo", label: "Kling Turbo", desc: "Fast generation, end frame support" },
+  { value: "kling-3.0", label: "Kling 3.0", desc: "Latest Kling, 3-15s variable duration" },
+  { value: "veo", label: "VEO 2", desc: "Previous gen VEO" },
+  { value: "grok-i2v", label: "Grok", desc: "Creative, stylized motion" },
+  { value: "sora2-pro", label: "Sora 2 Pro", desc: "Cinematic, high fidelity" },
+  { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
+  { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
+  { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
+] as const
+
+const VIDEO_T2V_MODELS = [
+  { value: "minimax", label: "MiniMax", desc: "Fast, reliable 5s clips" },
+  { value: "veo3", label: "VEO 3", desc: "Top quality, 8s with audio" },
+  { value: "kling", label: "Kling", desc: "Versatile, 5-10s clips" },
+  { value: "kling-turbo", label: "Kling Turbo", desc: "Fast generation, 5-10s" },
+  { value: "kling-3.0", label: "Kling 3.0", desc: "Latest Kling, 3-15s variable duration" },
+  { value: "veo", label: "VEO 2", desc: "Previous gen VEO" },
+  { value: "grok", label: "Grok", desc: "Creative, stylized motion" },
+  { value: "sora2-pro", label: "Sora 2 Pro", desc: "Cinematic, high fidelity" },
+  { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
+  { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
+  { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
+] as const
+
 function ModelSelectOption({ value, label, desc }: { value: string; label: string; desc: string }) {
   const credits = useModelCredits(value)
   return (
@@ -2349,6 +2378,7 @@ const PROVIDERS_WITH_END_FRAME: string[] = [
 type Kling3Tab = "scene" | "shots" | "elements"
 
 function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode }: ConfigProps<ImageToVideoData>) {
+  useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const { user } = useAuth()
   const allNodes = useWorkflowStore((s) => s.nodes)
   const [activeTab, setActiveTab] = useState<Kling3Tab>("scene")
@@ -2631,18 +2661,9 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="minimax">MiniMax (default)</SelectItem>
-                    <SelectItem value="veo3">VEO 3</SelectItem>
-                    <SelectItem value="veo3.1">VEO 3.1 (Fast)</SelectItem>
-                    <SelectItem value="kling">Kling</SelectItem>
-                    <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
-                    <SelectItem value="kling-3.0">Kling 3.0 (10 credits)</SelectItem>
-                    <SelectItem value="veo">VEO 2</SelectItem>
-                    <SelectItem value="grok-i2v">Grok</SelectItem>
-                    <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
-                    <SelectItem value="runway">Runway</SelectItem>
-                    <SelectItem value="pika">Pika</SelectItem>
-                    <SelectItem value="sora">Sora</SelectItem>
+                    {VIDEO_I2V_MODELS.map((m) => (
+                      <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+                    ))}
                   </SelectContent>
                 </Select>
               </MappableField>
@@ -3087,6 +3108,7 @@ function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField
 // ─── Standard Image-to-Video Config ───────────────────────────────────────
 
 function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode }: ConfigProps<ImageToVideoData>) {
+  useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
   // Get allowed durations for current provider (model-specific)
@@ -3250,18 +3272,9 @@ function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="veo3">VEO 3</SelectItem>
-            <SelectItem value="veo3.1">VEO 3.1 (Fast)</SelectItem>
-            <SelectItem value="kling">Kling</SelectItem>
-            <SelectItem value="kling-turbo">Kling Turbo (end frame)</SelectItem>
-            <SelectItem value="kling-3.0">Kling 3.0 (10 credits)</SelectItem>
-            <SelectItem value="veo">VEO 2</SelectItem>
-            <SelectItem value="grok-i2v">Grok</SelectItem>
-            <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
-            <SelectItem value="runway">Runway</SelectItem>
-            <SelectItem value="pika">Pika</SelectItem>
-            <SelectItem value="sora">Sora</SelectItem>
+            {VIDEO_I2V_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
@@ -3498,6 +3511,7 @@ const KIE_T2V_DURATIONS: Record<string, number[]> = {
 }
 
 function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes }: ConfigProps<TextToVideoData>) {
+  useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const category: ProviderCategory = "video"
   const models = getModels(category, data.provider)
   const connectedModel = getConnectedProviderModel(fieldMappings, sources, nodes)
@@ -3528,17 +3542,9 @@ function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField,
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="minimax">MiniMax (default)</SelectItem>
-            <SelectItem value="veo3">VEO 3</SelectItem>
-            <SelectItem value="kling">Kling</SelectItem>
-            <SelectItem value="kling-turbo">Kling Turbo</SelectItem>
-            <SelectItem value="kling-3.0">Kling 3.0 (10 credits)</SelectItem>
-            <SelectItem value="veo">VEO 2</SelectItem>
-            <SelectItem value="grok">Grok</SelectItem>
-            <SelectItem value="sora2-pro">Sora 2 Pro</SelectItem>
-            <SelectItem value="runway">Runway</SelectItem>
-            <SelectItem value="pika">Pika</SelectItem>
-            <SelectItem value="sora">Sora</SelectItem>
+            {VIDEO_T2V_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
