@@ -28,6 +28,7 @@ import { resizeVideo } from "../providers/video/resize-video.js"
 import { adjustVolume } from "../providers/video/adjust-volume.js"
 import { addCaptions } from "../providers/video/add-captions.js"
 import { mixAudio } from "../providers/video/mix-audio.js"
+import { speedRamp } from "../providers/video/speed-ramp.js"
 import { cleanupWorkDir, createWorkDir, downloadFile } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
@@ -777,6 +778,22 @@ export function createVideoWorker() {
           // Check if job was cancelled before saving result
           if (!await shouldSaveJobResult(jobId)) return
           await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: tvThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
+          await commitJobCredits(usageLogId, jobId)
+          console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
+
+        } else if (job.name === "speed-ramp") {
+          const { videoUrl, speed, adjustAudio } = job.data as {
+            jobId: string; videoUrl: string; speed: number; adjustAudio: boolean
+          }
+          console.log(`[worker] speed-ramp ${jobId}`)
+          const outputPath = await speedRamp({ videoUrl, speed, adjustAudio })
+          await job.updateProgress(80)
+          const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+          await cleanupWorkDir(dirname(outputPath))
+          await job.updateProgress(100)
+          const srThumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
+          if (!await shouldSaveJobResult(jobId)) return
+          await supabase.from("jobs").update({ status: "completed", progress: 100, output_data: { videoUrl: r2Url, thumbnailUrl: srThumbUrl }, completed_at: new Date().toISOString() }).eq("id", jobId)
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: ${r2Url}`)
 

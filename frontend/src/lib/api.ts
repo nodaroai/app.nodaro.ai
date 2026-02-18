@@ -934,6 +934,23 @@ export async function trimVideoApi(videoUrl: string, startTime: number, endTime?
   return res.json()
 }
 
+export async function speedRampApi(videoUrl: string, speed: number, adjustAudio: boolean, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, speed, adjustAudio }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/speed-ramp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start speed-ramp")
+  }
+  return res.json()
+}
+
 export async function resizeVideoApi(videoUrl: string, targetAspect: string, method: string, padColor?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, targetAspect, method, padColor }
   if (userId) {

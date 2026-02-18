@@ -84,6 +84,7 @@ import type {
   MixAudioData,
   AdjustVolumeData,
   TrimVideoData,
+  SpeedRampData,
   LipSyncData,
   MotionTransferData,
   VideoUpscaleData,
@@ -408,6 +409,7 @@ export function ConfigPanel() {
       "mix-audio": "Mix Audio",
       "adjust-volume": "Adjust Volume",
       "trim-video": "Trim Video",
+      "speed-ramp": "Adjust Speed",
       "combine-text": "Combine Text",
       "split-text": "Split Text",
       "loop": "Loop",
@@ -649,6 +651,9 @@ export function ConfigPanel() {
           {selectedNode.type === "trim-video" && (
             <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
+          {selectedNode.type === "speed-ramp" && (
+            <SpeedRampConfig data={selectedNode.data as SpeedRampData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
           {selectedNode.type === "combine-text" && (
             <CombineTextConfig data={selectedNode.data as CombineTextNodeData} onUpdate={update} />
           )}
@@ -712,7 +717,7 @@ export function ConfigPanel() {
               />
             )}
 
-            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text") && (
+            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text") && (
               <button
                 type="button"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -4610,7 +4615,7 @@ const AUDIO_SOURCE_TYPES = new Set([
 const VIDEO_SOURCE_TYPES = new Set([
   "image-to-video", "video-to-video", "text-to-video",
   "lip-sync", "motion-transfer", "video-upscale",
-  "combine-videos", "add-captions", "resize-video", "trim-video",
+  "combine-videos", "add-captions", "resize-video", "trim-video", "speed-ramp",
   "upload-video", "youtube-video",
 ])
 
@@ -5173,6 +5178,44 @@ function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) {
           onChange={(e) => onUpdate({ endTime: parseFloat(e.target.value) || 0 })}
         />
       </div>
+    </div>
+  )
+}
+
+function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) {
+  const speedLabel = data.speed === 1 ? "1x (Normal)" : data.speed < 1 ? `${data.speed}x (Slow Mo)` : `${data.speed}x (Fast)`
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="speed">Speed: {speedLabel}</Label>
+        <input
+          id="speed"
+          type="range"
+          min={0.25}
+          max={4.0}
+          step={0.05}
+          value={data.speed}
+          onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) })}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+        />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+          <span>0.25x</span>
+          <span>1x</span>
+          <span>4x</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="adjust-audio"
+          checked={data.adjustAudio}
+          onChange={(e) => onUpdate({ adjustAudio: e.target.checked })}
+        />
+        <Label htmlFor="adjust-audio">Adjust Audio Speed</Label>
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        When audio adjustment is off, the audio track is removed entirely.
+      </p>
     </div>
   )
 }

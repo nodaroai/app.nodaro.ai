@@ -42,6 +42,7 @@ import { ExtractAudioNode } from "./extract-audio-node"
 import { MixAudioNode } from "./mix-audio-node"
 import { AdjustVolumeNode } from "./adjust-volume-node"
 import { TrimVideoNode } from "./trim-video-node"
+import { SpeedRampNode } from "./speed-ramp-node"
 import { LipSyncNode } from "./lip-sync-node"
 import { MotionTransferNode } from "./motion-transfer-node"
 import { VideoUpscaleNode } from "./video-upscale-node"
@@ -108,6 +109,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "mix-audio": MixAudioNode,
   "adjust-volume": AdjustVolumeNode,
   "trim-video": TrimVideoNode,
+  "speed-ramp": SpeedRampNode,
   "video-upscale": VideoUpscaleNode,
   // Output
   "save-to-storage": SaveToStorageNode,
