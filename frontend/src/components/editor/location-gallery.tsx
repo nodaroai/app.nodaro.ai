@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, lazy, Suspense } from "react"
 import { MapPin, X, Loader2, AlertCircle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { LocationPageModal } from "./location-page-modal"
+const LocationPageModal = lazy(() => import("./location-page-modal").then(m => ({ default: m.LocationPageModal })))
 import { type DbLocation } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { useLocations } from "@/hooks/queries/use-assets-queries"
@@ -228,10 +228,12 @@ export function LocationGalleryButton() {
       )}
 
       {locationPageNodeId && (
-        <LocationPageModal
-          locationNodeId={locationPageNodeId}
-          onClose={() => setLocationPageNodeId(null)}
-        />
+        <Suspense fallback={null}>
+          <LocationPageModal
+            locationNodeId={locationPageNodeId}
+            onClose={() => setLocationPageNodeId(null)}
+          />
+        </Suspense>
       )}
     </>
   )

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect, lazy, Suspense } from "react"
 import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText } from "lucide-react"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
@@ -22,7 +22,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { FlowTemplatesDialog } from "./flow-templates-dialog"
+const FlowTemplatesDialog = lazy(() => import("./flow-templates-dialog").then(m => ({ default: m.FlowTemplatesDialog })))
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import {
@@ -641,13 +641,17 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           </Tooltip>
         </TooltipProvider>
 
-        <FlowTemplatesDialog
-          open={flowTemplatesOpen}
-          onOpenChange={setFlowTemplatesOpen}
-          flowTemplates={flowTemplates}
-          userTemplates={userTemplates}
-          onSave={setFlowPromptTemplates}
-        />
+        {flowTemplatesOpen && (
+          <Suspense fallback={null}>
+            <FlowTemplatesDialog
+              open={flowTemplatesOpen}
+              onOpenChange={setFlowTemplatesOpen}
+              flowTemplates={flowTemplates}
+              userTemplates={userTemplates}
+              onSave={setFlowPromptTemplates}
+            />
+          </Suspense>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

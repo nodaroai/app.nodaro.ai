@@ -1,9 +1,9 @@
-import { useState } from "react"
+import { useState, lazy, Suspense } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, Clock, Zap, DollarSign, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getJobs, cancelJob, cancelAllJobs, type Job } from "@/lib/api"
-import { ExecutionDetailModal } from "./execution-detail-modal"
+const ExecutionDetailModal = lazy(() => import("./execution-detail-modal").then(m => ({ default: m.ExecutionDetailModal })))
 import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
 import { useStats } from "@/hooks/queries/use-stats-queries"
@@ -502,16 +502,20 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
       </div>
 
       {/* Detail Modal */}
-      <ExecutionDetailModal
-        job={selectedJob}
-        open={selectedJob !== null}
-        onClose={() => setSelectedJob(null)}
-        onDeleted={(jobId) => {
-          qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
-          setSelectedJob(null)
-        }}
-        showDollars={showDollars}
-      />
+      {selectedJob !== null && (
+        <Suspense fallback={null}>
+          <ExecutionDetailModal
+            job={selectedJob}
+            open={selectedJob !== null}
+            onClose={() => setSelectedJob(null)}
+            onDeleted={(jobId) => {
+              qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
+              setSelectedJob(null)
+            }}
+            showDollars={showDollars}
+          />
+        </Suspense>
+      )}
 
       {/* Cancel All Confirmation Dialog */}
       <AlertDialog open={cancelAllDialogOpen} onOpenChange={setCancelAllDialogOpen}>
