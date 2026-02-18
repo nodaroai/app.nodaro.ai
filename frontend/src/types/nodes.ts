@@ -947,6 +947,7 @@ export type RenderVideoData = {
     fontSize: number
     color: string
   }
+  assetOrder?: string[] // ordered source node IDs for media input sequence
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

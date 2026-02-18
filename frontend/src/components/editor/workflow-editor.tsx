@@ -3083,8 +3083,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     if (node.type === "render-video") {
       const d = node.data as RenderVideoData
-      // Collect media assets from connected upstream nodes
-      const mediaAssets: Array<{ url: string; type: "image" | "video" | "audio"; durationSeconds?: number }> = []
+      // Collect media assets from connected upstream nodes, keyed by source node ID
+      const assetMap = new Map<string, { url: string; type: "image" | "video" | "audio"; durationSeconds?: number }>()
       const incomingEdges = edges.filter((e) => e.target === node.id)
       for (const edge of incomingEdges) {
         const sourceNode = nodes.find((n) => n.id === edge.source)
@@ -3093,11 +3093,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         if (!output) continue
         const srcType = sourceNode.type ?? ""
         if (srcType === "generate-image" || srcType === "upload-image" || srcType === "edit-image" || srcType === "image-to-image") {
-          mediaAssets.push({ url: output, type: "image" })
+          assetMap.set(sourceNode.id, { url: output, type: "image" })
         } else if (srcType === "image-to-video" || srcType === "video-to-video" || srcType === "text-to-video" || srcType === "upload-video" || srcType === "youtube-video" || srcType === "combine-videos" || srcType === "lip-sync" || srcType === "motion-transfer" || srcType === "video-upscale" || srcType === "suno-music-video" || srcType === "merge-video-audio" || srcType === "add-captions" || srcType === "resize-video" || srcType === "trim-video") {
-          mediaAssets.push({ url: output, type: "video" })
+          assetMap.set(sourceNode.id, { url: output, type: "video" })
         }
       }
+      // Apply user-defined order if available, then append any unordered sources
+      const assetOrder = d.assetOrder ?? []
+      const orderedIds = [
+        ...assetOrder.filter((id) => assetMap.has(id)),
+        ...[...assetMap.keys()].filter((id) => !assetOrder.includes(id)),
+      ]
+      const mediaAssets = orderedIds.map((id) => assetMap.get(id)!).filter(Boolean)
       if (mediaAssets.length === 0) {
         toast.error(`Node "${d.label}": no media assets connected`)
         return Promise.reject(new Error("No media assets"))

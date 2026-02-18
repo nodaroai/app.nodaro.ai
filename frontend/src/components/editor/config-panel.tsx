@@ -4671,9 +4671,63 @@ function CombineVideosConfig({ data, onUpdate }: ConfigProps<CombineVideosData>)
   )
 }
 
-function RenderVideoConfig({ data, onUpdate }: ConfigProps<RenderVideoData>) {
+function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
+  // Build ordered list of connected media sources
+  const mediaSources = sources.filter((s) =>
+    s.type === "generate-image" || s.type === "upload-image" || s.type === "edit-image" || s.type === "image-to-image" ||
+    s.type === "image-to-video" || s.type === "video-to-video" || s.type === "text-to-video" || s.type === "upload-video" ||
+    s.type === "youtube-video" || s.type === "combine-videos" || s.type === "lip-sync" || s.type === "motion-transfer" ||
+    s.type === "video-upscale" || s.type === "suno-music-video" || s.type === "merge-video-audio" || s.type === "add-captions" ||
+    s.type === "resize-video" || s.type === "trim-video"
+  )
+  const currentOrder = data.assetOrder ?? []
+  // Merge: keep existing order for still-connected nodes, append new ones at end
+  const orderedIds = [
+    ...currentOrder.filter((id) => mediaSources.some((s) => s.id === id)),
+    ...mediaSources.filter((s) => !currentOrder.includes(s.id)).map((s) => s.id),
+  ]
+  const orderedSources = orderedIds.map((id) => mediaSources.find((s) => s.id === id)!).filter(Boolean)
+
+  function moveAsset(index: number, direction: -1 | 1) {
+    const newOrder = [...orderedIds]
+    const target = index + direction
+    if (target < 0 || target >= newOrder.length) return
+    ;[newOrder[index], newOrder[target]] = [newOrder[target], newOrder[index]]
+    onUpdate({ assetOrder: newOrder })
+  }
+
   return (
     <div className="flex flex-col gap-3">
+      {orderedSources.length > 0 && (
+        <div>
+          <Label className="mb-1.5 block">Media Order</Label>
+          <div className="flex flex-col gap-1">
+            {orderedSources.map((s, i) => (
+              <div key={s.id} className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-muted/50 text-xs">
+                <span className="text-muted-foreground w-4 text-center shrink-0">{i + 1}</span>
+                <span className="truncate flex-1" title={s.label}>{s.label}</span>
+                <span className="text-muted-foreground/60 text-[10px] shrink-0">{s.type.includes("image") ? "img" : "vid"}</span>
+                <button
+                  type="button"
+                  disabled={i === 0}
+                  className="p-0.5 rounded hover:bg-muted disabled:opacity-20"
+                  onClick={() => moveAsset(i, -1)}
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  disabled={i === orderedSources.length - 1}
+                  className="p-0.5 rounded hover:bg-muted disabled:opacity-20"
+                  onClick={() => moveAsset(i, 1)}
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div>
         <Label>Template</Label>
         <Select
