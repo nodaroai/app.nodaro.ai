@@ -25,7 +25,15 @@ const generateVideoBody = z.object({
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
   multiShot: z.boolean().optional(),
   shots: z.array(z.object({ prompt: z.string().max(500), duration: z.number().int().min(1).max(12) })).max(6).optional(),
-  elements: z.array(z.object({ name: z.string().max(50), description: z.string().max(200), type: z.enum(["image", "video"]), urls: z.array(z.string().url()).min(1).max(4) })).max(5).optional(),
+  elements: z.array(z.object({
+    name: z.string().max(50),
+    description: z.string().max(200),
+    type: z.enum(["image", "video"]),
+    urls: z.array(z.string().url()).min(1).max(4),
+  }).refine(
+    (el) => el.type === "video" ? el.urls.length === 1 : el.urls.length >= 2,
+    { message: "Image elements require 2-4 URLs, video elements require exactly 1 URL" }
+  )).max(5).optional(),
   userId: z.string().uuid().optional(),
 })
 

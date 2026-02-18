@@ -104,14 +104,17 @@ export class KieVideoProvider
 
     // Kling 3.0 uses the unified createTask/getTaskDetail endpoints
     if (provider === "kling-3.0") {
-      const imageUrls = endFrameUrl
+      const imageUrls = (endFrameUrl && !options?.multiShots)
         ? [imageUrl, endFrameUrl]
         : [imageUrl]
+      const snappedDuration = duration
+        ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+        : 5
       const result = await kling3Generate({
         prompt: prompt ?? "smooth cinematic motion",
         imageUrls,
         sound: options?.sound ?? true,
-        duration: duration ? String(duration) : "5",
+        duration: String(snappedDuration),
         mode: (options?.mode as "std" | "pro") ?? "pro",
         aspectRatio: options?.aspectRatio ?? "16:9",
         multiShots: options?.multiShots,
@@ -252,10 +255,13 @@ export class KieVideoProvider
 
     // Kling 3.0 uses unified createTask endpoint (no start image for text-to-video)
     if (provider === "kling-3.0") {
+      const snappedDuration = duration
+        ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+        : 5
       const result = await kling3Generate({
         prompt,
         sound: options?.sound ?? true,
-        duration: duration ? String(duration) : "5",
+        duration: String(snappedDuration),
         mode: (options?.mode as "std" | "pro") ?? "pro",
         aspectRatio: aspectRatio ?? options?.aspectRatio ?? "16:9",
         multiShots: options?.multiShots,

@@ -63,14 +63,20 @@ export async function kling3Generate(
     ? totalShotDuration
     : (typeof params.duration === "string" ? parseInt(params.duration, 10) : (params.duration ?? 5))
 
+  if (durationNum < 3 || durationNum > 15) {
+    throw createSanitizedError(
+      `Duration ${durationNum}s is out of range (3-15s)`,
+      "Kling 3.0"
+    )
+  }
+
   const input: Record<string, unknown> = {
     prompt: hasMultiPrompt ? "" : params.prompt,
     sound: soundOn,
     duration: String(durationNum),
     mode: params.mode ?? "pro",
-    cfg_scale: 0.5,
     multi_shots: multiShots,
-    aspect_ratio: params.aspectRatio ?? "16:9",
+    aspect_ratio: params.aspectRatio ?? "1:1",
   }
 
   if (params.imageUrls && params.imageUrls.length > 0) {
