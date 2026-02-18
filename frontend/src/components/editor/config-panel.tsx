@@ -4505,22 +4505,42 @@ function CombineVideosConfig({ data, onUpdate }: ConfigProps<CombineVideosData>)
             <SelectItem value="cut">Cut</SelectItem>
             <SelectItem value="fade">Fade</SelectItem>
             <SelectItem value="dissolve">Dissolve</SelectItem>
+            <SelectItem value="dip-to-black">Dip to Black</SelectItem>
+            <SelectItem value="dip-to-white">Dip to White</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
+      {data.transition !== "cut" && (
+        <div>
+          <Label htmlFor="transition-duration">Duration — {data.transitionDuration ?? 0.5}s</Label>
+          <Input
+            id="transition-duration"
+            type="number"
+            min={0.1}
+            max={2}
+            step={0.1}
+            value={data.transitionDuration ?? 0.5}
+            onChange={(e) =>
+              onUpdate({ transitionDuration: parseFloat(e.target.value) || 0.5 })
+            }
+          />
+        </div>
+      )}
+
       <div>
-        <Label htmlFor="transition-duration">Transition Duration (s)</Label>
-        <Input
-          id="transition-duration"
-          type="number"
-          min={0}
-          max={5}
-          step={0.1}
-          value={data.transitionDuration}
-          onChange={(e) =>
-            onUpdate({ transitionDuration: parseFloat(e.target.value) || 0.5 })
-          }
-        />
+        <Label>Audio</Label>
+        <Select
+          value={data.audioMode ?? "crossfade"}
+          onValueChange={(v) => onUpdate({ audioMode: v as CombineVideosData["audioMode"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="keep">Keep original</SelectItem>
+            <SelectItem value="crossfade">Crossfade</SelectItem>
+            <SelectItem value="remove">Remove audio</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   )

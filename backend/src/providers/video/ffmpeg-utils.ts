@@ -28,6 +28,32 @@ export function runFfmpeg(args: readonly string[]): Promise<string> {
   })
 }
 
+export function runFfprobe(args: readonly string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`ffprobe failed: ${stderr || error.message}`))
+      } else {
+        resolve(stdout)
+      }
+    })
+  })
+}
+
+export async function getVideoDuration(filePath: string): Promise<number> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-show_entries", "format=duration",
+    "-of", "csv=p=0",
+    filePath,
+  ])
+  const duration = parseFloat(output.trim())
+  if (Number.isNaN(duration) || duration <= 0) {
+    throw new Error(`Could not determine duration for: ${filePath}`)
+  }
+  return duration
+}
+
 export async function createWorkDir(prefix: string): Promise<string> {
   const workDir = join(tmpdir(), `${prefix}-${randomUUID()}`)
   await fs.mkdir(workDir, { recursive: true })

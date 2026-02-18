@@ -802,8 +802,10 @@ export type TranscribeData = {
 export type CombineVideosData = {
   [key: string]: unknown
   label: string
-  transition: "cut" | "fade" | "dissolve"
+  transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
   transitionDuration: number
+  audioMode: "keep" | "crossfade" | "remove"
+  clipOrder?: string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1713,7 +1715,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 2,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, fieldMappings: {} },
+    defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", fieldMappings: {} },
   },
   {
     type: "merge-video-audio",

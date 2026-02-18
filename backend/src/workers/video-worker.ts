@@ -689,15 +689,16 @@ export function createVideoWorker() {
           await commitJobCredits(usageLogId, jobId)
           console.log(`[worker] Job ${jobId} completed: "${script.title}" (${script.scenes.length} scenes)`)
         } else if (job.name === "combine-videos") {
-          const { videoUrls, transition, transitionDuration } = job.data as {
+          const { videoUrls, transition, transitionDuration, audioMode } = job.data as {
             jobId: string
             videoUrls: string[]
-            transition: "cut" | "fade" | "dissolve"
+            transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
             transitionDuration: number
+            audioMode?: "keep" | "crossfade" | "remove"
           }
-          console.log(`[worker] combine-videos ${jobId}: ${videoUrls.length} videos, transition=${transition}`)
+          console.log(`[worker] combine-videos ${jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}`)
 
-          const outputPath = await combineVideos({ videoUrls, transition, transitionDuration })
+          const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade" })
           await job.updateProgress(80)
 
           const r2Url = await uploadFileToR2(outputPath, jobId, "video", jobUserId)

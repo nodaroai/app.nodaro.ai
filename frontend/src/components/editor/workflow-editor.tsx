@@ -1825,12 +1825,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     })
   }
 
-  function runCombineVideos(nodeId: string, videoUrls: string[], transition: "cut" | "fade" | "dissolve", transitionDuration: number): Promise<void> {
+  function runCombineVideos(nodeId: string, videoUrls: string[], transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white", transitionDuration: number, audioMode: "keep" | "crossfade" | "remove"): Promise<void> {
     const { updateNodeData } = useWorkflowStore.getState()
     updateNodeData(nodeId, { executionStatus: "running", generatedVideoUrl: undefined })
 
     return new Promise((resolve, reject) => {
-      combineVideos(videoUrls, transition, transitionDuration, user?.id).then(({ jobId }) => {
+      combineVideos(videoUrls, transition, transitionDuration, audioMode, user?.id).then(({ jobId }) => {
         toast.info("Combine videos started", { description: `Job ID: ${jobId}` })
 
         const poll = trackInterval(setInterval(async () => {
@@ -2672,7 +2672,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         return Promise.reject(new Error("Need at least 2 videos"))
       }
       const combineData = node.data as CombineVideosData
-      return runCombineVideos(node.id, videoUrls, combineData.transition ?? "cut", combineData.transitionDuration ?? 0.5)
+      return runCombineVideos(node.id, videoUrls, combineData.transition ?? "cut", combineData.transitionDuration ?? 0.5, combineData.audioMode ?? "crossfade")
     }
 
     if (node.type === "merge-video-audio") {
@@ -3957,6 +3957,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           label: "Combine All Videos",
           transition: "cut",
           transitionDuration: 0.5,
+          audioMode: "crossfade",
           fieldMappings: {},
         },
       } as WorkflowNode)

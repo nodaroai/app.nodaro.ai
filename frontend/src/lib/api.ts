@@ -856,11 +856,12 @@ export async function generateScriptApi(prompt: string, sceneCount?: number, ton
 
 export async function combineVideos(
   videoUrls: string[],
-  transition: "cut" | "fade" | "dissolve" = "cut",
+  transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white" = "cut",
   transitionDuration: number = 0.5,
+  audioMode: "keep" | "crossfade" | "remove" = "crossfade",
   userId?: string,
 ): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrls, transition, transitionDuration }
+  const body: Record<string, unknown> = { videoUrls, transition, transitionDuration, audioMode }
   if (userId) {
     body.userId = userId
   }
