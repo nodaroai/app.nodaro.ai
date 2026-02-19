@@ -22,6 +22,43 @@ interface LottieOverlayPreviewProps {
   isGenerating?: boolean
 }
 
+function SliderField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  suffix,
+  onChange,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  suffix?: string
+  onChange: (v: number) => void
+}) {
+  const precision = step >= 1 ? 0 : Math.max(2, -Math.floor(Math.log10(step)))
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-muted-foreground">{label}</span>
+        <span className="text-[10px] font-mono text-muted-foreground">{value.toFixed(precision)}{suffix ?? ""}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full accent-[#ff0073]"
+      />
+    </div>
+  )
+}
+
 function OverlayCard({
   overlay,
   fps,
@@ -47,41 +84,12 @@ function OverlayCard({
       </div>
 
       <div className="text-[10px] text-muted-foreground">
-        Position: ({overlay.position.x.toFixed(0)}%, {overlay.position.y.toFixed(0)}%) – {overlay.position.width.toFixed(0)}×{overlay.position.height.toFixed(0)}%
+        Position: ({overlay.position.x.toFixed(0)}%, {overlay.position.y.toFixed(0)}%) – {overlay.position.width.toFixed(0)}x{overlay.position.height.toFixed(0)}%
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">Opacity</span>
-            <span className="text-[10px] font-mono text-muted-foreground">{overlay.opacity.toFixed(2)}</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={overlay.opacity}
-            onChange={(e) => onChange({ ...overlay, opacity: parseFloat(e.target.value) })}
-            className="w-full accent-[#ff0073]"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">Playback Rate</span>
-            <span className="text-[10px] font-mono text-muted-foreground">{overlay.playbackRate.toFixed(1)}x</span>
-          </div>
-          <input
-            type="range"
-            min={0.1}
-            max={3}
-            step={0.1}
-            value={overlay.playbackRate}
-            onChange={(e) => onChange({ ...overlay, playbackRate: parseFloat(e.target.value) })}
-            className="w-full accent-[#ff0073]"
-          />
-        </div>
+        <SliderField label="Opacity" value={overlay.opacity} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...overlay, opacity: v })} />
+        <SliderField label="Playback Rate" value={overlay.playbackRate} min={0.1} max={3} step={0.1} suffix="x" onChange={(v) => onChange({ ...overlay, playbackRate: v })} />
 
         <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer">
           <input
