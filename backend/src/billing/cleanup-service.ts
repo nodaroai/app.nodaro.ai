@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { deleteFromR2, batchDeleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
+import { TIER_STORAGE_LIMITS } from "../billing/paddle-config.js"
 
 // ============================================================
 // Types
@@ -33,7 +34,7 @@ const MEDIA_RETENTION_DAYS = 60
 const FREE_TIER_DEFAULTS = {
   tier: "free",
   subscription_credits: 50,
-  storage_limit_bytes: 524288000, // 500 MB
+  storage_limit_bytes: TIER_STORAGE_LIMITS.free, // 1 GB
 } as const
 
 // ============================================================
