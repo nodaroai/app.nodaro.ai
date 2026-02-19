@@ -9,8 +9,17 @@ import { Documentary } from "./compositions/documentary"
 import { SceneGraphRenderer } from "./compositions/scene-graph-renderer"
 import { AfterEffectsRenderer } from "./compositions/after-effects-renderer"
 import { LottieOverlayRenderer } from "./compositions/lottie-overlay-renderer"
-import { ThreeDTitleRenderer } from "./compositions/three-d-title-renderer"
 import type { AfterEffectsPlan, LottieOverlayPlan, ThreeDTitlePlan } from "./plan-types"
+
+// Lazy-load ThreeDTitleRenderer to avoid pulling @react-three/fiber into the
+// main bundle. r3f's createReconciler() runs at module load time and conflicts
+// with Remotion's React reconciler, causing "'S' is undefined" errors in ALL
+// compositions if loaded eagerly.
+const LazyThreeDTitleRenderer = React.lazy(() =>
+  import("./compositions/three-d-title-renderer").then((m) => ({
+    default: m.ThreeDTitleRenderer,
+  })),
+)
 
 const DEFAULT_PROPS: RenderVideoInputProps = {
   template: "slideshow",
@@ -148,7 +157,7 @@ function RemotionRoot() {
       />
       <Composition
         id="3d-title"
-        component={ThreeDTitleRenderer as React.FC<any>}
+        component={LazyThreeDTitleRenderer as React.FC<any>}
         durationInFrames={300}
         fps={30}
         width={1920}
