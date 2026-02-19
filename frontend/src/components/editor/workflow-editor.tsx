@@ -5481,6 +5481,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         prompt: d.overlayPrompt,
         inputVideoUrl,
         fps: d.fps,
+        width: d.width ?? 1920,
+        height: d.height ?? 1080,
         durationSeconds: d.durationSeconds,
         lottieAssets: lottieAssets.length > 0 ? lottieAssets : undefined,
         userId: user.id,

@@ -967,6 +967,8 @@ export type LottieOverlayData = {
   overlayPrompt: string
   overlayPlan?: Record<string, unknown>
   inputVideoUrl?: string
+  width?: number
+  height?: number
   lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
   fps: number
   durationSeconds: number

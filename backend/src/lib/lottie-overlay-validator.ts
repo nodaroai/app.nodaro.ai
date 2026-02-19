@@ -86,12 +86,23 @@ export function validateLottieOverlayPlan(
     plan = { ...plan, durationInFrames: expectedDurationFrames }
   }
 
-  // Clamp overlay values (immutable)
+  // Clamp overlay values and ensure timing stays within plan duration
   const clampedOverlays = plan.overlays.map((overlay) => {
-    let fixed = {
+    let startFrame = Math.round(overlay.startFrame)
+    let durationInFrames = Math.round(overlay.durationInFrames)
+
+    if (startFrame + durationInFrames > plan.durationInFrames) {
+      durationInFrames = plan.durationInFrames - startFrame
+      if (durationInFrames < 1) {
+        startFrame = Math.max(0, plan.durationInFrames - 1)
+        durationInFrames = 1
+      }
+    }
+
+    return {
       ...overlay,
-      startFrame: Math.round(overlay.startFrame),
-      durationInFrames: Math.round(overlay.durationInFrames),
+      startFrame,
+      durationInFrames,
       opacity: clamp(overlay.opacity, 0, 1),
       playbackRate: clamp(overlay.playbackRate, 0.1, 3.0),
       position: {
@@ -101,16 +112,6 @@ export function validateLottieOverlayPlan(
         height: clamp(overlay.position.height, 0, 100),
       },
     }
-
-    // Ensure overlay doesn't extend past plan duration
-    if (fixed.startFrame + fixed.durationInFrames > plan.durationInFrames) {
-      fixed = { ...fixed, durationInFrames: plan.durationInFrames - fixed.startFrame }
-      if (fixed.durationInFrames < 1) {
-        fixed = { ...fixed, durationInFrames: 1, startFrame: Math.max(0, plan.durationInFrames - 1) }
-      }
-    }
-
-    return fixed
   })
 
   plan = { ...plan, overlays: clampedOverlays }

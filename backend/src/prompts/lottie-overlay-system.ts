@@ -65,7 +65,6 @@ Use these verified LottieFiles CDN URLs. Pick assets that match the user's inten
 ### Ambient / Decorative
 - Floating particles: https://lottie.host/9c8e1aef-f8e5-4ce8-bc80-1647ffb0724d/mNDClfKJVB.json
 - Glowing ring: https://lottie.host/b5d3e7e7-40bc-44fa-9a53-78b98ad66e80/pQVdNsVDmQ.json
-- Sparkle burst: https://lottie.host/c04a2758-a1d9-40a9-b81f-6f3e4e13a88c/xKCYDU2w0O.json
 
 ## User-Provided Assets
 

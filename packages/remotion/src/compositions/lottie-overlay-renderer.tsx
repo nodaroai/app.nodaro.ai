@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import {
   AbsoluteFill,
   Video,
@@ -14,13 +14,7 @@ interface LottieOverlayRendererProps {
   readonly plan: LottieOverlayPlan
 }
 
-/**
- * Individual overlay layer that fetches its Lottie JSON independently.
- * Uses delayRender/continueRender to ensure the animation data is loaded
- * before Remotion renders the frame.
- */
 function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }) {
-  // Create render handle synchronously on mount (before first frame)
   const [handle] = useState(() => delayRender(`Loading Lottie: ${overlay.id}`))
   const [animationData, setAnimationData] = useState<LottieAnimationData | null>(null)
 
@@ -68,16 +62,13 @@ function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }
         animationData={animationData}
         loop={overlay.loop}
         playbackRate={overlay.playbackRate}
+        renderer={overlay.renderer}
         style={{ width: "100%", height: "100%" }}
       />
     </div>
   )
 }
 
-/**
- * Remotion composition that renders Lottie overlays on top of a source video.
- * Each overlay is wrapped in a Sequence for timing control.
- */
 export function LottieOverlayRenderer({ plan }: LottieOverlayRendererProps) {
   const { sourceVideo, overlays } = plan
 

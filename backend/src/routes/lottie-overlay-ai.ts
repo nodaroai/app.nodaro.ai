@@ -104,20 +104,20 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
       try {
         const anthropic = getAnthropicClient()
 
-        let userMessage = `Add Lottie animation overlays to this video:
+        const assetLines = lottieAssets?.map((a) =>
+          `- ${a.name} (${a.url})${a.durationSeconds ? ` [${a.durationSeconds}s]` : ""}`,
+        )
+        const assetSection = assetLines?.length
+          ? `\n\nUser-provided Lottie assets (prefer these over built-in ones):\n${assetLines.join("\n")}`
+          : ""
+
+        const userMessage = `Add Lottie animation overlays to this video:
 - Source video: ${inputVideoUrl}
 - FPS: ${fps}
 - Resolution: ${width}x${height}
 - Duration: ${durationSeconds} seconds (${durationInFrames} frames)
 
-Overlay style: ${prompt}`
-
-        if (lottieAssets && lottieAssets.length > 0) {
-          userMessage += `\n\nUser-provided Lottie assets (prefer these over built-in ones):\n`
-          for (const asset of lottieAssets) {
-            userMessage += `- ${asset.name} (${asset.url})${asset.durationSeconds ? ` [${asset.durationSeconds}s]` : ""}\n`
-          }
-        }
+Overlay style: ${prompt}${assetSection}`
 
         console.log(`[lottie-overlay-ai] Generating for job ${job.id}, ${durationSeconds}s video`)
 
