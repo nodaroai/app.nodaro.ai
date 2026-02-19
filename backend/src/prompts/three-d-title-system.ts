@@ -19,7 +19,7 @@ Return a JSON object (no markdown wrapping):
       "type": "orbit" | "dolly" | "static",
       "startPosition": [x, y, z],
       "endPosition": [x, y, z],
-      "easing": "linear" | "ease-in" | "ease-out" | "ease-in-out" | "spring"
+      "easing": "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring"
     }
   },
   "lighting": {
@@ -49,7 +49,7 @@ Return a JSON object (no markdown wrapping):
         "axis": "x" | "y" | "z",
         "startFrame": <number>,
         "durationFrames": <number>,
-        "easing": "linear" | "ease-in" | "ease-out" | "ease-in-out" | "spring"
+        "easing": "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring"
       }
     },
     {
@@ -131,7 +131,7 @@ User: "epic gold title ADVENTURE"
       "type": "dolly",
       "startPosition": [0, 0, 8],
       "endPosition": [0, 0, 5],
-      "easing": "ease-out"
+      "easing": "easeOut"
     }
   },
   "lighting": {

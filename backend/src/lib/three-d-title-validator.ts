@@ -4,7 +4,7 @@ import { z } from "zod"
 
 const vec3Schema = z.tuple([z.number(), z.number(), z.number()])
 
-const easingSchema = z.enum(["linear", "ease-in", "ease-out", "ease-in-out", "spring"])
+const easingSchema = z.enum(["linear", "easeIn", "easeOut", "easeInOut", "spring"])
 
 const cameraAnimationSchema = z.object({
   type: z.enum(["orbit", "dolly", "static"]),

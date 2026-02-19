@@ -140,7 +140,7 @@ const renderSceneGraphBody = z.object({
 // ── Generic plan render schema ────────────────────────────────────────
 
 const renderPlanBody = z.object({
-  planType: z.enum(["after-effects", "lottie-overlay", "3d-title", "motion-graphics"]),
+  planType: z.enum(["scene-graph", "after-effects", "lottie-overlay", "3d-title", "motion-graphics"]),
   plan: z.record(z.unknown()),
   userId: z.string().uuid().optional(),
 })

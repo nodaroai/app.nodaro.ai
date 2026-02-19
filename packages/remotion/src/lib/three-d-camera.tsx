@@ -70,9 +70,9 @@ function getEasedProgress(
   })
 
   if (!easing || easing === "linear") return linear
-  if (easing === "ease-in") return linear * linear
-  if (easing === "ease-out") return 1 - (1 - linear) * (1 - linear)
-  if (easing === "ease-in-out") {
+  if (easing === "easeIn") return linear * linear
+  if (easing === "easeOut") return 1 - (1 - linear) * (1 - linear)
+  if (easing === "easeInOut") {
     return linear < 0.5
       ? 2 * linear * linear
       : 1 - Math.pow(-2 * linear + 2, 2) / 2

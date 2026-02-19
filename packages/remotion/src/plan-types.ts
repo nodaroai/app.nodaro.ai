@@ -127,7 +127,7 @@ export interface ThreeDTitleCameraAnimation {
   readonly type: "orbit" | "dolly" | "static"
   readonly startPosition: [number, number, number]
   readonly endPosition: [number, number, number]
-  readonly easing?: string
+  readonly easing?: "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring"
 }
 
 export interface ThreeDTitleCamera {
@@ -166,7 +166,7 @@ export interface ThreeDTextAnimation {
   readonly axis?: "x" | "y" | "z"
   readonly startFrame: number
   readonly durationFrames: number
-  readonly easing?: string
+  readonly easing?: "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring"
 }
 
 export interface ThreeDTextObject {
