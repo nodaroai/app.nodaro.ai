@@ -7,6 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../billing/credits.js"
 import { SCENE_GRAPH_SYSTEM_PROMPT } from "../prompts/scene-graph-system.js"
 import { validateSceneGraph } from "../lib/scene-graph-validator.js"
+import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 
 let _anthropic: Anthropic | null = null
 function getAnthropicClient(): Anthropic {
@@ -137,14 +138,9 @@ Composition style: ${prompt}`
         const rawText = textBlock?.text ?? ""
 
         // Parse JSON from response (handle potential markdown wrapping)
-        let jsonText = rawText.trim()
-        if (jsonText.startsWith("```")) {
-          jsonText = jsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
-        }
-
         let rawJson: unknown
         try {
-          rawJson = JSON.parse(jsonText)
+          rawJson = JSON.parse(extractJsonFromAIResponse(rawText))
         } catch {
           console.error(`[scene-graph-ai] Failed to parse JSON for job ${job.id}`)
           throw new Error("AI returned invalid JSON. Please try again with a different prompt.")

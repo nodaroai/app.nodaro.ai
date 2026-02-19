@@ -7,6 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../billing/credits.js"
 import { AFTER_EFFECTS_SYSTEM_PROMPT } from "../prompts/after-effects-system.js"
 import { validateAfterEffectsPlan } from "../lib/after-effects-validator.js"
+import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 
 let _anthropic: Anthropic | null = null
 function getAnthropicClient(): Anthropic {
@@ -127,14 +128,9 @@ Effect style: ${prompt}`
         const rawText = textBlock?.text ?? ""
 
         // Parse JSON from response
-        let jsonText = rawText.trim()
-        if (jsonText.startsWith("```")) {
-          jsonText = jsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
-        }
-
         let rawJson: unknown
         try {
-          rawJson = JSON.parse(jsonText)
+          rawJson = JSON.parse(extractJsonFromAIResponse(rawText))
         } catch {
           console.error(`[after-effects-ai] Failed to parse JSON for job ${job.id}`)
           throw new Error("AI returned invalid JSON. Please try again with a different prompt.")

@@ -12,6 +12,21 @@ import { LottieOverlayRenderer } from "./compositions/lottie-overlay-renderer"
 import { MotionGraphicsRenderer } from "./compositions/motion-graphics-renderer"
 import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan } from "./plan-types"
 
+/**
+ * Bridge specific component prop types with Remotion's
+ * LooseComponentType<Record<string, unknown>> requirement.
+ * Props are always provided at runtime via inputProps/defaultProps.
+ */
+function asRemotionComponent<P extends Record<string, unknown>>(
+  Comp: React.FC<P>,
+): React.FC<Record<string, unknown>> {
+  const Wrapper: React.FC<Record<string, unknown>> = (props) => (
+    <Comp {...(props as P)} />
+  )
+  Wrapper.displayName = `Remotion(${Comp.displayName ?? Comp.name})`
+  return Wrapper
+}
+
 const DEFAULT_PROPS: RenderVideoInputProps = {
   template: "slideshow",
   fps: 30,
@@ -33,18 +48,17 @@ const DEFAULT_PROPS: RenderVideoInputProps = {
   kenBurnsEnabled: false,
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const COMPOSITIONS: Array<{
   id: TemplateId
-  component: React.FC<any>
+  component: React.FC<Record<string, unknown>>
   width: number
   height: number
   extraProps?: Partial<RenderVideoInputProps>
 }> = [
-  { id: "slideshow", component: Slideshow, width: 1920, height: 1080 },
-  { id: "explainer", component: Explainer, width: 1920, height: 1080 },
-  { id: "social-reel", component: SocialReel, width: 1080, height: 1920 },
-  { id: "documentary", component: Documentary, width: 1920, height: 1080, extraProps: { kenBurnsEnabled: true } },
+  { id: "slideshow", component: asRemotionComponent(Slideshow), width: 1920, height: 1080 },
+  { id: "explainer", component: asRemotionComponent(Explainer), width: 1920, height: 1080 },
+  { id: "social-reel", component: asRemotionComponent(SocialReel), width: 1080, height: 1920 },
+  { id: "documentary", component: asRemotionComponent(Documentary), width: 1920, height: 1080, extraProps: { kenBurnsEnabled: true } },
 ]
 
 const SCENE_GRAPH_DEFAULT_PROPS: SceneGraphInputProps = {
@@ -112,7 +126,7 @@ function RemotionRoot() {
       ))}
       <Composition
         id="scene-graph"
-        component={SceneGraphRenderer as React.FC<any>}
+        component={asRemotionComponent(SceneGraphRenderer)}
         durationInFrames={300}
         fps={30}
         width={1920}
@@ -121,7 +135,7 @@ function RemotionRoot() {
       />
       <Composition
         id="after-effects"
-        component={AfterEffectsRenderer as React.FC<any>}
+        component={asRemotionComponent(AfterEffectsRenderer)}
         durationInFrames={300}
         fps={30}
         width={1920}
@@ -130,7 +144,7 @@ function RemotionRoot() {
       />
       <Composition
         id="lottie-overlay"
-        component={LottieOverlayRenderer as React.FC<any>}
+        component={asRemotionComponent(LottieOverlayRenderer)}
         durationInFrames={300}
         fps={30}
         width={1920}
@@ -139,7 +153,7 @@ function RemotionRoot() {
       />
       <Composition
         id="motion-graphics"
-        component={MotionGraphicsRenderer as React.FC<any>}
+        component={asRemotionComponent(MotionGraphicsRenderer)}
         durationInFrames={150}
         fps={30}
         width={1920}

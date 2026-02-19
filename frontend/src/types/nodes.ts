@@ -1017,6 +1017,8 @@ export type RenderVideoData = {
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
 }
 
 export type SpeedRampData = {

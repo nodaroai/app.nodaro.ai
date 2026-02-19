@@ -65,13 +65,15 @@ export function SceneMediaSegment({
   const isPositioned = layout.mode === "positioned"
   const objectFit = layout.objectFit ?? "cover"
 
+  const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
+
   const containerStyle: React.CSSProperties = isPositioned
     ? {
         position: "absolute",
-        left: `${layout.x ?? 0}%`,
-        top: `${layout.y ?? 0}%`,
-        width: `${layout.width ?? 100}%`,
-        height: `${layout.height ?? 100}%`,
+        left: `${clamp(layout.x ?? 0, 0, 100)}%`,
+        top: `${clamp(layout.y ?? 0, 0, 100)}%`,
+        width: `${clamp(layout.width ?? 100, 0, 100)}%`,
+        height: `${clamp(layout.height ?? 100, 0, 100)}%`,
         overflow: "hidden",
       }
     : {
