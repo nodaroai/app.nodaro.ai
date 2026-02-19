@@ -150,8 +150,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        <div className="flex justify-between text-muted-foreground text-[10px]">
-          <span>{nodeData.template}</span>
+        <div className="flex justify-end text-muted-foreground text-[10px]">
           <span>{nodeData.aspectRatio} @ {nodeData.fps}fps</span>
         </div>
       </div>

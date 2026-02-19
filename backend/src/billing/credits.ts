@@ -128,6 +128,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sora": 0,
   // ── LLM ──
   "ai-writer": 1,
+  "scene-graph-ai": 2,
+  "video-composer": 2,
   // ── Node types (legacy fallback for workflow estimation) ──
   "generate-script": 2,
   "generate-image": 1,

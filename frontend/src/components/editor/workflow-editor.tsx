@@ -56,7 +56,8 @@ import {
   lipSyncApi,
   motionTransferApi,
   videoUpscaleApi,
-  renderVideoApi,
+  generateSceneGraph,
+  renderVideoWithSceneGraph,
   generateCharacter,
   generateCharacterAsset,
   saveCharacter,
@@ -108,6 +109,7 @@ import type {
   LipSyncData,
   MotionTransferData,
   VideoUpscaleData,
+  VideoComposerData,
   RenderVideoData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -183,6 +185,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "adjust-volume": 0,
   "add-captions": 2,
   "mix-audio": 1,
+  "video-composer": 2,
   "render-video": 3,
   character: 5,
   object: 5,
@@ -696,6 +699,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "lip-sync",
     "motion-transfer",
     "video-upscale",
+    "video-composer",
     "render-video",
     "combine-videos",
     "merge-video-audio",
@@ -1073,6 +1077,85 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       return splitResults.length > 0 ? splitResults[0] : undefined;
     }
     return undefined;
+  }
+
+  const IMAGE_SOURCE_TYPES = new Set([
+    "generate-image", "upload-image", "edit-image", "image-to-image",
+  ]);
+  const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
+    "image-to-video", "video-to-video", "text-to-video", "upload-video",
+    "youtube-video", "combine-videos", "lip-sync", "motion-transfer",
+    "video-upscale", "suno-music-video", "merge-video-audio", "add-captions",
+    "resize-video", "trim-video",
+  ]);
+
+  function collectMediaAssets(
+    node: WorkflowNode,
+    allEdges: WorkflowEdge[],
+    allNodes: WorkflowNode[],
+  ): Array<{ id: string; type: "image" | "video"; url: string; label?: string }> {
+    const assetMap = new Map<string, { id: string; type: "image" | "video"; url: string; label?: string }>();
+    const incomingEdges = allEdges.filter((e) => e.target === node.id);
+    for (const edge of incomingEdges) {
+      const sourceNode = allNodes.find((n) => n.id === edge.source);
+      if (!sourceNode) continue;
+      const output = extractNodeOutput(sourceNode);
+      if (!output) continue;
+      const srcType = sourceNode.type ?? "";
+      if (IMAGE_SOURCE_TYPES.has(srcType)) {
+        assetMap.set(sourceNode.id, { id: sourceNode.id, type: "image", url: output, label: (sourceNode.data as Record<string, unknown>).label as string });
+      } else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(srcType)) {
+        assetMap.set(sourceNode.id, { id: sourceNode.id, type: "video", url: output, label: (sourceNode.data as Record<string, unknown>).label as string });
+      }
+    }
+    // Apply user-defined order
+    const nodeData = node.data as Record<string, unknown>;
+    const assetOrder = (nodeData.assetOrder as string[]) ?? [];
+    const orderedIds = [
+      ...assetOrder.filter((id) => assetMap.has(id)),
+      ...[...assetMap.keys()].filter((id) => !assetOrder.includes(id)),
+    ];
+    return orderedIds.map((id) => assetMap.get(id)!).filter(Boolean);
+  }
+
+  function buildAutoComposition(
+    assets: Array<{ id: string; type: "image" | "video"; url: string }>,
+    fps: number,
+    totalDuration: number,
+    aspectRatio: string,
+    backgroundColor: string,
+  ): Record<string, unknown> {
+    const perAssetDuration = totalDuration / assets.length;
+    const perAssetFrames = Math.round(perAssetDuration * fps);
+    const transitionFrames = 15;
+
+    const mediaSegments = assets.map((asset, i) => ({
+      id: `seg_${i}`,
+      src: asset.url,
+      mediaType: asset.type,
+      startFrame: i * perAssetFrames,
+      durationInFrames: perAssetFrames,
+      transitionIn: i > 0 ? { type: "fade", durationFrames: transitionFrames } : undefined,
+      transitionOut: i < assets.length - 1 ? { type: "fade", durationFrames: transitionFrames } : undefined,
+      effects: asset.type === "image"
+        ? [{ type: "kenBurns", startValue: 1.0, endValue: 1.1 }]
+        : [],
+    }));
+
+    return {
+      fps,
+      width: aspectRatio === "9:16" ? 1080 : aspectRatio === "1:1" ? 1080 : aspectRatio === "4:5" ? 1080 : 1920,
+      height: aspectRatio === "9:16" ? 1920 : aspectRatio === "1:1" ? 1080 : aspectRatio === "4:5" ? 1350 : 1080,
+      durationInFrames: Math.round(totalDuration * fps),
+      backgroundColor,
+      tracks: [
+        {
+          id: "track_media",
+          type: "media",
+          segments: mediaSegments,
+        },
+      ],
+    };
   }
 
   function extractNodeOutputAsList(node: WorkflowNode): string[] | undefined {
@@ -5182,83 +5265,100 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       );
     }
 
+    if (node.type === "video-composer") {
+      const d = node.data as VideoComposerData;
+      if (!d.compositionPrompt?.trim()) {
+        toast.error(`Node "${d.label}": no composition prompt set`);
+        return Promise.reject(new Error("No composition prompt"));
+      }
+      if (!user?.id) {
+        toast.error("Not authenticated");
+        return Promise.reject(new Error("Not authenticated"));
+      }
+      // Collect media assets from connected upstream nodes
+      const assets = collectMediaAssets(node, edges, nodes);
+      if (assets.length === 0) {
+        toast.error(`Node "${d.label}": no media assets connected`);
+        return Promise.reject(new Error("No media assets"));
+      }
+      const { updateNodeData } = useWorkflowStore.getState();
+      updateNodeData(node.id, {
+        executionStatus: "running",
+        sceneGraph: undefined,
+        errorMessage: undefined,
+      });
+      return generateSceneGraph({
+        prompt: d.compositionPrompt,
+        assets,
+        fps: d.fps,
+        aspectRatio: d.aspectRatio,
+        durationSeconds: d.durationSeconds,
+        userId: user.id,
+      })
+        .then((result) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            sceneGraph: result.sceneGraph,
+          });
+          toast.success("Composition generated");
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        });
+    }
+
     if (node.type === "render-video") {
       const d = node.data as RenderVideoData;
-      // Collect media assets from connected upstream nodes, keyed by source node ID
-      const assetMap = new Map<
-        string,
-        {
-          url: string;
-          type: "image" | "video" | "audio";
-          durationSeconds?: number;
-        }
-      >();
+      // Check if upstream video-composer is connected
       const incomingEdges = edges.filter((e) => e.target === node.id);
+      let upstreamSceneGraph: Record<string, unknown> | undefined;
       for (const edge of incomingEdges) {
         const sourceNode = nodes.find((n) => n.id === edge.source);
-        if (!sourceNode) continue;
-        const output = extractNodeOutput(sourceNode);
-        if (!output) continue;
-        const srcType = sourceNode.type ?? "";
-        if (
-          srcType === "generate-image" ||
-          srcType === "upload-image" ||
-          srcType === "edit-image" ||
-          srcType === "image-to-image"
-        ) {
-          assetMap.set(sourceNode.id, { url: output, type: "image" });
-        } else if (
-          srcType === "image-to-video" ||
-          srcType === "video-to-video" ||
-          srcType === "text-to-video" ||
-          srcType === "upload-video" ||
-          srcType === "youtube-video" ||
-          srcType === "combine-videos" ||
-          srcType === "lip-sync" ||
-          srcType === "motion-transfer" ||
-          srcType === "video-upscale" ||
-          srcType === "suno-music-video" ||
-          srcType === "merge-video-audio" ||
-          srcType === "add-captions" ||
-          srcType === "resize-video" ||
-          srcType === "trim-video"
-        ) {
-          assetMap.set(sourceNode.id, { url: output, type: "video" });
+        if (sourceNode?.type === "video-composer") {
+          const composerData = sourceNode.data as VideoComposerData;
+          if (composerData.sceneGraph) {
+            upstreamSceneGraph = composerData.sceneGraph;
+          }
+          break;
         }
       }
-      // Apply user-defined order if available, then append any unordered sources
-      const assetOrder = d.assetOrder ?? [];
-      const orderedIds = [
-        ...assetOrder.filter((id) => assetMap.has(id)),
-        ...[...assetMap.keys()].filter((id) => !assetOrder.includes(id)),
-      ];
-      const mediaAssets = orderedIds
-        .map((id) => assetMap.get(id)!)
-        .filter(Boolean);
+
+      if (upstreamSceneGraph) {
+        // Render from upstream composer's scene graph
+        return runProcessingNode(
+          node.id,
+          () => renderVideoWithSceneGraph({
+            sceneGraph: upstreamSceneGraph!,
+            userId: user?.id,
+          }),
+          "generatedVideoUrl",
+          "Render Video",
+        );
+      }
+
+      // Auto-compose from connected media
+      const mediaAssets = collectMediaAssets(node, edges, nodes);
       if (mediaAssets.length === 0) {
         toast.error(`Node "${d.label}": no media assets connected`);
         return Promise.reject(new Error("No media assets"));
       }
-      // Audio track from connected audio source
-      const audioTrackUrl = inputs.audioUrl;
+      const autoSceneGraph = buildAutoComposition(
+        mediaAssets,
+        d.fps,
+        d.durationSeconds,
+        d.aspectRatio,
+        d.backgroundColor,
+      );
       return runProcessingNode(
         node.id,
-        () =>
-          renderVideoApi({
-            template: d.template,
-            fps: d.fps,
-            aspectRatio: d.aspectRatio,
-            durationSeconds: d.durationSeconds,
-            transitionStyle: d.transitionStyle,
-            transitionDurationFrames: d.transitionDurationFrames,
-            mediaAssets,
-            audioTrackUrl,
-            textOverlays: [],
-            captions: d.captions,
-            backgroundColor: d.backgroundColor,
-            kenBurnsEnabled: d.kenBurnsEnabled,
-            userId: user?.id,
-          }),
+        () => renderVideoWithSceneGraph({
+          sceneGraph: autoSceneGraph,
+          userId: user?.id,
+        }),
         "generatedVideoUrl",
         "Render Video",
       );

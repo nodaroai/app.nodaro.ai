@@ -89,6 +89,7 @@ import type {
   MixAudioData,
   AdjustVolumeData,
   TrimVideoData,
+  VideoComposerData,
   RenderVideoData,
   SpeedRampData,
   LoopVideoData,
@@ -691,6 +692,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "trim-video" && (
             <TrimVideoConfig data={selectedNode.data as TrimVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "video-composer" && (
+            <VideoComposerConfig data={selectedNode.data as VideoComposerData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
           {selectedNode.type === "render-video" && (
             <RenderVideoConfig data={selectedNode.data as RenderVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -4792,7 +4796,16 @@ const RENDER_MEDIA_SOURCE_TYPES = new Set([
   "resize-video", "trim-video",
 ])
 
-function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
+const COMPOSER_PRESET_PROMPTS = [
+  { label: "Slideshow", prompt: "Create a smooth cinematic slideshow with fade transitions between each image" },
+  { label: "Explainer", prompt: "Create an explainer video with slide-in transitions, clear text overlays" },
+  { label: "Social Reel", prompt: "Create an energetic social media reel with zoom-in transitions and quick cuts" },
+  { label: "Documentary", prompt: "Create a documentary-style video with Ken Burns effect on images and atmospheric fades" },
+]
+
+function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoComposerData>) {
+  const [isGenerating, setIsGenerating] = useState(false)
+  const { user } = useAuth()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -4818,8 +4831,41 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
     onUpdate({ assetOrder: newOrder })
   }
 
+  async function handleGenerateComposition() {
+    if (!data.compositionPrompt?.trim() || !user?.id) return
+    setIsGenerating(true)
+    try {
+      const { generateSceneGraph } = await import("@/lib/api")
+      const assets = orderedSources.map((s) => {
+        const nd = s.nodeData ?? {}
+        const url = (nd.generatedImageUrl as string) || (nd.generatedVideoUrl as string) || s.value || ""
+        return {
+          id: s.id,
+          type: (s.type.includes("image") ? "image" : "video") as "image" | "video",
+          url,
+          label: s.label,
+        }
+      }).filter((a) => a.url)
+
+      const result = await generateSceneGraph({
+        prompt: data.compositionPrompt,
+        assets,
+        fps: data.fps,
+        aspectRatio: data.aspectRatio,
+        durationSeconds: data.durationSeconds,
+        userId: user.id,
+      })
+      onUpdate({ sceneGraph: result.sceneGraph })
+    } catch {
+      // Error toast handled by API layer
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
+      {/* 1. Media Order */}
       {orderedSources.length > 0 && (
         <div>
           <Label className="mb-1.5 block">Media Order</Label>
@@ -4840,164 +4886,301 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
           </DndContext>
         </div>
       )}
+
+      {/* 2. Composition Prompt */}
       <div>
-        <Label>Template</Label>
-        <Select
-          value={data.template}
-          onValueChange={(v) => onUpdate({ template: v as RenderVideoData["template"] })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="slideshow">Slideshow</SelectItem>
-            <SelectItem value="explainer">Explainer</SelectItem>
-            <SelectItem value="social-reel">Social Reel</SelectItem>
-            <SelectItem value="documentary">Documentary</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>Aspect Ratio</Label>
-        <Select
-          value={data.aspectRatio}
-          onValueChange={(v) => onUpdate({ aspectRatio: v as RenderVideoData["aspectRatio"] })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-            <SelectItem value="1:1">1:1 (Square)</SelectItem>
-            <SelectItem value="4:5">4:5 (Social)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="render-fps">FPS</Label>
-        <Select
-          value={String(data.fps)}
-          onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="24">24 fps (Film)</SelectItem>
-            <SelectItem value="30">30 fps (Standard)</SelectItem>
-            <SelectItem value="60">60 fps (Smooth)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="render-duration">Duration (seconds)</Label>
-        <Input
-          id="render-duration"
-          type="number"
-          min={1}
-          max={300}
-          value={data.durationSeconds}
-          onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
+        <Label className="mb-1.5 block">Composition Prompt</Label>
+        <Textarea
+          placeholder="Describe the style of video you want: cinematic product showcase with slow fades, energetic social reel with zoom cuts..."
+          value={data.compositionPrompt ?? ""}
+          onChange={(e) => onUpdate({ compositionPrompt: e.target.value })}
+          rows={3}
+          className="text-sm"
         />
       </div>
-      <div>
-        <Label>Transition</Label>
-        <Select
-          value={data.transitionStyle}
-          onValueChange={(v) => onUpdate({ transitionStyle: v as RenderVideoData["transitionStyle"] })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fade">Fade</SelectItem>
-            <SelectItem value="slide">Slide</SelectItem>
-            <SelectItem value="dissolve">Dissolve</SelectItem>
-            <SelectItem value="zoom">Zoom</SelectItem>
-            <SelectItem value="none">None</SelectItem>
-          </SelectContent>
-        </Select>
+
+      {/* 3. Preset Chips */}
+      <div className="flex flex-wrap gap-1">
+        {COMPOSER_PRESET_PROMPTS.map((preset) => (
+          <button
+            key={preset.label}
+            onClick={() => onUpdate({ compositionPrompt: preset.prompt })}
+            className="text-[10px] px-2 py-1 rounded-full border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#ff0073] hover:text-[#ff0073] transition-colors"
+          >
+            {preset.label}
+          </button>
+        ))}
       </div>
-      <div>
-        <Label htmlFor="render-transition-frames">Transition Duration (frames)</Label>
-        <Input
-          id="render-transition-frames"
-          type="number"
-          min={0}
-          max={60}
-          value={data.transitionDurationFrames}
-          onChange={(e) => onUpdate({ transitionDurationFrames: parseInt(e.target.value, 10) || 15 })}
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="render-ken-burns"
-          checked={data.kenBurnsEnabled}
-          onChange={(e) => onUpdate({ kenBurnsEnabled: e.target.checked })}
-          className="rounded border-muted-foreground/30"
-        />
-        <Label htmlFor="render-ken-burns" className="text-sm cursor-pointer">Ken Burns Effect</Label>
-      </div>
-      <Separator />
-      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Captions</div>
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="render-captions"
-          checked={data.captions.enabled}
-          onChange={(e) => onUpdate({ captions: { ...data.captions, enabled: e.target.checked } })}
-          className="rounded border-muted-foreground/30"
-        />
-        <Label htmlFor="render-captions" className="text-sm cursor-pointer">Enable Captions</Label>
-      </div>
-      {data.captions.enabled && (
+
+      {/* 4. Generate Button */}
+      <Button
+        onClick={handleGenerateComposition}
+        disabled={!data.compositionPrompt?.trim() || isGenerating || orderedSources.length === 0}
+        className="w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
+        size="sm"
+      >
+        {isGenerating ? (
+          <>
+            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Sparkles className="w-3 h-3 mr-1" />
+            Generate Composition
+            <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">2 CR</span>
+          </>
+        )}
+      </Button>
+
+      {/* 5. Scene Graph Preview (shown after generation) */}
+      {data.sceneGraph && (
         <>
-          <div>
-            <Label>Caption Style</Label>
-            <Select
-              value={data.captions.style}
-              onValueChange={(v) => onUpdate({ captions: { ...data.captions, style: v as RenderVideoData["captions"]["style"] } })}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="subtitle">Subtitle</SelectItem>
-                <SelectItem value="word-highlight">Word Highlight</SelectItem>
-                <SelectItem value="karaoke">Karaoke</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Caption Position</Label>
-            <Select
-              value={data.captions.position}
-              onValueChange={(v) => onUpdate({ captions: { ...data.captions, position: v as RenderVideoData["captions"]["position"] } })}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bottom">Bottom</SelectItem>
-                <SelectItem value="top">Top</SelectItem>
-                <SelectItem value="center">Center</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="render-caption-font-size">Caption Font Size</Label>
-            <Input
-              id="render-caption-font-size"
-              type="number"
-              min={12}
-              max={72}
-              value={data.captions.fontSize}
-              onChange={(e) => onUpdate({ captions: { ...data.captions, fontSize: parseInt(e.target.value, 10) || 24 } })}
-            />
-          </div>
+          <Separator />
+          <SceneGraphPreviewInline
+            sceneGraph={data.sceneGraph}
+            fps={data.fps}
+            onUpdate={(sg) => onUpdate({ sceneGraph: sg })}
+            onRegenerate={handleGenerateComposition}
+            isGenerating={isGenerating}
+          />
         </>
       )}
-      <div>
-        <Label htmlFor="render-bg">Background Color</Label>
-        <Input
-          id="render-bg"
-          type="color"
-          value={data.backgroundColor}
-          onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-          className="h-8 w-full"
-        />
-      </div>
+
+      {/* Advanced Settings */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="advanced" className="border-0">
+          <AccordionTrigger className="text-xs text-muted-foreground py-1.5 hover:no-underline">
+            Advanced Settings
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 pt-1">
+            <div>
+              <Label>Aspect Ratio</Label>
+              <Select
+                value={data.aspectRatio}
+                onValueChange={(v) => onUpdate({ aspectRatio: v as VideoComposerData["aspectRatio"] })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                  <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                  <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                  <SelectItem value="4:5">4:5 (Social)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="composer-fps">FPS</Label>
+              <Select
+                value={String(data.fps)}
+                onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="24">24 fps (Film)</SelectItem>
+                  <SelectItem value="30">30 fps (Standard)</SelectItem>
+                  <SelectItem value="60">60 fps (Smooth)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="composer-duration">Duration (seconds)</Label>
+              <Input
+                id="composer-duration"
+                type="number"
+                min={1}
+                max={300}
+                value={data.durationSeconds}
+                onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="composer-bg">Background Color</Label>
+              <Input
+                id="composer-bg"
+                type="color"
+                value={data.backgroundColor}
+                onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                className="h-8 w-full"
+              />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
+  )
+}
+
+function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  // Check if upstream video-composer is connected
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const upstreamComposer = useMemo(() => {
+    if (!selectedNodeId) return undefined
+    const inEdges = edges.filter((e) => e.target === selectedNodeId)
+    for (const edge of inEdges) {
+      const srcNode = nodes.find((n) => n.id === edge.source)
+      if (srcNode?.type === "video-composer") {
+        const composerData = srcNode.data as VideoComposerData
+        return { label: composerData.label, trackCount: ((composerData.sceneGraph as Record<string, unknown>)?.tracks as unknown[])?.length ?? 0 }
+      }
+    }
+    return undefined
+  }, [selectedNodeId, edges, nodes])
+
+  const mediaSources = sources.filter((s) => RENDER_MEDIA_SOURCE_TYPES.has(s.type))
+  const currentOrder = data.assetOrder ?? []
+  const orderedIds = [
+    ...currentOrder.filter((id) => mediaSources.some((s) => s.id === id)),
+    ...mediaSources.filter((s) => !currentOrder.includes(s.id)).map((s) => s.id),
+  ]
+  const orderedSources = orderedIds.map((id) => mediaSources.find((s) => s.id === id)!).filter(Boolean)
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = orderedIds.indexOf(String(active.id))
+    const newIndex = orderedIds.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    const newOrder = [...orderedIds]
+    const [moved] = newOrder.splice(oldIndex, 1)
+    newOrder.splice(newIndex, 0, moved)
+    onUpdate({ assetOrder: newOrder })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Upstream composer info */}
+      {upstreamComposer && (
+        <div className="flex items-center gap-2 p-2 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
+          <Sparkles className="w-4 h-4 text-[#ff0073] shrink-0" />
+          <div className="text-xs">
+            <span className="text-[var(--text-primary)]">Composition from </span>
+            <span className="font-medium text-[#ff0073]">{upstreamComposer.label}</span>
+            {upstreamComposer.trackCount > 0 && (
+              <span className="ml-1 text-muted-foreground">({upstreamComposer.trackCount} tracks)</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Media Order (for auto-compose mode when no composer connected) */}
+      {!upstreamComposer && orderedSources.length > 0 && (
+        <div>
+          <Label className="mb-1.5 block">Media Order</Label>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-1">
+                {orderedSources.map((s, i) => (
+                  <SortableAssetItem
+                    key={s.id}
+                    id={s.id}
+                    index={i}
+                    label={s.label}
+                    typeLabel={s.type.includes("image") ? "img" : "vid"}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+
+      {/* Advanced Settings */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="advanced" className="border-0">
+          <AccordionTrigger className="text-xs text-muted-foreground py-1.5 hover:no-underline">
+            Advanced Settings
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 pt-1">
+            <div>
+              <Label>Aspect Ratio</Label>
+              <Select
+                value={data.aspectRatio}
+                onValueChange={(v) => onUpdate({ aspectRatio: v as RenderVideoData["aspectRatio"] })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                  <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                  <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                  <SelectItem value="4:5">4:5 (Social)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="render-fps">FPS</Label>
+              <Select
+                value={String(data.fps)}
+                onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="24">24 fps (Film)</SelectItem>
+                  <SelectItem value="30">30 fps (Standard)</SelectItem>
+                  <SelectItem value="60">60 fps (Smooth)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="render-duration">Duration (seconds)</Label>
+              <Input
+                id="render-duration"
+                type="number"
+                min={1}
+                max={300}
+                value={data.durationSeconds}
+                onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="render-bg">Background Color</Label>
+              <Input
+                id="render-bg"
+                type="color"
+                value={data.backgroundColor}
+                onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                className="h-8 w-full"
+              />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  )
+}
+
+const LazySceneGraphPreview = lazy(() => import("@/components/editor/scene-graph-preview").then(m => ({ default: m.SceneGraphPreview })))
+
+function SceneGraphPreviewInline({
+  sceneGraph,
+  fps,
+  onUpdate,
+  onRegenerate,
+  isGenerating,
+}: {
+  sceneGraph: Record<string, unknown>
+  fps: number
+  onUpdate: (sg: Record<string, unknown>) => void
+  onRegenerate: () => void
+  isGenerating: boolean
+}) {
+  return (
+    <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+      <LazySceneGraphPreview
+        sceneGraph={sceneGraph}
+        fps={fps}
+        onUpdate={onUpdate}
+        onRegenerate={onRegenerate}
+        isGenerating={isGenerating}
+      />
+    </Suspense>
   )
 }
 
