@@ -98,30 +98,37 @@ const REMOTION_PKG_DIR = join(
 async function bundleEntry(
   entryFile: string,
   label: string,
+  useR3FAliases: boolean,
 ): Promise<string> {
   const { bundle } = await import("@remotion/bundler")
   const entryPoint = join(REMOTION_PKG_DIR, "src", entryFile)
-  const nodeModules = join(REMOTION_PKG_DIR, "node_modules")
 
   console.log(`[render-worker] Bundling ${label}...`)
   const bundlePath = await bundle({
     entryPoint,
-    // Force single copies of React packages to avoid version mismatches
-    // between @react-three/fiber's nested scheduler@0.21 and React 18.3's
-    // scheduler@0.23.
-    webpackOverride: (config) => ({
-      ...config,
-      resolve: {
-        ...config.resolve,
-        alias: {
-          ...(config.resolve?.alias ?? {}),
-          react: join(nodeModules, "react"),
-          "react-dom": join(nodeModules, "react-dom"),
-          scheduler: join(nodeModules, "scheduler"),
-          "react-reconciler": join(nodeModules, "react-reconciler"),
-        },
-      },
-    }),
+    // Only the 3D bundle needs webpack aliases to de-duplicate React packages.
+    // @react-three/fiber bundles its own scheduler@0.21 which conflicts with
+    // React 18.3's scheduler@0.23. The main bundle must NOT have aliases —
+    // they break Remotion's own module resolution.
+    ...(useR3FAliases
+      ? {
+          webpackOverride: (config) => {
+            const nodeModules = join(REMOTION_PKG_DIR, "node_modules")
+            return {
+              ...config,
+              resolve: {
+                ...config.resolve,
+                alias: {
+                  ...(config.resolve?.alias ?? {}),
+                  react: join(nodeModules, "react"),
+                  "react-dom": join(nodeModules, "react-dom"),
+                  scheduler: join(nodeModules, "scheduler"),
+                },
+              },
+            }
+          },
+        }
+      : {}),
     onProgress: (progress: number) => {
       if (progress % 25 === 0) {
         console.log(`[render-worker] ${label} bundle progress: ${progress}%`)
@@ -135,12 +142,12 @@ async function bundleEntry(
 async function getBundlePath(compositionId: string): Promise<string> {
   if (compositionId === "3d-title") {
     if (!cached3DBundlePath) {
-      cached3DBundlePath = await bundleEntry("Root3D.tsx", "3D compositions")
+      cached3DBundlePath = await bundleEntry("Root3D.tsx", "3D compositions", true)
     }
     return cached3DBundlePath
   }
   if (!cachedMainBundlePath) {
-    cachedMainBundlePath = await bundleEntry("Root.tsx", "main compositions")
+    cachedMainBundlePath = await bundleEntry("Root.tsx", "main compositions", false)
   }
   return cachedMainBundlePath
 }
