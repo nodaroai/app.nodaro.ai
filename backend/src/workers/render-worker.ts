@@ -93,8 +93,27 @@ async function getBundlePath(): Promise<string> {
   const entryPoint = join(currentDir, "../../../packages/remotion/src/Root.tsx")
 
   console.log("[render-worker] Bundling Remotion compositions...")
+  // Resolve the remotion package's node_modules for webpack aliasing
+  const remotionPkgDir = join(currentDir, "../../../packages/remotion")
+  const remotionNodeModules = join(remotionPkgDir, "node_modules")
+
   cachedBundlePath = await bundle({
     entryPoint,
+    // @react-three/fiber bundles its own scheduler@0.21 which conflicts with
+    // React 18.3's scheduler@0.23, causing "Cannot read properties of undefined
+    // (reading 'ReactCurrentBatchConfig')". Force single copies.
+    webpackOverride: (config) => ({
+      ...config,
+      resolve: {
+        ...config.resolve,
+        alias: {
+          ...(config.resolve?.alias ?? {}),
+          react: join(remotionNodeModules, "react"),
+          "react-dom": join(remotionNodeModules, "react-dom"),
+          scheduler: join(remotionNodeModules, "scheduler"),
+        },
+      },
+    }),
     onProgress: (progress: number) => {
       if (progress % 25 === 0) {
         console.log(`[render-worker] Bundle progress: ${progress}%`)
