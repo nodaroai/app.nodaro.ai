@@ -410,10 +410,14 @@ export function createRenderWorker() {
         // Select composition and render
         const { selectComposition, renderMedia } = await import("@remotion/renderer")
 
+        // Use system Chromium on Alpine Linux (glibc chrome-headless-shell won't work on musl)
+        const browserExecutable = process.env.CHROME_PATH || undefined
+
         const composition = await selectComposition({
           serveUrl: bundlePath,
           id: compositionId,
           inputProps,
+          browserExecutable,
         })
 
         const outputPath = join(workDir, "output.mp4")
@@ -432,6 +436,7 @@ export function createRenderWorker() {
             codec: "h264",
             outputLocation: outputPath,
             inputProps,
+            browserExecutable,
             onProgress: ({ progress }: { progress: number }) => {
               const overall = 40 + Math.round(progress * 50)
               bullJob.updateProgress(overall).catch(() => {})
