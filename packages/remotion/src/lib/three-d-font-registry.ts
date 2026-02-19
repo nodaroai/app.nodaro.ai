@@ -2,18 +2,13 @@
  * Bundled typeface.json font registry for 3D Title compositions.
  * Text3D in Three.js requires typeface.json format (NOT TTF/OTF).
  *
- * The helvetiker font ships with the three.js npm package at:
- *   node_modules/three/examples/fonts/helvetiker_regular.typeface.json
- * We host a copy in public/fonts/ for Remotion rendering.
- *
- * CDN URLs are also accepted as fallbacks.
+ * Fonts are served from public/fonts/ via Remotion's staticFile().
+ * This avoids network fetches to external CDNs during rendering.
  */
-
-const HELVETIKER_CDN =
-  "https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/fonts/helvetiker_regular.typeface.json"
+import { staticFile } from "remotion"
 
 const BUNDLED_FONTS: Record<string, string> = {
-  helvetiker: HELVETIKER_CDN,
+  helvetiker: staticFile("fonts/helvetiker_regular.typeface.json"),
 }
 
 export const DEFAULT_3D_FONT = "helvetiker"
@@ -23,7 +18,7 @@ export const BUNDLED_3D_FONT_NAMES = Object.keys(BUNDLED_FONTS)
 /**
  * Resolve a font name or URL to a typeface.json path.
  * - HTTP(S) URL → returned as-is
- * - Known bundled font name → CDN/local path
+ * - Known bundled font name → local static path
  * - Unknown name → fallback to default font
  */
 export function resolve3DFontPath(fontNameOrUrl: string): string {

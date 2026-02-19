@@ -111,6 +111,7 @@ async function getBundlePath(): Promise<string> {
           react: join(remotionNodeModules, "react"),
           "react-dom": join(remotionNodeModules, "react-dom"),
           scheduler: join(remotionNodeModules, "scheduler"),
+          "react-reconciler": join(remotionNodeModules, "react-reconciler"),
         },
       },
     }),

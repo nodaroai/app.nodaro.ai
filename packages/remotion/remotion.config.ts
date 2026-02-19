@@ -15,6 +15,7 @@ Config.overrideWebpackConfig((config) => {
     react: path.resolve(nodeModules, "react"),
     "react-dom": path.resolve(nodeModules, "react-dom"),
     scheduler: path.resolve(nodeModules, "scheduler"),
+    "react-reconciler": path.resolve(nodeModules, "react-reconciler"),
   }
   return config
 })
