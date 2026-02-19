@@ -51,7 +51,10 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
 
   // Build combined CSS filter (color grading + animated blur)
   const filters: string[] = []
-  if (colorGrade) filters.push(buildColorGradeFilter(colorGrade))
+  if (colorGrade) {
+    const cg = buildColorGradeFilter(colorGrade)
+    if (cg) filters.push(cg)
+  }
   if (animatedBlur) {
     const easingFn = EASING_MAP[animatedBlur.easing ?? "linear"] ?? Easing.linear
     const blur = interpolate(
@@ -62,22 +65,21 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
     )
     if (blur > 0.1) filters.push(`blur(${blur.toFixed(1)}px)`)
   }
-  const videoFilter = filters.length > 0 ? filters.join(" ") : "none"
+  const videoFilter = filters.length > 0 ? filters.join(" ") : undefined
 
   // Build the core content (effects + overlays)
   const content = (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
-      {/* 1. Base video layer with color grading applied via CSS filter */}
-      <AbsoluteFill style={{ filter: videoFilter }}>
-        <Video
-          src={sourceVideo}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-          }}
-        />
-      </AbsoluteFill>
+      {/* 1. Base video layer with color grading + blur applied directly to Video */}
+      <Video
+        src={sourceVideo}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          filter: videoFilter,
+        }}
+      />
 
       {/* 2. Vignette overlay */}
       {vignette && (

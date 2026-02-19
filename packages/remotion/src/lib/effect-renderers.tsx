@@ -25,7 +25,7 @@ export function buildColorGradeFilter(effect: ColorGradeEffect): string {
     const hue = effect.temperature > 0 ? -10 : 180
     if (absTemp > 20) parts.push(`hue-rotate(${hue}deg)`)
   }
-  return parts.length > 0 ? parts.join(" ") : "none"
+  return parts.length > 0 ? parts.join(" ") : ""
 }
 
 /**
