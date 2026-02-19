@@ -68,25 +68,25 @@ function EffectEditor({
               <SliderField label="Brightness" value={effect.brightness as number ?? 1} min={0.5} max={2} step={0.05} onChange={(v) => onChange({ ...effect, brightness: v })} />
               <SliderField label="Contrast" value={effect.contrast as number ?? 1} min={0.5} max={2} step={0.05} onChange={(v) => onChange({ ...effect, contrast: v })} />
               <SliderField label="Saturation" value={effect.saturation as number ?? 1} min={0} max={3} step={0.05} onChange={(v) => onChange({ ...effect, saturation: v })} />
-              <SliderField label="Temperature" value={effect.temperature as number ?? 0} min={-1} max={1} step={0.05} onChange={(v) => onChange({ ...effect, temperature: v })} />
+              <SliderField label="Temperature" value={effect.temperature as number ?? 0} min={-100} max={100} step={1} onChange={(v) => onChange({ ...effect, temperature: v })} />
             </>
           )}
           {effect.type === "vignette" && (
             <>
               <SliderField label="Intensity" value={effect.intensity as number ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, intensity: v })} />
-              <SliderField label="Radius" value={effect.radius as number ?? 0.7} min={0.1} max={1} step={0.05} onChange={(v) => onChange({ ...effect, radius: v })} />
+              <SliderField label="Radius" value={effect.radius as number ?? 0.7} min={0.2} max={1} step={0.05} onChange={(v) => onChange({ ...effect, radius: v })} />
             </>
           )}
           {effect.type === "film-grain" && (
             <>
               <SliderField label="Intensity" value={effect.intensity as number ?? 0.3} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, intensity: v })} />
-              <SliderField label="Size" value={effect.size as number ?? 1.5} min={0.5} max={4} step={0.1} onChange={(v) => onChange({ ...effect, size: v })} />
+              <SliderField label="Size" value={effect.size as number ?? 2} min={1} max={4} step={0.1} onChange={(v) => onChange({ ...effect, size: v })} />
             </>
           )}
           {effect.type === "noise-overlay" && (
             <>
-              <SliderField label="Opacity" value={effect.opacity as number ?? 0.15} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, opacity: v })} />
-              <SliderField label="Scale" value={effect.scale as number ?? 1} min={0.1} max={5} step={0.1} onChange={(v) => onChange({ ...effect, scale: v })} />
+              <SliderField label="Opacity" value={effect.opacity as number ?? 0.1} min={0} max={0.5} step={0.01} onChange={(v) => onChange({ ...effect, opacity: v })} />
+              <SliderField label="Scale" value={effect.scale as number ?? 0.005} min={0.001} max={0.01} step={0.001} onChange={(v) => onChange({ ...effect, scale: v })} />
             </>
           )}
           {effect.type === "letterbox" && (
@@ -111,7 +111,7 @@ function EffectEditor({
           {effect.type === "motion-blur" && (
             <>
               <SliderField label="Shutter Angle" value={effect.shutterAngle as number ?? 180} min={0} max={360} step={1} onChange={(v) => onChange({ ...effect, shutterAngle: v })} />
-              <SliderField label="Samples" value={effect.samples as number ?? 10} min={1} max={30} step={1} onChange={(v) => onChange({ ...effect, samples: v })} />
+              <SliderField label="Samples" value={effect.samples as number ?? 10} min={1} max={16} step={1} onChange={(v) => onChange({ ...effect, samples: v })} />
             </>
           )}
         </div>
