@@ -410,7 +410,7 @@ export function createRenderWorker() {
         // Select composition and render
         const { selectComposition, renderMedia } = await import("@remotion/renderer")
 
-        // Use system Chromium on Alpine Linux (glibc chrome-headless-shell won't work on musl)
+        // Allow overriding Remotion's bundled chrome-headless-shell (e.g. custom Docker images)
         const browserExecutable = process.env.CHROME_PATH || undefined
 
         const composition = await selectComposition({

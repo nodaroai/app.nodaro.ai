@@ -51,13 +51,21 @@ ENV VITE_PADDLE_ENVIRONMENT=$VITE_PADDLE_ENVIRONMENT
 RUN npm run build
 
 # ── Stage 4: Production runner ───────────────────────────────────────
-FROM node:20-alpine AS runner
+# Debian slim (glibc) — required for Remotion's chrome-headless-shell binary.
+# Alpine (musl) is incompatible with Chrome/Chromium glibc binaries.
+FROM node:20-slim AS runner
 
-RUN apk add --no-cache libc6-compat ffmpeg caddy curl \
-    chromium nss freetype harfbuzz ca-certificates ttf-freefont
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg curl \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
+    libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
+    libatspi2.0-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/bin/caddy \
+    && chmod +x /usr/bin/caddy
 
 ENV NODE_ENV=production
-ENV CHROME_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 
