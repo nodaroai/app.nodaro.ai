@@ -34,6 +34,7 @@ const EFFECT_LABELS: Record<string, string> = {
   "noise-overlay": "Noise Overlay",
   letterbox: "Letterbox",
   "motion-blur": "Motion Blur",
+  "animated-blur": "Animated Blur",
 }
 
 function EffectEditor({
@@ -112,6 +113,14 @@ function EffectEditor({
             <>
               <SliderField label="Shutter Angle" value={effect.shutterAngle as number ?? 180} min={0} max={360} step={1} onChange={(v) => onChange({ ...effect, shutterAngle: v })} />
               <SliderField label="Samples" value={effect.samples as number ?? 10} min={1} max={16} step={1} onChange={(v) => onChange({ ...effect, samples: v })} />
+            </>
+          )}
+          {effect.type === "animated-blur" && (
+            <>
+              <SliderField label="Start Blur" value={effect.startBlur as number ?? 20} min={0} max={50} step={1} onChange={(v) => onChange({ ...effect, startBlur: v })} />
+              <SliderField label="End Blur" value={effect.endBlur as number ?? 0} min={0} max={50} step={1} onChange={(v) => onChange({ ...effect, endBlur: v })} />
+              <SliderField label="Start Frame" value={effect.startFrame as number ?? 0} min={0} max={600} step={1} onChange={(v) => onChange({ ...effect, startFrame: v })} />
+              <SliderField label="Duration (frames)" value={effect.durationFrames as number ?? 60} min={1} max={300} step={1} onChange={(v) => onChange({ ...effect, durationFrames: v })} />
             </>
           )}
         </div>

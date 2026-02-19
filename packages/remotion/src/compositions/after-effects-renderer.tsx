@@ -1,5 +1,5 @@
 import React from "react"
-import { AbsoluteFill, Video, Sequence } from "remotion"
+import { AbsoluteFill, Video, Sequence, useCurrentFrame, interpolate, Easing } from "remotion"
 import type { AfterEffectsPlan, AfterEffect } from "../plan-types"
 import {
   buildColorGradeFilter,
@@ -9,6 +9,13 @@ import {
   NoiseOverlay,
 } from "../lib/effect-renderers"
 import { SceneTextSegment } from "../lib/scene-text-segment"
+
+const EASING_MAP: Record<string, (t: number) => number> = {
+  linear: Easing.linear,
+  easeIn: Easing.ease,
+  easeOut: Easing.out(Easing.ease),
+  easeInOut: Easing.inOut(Easing.ease),
+}
 
 interface AfterEffectsRendererProps {
   readonly plan: AfterEffectsPlan
@@ -30,14 +37,29 @@ function getEffectByType<T extends AfterEffect["type"]>(
 export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
   const { width, height, sourceVideo, effects, textOverlays } = plan
 
+  const frame = useCurrentFrame()
+
   const colorGrade = getEffectByType(effects, "color-grade")
   const vignette = getEffectByType(effects, "vignette")
   const filmGrain = getEffectByType(effects, "film-grain")
   const noiseOverlay = getEffectByType(effects, "noise-overlay")
   const letterbox = getEffectByType(effects, "letterbox")
+  const animatedBlur = getEffectByType(effects, "animated-blur")
 
-  // Build CSS filter for color grading
-  const videoFilter = colorGrade ? buildColorGradeFilter(colorGrade) : "none"
+  // Build combined CSS filter (color grading + animated blur)
+  const filters: string[] = []
+  if (colorGrade) filters.push(buildColorGradeFilter(colorGrade))
+  if (animatedBlur) {
+    const easingFn = EASING_MAP[animatedBlur.easing ?? "linear"] ?? Easing.linear
+    const blur = interpolate(
+      frame,
+      [animatedBlur.startFrame, animatedBlur.startFrame + animatedBlur.durationFrames],
+      [animatedBlur.startBlur, animatedBlur.endBlur],
+      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easingFn },
+    )
+    if (blur > 0.1) filters.push(`blur(${blur.toFixed(1)}px)`)
+  }
+  const videoFilter = filters.length > 0 ? filters.join(" ") : "none"
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>

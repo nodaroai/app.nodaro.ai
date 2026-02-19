@@ -42,6 +42,15 @@ const motionBlurSchema = z.object({
   samples: z.number().min(1).max(16).default(10),
 })
 
+const animatedBlurSchema = z.object({
+  type: z.literal("animated-blur"),
+  startBlur: z.number().min(0).max(50),
+  endBlur: z.number().min(0).max(50),
+  startFrame: z.number().min(0),
+  durationFrames: z.number().min(1),
+  easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut"]).optional(),
+})
+
 const afterEffectSchema = z.discriminatedUnion("type", [
   colorGradeSchema,
   vignetteSchema,
@@ -49,6 +58,7 @@ const afterEffectSchema = z.discriminatedUnion("type", [
   noiseOverlaySchema,
   letterboxSchema,
   motionBlurSchema,
+  animatedBlurSchema,
 ])
 
 const textOverlaySchema = z.object({
@@ -157,6 +167,12 @@ export function validateAfterEffectsPlan(
           ...effect,
           opacity: clamp(effect.opacity, 0, 0.5),
           scale: clamp(effect.scale, 0.001, 0.01),
+        }
+      case "animated-blur":
+        return {
+          ...effect,
+          startBlur: clamp(effect.startBlur, 0, 50),
+          endBlur: clamp(effect.endBlur, 0, 50),
         }
       default:
         return effect

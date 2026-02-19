@@ -58,6 +58,16 @@ Add motion blur (uses Remotion's CameraMotionBlur).
 - shutterAngle: 0-360 (180 = standard film)
 - samples: 1-16 (quality, higher = smoother but slower)
 
+### animated-blur
+Animate blur over time (reveal, defocus, dream transitions).
+{ "type": "animated-blur", "startBlur": 20, "endBlur": 0, "startFrame": 0, "durationFrames": 60, "easing": "easeOut" }
+- startBlur: 0-50 (blur pixels at start)
+- endBlur: 0-50 (blur pixels at end)
+- startFrame: frame when animation begins
+- durationFrames: how many frames the animation takes
+- easing: "linear" | "easeIn" | "easeOut" | "easeInOut"
+Common patterns: blur-to-clear reveal (20→0), defocus outro (0→20), dream sequence (0→10)
+
 ## Text Overlays (optional)
 
 { "id": "text-1", "text": "CHAPTER ONE", "startFrame": 0, "durationInFrames": 90, "position": "center", "fontSize": 48, "color": "#ffffff", "animation": "fade" }
@@ -70,7 +80,8 @@ Add motion blur (uses Remotion's CameraMotionBlur).
 - **Cinematic**: film-grain (0.2-0.4) + vignette (0.4-0.6) + cool temperature (-20 to -40) + slightly desaturated (0.8-0.9) + letterbox 2.35
 - **Vintage/Retro**: warm temperature (30-60) + high grain (0.4-0.6) + low contrast (0.8) + desaturated (0.7-0.8) + vignette (0.5)
 - **Horror/Dark**: high contrast (1.3-1.5) + desaturated (0.3-0.5) + cool temperature (-40 to -60) + heavy vignette (0.7-0.9, radius 0.5)
-- **Dreamy**: low contrast (0.8) + warm temperature (20-40) + soft grain (0.1-0.2) + slight desaturation (0.85)
+- **Dreamy**: low contrast (0.8) + warm temperature (20-40) + soft grain (0.1-0.2) + slight desaturation (0.85) + animated-blur (0→8, easeOut)
+- **Reveal/Intro**: animated-blur (20→0, easeOut) over first 2 seconds + vignette (0.3)
 - **Documentary**: subtle grain (0.1-0.2) + neutral color grade + letterbox 1.85
 - **Music Video**: high saturation (1.3-1.8) + high contrast (1.2) + no grain
 - **Clean/Modern**: minimal effects, slight contrast boost (1.1), no grain

@@ -141,13 +141,35 @@ Effect style: ${prompt}`
         }
 
         // Validate and auto-fix
-        const validation = validateAfterEffectsPlan(rawJson, inputVideoUrl, fps, durationInFrames)
+        let validation = validateAfterEffectsPlan(rawJson, inputVideoUrl, fps, durationInFrames)
 
         if (validation.autoFixed.length > 0) {
           console.log(`[after-effects-ai] Auto-fixed ${validation.autoFixed.length} issues for job ${job.id}`)
         }
 
-        const effectPlan = validation.plan ?? rawJson
+        let effectPlan = validation.plan
+
+        // If validation fails, try to salvage by filtering to valid effect types only
+        if (!validation.valid) {
+          const obj = (typeof rawJson === "object" && rawJson !== null ? { ...rawJson as Record<string, unknown> } : {}) as Record<string, unknown>
+          const validTypes = new Set(["color-grade", "vignette", "film-grain", "noise-overlay", "letterbox", "motion-blur", "animated-blur"])
+          const filteredEffects = (obj.effects as Array<Record<string, unknown>>)?.filter(
+            (e) => validTypes.has(e.type as string),
+          ) ?? []
+          if (filteredEffects.length > 0) {
+            obj.effects = filteredEffects
+            const retry = validateAfterEffectsPlan(obj, inputVideoUrl, fps, durationInFrames)
+            if (retry.valid) {
+              effectPlan = retry.plan
+              validation = retry
+              console.log(`[after-effects-ai] Salvaged plan for job ${job.id} by filtering invalid effects`)
+            } else {
+              throw new Error("AI returned an invalid effect plan. Please try a different prompt.")
+            }
+          } else {
+            throw new Error("AI returned an invalid effect plan. Please try a different prompt.")
+          }
+        }
 
         // Finalize job
         await supabase

@@ -40,6 +40,15 @@ export interface MotionBlurEffect {
   readonly samples: number       // 1 - 16
 }
 
+export interface AnimatedBlurEffect {
+  readonly type: "animated-blur"
+  readonly startBlur: number       // 0-50 pixels
+  readonly endBlur: number         // 0-50 pixels
+  readonly startFrame: number
+  readonly durationFrames: number
+  readonly easing?: "linear" | "easeIn" | "easeOut" | "easeInOut"
+}
+
 export type AfterEffect =
   | ColorGradeEffect
   | VignetteEffect
@@ -47,6 +56,7 @@ export type AfterEffect =
   | NoiseOverlayEffect
   | LetterboxEffect
   | MotionBlurEffect
+  | AnimatedBlurEffect
 
 export interface AfterEffectsTextOverlay {
   readonly id: string
