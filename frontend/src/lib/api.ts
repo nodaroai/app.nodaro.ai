@@ -1774,6 +1774,119 @@ export async function generateSceneGraph(params: {
   return res.json()
 }
 
+// --- After Effects ---
+
+export async function generateAfterEffects(params: {
+  prompt: string
+  inputVideoUrl: string
+  fps: number
+  width: number
+  height: number
+  durationSeconds: number
+  userId: string
+}): Promise<{ jobId: string; effectPlan: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/after-effects/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "After effects generation failed")
+  }
+  return res.json()
+}
+
+export async function renderVideoWithPlan(params: {
+  planType: string
+  plan: Record<string, unknown>
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/render-video/plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start plan-based video render")
+  }
+  return res.json()
+}
+
+// --- Lottie Overlay ---
+
+export async function generateLottieOverlay(params: {
+  prompt: string
+  inputVideoUrl: string
+  fps: number
+  durationSeconds: number
+  width?: number
+  height?: number
+  lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
+  userId: string
+}): Promise<{ jobId: string; overlayPlan: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/lottie-overlay/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Lottie overlay generation failed")
+  }
+  return res.json()
+}
+
+// --- 3D Title ---
+
+export async function generate3DTitle(params: {
+  prompt: string
+  fps: number
+  aspectRatio?: string
+  width?: number
+  height?: number
+  durationSeconds: number
+  backgroundColor?: string
+  backgroundMediaUrl?: string
+  userId: string
+}): Promise<{ jobId: string; titlePlan: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/3d-title/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "3D title generation failed")
+  }
+  return res.json()
+}
+
+// --- Motion Graphics ---
+
+export async function generateMotionGraphics(params: {
+  prompt: string
+  fps: number
+  aspectRatio?: string
+  width?: number
+  height?: number
+  durationSeconds: number
+  backgroundColor?: string
+  userId: string
+}): Promise<{ jobId: string; motionPlan: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/motion-graphics/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Motion graphics generation failed")
+  }
+  return res.json()
+}
+
 // --- AI Writer ---
 
 export async function generateAIWriter(params: {

@@ -1,5 +1,6 @@
-import React from "react"
-import { AbsoluteFill, Img, Video, useCurrentFrame, useVideoConfig, interpolate } from "remotion"
+import type React from "react"
+import { Img, Video, useCurrentFrame, useVideoConfig, interpolate } from "remotion"
+import { Gif } from "@remotion/gif"
 import type { MediaSegment } from "../scene-graph"
 import {
   computeTransitionIn,
@@ -98,14 +99,29 @@ export function SceneMediaSegment({
     objectFit,
   }
 
+  function renderMedia() {
+    switch (segment.mediaType) {
+      case "gif":
+        return (
+          <Gif
+            src={segment.src}
+            width={containerWidth}
+            height={containerHeight}
+            fit={objectFit}
+            style={{ width: mediaWidth, height: mediaHeight }}
+          />
+        )
+      case "image":
+        return <Img src={segment.src} style={mediaStyle} />
+      case "video":
+        return <Video src={segment.src} style={mediaStyle} />
+    }
+  }
+
   return (
     <div style={containerStyle}>
       <div style={wrapperStyle}>
-        {segment.mediaType === "image" ? (
-          <Img src={segment.src} style={mediaStyle} />
-        ) : (
-          <Video src={segment.src} style={mediaStyle} />
-        )}
+        {renderMedia()}
       </div>
     </div>
   )

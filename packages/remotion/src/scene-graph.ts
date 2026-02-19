@@ -42,7 +42,7 @@ export interface SegmentLayout {
 export interface MediaSegment {
   readonly id: string
   readonly src: string
-  readonly mediaType: "image" | "video"
+  readonly mediaType: "image" | "video" | "gif"
   readonly startFrame: number
   readonly durationInFrames: number
   readonly layout: SegmentLayout
@@ -61,6 +61,7 @@ export interface TextSegment {
   readonly color: string
   readonly fontWeight?: number
   readonly fontStyle?: "normal" | "italic"
+  readonly fontFamily?: string
   readonly animation: TextAnimation
 }
 

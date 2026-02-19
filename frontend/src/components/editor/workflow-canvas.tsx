@@ -9,6 +9,7 @@ import {
   ConnectionMode,
   useReactFlow,
   type NodeMouseHandler,
+  type IsValidConnection,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 
@@ -87,6 +88,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
   const isMobile = useIsMobile()
+
+  // Prevent composition handles from connecting to non-Render-Video nodes
+  const isValidConnection = useCallback<IsValidConnection>(
+    (connection) => {
+      if (connection.sourceHandle === "composition") {
+        const targetNode = nodes.find((n) => n.id === connection.target)
+        return targetNode?.type === "render-video"
+      }
+      return true
+    },
+    [nodes],
+  )
 
   // Transform edges to be animated when source or target node is running, or highlighted when dragging
   const animatedEdges = useMemo(() => {
@@ -467,6 +480,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          isValidConnection={isValidConnection}
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
           onNodeContextMenu={handleNodeContextMenu}

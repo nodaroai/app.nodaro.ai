@@ -131,6 +131,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ai-writer": 1,
   "scene-graph-ai": 2,
   "video-composer": 2,
+  "after-effects": 2,
+  "lottie-overlay": 2,
+  "3d-title": 3,
+  "motion-graphics": 2,
   // ── Node types (legacy fallback for workflow estimation) ──
   "generate-script": 2,
   "generate-image": 1,
@@ -710,7 +714,7 @@ export class CreditsService {
     // Get the usage log to find credits to refund
     const { data: usageLog, error: logError } = await supabase
       .from("usage_logs")
-      .select("user_id, credits_used, metadata")
+      .select("user_id, job_id, credits_used, metadata")
       .eq("id", usageLogId)
       .single()
 
@@ -742,7 +746,7 @@ export class CreditsService {
       creditType: "topup",
       source: "refund",
       description: "Refund for failed job",
-      jobId: usageLogId,
+      jobId: usageLog.job_id ?? undefined,
       balanceAfter: 0,
     })
 

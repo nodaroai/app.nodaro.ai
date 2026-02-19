@@ -947,6 +947,62 @@ export type VideoComposerData = {
   errorMessage?: string
 }
 
+export type AfterEffectsData = {
+  [key: string]: unknown
+  label: string
+  effectPrompt: string
+  effectPlan?: Record<string, unknown>
+  inputVideoUrl?: string
+  width?: number
+  height?: number
+  fps: number
+  durationSeconds: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+export type LottieOverlayData = {
+  [key: string]: unknown
+  label: string
+  overlayPrompt: string
+  overlayPlan?: Record<string, unknown>
+  inputVideoUrl?: string
+  width?: number
+  height?: number
+  lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
+  fps: number
+  durationSeconds: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+export type ThreeDTitleData = {
+  [key: string]: unknown
+  label: string
+  titlePrompt: string
+  titlePlan?: Record<string, unknown>
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
+  backgroundColor: string
+  backgroundMediaUrl?: string
+  fps: number
+  durationSeconds: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+export type MotionGraphicsData = {
+  [key: string]: unknown
+  label: string
+  motionPrompt: string
+  motionPlan?: Record<string, unknown>
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
+  backgroundColor: string
+  fps: number
+  durationSeconds: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 export type RenderVideoData = {
   [key: string]: unknown
   label: string
@@ -1374,6 +1430,10 @@ export type SceneNodeData =
   | AdjustVolumeData
   | TrimVideoData
   | VideoComposerData
+  | AfterEffectsData
+  | LottieOverlayData
+  | ThreeDTitleData
+  | MotionGraphicsData
   | RenderVideoData
   | SpeedRampData
   | LoopVideoData
@@ -1440,6 +1500,10 @@ export type SceneNodeType =
   | "adjust-volume"
   | "trim-video"
   | "video-composer"
+  | "after-effects"
+  | "lottie-overlay"
+  | "3d-title"
+  | "motion-graphics"
   | "render-video"
   | "speed-ramp"
   | "loop-video"
@@ -1882,6 +1946,74 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as VideoComposerData,
+  },
+  {
+    type: "after-effects",
+    label: "After Effects",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["in"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "After Effects",
+      effectPrompt: "",
+      fps: 30,
+      durationSeconds: 10,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as AfterEffectsData,
+  },
+  {
+    type: "lottie-overlay",
+    label: "Lottie Overlay",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["in", "lottie"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "Lottie Overlay",
+      overlayPrompt: "",
+      fps: 30,
+      durationSeconds: 10,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as LottieOverlayData,
+  },
+  {
+    type: "3d-title",
+    label: "3D Title",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["background"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "3D Title",
+      titlePrompt: "",
+      aspectRatio: "16:9",
+      backgroundColor: "#000000",
+      fps: 30,
+      durationSeconds: 10,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as ThreeDTitleData,
+  },
+  {
+    type: "motion-graphics",
+    label: "Motion Graphics",
+    category: "ai",
+    creditCost: 2,
+    inputs: [],
+    outputs: ["composition"],
+    defaultData: {
+      label: "Motion Graphics",
+      motionPrompt: "",
+      aspectRatio: "16:9",
+      backgroundColor: "#00000000",
+      fps: 30,
+      durationSeconds: 5,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as MotionGraphicsData,
   },
   {
     type: "render-video",

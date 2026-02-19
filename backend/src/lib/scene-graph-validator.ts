@@ -25,7 +25,7 @@ const segmentLayoutSchema = z.object({
 const mediaSegmentSchema = z.object({
   id: z.string(),
   src: z.string(),
-  mediaType: z.enum(["image", "video"]),
+  mediaType: z.enum(["image", "video", "gif"]),
   startFrame: z.number().min(0),
   durationInFrames: z.number().min(1),
   layout: segmentLayoutSchema,
@@ -44,6 +44,7 @@ const textSegmentSchema = z.object({
   color: z.string(),
   fontWeight: z.number().optional(),
   fontStyle: z.enum(["normal", "italic"]).optional(),
+  fontFamily: z.string().optional(),
   animation: z.string(), // validated and auto-fixed post-parse
 })
 
@@ -136,7 +137,7 @@ export function validateSceneGraph(
     sg.fps = expectedFps
   }
 
-  // 3. Auto-fix total duration if within 10% tolerance
+  // 4. Auto-fix total duration if within 10% tolerance
   const durationDiff = Math.abs(sg.durationInFrames - expectedDurationFrames)
   const tolerance = Math.ceil(expectedDurationFrames * 0.1)
   if (durationDiff > 0 && durationDiff <= tolerance) {
@@ -146,7 +147,7 @@ export function validateSceneGraph(
     errors.push(`Total duration ${sg.durationInFrames} frames differs from expected ${expectedDurationFrames} by more than 10%`)
   }
 
-  // 4. Check that all assets are referenced
+  // 5. Check that all assets are referenced
   const referencedSrcs = new Set<string>()
   for (const track of sg.tracks) {
     if (track.type === "media") {
@@ -164,7 +165,7 @@ export function validateSceneGraph(
     }
   }
 
-  // 5. Check for segment overlaps within media tracks
+  // 6. Check for segment overlaps within media tracks
   for (const track of sg.tracks) {
     if (track.type !== "media") continue
     const sorted = [...track.segments].sort((a, b) => a.startFrame - b.startFrame)
@@ -179,7 +180,7 @@ export function validateSceneGraph(
     }
   }
 
-  // 6. Round all frame numbers to integers
+  // 7. Round all frame numbers to integers
   for (const track of sg.tracks) {
     if (track.type === "media") {
       for (const seg of track.segments) {

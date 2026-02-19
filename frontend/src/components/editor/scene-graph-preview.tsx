@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface MediaSegment {
   id: string
   src: string
-  mediaType: "image" | "video"
+  mediaType: "image" | "video" | "gif"
   startFrame: number
   durationInFrames: number
   transitionIn?: { type: string; durationFrames: number }
@@ -22,6 +22,7 @@ interface TextSegment {
   durationInFrames: number
   position: string
   fontSize: number
+  fontFamily?: string
   animation: string
 }
 
@@ -53,6 +54,18 @@ const TRANSITION_OPTIONS = [
   { value: "none", label: "None" },
 ]
 
+const MEDIA_TYPE_LABEL: Record<string, string> = {
+  video: "Video",
+  gif: "GIF",
+  image: "Image",
+}
+
+const MEDIA_TYPE_COLOR: Record<string, string> = {
+  video: "#ff0073",
+  gif: "#A78BFA",
+  image: "#38BDF8",
+}
+
 function framesToSeconds(frames: number, fps: number): string {
   return (frames / fps).toFixed(1)
 }
@@ -83,7 +96,7 @@ function SegmentEditor({
           {isMedia ? (
             <>
               <Film className="inline w-3 h-3 mr-1" />
-              {mediaSeg?.mediaType === "video" ? "Video" : "Image"} — {framesToSeconds(segment.startFrame, fps)}s
+              {MEDIA_TYPE_LABEL[mediaSeg?.mediaType ?? "image"] ?? "Image"} — {framesToSeconds(segment.startFrame, fps)}s
             </>
           ) : (
             <>
@@ -115,6 +128,14 @@ function SegmentEditor({
             />
             <span className="text-xs tabular-nums w-4">s</span>
           </div>
+
+          {/* Font label for text segments */}
+          {!isMedia && (segment as TextSegment).fontFamily && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--text-secondary)] w-16">Font</span>
+              <span className="text-xs">{(segment as TextSegment).fontFamily}</span>
+            </div>
+          )}
 
           {/* Transition controls for media */}
           {isMedia && mediaSeg && (
@@ -297,7 +318,7 @@ export function SceneGraphPreview({
                   left: `${left}%`,
                   width: `${width}%`,
                   height: "calc(100% - 12px)",
-                  backgroundColor: mediaSeg.mediaType === "video" ? "#ff0073" : "#38BDF8",
+                  backgroundColor: MEDIA_TYPE_COLOR[mediaSeg.mediaType] ?? "#38BDF8",
                   opacity: 0.7,
                 }}
                 title={`${mediaSeg.mediaType} — ${framesToSeconds(mediaSeg.durationInFrames, fps)}s`}

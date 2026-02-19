@@ -38,7 +38,7 @@ const segmentLayoutSchema = z.object({
 const mediaSegmentSchema = z.object({
   id: z.string(),
   src: z.string(),
-  mediaType: z.enum(["image", "video"]),
+  mediaType: z.enum(["image", "video", "gif"]),
   startFrame: z.number().min(0),
   durationInFrames: z.number().min(1),
   layout: segmentLayoutSchema,
@@ -54,6 +54,7 @@ const textSegmentSchema = z.object({
   durationInFrames: z.number().min(1),
   position: z.enum(["top", "center", "bottom"]),
   fontSize: z.number().min(8).max(200),
+  fontFamily: z.string().optional(),
   color: z.string(),
   fontWeight: z.number().optional(),
   fontStyle: z.enum(["normal", "italic"]).optional(),
@@ -134,6 +135,14 @@ const renderVideoBody = z.object({
 
 const renderSceneGraphBody = z.object({
   sceneGraph: sceneGraphSchema,
+  userId: z.string().uuid().optional(),
+})
+
+// ── Generic plan render schema ────────────────────────────────────────
+
+const renderPlanBody = z.object({
+  planType: z.enum(["scene-graph", "after-effects", "lottie-overlay", "3d-title", "motion-graphics"]),
+  plan: z.record(z.unknown()),
   userId: z.string().uuid().optional(),
 })
 
@@ -269,6 +278,62 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     await renderQueue.add("render-video", {
       jobId: job.id,
       sceneGraph,
+      usageLogId,
+    })
+
+    return { jobId: job.id }
+  })
+
+  // Generic plan-based render (after-effects, future composers)
+  app.post("/v1/render-video/plan", { preHandler: creditGuard(() => "render-video") }, async (req, reply) => {
+    const parsed = renderPlanBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid request",
+        },
+      })
+    }
+
+    const { planType, plan, userId } = parsed.data
+
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
+    const { data: job, error } = await supabase
+      .from("jobs")
+      .insert({
+        workflow_id: null,
+        user_id: userId,
+        status: "pending",
+        input_data: {
+          type: "render-video",
+          mode: "plan",
+          planType,
+          plan,
+        },
+      })
+      .select("id")
+      .single()
+
+    if (error) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: error.message },
+      })
+    }
+
+    const reservation = await reserveCreditsForJob(req, reply, job.id, "render-video")
+    if (reply.sent) return
+    const usageLogId = reservation?.usageLogId
+
+    await renderQueue.add("render-video", {
+      jobId: job.id,
+      planType,
+      plan,
       usageLogId,
     })
 

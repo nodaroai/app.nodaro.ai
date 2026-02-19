@@ -65,33 +65,91 @@ interface SceneGraphRenderJobData {
   usageLogId?: string
 }
 
-type RenderJobData = LegacyRenderJobData | SceneGraphRenderJobData
+interface PlanRenderJobData {
+  jobId: string
+  planType: string
+  plan: Record<string, unknown>
+  usageLogId?: string
+}
+
+type RenderJobData = LegacyRenderJobData | SceneGraphRenderJobData | PlanRenderJobData
+
+function isPlanJob(data: RenderJobData): data is PlanRenderJobData {
+  return "planType" in data && data.planType != null
+}
 
 function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
   return "sceneGraph" in data && data.sceneGraph != null
 }
 
-// Cache the Remotion bundle after first build
-let cachedBundlePath: string | null = null
+// Cache Remotion bundles after first build.
+// Two separate bundles: main (all non-3D compositions) and 3D (r3f-based).
+// @react-three/fiber creates its own React reconciler at module init time,
+// which conflicts with Remotion's reconciler and crashes ALL compositions
+// if bundled together.
+let cachedMainBundlePath: string | null = null
+let cached3DBundlePath: string | null = null
 
-async function getBundlePath(): Promise<string> {
-  if (cachedBundlePath) return cachedBundlePath
+const REMOTION_PKG_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../packages/remotion",
+)
 
+async function bundleEntry(
+  entryFile: string,
+  label: string,
+  useR3FAliases: boolean,
+): Promise<string> {
   const { bundle } = await import("@remotion/bundler")
-  const currentDir = dirname(fileURLToPath(import.meta.url))
-  const entryPoint = join(currentDir, "../../../packages/remotion/src/Root.tsx")
+  const entryPoint = join(REMOTION_PKG_DIR, "src", entryFile)
 
-  console.log("[render-worker] Bundling Remotion compositions...")
-  cachedBundlePath = await bundle({
+  console.log(`[render-worker] Bundling ${label}...`)
+  const bundlePath = await bundle({
     entryPoint,
+    // Only the 3D bundle needs webpack aliases to de-duplicate React packages.
+    // @react-three/fiber bundles its own scheduler@0.21 which conflicts with
+    // React 18.3's scheduler@0.23. The main bundle must NOT have aliases —
+    // they break Remotion's own module resolution.
+    ...(useR3FAliases
+      ? {
+          webpackOverride: (config) => {
+            const nodeModules = join(REMOTION_PKG_DIR, "node_modules")
+            return {
+              ...config,
+              resolve: {
+                ...config.resolve,
+                alias: {
+                  ...(config.resolve?.alias ?? {}),
+                  react: join(nodeModules, "react"),
+                  "react-dom": join(nodeModules, "react-dom"),
+                  scheduler: join(nodeModules, "scheduler"),
+                },
+              },
+            }
+          },
+        }
+      : {}),
     onProgress: (progress: number) => {
       if (progress % 25 === 0) {
-        console.log(`[render-worker] Bundle progress: ${progress}%`)
+        console.log(`[render-worker] ${label} bundle progress: ${progress}%`)
       }
     },
   })
-  console.log("[render-worker] Bundle complete:", cachedBundlePath)
-  return cachedBundlePath
+  console.log(`[render-worker] ${label} bundle complete:`, bundlePath)
+  return bundlePath
+}
+
+async function getBundlePath(compositionId: string): Promise<string> {
+  if (compositionId === "3d-title") {
+    if (!cached3DBundlePath) {
+      cached3DBundlePath = await bundleEntry("Root3D.tsx", "3D compositions", true)
+    }
+    return cached3DBundlePath
+  }
+  if (!cachedMainBundlePath) {
+    cachedMainBundlePath = await bundleEntry("Root.tsx", "main compositions", false)
+  }
+  return cachedMainBundlePath
 }
 
 async function handleCredits(
@@ -123,6 +181,29 @@ async function generateAndUploadThumbnail(
   } catch (err) {
     console.error(`[render-worker] Thumbnail generation failed for job ${jobId}:`, err)
     return null
+  }
+}
+
+/**
+ * Build composition ID and input props for generic plan mode.
+ * Routes to the composition matching the planType (e.g. "after-effects").
+ */
+function buildPlanRender(data: PlanRenderJobData): {
+  compositionId: string
+  inputProps: Record<string, unknown>
+  width: number
+  height: number
+  fps: number
+  durationInFrames: number
+} {
+  const plan = data.plan as Record<string, unknown>
+  return {
+    compositionId: data.planType,
+    inputProps: { plan },
+    width: (plan.width as number) ?? 1920,
+    height: (plan.height as number) ?? 1080,
+    fps: (plan.fps as number) ?? 30,
+    durationInFrames: (plan.durationInFrames as number) ?? 300,
   }
 }
 
@@ -227,18 +308,26 @@ export function createRenderWorker() {
 
         await bullJob.updateProgress(30)
 
-        // Build render config — scene graph mode or legacy template mode
-        const isSceneGraph = isSceneGraphJob(data)
-        const renderConfig = isSceneGraph
-          ? buildSceneGraphRender(data)
-          : buildLegacyRender(data)
+        // Build render config — plan mode, scene graph mode, or legacy template mode
+        let renderConfig
+        let modeLabel: string
+        if (isPlanJob(data)) {
+          renderConfig = buildPlanRender(data)
+          modeLabel = `plan:${data.planType}`
+        } else if (isSceneGraphJob(data)) {
+          renderConfig = buildSceneGraphRender(data)
+          modeLabel = "scene-graph"
+        } else {
+          renderConfig = buildLegacyRender(data)
+          modeLabel = "legacy"
+        }
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
 
-        console.log(`[render-worker] Rendering ${compositionId} (${isSceneGraph ? "scene-graph" : "legacy"}) for job ${jobId}`)
+        console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
 
-        // Bundle Remotion compositions (cached after first call)
-        const bundlePath = await getBundlePath()
+        // Bundle Remotion compositions (cached after first call per entry point)
+        const bundlePath = await getBundlePath(compositionId)
         await bullJob.updateProgress(40)
 
         // Select composition and render
