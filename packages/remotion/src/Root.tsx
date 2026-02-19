@@ -1,10 +1,12 @@
 import React from "react"
 import { Composition, registerRoot } from "remotion"
 import type { RenderVideoInputProps, TemplateId } from "./types"
+import type { SceneGraphInputProps } from "./scene-graph"
 import { Slideshow } from "./compositions/slideshow"
 import { Explainer } from "./compositions/explainer"
 import { SocialReel } from "./compositions/social-reel"
 import { Documentary } from "./compositions/documentary"
+import { SceneGraphRenderer } from "./compositions/scene-graph-renderer"
 
 const DEFAULT_PROPS: RenderVideoInputProps = {
   template: "slideshow",
@@ -27,9 +29,10 @@ const DEFAULT_PROPS: RenderVideoInputProps = {
   kenBurnsEnabled: false,
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const COMPOSITIONS: Array<{
   id: TemplateId
-  component: React.FC<RenderVideoInputProps>
+  component: React.FC<any>
   width: number
   height: number
   extraProps?: Partial<RenderVideoInputProps>
@@ -39,6 +42,17 @@ const COMPOSITIONS: Array<{
   { id: "social-reel", component: SocialReel, width: 1080, height: 1920 },
   { id: "documentary", component: Documentary, width: 1920, height: 1080, extraProps: { kenBurnsEnabled: true } },
 ]
+
+const SCENE_GRAPH_DEFAULT_PROPS: SceneGraphInputProps = {
+  sceneGraph: {
+    fps: 30,
+    width: 1920,
+    height: 1080,
+    durationInFrames: 300,
+    backgroundColor: "#000000",
+    tracks: [],
+  },
+}
 
 function RemotionRoot() {
   return (
@@ -55,6 +69,15 @@ function RemotionRoot() {
           defaultProps={{ ...DEFAULT_PROPS, template: id, width, height, ...extraProps }}
         />
       ))}
+      <Composition
+        id="scene-graph"
+        component={SceneGraphRenderer as React.FC<any>}
+        durationInFrames={300}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={SCENE_GRAPH_DEFAULT_PROPS}
+      />
     </>
   )
 }
