@@ -79,7 +79,7 @@ function getWipeClipPath(progress: number, direction?: string): string {
     case "right":
       return `inset(0 ${(1 - progress) * 100}% 0 0)`
     case "up":
-      return `inset(0 0 0 0)` // for up wipe, reveal from bottom
+      return `inset(${(1 - progress) * 100}% 0 0 0)`
     case "down":
       return `inset(0 0 ${(1 - progress) * 100}% 0)`
     case "left":
