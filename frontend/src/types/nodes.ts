@@ -947,6 +947,20 @@ export type VideoComposerData = {
   errorMessage?: string
 }
 
+export type AfterEffectsData = {
+  [key: string]: unknown
+  label: string
+  effectPrompt: string
+  effectPlan?: Record<string, unknown>
+  inputVideoUrl?: string
+  width?: number
+  height?: number
+  fps: number
+  durationSeconds: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 export type RenderVideoData = {
   [key: string]: unknown
   label: string
@@ -1374,6 +1388,7 @@ export type SceneNodeData =
   | AdjustVolumeData
   | TrimVideoData
   | VideoComposerData
+  | AfterEffectsData
   | RenderVideoData
   | SpeedRampData
   | LoopVideoData
@@ -1440,6 +1455,7 @@ export type SceneNodeType =
   | "adjust-volume"
   | "trim-video"
   | "video-composer"
+  | "after-effects"
   | "render-video"
   | "speed-ramp"
   | "loop-video"
@@ -1882,6 +1898,22 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as VideoComposerData,
+  },
+  {
+    type: "after-effects",
+    label: "After Effects",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["in"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "After Effects",
+      effectPrompt: "",
+      fps: 30,
+      durationSeconds: 10,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as AfterEffectsData,
   },
   {
     type: "render-video",

@@ -43,6 +43,7 @@ import { MixAudioNode } from "./mix-audio-node";
 import { AdjustVolumeNode } from "./adjust-volume-node";
 import { TrimVideoNode } from "./trim-video-node";
 import { VideoComposerNode } from "./video-composer-node";
+import { AfterEffectsNode } from "./after-effects-node";
 import { RenderVideoNode } from "./render-video-node";
 import { SpeedRampNode } from "./speed-ramp-node";
 import { LoopVideoNode } from "./loop-video-node";
@@ -114,6 +115,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "adjust-volume": AdjustVolumeNode,
   "trim-video": TrimVideoNode,
   "video-composer": VideoComposerNode,
+  "after-effects": AfterEffectsNode,
   "render-video": RenderVideoNode,
   "speed-ramp": SpeedRampNode,
   "loop-video": LoopVideoNode,

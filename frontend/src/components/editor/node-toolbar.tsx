@@ -87,6 +87,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "split-text", label: "Split Text", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Text" },
   // Processing — Video Production
   { type: "video-composer", label: "Compose Video", icon: <Sparkles className="h-4 w-4" />, category: "Processing", group: "Video Production" },
+  { type: "after-effects", label: "After Effects", icon: <Wand2 className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   { type: "render-video", label: "Render Video", icon: <Film className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   // Character
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },

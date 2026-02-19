@@ -58,6 +58,8 @@ import {
   videoUpscaleApi,
   generateSceneGraph,
   renderVideoWithSceneGraph,
+  renderVideoWithPlan,
+  generateAfterEffects,
   generateCharacter,
   generateCharacterAsset,
   saveCharacter,
@@ -110,6 +112,7 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
   VideoComposerData,
+  AfterEffectsData,
   RenderVideoData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -186,6 +189,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "add-captions": 2,
   "mix-audio": 1,
   "video-composer": 2,
+  "after-effects": 2,
   "render-video": 3,
   character: 5,
   object: 5,
@@ -702,6 +706,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "motion-transfer",
     "video-upscale",
     "video-composer",
+    "after-effects",
     "render-video",
     "combine-videos",
     "merge-video-audio",
@@ -1077,6 +1082,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (type === "split-text") {
       const splitResults = (data.splitResults as string[] | undefined) ?? [];
       return splitResults.length > 0 ? splitResults[0] : undefined;
+    }
+    if (type === "after-effects") {
+      return (data.effectPlan as Record<string, unknown> | undefined)
+        ? "plan-ready"
+        : undefined;
     }
     return undefined;
   }
@@ -5352,28 +5362,110 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         });
     }
 
+    if (node.type === "after-effects") {
+      const d = node.data as AfterEffectsData;
+      if (!d.effectPrompt?.trim()) {
+        toast.error(`Node "${d.label}": no effect prompt set`);
+        return Promise.reject(new Error("No effect prompt"));
+      }
+      if (!user?.id) {
+        toast.error("Not authenticated");
+        return Promise.reject(new Error("Not authenticated"));
+      }
+      // Find input video URL from upstream node
+      const aeIncomingEdges = edges.filter((e) => e.target === node.id);
+      let inputVideoUrl: string | undefined;
+      for (const edge of aeIncomingEdges) {
+        const sourceNode = nodes.find((n) => n.id === edge.source);
+        if (sourceNode) {
+          const output = extractNodeOutput(sourceNode);
+          if (output && (output.startsWith("http") || output.startsWith("/"))) {
+            inputVideoUrl = output;
+            break;
+          }
+        }
+      }
+      if (!inputVideoUrl) {
+        toast.error(`Node "${d.label}": no video input connected`);
+        return Promise.reject(new Error("No video input"));
+      }
+      const { updateNodeData } = useWorkflowStore.getState();
+      updateNodeData(node.id, {
+        executionStatus: "running",
+        effectPlan: undefined,
+        errorMessage: undefined,
+        inputVideoUrl,
+      });
+      // Resolve dimensions from upstream or defaults
+      const aeWidth = d.width ?? 1920;
+      const aeHeight = d.height ?? 1080;
+      return generateAfterEffects({
+        prompt: d.effectPrompt,
+        inputVideoUrl,
+        fps: d.fps,
+        width: aeWidth,
+        height: aeHeight,
+        durationSeconds: d.durationSeconds,
+        userId: user.id,
+      })
+        .then((result) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            effectPlan: result.effectPlan,
+          });
+          toast.success("After effects plan generated");
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        });
+    }
+
     if (node.type === "render-video") {
       const d = node.data as RenderVideoData;
-      // Check if upstream video-composer is connected
+      // Generic upstream composer detection via COMPOSER_PLAN_MAP
+      const COMPOSER_PLAN_MAP: Record<string, { planType: string; planField: string }> = {
+        "video-composer": { planType: "scene-graph", planField: "sceneGraph" },
+        "after-effects": { planType: "after-effects", planField: "effectPlan" },
+      };
       const incomingEdges = edges.filter((e) => e.target === node.id);
-      let upstreamSceneGraph: Record<string, unknown> | undefined;
+      let upstreamPlanType: string | undefined;
+      let upstreamPlan: Record<string, unknown> | undefined;
       for (const edge of incomingEdges) {
         const sourceNode = nodes.find((n) => n.id === edge.source);
-        if (sourceNode?.type === "video-composer") {
-          const composerData = sourceNode.data as VideoComposerData;
-          if (composerData.sceneGraph) {
-            upstreamSceneGraph = composerData.sceneGraph;
+        if (!sourceNode) continue;
+        const composerInfo = COMPOSER_PLAN_MAP[sourceNode.type!];
+        if (composerInfo) {
+          const nodePlan = (sourceNode.data as Record<string, unknown>)[composerInfo.planField];
+          if (nodePlan) {
+            upstreamPlanType = composerInfo.planType;
+            upstreamPlan = nodePlan as Record<string, unknown>;
+            break;
           }
-          break;
         }
       }
 
-      if (upstreamSceneGraph) {
-        // Render from upstream composer's scene graph
+      if (upstreamPlan) {
+        if (upstreamPlanType === "scene-graph") {
+          return runProcessingNode(
+            node.id,
+            () => renderVideoWithSceneGraph({
+              sceneGraph: upstreamPlan!,
+              userId: user?.id,
+            }),
+            "generatedVideoUrl",
+            "Render Video",
+          );
+        }
+        // Non-scene-graph plan types (after-effects, etc.)
         return runProcessingNode(
           node.id,
-          () => renderVideoWithSceneGraph({
-            sceneGraph: upstreamSceneGraph!,
+          () => renderVideoWithPlan({
+            planType: upstreamPlanType!,
+            plan: upstreamPlan!,
             userId: user?.id,
           }),
           "generatedVideoUrl",

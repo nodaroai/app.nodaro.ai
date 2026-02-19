@@ -65,7 +65,18 @@ interface SceneGraphRenderJobData {
   usageLogId?: string
 }
 
-type RenderJobData = LegacyRenderJobData | SceneGraphRenderJobData
+interface PlanRenderJobData {
+  jobId: string
+  planType: string
+  plan: Record<string, unknown>
+  usageLogId?: string
+}
+
+type RenderJobData = LegacyRenderJobData | SceneGraphRenderJobData | PlanRenderJobData
+
+function isPlanJob(data: RenderJobData): data is PlanRenderJobData {
+  return "planType" in data && (data as PlanRenderJobData).planType != null
+}
 
 function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
   return "sceneGraph" in data && data.sceneGraph != null
@@ -123,6 +134,29 @@ async function generateAndUploadThumbnail(
   } catch (err) {
     console.error(`[render-worker] Thumbnail generation failed for job ${jobId}:`, err)
     return null
+  }
+}
+
+/**
+ * Build composition ID and input props for generic plan mode.
+ * Routes to the composition matching the planType (e.g. "after-effects").
+ */
+function buildPlanRender(data: PlanRenderJobData): {
+  compositionId: string
+  inputProps: Record<string, unknown>
+  width: number
+  height: number
+  fps: number
+  durationInFrames: number
+} {
+  const plan = data.plan as Record<string, unknown>
+  return {
+    compositionId: data.planType,
+    inputProps: { plan },
+    width: (plan.width as number) ?? 1920,
+    height: (plan.height as number) ?? 1080,
+    fps: (plan.fps as number) ?? 30,
+    durationInFrames: (plan.durationInFrames as number) ?? 300,
   }
 }
 
@@ -227,15 +261,17 @@ export function createRenderWorker() {
 
         await bullJob.updateProgress(30)
 
-        // Build render config — scene graph mode or legacy template mode
-        const isSceneGraph = isSceneGraphJob(data)
-        const renderConfig = isSceneGraph
-          ? buildSceneGraphRender(data)
-          : buildLegacyRender(data)
+        // Build render config — plan mode, scene graph mode, or legacy template mode
+        const renderConfig = isPlanJob(data)
+          ? buildPlanRender(data)
+          : isSceneGraphJob(data)
+            ? buildSceneGraphRender(data)
+            : buildLegacyRender(data)
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
+        const modeLabel = isPlanJob(data) ? `plan:${(data as PlanRenderJobData).planType}` : isSceneGraphJob(data) ? "scene-graph" : "legacy"
 
-        console.log(`[render-worker] Rendering ${compositionId} (${isSceneGraph ? "scene-graph" : "legacy"}) for job ${jobId}`)
+        console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
 
         // Bundle Remotion compositions (cached after first call)
         const bundlePath = await getBundlePath()

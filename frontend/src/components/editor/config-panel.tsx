@@ -90,6 +90,7 @@ import type {
   AdjustVolumeData,
   TrimVideoData,
   VideoComposerData,
+  AfterEffectsData,
   RenderVideoData,
   SpeedRampData,
   LoopVideoData,
@@ -695,6 +696,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "video-composer" && (
             <VideoComposerConfig data={selectedNode.data as VideoComposerData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
+          )}
+          {selectedNode.type === "after-effects" && (
+            <AfterEffectsConfig data={selectedNode.data as AfterEffectsData} onUpdate={update} />
           )}
           {selectedNode.type === "render-video" && (
             <RenderVideoConfig data={selectedNode.data as RenderVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -4982,6 +4986,73 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
   )
 }
 
+const LazyAfterEffectsPreview = lazy(() => import("@/components/editor/after-effects-preview").then(m => ({ default: m.AfterEffectsPreview })))
+
+function AfterEffectsConfig({ data, onUpdate }: { data: AfterEffectsData; onUpdate: (d: Partial<AfterEffectsData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label className="mb-1.5 block">Effect Prompt</Label>
+        <Textarea
+          placeholder="Describe the look: cinematic film grain with warm color grading, vignette, letterbox..."
+          value={data.effectPrompt ?? ""}
+          onChange={(e) => onUpdate({ effectPrompt: e.target.value })}
+          rows={3}
+          className="text-sm"
+        />
+      </div>
+
+      {data.effectPlan && (
+        <>
+          <Separator />
+          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+            <LazyAfterEffectsPreview
+              effectPlan={data.effectPlan}
+              fps={data.fps}
+              onUpdate={(ep) => onUpdate({ effectPlan: ep })}
+            />
+          </Suspense>
+        </>
+      )}
+
+      <Accordion type="single" collapsible>
+        <AccordionItem value="settings">
+          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="ae-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
+                    <SelectTrigger id="ae-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24</SelectItem>
+                      <SelectItem value="30">30</SelectItem>
+                      <SelectItem value="60">60</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="ae-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Input
+                    id="ae-duration"
+                    type="number"
+                    min={1}
+                    max={300}
+                    value={data.durationSeconds}
+                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 10 })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  )
+}
+
 function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -4996,6 +5067,11 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
       if (srcNode?.type === "video-composer") {
         const composerData = srcNode.data as VideoComposerData
         return { label: composerData.label, trackCount: ((composerData.sceneGraph as Record<string, unknown>)?.tracks as unknown[])?.length ?? 0 }
+      }
+      if (srcNode?.type === "after-effects") {
+        const aeData = srcNode.data as AfterEffectsData
+        const effectCount = ((aeData.effectPlan as Record<string, unknown>)?.effects as unknown[])?.length ?? 0
+        return { label: aeData.label, trackCount: effectCount }
       }
     }
     return undefined
