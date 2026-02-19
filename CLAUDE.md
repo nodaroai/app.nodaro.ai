@@ -163,7 +163,7 @@ backend/src/
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
 | Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + legacy template converters via BullMQ worker |
 | AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
-| After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox) applied to video (2 credits) |
+| After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox, animated-blur) applied to video (2 credits) |
 | Lottie Overlay | Claude Sonnet → Overlay Plan JSON | AI-placed timed Lottie animations over video (2 credits), `@remotion/lottie` + `delayRender`/`continueRender` per overlay |
 | 3D Title | Claude Sonnet → 3D Title Plan JSON | AI-generated animated 3D text scenes with camera, lighting, particles (3 credits), `@remotion/three` + Three.js + `@react-three/drei`, max 60s |
 | Motion Graphics | Claude Sonnet → Motion Graphics Plan JSON | AI-generated 2D motion graphics: lower thirds, title cards, kinetic typography, animated shapes/SVG paths (2 credits), pure Remotion primitives + `FONT_MAP` |
@@ -191,4 +191,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-19*
-*Version: 1.31.0*
+*Version: 1.32.0*
