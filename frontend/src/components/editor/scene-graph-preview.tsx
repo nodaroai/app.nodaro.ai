@@ -272,8 +272,18 @@ export function SceneGraphPreview({
       </div>
 
       {/* Timeline bar */}
-      <div className="relative h-6 rounded bg-[var(--card-bg)] overflow-hidden border border-[var(--border-color)]">
+      <div className="relative h-8 rounded bg-[var(--card-bg)] overflow-hidden border border-[var(--border-color)]">
         {tracks.map((track) => {
+          if (track.type === "audio") {
+            return (
+              <div
+                key={track.id}
+                className="absolute left-0 right-0 bottom-0 h-2 rounded-sm"
+                style={{ backgroundColor: "#22c55e", opacity: 0.5 }}
+                title={`Audio — vol ${track.volume ?? 1}`}
+              />
+            )
+          }
           if (track.type !== "media" || !track.segments) return null
           return track.segments.map((seg) => {
             const mediaSeg = seg as MediaSegment
@@ -282,10 +292,11 @@ export function SceneGraphPreview({
             return (
               <div
                 key={mediaSeg.id}
-                className="absolute top-0.5 bottom-0.5 rounded-sm"
+                className="absolute top-0.5 rounded-sm"
                 style={{
                   left: `${left}%`,
                   width: `${width}%`,
+                  height: "calc(100% - 12px)",
                   backgroundColor: mediaSeg.mediaType === "video" ? "#ff0073" : "#38BDF8",
                   opacity: 0.7,
                 }}
@@ -298,7 +309,41 @@ export function SceneGraphPreview({
 
       {/* Per-track segment editors */}
       {tracks.map((track, trackIndex) => {
-        if (track.type === "audio") return null
+        if (track.type === "audio") {
+          const audioSrc = track.src ?? ""
+          const filename = audioSrc.split("/").pop()?.split("?")[0] ?? "Audio"
+          return (
+            <div key={track.id} className="space-y-1">
+              <div className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">
+                Audio Track
+              </div>
+              <div className="border border-[var(--border-color)] rounded p-2 space-y-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <Music className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span className="truncate flex-1" title={audioSrc}>{filename}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--text-secondary)] w-16">Volume</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    value={track.volume ?? 1}
+                    onChange={(e) => {
+                      const newTracks = tracks.map((t, i) =>
+                        i === trackIndex ? { ...t, volume: parseFloat(e.target.value) || 0 } : t,
+                      )
+                      onUpdate({ ...sceneGraph, tracks: newTracks })
+                    }}
+                    className="h-7 text-xs flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          )
+        }
+
         if (!track.segments || track.segments.length === 0) return null
 
         return (
