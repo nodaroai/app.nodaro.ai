@@ -5,6 +5,33 @@ import { SceneMediaSegment } from "../lib/scene-media-segment"
 import { SceneTextSegment } from "../lib/scene-text-segment"
 import { SceneAudioTrack } from "../lib/scene-audio-track"
 
+/**
+ * Error boundary that catches rendering errors in individual tracks
+ * and logs them instead of crashing the entire composition.
+ */
+class TrackErrorBoundary extends React.Component<
+  { trackId: string; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { trackId: string; children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error) {
+    console.error(`[scene-graph] Track "${this.props.trackId}" render error:`, error.message)
+  }
+
+  render() {
+    if (this.state.hasError) return null
+    return this.props.children
+  }
+}
+
 function RenderMediaTrack({
   track,
   width,
@@ -77,29 +104,26 @@ export function SceneGraphRenderer({ sceneGraph }: SceneGraphInputProps) {
 
   return (
     <AbsoluteFill style={{ backgroundColor, width, height }}>
-      {sortedTracks.map((track) => {
-        switch (track.type) {
-          case "media":
-            return (
-              <RenderMediaTrack
-                key={track.id}
-                track={track}
-                width={width}
-                height={height}
-              />
-            )
-          case "text":
-            return <RenderTextTrack key={track.id} track={track} />
-          case "audio":
-            return (
-              <RenderAudioTrack
-                key={track.id}
-                track={track}
-                totalDurationInFrames={durationInFrames}
-              />
-            )
-        }
-      })}
+      {sortedTracks.map((track) => (
+        <TrackErrorBoundary key={track.id} trackId={track.id}>
+          {track.type === "media" && (
+            <RenderMediaTrack
+              track={track}
+              width={width}
+              height={height}
+            />
+          )}
+          {track.type === "text" && (
+            <RenderTextTrack track={track} />
+          )}
+          {track.type === "audio" && (
+            <RenderAudioTrack
+              track={track}
+              totalDurationInFrames={durationInFrames}
+            />
+          )}
+        </TrackErrorBoundary>
+      ))}
     </AbsoluteFill>
   )
 }

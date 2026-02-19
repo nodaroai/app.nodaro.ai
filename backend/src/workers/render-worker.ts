@@ -9,6 +9,9 @@ import { applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
+import { readdir, stat, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { validatePlanByType } from "../lib/plan-schemas.js"
 
 // Remotion types (inline to avoid cross-package import at compile time)
 // Index signature required for Remotion's selectComposition/renderMedia APIs
@@ -196,14 +199,21 @@ function buildPlanRender(data: PlanRenderJobData): {
   fps: number
   durationInFrames: number
 } {
-  const plan = data.plan as Record<string, unknown>
+  // Validate plan structure (scene-graph uses its own validator)
+  let validatedPlan: Record<string, unknown>
+  if (data.planType !== "scene-graph") {
+    validatedPlan = validatePlanByType(data.planType, data.plan) as Record<string, unknown>
+  } else {
+    validatedPlan = data.plan as Record<string, unknown>
+  }
+
   return {
     compositionId: data.planType,
-    inputProps: { plan },
-    width: (plan.width as number) ?? 1920,
-    height: (plan.height as number) ?? 1080,
-    fps: (plan.fps as number) ?? 30,
-    durationInFrames: (plan.durationInFrames as number) ?? 300,
+    inputProps: { plan: validatedPlan },
+    width: (validatedPlan.width as number) ?? 1920,
+    height: (validatedPlan.height as number) ?? 1080,
+    fps: (validatedPlan.fps as number) ?? 30,
+    durationInFrames: (validatedPlan.durationInFrames as number) ?? 300,
   }
 }
 
@@ -275,7 +285,66 @@ function buildLegacyRender(data: LegacyRenderJobData): {
   }
 }
 
+/**
+ * Check if a job was cancelled before saving results.
+ * Prevents wasted work when user cancels during a long render.
+ */
+async function shouldSaveJobResult(jobId: string): Promise<boolean> {
+  const { data: currentJob } = await supabase
+    .from("jobs")
+    .select("status")
+    .eq("id", jobId)
+    .single()
+
+  if (currentJob?.status === "cancelled") {
+    console.log(`[render-worker] Job ${jobId} was cancelled, skipping save`)
+    return false
+  }
+  return true
+}
+
+/**
+ * Clean up orphaned render work directories from /tmp on startup.
+ * Removes any render-* directories older than 24 hours.
+ */
+async function cleanupStaleWorkDirs(): Promise<void> {
+  const tmp = tmpdir()
+  const maxAge = 24 * 60 * 60 * 1000 // 24 hours
+  const now = Date.now()
+
+  try {
+    const entries = await readdir(tmp)
+    let cleaned = 0
+    let totalBytes = 0
+
+    for (const entry of entries) {
+      if (!entry.startsWith("render-")) continue
+      const fullPath = join(tmp, entry)
+      try {
+        const s = await stat(fullPath)
+        if (!s.isDirectory()) continue
+        if (now - s.mtimeMs > maxAge) {
+          totalBytes += s.size
+          await rm(fullPath, { recursive: true, force: true })
+          cleaned++
+        }
+      } catch {
+        // Skip entries we can't stat
+      }
+    }
+
+    if (cleaned > 0) {
+      console.log(`[render-worker] Startup cleanup: removed ${cleaned} stale work dir(s)`)
+    }
+  } catch (err) {
+    console.error("[render-worker] Startup cleanup failed:", err)
+  }
+}
+
 export function createRenderWorker() {
+  // Clean up orphaned work directories from previous crashes
+  cleanupStaleWorkDirs().catch(() => {})
+
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
   })
@@ -360,6 +429,12 @@ export function createRenderWorker() {
         })
 
         await bullJob.updateProgress(90)
+
+        // Check if job was cancelled during render
+        if (!await shouldSaveJobResult(jobId)) {
+          await handleCredits("refund", effectiveUsageLogId, jobId)
+          return
+        }
 
         // Apply watermark if free tier
         let uploadPath = outputPath

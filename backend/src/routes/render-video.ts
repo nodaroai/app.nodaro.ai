@@ -140,8 +140,10 @@ const renderSceneGraphBody = z.object({
 
 // ── Generic plan render schema ────────────────────────────────────────
 
+import { PLAN_TYPES, validatePlanByType } from "../lib/plan-schemas.js"
+
 const renderPlanBody = z.object({
-  planType: z.enum(["scene-graph", "after-effects", "lottie-overlay", "3d-title", "motion-graphics"]),
+  planType: z.enum(PLAN_TYPES),
   plan: z.record(z.unknown()),
   userId: z.string().uuid().optional(),
 })
@@ -302,6 +304,20 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "userId is required" },
       })
+    }
+
+    // Validate plan structure against its planType schema (scene-graph uses its own validator)
+    if (planType !== "scene-graph") {
+      try {
+        validatePlanByType(planType, plan)
+      } catch (err) {
+        return reply.status(400).send({
+          error: {
+            code: "plan_validation_error",
+            message: err instanceof Error ? err.message : "Invalid plan structure",
+          },
+        })
+      }
     }
 
     const { data: job, error } = await supabase

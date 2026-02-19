@@ -20,8 +20,10 @@ function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30_000)
 
-    fetch(overlay.src)
+    fetch(overlay.src, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to fetch Lottie ${overlay.src}: ${res.status}`)
         return res.json()
@@ -34,12 +36,17 @@ function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }
       })
       .catch((err) => {
         if (!cancelled) {
-          cancelRender(err)
+          const message = controller.signal.aborted
+            ? `Lottie fetch timed out after 30s: ${overlay.src}`
+            : err instanceof Error ? err.message : String(err)
+          cancelRender(new Error(message))
         }
       })
+      .finally(() => clearTimeout(timeout))
 
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [overlay.src, handle])
 
