@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"
-import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward, Trash2, ChevronUp, ChevronDown, Users, GripVertical } from "lucide-react"
+import { X, Play, Copy, Check, ImageIcon, FileText, Plus, UserPlus, Download, Maximize2, Minimize2, Loader2, Sparkles, Upload, UserCircle, Package, MapPin, Volume2, VolumeX, Mic, Music, Film, AudioWaveform, AlertCircle, FastForward, Trash2, ChevronUp, ChevronDown, Users, GripVertical, Info } from "lucide-react"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
@@ -5231,10 +5231,51 @@ function ThreeDTitleConfig({ data, onUpdate }: { data: ThreeDTitleData; onUpdate
 const LazyMotionGraphicsPreview = lazy(() => import("@/components/editor/motion-graphics-preview").then(m => ({ default: m.MotionGraphicsPreview })))
 
 function MotionGraphicsConfig({ data, onUpdate }: { data: MotionGraphicsData; onUpdate: (d: Partial<MotionGraphicsData>) => void }) {
+  const [showInfo, setShowInfo] = useState(false)
+
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label className="mb-1.5 block">Motion Graphics Prompt</Label>
+        <div className="flex items-center justify-between mb-1.5">
+          <Label>Motion Graphics Prompt</Label>
+          <button
+            type="button"
+            onClick={() => setShowInfo(!showInfo)}
+            className={`p-1 rounded-md transition-colors ${showInfo ? "bg-[#ff0073]/10 text-[#ff0073]" : "text-muted-foreground hover:text-[var(--text-primary)] hover:bg-muted/50"}`}
+            title="Prompt guide"
+          >
+            <Info className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {showInfo && (
+          <div className="mb-2 p-3 rounded-md bg-muted/30 border border-[var(--border-primary)] text-xs text-muted-foreground space-y-2">
+            <p className="font-medium text-[var(--text-primary)]">What can you create?</p>
+            <ul className="space-y-1 list-disc list-inside">
+              <li><span className="text-[var(--text-primary)]">Lower thirds</span> — name + title bars for interviews, news</li>
+              <li><span className="text-[var(--text-primary)]">Title cards</span> — centered text with decorative shapes</li>
+              <li><span className="text-[var(--text-primary)]">Intros / Outros</span> — animated text sequences with staggered timing</li>
+              <li><span className="text-[var(--text-primary)]">Kinetic typography</span> — multiple texts animating in sequence</li>
+              <li><span className="text-[var(--text-primary)]">Animated shapes</span> — geometric patterns, lines, SVG paths</li>
+            </ul>
+            <Separator className="my-1.5" />
+            <p className="font-medium text-[var(--text-primary)]">Prompt tips</p>
+            <ul className="space-y-1 list-disc list-inside">
+              <li>Include names/text in quotes: <span className="font-mono text-[10px]">"John Smith - CEO"</span></li>
+              <li>Mention style: modern, minimal, neon, corporate, elegant</li>
+              <li>Specify colors if you want: <span className="font-mono text-[10px]">pink accent, white text</span></li>
+              <li>Mention animation feel: snappy, smooth, cinematic</li>
+            </ul>
+            <Separator className="my-1.5" />
+            <p className="font-medium text-[var(--text-primary)]">Settings</p>
+            <ul className="space-y-1 list-disc list-inside">
+              <li><span className="text-[var(--text-primary)]">Background</span> — transparent (#00000000) for overlays, solid for standalone</li>
+              <li><span className="text-[var(--text-primary)]">Duration</span> — 3-5s for lower thirds, 5-10s for title cards</li>
+              <li>Wire to <span className="text-[var(--text-primary)]">Render Video</span> to produce the final video file</li>
+            </ul>
+          </div>
+        )}
+
         <Textarea
           placeholder="Describe the motion graphic: modern lower third with name, title card, animated shapes..."
           value={data.motionPrompt ?? ""}
