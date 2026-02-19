@@ -25,7 +25,7 @@ Return ONLY valid JSON (no markdown, no explanation). The JSON must match this s
         {
           "id": "seg-1",   // unique segment ID
           "src": "...",    // media URL (from assets)
-          "mediaType": "image" | "video",
+          "mediaType": "image" | "video" | "gif",
           "startFrame": 0, // when this segment starts in the timeline
           "durationInFrames": 150, // how long it plays
           "layout": {
@@ -77,6 +77,7 @@ Return ONLY valid JSON (no markdown, no explanation). The JSON must match this s
           "color": "#ffffff",
           "fontWeight": 700,    // optional
           "fontStyle": "normal", // optional: "normal" or "italic"
+          "fontFamily": "Inter", // optional: Google Font name (see supported fonts below)
           "animation": "fade"   // see text animation types below
         }
       ]
@@ -93,8 +94,13 @@ Return ONLY valid JSON (no markdown, no explanation). The JSON must match this s
 - "zoom-out" — spring zoom from smaller scale
 - "none" — instant cut
 
+## Media Types
+- "image" — static image (jpg, png, webp)
+- "video" — video file (mp4, webm)
+- "gif" — animated GIF file (ken-burns effect works on GIFs)
+
 ## Effect Types
-- "ken-burns" — slow zoom + pan on images (startValue=0, endValue=1). Only for images.
+- "ken-burns" — slow zoom + pan on images/GIFs (startValue=0, endValue=1). Only for images and GIFs.
 - "scale" — scale transform (startValue/endValue are scale factors, e.g. 1.0 to 1.2)
 - "opacity" — opacity animation (0-1)
 - "blur" — blur filter (values in pixels, e.g. 0 to 5)
@@ -107,6 +113,16 @@ Return ONLY valid JSON (no markdown, no explanation). The JSON must match this s
 - "none" — appears instantly
 
 IMPORTANT: Text animation values are NOT the same as media transition types. Never use "zoom-in", "slide-left", "dissolve", etc. as a text animation. Only the 5 values above are valid for text segment "animation" fields.
+
+## Supported Fonts
+Use the optional "fontFamily" field on text segments to select a Google Font. Omit for the default system font. Available fonts:
+- **Sans-serif:** Inter, Roboto, Open Sans, Montserrat, Poppins, Raleway, Nunito, Lato
+- **Serif:** Playfair Display, Merriweather, Lora, EB Garamond
+- **Display:** Bebas Neue, Oswald, Anton
+- **Script:** Dancing Script, Pacifico, Caveat
+- **Monospace:** Roboto Mono, Fira Code
+
+Use fontFamily for title cards and stylistic text. Omit for default.
 
 ## Frame Math Rules
 - durationInFrames = fps * seconds
