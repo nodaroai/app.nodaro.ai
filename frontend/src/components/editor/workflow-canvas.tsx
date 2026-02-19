@@ -503,7 +503,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
                 // Scene and AI nodes - brand pink (spotlight)
                 if (nodeType === 'scene' ||
                     nodeType === 'ai-writer' ||
-                    nodeType === 'video-composer' ||
                     nodeType.startsWith('generate-') ||
                     nodeType.startsWith('text-to-') ||
                     nodeType.startsWith('image-to-') ||

@@ -28,7 +28,7 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
       id={id}
       label={nodeData.label}
       icon={<Sparkles className="h-4 w-4" />}
-      category="ai"
+      category="processing"
       credits={credits}
       selected={selected}
       isRunning={isRunning}

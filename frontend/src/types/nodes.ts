@@ -1867,13 +1867,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "video-composer",
-    label: "Video Composer",
-    category: "ai",
+    label: "Compose Video",
+    category: "processing",
     creditCost: 2,
     inputs: ["in"],
     outputs: ["composition"],
     defaultData: {
-      label: "Video Composer",
+      label: "Compose Video",
       compositionPrompt: "",
       fps: 30,
       aspectRatio: "16:9",
