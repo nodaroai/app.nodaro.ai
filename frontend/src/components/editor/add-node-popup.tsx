@@ -355,12 +355,20 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "Video",
   },
+  // Processing — Video Production
+  {
+    type: "video-composer",
+    label: "Compose Video",
+    icon: <Sparkles className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video Production",
+  },
   {
     type: "render-video",
     label: "Render Video",
     icon: <Film className="h-4 w-4" />,
     category: "Processing",
-    group: "Video",
+    group: "Video Production",
   },
   {
     type: "speed-ramp",
