@@ -369,6 +369,9 @@ export default function GalleryPage() {
   // Reference image mini-lightbox
   const [referenceViewIndex, setReferenceViewIndex] = useState<number | null>(null)
 
+  // Touch swipe for mobile navigation
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+
   // Keyboard navigation: arrows for gallery, ESC exits fullscreen
   useEffect(() => {
     if (selectedIndex === null || referenceViewIndex !== null) return
@@ -390,6 +393,21 @@ export default function GalleryPage() {
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
   }, [selectedIndex, goToPrev, goToNext, isFullscreen, referenceViewIndex])
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (!touchStartRef.current) return
+    const deltaX = e.changedTouches[0].clientX - touchStartRef.current.x
+    const deltaY = e.changedTouches[0].clientY - touchStartRef.current.y
+    touchStartRef.current = null
+    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX > 0) goToPrev()
+      else goToNext()
+    }
+  }
 
   function openReportDialog(item: GalleryItem, e?: React.MouseEvent) {
     e?.stopPropagation()
@@ -562,40 +580,47 @@ export default function GalleryPage() {
         )}
       </section>
 
-      {/* Preview Dialog (normal lightbox) */}
+      {/* Preview Dialog — full-screen on mobile, centered card on desktop */}
       <Dialog open={selectedIndex !== null && !isFullscreen} onOpenChange={(open) => { if (!open) { setSelectedIndex(null); setReferenceViewIndex(null) } }}>
-        <DialogContent showCloseButton={false} className="p-0 overflow-hidden sm:max-w-3xl">
+        <DialogContent
+          showCloseButton={false}
+          className="p-0 overflow-hidden gap-0 top-0 left-0 translate-x-0 translate-y-0 max-w-full h-[100dvh] w-full rounded-none border-0 sm:top-[50%] sm:left-[50%] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-3xl sm:h-auto sm:rounded-lg sm:border"
+        >
           <DialogTitle className="sr-only">Preview</DialogTitle>
           {selectedItem && selectedIndex !== null && (
-            <div>
-              {/* Preview with navigation arrows */}
-              <div className="relative bg-black flex items-center justify-center min-h-[300px] max-h-[70vh]">
+            <div className="flex flex-col h-full sm:h-auto">
+              {/* Media section with swipe support */}
+              <div
+                className="relative bg-black flex items-center justify-center flex-1 min-h-0 sm:flex-none sm:min-h-[300px] sm:max-h-[70vh]"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+              >
                 {selectedItem.type === "image" ? (
-                  <CachedImage src={selectedItem.outputUrl} alt="" className="max-w-full max-h-[70vh] object-contain" />
+                  <CachedImage src={selectedItem.outputUrl} alt="" className="max-w-full max-h-full object-contain" />
                 ) : selectedItem.type === "video" ? (
-                  <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="max-w-full max-h-[70vh]" />
+                  <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay playsInline className="max-w-full max-h-full" />
                 ) : (
-                  <div className="p-8">
+                  <div className="p-8 w-full">
                     <audio key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="w-full" />
                   </div>
                 )}
 
                 {/* Left arrow */}
                 {selectedIndex > 0 && (
-                  <button onClick={goToPrev} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Previous">
+                  <button onClick={goToPrev} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-10" aria-label="Previous">
                     <ChevronLeft className="h-6 w-6 text-white" />
                   </button>
                 )}
 
                 {/* Right arrow */}
                 {selectedIndex < items.length - 1 && (
-                  <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Next">
+                  <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-10" aria-label="Next">
                     <ChevronRight className="h-6 w-6 text-white" />
                   </button>
                 )}
 
                 {/* Top-right buttons: download, fullscreen, close */}
-                <div className="absolute top-2 right-2 flex gap-2">
+                <div className="absolute top-2 right-2 flex gap-2 z-10">
                   <button onClick={handleDownload} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Download">
                     <Download className="h-4 w-4 text-white" />
                   </button>
@@ -608,14 +633,14 @@ export default function GalleryPage() {
                 </div>
 
                 {/* Position indicator */}
-                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 font-medium">
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 font-medium z-10">
                   {selectedIndex + 1} / {items.length}
                 </span>
               </div>
 
-              {/* Meta */}
-              <div className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
+              {/* Info section — scrollable on mobile, static on desktop */}
+              <div className="flex-shrink-0 max-h-[40dvh] sm:max-h-none overflow-y-auto p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <TypeBadge type={selectedItem.type} />
                     {selectedItem.model && (
@@ -631,7 +656,7 @@ export default function GalleryPage() {
                       title="Report"
                     >
                       <Flag className="h-3.5 w-3.5" />
-                      Report
+                      <span className="hidden sm:inline">Report</span>
                     </button>
                     {isAdmin && (
                       <button
@@ -640,7 +665,7 @@ export default function GalleryPage() {
                         title="Remove from gallery"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        Remove
+                        <span className="hidden sm:inline">Remove</span>
                       </button>
                     )}
                     <span className="text-xs text-muted-foreground">
@@ -715,26 +740,30 @@ export default function GalleryPage() {
 
       {/* Fullscreen overlay (completely separate from Dialog) */}
       {isFullscreen && selectedItem && selectedIndex !== null && (
-        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center">
+        <div
+          className="fixed inset-0 z-[9999] bg-black flex items-center justify-center"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           {selectedItem.type === "image" ? (
             <CachedImage src={selectedItem.outputUrl} alt="" className="max-w-full max-h-full object-contain" />
           ) : selectedItem.type === "video" ? (
-            <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="max-w-full max-h-full" />
+            <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay playsInline className="max-w-full max-h-full" />
           ) : (
             <audio key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay />
           )}
 
           {/* Left arrow */}
           {selectedIndex > 0 && (
-            <button onClick={goToPrev} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Previous">
-              <ChevronLeft className="h-6 w-6 text-white" />
+            <button onClick={goToPrev} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-3 transition-colors" aria-label="Previous">
+              <ChevronLeft className="h-7 w-7 text-white" />
             </button>
           )}
 
           {/* Right arrow */}
           {selectedIndex < items.length - 1 && (
-            <button onClick={goToNext} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Next">
-              <ChevronRight className="h-6 w-6 text-white" />
+            <button onClick={goToNext} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-3 transition-colors" aria-label="Next">
+              <ChevronRight className="h-7 w-7 text-white" />
             </button>
           )}
 
