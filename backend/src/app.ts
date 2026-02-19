@@ -66,6 +66,7 @@ import { adminGalleryReportsRoutes } from "./routes/admin-gallery-reports.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { downloadRoutes } from "./routes/download.js"
 import { renderVideoRoutes } from "./routes/render-video.js"
+import { sceneGraphAIRoutes } from "./routes/scene-graph-ai.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -158,6 +159,7 @@ export async function buildApp() {
   await app.register(aiWriterRoutes)
   await app.register(downloadRoutes)
   await app.register(renderVideoRoutes)
+  await app.register(sceneGraphAIRoutes)
 
   return app
 }
