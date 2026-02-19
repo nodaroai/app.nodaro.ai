@@ -82,47 +82,67 @@ function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
   return "sceneGraph" in data && data.sceneGraph != null
 }
 
-// Cache the Remotion bundle after first build
-let cachedBundlePath: string | null = null
+// Cache Remotion bundles after first build.
+// Two separate bundles: main (all non-3D compositions) and 3D (r3f-based).
+// @react-three/fiber creates its own React reconciler at module init time,
+// which conflicts with Remotion's reconciler and crashes ALL compositions
+// if bundled together.
+let cachedMainBundlePath: string | null = null
+let cached3DBundlePath: string | null = null
 
-async function getBundlePath(): Promise<string> {
-  if (cachedBundlePath) return cachedBundlePath
+const REMOTION_PKG_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../packages/remotion",
+)
 
+async function bundleEntry(
+  entryFile: string,
+  label: string,
+): Promise<string> {
   const { bundle } = await import("@remotion/bundler")
-  const currentDir = dirname(fileURLToPath(import.meta.url))
-  const entryPoint = join(currentDir, "../../../packages/remotion/src/Root.tsx")
+  const entryPoint = join(REMOTION_PKG_DIR, "src", entryFile)
+  const nodeModules = join(REMOTION_PKG_DIR, "node_modules")
 
-  console.log("[render-worker] Bundling Remotion compositions...")
-  // Resolve the remotion package's node_modules for webpack aliasing
-  const remotionPkgDir = join(currentDir, "../../../packages/remotion")
-  const remotionNodeModules = join(remotionPkgDir, "node_modules")
-
-  cachedBundlePath = await bundle({
+  console.log(`[render-worker] Bundling ${label}...`)
+  const bundlePath = await bundle({
     entryPoint,
-    // @react-three/fiber bundles its own scheduler@0.21 which conflicts with
-    // React 18.3's scheduler@0.23, causing "Cannot read properties of undefined
-    // (reading 'ReactCurrentBatchConfig')". Force single copies.
+    // Force single copies of React packages to avoid version mismatches
+    // between @react-three/fiber's nested scheduler@0.21 and React 18.3's
+    // scheduler@0.23.
     webpackOverride: (config) => ({
       ...config,
       resolve: {
         ...config.resolve,
         alias: {
           ...(config.resolve?.alias ?? {}),
-          react: join(remotionNodeModules, "react"),
-          "react-dom": join(remotionNodeModules, "react-dom"),
-          scheduler: join(remotionNodeModules, "scheduler"),
-          "react-reconciler": join(remotionNodeModules, "react-reconciler"),
+          react: join(nodeModules, "react"),
+          "react-dom": join(nodeModules, "react-dom"),
+          scheduler: join(nodeModules, "scheduler"),
+          "react-reconciler": join(nodeModules, "react-reconciler"),
         },
       },
     }),
     onProgress: (progress: number) => {
       if (progress % 25 === 0) {
-        console.log(`[render-worker] Bundle progress: ${progress}%`)
+        console.log(`[render-worker] ${label} bundle progress: ${progress}%`)
       }
     },
   })
-  console.log("[render-worker] Bundle complete:", cachedBundlePath)
-  return cachedBundlePath
+  console.log(`[render-worker] ${label} bundle complete:`, bundlePath)
+  return bundlePath
+}
+
+async function getBundlePath(compositionId: string): Promise<string> {
+  if (compositionId === "3d-title") {
+    if (!cached3DBundlePath) {
+      cached3DBundlePath = await bundleEntry("Root3D.tsx", "3D compositions")
+    }
+    return cached3DBundlePath
+  }
+  if (!cachedMainBundlePath) {
+    cachedMainBundlePath = await bundleEntry("Root.tsx", "main compositions")
+  }
+  return cachedMainBundlePath
 }
 
 async function handleCredits(
@@ -299,8 +319,8 @@ export function createRenderWorker() {
 
         console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
 
-        // Bundle Remotion compositions (cached after first call)
-        const bundlePath = await getBundlePath()
+        // Bundle Remotion compositions (cached after first call per entry point)
+        const bundlePath = await getBundlePath(compositionId)
         await bullJob.updateProgress(40)
 
         // Select composition and render
