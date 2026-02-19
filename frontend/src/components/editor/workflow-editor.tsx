@@ -1090,13 +1090,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "video-upscale", "suno-music-video", "merge-video-audio", "add-captions",
     "resize-video", "trim-video",
   ]);
+  const AUDIO_SOURCE_TYPES = new Set([
+    "text-to-speech", "text-to-audio", "generate-music", "upload-audio",
+    "suno-generate", "suno-cover", "suno-extend", "suno-separate",
+    "extract-audio", "mix-audio", "adjust-volume", "reference-audio",
+  ]);
 
   function collectMediaAssets(
     node: WorkflowNode,
     allEdges: WorkflowEdge[],
     allNodes: WorkflowNode[],
-  ): Array<{ id: string; type: "image" | "video"; url: string; label?: string }> {
-    const assetMap = new Map<string, { id: string; type: "image" | "video"; url: string; label?: string }>();
+  ): Array<{ id: string; type: "image" | "video" | "audio"; url: string; label?: string }> {
+    const assetMap = new Map<string, { id: string; type: "image" | "video" | "audio"; url: string; label?: string }>();
     const incomingEdges = allEdges.filter((e) => e.target === node.id);
     for (const edge of incomingEdges) {
       const sourceNode = allNodes.find((n) => n.id === edge.source);
@@ -1109,6 +1114,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         assetMap.set(sourceNode.id, { id: sourceNode.id, type: "image", url: output, label });
       } else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(srcType)) {
         assetMap.set(sourceNode.id, { id: sourceNode.id, type: "video", url: output, label });
+      } else if (AUDIO_SOURCE_TYPES.has(srcType)) {
+        assetMap.set(sourceNode.id, { id: sourceNode.id, type: "audio", url: output, label });
       }
     }
     const nodeData = node.data as Record<string, unknown>;
@@ -1128,54 +1135,59 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   };
 
   function buildAutoComposition(
-    assets: Array<{ id: string; type: "image" | "video"; url: string }>,
+    assets: Array<{ id: string; type: "image" | "video" | "audio"; url: string }>,
     fps: number,
     totalDuration: number,
     aspectRatio: string,
     backgroundColor: string,
-    audioUrl?: string,
   ): Record<string, unknown> {
-    const perAssetDuration = totalDuration / assets.length;
+    const visualAssets = assets.filter((a) => a.type !== "audio");
+    const audioAssets = assets.filter((a) => a.type === "audio");
+
+    const perAssetDuration = visualAssets.length > 0
+      ? totalDuration / visualAssets.length
+      : totalDuration;
     const perAssetFrames = Math.round(perAssetDuration * fps);
     const transitionFrames = 15;
-    const lastIndex = assets.length - 1;
+    const lastIndex = Math.max(visualAssets.length - 1, 0);
 
-    const mediaSegments = assets.map((asset, i) => ({
-      id: `seg_${i}`,
-      src: asset.url,
-      mediaType: asset.type,
-      startFrame: i * perAssetFrames,
-      durationInFrames: perAssetFrames,
-      layout: { mode: "fullscreen" as const },
-      transitionIn: i > 0 ? { type: "fade", durationFrames: transitionFrames } : undefined,
-      transitionOut: i < lastIndex ? { type: "fade", durationFrames: transitionFrames } : undefined,
-      effects: asset.type === "image"
-        ? [{ type: "ken-burns", startValue: 1.0, endValue: 1.1 }]
-        : [],
-    }));
+    const tracks: unknown[] = [];
 
-    const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio] ?? ASPECT_RATIO_DIMENSIONS["16:9"];
-
-    const tracks: unknown[] = [
-      {
+    if (visualAssets.length > 0) {
+      const mediaSegments = visualAssets.map((asset, i) => ({
+        id: `seg_${i}`,
+        src: asset.url,
+        mediaType: asset.type as "image" | "video",
+        startFrame: i * perAssetFrames,
+        durationInFrames: perAssetFrames,
+        layout: { mode: "fullscreen" as const },
+        transitionIn: i > 0 ? { type: "fade", durationFrames: transitionFrames } : undefined,
+        transitionOut: i < lastIndex ? { type: "fade", durationFrames: transitionFrames } : undefined,
+        effects: asset.type === "image"
+          ? [{ type: "ken-burns", startValue: 1.0, endValue: 1.1 }]
+          : [],
+      }));
+      tracks.push({
         id: "track_media",
         type: "media",
         zIndex: 0,
         segments: mediaSegments,
-      },
-    ];
+      });
+    }
 
-    if (audioUrl) {
+    audioAssets.forEach((audio, i) => {
       tracks.push({
-        id: "track_audio",
+        id: `track_audio_${i}`,
         type: "audio",
-        src: audioUrl,
+        src: audio.url,
         volume: 1,
         fadeInFrames: 0,
         fadeOutFrames: 0,
         startFrame: 0,
       });
-    }
+    });
+
+    const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio] ?? ASPECT_RATIO_DIMENSIONS["16:9"];
 
     return {
       fps,
@@ -5381,7 +5393,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         d.durationSeconds,
         d.aspectRatio,
         d.backgroundColor,
-        inputs.audioUrl,
       );
       return runProcessingNode(
         node.id,

@@ -4794,6 +4794,9 @@ const RENDER_MEDIA_SOURCE_TYPES = new Set([
   "youtube-video", "combine-videos", "lip-sync", "motion-transfer",
   "video-upscale", "suno-music-video", "merge-video-audio", "add-captions",
   "resize-video", "trim-video",
+  "text-to-speech", "text-to-audio", "generate-music", "upload-audio",
+  "suno-generate", "suno-cover", "suno-extend", "suno-separate",
+  "extract-audio", "mix-audio", "adjust-volume", "reference-audio",
 ])
 
 const COMPOSER_PRESET_PROMPTS = [
@@ -4803,16 +4806,19 @@ const COMPOSER_PRESET_PROMPTS = [
   { label: "Documentary", prompt: "Create a documentary-style video with Ken Burns effect on images and atmospheric fades" },
 ]
 
-function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoComposerData>) {
-  const [isGenerating, setIsGenerating] = useState(false)
-  const { user } = useAuth()
+/** Shared hook for media asset ordering via drag-and-drop. */
+function useMediaOrder(
+  sources: ReadonlyArray<SourceNodeInfo>,
+  assetOrder: string[] | undefined,
+  onUpdate: (d: Record<string, unknown>) => void,
+) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
   const mediaSources = sources.filter((s) => RENDER_MEDIA_SOURCE_TYPES.has(s.type))
-  const currentOrder = data.assetOrder ?? []
+  const currentOrder = assetOrder ?? []
   const orderedIds = [
     ...currentOrder.filter((id) => mediaSources.some((s) => s.id === id)),
     ...mediaSources.filter((s) => !currentOrder.includes(s.id)).map((s) => s.id),
@@ -4830,6 +4836,122 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
     newOrder.splice(newIndex, 0, moved)
     onUpdate({ assetOrder: newOrder })
   }
+
+  return { sensors, orderedIds, orderedSources, handleDragEnd }
+}
+
+/** Sortable media list with drag-and-drop reordering. */
+function MediaOrderList({
+  sensors,
+  orderedIds,
+  orderedSources,
+  onDragEnd,
+}: {
+  sensors: ReturnType<typeof useSensors>
+  orderedIds: string[]
+  orderedSources: ReadonlyArray<SourceNodeInfo>
+  onDragEnd: (event: DragEndEvent) => void
+}) {
+  if (orderedSources.length === 0) return null
+  return (
+    <div>
+      <Label className="mb-1.5 block">Media Order</Label>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+          <div className="flex flex-col gap-1">
+            {orderedSources.map((s, i) => (
+              <SortableAssetItem
+                key={s.id}
+                id={s.id}
+                index={i}
+                label={s.label}
+                typeLabel={s.type.includes("image") ? "img" : "vid"}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </div>
+  )
+}
+
+/** Shared video settings accordion (Aspect Ratio, FPS, Duration, Background Color). */
+function VideoSettingsAccordion({
+  aspectRatio,
+  fps,
+  durationSeconds,
+  backgroundColor,
+  onUpdate,
+  idPrefix,
+}: {
+  aspectRatio: string
+  fps: number
+  durationSeconds: number
+  backgroundColor: string
+  onUpdate: (d: Record<string, unknown>) => void
+  idPrefix: string
+}) {
+  return (
+    <Accordion type="single" collapsible>
+      <AccordionItem value="advanced" className="border-0">
+        <AccordionTrigger className="text-xs text-muted-foreground py-1.5 hover:no-underline">
+          Advanced Settings
+        </AccordionTrigger>
+        <AccordionContent className="space-y-3 pt-1">
+          <div>
+            <Label>Aspect Ratio</Label>
+            <Select value={aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                <SelectItem value="4:5">4:5 (Social)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-fps`}>FPS</Label>
+            <Select value={String(fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="24">24 fps (Film)</SelectItem>
+                <SelectItem value="30">30 fps (Standard)</SelectItem>
+                <SelectItem value="60">60 fps (Smooth)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-duration`}>Duration (seconds)</Label>
+            <Input
+              id={`${idPrefix}-duration`}
+              type="number"
+              min={1}
+              max={300}
+              value={durationSeconds}
+              onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
+            />
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-bg`}>Background Color</Label>
+            <Input
+              id={`${idPrefix}-bg`}
+              type="color"
+              value={backgroundColor}
+              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+              className="h-8 w-full"
+            />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  )
+}
+
+function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoComposerData>) {
+  const [isGenerating, setIsGenerating] = useState(false)
+  const { user } = useAuth()
+  const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
 
   async function handleGenerateComposition() {
     if (!data.compositionPrompt?.trim() || !user?.id) return
@@ -4865,29 +4987,8 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
 
   return (
     <div className="flex flex-col gap-3">
-      {/* 1. Media Order */}
-      {orderedSources.length > 0 && (
-        <div>
-          <Label className="mb-1.5 block">Media Order</Label>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
-              <div className="flex flex-col gap-1">
-                {orderedSources.map((s, i) => (
-                  <SortableAssetItem
-                    key={s.id}
-                    id={s.id}
-                    index={i}
-                    label={s.label}
-                    typeLabel={s.type.includes("image") ? "img" : "vid"}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
-      )}
+      <MediaOrderList sensors={sensors} orderedIds={orderedIds} orderedSources={orderedSources} onDragEnd={handleDragEnd} />
 
-      {/* 2. Composition Prompt */}
       <div>
         <Label className="mb-1.5 block">Composition Prompt</Label>
         <Textarea
@@ -4899,7 +5000,6 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
         />
       </div>
 
-      {/* 3. Preset Chips */}
       <div className="flex flex-wrap gap-1">
         {COMPOSER_PRESET_PROMPTS.map((preset) => (
           <button
@@ -4912,7 +5012,6 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
         ))}
       </div>
 
-      {/* 4. Generate Button */}
       <Button
         onClick={handleGenerateComposition}
         disabled={!data.compositionPrompt?.trim() || isGenerating || orderedSources.length === 0}
@@ -4933,7 +5032,6 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
         )}
       </Button>
 
-      {/* 5. Scene Graph Preview (shown after generation) */}
       {data.sceneGraph && (
         <>
           <Separator />
@@ -4947,66 +5045,14 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
         </>
       )}
 
-      {/* Advanced Settings */}
-      <Accordion type="single" collapsible>
-        <AccordionItem value="advanced" className="border-0">
-          <AccordionTrigger className="text-xs text-muted-foreground py-1.5 hover:no-underline">
-            Advanced Settings
-          </AccordionTrigger>
-          <AccordionContent className="space-y-3 pt-1">
-            <div>
-              <Label>Aspect Ratio</Label>
-              <Select
-                value={data.aspectRatio}
-                onValueChange={(v) => onUpdate({ aspectRatio: v as VideoComposerData["aspectRatio"] })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-                  <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-                  <SelectItem value="1:1">1:1 (Square)</SelectItem>
-                  <SelectItem value="4:5">4:5 (Social)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="composer-fps">FPS</Label>
-              <Select
-                value={String(data.fps)}
-                onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="24">24 fps (Film)</SelectItem>
-                  <SelectItem value="30">30 fps (Standard)</SelectItem>
-                  <SelectItem value="60">60 fps (Smooth)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="composer-duration">Duration (seconds)</Label>
-              <Input
-                id="composer-duration"
-                type="number"
-                min={1}
-                max={300}
-                value={data.durationSeconds}
-                onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="composer-bg">Background Color</Label>
-              <Input
-                id="composer-bg"
-                type="color"
-                value={data.backgroundColor}
-                onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-                className="h-8 w-full"
-              />
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+      <VideoSettingsAccordion
+        aspectRatio={data.aspectRatio}
+        fps={data.fps}
+        durationSeconds={data.durationSeconds}
+        backgroundColor={data.backgroundColor}
+        onUpdate={onUpdate}
+        idPrefix="composer"
+      />
     </div>
   )
 }
@@ -5014,12 +5060,8 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
 function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
+  const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
 
-  // Check if upstream video-composer is connected
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const upstreamComposer = useMemo(() => {
     if (!selectedNodeId) return undefined
@@ -5034,29 +5076,8 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
     return undefined
   }, [selectedNodeId, edges, nodes])
 
-  const mediaSources = sources.filter((s) => RENDER_MEDIA_SOURCE_TYPES.has(s.type))
-  const currentOrder = data.assetOrder ?? []
-  const orderedIds = [
-    ...currentOrder.filter((id) => mediaSources.some((s) => s.id === id)),
-    ...mediaSources.filter((s) => !currentOrder.includes(s.id)).map((s) => s.id),
-  ]
-  const orderedSources = orderedIds.map((id) => mediaSources.find((s) => s.id === id)!).filter(Boolean)
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = orderedIds.indexOf(String(active.id))
-    const newIndex = orderedIds.indexOf(String(over.id))
-    if (oldIndex === -1 || newIndex === -1) return
-    const newOrder = [...orderedIds]
-    const [moved] = newOrder.splice(oldIndex, 1)
-    newOrder.splice(newIndex, 0, moved)
-    onUpdate({ assetOrder: newOrder })
-  }
-
   return (
     <div className="flex flex-col gap-3">
-      {/* Upstream composer info */}
       {upstreamComposer && (
         <div className="flex items-center gap-2 p-2 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
           <Sparkles className="w-4 h-4 text-[#ff0073] shrink-0" />
@@ -5070,88 +5091,18 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
         </div>
       )}
 
-      {/* Media Order (for auto-compose mode when no composer connected) */}
-      {!upstreamComposer && orderedSources.length > 0 && (
-        <div>
-          <Label className="mb-1.5 block">Media Order</Label>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
-              <div className="flex flex-col gap-1">
-                {orderedSources.map((s, i) => (
-                  <SortableAssetItem
-                    key={s.id}
-                    id={s.id}
-                    index={i}
-                    label={s.label}
-                    typeLabel={s.type.includes("image") ? "img" : "vid"}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
+      {!upstreamComposer && (
+        <MediaOrderList sensors={sensors} orderedIds={orderedIds} orderedSources={orderedSources} onDragEnd={handleDragEnd} />
       )}
 
-      {/* Advanced Settings */}
-      <Accordion type="single" collapsible>
-        <AccordionItem value="advanced" className="border-0">
-          <AccordionTrigger className="text-xs text-muted-foreground py-1.5 hover:no-underline">
-            Advanced Settings
-          </AccordionTrigger>
-          <AccordionContent className="space-y-3 pt-1">
-            <div>
-              <Label>Aspect Ratio</Label>
-              <Select
-                value={data.aspectRatio}
-                onValueChange={(v) => onUpdate({ aspectRatio: v as RenderVideoData["aspectRatio"] })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-                  <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-                  <SelectItem value="1:1">1:1 (Square)</SelectItem>
-                  <SelectItem value="4:5">4:5 (Social)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="render-fps">FPS</Label>
-              <Select
-                value={String(data.fps)}
-                onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="24">24 fps (Film)</SelectItem>
-                  <SelectItem value="30">30 fps (Standard)</SelectItem>
-                  <SelectItem value="60">60 fps (Smooth)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="render-duration">Duration (seconds)</Label>
-              <Input
-                id="render-duration"
-                type="number"
-                min={1}
-                max={300}
-                value={data.durationSeconds}
-                onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 30 })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="render-bg">Background Color</Label>
-              <Input
-                id="render-bg"
-                type="color"
-                value={data.backgroundColor}
-                onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-                className="h-8 w-full"
-              />
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+      <VideoSettingsAccordion
+        aspectRatio={data.aspectRatio}
+        fps={data.fps}
+        durationSeconds={data.durationSeconds}
+        backgroundColor={data.backgroundColor}
+        onUpdate={onUpdate}
+        idPrefix="render"
+      />
     </div>
   )
 }

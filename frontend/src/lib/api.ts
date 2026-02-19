@@ -1763,7 +1763,7 @@ export async function renderVideoWithSceneGraph(params: {
 
 export async function generateSceneGraph(params: {
   prompt: string
-  assets: Array<{ id: string; type: "image" | "video"; url: string; label?: string; durationSeconds?: number }>
+  assets: Array<{ id: string; type: "image" | "video" | "audio"; url: string; label?: string; durationSeconds?: number }>
   fps: number
   aspectRatio: string
   durationSeconds: number
