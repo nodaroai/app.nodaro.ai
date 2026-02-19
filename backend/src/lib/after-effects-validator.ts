@@ -92,7 +92,6 @@ export function validateAfterEffectsPlan(
   expectedFps: number,
   expectedDurationFrames: number,
 ): AfterEffectsValidationResult {
-  const errors: string[] = []
   const autoFixed: string[] = []
 
   // Inject/override known values before parsing
@@ -116,74 +115,67 @@ export function validateAfterEffectsPlan(
     }
   }
 
-  const plan = { ...parsed.data } as z.infer<typeof afterEffectsPlanSchema> & {
-    fps: number
-    durationInFrames: number
-  }
+  let plan = parsed.data
 
   // Auto-fix fps
   if (plan.fps !== expectedFps) {
     autoFixed.push(`Fixed fps from ${plan.fps} to ${expectedFps}`)
-    plan.fps = expectedFps
+    plan = { ...plan, fps: expectedFps }
   }
 
-  // Auto-fix duration within 10% tolerance
-  const durationDiff = Math.abs(plan.durationInFrames - expectedDurationFrames)
-  const tolerance = Math.ceil(expectedDurationFrames * 0.1)
-  if (durationDiff > 0 && durationDiff <= tolerance) {
+  // Auto-fix duration to match expected value
+  if (plan.durationInFrames !== expectedDurationFrames) {
     autoFixed.push(`Fixed durationInFrames from ${plan.durationInFrames} to ${expectedDurationFrames}`)
-    plan.durationInFrames = expectedDurationFrames
-  } else if (durationDiff > tolerance) {
-    // Force-fix since we know the correct duration
-    autoFixed.push(`Overrode durationInFrames from ${plan.durationInFrames} to ${expectedDurationFrames}`)
-    plan.durationInFrames = expectedDurationFrames
+    plan = { ...plan, durationInFrames: expectedDurationFrames }
   }
 
-  // Clamp effect values to valid ranges
-  for (const effect of plan.effects) {
+  // Clamp effect values to valid ranges (immutable)
+  const clampedEffects = plan.effects.map((effect) => {
     switch (effect.type) {
-      case "color-grade": {
-        const e = effect as { brightness: number; contrast: number; saturation: number; temperature: number }
-        e.brightness = clamp(e.brightness, 0.5, 2.0)
-        e.contrast = clamp(e.contrast, 0.5, 2.0)
-        e.saturation = clamp(e.saturation, 0, 3.0)
-        e.temperature = clamp(e.temperature, -100, 100)
-        break
-      }
-      case "vignette": {
-        const e = effect as { intensity: number; radius: number }
-        e.intensity = clamp(e.intensity, 0, 1)
-        e.radius = clamp(e.radius, 0.2, 1.0)
-        break
-      }
-      case "film-grain": {
-        const e = effect as { intensity: number; size: number }
-        e.intensity = clamp(e.intensity, 0, 1)
-        e.size = clamp(e.size, 1, 4)
-        break
-      }
-      case "noise-overlay": {
-        const e = effect as { opacity: number; scale: number }
-        e.opacity = clamp(e.opacity, 0, 0.5)
-        e.scale = clamp(e.scale, 0.001, 0.01)
-        break
-      }
+      case "color-grade":
+        return {
+          ...effect,
+          brightness: clamp(effect.brightness, 0.5, 2.0),
+          contrast: clamp(effect.contrast, 0.5, 2.0),
+          saturation: clamp(effect.saturation, 0, 3.0),
+          temperature: clamp(effect.temperature, -100, 100),
+        }
+      case "vignette":
+        return {
+          ...effect,
+          intensity: clamp(effect.intensity, 0, 1),
+          radius: clamp(effect.radius, 0.2, 1.0),
+        }
+      case "film-grain":
+        return {
+          ...effect,
+          intensity: clamp(effect.intensity, 0, 1),
+          size: clamp(effect.size, 1, 4),
+        }
+      case "noise-overlay":
+        return {
+          ...effect,
+          opacity: clamp(effect.opacity, 0, 0.5),
+          scale: clamp(effect.scale, 0.001, 0.01),
+        }
+      default:
+        return effect
     }
-  }
+  })
 
-  // Round text overlay frames to integers
-  if (plan.textOverlays) {
-    for (const overlay of plan.textOverlays) {
-      const o = overlay as { startFrame: number; durationInFrames: number }
-      o.startFrame = Math.round(o.startFrame)
-      o.durationInFrames = Math.round(o.durationInFrames)
-    }
-  }
+  // Round text overlay frames to integers (immutable)
+  const fixedOverlays = plan.textOverlays?.map((overlay) => ({
+    ...overlay,
+    startFrame: Math.round(overlay.startFrame),
+    durationInFrames: Math.round(overlay.durationInFrames),
+  }))
+
+  plan = { ...plan, effects: clampedEffects, textOverlays: fixedOverlays }
 
   return {
-    valid: errors.length === 0,
+    valid: true,
     plan,
-    errors,
+    errors: [],
     autoFixed,
   }
 }

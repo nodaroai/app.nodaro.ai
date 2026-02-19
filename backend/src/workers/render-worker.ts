@@ -75,7 +75,7 @@ interface PlanRenderJobData {
 type RenderJobData = LegacyRenderJobData | SceneGraphRenderJobData | PlanRenderJobData
 
 function isPlanJob(data: RenderJobData): data is PlanRenderJobData {
-  return "planType" in data && (data as PlanRenderJobData).planType != null
+  return "planType" in data && data.planType != null
 }
 
 function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
@@ -262,14 +262,20 @@ export function createRenderWorker() {
         await bullJob.updateProgress(30)
 
         // Build render config — plan mode, scene graph mode, or legacy template mode
-        const renderConfig = isPlanJob(data)
-          ? buildPlanRender(data)
-          : isSceneGraphJob(data)
-            ? buildSceneGraphRender(data)
-            : buildLegacyRender(data)
+        let renderConfig
+        let modeLabel: string
+        if (isPlanJob(data)) {
+          renderConfig = buildPlanRender(data)
+          modeLabel = `plan:${data.planType}`
+        } else if (isSceneGraphJob(data)) {
+          renderConfig = buildSceneGraphRender(data)
+          modeLabel = "scene-graph"
+        } else {
+          renderConfig = buildLegacyRender(data)
+          modeLabel = "legacy"
+        }
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
-        const modeLabel = isPlanJob(data) ? `plan:${(data as PlanRenderJobData).planType}` : isSceneGraphJob(data) ? "scene-graph" : "legacy"
 
         console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
 

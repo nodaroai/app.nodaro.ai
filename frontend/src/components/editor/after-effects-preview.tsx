@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronDown, ChevronUp, Eye, EyeOff, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -161,36 +161,44 @@ export function AfterEffectsPreview({
   onRegenerate,
   isGenerating,
 }: AfterEffectsPreviewProps) {
-  const effects = useMemo(() => (effectPlan.effects as Effect[]) ?? [], [effectPlan])
+  // Track all effects (including disabled) separately from the plan
+  const [allEffects, setAllEffects] = useState<Effect[]>(() => (effectPlan.effects as Effect[]) ?? [])
   const textOverlays = useMemo(() => (effectPlan.textOverlays as TextOverlay[]) ?? [], [effectPlan])
   const [disabledEffects, setDisabledEffects] = useState<Set<number>>(new Set())
+  const lastPlanIdRef = useRef<unknown>(effectPlan)
+
+  // Reset when effectPlan changes externally (e.g., regeneration)
+  useEffect(() => {
+    if (effectPlan !== lastPlanIdRef.current && disabledEffects.size === 0) {
+      setAllEffects((effectPlan.effects as Effect[]) ?? [])
+      lastPlanIdRef.current = effectPlan
+    }
+  }, [effectPlan, disabledEffects.size])
 
   function handleEffectChange(index: number, updated: Effect) {
-    const newEffects = [...effects]
-    newEffects[index] = updated
-    onUpdate({ ...effectPlan, effects: newEffects })
+    const newAllEffects = allEffects.map((e, i) => (i === index ? updated : e))
+    setAllEffects(newAllEffects)
+    const enabledEffects = newAllEffects.filter((_, i) => !disabledEffects.has(i))
+    onUpdate({ ...effectPlan, effects: enabledEffects })
   }
 
   function toggleEffect(index: number) {
-    setDisabledEffects((prev) => {
-      const next = new Set(prev)
-      if (next.has(index)) {
-        next.delete(index)
-      } else {
-        next.add(index)
-      }
-      // Update the plan with only enabled effects
-      const enabledEffects = effects.filter((_, i) => !next.has(i))
-      onUpdate({ ...effectPlan, effects: enabledEffects })
-      return next
-    })
+    const next = new Set(disabledEffects)
+    if (next.has(index)) {
+      next.delete(index)
+    } else {
+      next.add(index)
+    }
+    setDisabledEffects(next)
+    const enabledEffects = allEffects.filter((_, i) => !next.has(i))
+    onUpdate({ ...effectPlan, effects: enabledEffects })
   }
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--text-primary)]">
-          Effect Plan ({effects.length} effects)
+          Effect Plan ({allEffects.length} effects)
         </span>
         {onRegenerate && (
           <Button
@@ -206,7 +214,7 @@ export function AfterEffectsPreview({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        {effects.map((effect, i) => (
+        {allEffects.map((effect, i) => (
           <div key={i} className="flex items-start gap-1">
             <button
               type="button"
@@ -243,8 +251,8 @@ export function AfterEffectsPreview({
               <div className="font-medium truncate">{overlay.text}</div>
               <div className="text-[10px] text-muted-foreground">
                 {overlay.position} &middot; {overlay.fontSize}px &middot;{" "}
-                {((overlay.startFrame / fps)).toFixed(1)}s–
-                {(((overlay.startFrame + overlay.durationInFrames) / fps)).toFixed(1)}s
+                {(overlay.startFrame / fps).toFixed(1)}s–
+                {((overlay.startFrame + overlay.durationInFrames) / fps).toFixed(1)}s
               </div>
             </div>
           ))}
