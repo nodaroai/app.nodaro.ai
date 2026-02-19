@@ -49,6 +49,8 @@ import {
   Repeat,
   Gauge,
   SunDim,
+  Shapes,
+  Box,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
@@ -360,6 +362,34 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "video-composer",
     label: "Compose Video",
     icon: <Sparkles className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video Production",
+  },
+  {
+    type: "after-effects",
+    label: "After Effects",
+    icon: <Wand2 className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video Production",
+  },
+  {
+    type: "lottie-overlay",
+    label: "Lottie Overlay",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video Production",
+  },
+  {
+    type: "3d-title",
+    label: "3D Title",
+    icon: <Box className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video Production",
+  },
+  {
+    type: "motion-graphics",
+    label: "Motion Graphics",
+    icon: <Shapes className="h-4 w-4" />,
     category: "Processing",
     group: "Video Production",
   },

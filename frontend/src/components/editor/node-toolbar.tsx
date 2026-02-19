@@ -6,7 +6,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -90,6 +90,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "after-effects", label: "After Effects", icon: <Wand2 className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   { type: "lottie-overlay", label: "Lottie Overlay", icon: <Layers className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   { type: "3d-title", label: "3D Title", icon: <Box className="h-4 w-4" />, category: "Processing", group: "Video Production" },
+  { type: "motion-graphics", label: "Motion Graphics", icon: <Shapes className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   { type: "render-video", label: "Render Video", icon: <Film className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   // Character
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
