@@ -140,7 +140,7 @@ const renderSceneGraphBody = z.object({
 // ── Generic plan render schema ────────────────────────────────────────
 
 const renderPlanBody = z.object({
-  planType: z.enum(["after-effects"]), // extend as more composers are added
+  planType: z.enum(["after-effects", "lottie-overlay"]), // extend as more composers are added
   plan: z.record(z.unknown()),
   userId: z.string().uuid().optional(),
 })

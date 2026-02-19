@@ -1,0 +1,203 @@
+import type { FastifyInstance } from "fastify"
+import { z } from "zod"
+import Anthropic from "@anthropic-ai/sdk"
+import { supabase } from "../lib/supabase.js"
+import { config } from "../lib/config.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { CreditsService } from "../billing/credits.js"
+import { LOTTIE_OVERLAY_SYSTEM_PROMPT } from "../prompts/lottie-overlay-system.js"
+import { validateLottieOverlayPlan } from "../lib/lottie-overlay-validator.js"
+
+let _anthropic: Anthropic | null = null
+function getAnthropicClient(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
+  }
+  return _anthropic
+}
+
+const lottieAssetSchema = z.object({
+  id: z.string(),
+  url: z.string().url(),
+  name: z.string(),
+  durationSeconds: z.number().optional(),
+})
+
+const generateBody = z.object({
+  prompt: z.string().min(1).max(2000),
+  inputVideoUrl: z.string().url(),
+  fps: z.number().min(15).max(60).default(30),
+  durationSeconds: z.number().min(1).max(300),
+  width: z.number().min(100).max(3840).optional(),
+  height: z.number().min(100).max(3840).optional(),
+  lottieAssets: z.array(lottieAssetSchema).optional(),
+  userId: z.string().uuid(),
+})
+
+export async function lottieOverlayAIRoutes(app: FastifyInstance) {
+  app.post(
+    "/v1/lottie-overlay/generate",
+    {
+      preHandler: creditGuard(() => "lottie-overlay"),
+      config: { requestTimeout: 60000 } as Record<string, unknown>,
+    },
+    async (req, reply) => {
+      req.raw.setTimeout(60000)
+      reply.raw.setTimeout(60000)
+
+      const parsed = generateBody.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: parsed.error.issues[0]?.message ?? "Invalid request",
+          },
+        })
+      }
+
+      const { prompt, inputVideoUrl, fps, durationSeconds, lottieAssets, userId } = parsed.data
+
+      if (!config.ANTHROPIC_API_KEY) {
+        return reply.status(503).send({
+          error: {
+            code: "provider_unavailable",
+            message: "Anthropic API key not configured",
+          },
+        })
+      }
+
+      const width = parsed.data.width ?? 1920
+      const height = parsed.data.height ?? 1080
+      const durationInFrames = Math.round(durationSeconds * fps)
+
+      // Create job record
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .insert({
+          workflow_id: null,
+          user_id: userId,
+          status: "pending",
+          input_data: {
+            type: "lottie-overlay",
+            prompt,
+            inputVideoUrl,
+            fps,
+            width,
+            height,
+            durationSeconds,
+          },
+        })
+        .select("id")
+        .single()
+
+      if (jobError) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: jobError.message },
+        })
+      }
+
+      // Reserve credits
+      const reservation = await reserveCreditsForJob(req, reply, job.id, "lottie-overlay")
+      if (reply.sent) return
+      const usageLogId = reservation?.usageLogId
+
+      try {
+        const anthropic = getAnthropicClient()
+
+        let userMessage = `Add Lottie animation overlays to this video:
+- Source video: ${inputVideoUrl}
+- FPS: ${fps}
+- Resolution: ${width}x${height}
+- Duration: ${durationSeconds} seconds (${durationInFrames} frames)
+
+Overlay style: ${prompt}`
+
+        if (lottieAssets && lottieAssets.length > 0) {
+          userMessage += `\n\nUser-provided Lottie assets (prefer these over built-in ones):\n`
+          for (const asset of lottieAssets) {
+            userMessage += `- ${asset.name} (${asset.url})${asset.durationSeconds ? ` [${asset.durationSeconds}s]` : ""}\n`
+          }
+        }
+
+        console.log(`[lottie-overlay-ai] Generating for job ${job.id}, ${durationSeconds}s video`)
+
+        const response = await anthropic.messages.create({
+          model: "claude-sonnet-4-5-20250929",
+          max_tokens: 2048,
+          temperature: 0.3,
+          system: LOTTIE_OVERLAY_SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userMessage }],
+        })
+
+        const textBlock = response.content.find((b) => b.type === "text")
+        const rawText = textBlock?.text ?? ""
+
+        // Parse JSON from response
+        let jsonText = rawText.trim()
+        if (jsonText.startsWith("```")) {
+          jsonText = jsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
+        }
+
+        let rawJson: unknown
+        try {
+          rawJson = JSON.parse(jsonText)
+        } catch {
+          console.error(`[lottie-overlay-ai] Failed to parse JSON for job ${job.id}`)
+          throw new Error("AI returned invalid JSON. Please try again with a different prompt.")
+        }
+
+        // Validate and auto-fix
+        const validation = validateLottieOverlayPlan(rawJson, inputVideoUrl, fps, durationInFrames)
+
+        if (validation.autoFixed.length > 0) {
+          console.log(`[lottie-overlay-ai] Auto-fixed ${validation.autoFixed.length} issues for job ${job.id}`)
+        }
+
+        const overlayPlan = validation.plan ?? rawJson
+
+        // Finalize job
+        await supabase
+          .from("jobs")
+          .update({
+            status: "completed",
+            output_data: {
+              overlayPlan,
+              validationErrors: validation.errors,
+              autoFixes: validation.autoFixed,
+              usage: response.usage,
+            },
+          })
+          .eq("id", job.id)
+
+        if (usageLogId) {
+          await CreditsService.commitCredits(usageLogId)
+        }
+
+        console.log(`[lottie-overlay-ai] Job ${job.id} completed, tokens: ${response.usage.output_tokens}`)
+
+        return reply.send({
+          jobId: job.id,
+          overlayPlan,
+          validationErrors: validation.errors,
+          autoFixes: validation.autoFixed,
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Lottie overlay plan generation failed"
+        console.error(`[lottie-overlay-ai] Error for job ${job.id}:`, message)
+
+        await supabase
+          .from("jobs")
+          .update({ status: "failed", output_data: { error: message } })
+          .eq("id", job.id)
+
+        if (usageLogId) {
+          await CreditsService.refundCredits(usageLogId)
+        }
+
+        return reply.status(502).send({
+          error: { code: "llm_error", message },
+        })
+      }
+    },
+  )
+}

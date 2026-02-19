@@ -71,5 +71,36 @@ export interface AfterEffectsPlan {
   readonly textOverlays?: AfterEffectsTextOverlay[]
 }
 
+// ── Lottie Overlay Plan Types ─────────────────────────────────────────
+
+export interface LottieOverlayPosition {
+  readonly x: number      // 0–100 (left %)
+  readonly y: number      // 0–100 (top %)
+  readonly width: number   // 0–100 (% of composition width)
+  readonly height: number  // 0–100 (% of composition height)
+}
+
+export interface LottieOverlayItem {
+  readonly id: string
+  readonly src: string
+  readonly startFrame: number
+  readonly durationInFrames: number
+  readonly position: LottieOverlayPosition
+  readonly opacity: number        // 0–1
+  readonly playbackRate: number   // 0.1–3.0
+  readonly loop: boolean
+  readonly renderer?: "svg" | "canvas" | "html"
+}
+
+export interface LottieOverlayPlan {
+  readonly planType: "lottie-overlay"
+  readonly fps: number
+  readonly width: number
+  readonly height: number
+  readonly durationInFrames: number
+  readonly sourceVideo: string
+  readonly overlays: LottieOverlayItem[]
+}
+
 // Union type for all composer plans (extend as more composers are added)
-export type ComposerPlanType = "scene-graph" | "after-effects"
+export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay"

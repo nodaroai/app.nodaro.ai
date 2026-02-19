@@ -60,6 +60,7 @@ import {
   renderVideoWithSceneGraph,
   renderVideoWithPlan,
   generateAfterEffects,
+  generateLottieOverlay,
   generateCharacter,
   generateCharacterAsset,
   saveCharacter,
@@ -113,6 +114,7 @@ import type {
   VideoUpscaleData,
   VideoComposerData,
   AfterEffectsData,
+  LottieOverlayData,
   RenderVideoData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -190,6 +192,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "mix-audio": 1,
   "video-composer": 2,
   "after-effects": 2,
+  "lottie-overlay": 2,
   "render-video": 3,
   character: 5,
   object: 5,
@@ -707,6 +710,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "video-upscale",
     "video-composer",
     "after-effects",
+    "lottie-overlay",
     "render-video",
     "combine-videos",
     "merge-video-audio",
@@ -1085,6 +1089,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
     if (type === "after-effects") {
       return (data.effectPlan as Record<string, unknown> | undefined)
+        ? "plan-ready"
+        : undefined;
+    }
+    if (type === "lottie-overlay") {
+      return (data.overlayPlan as Record<string, unknown> | undefined)
         ? "plan-ready"
         : undefined;
     }
@@ -5424,12 +5433,81 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         });
     }
 
+    if (node.type === "lottie-overlay") {
+      const d = node.data as LottieOverlayData;
+      if (!d.overlayPrompt?.trim()) {
+        toast.error(`Node "${d.label}": no overlay prompt set`);
+        return Promise.reject(new Error("No overlay prompt"));
+      }
+      if (!user?.id) {
+        toast.error("Not authenticated");
+        return Promise.reject(new Error("Not authenticated"));
+      }
+      // Find input video URL from upstream node via "in" handle
+      const loIncomingEdges = edges.filter((e) => e.target === node.id);
+      let inputVideoUrl: string | undefined;
+      const lottieAssets: Array<{ id: string; url: string; name: string }> = [];
+      for (const edge of loIncomingEdges) {
+        const sourceNode = nodes.find((n) => n.id === edge.source);
+        if (!sourceNode) continue;
+        if (edge.targetHandle === "in") {
+          const output = extractNodeOutput(sourceNode);
+          if (output && (output.startsWith("http") || output.startsWith("/"))) {
+            inputVideoUrl = output;
+          }
+        } else if (edge.targetHandle === "lottie") {
+          const output = extractNodeOutput(sourceNode);
+          if (output && (output.startsWith("http") || output.startsWith("/"))) {
+            lottieAssets.push({
+              id: sourceNode.id,
+              url: output,
+              name: (sourceNode.data as Record<string, unknown>).label as string ?? "Lottie Asset",
+            });
+          }
+        }
+      }
+      if (!inputVideoUrl) {
+        toast.error(`Node "${d.label}": no video input connected`);
+        return Promise.reject(new Error("No video input"));
+      }
+      const { updateNodeData } = useWorkflowStore.getState();
+      updateNodeData(node.id, {
+        executionStatus: "running",
+        overlayPlan: undefined,
+        errorMessage: undefined,
+        inputVideoUrl,
+      });
+      return generateLottieOverlay({
+        prompt: d.overlayPrompt,
+        inputVideoUrl,
+        fps: d.fps,
+        durationSeconds: d.durationSeconds,
+        lottieAssets: lottieAssets.length > 0 ? lottieAssets : undefined,
+        userId: user.id,
+      })
+        .then((result) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            overlayPlan: result.overlayPlan,
+          });
+          toast.success("Lottie overlay plan generated");
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        });
+    }
+
     if (node.type === "render-video") {
       const d = node.data as RenderVideoData;
       // Generic upstream composer detection via COMPOSER_PLAN_MAP
       const COMPOSER_PLAN_MAP: Record<string, { planType: string; planField: string }> = {
         "video-composer": { planType: "scene-graph", planField: "sceneGraph" },
         "after-effects": { planType: "after-effects", planField: "effectPlan" },
+        "lottie-overlay": { planType: "lottie-overlay", planField: "overlayPlan" },
       };
       const incomingEdges = edges.filter((e) => e.target === node.id);
       let upstreamPlanType: string | undefined;

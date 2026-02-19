@@ -91,6 +91,7 @@ import type {
   TrimVideoData,
   VideoComposerData,
   AfterEffectsData,
+  LottieOverlayData,
   RenderVideoData,
   SpeedRampData,
   LoopVideoData,
@@ -699,6 +700,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "after-effects" && (
             <AfterEffectsConfig data={selectedNode.data as AfterEffectsData} onUpdate={update} />
+          )}
+          {selectedNode.type === "lottie-overlay" && (
+            <LottieOverlayConfig data={selectedNode.data as LottieOverlayData} onUpdate={update} />
           )}
           {selectedNode.type === "render-video" && (
             <RenderVideoConfig data={selectedNode.data as RenderVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -5053,6 +5057,73 @@ function AfterEffectsConfig({ data, onUpdate }: { data: AfterEffectsData; onUpda
   )
 }
 
+const LazyLottieOverlayPreview = lazy(() => import("@/components/editor/lottie-overlay-preview").then(m => ({ default: m.LottieOverlayPreview })))
+
+function LottieOverlayConfig({ data, onUpdate }: { data: LottieOverlayData; onUpdate: (d: Partial<LottieOverlayData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label className="mb-1.5 block">Overlay Prompt</Label>
+        <Textarea
+          placeholder="Describe overlays: add confetti at 3 seconds, floating particles throughout..."
+          value={data.overlayPrompt ?? ""}
+          onChange={(e) => onUpdate({ overlayPrompt: e.target.value })}
+          rows={3}
+          className="text-sm"
+        />
+      </div>
+
+      {data.overlayPlan && (
+        <>
+          <Separator />
+          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+            <LazyLottieOverlayPreview
+              overlayPlan={data.overlayPlan}
+              fps={data.fps}
+              onUpdate={(op) => onUpdate({ overlayPlan: op })}
+            />
+          </Suspense>
+        </>
+      )}
+
+      <Accordion type="single" collapsible>
+        <AccordionItem value="settings">
+          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="lo-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
+                    <SelectTrigger id="lo-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24</SelectItem>
+                      <SelectItem value="30">30</SelectItem>
+                      <SelectItem value="60">60</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="lo-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Input
+                    id="lo-duration"
+                    type="number"
+                    min={1}
+                    max={300}
+                    value={data.durationSeconds}
+                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 10 })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  )
+}
+
 function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -5072,6 +5143,11 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
         const aeData = srcNode.data as AfterEffectsData
         const effectCount = ((aeData.effectPlan as Record<string, unknown>)?.effects as unknown[])?.length ?? 0
         return { label: aeData.label, trackCount: effectCount }
+      }
+      if (srcNode?.type === "lottie-overlay") {
+        const loData = srcNode.data as LottieOverlayData
+        const overlayCount = ((loData.overlayPlan as Record<string, unknown>)?.overlays as unknown[])?.length ?? 0
+        return { label: loData.label, trackCount: overlayCount }
       }
     }
     return undefined

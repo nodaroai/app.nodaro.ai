@@ -961,6 +961,19 @@ export type AfterEffectsData = {
   errorMessage?: string
 }
 
+export type LottieOverlayData = {
+  [key: string]: unknown
+  label: string
+  overlayPrompt: string
+  overlayPlan?: Record<string, unknown>
+  inputVideoUrl?: string
+  lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
+  fps: number
+  durationSeconds: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 export type RenderVideoData = {
   [key: string]: unknown
   label: string
@@ -1389,6 +1402,7 @@ export type SceneNodeData =
   | TrimVideoData
   | VideoComposerData
   | AfterEffectsData
+  | LottieOverlayData
   | RenderVideoData
   | SpeedRampData
   | LoopVideoData
@@ -1456,6 +1470,7 @@ export type SceneNodeType =
   | "trim-video"
   | "video-composer"
   | "after-effects"
+  | "lottie-overlay"
   | "render-video"
   | "speed-ramp"
   | "loop-video"
@@ -1914,6 +1929,22 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as AfterEffectsData,
+  },
+  {
+    type: "lottie-overlay",
+    label: "Lottie Overlay",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["in", "lottie"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "Lottie Overlay",
+      overlayPrompt: "",
+      fps: 30,
+      durationSeconds: 10,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as LottieOverlayData,
   },
   {
     type: "render-video",

@@ -68,6 +68,7 @@ import { downloadRoutes } from "./routes/download.js"
 import { renderVideoRoutes } from "./routes/render-video.js"
 import { sceneGraphAIRoutes } from "./routes/scene-graph-ai.js"
 import { afterEffectsAIRoutes } from "./routes/after-effects-ai.js"
+import { lottieOverlayAIRoutes } from "./routes/lottie-overlay-ai.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -162,6 +163,7 @@ export async function buildApp() {
   await app.register(renderVideoRoutes)
   await app.register(sceneGraphAIRoutes)
   await app.register(afterEffectsAIRoutes)
+  await app.register(lottieOverlayAIRoutes)
 
   return app
 }

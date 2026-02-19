@@ -1814,6 +1814,30 @@ export async function renderVideoWithPlan(params: {
   return res.json()
 }
 
+// --- Lottie Overlay ---
+
+export async function generateLottieOverlay(params: {
+  prompt: string
+  inputVideoUrl: string
+  fps: number
+  durationSeconds: number
+  width?: number
+  height?: number
+  lottieAssets?: Array<{ id: string; url: string; name: string; durationSeconds?: number }>
+  userId: string
+}): Promise<{ jobId: string; overlayPlan: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/lottie-overlay/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Lottie overlay generation failed")
+  }
+  return res.json()
+}
+
 // --- AI Writer ---
 
 export async function generateAIWriter(params: {
