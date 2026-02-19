@@ -10,11 +10,14 @@
     "render": "remotion render"
   },
   "dependencies": {
+    "@react-three/fiber": "^8.0.0",
     "@remotion/cli": "^4.0.0",
     "@remotion/gif": "^4.0.0",
     "@remotion/lottie": "^4.0.0",
     "@remotion/google-fonts": "^4.0.0",
+    "@remotion/motion-blur": "^4.0.0",
     "@remotion/noise": "^4.0.0",
+    "@remotion/paths": "^4.0.0",
     "@remotion/renderer": "^4.0.0",
     "@remotion/three": "^4.0.0",
     "@react-three/drei": "^9.0.0",

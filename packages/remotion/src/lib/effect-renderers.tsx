@@ -130,9 +130,11 @@ export function NoiseOverlay({
   opacity,
   scale,
   animated,
-}: Pick<NoiseOverlayEffect, "opacity" | "scale" | "animated">) {
+  noiseType,
+}: Pick<NoiseOverlayEffect, "opacity" | "scale" | "animated" | "noiseType">) {
   const frame = useCurrentFrame()
   const seed = animated ? frame : 0
+  const turbulenceType = noiseType === "simplex" ? "turbulence" : "fractalNoise"
 
   return (
     <div
@@ -147,7 +149,7 @@ export function NoiseOverlay({
       <svg width="100%" height="100%" style={{ position: "absolute", inset: 0 }}>
         <filter id={`noise-${seed}`}>
           <feTurbulence
-            type="fractalNoise"
+            type={turbulenceType}
             baseFrequency={scale}
             numOctaves={4}
             seed={seed}

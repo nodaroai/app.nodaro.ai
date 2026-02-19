@@ -40,11 +40,12 @@ Add analog film texture.
 - size: 1-4 (pixel size of grain particles)
 
 ### noise-overlay
-Subtle perlin noise texture.
-{ "type": "noise-overlay", "opacity": 0.1, "scale": 0.005, "animated": true }
+Subtle noise texture.
+{ "type": "noise-overlay", "opacity": 0.1, "scale": 0.005, "animated": true, "noiseType": "perlin" }
 - opacity: 0-0.5
 - scale: 0.001-0.01 (frequency)
 - animated: boolean (animates per frame)
+- noiseType: "perlin" (default, fractalNoise) or "simplex" (turbulence pattern)
 
 ### letterbox
 Add cinematic black bars for wider aspect ratio.
@@ -68,6 +69,13 @@ Animate blur over time (reveal, defocus, dream transitions).
 - easing: "linear" | "easeIn" | "easeOut" | "easeInOut"
 Common patterns: blur-to-clear reveal (20→0), defocus outro (0→20), dream sequence (0→10)
 
+### trail
+Echo/trail effect that leaves ghosted copies of previous frames.
+{ "type": "trail", "layers": 3, "lagInFrames": 1.5, "trailOpacity": 0.4 }
+- layers: 1-10 integer (number of ghost copies)
+- lagInFrames: 0.5-5 (delay between ghost layers)
+- trailOpacity: 0-1 (opacity of ghost layers)
+
 ## Text Overlays (optional)
 
 { "id": "text-1", "text": "CHAPTER ONE", "startFrame": 0, "durationInFrames": 90, "position": "center", "fontSize": 48, "color": "#ffffff", "animation": "fade" }
@@ -83,7 +91,7 @@ Common patterns: blur-to-clear reveal (20→0), defocus outro (0→20), dream se
 - **Dreamy**: low contrast (0.8) + warm temperature (20-40) + soft grain (0.1-0.2) + slight desaturation (0.85) + animated-blur (0→8, easeOut)
 - **Reveal/Intro**: animated-blur (20→0, easeOut) over first 2 seconds + vignette (0.3)
 - **Documentary**: subtle grain (0.1-0.2) + neutral color grade + letterbox 1.85
-- **Music Video**: high saturation (1.3-1.8) + high contrast (1.2) + no grain
+- **Music Video**: high saturation (1.3-1.8) + high contrast (1.2) + no grain + trail (3-5 layers, 0.3-0.5 opacity)
 - **Clean/Modern**: minimal effects, slight contrast boost (1.1), no grain
 
 Use 2-4 effects for most prompts. Don't over-process. Match the user's intent.

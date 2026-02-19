@@ -38,7 +38,7 @@ const segmentLayoutSchema = z.object({
 const mediaSegmentSchema = z.object({
   id: z.string(),
   src: z.string(),
-  mediaType: z.enum(["image", "video"]),
+  mediaType: z.enum(["image", "video", "gif"]),
   startFrame: z.number().min(0),
   durationInFrames: z.number().min(1),
   layout: segmentLayoutSchema,
@@ -140,7 +140,7 @@ const renderSceneGraphBody = z.object({
 // ── Generic plan render schema ────────────────────────────────────────
 
 const renderPlanBody = z.object({
-  planType: z.enum(["after-effects", "lottie-overlay", "3d-title"]), // extend as more composers are added
+  planType: z.enum(["after-effects", "lottie-overlay", "3d-title", "motion-graphics"]),
   plan: z.record(z.unknown()),
   userId: z.string().uuid().optional(),
 })

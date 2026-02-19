@@ -35,6 +35,7 @@ const EFFECT_LABELS: Record<string, string> = {
   letterbox: "Letterbox",
   "motion-blur": "Motion Blur",
   "animated-blur": "Animated Blur",
+  trail: "Trail",
 }
 
 function EffectEditor({
@@ -121,6 +122,13 @@ function EffectEditor({
               <SliderField label="End Blur" value={effect.endBlur as number ?? 0} min={0} max={50} step={1} onChange={(v) => onChange({ ...effect, endBlur: v })} />
               <SliderField label="Start Frame" value={effect.startFrame as number ?? 0} min={0} max={600} step={1} onChange={(v) => onChange({ ...effect, startFrame: v })} />
               <SliderField label="Duration (frames)" value={effect.durationFrames as number ?? 60} min={1} max={300} step={1} onChange={(v) => onChange({ ...effect, durationFrames: v })} />
+            </>
+          )}
+          {effect.type === "trail" && (
+            <>
+              <SliderField label="Layers" value={effect.layers as number ?? 3} min={1} max={10} step={1} onChange={(v) => onChange({ ...effect, layers: v })} />
+              <SliderField label="Lag (frames)" value={effect.lagInFrames as number ?? 1.5} min={0.5} max={5} step={0.5} onChange={(v) => onChange({ ...effect, lagInFrames: v })} />
+              <SliderField label="Opacity" value={effect.trailOpacity as number ?? 0.4} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, trailOpacity: v })} />
             </>
           )}
         </div>

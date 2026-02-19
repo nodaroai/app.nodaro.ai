@@ -28,6 +28,7 @@ const noiseOverlaySchema = z.object({
   opacity: z.number().min(0).max(0.5).default(0.1),
   scale: z.number().min(0.001).max(0.01).default(0.005),
   animated: z.boolean().default(true),
+  noiseType: z.enum(["perlin", "simplex"]).optional(),
 })
 
 const letterboxSchema = z.object({
@@ -51,6 +52,13 @@ const animatedBlurSchema = z.object({
   easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut"]).optional(),
 })
 
+const trailSchema = z.object({
+  type: z.literal("trail"),
+  layers: z.number().int().min(1).max(10).default(3),
+  lagInFrames: z.number().min(0.5).max(5).default(1.5),
+  trailOpacity: z.number().min(0).max(1).default(0.4),
+})
+
 const afterEffectSchema = z.discriminatedUnion("type", [
   colorGradeSchema,
   vignetteSchema,
@@ -59,6 +67,7 @@ const afterEffectSchema = z.discriminatedUnion("type", [
   letterboxSchema,
   motionBlurSchema,
   animatedBlurSchema,
+  trailSchema,
 ])
 
 const textOverlaySchema = z.object({
@@ -173,6 +182,13 @@ export function validateAfterEffectsPlan(
           ...effect,
           startBlur: clamp(effect.startBlur, 0, 50),
           endBlur: clamp(effect.endBlur, 0, 50),
+        }
+      case "trail":
+        return {
+          ...effect,
+          layers: clamp(effect.layers, 1, 10),
+          lagInFrames: clamp(effect.lagInFrames, 0.5, 5),
+          trailOpacity: clamp(effect.trailOpacity, 0, 1),
         }
       default:
         return effect

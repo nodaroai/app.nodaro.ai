@@ -1,5 +1,6 @@
 import React from "react"
 import { AbsoluteFill, Video, Sequence, useCurrentFrame, interpolate, Easing } from "remotion"
+import { CameraMotionBlur, Trail } from "@remotion/motion-blur"
 import type { AfterEffectsPlan, AfterEffect } from "../plan-types"
 import {
   buildColorGradeFilter,
@@ -45,6 +46,8 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
   const noiseOverlay = getEffectByType(effects, "noise-overlay")
   const letterbox = getEffectByType(effects, "letterbox")
   const animatedBlur = getEffectByType(effects, "animated-blur")
+  const motionBlur = getEffectByType(effects, "motion-blur")
+  const trail = getEffectByType(effects, "trail")
 
   // Build combined CSS filter (color grading + animated blur)
   const filters: string[] = []
@@ -61,7 +64,8 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
   }
   const videoFilter = filters.length > 0 ? filters.join(" ") : "none"
 
-  return (
+  // Build the core content (effects + overlays)
+  const content = (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
       {/* 1. Base video layer with color grading applied via CSS filter */}
       <AbsoluteFill style={{ filter: videoFilter }}>
@@ -98,6 +102,7 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
           opacity={noiseOverlay.opacity}
           scale={noiseOverlay.scale}
           animated={noiseOverlay.animated}
+          noiseType={noiseOverlay.noiseType}
         />
       )}
 
@@ -135,4 +140,27 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
       ))}
     </AbsoluteFill>
   )
+
+  // Wrap with Trail if present (inner wrapper)
+  const withTrail = trail ? (
+    <Trail
+      layers={trail.layers}
+      lagInFrames={trail.lagInFrames}
+      trailOpacity={trail.trailOpacity}
+    >
+      {content}
+    </Trail>
+  ) : content
+
+  // Wrap with CameraMotionBlur if present (outer wrapper)
+  const withMotionBlur = motionBlur ? (
+    <CameraMotionBlur
+      shutterAngle={motionBlur.shutterAngle}
+      samples={motionBlur.samples}
+    >
+      {withTrail}
+    </CameraMotionBlur>
+  ) : withTrail
+
+  return withMotionBlur
 }

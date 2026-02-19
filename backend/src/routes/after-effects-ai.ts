@@ -152,7 +152,7 @@ Effect style: ${prompt}`
         // If validation fails, try to salvage by filtering to valid effect types only
         if (!validation.valid) {
           const obj = (typeof rawJson === "object" && rawJson !== null ? { ...rawJson as Record<string, unknown> } : {}) as Record<string, unknown>
-          const validTypes = new Set(["color-grade", "vignette", "film-grain", "noise-overlay", "letterbox", "motion-blur", "animated-blur"])
+          const validTypes = new Set(["color-grade", "vignette", "film-grain", "noise-overlay", "letterbox", "motion-blur", "animated-blur", "trail"])
           const filteredEffects = (obj.effects as Array<Record<string, unknown>>)?.filter(
             (e) => validTypes.has(e.type as string),
           ) ?? []

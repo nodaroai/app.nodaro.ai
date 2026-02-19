@@ -26,6 +26,7 @@ export interface NoiseOverlayEffect {
   readonly opacity: number    // 0 - 0.5
   readonly scale: number      // 0.001 - 0.01
   readonly animated: boolean
+  readonly noiseType?: "perlin" | "simplex"
 }
 
 export interface LetterboxEffect {
@@ -49,6 +50,13 @@ export interface AnimatedBlurEffect {
   readonly easing?: "linear" | "easeIn" | "easeOut" | "easeInOut"
 }
 
+export interface TrailEffect {
+  readonly type: "trail"
+  readonly layers: number        // 1-10 integer
+  readonly lagInFrames: number   // 0.5-5
+  readonly trailOpacity: number  // 0-1
+}
+
 export type AfterEffect =
   | ColorGradeEffect
   | VignetteEffect
@@ -57,6 +65,7 @@ export type AfterEffect =
   | LetterboxEffect
   | MotionBlurEffect
   | AnimatedBlurEffect
+  | TrailEffect
 
 export interface AfterEffectsTextOverlay {
   readonly id: string
