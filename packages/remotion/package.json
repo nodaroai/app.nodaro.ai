@@ -16,6 +16,9 @@
     "@remotion/google-fonts": "^4.0.0",
     "@remotion/noise": "^4.0.0",
     "@remotion/renderer": "^4.0.0",
+    "@remotion/three": "^4.0.0",
+    "@react-three/drei": "^9.0.0",
+    "three": "^0.170.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "remotion": "^4.0.0"
@@ -23,6 +26,7 @@
   "devDependencies": {
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.170.0",
     "typescript": "^5.7.3"
   }
 }

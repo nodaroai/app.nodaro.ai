@@ -9,7 +9,8 @@ import { Documentary } from "./compositions/documentary"
 import { SceneGraphRenderer } from "./compositions/scene-graph-renderer"
 import { AfterEffectsRenderer } from "./compositions/after-effects-renderer"
 import { LottieOverlayRenderer } from "./compositions/lottie-overlay-renderer"
-import type { AfterEffectsPlan, LottieOverlayPlan } from "./plan-types"
+import { ThreeDTitleRenderer } from "./compositions/three-d-title-renderer"
+import type { AfterEffectsPlan, LottieOverlayPlan, ThreeDTitlePlan } from "./plan-types"
 
 const DEFAULT_PROPS: RenderVideoInputProps = {
   template: "slideshow",
@@ -82,6 +83,27 @@ const LOTTIE_OVERLAY_DEFAULT_PROPS: { plan: LottieOverlayPlan } = {
   },
 }
 
+const THREE_D_TITLE_DEFAULT_PROPS: { plan: ThreeDTitlePlan } = {
+  plan: {
+    planType: "3d-title",
+    fps: 30,
+    width: 1920,
+    height: 1080,
+    durationInFrames: 300,
+    backgroundColor: "#000000",
+    camera: {
+      fov: 75,
+      position: [0, 0, 5],
+      lookAt: [0, 0, 0],
+    },
+    lighting: {
+      ambient: { intensity: 0.5, color: "#ffffff" },
+      directional: [{ intensity: 1, color: "#ffffff", position: [5, 5, 5] }],
+    },
+    objects: [],
+  },
+}
+
 function RemotionRoot() {
   return (
     <>
@@ -123,6 +145,15 @@ function RemotionRoot() {
         width={1920}
         height={1080}
         defaultProps={LOTTIE_OVERLAY_DEFAULT_PROPS}
+      />
+      <Composition
+        id="3d-title"
+        component={ThreeDTitleRenderer as React.FC<any>}
+        durationInFrames={300}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={THREE_D_TITLE_DEFAULT_PROPS}
       />
     </>
   )

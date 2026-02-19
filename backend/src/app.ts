@@ -69,6 +69,7 @@ import { renderVideoRoutes } from "./routes/render-video.js"
 import { sceneGraphAIRoutes } from "./routes/scene-graph-ai.js"
 import { afterEffectsAIRoutes } from "./routes/after-effects-ai.js"
 import { lottieOverlayAIRoutes } from "./routes/lottie-overlay-ai.js"
+import { threeDTitleAIRoutes } from "./routes/three-d-title-ai.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -164,6 +165,7 @@ export async function buildApp() {
   await app.register(sceneGraphAIRoutes)
   await app.register(afterEffectsAIRoutes)
   await app.register(lottieOverlayAIRoutes)
+  await app.register(threeDTitleAIRoutes)
 
   return app
 }

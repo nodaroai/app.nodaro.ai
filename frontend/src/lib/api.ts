@@ -1838,6 +1838,31 @@ export async function generateLottieOverlay(params: {
   return res.json()
 }
 
+// --- 3D Title ---
+
+export async function generate3DTitle(params: {
+  prompt: string
+  fps: number
+  aspectRatio?: string
+  width?: number
+  height?: number
+  durationSeconds: number
+  backgroundColor?: string
+  backgroundMediaUrl?: string
+  userId: string
+}): Promise<{ jobId: string; titlePlan: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/3d-title/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "3D title generation failed")
+  }
+  return res.json()
+}
+
 // --- AI Writer ---
 
 export async function generateAIWriter(params: {

@@ -45,6 +45,7 @@ import { TrimVideoNode } from "./trim-video-node";
 import { VideoComposerNode } from "./video-composer-node";
 import { AfterEffectsNode } from "./after-effects-node";
 import { LottieOverlayNode } from "./lottie-overlay-node";
+import { ThreeDTitleNode } from "./three-d-title-node";
 import { RenderVideoNode } from "./render-video-node";
 import { SpeedRampNode } from "./speed-ramp-node";
 import { LoopVideoNode } from "./loop-video-node";
@@ -118,6 +119,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "video-composer": VideoComposerNode,
   "after-effects": AfterEffectsNode,
   "lottie-overlay": LottieOverlayNode,
+  "3d-title": ThreeDTitleNode,
   "render-video": RenderVideoNode,
   "speed-ramp": SpeedRampNode,
   "loop-video": LoopVideoNode,

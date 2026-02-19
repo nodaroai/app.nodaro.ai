@@ -102,5 +102,91 @@ export interface LottieOverlayPlan {
   readonly overlays: LottieOverlayItem[]
 }
 
+// ── 3D Title Plan Types ──────────────────────────────────────────────
+
+export interface ThreeDTitleCameraAnimation {
+  readonly type: "orbit" | "dolly" | "static"
+  readonly startPosition: [number, number, number]
+  readonly endPosition: [number, number, number]
+  readonly easing?: string
+}
+
+export interface ThreeDTitleCamera {
+  readonly fov: number
+  readonly position: [number, number, number]
+  readonly lookAt: [number, number, number]
+  readonly animation?: ThreeDTitleCameraAnimation
+}
+
+export interface ThreeDTitleAmbientLight {
+  readonly intensity: number
+  readonly color: string
+}
+
+export interface ThreeDTitleDirectionalLight {
+  readonly intensity: number
+  readonly color: string
+  readonly position: [number, number, number]
+}
+
+export interface ThreeDTitleLighting {
+  readonly ambient: ThreeDTitleAmbientLight
+  readonly directional: ThreeDTitleDirectionalLight[]
+}
+
+export interface ThreeDTextMaterial {
+  readonly type: "metallic" | "glass" | "emissive" | "standard"
+  readonly color: string
+  readonly metalness?: number
+  readonly roughness?: number
+  readonly emissiveIntensity?: number
+}
+
+export interface ThreeDTextAnimation {
+  readonly type: "rotate-in" | "scale-up" | "fade-in" | "slide-in" | "none"
+  readonly axis?: "x" | "y" | "z"
+  readonly startFrame: number
+  readonly durationFrames: number
+  readonly easing?: string
+}
+
+export interface ThreeDTextObject {
+  readonly id: string
+  readonly type: "3d-text"
+  readonly text: string
+  readonly font: string
+  readonly size: number
+  readonly depth: number
+  readonly material: ThreeDTextMaterial
+  readonly position: [number, number, number]
+  readonly animation: ThreeDTextAnimation
+}
+
+export interface ParticleSystemObject {
+  readonly id: string
+  readonly type: "particle-system"
+  readonly count: number
+  readonly size: number
+  readonly color: string
+  readonly spread: [number, number, number]
+  readonly speed: number
+  readonly opacity: number
+}
+
+export type ThreeDTitleObject = ThreeDTextObject | ParticleSystemObject
+
+export interface ThreeDTitlePlan {
+  readonly planType: "3d-title"
+  readonly fps: number
+  readonly width: number
+  readonly height: number
+  readonly durationInFrames: number
+  readonly backgroundColor: string
+  readonly backgroundMedia?: string
+  readonly camera: ThreeDTitleCamera
+  readonly lighting: ThreeDTitleLighting
+  readonly objects: ThreeDTitleObject[]
+}
+
 // Union type for all composer plans (extend as more composers are added)
-export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay"
+export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title"

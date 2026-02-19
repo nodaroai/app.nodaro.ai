@@ -61,6 +61,7 @@ import {
   renderVideoWithPlan,
   generateAfterEffects,
   generateLottieOverlay,
+  generate3DTitle,
   generateCharacter,
   generateCharacterAsset,
   saveCharacter,
@@ -115,6 +116,7 @@ import type {
   VideoComposerData,
   AfterEffectsData,
   LottieOverlayData,
+  ThreeDTitleData,
   RenderVideoData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -193,6 +195,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "video-composer": 2,
   "after-effects": 2,
   "lottie-overlay": 2,
+  "3d-title": 3,
   "render-video": 3,
   character: 5,
   object: 5,
@@ -711,6 +714,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "video-composer",
     "after-effects",
     "lottie-overlay",
+    "3d-title",
     "render-video",
     "combine-videos",
     "merge-video-audio",
@@ -1094,6 +1098,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
     if (type === "lottie-overlay") {
       return (data.overlayPlan as Record<string, unknown> | undefined)
+        ? "plan-ready"
+        : undefined;
+    }
+    if (type === "3d-title") {
+      return (data.titlePlan as Record<string, unknown> | undefined)
         ? "plan-ready"
         : undefined;
     }
@@ -5503,6 +5512,72 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         });
     }
 
+    if (node.type === "3d-title") {
+      const d = node.data as ThreeDTitleData;
+      if (!d.titlePrompt?.trim()) {
+        toast.error(`Node "${d.label}": no title prompt set`);
+        return Promise.reject(new Error("No title prompt"));
+      }
+      if (!user?.id) {
+        toast.error("Not authenticated");
+        return Promise.reject(new Error("Not authenticated"));
+      }
+      // Find optional background URL from upstream node via "background" handle
+      const tdIncomingEdges = edges.filter((e) => e.target === node.id);
+      let backgroundMediaUrl: string | undefined;
+      for (const edge of tdIncomingEdges) {
+        if (edge.targetHandle === "background") {
+          const sourceNode = nodes.find((n) => n.id === edge.source);
+          if (sourceNode) {
+            const output = extractNodeOutput(sourceNode);
+            if (output && (output.startsWith("http") || output.startsWith("/"))) {
+              backgroundMediaUrl = output;
+              break;
+            }
+          }
+        }
+      }
+      const { updateNodeData } = useWorkflowStore.getState();
+      updateNodeData(node.id, {
+        executionStatus: "running",
+        titlePlan: undefined,
+        errorMessage: undefined,
+        backgroundMediaUrl,
+      });
+      const ASPECT_DIMS: Record<string, { width: number; height: number }> = {
+        "16:9": { width: 1920, height: 1080 },
+        "9:16": { width: 1080, height: 1920 },
+        "1:1": { width: 1080, height: 1080 },
+        "4:5": { width: 1080, height: 1350 },
+      };
+      const dims = ASPECT_DIMS[d.aspectRatio] ?? { width: 1920, height: 1080 };
+      return generate3DTitle({
+        prompt: d.titlePrompt,
+        fps: d.fps,
+        aspectRatio: d.aspectRatio,
+        width: dims.width,
+        height: dims.height,
+        durationSeconds: d.durationSeconds,
+        backgroundColor: d.backgroundColor,
+        backgroundMediaUrl,
+        userId: user.id,
+      })
+        .then((result) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            titlePlan: result.titlePlan,
+          });
+          toast.success("3D title plan generated");
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        });
+    }
+
     if (node.type === "render-video") {
       const d = node.data as RenderVideoData;
       // Generic upstream composer detection via COMPOSER_PLAN_MAP
@@ -5510,6 +5585,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         "video-composer": { planType: "scene-graph", planField: "sceneGraph" },
         "after-effects": { planType: "after-effects", planField: "effectPlan" },
         "lottie-overlay": { planType: "lottie-overlay", planField: "overlayPlan" },
+        "3d-title": { planType: "3d-title", planField: "titlePlan" },
       };
       const incomingEdges = edges.filter((e) => e.target === node.id);
       let upstreamPlanType: string | undefined;

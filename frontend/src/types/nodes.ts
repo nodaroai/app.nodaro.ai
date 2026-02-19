@@ -976,6 +976,20 @@ export type LottieOverlayData = {
   errorMessage?: string
 }
 
+export type ThreeDTitleData = {
+  [key: string]: unknown
+  label: string
+  titlePrompt: string
+  titlePlan?: Record<string, unknown>
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
+  backgroundColor: string
+  backgroundMediaUrl?: string
+  fps: number
+  durationSeconds: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 export type RenderVideoData = {
   [key: string]: unknown
   label: string
@@ -1405,6 +1419,7 @@ export type SceneNodeData =
   | VideoComposerData
   | AfterEffectsData
   | LottieOverlayData
+  | ThreeDTitleData
   | RenderVideoData
   | SpeedRampData
   | LoopVideoData
@@ -1473,6 +1488,7 @@ export type SceneNodeType =
   | "video-composer"
   | "after-effects"
   | "lottie-overlay"
+  | "3d-title"
   | "render-video"
   | "speed-ramp"
   | "loop-video"
@@ -1947,6 +1963,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as LottieOverlayData,
+  },
+  {
+    type: "3d-title",
+    label: "3D Title",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["background"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "3D Title",
+      titlePrompt: "",
+      aspectRatio: "16:9",
+      backgroundColor: "#000000",
+      fps: 30,
+      durationSeconds: 10,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as ThreeDTitleData,
   },
   {
     type: "render-video",

@@ -133,6 +133,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "video-composer": 2,
   "after-effects": 2,
   "lottie-overlay": 2,
+  "3d-title": 3,
   // ── Node types (legacy fallback for workflow estimation) ──
   "generate-script": 2,
   "generate-image": 1,

@@ -92,6 +92,7 @@ import type {
   VideoComposerData,
   AfterEffectsData,
   LottieOverlayData,
+  ThreeDTitleData,
   RenderVideoData,
   SpeedRampData,
   LoopVideoData,
@@ -703,6 +704,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "lottie-overlay" && (
             <LottieOverlayConfig data={selectedNode.data as LottieOverlayData} onUpdate={update} />
+          )}
+          {selectedNode.type === "3d-title" && (
+            <ThreeDTitleConfig data={selectedNode.data as ThreeDTitleData} onUpdate={update} />
           )}
           {selectedNode.type === "render-video" && (
             <RenderVideoConfig data={selectedNode.data as RenderVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -5124,6 +5128,102 @@ function LottieOverlayConfig({ data, onUpdate }: { data: LottieOverlayData; onUp
   )
 }
 
+const LazyThreeDTitlePreview = lazy(() => import("@/components/editor/three-d-title-preview").then(m => ({ default: m.ThreeDTitlePreview })))
+
+function ThreeDTitleConfig({ data, onUpdate }: { data: ThreeDTitleData; onUpdate: (d: Partial<ThreeDTitleData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label className="mb-1.5 block">Title Prompt</Label>
+        <Textarea
+          placeholder="Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera..."
+          value={data.titlePrompt ?? ""}
+          onChange={(e) => onUpdate({ titlePrompt: e.target.value })}
+          rows={3}
+          className="text-sm"
+        />
+      </div>
+
+      {data.titlePlan && (
+        <>
+          <Separator />
+          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+            <LazyThreeDTitlePreview
+              titlePlan={data.titlePlan}
+              fps={data.fps}
+              onUpdate={(tp) => onUpdate({ titlePlan: tp })}
+            />
+          </Suspense>
+        </>
+      )}
+
+      <Accordion type="single" collapsible>
+        <AccordionItem value="settings">
+          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="3d-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
+                    <SelectTrigger id="3d-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24</SelectItem>
+                      <SelectItem value="30">30</SelectItem>
+                      <SelectItem value="60">60</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="3d-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Input
+                    id="3d-duration"
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={data.durationSeconds}
+                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 10 })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="3d-aspect" className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <Select value={data.aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v as ThreeDTitleData["aspectRatio"] })}>
+                  <SelectTrigger id="3d-aspect" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16:9">16:9</SelectItem>
+                    <SelectItem value="9:16">9:16</SelectItem>
+                    <SelectItem value="1:1">1:1</SelectItem>
+                    <SelectItem value="4:5">4:5</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="3d-bgcolor" className="mb-1.5 block text-xs">Background Color</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    id="3d-bgcolor"
+                    value={data.backgroundColor ?? "#000000"}
+                    onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                    className="h-8 w-8 rounded border border-[var(--border-primary)] cursor-pointer"
+                  />
+                  <Input
+                    value={data.backgroundColor ?? "#000000"}
+                    onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                    className="h-8 text-xs flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  )
+}
+
 function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -5148,6 +5248,11 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
         const loData = srcNode.data as LottieOverlayData
         const overlayCount = ((loData.overlayPlan as Record<string, unknown>)?.overlays as unknown[])?.length ?? 0
         return { label: loData.label, trackCount: overlayCount }
+      }
+      if (srcNode?.type === "3d-title") {
+        const tdData = srcNode.data as ThreeDTitleData
+        const objectCount = ((tdData.titlePlan as Record<string, unknown>)?.objects as unknown[])?.length ?? 0
+        return { label: tdData.label, trackCount: objectCount }
       }
     }
     return undefined
