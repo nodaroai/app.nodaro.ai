@@ -56,6 +56,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-video", label: "Text to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI", group: "Video" },
+  { type: "video-composer", label: "Video Composer", icon: <Sparkles className="h-4 w-4" />, category: "AI", group: "Video" },
   // AI — Audio & Speech
   { type: "text-to-speech", label: "Text to Speech", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },

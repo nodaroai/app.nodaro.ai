@@ -271,6 +271,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       "object",
       "location",
       "ai-writer",
+      "video-composer",
+      "render-video",
     ]);
     const executableNodes = storeNodes.filter((n) =>
       execTypes.has(n.type ?? ""),
@@ -1102,13 +1104,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       const output = extractNodeOutput(sourceNode);
       if (!output) continue;
       const srcType = sourceNode.type ?? "";
+      const label = (sourceNode.data as Record<string, unknown>).label as string | undefined;
       if (IMAGE_SOURCE_TYPES.has(srcType)) {
-        assetMap.set(sourceNode.id, { id: sourceNode.id, type: "image", url: output, label: (sourceNode.data as Record<string, unknown>).label as string });
+        assetMap.set(sourceNode.id, { id: sourceNode.id, type: "image", url: output, label });
       } else if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(srcType)) {
-        assetMap.set(sourceNode.id, { id: sourceNode.id, type: "video", url: output, label: (sourceNode.data as Record<string, unknown>).label as string });
+        assetMap.set(sourceNode.id, { id: sourceNode.id, type: "video", url: output, label });
       }
     }
-    // Apply user-defined order
     const nodeData = node.data as Record<string, unknown>;
     const assetOrder = (nodeData.assetOrder as string[]) ?? [];
     const orderedIds = [
@@ -1118,16 +1120,25 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return orderedIds.map((id) => assetMap.get(id)!).filter(Boolean);
   }
 
+  const ASPECT_RATIO_DIMENSIONS: Record<string, { width: number; height: number }> = {
+    "16:9": { width: 1920, height: 1080 },
+    "9:16": { width: 1080, height: 1920 },
+    "1:1":  { width: 1080, height: 1080 },
+    "4:5":  { width: 1080, height: 1350 },
+  };
+
   function buildAutoComposition(
     assets: Array<{ id: string; type: "image" | "video"; url: string }>,
     fps: number,
     totalDuration: number,
     aspectRatio: string,
     backgroundColor: string,
+    audioUrl?: string,
   ): Record<string, unknown> {
     const perAssetDuration = totalDuration / assets.length;
     const perAssetFrames = Math.round(perAssetDuration * fps);
     const transitionFrames = 15;
+    const lastIndex = assets.length - 1;
 
     const mediaSegments = assets.map((asset, i) => ({
       id: `seg_${i}`,
@@ -1135,26 +1146,44 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       mediaType: asset.type,
       startFrame: i * perAssetFrames,
       durationInFrames: perAssetFrames,
+      layout: { mode: "fullscreen" as const },
       transitionIn: i > 0 ? { type: "fade", durationFrames: transitionFrames } : undefined,
-      transitionOut: i < assets.length - 1 ? { type: "fade", durationFrames: transitionFrames } : undefined,
+      transitionOut: i < lastIndex ? { type: "fade", durationFrames: transitionFrames } : undefined,
       effects: asset.type === "image"
-        ? [{ type: "kenBurns", startValue: 1.0, endValue: 1.1 }]
+        ? [{ type: "ken-burns", startValue: 1.0, endValue: 1.1 }]
         : [],
     }));
 
+    const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio] ?? ASPECT_RATIO_DIMENSIONS["16:9"];
+
+    const tracks: unknown[] = [
+      {
+        id: "track_media",
+        type: "media",
+        zIndex: 0,
+        segments: mediaSegments,
+      },
+    ];
+
+    if (audioUrl) {
+      tracks.push({
+        id: "track_audio",
+        type: "audio",
+        src: audioUrl,
+        volume: 1,
+        fadeInFrames: 0,
+        fadeOutFrames: 0,
+        startFrame: 0,
+      });
+    }
+
     return {
       fps,
-      width: aspectRatio === "9:16" ? 1080 : aspectRatio === "1:1" ? 1080 : aspectRatio === "4:5" ? 1080 : 1920,
-      height: aspectRatio === "9:16" ? 1920 : aspectRatio === "1:1" ? 1080 : aspectRatio === "4:5" ? 1350 : 1080,
+      width: dimensions.width,
+      height: dimensions.height,
       durationInFrames: Math.round(totalDuration * fps),
       backgroundColor,
-      tracks: [
-        {
-          id: "track_media",
-          type: "media",
-          segments: mediaSegments,
-        },
-      ],
+      tracks,
     };
   }
 
@@ -5352,6 +5381,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         d.durationSeconds,
         d.aspectRatio,
         d.backgroundColor,
+        inputs.audioUrl,
       );
       return runProcessingNode(
         node.id,

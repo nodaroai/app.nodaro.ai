@@ -1745,29 +1745,38 @@ export async function videoUpscaleApi(
 
 // --- Render Video (Remotion) ---
 
-export async function renderVideoApi(params: {
-  template: string
-  fps?: number
-  aspectRatio?: string
-  durationSeconds?: number
-  transitionStyle?: string
-  transitionDurationFrames?: number
-  mediaAssets: Array<{ url: string; type: "image" | "video" | "audio"; durationSeconds?: number }>
-  audioTrackUrl?: string
-  textOverlays?: Array<{ text: string; position: string; fontSize: number; color: string; startFrame: number; endFrame: number }>
-  captions?: { enabled: boolean; style: string; position: string; fontSize: number; color: string }
-  backgroundColor?: string
-  kenBurnsEnabled?: boolean
+export async function renderVideoWithSceneGraph(params: {
+  sceneGraph: Record<string, unknown>
   userId?: string
 }): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/render-video`, {
+  const res = await fetch(`${API_BASE_URL}/v1/render-video/scene-graph`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(params),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start video render")
+    throwApiError(err, "Failed to start scene graph video render")
+  }
+  return res.json()
+}
+
+export async function generateSceneGraph(params: {
+  prompt: string
+  assets: Array<{ id: string; type: "image" | "video"; url: string; label?: string; durationSeconds?: number }>
+  fps: number
+  aspectRatio: string
+  durationSeconds: number
+  userId: string
+}): Promise<{ jobId: string; sceneGraph: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/scene-graph/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Scene graph generation failed")
   }
   return res.json()
 }

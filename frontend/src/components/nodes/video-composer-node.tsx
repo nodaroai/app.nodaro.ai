@@ -1,4 +1,4 @@
-import { memo, useState } from "react"
+import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Sparkles, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
