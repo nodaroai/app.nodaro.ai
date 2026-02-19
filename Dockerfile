@@ -11,7 +11,17 @@ RUN npm ci
 COPY backend/ ./
 RUN npm run build
 
-# ── Stage 2: Build frontend ──────────────────────────────────────────
+# ── Stage 2: Install Remotion package deps ─────────────────────────────
+FROM node:20-alpine AS remotion-builder
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app/packages/remotion
+COPY packages/remotion/package*.json ./
+RUN npm ci
+COPY packages/remotion/ ./
+
+# ── Stage 3: Build frontend ──────────────────────────────────────────
 FROM node:20-alpine AS frontend-builder
 
 RUN apk add --no-cache libc6-compat
@@ -40,7 +50,7 @@ ENV VITE_PADDLE_ENVIRONMENT=$VITE_PADDLE_ENVIRONMENT
 
 RUN npm run build
 
-# ── Stage 3: Production runner ───────────────────────────────────────
+# ── Stage 4: Production runner ───────────────────────────────────────
 FROM node:20-alpine AS runner
 
 RUN apk add --no-cache libc6-compat ffmpeg caddy curl
@@ -53,6 +63,9 @@ WORKDIR /app
 COPY --from=backend-builder /app/backend/dist ./backend/dist
 COPY --from=backend-builder /app/backend/node_modules ./backend/node_modules
 COPY --from=backend-builder /app/backend/package.json ./backend/package.json
+
+# Remotion: source + node_modules (bundled at runtime by @remotion/bundler)
+COPY --from=remotion-builder /app/packages/remotion ./packages/remotion
 
 # Frontend: Vite static build + Caddy config
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
