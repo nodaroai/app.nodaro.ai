@@ -54,6 +54,7 @@ const textSegmentSchema = z.object({
   durationInFrames: z.number().min(1),
   position: z.enum(["top", "center", "bottom"]),
   fontSize: z.number().min(8).max(200),
+  fontFamily: z.string().optional(),
   color: z.string(),
   fontWeight: z.number().optional(),
   fontStyle: z.enum(["normal", "italic"]).optional(),
