@@ -95,13 +95,13 @@ export function AnimatedText3D({ object }: { object: ThreeDTextObject }) {
   // Handle fade-in by cloning material with transparency
   const finalMaterial = useMemo(() => {
     if (anim.type !== "fade-in") return material
-    const cloned = material.clone()
-    ;(cloned as THREE.MeshStandardMaterial).transparent = true
+    const cloned = material.clone() as THREE.MeshStandardMaterial
+    cloned.transparent = true
     return cloned
   }, [material, anim.type])
 
-  if (anim.type === "fade-in") {
-    ;(finalMaterial as THREE.MeshStandardMaterial).opacity = opacity
+  if (anim.type === "fade-in" && finalMaterial instanceof THREE.MeshStandardMaterial) {
+    finalMaterial.opacity = opacity
   }
 
   return (
@@ -113,8 +113,8 @@ export function AnimatedText3D({ object }: { object: ThreeDTextObject }) {
             size={object.size}
             height={object.depth}
             bevelEnabled
-            bevelSize={0.02}
-            bevelThickness={0.01}
+            bevelSize={object.size * 0.015}
+            bevelThickness={object.size * 0.008}
           >
             {object.text}
             <primitive object={finalMaterial} attach="material" />

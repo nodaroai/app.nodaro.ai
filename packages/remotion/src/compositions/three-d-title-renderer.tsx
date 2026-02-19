@@ -75,6 +75,10 @@ export function ThreeDTitleRenderer({ plan }: ThreeDTitleRendererProps) {
 }
 
 function isVideoUrl(url: string): boolean {
-  const lower = url.toLowerCase()
-  return lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mov")
+  try {
+    const pathname = new URL(url).pathname.toLowerCase()
+    return /\.(mp4|webm|mov)$/.test(pathname)
+  } catch {
+    return url.toLowerCase().endsWith(".mp4") || url.toLowerCase().endsWith(".webm") || url.toLowerCase().endsWith(".mov")
+  }
 }

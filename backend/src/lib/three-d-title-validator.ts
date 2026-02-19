@@ -4,11 +4,13 @@ import { z } from "zod"
 
 const vec3Schema = z.tuple([z.number(), z.number(), z.number()])
 
+const easingSchema = z.enum(["linear", "ease-in", "ease-out", "ease-in-out", "spring"])
+
 const cameraAnimationSchema = z.object({
   type: z.enum(["orbit", "dolly", "static"]),
   startPosition: vec3Schema,
   endPosition: vec3Schema,
-  easing: z.string().optional(),
+  easing: easingSchema.optional(),
 })
 
 const cameraSchema = z.object({
@@ -18,14 +20,16 @@ const cameraSchema = z.object({
   animation: cameraAnimationSchema.optional(),
 })
 
+const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{3,6}$/)
+
 const ambientLightSchema = z.object({
   intensity: z.number().min(0).max(5),
-  color: z.string(),
+  color: hexColorSchema,
 })
 
 const directionalLightSchema = z.object({
   intensity: z.number().min(0).max(10),
-  color: z.string(),
+  color: hexColorSchema,
   position: vec3Schema,
 })
 
@@ -36,7 +40,7 @@ const lightingSchema = z.object({
 
 const materialSchema = z.object({
   type: z.enum(["metallic", "glass", "emissive", "standard"]),
-  color: z.string(),
+  color: hexColorSchema,
   metalness: z.number().min(0).max(1).optional(),
   roughness: z.number().min(0).max(1).optional(),
   emissiveIntensity: z.number().min(0).max(10).optional(),
@@ -47,7 +51,7 @@ const textAnimationSchema = z.object({
   axis: z.enum(["x", "y", "z"]).optional(),
   startFrame: z.number().min(0),
   durationFrames: z.number().min(1),
-  easing: z.string().optional(),
+  easing: easingSchema.optional(),
 })
 
 const threeDTextObjectSchema = z.object({
@@ -84,8 +88,8 @@ export const threeDTitlePlanSchema = z.object({
   width: z.number().min(100).max(3840),
   height: z.number().min(100).max(3840),
   durationInFrames: z.number().min(1),
-  backgroundColor: z.string(),
-  backgroundMedia: z.string().optional(),
+  backgroundColor: hexColorSchema,
+  backgroundMedia: z.string().url().optional(),
   camera: cameraSchema,
   lighting: lightingSchema,
   objects: z.array(threeDTitleObjectSchema).min(1),
