@@ -761,7 +761,7 @@ export function ConfigPanel() {
           <Separator />
 
           <div className="flex flex-col gap-2 pt-2">
-            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover" || selectedNode.type === "suno-extend" || selectedNode.type === "suno-lyrics" || selectedNode.type === "suno-separate" || selectedNode.type === "suno-music-video" || selectedNode.type === "ai-writer") && (
+            {(selectedNode.type === "generate-script" || selectedNode.type === "generate-image" || selectedNode.type === "edit-image" || selectedNode.type === "image-to-image" || selectedNode.type === "image-to-video" || selectedNode.type === "video-to-video" || selectedNode.type === "text-to-video" || selectedNode.type === "text-to-speech" || selectedNode.type === "text-to-audio" || selectedNode.type === "generate-music" || selectedNode.type === "motion-transfer" || selectedNode.type === "lip-sync" || selectedNode.type === "video-upscale" || selectedNode.type === "suno-generate" || selectedNode.type === "suno-cover" || selectedNode.type === "suno-extend" || selectedNode.type === "suno-lyrics" || selectedNode.type === "suno-separate" || selectedNode.type === "suno-music-video" || selectedNode.type === "ai-writer" || selectedNode.type === "video-composer") && (
               <GenerateButton
                 onClick={() => runSingleNode?.(selectedNode.id)}
                 modelIdentifier={getModelIdentifier(selectedNode)}
@@ -771,7 +771,7 @@ export function ConfigPanel() {
               />
             )}
 
-            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "loop-video" || selectedNode.type === "fade-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text") && (
+            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "loop-video" || selectedNode.type === "fade-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text" || selectedNode.type === "render-video") && (
               <button
                 type="button"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -4799,13 +4799,6 @@ const RENDER_MEDIA_SOURCE_TYPES = new Set([
   "extract-audio", "mix-audio", "adjust-volume", "reference-audio",
 ])
 
-const COMPOSER_PRESET_PROMPTS = [
-  { label: "Slideshow", prompt: "Create a smooth cinematic slideshow with fade transitions between each image" },
-  { label: "Explainer", prompt: "Create an explainer video with slide-in transitions, clear text overlays" },
-  { label: "Social Reel", prompt: "Create an energetic social media reel with zoom-in transitions and quick cuts" },
-  { label: "Documentary", prompt: "Create a documentary-style video with Ken Burns effect on images and atmospheric fades" },
-]
-
 /** Shared hook for media asset ordering via drag-and-drop. */
 function useMediaOrder(
   sources: ReadonlyArray<SourceNodeInfo>,
@@ -4949,41 +4942,7 @@ function VideoSettingsAccordion({
 }
 
 function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoComposerData>) {
-  const [isGenerating, setIsGenerating] = useState(false)
-  const { user } = useAuth()
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
-
-  async function handleGenerateComposition() {
-    if (!data.compositionPrompt?.trim() || !user?.id) return
-    setIsGenerating(true)
-    try {
-      const { generateSceneGraph } = await import("@/lib/api")
-      const assets = orderedSources.map((s) => {
-        const nd = s.nodeData ?? {}
-        const url = (nd.generatedImageUrl as string) || (nd.generatedVideoUrl as string) || s.value || ""
-        return {
-          id: s.id,
-          type: (s.type.includes("image") ? "image" : "video") as "image" | "video",
-          url,
-          label: s.label,
-        }
-      }).filter((a) => a.url)
-
-      const result = await generateSceneGraph({
-        prompt: data.compositionPrompt,
-        assets,
-        fps: data.fps,
-        aspectRatio: data.aspectRatio,
-        durationSeconds: data.durationSeconds,
-        userId: user.id,
-      })
-      onUpdate({ sceneGraph: result.sceneGraph })
-    } catch {
-      // Error toast handled by API layer
-    } finally {
-      setIsGenerating(false)
-    }
-  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -5000,38 +4959,6 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
         />
       </div>
 
-      <div className="flex flex-wrap gap-1">
-        {COMPOSER_PRESET_PROMPTS.map((preset) => (
-          <button
-            key={preset.label}
-            onClick={() => onUpdate({ compositionPrompt: preset.prompt })}
-            className="text-[10px] px-2 py-1 rounded-full border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#ff0073] hover:text-[#ff0073] transition-colors"
-          >
-            {preset.label}
-          </button>
-        ))}
-      </div>
-
-      <Button
-        onClick={handleGenerateComposition}
-        disabled={!data.compositionPrompt?.trim() || isGenerating || orderedSources.length === 0}
-        className="w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"
-        size="sm"
-      >
-        {isGenerating ? (
-          <>
-            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-            Generating...
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-3 h-3 mr-1" />
-            Generate Composition
-            <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">2 CR</span>
-          </>
-        )}
-      </Button>
-
       {data.sceneGraph && (
         <>
           <Separator />
@@ -5039,8 +4966,6 @@ function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoCompo
             sceneGraph={data.sceneGraph}
             fps={data.fps}
             onUpdate={(sg) => onUpdate({ sceneGraph: sg })}
-            onRegenerate={handleGenerateComposition}
-            isGenerating={isGenerating}
           />
         </>
       )}
@@ -5113,14 +5038,10 @@ function SceneGraphPreviewInline({
   sceneGraph,
   fps,
   onUpdate,
-  onRegenerate,
-  isGenerating,
 }: {
   sceneGraph: Record<string, unknown>
   fps: number
   onUpdate: (sg: Record<string, unknown>) => void
-  onRegenerate: () => void
-  isGenerating: boolean
 }) {
   return (
     <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
@@ -5128,8 +5049,6 @@ function SceneGraphPreviewInline({
         sceneGraph={sceneGraph}
         fps={fps}
         onUpdate={onUpdate}
-        onRegenerate={onRegenerate}
-        isGenerating={isGenerating}
       />
     </Suspense>
   )
