@@ -131,15 +131,15 @@ frontend/src/
   lib/pricing-data.ts     — Tier/model pricing constants
   types/nodes.ts          — Node data types
 
-packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary, scene-graph, after-effects)
+packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary, scene-graph, after-effects, lottie-overlay)
 
 backend/src/
   server.ts               — Entry point
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, render-video)
-  prompts/                — AI system prompts (after-effects-system.ts)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, render-video)
+  prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
   billing/                — Credits, Paddle, cleanup (see Credit System)
@@ -161,9 +161,10 @@ backend/src/
 | Execution model | Frontend DAG engine | Topological sort, parallel per level |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
-| Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + legacy template converters via BullMQ worker |
+| Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + legacy template converters via BullMQ worker |
 | AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
 | After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox) applied to video (2 credits) |
+| Lottie Overlay | Claude Sonnet → Overlay Plan JSON | AI-placed timed Lottie animations over video (2 credits), `@remotion/lottie` + `delayRender`/`continueRender` per overlay |
 | Multi-plan rendering | `POST /v1/render-video/plan` | Generic `{ planType, plan }` envelope — any composer node can feed plans to Render Video |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
@@ -188,4 +189,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-19*
-*Version: 1.28.0*
+*Version: 1.29.0*
