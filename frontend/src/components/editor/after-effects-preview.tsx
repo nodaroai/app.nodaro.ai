@@ -139,7 +139,7 @@ function SliderField({
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-muted-foreground">{label}</span>
-        <span className="text-[10px] font-mono text-muted-foreground">{value.toFixed(step < 1 ? 2 : 0)}</span>
+        <span className="text-[10px] font-mono text-muted-foreground">{value.toFixed(step >= 1 ? 0 : Math.max(2, -Math.floor(Math.log10(step))))}</span>
       </div>
       <input
         type="range"
