@@ -53,9 +53,11 @@ RUN npm run build
 # ── Stage 4: Production runner ───────────────────────────────────────
 FROM node:20-alpine AS runner
 
-RUN apk add --no-cache libc6-compat ffmpeg caddy curl
+RUN apk add --no-cache libc6-compat ffmpeg caddy curl \
+    chromium nss freetype harfbuzz ca-certificates ttf-freefont
 
 ENV NODE_ENV=production
+ENV CHROME_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 

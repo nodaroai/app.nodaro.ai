@@ -345,6 +345,14 @@ export function createRenderWorker() {
   // Clean up orphaned work directories from previous crashes
   cleanupStaleWorkDirs().catch(() => {})
 
+  // Pre-warm bundles in background (non-blocking)
+  getBundlePath("scene-graph").catch((err) =>
+    console.error("[render-worker] Main bundle pre-warm failed:", err)
+  )
+  getBundlePath("3d-title").catch((err) =>
+    console.error("[render-worker] 3D bundle pre-warm failed:", err)
+  )
+
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
   })
@@ -402,31 +410,42 @@ export function createRenderWorker() {
         // Select composition and render
         const { selectComposition, renderMedia } = await import("@remotion/renderer")
 
+        // Use system Chromium on Alpine Linux (glibc chrome-headless-shell won't work on musl)
+        const browserExecutable = process.env.CHROME_PATH || undefined
+
         const composition = await selectComposition({
           serveUrl: bundlePath,
           id: compositionId,
           inputProps,
+          browserExecutable,
         })
 
         const outputPath = join(workDir, "output.mp4")
 
-        await renderMedia({
-          composition: {
-            ...composition,
-            width,
-            height,
-            fps,
-            durationInFrames,
-          },
-          serveUrl: bundlePath,
-          codec: "h264",
-          outputLocation: outputPath,
-          inputProps,
-          onProgress: ({ progress }: { progress: number }) => {
-            const overall = 40 + Math.round(progress * 50)
-            bullJob.updateProgress(overall).catch(() => {})
-          },
-        })
+        const RENDER_TIMEOUT_MS = 25 * 60 * 1000
+        await Promise.race([
+          renderMedia({
+            composition: {
+              ...composition,
+              width,
+              height,
+              fps,
+              durationInFrames,
+            },
+            serveUrl: bundlePath,
+            codec: "h264",
+            outputLocation: outputPath,
+            inputProps,
+            browserExecutable,
+            onProgress: ({ progress }: { progress: number }) => {
+              const overall = 40 + Math.round(progress * 50)
+              bullJob.updateProgress(overall).catch(() => {})
+            },
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Render timed out after 25 minutes")), RENDER_TIMEOUT_MS)
+          ),
+        ])
 
         await bullJob.updateProgress(90)
 
@@ -481,6 +500,13 @@ export function createRenderWorker() {
           .eq("id", jobId)
 
         await handleCredits("refund", effectiveUsageLogId, jobId)
+
+        // Terminal errors won't resolve on retry — skip BullMQ retries
+        const isTerminal = /composition.*not found|plan validation|zod|invalid plan|timed out/i.test(errMsg)
+        if (isTerminal) {
+          console.error(`[render-worker] Terminal error for job ${jobId}, skipping retry: ${errMsg}`)
+          return
+        }
         throw error
       } finally {
         await cleanupWorkDir(workDir)
