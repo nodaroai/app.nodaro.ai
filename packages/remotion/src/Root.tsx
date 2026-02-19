@@ -9,7 +9,8 @@ import { Documentary } from "./compositions/documentary"
 import { SceneGraphRenderer } from "./compositions/scene-graph-renderer"
 import { AfterEffectsRenderer } from "./compositions/after-effects-renderer"
 import { LottieOverlayRenderer } from "./compositions/lottie-overlay-renderer"
-import type { AfterEffectsPlan, LottieOverlayPlan } from "./plan-types"
+import { MotionGraphicsRenderer } from "./compositions/motion-graphics-renderer"
+import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan } from "./plan-types"
 
 const DEFAULT_PROPS: RenderVideoInputProps = {
   template: "slideshow",
@@ -82,6 +83,18 @@ const LOTTIE_OVERLAY_DEFAULT_PROPS: { plan: LottieOverlayPlan } = {
   },
 }
 
+const MOTION_GRAPHICS_DEFAULT_PROPS: { plan: MotionGraphicsPlan } = {
+  plan: {
+    planType: "motion-graphics",
+    fps: 30,
+    width: 1920,
+    height: 1080,
+    durationInFrames: 150,
+    backgroundColor: "#00000000",
+    elements: [],
+  },
+}
+
 function RemotionRoot() {
   return (
     <>
@@ -123,6 +136,15 @@ function RemotionRoot() {
         width={1920}
         height={1080}
         defaultProps={LOTTIE_OVERLAY_DEFAULT_PROPS}
+      />
+      <Composition
+        id="motion-graphics"
+        component={MotionGraphicsRenderer as React.FC<any>}
+        durationInFrames={150}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={MOTION_GRAPHICS_DEFAULT_PROPS}
       />
     </>
   )

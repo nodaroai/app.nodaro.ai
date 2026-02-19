@@ -93,6 +93,7 @@ import type {
   AfterEffectsData,
   LottieOverlayData,
   ThreeDTitleData,
+  MotionGraphicsData,
   RenderVideoData,
   SpeedRampData,
   LoopVideoData,
@@ -707,6 +708,9 @@ export function ConfigPanel() {
           )}
           {selectedNode.type === "3d-title" && (
             <ThreeDTitleConfig data={selectedNode.data as ThreeDTitleData} onUpdate={update} />
+          )}
+          {selectedNode.type === "motion-graphics" && (
+            <MotionGraphicsConfig data={selectedNode.data as MotionGraphicsData} onUpdate={update} />
           )}
           {selectedNode.type === "render-video" && (
             <RenderVideoConfig data={selectedNode.data as RenderVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
@@ -5224,6 +5228,102 @@ function ThreeDTitleConfig({ data, onUpdate }: { data: ThreeDTitleData; onUpdate
   )
 }
 
+const LazyMotionGraphicsPreview = lazy(() => import("@/components/editor/motion-graphics-preview").then(m => ({ default: m.MotionGraphicsPreview })))
+
+function MotionGraphicsConfig({ data, onUpdate }: { data: MotionGraphicsData; onUpdate: (d: Partial<MotionGraphicsData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label className="mb-1.5 block">Motion Graphics Prompt</Label>
+        <Textarea
+          placeholder="Describe the motion graphic: modern lower third with name, title card, animated shapes..."
+          value={data.motionPrompt ?? ""}
+          onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
+          rows={3}
+          className="text-sm"
+        />
+      </div>
+
+      {data.motionPlan && (
+        <>
+          <Separator />
+          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+            <LazyMotionGraphicsPreview
+              motionPlan={data.motionPlan}
+              fps={data.fps}
+              onUpdate={(mp) => onUpdate({ motionPlan: mp })}
+            />
+          </Suspense>
+        </>
+      )}
+
+      <Accordion type="single" collapsible>
+        <AccordionItem value="settings">
+          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="mg-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
+                    <SelectTrigger id="mg-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24</SelectItem>
+                      <SelectItem value="30">30</SelectItem>
+                      <SelectItem value="60">60</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="mg-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Input
+                    id="mg-duration"
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={data.durationSeconds}
+                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 5 })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="mg-aspect" className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <Select value={data.aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v as MotionGraphicsData["aspectRatio"] })}>
+                  <SelectTrigger id="mg-aspect" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16:9">16:9</SelectItem>
+                    <SelectItem value="9:16">9:16</SelectItem>
+                    <SelectItem value="1:1">1:1</SelectItem>
+                    <SelectItem value="4:5">4:5</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="mg-bgcolor" className="mb-1.5 block text-xs">Background Color</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    id="mg-bgcolor"
+                    value={(data.backgroundColor ?? "#00000000").slice(0, 7)}
+                    onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                    className="h-8 w-8 rounded border border-[var(--border-primary)] cursor-pointer"
+                  />
+                  <Input
+                    value={data.backgroundColor ?? "#00000000"}
+                    onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                    className="h-8 text-xs flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  )
+}
+
 function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
@@ -5253,6 +5353,11 @@ function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoD
         const tdData = srcNode.data as ThreeDTitleData
         const objectCount = ((tdData.titlePlan as Record<string, unknown>)?.objects as unknown[])?.length ?? 0
         return { label: tdData.label, trackCount: objectCount }
+      }
+      if (srcNode?.type === "motion-graphics") {
+        const mgData = srcNode.data as MotionGraphicsData
+        const elementCount = ((mgData.motionPlan as Record<string, unknown>)?.elements as unknown[])?.length ?? 0
+        return { label: mgData.label, trackCount: elementCount }
       }
     }
     return undefined

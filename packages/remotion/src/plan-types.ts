@@ -188,5 +188,78 @@ export interface ThreeDTitlePlan {
   readonly objects: ThreeDTitleObject[]
 }
 
+// ── Motion Graphics Plan Types ──────────────────────────────────────
+
+export interface MGElementAnimation {
+  readonly type: "wipe-in" | "scale-up" | "fade" | "draw-path" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
+  readonly direction?: "left" | "right" | "up" | "down"
+  readonly startFrame: number
+  readonly durationFrames: number
+  readonly easing?: "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring"
+}
+
+export interface MGShapeElement {
+  readonly id: string
+  readonly type: "shape"
+  readonly shape: "rectangle" | "circle" | "line"
+  readonly fill?: string
+  readonly stroke?: string
+  readonly strokeWidth?: number
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly cornerRadius?: number
+  readonly opacity?: number
+  readonly animation: MGElementAnimation
+}
+
+export interface MGTextElement {
+  readonly id: string
+  readonly type: "text"
+  readonly text: string
+  readonly fontFamily: string
+  readonly fontSize: number
+  readonly fontWeight?: number
+  readonly color: string
+  readonly x: number
+  readonly y: number
+  readonly letterSpacing?: number
+  readonly opacity?: number
+  readonly animation: MGElementAnimation
+}
+
+export interface MGSvgPathElement {
+  readonly id: string
+  readonly type: "svg-path"
+  readonly path: string
+  readonly stroke: string
+  readonly strokeWidth: number
+  readonly fill?: string
+  readonly x: number
+  readonly y: number
+  readonly opacity?: number
+  readonly animation: MGElementAnimation
+}
+
+export type MGElement = MGShapeElement | MGTextElement | MGSvgPathElement
+
+export interface MGExitAnimation {
+  readonly type: "fade" | "slide-down" | "slide-up" | "slide-left" | "slide-right" | "none"
+  readonly startFrame: number
+  readonly durationFrames: number
+}
+
+export interface MotionGraphicsPlan {
+  readonly planType: "motion-graphics"
+  readonly fps: number
+  readonly width: number
+  readonly height: number
+  readonly durationInFrames: number
+  readonly backgroundColor: string
+  readonly elements: MGElement[]
+  readonly exitAnimation?: MGExitAnimation
+}
+
 // Union type for all composer plans (extend as more composers are added)
-export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title"
+export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics"

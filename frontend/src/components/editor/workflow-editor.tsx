@@ -62,6 +62,7 @@ import {
   generateAfterEffects,
   generateLottieOverlay,
   generate3DTitle,
+  generateMotionGraphics,
   generateCharacter,
   generateCharacterAsset,
   saveCharacter,
@@ -117,6 +118,7 @@ import type {
   AfterEffectsData,
   LottieOverlayData,
   ThreeDTitleData,
+  MotionGraphicsData,
   RenderVideoData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -196,6 +198,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "after-effects": 2,
   "lottie-overlay": 2,
   "3d-title": 3,
+  "motion-graphics": 2,
   "render-video": 3,
   character: 5,
   object: 5,
@@ -715,6 +718,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "after-effects",
     "lottie-overlay",
     "3d-title",
+    "motion-graphics",
     "render-video",
     "combine-videos",
     "merge-video-audio",
@@ -1103,6 +1107,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
     if (type === "3d-title") {
       return (data.titlePlan as Record<string, unknown> | undefined)
+        ? "plan-ready"
+        : undefined;
+    }
+    if (type === "motion-graphics") {
+      return (data.motionPlan as Record<string, unknown> | undefined)
         ? "plan-ready"
         : undefined;
     }
@@ -5578,6 +5587,47 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         });
     }
 
+    if (node.type === "motion-graphics") {
+      const d = node.data as MotionGraphicsData;
+      const { updateNodeData } = useWorkflowStore.getState();
+      updateNodeData(node.id, {
+        executionStatus: "running",
+        motionPlan: undefined,
+        errorMessage: undefined,
+      });
+      const ASPECT_DIMS: Record<string, { width: number; height: number }> = {
+        "16:9": { width: 1920, height: 1080 },
+        "9:16": { width: 1080, height: 1920 },
+        "1:1": { width: 1080, height: 1080 },
+        "4:5": { width: 1080, height: 1350 },
+      };
+      const dims = ASPECT_DIMS[d.aspectRatio] ?? { width: 1920, height: 1080 };
+      return generateMotionGraphics({
+        prompt: d.motionPrompt,
+        fps: d.fps,
+        aspectRatio: d.aspectRatio,
+        width: dims.width,
+        height: dims.height,
+        durationSeconds: d.durationSeconds,
+        backgroundColor: d.backgroundColor,
+        userId: user!.id,
+      })
+        .then((result) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            motionPlan: result.motionPlan,
+          });
+          toast.success("Motion graphics plan generated");
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        });
+    }
+
     if (node.type === "render-video") {
       const d = node.data as RenderVideoData;
       // Generic upstream composer detection via COMPOSER_PLAN_MAP
@@ -5586,6 +5636,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         "after-effects": { planType: "after-effects", planField: "effectPlan" },
         "lottie-overlay": { planType: "lottie-overlay", planField: "overlayPlan" },
         "3d-title": { planType: "3d-title", planField: "titlePlan" },
+        "motion-graphics": { planType: "motion-graphics", planField: "motionPlan" },
       };
       const incomingEdges = edges.filter((e) => e.target === node.id);
       let upstreamPlanType: string | undefined;

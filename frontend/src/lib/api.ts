@@ -1863,6 +1863,30 @@ export async function generate3DTitle(params: {
   return res.json()
 }
 
+// --- Motion Graphics ---
+
+export async function generateMotionGraphics(params: {
+  prompt: string
+  fps: number
+  aspectRatio?: string
+  width?: number
+  height?: number
+  durationSeconds: number
+  backgroundColor?: string
+  userId: string
+}): Promise<{ jobId: string; motionPlan: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/motion-graphics/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Motion graphics generation failed")
+  }
+  return res.json()
+}
+
 // --- AI Writer ---
 
 export async function generateAIWriter(params: {

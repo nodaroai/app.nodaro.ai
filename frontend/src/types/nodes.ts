@@ -990,6 +990,19 @@ export type ThreeDTitleData = {
   errorMessage?: string
 }
 
+export type MotionGraphicsData = {
+  [key: string]: unknown
+  label: string
+  motionPrompt: string
+  motionPlan?: Record<string, unknown>
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
+  backgroundColor: string
+  fps: number
+  durationSeconds: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 export type RenderVideoData = {
   [key: string]: unknown
   label: string
@@ -1420,6 +1433,7 @@ export type SceneNodeData =
   | AfterEffectsData
   | LottieOverlayData
   | ThreeDTitleData
+  | MotionGraphicsData
   | RenderVideoData
   | SpeedRampData
   | LoopVideoData
@@ -1489,6 +1503,7 @@ export type SceneNodeType =
   | "after-effects"
   | "lottie-overlay"
   | "3d-title"
+  | "motion-graphics"
   | "render-video"
   | "speed-ramp"
   | "loop-video"
@@ -1981,6 +1996,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as ThreeDTitleData,
+  },
+  {
+    type: "motion-graphics",
+    label: "Motion Graphics",
+    category: "ai",
+    creditCost: 2,
+    inputs: [],
+    outputs: ["composition"],
+    defaultData: {
+      label: "Motion Graphics",
+      motionPrompt: "",
+      aspectRatio: "16:9",
+      backgroundColor: "#00000000",
+      fps: 30,
+      durationSeconds: 5,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as MotionGraphicsData,
   },
   {
     type: "render-video",
