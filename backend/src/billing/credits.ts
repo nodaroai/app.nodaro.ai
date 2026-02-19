@@ -713,7 +713,7 @@ export class CreditsService {
     // Get the usage log to find credits to refund
     const { data: usageLog, error: logError } = await supabase
       .from("usage_logs")
-      .select("user_id, credits_used, metadata")
+      .select("user_id, job_id, credits_used, metadata")
       .eq("id", usageLogId)
       .single()
 
@@ -745,7 +745,7 @@ export class CreditsService {
       creditType: "topup",
       source: "refund",
       description: "Refund for failed job",
-      jobId: usageLogId,
+      jobId: usageLog.job_id ?? undefined,
       balanceAfter: 0,
     })
 
