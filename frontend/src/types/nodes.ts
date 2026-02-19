@@ -932,25 +932,29 @@ export type TrimVideoData = {
   activeResultIndex?: number
 }
 
-export type RenderVideoData = {
+export type VideoComposerData = {
   [key: string]: unknown
   label: string
-  template: "slideshow" | "explainer" | "social-reel" | "documentary"
+  compositionPrompt: string
+  sceneGraph?: Record<string, unknown>
   fps: number
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
   durationSeconds: number
-  transitionStyle: "fade" | "slide" | "dissolve" | "zoom" | "none"
-  transitionDurationFrames: number
   backgroundColor: string
-  kenBurnsEnabled: boolean
-  captions: {
-    enabled: boolean
-    style: "subtitle" | "word-highlight" | "karaoke"
-    position: "bottom" | "top" | "center"
-    fontSize: number
-    color: string
-  }
-  assetOrder?: string[] // ordered source node IDs for media input sequence
+  assetOrder?: string[]
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+export type RenderVideoData = {
+  [key: string]: unknown
+  label: string
+  fps: number
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
+  durationSeconds: number
+  backgroundColor: string
+  assetOrder?: string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1369,6 +1373,7 @@ export type SceneNodeData =
   | MixAudioData
   | AdjustVolumeData
   | TrimVideoData
+  | VideoComposerData
   | RenderVideoData
   | SpeedRampData
   | LoopVideoData
@@ -1434,6 +1439,7 @@ export type SceneNodeType =
   | "mix-audio"
   | "adjust-volume"
   | "trim-video"
+  | "video-composer"
   | "render-video"
   | "speed-ramp"
   | "loop-video"
@@ -1860,6 +1866,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: { label: "Trim Video", startTime: 0, endTime: 0, fieldMappings: {} },
   },
   {
+    type: "video-composer",
+    label: "Compose Video",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["in"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "Compose Video",
+      compositionPrompt: "",
+      fps: 30,
+      aspectRatio: "16:9",
+      durationSeconds: 30,
+      backgroundColor: "#000000",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as VideoComposerData,
+  },
+  {
     type: "render-video",
     label: "Render Video",
     category: "processing",
@@ -1868,15 +1892,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["video"],
     defaultData: {
       label: "Render Video",
-      template: "slideshow",
       fps: 30,
       aspectRatio: "16:9",
       durationSeconds: 30,
-      transitionStyle: "fade",
-      transitionDurationFrames: 15,
       backgroundColor: "#000000",
-      kenBurnsEnabled: false,
-      captions: { enabled: false, style: "subtitle", position: "bottom", fontSize: 24, color: "#ffffff" },
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],

@@ -13,6 +13,90 @@ const ASPECT_DIMENSIONS: Record<typeof ASPECT_RATIOS[number], { width: number; h
   "4:5": { width: 1080, height: 1350 },
 }
 
+// ── Scene Graph Zod schema ─────────────────────────────────────────────
+
+const transitionSchema = z.object({
+  type: z.enum(["fade", "slide-left", "slide-right", "slide-up", "slide-down", "dissolve", "zoom-in", "zoom-out", "none"]),
+  durationFrames: z.number().min(0).max(120),
+})
+
+const effectSchema = z.object({
+  type: z.enum(["ken-burns", "scale", "opacity", "blur"]),
+  startValue: z.number(),
+  endValue: z.number(),
+})
+
+const segmentLayoutSchema = z.object({
+  mode: z.enum(["fullscreen", "positioned"]),
+  x: z.number().min(0).max(100).optional(),
+  y: z.number().min(0).max(100).optional(),
+  width: z.number().min(0).max(100).optional(),
+  height: z.number().min(0).max(100).optional(),
+  objectFit: z.enum(["cover", "contain", "fill"]).optional(),
+})
+
+const mediaSegmentSchema = z.object({
+  id: z.string(),
+  src: z.string(),
+  mediaType: z.enum(["image", "video"]),
+  startFrame: z.number().min(0),
+  durationInFrames: z.number().min(1),
+  layout: segmentLayoutSchema,
+  transitionIn: transitionSchema.optional(),
+  transitionOut: transitionSchema.optional(),
+  effects: z.array(effectSchema).default([]),
+})
+
+const textSegmentSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  startFrame: z.number().min(0),
+  durationInFrames: z.number().min(1),
+  position: z.enum(["top", "center", "bottom"]),
+  fontSize: z.number().min(8).max(200),
+  color: z.string(),
+  fontWeight: z.number().optional(),
+  fontStyle: z.enum(["normal", "italic"]).optional(),
+  animation: z.enum(["fade", "slide-up", "typewriter", "word-highlight", "none"]),
+})
+
+const mediaTrackSchema = z.object({
+  type: z.literal("media"),
+  id: z.string(),
+  zIndex: z.number(),
+  segments: z.array(mediaSegmentSchema).min(1),
+})
+
+const audioTrackSchema = z.object({
+  type: z.literal("audio"),
+  id: z.string(),
+  src: z.string(),
+  volume: z.number().min(0).max(1),
+  fadeInFrames: z.number().min(0),
+  fadeOutFrames: z.number().min(0),
+  startFrame: z.number().min(0).optional(),
+})
+
+const textTrackSchema = z.object({
+  type: z.literal("text"),
+  id: z.string(),
+  zIndex: z.number(),
+  segments: z.array(textSegmentSchema).min(1),
+})
+
+const trackSchema = z.discriminatedUnion("type", [mediaTrackSchema, audioTrackSchema, textTrackSchema])
+
+const sceneGraphSchema = z.object({
+  fps: z.number().min(15).max(60),
+  width: z.number().min(100).max(3840),
+  height: z.number().min(100).max(3840),
+  durationInFrames: z.number().min(1),
+  backgroundColor: z.string(),
+  tracks: z.array(trackSchema).min(1),
+})
+
+// ── Legacy template schema ─────────────────────────────────────────────
+
 const renderVideoBody = z.object({
   template: z.enum(["slideshow", "explainer", "social-reel", "documentary"]),
   fps: z.number().min(15).max(60).default(30),
@@ -46,7 +130,15 @@ const renderVideoBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
+// ── Scene graph render schema ──────────────────────────────────────────
+
+const renderSceneGraphBody = z.object({
+  sceneGraph: sceneGraphSchema,
+  userId: z.string().uuid().optional(),
+})
+
 export async function renderVideoRoutes(app: FastifyInstance) {
+  // Legacy template-based render
   app.post("/v1/render-video", { preHandler: creditGuard(() => "render-video") }, async (req, reply) => {
     const parsed = renderVideoBody.safeParse(req.body)
     if (!parsed.success) {
@@ -123,6 +215,60 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       captions: body.captions,
       backgroundColor: body.backgroundColor,
       kenBurnsEnabled: body.kenBurnsEnabled,
+      usageLogId,
+    })
+
+    return { jobId: job.id }
+  })
+
+  // Scene graph render
+  app.post("/v1/render-video/scene-graph", { preHandler: creditGuard(() => "render-video") }, async (req, reply) => {
+    const parsed = renderSceneGraphBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid request",
+        },
+      })
+    }
+
+    const { sceneGraph, userId } = parsed.data
+
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
+    const { data: job, error } = await supabase
+      .from("jobs")
+      .insert({
+        workflow_id: null,
+        user_id: userId,
+        status: "pending",
+        input_data: {
+          type: "render-video",
+          mode: "scene-graph",
+          sceneGraph,
+        },
+      })
+      .select("id")
+      .single()
+
+    if (error) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: error.message },
+      })
+    }
+
+    const reservation = await reserveCreditsForJob(req, reply, job.id, "render-video")
+    if (reply.sent) return
+    const usageLogId = reservation?.usageLogId
+
+    await renderQueue.add("render-video", {
+      jobId: job.id,
+      sceneGraph,
       usageLogId,
     })
 

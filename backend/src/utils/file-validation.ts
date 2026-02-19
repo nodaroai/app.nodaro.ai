@@ -181,7 +181,7 @@ export async function checkStorageQuota(
   // Get user profile for tier, current storage usage, and admin-overridable limit
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("storage_used_bytes, storage_limit_bytes, subscription_tier")
+    .select("storage_used_bytes, storage_limit_bytes, tier")
     .eq("id", userId)
     .single()
 
@@ -192,10 +192,12 @@ export async function checkStorageQuota(
     }
   }
 
-  const tier = profile.subscription_tier ?? "free"
+  const tier = (profile.tier as string) ?? "free"
   const usedBytes = profile.storage_used_bytes ?? 0
   const dbLimit = profile.storage_limit_bytes ?? 0
-  const quotaBytes = dbLimit > 0 ? dbLimit : (TIER_STORAGE_LIMITS[tier] ?? TIER_STORAGE_LIMITS.free)
+  const tierLimit = TIER_STORAGE_LIMITS[tier] ?? TIER_STORAGE_LIMITS.free
+  // Use tier-based limit when DB has no value or the stale 500MB default (524288000)
+  const quotaBytes = dbLimit > 0 && dbLimit !== 524288000 ? dbLimit : tierLimit
 
   const newUsed = usedBytes + fileSizeBytes
   if (newUsed > quotaBytes) {

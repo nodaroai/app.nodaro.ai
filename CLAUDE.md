@@ -160,7 +160,8 @@ backend/src/
 | Execution model | Frontend DAG engine | Topological sort, parallel per level |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
-| Video composition | Remotion (`packages/remotion/`) | Template-based rendering via separate BullMQ worker |
+| Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + legacy template converters via BullMQ worker |
+| AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
@@ -184,4 +185,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-19*
-*Version: 1.26.0*
+*Version: 1.27.0*

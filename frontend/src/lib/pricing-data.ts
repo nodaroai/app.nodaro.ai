@@ -128,6 +128,19 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   },
 ] as const
 
+/**
+ * Storage limits per tier in bytes.
+ * Must match backend TIER_STORAGE_LIMITS in paddle-config.ts.
+ */
+export const TIER_STORAGE_BYTES: Record<string, number> = {
+  free: 1 * 1024 * 1024 * 1024,          // 1 GB
+  basic: 10 * 1024 * 1024 * 1024,        // 10 GB
+  standard: 25 * 1024 * 1024 * 1024,     // 25 GB
+  pro: 50 * 1024 * 1024 * 1024,          // 50 GB
+  business: 200 * 1024 * 1024 * 1024,    // 200 GB
+  enterprise: 500 * 1024 * 1024 * 1024,  // 500 GB
+}
+
 /** Get the display price for a tier based on billing cycle. */
 export function getTierPrice(tier: PricingTier, cycle: BillingCycle): number {
   return cycle === "monthly" ? tier.priceMonthly : tier.priceAnnual

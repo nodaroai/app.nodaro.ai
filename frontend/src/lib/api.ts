@@ -19,6 +19,16 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return {}
 }
 
+async function getCurrentUserId(): Promise<string | undefined> {
+  try {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.user?.id
+  } catch {
+    return undefined
+  }
+}
+
 export class StorageExceededError extends Error {
   readonly usedBytes: number
   readonly quotaBytes: number
@@ -1071,36 +1081,19 @@ export function getImageProxyUrl(url: string): string {
   return `${API_BASE_URL}/v1/image-proxy?url=${encodeURIComponent(url)}`
 }
 
-export async function uploadImage(file: File | Blob): Promise<{ url: string }> {
-  const formData = new FormData()
-  formData.append("file", file, file instanceof File ? file.name : "crop.png")
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}/v1/upload/image`, {
-    method: "POST",
-    headers: authHeaders,
-    body: formData,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to upload image")
-  }
-  return res.json()
+export async function uploadImage(file: File | Blob, userId?: string): Promise<{ url: string }> {
+  const resolvedUserId = userId ?? await getCurrentUserId()
+  const asFile = file instanceof File
+    ? file
+    : new File([file], "crop.png", { type: file.type || "image/png" })
+  const result = await uploadFile(asFile, resolvedUserId)
+  return { url: result.url }
 }
 
-export async function uploadAudio(file: File): Promise<{ url: string }> {
-  const formData = new FormData()
-  formData.append("file", file)
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}/v1/upload/audio`, {
-    method: "POST",
-    headers: authHeaders,
-    body: formData,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to upload audio file")
-  }
-  return res.json()
+export async function uploadAudio(file: File, userId?: string): Promise<{ url: string }> {
+  const resolvedUserId = userId ?? await getCurrentUserId()
+  const result = await uploadFile(file, resolvedUserId)
+  return { url: result.url }
 }
 
 export interface UploadResult {
@@ -1745,29 +1738,38 @@ export async function videoUpscaleApi(
 
 // --- Render Video (Remotion) ---
 
-export async function renderVideoApi(params: {
-  template: string
-  fps?: number
-  aspectRatio?: string
-  durationSeconds?: number
-  transitionStyle?: string
-  transitionDurationFrames?: number
-  mediaAssets: Array<{ url: string; type: "image" | "video" | "audio"; durationSeconds?: number }>
-  audioTrackUrl?: string
-  textOverlays?: Array<{ text: string; position: string; fontSize: number; color: string; startFrame: number; endFrame: number }>
-  captions?: { enabled: boolean; style: string; position: string; fontSize: number; color: string }
-  backgroundColor?: string
-  kenBurnsEnabled?: boolean
+export async function renderVideoWithSceneGraph(params: {
+  sceneGraph: Record<string, unknown>
   userId?: string
 }): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/render-video`, {
+  const res = await fetch(`${API_BASE_URL}/v1/render-video/scene-graph`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify(params),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start video render")
+    throwApiError(err, "Failed to start scene graph video render")
+  }
+  return res.json()
+}
+
+export async function generateSceneGraph(params: {
+  prompt: string
+  assets: Array<{ id: string; type: "image" | "video" | "audio"; url: string; label?: string; durationSeconds?: number }>
+  fps: number
+  aspectRatio: string
+  durationSeconds: number
+  userId: string
+}): Promise<{ jobId: string; sceneGraph: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/scene-graph/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Scene graph generation failed")
   }
   return res.json()
 }

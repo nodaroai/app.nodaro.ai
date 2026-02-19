@@ -58,9 +58,10 @@ export interface CreditProfile {
 
 /**
  * Pre-fetched profile shape for checkStorageLimitWithProfile.
- * Must include storage columns.
+ * Must include storage columns + tier for fallback.
  */
 export interface StorageProfile {
+  tier?: string | null
   storage_used_bytes?: number | null
   storage_limit_bytes?: number | null
 }
@@ -128,6 +129,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sora": 0,
   // ── LLM ──
   "ai-writer": 1,
+  "scene-graph-ai": 2,
+  "video-composer": 2,
   // ── Node types (legacy fallback for workflow estimation) ──
   "generate-script": 2,
   "generate-image": 1,
@@ -763,7 +766,7 @@ export class CreditsService {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("storage_used_bytes, storage_limit_bytes")
+      .select("tier, storage_used_bytes, storage_limit_bytes")
       .eq("id", userId)
       .single()
 
@@ -784,7 +787,11 @@ export class CreditsService {
     }
 
     const usedBytes = profile.storage_used_bytes ?? 0
-    const limitBytes = profile.storage_limit_bytes ?? TIER_STORAGE_LIMITS.free
+    const tier = (profile.tier as string) ?? "free"
+    const dbLimit = profile.storage_limit_bytes ?? 0
+    const tierLimit = TIER_STORAGE_LIMITS[tier] ?? TIER_STORAGE_LIMITS.free
+    // Use tier-based limit when DB has no value or the stale 500MB default (524288000)
+    const limitBytes = dbLimit > 0 && dbLimit !== 524288000 ? dbLimit : tierLimit
 
     if (usedBytes >= limitBytes) {
       const usedGB = (usedBytes / (1024 * 1024 * 1024)).toFixed(1)

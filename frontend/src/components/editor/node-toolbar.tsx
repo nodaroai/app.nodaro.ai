@@ -77,7 +77,6 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "loop-video", label: "Loop Video", icon: <Repeat className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "fade-video", label: "Fade In/Out", icon: <SunDim className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "add-captions", label: "Add Captions", icon: <Captions className="h-4 w-4" />, category: "Processing", group: "Video" },
-  { type: "render-video", label: "Render Video", icon: <Film className="h-4 w-4" />, category: "Processing", group: "Video" },
   // Processing — Audio
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "extract-audio", label: "Extract Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio" },
@@ -86,6 +85,9 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Processing — Text
   { type: "combine-text", label: "Combine Text", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "split-text", label: "Split Text", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Text" },
+  // Processing — Video Production
+  { type: "video-composer", label: "Compose Video", icon: <Sparkles className="h-4 w-4" />, category: "Processing", group: "Video Production" },
+  { type: "render-video", label: "Render Video", icon: <Film className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   // Character
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
   // Face

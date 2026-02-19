@@ -28,7 +28,20 @@ interface RenderInputProps extends Record<string, unknown> {
   kenBurnsEnabled: boolean
 }
 
-interface RenderJobData {
+interface SceneGraphData extends Record<string, unknown> {
+  fps: number
+  width: number
+  height: number
+  durationInFrames: number
+  backgroundColor: string
+  tracks: unknown[]
+}
+
+interface SceneGraphInputProps extends Record<string, unknown> {
+  sceneGraph: SceneGraphData
+}
+
+interface LegacyRenderJobData {
   jobId: string
   template: string
   fps: number
@@ -44,6 +57,18 @@ interface RenderJobData {
   backgroundColor: string
   kenBurnsEnabled: boolean
   usageLogId?: string
+}
+
+interface SceneGraphRenderJobData {
+  jobId: string
+  sceneGraph: SceneGraphData
+  usageLogId?: string
+}
+
+type RenderJobData = LegacyRenderJobData | SceneGraphRenderJobData
+
+function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
+  return "sceneGraph" in data && data.sceneGraph != null
 }
 
 // Cache the Remotion bundle after first build
@@ -101,6 +126,74 @@ async function generateAndUploadThumbnail(
   }
 }
 
+/**
+ * Build composition ID and input props for scene graph mode.
+ * Uses the "scene-graph" composition registered in Root.tsx.
+ */
+function buildSceneGraphRender(data: SceneGraphRenderJobData): {
+  compositionId: string
+  inputProps: SceneGraphInputProps
+  width: number
+  height: number
+  fps: number
+  durationInFrames: number
+} {
+  const { sceneGraph } = data
+  return {
+    compositionId: "scene-graph",
+    inputProps: { sceneGraph },
+    width: sceneGraph.width,
+    height: sceneGraph.height,
+    fps: sceneGraph.fps,
+    durationInFrames: sceneGraph.durationInFrames,
+  }
+}
+
+/**
+ * Build composition ID and input props for legacy template mode.
+ * Legacy templates still use their original composition IDs (slideshow, explainer, etc.)
+ * and are rendered by the original composition components registered in Root.tsx.
+ */
+function buildLegacyRender(data: LegacyRenderJobData): {
+  compositionId: string
+  inputProps: RenderInputProps
+  width: number
+  height: number
+  fps: number
+  durationInFrames: number
+} {
+  const localAssets = data.mediaAssets.map((asset) => ({
+    localPath: asset.url,
+    type: asset.type,
+    durationSeconds: asset.durationSeconds,
+  }))
+
+  const inputProps: RenderInputProps = {
+    template: data.template,
+    fps: data.fps,
+    width: data.width,
+    height: data.height,
+    durationInFrames: data.durationInFrames,
+    transitionStyle: data.transitionStyle,
+    transitionDurationFrames: data.transitionDurationFrames,
+    mediaAssets: localAssets,
+    audioTrackLocalPath: data.audioTrackUrl,
+    textOverlays: data.textOverlays,
+    captions: data.captions,
+    backgroundColor: data.backgroundColor,
+    kenBurnsEnabled: data.kenBurnsEnabled,
+  }
+
+  return {
+    compositionId: data.template,
+    inputProps,
+    width: data.width,
+    height: data.height,
+    fps: data.fps,
+    durationInFrames: data.durationInFrames,
+  }
+}
+
 export function createRenderWorker() {
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
@@ -132,58 +225,40 @@ export function createRenderWorker() {
       try {
         await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", jobId)
 
-        // 1. Pass original HTTP URLs to Remotion (Chrome fetches them directly)
-        console.log(`[render-worker] Preparing ${data.mediaAssets.length} assets for job ${jobId}`)
-        const localAssets: RenderInputProps["mediaAssets"] = data.mediaAssets.map((asset) => ({
-          localPath: asset.url,
-          type: asset.type,
-          durationSeconds: asset.durationSeconds,
-        }))
-
-        const audioTrackLocalPath = data.audioTrackUrl
-
         await bullJob.updateProgress(30)
 
-        // 2. Bundle Remotion compositions (cached after first call)
+        // Build render config — scene graph mode or legacy template mode
+        const isSceneGraph = isSceneGraphJob(data)
+        const renderConfig = isSceneGraph
+          ? buildSceneGraphRender(data)
+          : buildLegacyRender(data)
+
+        const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
+
+        console.log(`[render-worker] Rendering ${compositionId} (${isSceneGraph ? "scene-graph" : "legacy"}) for job ${jobId}`)
+
+        // Bundle Remotion compositions (cached after first call)
         const bundlePath = await getBundlePath()
         await bullJob.updateProgress(40)
 
-        // 3. Build input props
-        const inputProps: RenderInputProps = {
-          template: data.template,
-          fps: data.fps,
-          width: data.width,
-          height: data.height,
-          durationInFrames: data.durationInFrames,
-          transitionStyle: data.transitionStyle,
-          transitionDurationFrames: data.transitionDurationFrames,
-          mediaAssets: localAssets,
-          audioTrackLocalPath,
-          textOverlays: data.textOverlays,
-          captions: data.captions,
-          backgroundColor: data.backgroundColor,
-          kenBurnsEnabled: data.kenBurnsEnabled,
-        }
-
-        // 4. Select composition and render
+        // Select composition and render
         const { selectComposition, renderMedia } = await import("@remotion/renderer")
 
         const composition = await selectComposition({
           serveUrl: bundlePath,
-          id: data.template,
+          id: compositionId,
           inputProps,
         })
 
         const outputPath = join(workDir, "output.mp4")
 
-        console.log(`[render-worker] Rendering ${data.template} for job ${jobId}`)
         await renderMedia({
           composition: {
             ...composition,
-            width: data.width,
-            height: data.height,
-            fps: data.fps,
-            durationInFrames: data.durationInFrames,
+            width,
+            height,
+            fps,
+            durationInFrames,
           },
           serveUrl: bundlePath,
           codec: "h264",
@@ -197,7 +272,7 @@ export function createRenderWorker() {
 
         await bullJob.updateProgress(90)
 
-        // 5. Apply watermark if free tier
+        // Apply watermark if free tier
         let uploadPath = outputPath
         if (shouldWatermark) {
           const wmPath = join(workDir, "output-wm.mp4")
@@ -205,14 +280,14 @@ export function createRenderWorker() {
           uploadPath = wmPath
         }
 
-        // 6. Upload to R2
+        // Upload to R2
         const videoUrl = await uploadFileToR2(uploadPath, jobId, "video", jobUserId)
         await bullJob.updateProgress(95)
 
-        // 7. Generate thumbnail
+        // Generate thumbnail
         const thumbnailUrl = await generateAndUploadThumbnail(videoUrl, jobId, jobUserId)
 
-        // 8. Mark job completed
+        // Mark job completed
         await supabase
           .from("jobs")
           .update({
@@ -224,7 +299,7 @@ export function createRenderWorker() {
           })
           .eq("id", jobId)
 
-        // 9. Commit credits
+        // Commit credits
         await handleCredits("commit", effectiveUsageLogId, jobId)
 
         console.log(`[render-worker] Job ${jobId} completed successfully`)

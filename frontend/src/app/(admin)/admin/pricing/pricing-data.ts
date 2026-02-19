@@ -174,4 +174,5 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "topaz":             { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
   "ffmpeg":            { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "render-video":      { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
+  "video-composer":    { provider: "Anthropic", providerCostUsd: 0.010, markupPct: 25 },
 }
