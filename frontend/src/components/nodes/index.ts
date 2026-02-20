@@ -52,6 +52,7 @@ import { RenderVideoNode } from "./render-video-node";
 import { SpeedRampNode } from "./speed-ramp-node";
 import { LoopVideoNode } from "./loop-video-node";
 import { FadeVideoNode } from "./fade-video-node";
+import { TranscodeVideoNode } from "./transcode-video-node";
 import { LipSyncNode } from "./lip-sync-node";
 import { MotionTransferNode } from "./motion-transfer-node";
 import { VideoUpscaleNode } from "./video-upscale-node";
@@ -128,6 +129,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "speed-ramp": SpeedRampNode,
   "loop-video": LoopVideoNode,
   "fade-video": FadeVideoNode,
+  "transcode-video": TranscodeVideoNode,
   "video-upscale": VideoUpscaleNode,
   // Output
   "save-to-storage": SaveToStorageNode,

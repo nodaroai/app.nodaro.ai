@@ -24,6 +24,7 @@ import {
   mergeVideoAudioApi,
   extractAudioApi,
   trimVideoApi,
+  transcodeVideoApi,
   speedRampApi,
   loopVideoApi,
   fadeVideoApi,
@@ -72,6 +73,7 @@ import type {
   MergeVideoAudioData,
   ExtractAudioData,
   TrimVideoData,
+  TranscodeVideoData,
   SpeedRampData,
   LoopVideoData,
   FadeVideoData,
@@ -1376,6 +1378,32 @@ export function executeNode(
         trimVideoApi(videoUrl, d.startTime, d.endTime || undefined, ctx.userId),
       "generatedVideoUrl",
       "Trim Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "transcode-video") {
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!videoUrl) {
+      toast.error(
+        `Node "${(node.data as TranscodeVideoData).label}": no video input`,
+      );
+      return Promise.reject(new Error("No video"));
+    }
+    const d = node.data as TranscodeVideoData;
+    return runProcessingNode(
+      node.id,
+      () =>
+        transcodeVideoApi(
+          videoUrl,
+          d.codec || undefined,
+          d.crf ?? undefined,
+          d.resolution || undefined,
+          d.audioBitrate || undefined,
+          ctx.userId,
+        ),
+      "generatedVideoUrl",
+      "Transcode Video",
       ctx,
     );
   }

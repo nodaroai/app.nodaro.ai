@@ -1,8 +1,8 @@
-import { dirname } from "node:path"
+import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import { supabase } from "../../lib/supabase.js"
 import { uploadFileToR2 } from "../../lib/storage.js"
-import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
+import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
@@ -188,6 +188,45 @@ const handleMixAudio: HandlerFn = async function handleMixAudio(job, ctx) {
   await completeFfmpegAudioJob(outputPath, ctx)
 }
 
+const RESOLUTION_SCALE: Record<string, string> = {
+  "1080p": "scale=-2:1080",
+  "720p": "scale=-2:720",
+  "480p": "scale=-2:480",
+}
+
+const handleTranscodeVideo: HandlerFn = async function handleTranscodeVideo(job, ctx) {
+  const { videoUrl, codec, crf, resolution, audioBitrate } = job.data as {
+    jobId: string; videoUrl: string; codec?: "h264" | "h265"; crf?: number; resolution?: string; audioBitrate?: string
+  }
+  console.log(`[worker] transcode-video ${ctx.jobId}`)
+
+  const isDefault = !codec && crf === undefined && (!resolution || resolution === "original") && !audioBitrate
+  const workDir = await createWorkDir("transcode")
+  const inputPath = join(workDir, "input.mp4")
+  const outputPath = join(workDir, "output.mp4")
+  await downloadFile(videoUrl, inputPath)
+  await job.updateProgress(30)
+
+  if (isDefault) {
+    // Use the standard browser-safe args
+    await runFfmpeg(["-y", "-i", inputPath, ...BROWSER_SAFE_VIDEO_ARGS, "-c:a", "aac", "-b:a", "128k", outputPath])
+  } else {
+    // Build custom args
+    const videoCodec = codec === "h265" ? "libx265" : "libx264"
+    const crfValue = String(crf ?? 23)
+    const args: string[] = ["-y", "-i", inputPath, "-c:v", videoCodec, "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", crfValue]
+
+    if (resolution && resolution !== "original" && RESOLUTION_SCALE[resolution]) {
+      args.push("-vf", RESOLUTION_SCALE[resolution])
+    }
+
+    args.push("-movflags", "+faststart", "-c:a", "aac", "-b:a", audioBitrate ?? "128k", outputPath)
+    await runFfmpeg(args)
+  }
+  await job.updateProgress(80)
+  await completeFfmpegVideoJob(outputPath, ctx)
+}
+
 export const ffmpegHandlers: Record<string, HandlerFn> = {
   "combine-videos": handleCombineVideos,
   "merge-video-audio": handleMergeVideoAudio,
@@ -200,4 +239,5 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "adjust-volume": handleAdjustVolume,
   "add-captions": handleAddCaptions,
   "mix-audio": handleMixAudio,
+  "transcode-video": handleTranscodeVideo,
 }

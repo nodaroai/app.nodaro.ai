@@ -1092,6 +1092,21 @@ export type FadeVideoData = {
   activeResultIndex?: number
 }
 
+export type TranscodeVideoData = {
+  [key: string]: unknown
+  label: string
+  codec: "h264" | "h265"
+  crf: number
+  resolution: "original" | "1080p" | "720p" | "480p"
+  audioBitrate: "128k" | "192k" | "256k" | "320k"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 // --- Output Node Data ---
 
 export type SaveToStorageData = {
@@ -1469,6 +1484,7 @@ export type SceneNodeData =
   | SpeedRampData
   | LoopVideoData
   | FadeVideoData
+  | TranscodeVideoData
   | LipSyncData
   | MotionTransferData
   | VideoUpscaleData
@@ -1540,6 +1556,7 @@ export type SceneNodeType =
   | "speed-ramp"
   | "loop-video"
   | "fade-video"
+  | "transcode-video"
   | "lip-sync"
   | "motion-transfer"
   | "video-upscale"
@@ -2109,6 +2126,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Fade In/Out", fadeIn: true, fadeInDuration: 0.5, fadeOut: true, fadeOutDuration: 0.5, color: "black", fieldMappings: {} },
+  },
+  {
+    type: "transcode-video",
+    label: "Transcode Video",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: { label: "Transcode Video", codec: "h264", crf: 23, resolution: "original", audioBitrate: "128k", fieldMappings: {} },
   },
   // Lip Sync / AI Avatar
   {
