@@ -1,0 +1,706 @@
+"use client"
+
+import { useState, useCallback } from "react"
+import { X, Plus, Loader2, Check, Download, AlertCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { CachedImage } from "@/components/ui/cached-image"
+import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
+import type { DownloadProgressEvent } from "@/lib/api"
+import type {
+  TextPromptData,
+  ListNodeData,
+  LoopNodeData,
+  LoopColumn,
+  UploadImageData,
+  UploadVideoData,
+  UploadAudioData,
+  RSSFeedData,
+  YouTubeVideoData,
+  ReferenceAudioData,
+} from "@/types/nodes"
+import type { ConfigProps } from "./types"
+
+export function TextPromptConfig({ data, onUpdate }: ConfigProps<TextPromptData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="prompt-text">Prompt Text</Label>
+        <Textarea
+          id="prompt-text"
+          rows={5}
+          value={data.text}
+          onChange={(e) => onUpdate({ text: e.target.value })}
+          placeholder="Enter your story prompt..."
+        />
+      </div>
+    </div>
+  )
+}
+
+export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (patch: Partial<ListNodeData>) => void }) {
+  const [newItem, setNewItem] = useState("")
+  const itemList = (data.items || "").split("\n").filter((l) => l.trim() !== "")
+
+  function save(updated: ReadonlyArray<string>) {
+    onUpdate({ items: updated.join("\n") })
+  }
+
+  function addItem(text: string) {
+    if (!text.trim()) return
+    save([...itemList, text.trim()])
+    setNewItem("")
+  }
+
+  function updateItem(index: number, value: string) {
+    const updated = itemList.map((item, i) => (i === index ? value : item))
+    save(updated)
+  }
+
+  function removeItem(index: number) {
+    save(itemList.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Label>Items</Label>
+      <div className="flex flex-col gap-1.5">
+        {itemList.map((item, i) => (
+          <div key={`item-${i}`} className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-5 text-right shrink-0">{i + 1}</span>
+            <input
+              className="flex-1 text-sm bg-muted/30 rounded px-2 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+              value={item}
+              onChange={(e) => updateItem(i, e.target.value)}
+            />
+            <button
+              type="button"
+              className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
+              onClick={() => removeItem(i)}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-5 text-right shrink-0" />
+          <input
+            className="flex-1 text-sm bg-muted/30 rounded px-2 py-1 border border-dashed border-border focus:border-[#ff0073] focus:outline-none"
+            placeholder="Add item..."
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newItem.trim()) {
+                e.preventDefault()
+                addItem(newItem)
+              }
+            }}
+            onBlur={() => {
+              if (newItem.trim()) addItem(newItem)
+            }}
+          />
+          <span className="w-3 shrink-0" />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {itemList.length} item{itemList.length !== 1 ? "s" : ""}
+      </p>
+    </div>
+  )
+}
+
+export function LoopConfig({ data, onUpdate }: { data: LoopNodeData; onUpdate: (patch: Partial<LoopNodeData>) => void }) {
+  const columns = data.columns ?? []
+  const rows = data.rows ?? []
+
+  function addColumn() {
+    const id = crypto.randomUUID()
+    const name = `Column ${columns.length + 1}`
+    const newCol: LoopColumn = { id, name, handleId: `col_${id}` }
+    const updatedRows = rows.map((row) => [...row, ""])
+    onUpdate({ columns: [...columns, newCol], rows: updatedRows })
+  }
+
+  function removeColumn(colIndex: number) {
+    const updatedCols = columns.filter((_, i) => i !== colIndex)
+    const updatedRows = rows.map((row) => row.filter((_, i) => i !== colIndex))
+    onUpdate({ columns: updatedCols, rows: updatedRows })
+  }
+
+  function renameColumn(colIndex: number, name: string) {
+    const updatedCols = columns.map((col, i) =>
+      i === colIndex ? { ...col, name } : col,
+    )
+    onUpdate({ columns: updatedCols })
+  }
+
+  function addRow() {
+    const newRow = columns.map(() => "")
+    onUpdate({ rows: [...rows, newRow] })
+  }
+
+  function removeRow(rowIndex: number) {
+    onUpdate({ rows: rows.filter((_, i) => i !== rowIndex) })
+  }
+
+  function updateCell(rowIndex: number, colIndex: number, value: string) {
+    const updatedRows = rows.map((row, ri) =>
+      ri === rowIndex ? row.map((cell, ci) => (ci === colIndex ? value : cell)) : row,
+    )
+    onUpdate({ rows: updatedRows })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <Label>Table</Label>
+        <button
+          type="button"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          onClick={addColumn}
+        >
+          <Plus className="w-3 h-3" />
+          Add Column
+        </button>
+      </div>
+
+      {columns.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-6 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/50">
+          <p className="text-sm">No columns yet</p>
+          <p className="text-xs mt-1">Add a column to get started</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr>
+                <th className="w-6" />
+                {columns.map((col, ci) => (
+                  <th key={col.id} className="pb-1 px-0.5">
+                    <div className="flex items-center gap-0.5">
+                      <input
+                        className="flex-1 min-w-[60px] text-xs font-medium bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+                        value={col.name}
+                        onChange={(e) => renameColumn(ci, e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
+                        onClick={() => removeColumn(ci)}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, ri) => (
+                <tr key={`row-${ri}`}>
+                  <td className="pr-1 text-right align-middle">
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        className="shrink-0 text-muted-foreground/40 hover:text-red-500 transition-colors"
+                        onClick={() => removeRow(ri)}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                      <span className="text-muted-foreground w-3 text-right">{ri + 1}</span>
+                    </div>
+                  </td>
+                  {columns.map((col, ci) => (
+                    <td key={`${col.id}-${ri}`} className="px-0.5 py-0.5">
+                      <input
+                        className="w-full min-w-[60px] text-xs bg-muted/30 rounded px-1.5 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
+                        value={row[ci] ?? ""}
+                        onChange={(e) => updateCell(ri, ci, e.target.value)}
+                        placeholder={col.name}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button
+            type="button"
+            className="flex items-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={addRow}
+          >
+            <Plus className="w-3 h-3" />
+            Add Row
+          </button>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        {rows.length} row{rows.length !== 1 ? "s" : ""} &times; {columns.length} column{columns.length !== 1 ? "s" : ""}
+      </p>
+    </div>
+  )
+}
+
+export function UploadImageConfig({ data, onUpdate }: ConfigProps<UploadImageData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="image-url">Image URL</Label>
+        <Input
+          id="image-url"
+          value={data.url}
+          onChange={(e) => onUpdate({ url: e.target.value })}
+          placeholder="https://example.com/image.png"
+        />
+      </div>
+    </div>
+  )
+}
+
+export function UploadVideoConfig({ data, onUpdate }: ConfigProps<UploadVideoData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="video-url">Video URL</Label>
+        <Input
+          id="video-url"
+          value={data.url}
+          onChange={(e) => onUpdate({ url: e.target.value })}
+          placeholder="https://example.com/video.mp4"
+        />
+      </div>
+    </div>
+  )
+}
+
+export function UploadAudioConfig({ data, onUpdate }: ConfigProps<UploadAudioData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="audio-url">Audio URL</Label>
+        <Input
+          id="audio-url"
+          value={data.url}
+          onChange={(e) => onUpdate({ url: e.target.value })}
+          placeholder="https://example.com/audio.mp3"
+        />
+      </div>
+    </div>
+  )
+}
+
+export function RSSFeedConfig({ data, onUpdate }: ConfigProps<RSSFeedData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="feed-url">Feed URL</Label>
+        <Input
+          id="feed-url"
+          value={data.feedUrl}
+          onChange={(e) => onUpdate({ feedUrl: e.target.value })}
+          placeholder="https://example.com/feed.xml"
+        />
+      </div>
+      <div>
+        <Label htmlFor="item-index">Item Index</Label>
+        <Input
+          id="item-index"
+          type="number"
+          min={0}
+          value={data.itemIndex}
+          onChange={(e) => onUpdate({ itemIndex: parseInt(e.target.value, 10) || 0 })}
+        />
+      </div>
+    </div>
+  )
+}
+
+function detectVideoPlatform(url: string): string {
+  if (/youtube\.com|youtu\.be/.test(url)) return "youtube"
+  if (/facebook\.com|fb\.watch|fb\.com/.test(url)) return "facebook"
+  if (/tiktok\.com/.test(url)) return "tiktok"
+  if (/instagram\.com/.test(url)) return "instagram"
+  if (/(?:twitter\.com|x\.com)/.test(url)) return "twitter"
+  return "unknown"
+}
+
+function extractVideoUrlId(url: string): string | null {
+  const ytMatch = url.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/
+  )
+  if (ytMatch) return ytMatch[1]
+  const tiktokMatch = url.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/)
+  if (tiktokMatch) return tiktokMatch[1]
+  const igMatch = url.match(/instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/)
+  if (igMatch) return igMatch[1]
+  const twMatch = url.match(/(?:twitter\.com|x\.com)\/[\w]+\/status\/(\d+)/)
+  if (twMatch) return twMatch[1]
+  const fbMatch = url.match(/facebook\.com\/.*\/videos\/(\d+)/)
+  if (fbMatch) return fbMatch[1]
+  const fbShareMatch = url.match(/facebook\.com\/share\/(?:v|r)\/([A-Za-z0-9_-]+)/)
+  if (fbShareMatch) return fbShareMatch[1]
+  const fbReelMatch = url.match(/facebook\.com\/reel\/([A-Za-z0-9_-]+)/)
+  if (fbReelMatch) return fbReelMatch[1]
+  if (/fb\.watch/.test(url)) return url
+  const platform = detectVideoPlatform(url)
+  if (platform !== "unknown" && platform !== "youtube") return url
+  return null
+}
+
+const VIDEO_PLATFORM_LABELS: Record<string, string> = {
+  youtube: "YouTube",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  instagram: "Instagram",
+  twitter: "Twitter/X",
+  unknown: "Video",
+}
+
+export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
+  const [loading, setLoading] = useState(false)
+
+  const platform = detectVideoPlatform(data.youtubeUrl || "")
+  const isYouTube = platform === "youtube"
+  const downloadStatus = data.downloadStatus ?? "idle"
+  const isDownloading = downloadStatus === "downloading"
+  const displayThumbnail = data.downloadedThumbnailUrl || data.thumbnailUrl
+
+  const handleUrlChange = useCallback(async (url: string) => {
+    onUpdate({
+      youtubeUrl: url,
+      downloadedVideoUrl: "",
+      downloadedThumbnailUrl: "",
+      downloadStatus: "idle",
+      downloadError: "",
+      downloadPercent: 0,
+    })
+
+    const videoId = extractVideoUrlId(url)
+    if (!videoId) {
+      onUpdate({ videoId: "", title: "", thumbnailUrl: "" })
+      return
+    }
+
+    const detectedPlatform = detectVideoPlatform(url)
+    onUpdate({ videoId })
+    setLoading(true)
+    try {
+      if (detectedPlatform === "youtube") {
+        const meta = await fetchYouTubeOEmbed(url)
+        onUpdate({ title: meta.title, thumbnailUrl: meta.thumbnail_url })
+      } else {
+        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[detectedPlatform]} Video`, thumbnailUrl: "" })
+      }
+    } catch {
+      if (detectedPlatform === "youtube") {
+        onUpdate({ title: "", thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` })
+      } else {
+        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[detectedPlatform]} Video`, thumbnailUrl: "" })
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [onUpdate])
+
+  const handleDownload = useCallback(async () => {
+    const url = data.youtubeUrl?.trim()
+    if (!url) return
+    onUpdate({
+      downloadStatus: "downloading",
+      downloadPercent: 0,
+      downloadError: "",
+      downloadedVideoUrl: "",
+      downloadedThumbnailUrl: "",
+    })
+    try {
+      const { downloadId } = await startVideoDownload(url)
+      subscribeToDownloadProgress(downloadId, (event: DownloadProgressEvent) => {
+        if (event.phase === "completed" && event.videoUrl) {
+          onUpdate({
+            downloadedVideoUrl: event.videoUrl,
+            downloadedThumbnailUrl: event.thumbnailUrl ?? "",
+            downloadStatus: "completed",
+            downloadPercent: 100,
+            thumbnailUrl: event.thumbnailUrl ?? data.thumbnailUrl,
+          })
+        } else if (event.phase === "failed") {
+          onUpdate({
+            downloadStatus: "failed",
+            downloadError: event.error ?? "Download failed",
+            downloadPercent: 0,
+          })
+        } else {
+          onUpdate({ downloadPercent: event.percent, downloadPhase: event.phase })
+        }
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Download failed"
+      onUpdate({
+        downloadStatus: "failed",
+        downloadError: message,
+        downloadPercent: 0,
+      })
+    }
+  }, [data.youtubeUrl, data.thumbnailUrl, onUpdate])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="video-url">Video URL</Label>
+        <Input
+          id="video-url"
+          value={data.youtubeUrl}
+          onChange={(e) => handleUrlChange(e.target.value)}
+          placeholder="YouTube, Facebook, TikTok, Instagram, or X URL"
+        />
+      </div>
+      {loading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          <span>Fetching metadata...</span>
+        </div>
+      )}
+      {!loading && displayThumbnail && (
+        <div className="rounded-md overflow-hidden">
+          <CachedImage
+            src={displayThumbnail}
+            alt={data.title || "Video"}
+            className="w-full rounded-md"
+            thumbnail
+            thumbnailWidth={480}
+          />
+        </div>
+      )}
+      {data.title && (
+        <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+          <span className="font-medium">Title:</span> {data.title}
+        </div>
+      )}
+
+      {!loading && data.videoId && !isYouTube && (
+        <div className="flex flex-col gap-2">
+          {(downloadStatus === "idle" || downloadStatus === "failed") && (
+            <>
+              {downloadStatus === "failed" && data.downloadError && (
+                <div className="flex items-center gap-1.5 p-2 rounded-md bg-red-500/10 text-red-500 text-xs">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span className="line-clamp-2">{data.downloadError}</span>
+                </div>
+              )}
+              <Button
+                size="sm"
+                onClick={handleDownload}
+                className="w-full bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              >
+                <Download className="w-3.5 h-3.5 mr-1.5" />
+                {downloadStatus === "failed" ? "Retry Download" : "Download Video"}
+              </Button>
+            </>
+          )}
+
+          {isDownloading && (
+            <div className="flex flex-col gap-1.5 p-2 bg-muted/30 rounded-md">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ff0073]" />
+                <span>{data.downloadPhase === "uploading" ? "Uploading..." : data.downloadPhase === "processing" ? "Processing..." : "Downloading video..."}</span>
+                <span className="ml-auto font-mono text-[#ff0073]">{data.downloadPercent ?? 0}%</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden">
+                <div
+                  className="h-full bg-[#ff0073] rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${data.downloadPercent ?? 0}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {downloadStatus === "completed" && (
+            <div className="flex items-center gap-2 text-xs text-green-500 p-2 bg-green-500/10 rounded-md">
+              <Check className="w-3.5 h-3.5" />
+              <span>Downloaded and ready</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!loading && data.videoId && isYouTube && (
+        <div className="flex items-center gap-2 text-xs text-green-500 p-2 bg-green-500/10 rounded-md">
+          <Check className="w-3.5 h-3.5" />
+          <span>Direct streaming</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAudioData>) {
+  const [extracting, setExtracting] = useState(false)
+  const [fetchingMeta, setFetchingMeta] = useState(false)
+
+  const handleYouTubeUrlChange = useCallback(async (url: string) => {
+    onUpdate({ youtubeUrl: url })
+    if (!url.trim()) return
+    try {
+      const parsed = new URL(url)
+      if (!parsed.hostname.includes("youtube.com") && !parsed.hostname.includes("youtu.be")) return
+    } catch {
+      return
+    }
+    setFetchingMeta(true)
+    try {
+      const meta = await fetchYouTubeOEmbed(url)
+      onUpdate({ videoTitle: meta.title, videoThumbnail: meta.thumbnail_url })
+    } catch {
+      // ignore metadata fetch errors
+    } finally {
+      setFetchingMeta(false)
+    }
+  }, [onUpdate])
+
+  const handleExtract = useCallback(async () => {
+    const url = data.youtubeUrl?.trim()
+    if (!url) return
+    setExtracting(true)
+    onUpdate({ extractionStatus: "extracting" })
+    try {
+      const { jobId } = await extractYouTubeAudioApi(url)
+      const poll = async (): Promise<string> => {
+        const status = await getJobStatus(jobId)
+        if (status.status === "completed" && status.output_data?.audioUrl) {
+          return status.output_data.audioUrl
+        }
+        if (status.status === "failed") {
+          throw new Error(status.error_message ?? "Extraction failed")
+        }
+        await new Promise((r) => setTimeout(r, 2000))
+        return poll()
+      }
+      const audioUrl = await poll()
+      onUpdate({ extractedAudioUrl: audioUrl, extractionStatus: "ready" })
+    } catch {
+      onUpdate({ extractionStatus: "failed" })
+    } finally {
+      setExtracting(false)
+    }
+  }, [data.youtubeUrl, onUpdate])
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    setExtracting(true)
+    onUpdate({ extractionStatus: "extracting" })
+    try {
+      const result = await uploadAudio(file)
+      onUpdate({ uploadedFileUrl: result.url, extractedAudioUrl: result.url, extractionStatus: "ready" })
+    } catch {
+      onUpdate({ extractionStatus: "failed" })
+    } finally {
+      setExtracting(false)
+    }
+  }, [onUpdate])
+
+  const handleDirectUrlSet = useCallback(() => {
+    const url = data.directUrl?.trim()
+    if (url) {
+      onUpdate({ extractedAudioUrl: url, extractionStatus: "ready" })
+    }
+  }, [data.directUrl, onUpdate])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Source</Label>
+        <Select
+          value={data.sourceType || "youtube"}
+          onValueChange={(v) => onUpdate({ sourceType: v as ReferenceAudioData["sourceType"], extractedAudioUrl: "", extractionStatus: "idle", videoTitle: "", videoThumbnail: "" })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="youtube">YouTube</SelectItem>
+            <SelectItem value="upload">Upload File</SelectItem>
+            <SelectItem value="url">Direct URL</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {(data.sourceType === "youtube" || !data.sourceType) && (
+        <div className="flex flex-col gap-2">
+          <div>
+            <Label htmlFor="yt-url">YouTube URL</Label>
+            <Input
+              id="yt-url"
+              value={data.youtubeUrl || ""}
+              onChange={(e) => handleYouTubeUrlChange(e.target.value)}
+              placeholder="https://youtube.com/watch?v=..."
+            />
+          </div>
+          {fetchingMeta && <p className="text-xs text-muted-foreground">Fetching video info...</p>}
+          {data.videoThumbnail && (
+            <div className="rounded-md overflow-hidden bg-muted border border-border">
+              <CachedImage src={data.videoThumbnail} alt="" className="w-full aspect-video object-cover" thumbnail thumbnailWidth={480} />
+              {data.videoTitle && <p className="text-xs px-2 py-1.5 truncate text-foreground">{data.videoTitle}</p>}
+            </div>
+          )}
+          <Button
+            size="sm"
+            onClick={handleExtract}
+            disabled={extracting || !data.youtubeUrl?.trim()}
+          >
+            {extracting ? "Extracting..." : "Extract Audio"}
+          </Button>
+        </div>
+      )}
+
+      {data.sourceType === "upload" && (
+        <div className="flex flex-col gap-2">
+          <Label>Audio File</Label>
+          <Input
+            type="file"
+            accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,.mp3,.wav,.m4a,.aac"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleFileUpload(file)
+            }}
+          />
+          {extracting && <p className="text-xs text-muted-foreground">Uploading...</p>}
+        </div>
+      )}
+
+      {data.sourceType === "url" && (
+        <div className="flex flex-col gap-2">
+          <div>
+            <Label htmlFor="direct-url">Audio URL</Label>
+            <Input
+              id="direct-url"
+              value={data.directUrl || ""}
+              onChange={(e) => onUpdate({ directUrl: e.target.value })}
+              placeholder="https://example.com/audio.mp3"
+            />
+          </div>
+          <Button size="sm" onClick={handleDirectUrlSet} disabled={!data.directUrl?.trim()}>
+            Set URL
+          </Button>
+        </div>
+      )}
+
+      {data.extractionStatus === "ready" && data.extractedAudioUrl && (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs text-green-600">Audio ready</p>
+          <audio src={data.extractedAudioUrl} controls className="w-full h-8" />
+        </div>
+      )}
+      {data.extractionStatus === "failed" && (
+        <p className="text-xs text-red-500">Extraction failed. Try again.</p>
+      )}
+    </div>
+  )
+}

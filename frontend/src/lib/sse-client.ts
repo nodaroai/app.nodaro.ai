@@ -10,9 +10,9 @@
 //     body: { systemPrompt, userInput, userId },
 //     signal: controller.signal,
 //   })) {
-//     if (event.type === "token") console.log(event.data)
-//     if (event.type === "done") console.log("Finished:", event.data)
-//     if (event.type === "error") console.error(event.data.message)
+//     if (event.type === "token") { /* handle token */ }
+//     if (event.type === "done") { /* handle done */ }
+//     if (event.type === "error") { /* handle error */ }
 //   }
 // ---------------------------------------------------------------------------
 

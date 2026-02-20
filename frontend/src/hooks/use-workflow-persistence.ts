@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, type BatchJobStatus } from "@/lib/api"
 import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
+import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 
 interface StillRunningJob {
@@ -97,7 +98,6 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
     if (err instanceof DOMException && err.name === "AbortError") {
       return { nodes, stillRunningJobs: [] }
     }
-    console.error("[sync] Failed to fetch jobs:", err)
     return { nodes, stillRunningJobs: [] }
   }
 
@@ -189,11 +189,9 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
         newData.generatedScript = job.output_data.script
       }
 
-      console.log(`[sync] Updated node ${node.id} with completed job ${job.id}`)
       return { ...node, data: newData }
     } else if (job.status === "failed") {
       // Job failed - update node with error
-      console.log(`[sync] Updated node ${node.id} with failed job ${job.id}`)
       return {
         ...node,
         data: {
@@ -206,7 +204,6 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       }
     } else if (job.status === "cancelled") {
       // Job was cancelled - reset to idle
-      console.log(`[sync] Updated node ${node.id} - job ${job.id} was cancelled`)
       return {
         ...node,
         data: { ...data, executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined }
@@ -373,14 +370,13 @@ export function useWorkflowPersistence(projectId?: string) {
 
         // If nodes were updated during sync, save the updated workflow
         if (nodesChanged && projectId) {
-          console.log("[sync] Nodes were updated, saving workflow...")
           const { error: saveError } = await supabase
             .from("workflows")
             .update({ nodes: JSON.parse(JSON.stringify(nodes)) })
             .eq("id", id)
 
           if (saveError) {
-            console.error("[sync] Failed to save synced nodes:", saveError)
+            toast.error("Failed to save synced nodes")
           }
         }
 

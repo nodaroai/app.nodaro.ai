@@ -322,7 +322,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             const char = await getCharacterById(id)
             if (char) characters.push(char)
           } catch (err) {
-            console.error(`Failed to fetch character ${id}:`, err)
+            // Silently skip — export continues with remaining entities
           }
         }
 
@@ -331,7 +331,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             const obj = await getObjectById(id)
             if (obj) objects.push(obj)
           } catch (err) {
-            console.error(`Failed to fetch object ${id}:`, err)
+            // Silently skip — export continues with remaining entities
           }
         }
 
@@ -340,7 +340,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             const loc = await getLocationById(id)
             if (loc) locations.push(loc)
           } catch (err) {
-            console.error(`Failed to fetch location ${id}:`, err)
+            // Silently skip — export continues with remaining entities
           }
         }
 
@@ -363,7 +363,6 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
       toast.success(includeAssets ? "Exported workflow with assets" : "Exported workflow template")
     } catch (err) {
-      console.error("Export failed:", err)
       toast.error("Export failed: " + (err instanceof Error ? err.message : "Unknown error"))
     } finally {
       setExporting(false)
@@ -419,7 +418,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               })
               assetIdMap[char.id] = result.id
             } catch (err) {
-              console.error(`Failed to import character ${char.name}:`, err)
+              // Silently skip — import continues with remaining entities
             }
           }
 
@@ -441,7 +440,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               })
               assetIdMap[obj.id] = result.id
             } catch (err) {
-              console.error(`Failed to import object ${obj.name}:`, err)
+              // Silently skip — import continues with remaining entities
             }
           }
 
@@ -463,7 +462,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               })
               assetIdMap[loc.id] = result.id
             } catch (err) {
-              console.error(`Failed to import location ${loc.name}:`, err)
+              // Silently skip — import continues with remaining entities
             }
           }
 
@@ -545,7 +544,6 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             : "Imported workflow"
         )
       } catch (err) {
-        console.error("Invalid file:", err)
         toast.error("Invalid file: " + (err instanceof Error ? err.message : "Could not parse JSON"))
       } finally {
         setImporting(false)

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Coins, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import { openCheckout } from "@/lib/paddle"
 import { TOPUP_PACKAGES, type TopupPackage } from "@/lib/pricing-data"
 
@@ -25,7 +26,7 @@ export function CreditTopup({ userId, userEmail }: CreditTopupProps) {
         successUrl: `${window.location.origin}/billing?topup=true`,
       })
     } catch (err) {
-      console.error("[topup] Checkout error:", err)
+      toast.error("Failed to open checkout")
     } finally {
       setLoadingId(null)
     }

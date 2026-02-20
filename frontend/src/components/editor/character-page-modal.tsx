@@ -308,7 +308,7 @@ centered composition, high quality, single character`
             setRefinedResults([...results])
           }
         } catch (err) {
-          console.error(`Failed to generate refined image ${i + 1}:`, err)
+          // Silently skip — continues generating remaining images
         }
       }
 
@@ -372,9 +372,9 @@ centered composition, high quality, single character`
           description: data.description,
           style: data.style,
         })
-        console.log("[Refine] Saved refined image to database:", imageUrl)
+        // Saved successfully
       } catch (err) {
-        console.error("Failed to save refined image to database:", err)
+        toast.error("Failed to save refined image")
       }
     }
 
@@ -458,7 +458,7 @@ centered composition, high quality, single character`
               })
             }
           } catch (err) {
-            console.error(`Failed to generate ${assetConfig.type} ${variant}:`, err)
+            // Silently skip — continues generating remaining assets
           }
         }
       }

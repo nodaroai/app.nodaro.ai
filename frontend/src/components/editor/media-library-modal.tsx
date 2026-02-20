@@ -13,6 +13,7 @@ import {
   Globe,
   Plus,
 } from "lucide-react"
+import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import {
@@ -154,7 +155,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
       await deleteMutation.mutateAsync({ assetId: asset.id, userId: user.id })
       setConfirmDeleteId(null)
     } catch (err) {
-      console.error("[media-library] Delete failed:", err)
+      toast.error("Failed to delete asset")
     } finally {
       setDeletingId(null)
     }
@@ -177,7 +178,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
       await promoteToLibrary(asset.id, user.id)
       queryClient.invalidateQueries({ queryKey: queryKeys.library.all })
     } catch (err) {
-      console.error("[media-library] Promote failed:", err)
+      toast.error("Failed to save to library")
     }
   }
 
@@ -187,7 +188,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
       await demoteFromLibrary(asset.id, user.id)
       queryClient.invalidateQueries({ queryKey: queryKeys.library.all })
     } catch (err) {
-      console.error("[media-library] Demote failed:", err)
+      toast.error("Failed to remove from library")
     }
   }
 
