@@ -2,10 +2,12 @@ import { Worker } from "bullmq"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { uploadFileWithKeyToR2, uploadFileToR2 } from "../lib/storage.js"
+import { uploadFileToR2 } from "../lib/storage.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, generateAndUploadThumbnail } from "./shared.js"
+import { createServer } from "node:http"
+import { createReadStream, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -444,8 +446,12 @@ function buildLegacyRender(data: LegacyRenderJobData): {
 }
 
 // ── Input video normalization ────────────────────────────────────────────
-// Remotion's OffthreadVideo compositor may not support all codecs (e.g. H.265).
-// Pre-transcode incompatible videos to H.264/yuv420p before rendering.
+// Remotion's OffthreadVideo compositor must download videos in full before
+// extracting frames.  The Cloudflare R2 CDN sometimes closes connections
+// mid-download ("Request closed"), crashing the compositor.
+// To work around this we download input videos to disk, transcode to H.264
+// if needed, and serve them from a local HTTP server so the compositor
+// fetches from localhost instead of the CDN.
 
 const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
 
@@ -453,7 +459,6 @@ const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
 function collectVideoUrls(props: Record<string, unknown>): string[] {
   const urls: string[] = []
 
-  // Scene graph: props.sceneGraph.tracks[].segments[].src
   const sg = props.sceneGraph as Record<string, unknown> | undefined
   if (sg) {
     for (const track of (sg.tracks as Array<Record<string, unknown>>)) {
@@ -467,7 +472,6 @@ function collectVideoUrls(props: Record<string, unknown>): string[] {
     return [...new Set(urls)]
   }
 
-  // Plan: props.plan.sourceVideo / backgroundMedia / layers[].sourceVideo
   const plan = props.plan as Record<string, unknown> | undefined
   if (plan) {
     if (typeof plan.sourceVideo === "string" && VIDEO_URL_RE.test(plan.sourceVideo)) urls.push(plan.sourceVideo)
@@ -481,7 +485,6 @@ function collectVideoUrls(props: Record<string, unknown>): string[] {
     return [...new Set(urls)]
   }
 
-  // Legacy: props.mediaAssets[].src where type === "video"
   const assets = props.mediaAssets as Array<{ src: string; type: string }> | undefined
   if (assets) {
     for (const asset of assets) {
@@ -528,54 +531,122 @@ function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, st
 }
 
 /**
- * Wait until a URL is reachable (HEAD 200). Retries up to `maxAttempts`
- * with exponential backoff. Throws if the URL never becomes available.
+ * Start a lightweight HTTP server that serves video files from a directory.
+ * Supports HTTP Range requests (required by some Remotion internals).
  */
-async function waitForUrl(url: string, maxAttempts = 8): Promise<void> {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(10_000) })
-      if (res.ok) return
-    } catch { /* retry */ }
-    const delay = Math.min(1000 * 2 ** i, 10_000)
-    await new Promise((r) => setTimeout(r, delay))
-  }
-  throw new Error(`URL not reachable after ${maxAttempts} attempts: ${url}`)
+function startLocalFileServer(serveDir: string): Promise<{ baseUrl: string; close: () => void }> {
+  return new Promise((resolve, reject) => {
+    const server = createServer((req, res) => {
+      const fileName = decodeURIComponent(req.url?.slice(1) ?? "")
+
+      // Only serve flat filenames — prevent path traversal
+      if (!fileName || fileName.includes("..") || fileName.includes("/")) {
+        res.writeHead(403)
+        res.end("Forbidden")
+        return
+      }
+
+      const filePath = join(serveDir, fileName)
+      try {
+        const fileStat = statSync(filePath)
+        const fileSize = fileStat.size
+        const rangeHeader = req.headers.range
+
+        const headers: Record<string, string | number> = {
+          "Content-Type": "video/mp4",
+          "Accept-Ranges": "bytes",
+          "Access-Control-Allow-Origin": "*",
+        }
+
+        if (rangeHeader) {
+          const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
+          if (match) {
+            const start = parseInt(match[1], 10)
+            const end = match[2] ? parseInt(match[2], 10) : fileSize - 1
+            headers["Content-Range"] = `bytes ${start}-${end}/${fileSize}`
+            headers["Content-Length"] = end - start + 1
+            res.writeHead(206, headers)
+            createReadStream(filePath, { start, end }).pipe(res)
+            return
+          }
+        }
+
+        headers["Content-Length"] = fileSize
+        res.writeHead(200, headers)
+        createReadStream(filePath).pipe(res)
+      } catch {
+        res.writeHead(404)
+        res.end("Not found")
+      }
+    })
+
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address() as { port: number }
+      resolve({
+        baseUrl: `http://127.0.0.1:${addr.port}`,
+        close: () => server.close(),
+      })
+    })
+    server.on("error", reject)
+  })
 }
 
 /**
- * Transcode any incompatible input videos to H.264/yuv420p, re-upload to R2,
- * and replace URLs in inputProps. Must be called AFTER plan validation to
- * avoid safeUrlSchema rejecting the replacement URLs (which are still CDN URLs).
+ * Download input videos, transcode to H.264 if needed, and serve them from
+ * a local HTTP server so the Remotion compositor fetches from localhost
+ * instead of the CDN. Must be called AFTER plan validation (buildPlanRender
+ * etc.) to avoid safeUrlSchema rejecting the localhost replacement URLs.
+ * Returns a cleanup function to stop the server (or undefined if no videos found).
  */
 async function normalizeInputVideos(
   inputProps: Record<string, unknown>,
   workDir: string,
-): Promise<void> {
+): Promise<(() => void) | undefined> {
   const urls = collectVideoUrls(inputProps)
-  if (urls.length === 0) return
+  if (urls.length === 0) return undefined
 
-  const urlMap = new Map<string, string>()
+  const fileMap = new Map<string, string>() // original URL → local filename
 
   for (const url of urls) {
-    if (urlMap.has(url)) continue
-    const localPath = join(workDir, `probe-${randomUUID()}.mp4`)
+    if (fileMap.has(url)) continue
+    const inputName = `input-${randomUUID()}.mp4`
+    const localPath = join(workDir, inputName)
     await downloadFile(url, localPath)
-    const outPath = join(workDir, `norm-${randomUUID()}.mp4`)
-    const result = await transcodeToBrowserSafe(localPath, outPath)
-    if (result !== localPath) {
-      // Upload transcoded file to R2 with a unique key
-      const r2Key = `render-input/${randomUUID()}.mp4`
-      const newUrl = await uploadFileWithKeyToR2(result, r2Key, "video/mp4")
-      await waitForUrl(newUrl)
-      urlMap.set(url, newUrl)
-      console.log(`[render-worker] Transcoded input video: ${url} -> ${newUrl}`)
-    }
+
+    const outName = `norm-${randomUUID()}.mp4`
+    const result = await transcodeToBrowserSafe(localPath, join(workDir, outName))
+    const serveName = result === localPath ? inputName : outName
+    fileMap.set(url, serveName)
+    console.log(`[render-worker] Prepared input video: ${url} -> ${serveName} (transcoded=${result !== localPath})`)
   }
 
-  if (urlMap.size > 0) {
-    replaceVideoUrls(inputProps, urlMap)
+  if (fileMap.size === 0) return undefined
+
+  const { baseUrl, close } = await startLocalFileServer(workDir)
+
+  // Verify the server is working before proceeding
+  const testFile = [...fileMap.values()][0]
+  const testUrl = `${baseUrl}/${testFile}`
+  try {
+    const res = await fetch(testUrl, { method: "HEAD", signal: AbortSignal.timeout(5_000) })
+    if (!res.ok) throw new Error(`HEAD returned ${res.status}`)
+    const expectedSize = statSync(join(workDir, testFile)).size
+    const contentLength = parseInt(res.headers.get("content-length") ?? "0", 10)
+    if (contentLength !== expectedSize) throw new Error(`Size mismatch: ${contentLength} vs ${expectedSize}`)
+    console.log(`[render-worker] Local file server verified: ${baseUrl} (${fileMap.size} video(s))`)
+  } catch (err) {
+    close()
+    throw new Error(`Local file server verification failed for ${testUrl}: ${err}`)
   }
+
+  // Replace CDN URLs with localhost URLs
+  const urlMap = new Map<string, string>()
+  for (const [originalUrl, fileName] of fileMap) {
+    urlMap.set(originalUrl, `${baseUrl}/${fileName}`)
+  }
+  replaceVideoUrls(inputProps, urlMap)
+
+  return close
 }
 
 /**
@@ -676,9 +747,6 @@ export function createRenderWorker() {
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
 
-        // Transcode input videos to H.264 if Remotion's compositor can't decode them
-        await normalizeInputVideos(inputProps, workDir)
-
         await bullJob.updateProgress(30)
 
         // FFmpeg fast path: skip Remotion for simple scene graphs (1 video, no effects/text)
@@ -687,54 +755,65 @@ export function createRenderWorker() {
           console.log(`[render-worker] FFmpeg fast path for job ${jobId}`)
           outputPath = await renderSceneGraphViaFfmpeg(data, workDir, bullJob)
         } else {
-          console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
+          // Remotion path — pre-download input videos and serve from localhost
+          // so the compositor doesn't rely on CDN downloads (which often fail
+          // with "Request closed" errors on Cloudflare R2).
+          const stopFileServer = await normalizeInputVideos(inputProps, workDir)
 
-          // Bundle Remotion compositions (cached after first call per entry point)
-          const bundlePath = await getBundlePath(compositionId)
-          await bullJob.updateProgress(40)
+          try {
+            console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
 
-          // Select composition and render
-          const { selectComposition, renderMedia } = await import("@remotion/renderer")
+            // Bundle Remotion compositions (cached after first call per entry point)
+            const bundlePath = await getBundlePath(compositionId)
+            await bullJob.updateProgress(40)
 
-          // Allow overriding Remotion's bundled chrome-headless-shell (e.g. custom Docker images)
-          const browserExecutable = process.env.CHROME_PATH || undefined
+            // Select composition and render
+            const { selectComposition, renderMedia } = await import("@remotion/renderer")
 
-          const composition = await selectComposition({
-            serveUrl: bundlePath,
-            id: compositionId,
-            inputProps,
-            browserExecutable,
-          })
+            // Allow overriding Remotion's bundled chrome-headless-shell (e.g. custom Docker images)
+            const browserExecutable = process.env.CHROME_PATH || undefined
 
-          outputPath = join(workDir, "output.mp4")
-
-          const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
-
-          const RENDER_TIMEOUT_MS = 25 * 60 * 1000
-          await Promise.race([
-            renderMedia({
-              composition: {
-                ...composition,
-                width,
-                height,
-                fps,
-                durationInFrames,
-              },
+            const composition = await selectComposition({
               serveUrl: bundlePath,
-              codec: "h264",
-              outputLocation: outputPath,
+              id: compositionId,
               inputProps,
               browserExecutable,
-              concurrency: remotionConcurrency,
-              onProgress: ({ progress }: { progress: number }) => {
-                const overall = 40 + Math.round(progress * 50)
-                bullJob.updateProgress(overall).catch(() => {})
-              },
-            }),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Render timed out after 25 minutes")), RENDER_TIMEOUT_MS)
-            ),
-          ])
+              timeoutInMilliseconds: 120_000,
+            })
+
+            outputPath = join(workDir, "output.mp4")
+
+            const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
+
+            const RENDER_TIMEOUT_MS = 25 * 60 * 1000
+            await Promise.race([
+              renderMedia({
+                composition: {
+                  ...composition,
+                  width,
+                  height,
+                  fps,
+                  durationInFrames,
+                },
+                serveUrl: bundlePath,
+                codec: "h264",
+                outputLocation: outputPath,
+                inputProps,
+                browserExecutable,
+                concurrency: remotionConcurrency,
+                timeoutInMilliseconds: 120_000,
+                onProgress: ({ progress }: { progress: number }) => {
+                  const overall = 40 + Math.round(progress * 50)
+                  bullJob.updateProgress(overall).catch(() => {})
+                },
+              }),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Render timed out after 25 minutes")), RENDER_TIMEOUT_MS)
+              ),
+            ])
+          } finally {
+            stopFileServer?.()
+          }
         }
 
         await bullJob.updateProgress(90)
