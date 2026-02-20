@@ -3,16 +3,13 @@ import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { uploadFileToR2 } from "../lib/storage.js"
-import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
+import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, generateAndUploadThumbnail } from "./shared.js"
-import { join, dirname, resolve as resolvePath } from "node:path"
+import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { readdir, stat, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { randomUUID } from "node:crypto"
-import { createServer, type Server } from "node:http"
-import { createReadStream, statSync } from "node:fs"
 import { validatePlanByType } from "../lib/plan-schemas.js"
 
 // Remotion types (inline to avoid cross-package import at compile time)
@@ -445,224 +442,6 @@ function buildLegacyRender(data: LegacyRenderJobData): {
   }
 }
 
-// ── Video URL normalization ──────────────────────────────────────────────
-// Pre-process input data to ensure all video URLs point to browser-safe
-// H.264/yuv420p files. AI providers may return H.265/HEVC or other codecs
-// that headless Chrome (Remotion) cannot decode.
-// Transcoded files are served from a local HTTP server to avoid CDN
-// propagation delays that cause ERR_HTTP2_PROTOCOL_ERROR.
-
-const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
-
-/**
- * Start a lightweight HTTP server that serves files from a directory.
- * Supports HTTP Range requests (required by Chrome's <video> element for
- * loading metadata/duration via partial content).
- * Returns the base URL and a cleanup function.
- */
-function startLocalFileServer(serveDir: string): Promise<{ baseUrl: string; close: () => void }> {
-  const resolvedDir = resolvePath(serveDir)
-  return new Promise((resolve, reject) => {
-    const server: Server = createServer((req, res) => {
-      const fileName = decodeURIComponent(req.url?.slice(1) ?? "")
-      const filePath = join(resolvedDir, fileName)
-      // Prevent path traversal — resolved path must stay within the serve directory
-      if (!filePath.startsWith(resolvedDir)) {
-        res.writeHead(403)
-        res.end("Forbidden")
-        return
-      }
-      try {
-        const fileStat = statSync(filePath)
-        const fileSize = fileStat.size
-        const rangeHeader = req.headers.range
-
-        const headers: Record<string, string | number> = {
-          "Content-Type": "video/mp4",
-          "Accept-Ranges": "bytes",
-          "Access-Control-Allow-Origin": "*",
-        }
-
-        if (rangeHeader) {
-          // Parse Range: bytes=start-end
-          const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
-          if (match) {
-            const start = parseInt(match[1], 10)
-            const end = match[2] ? parseInt(match[2], 10) : fileSize - 1
-            headers["Content-Range"] = `bytes ${start}-${end}/${fileSize}`
-            headers["Content-Length"] = end - start + 1
-            res.writeHead(206, headers)
-            createReadStream(filePath, { start, end }).pipe(res)
-            return
-          }
-        }
-
-        headers["Content-Length"] = fileSize
-        res.writeHead(200, headers)
-        createReadStream(filePath).pipe(res)
-      } catch {
-        res.writeHead(404)
-        res.end("Not found")
-      }
-    })
-    server.listen(0, "127.0.0.1", () => {
-      const addr = server.address() as { port: number }
-      resolve({
-        baseUrl: `http://127.0.0.1:${addr.port}`,
-        close: () => server.close(),
-      })
-    })
-    server.on("error", reject)
-  })
-}
-
-/**
- * Scan Remotion inputProps for video URLs, transcode incompatible ones to
- * browser-safe H.264/yuv420p, and serve them from a local HTTP server.
- * Must be called AFTER plan validation (buildPlanRender etc.) to avoid
- * safeUrlSchema rejecting the localhost replacement URLs.
- * Returns a cleanup function to stop the server (or undefined if no transcoding needed).
- */
-async function normalizeInputVideos(
-  inputProps: Record<string, unknown>,
-  workDir: string,
-): Promise<(() => void) | undefined> {
-  const urls = collectVideoUrls(inputProps)
-  if (urls.length === 0) return undefined
-
-  // Start server up front so we know the port for building replacement URLs.
-  // The server binds instantly; transcoded files are written into workDir before
-  // Remotion attempts to fetch them.
-  const { baseUrl, close } = await startLocalFileServer(workDir)
-  const urlMap = new Map<string, string>()
-
-  for (const url of urls) {
-    if (urlMap.has(url)) continue
-    const localPath = join(workDir, `probe-${randomUUID()}.mp4`)
-    await downloadFile(url, localPath)
-    const outName = `norm-${randomUUID()}.mp4`
-    const result = await transcodeToBrowserSafe(localPath, join(workDir, outName))
-    if (result !== localPath) {
-      urlMap.set(url, `${baseUrl}/${outName}`)
-      console.log(`[render-worker] Transcoded input video: ${url} -> ${outName}`)
-    }
-  }
-
-  if (urlMap.size === 0) {
-    close()
-    return undefined
-  }
-
-  console.log(`[render-worker] Local file server for transcoded videos: ${baseUrl}`)
-  replaceVideoUrls(inputProps, urlMap)
-  return close
-}
-
-/**
- * Collect all video URLs from Remotion inputProps.
- * Works on the validated props (after buildPlanRender/buildSceneGraphRender/buildLegacyRender).
- */
-function collectVideoUrls(props: Record<string, unknown>): string[] {
-  const urls: string[] = []
-
-  // Scene graph: props.sceneGraph.tracks[].segments[].src
-  const sg = props.sceneGraph as Record<string, unknown> | undefined
-  if (sg) {
-    for (const track of sg.tracks as Array<Record<string, unknown>>) {
-      const segments = track.segments as Array<Record<string, unknown>> | undefined
-      if (segments) {
-        for (const seg of segments) {
-          if (seg.mediaType === "video" && typeof seg.src === "string") {
-            urls.push(seg.src)
-          }
-        }
-      }
-    }
-    return [...new Set(urls)]
-  }
-
-  // Plan: props.plan.sourceVideo / backgroundMedia / layers[].sourceVideo
-  const plan = props.plan as Record<string, unknown> | undefined
-  if (plan) {
-    if (typeof plan.sourceVideo === "string" && VIDEO_URL_RE.test(plan.sourceVideo)) {
-      urls.push(plan.sourceVideo)
-    }
-    if (typeof plan.backgroundMedia === "string" && VIDEO_URL_RE.test(plan.backgroundMedia)) {
-      urls.push(plan.backgroundMedia)
-    }
-    const layers = plan.layers as Array<Record<string, unknown>> | undefined
-    if (layers) {
-      for (const layer of layers) {
-        if (typeof layer.sourceVideo === "string") {
-          urls.push(layer.sourceVideo)
-        }
-      }
-    }
-    return [...new Set(urls)]
-  }
-
-  // Legacy: props.mediaAssets[].src where type === "video"
-  const assets = props.mediaAssets as Array<{ src: string; type: string }> | undefined
-  if (assets) {
-    for (const asset of assets) {
-      if (asset.type === "video") {
-        urls.push(asset.src)
-      }
-    }
-  }
-
-  return [...new Set(urls)]
-}
-
-/** Replace video URLs in Remotion inputProps. */
-function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, string>): void {
-  // Scene graph
-  const sg = props.sceneGraph as Record<string, unknown> | undefined
-  if (sg) {
-    for (const track of sg.tracks as Array<Record<string, unknown>>) {
-      const segments = track.segments as Array<Record<string, unknown>> | undefined
-      if (segments) {
-        for (const seg of segments) {
-          if (typeof seg.src === "string" && urlMap.has(seg.src)) {
-            seg.src = urlMap.get(seg.src)!
-          }
-        }
-      }
-    }
-    return
-  }
-
-  // Plan
-  const plan = props.plan as Record<string, unknown> | undefined
-  if (plan) {
-    if (typeof plan.sourceVideo === "string" && urlMap.has(plan.sourceVideo)) {
-      plan.sourceVideo = urlMap.get(plan.sourceVideo)!
-    }
-    if (typeof plan.backgroundMedia === "string" && urlMap.has(plan.backgroundMedia)) {
-      plan.backgroundMedia = urlMap.get(plan.backgroundMedia)!
-    }
-    const layers = plan.layers as Array<Record<string, unknown>> | undefined
-    if (layers) {
-      for (const layer of layers) {
-        if (typeof layer.sourceVideo === "string" && urlMap.has(layer.sourceVideo)) {
-          layer.sourceVideo = urlMap.get(layer.sourceVideo)!
-        }
-      }
-    }
-    return
-  }
-
-  // Legacy
-  const assets = props.mediaAssets as Array<{ src: string }> | undefined
-  if (assets) {
-    for (const asset of assets) {
-      if (urlMap.has(asset.src)) {
-        asset.src = urlMap.get(asset.src)!
-      }
-    }
-  }
-}
-
 /**
  * Clean up orphaned render work directories from /tmp on startup.
  * Removes any render-* directories older than 24 hours.
@@ -739,15 +518,13 @@ export function createRenderWorker() {
       const isPublic = profileData?.public_outputs !== false
 
       const workDir = await createWorkDir("render")
-      let stopFileServer: (() => void) | undefined
 
       try {
         await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", jobId)
 
         await bullJob.updateProgress(20)
 
-        // Build render config FIRST — plan validation uses safeUrlSchema which
-        // rejects localhost URLs, so we must validate before URL normalization
+        // Build render config — plan mode, scene graph mode, or legacy template mode
         let renderConfig
         let modeLabel: string
         if (isPlanJob(data)) {
@@ -763,11 +540,11 @@ export function createRenderWorker() {
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
 
-        // Normalize input videos: transcode any non-browser-safe codecs to H.264/yuv420p.
-        // Operates on the validated inputProps (after plan validation).
-        // For scene graph jobs, inputProps.sceneGraph is the same object ref as data.sceneGraph,
-        // so the FFmpeg fast path (which reads from data) also sees the normalized URLs.
-        stopFileServer = await normalizeInputVideos(inputProps, workDir)
+        // NOTE: Input video transcoding is NOT needed here because all Remotion
+        // compositions use <OffthreadVideo>, which extracts frames via FFmpeg
+        // (not the browser's HTML5 video element) and can decode any codec.
+        // Browser-safe transcoding only matters for final output uploads,
+        // which is handled by the FFmpeg fast path and video-worker.
 
         await bullJob.updateProgress(30)
 
@@ -888,7 +665,6 @@ export function createRenderWorker() {
         }
         throw error
       } finally {
-        stopFileServer?.()
         await cleanupWorkDir(workDir)
       }
     },
