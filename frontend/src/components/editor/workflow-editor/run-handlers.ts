@@ -16,7 +16,7 @@ import {
 } from "./types";
 import { buildExecutionLevels, getEffectivelySkippedIds, collapseExpandedClones } from "./execution-graph";
 import { getListInputForNode } from "./node-input-resolver";
-import { executeNode } from "./execute-node";
+import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList, expandLoopResults } from "./list-execution";
 
 /**
@@ -102,6 +102,7 @@ export async function handleRun(
   setIsRunning: (v: boolean) => void,
   pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
 ): Promise<void> {
+  rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
 
   const executableNodes = nodes.filter(isExecutableNode);
@@ -238,6 +239,7 @@ export async function handleRunFromHere(
   setIsRunning: (v: boolean) => void,
   pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
 ): Promise<void> {
+  rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
   const startNode = nodes.find((n) => n.id === nodeId);
   if (!startNode) return;
@@ -302,6 +304,7 @@ export async function handleRunSelected(
   setIsRunning: (v: boolean) => void,
   pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
 ): Promise<void> {
+  rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
   const selectedNodes = nodes.filter((n) => n.selected);
   if (selectedNodes.length === 0) {

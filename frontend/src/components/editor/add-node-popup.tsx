@@ -436,6 +436,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "Video",
   },
+  {
+    type: "manual-edit",
+    label: "Manual Edit",
+    icon: <Scissors className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video",
+  },
   // Processing — Audio
   {
     type: "merge-video-audio",

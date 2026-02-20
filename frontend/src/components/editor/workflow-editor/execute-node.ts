@@ -74,6 +74,7 @@ import type {
   ExtractAudioData,
   TrimVideoData,
   TranscodeVideoData,
+  ManualEditData,
   SpeedRampData,
   LoopVideoData,
   FadeVideoData,
@@ -115,6 +116,28 @@ import {
   runObjectGeneration,
   runLocationGeneration,
 } from "./asset-executors";
+
+// ---------------------------------------------------------------------------
+// Manual-edit pending promise bridge
+// ---------------------------------------------------------------------------
+const pendingManualEdits = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
+
+export function resolveManualEdit(nodeId: string): void {
+  const pending = pendingManualEdits.get(nodeId);
+  if (pending) { pending.resolve(); pendingManualEdits.delete(nodeId); }
+}
+
+export function rejectManualEdit(nodeId: string, error: Error): void {
+  const pending = pendingManualEdits.get(nodeId);
+  if (pending) { pending.reject(error); pendingManualEdits.delete(nodeId); }
+}
+
+export function rejectAllManualEdits(): void {
+  for (const [nodeId, pending] of pendingManualEdits) {
+    pending.reject(new Error("Workflow restarted"));
+    pendingManualEdits.delete(nodeId);
+  }
+}
 
 /**
  * Alias for pollJobWithNodeUpdate to match original codebase naming.
@@ -1406,6 +1429,26 @@ export function executeNode(
       "Transcode Video",
       ctx,
     );
+  }
+
+  if (node.type === "manual-edit") {
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!videoUrl) {
+      toast.error(
+        `Node "${(node.data as ManualEditData).label}": no video input`,
+      );
+      return Promise.reject(new Error("No video"));
+    }
+    const { updateNodeData: setNodeData } = useWorkflowStore.getState();
+    setNodeData(node.id, {
+      executionStatus: "awaiting-user",
+      inputVideoUrl: videoUrl,
+      errorMessage: undefined,
+    });
+    toast.info("Manual edit required — click 'Open Editor' on the node");
+    return new Promise<void>((resolve, reject) => {
+      pendingManualEdits.set(node.id, { resolve, reject });
+    });
   }
 
   if (node.type === "speed-ramp") {
