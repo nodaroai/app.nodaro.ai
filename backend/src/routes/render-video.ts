@@ -8,14 +8,9 @@ import { rateLimiter } from "../middleware/rate-limit.js"
 
 const renderRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "render" })
 
-const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:5"] as const
+import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 
-const ASPECT_DIMENSIONS: Record<typeof ASPECT_RATIOS[number], { width: number; height: number }> = {
-  "16:9": { width: 1920, height: 1080 },
-  "9:16": { width: 1080, height: 1920 },
-  "1:1": { width: 1080, height: 1080 },
-  "4:5": { width: 1080, height: 1350 },
-}
+const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:5"] as const
 
 // ── Scene Graph Zod schema ─────────────────────────────────────────────
 

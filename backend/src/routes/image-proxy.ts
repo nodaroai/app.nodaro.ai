@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { Readable } from "node:stream"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { config } from "../lib/config.js"
 
 const proxyQuery = z.object({
-  url: z.string().url(),
+  url: safeUrlSchema,
 })
 
 export async function imageProxyRoutes(app: FastifyInstance) {

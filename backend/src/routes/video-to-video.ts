@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const videoToVideoBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
   // V2V uses Wan 2.6 only via KIE.ai (no provider selection)
 })

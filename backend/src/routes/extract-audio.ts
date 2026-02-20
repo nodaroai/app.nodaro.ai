@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const extractAudioBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   audioFormat: z.enum(["mp3", "wav", "aac"]).optional().default("mp3"),
   outputSilentVideo: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),

@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 
 const extractYouTubeAudioBody = z.object({
-  youtubeUrl: z.string().url().refine(
+  youtubeUrl: safeUrlSchema.refine(
     (url) => {
       try {
         const parsed = new URL(url)

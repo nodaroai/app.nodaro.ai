@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const fadeVideoBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   fadeIn: z.boolean(),
   fadeInDuration: z.number().min(0.1).max(3.0),
   fadeOut: z.boolean(),

@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const combineVideosBody = z.object({
-  videoUrls: z.array(z.string().url()).min(2, "At least 2 video URLs required"),
+  videoUrls: z.array(safeUrlSchema).min(2, "At least 2 video URLs required"),
   transition: z.enum(["cut", "fade", "dissolve", "dip-to-black", "dip-to-white"]).optional().default("cut"),
   transitionDuration: z.number().min(0).max(5).optional().default(0.5),
   audioMode: z.enum(["keep", "crossfade", "remove"]).optional().default("crossfade"),

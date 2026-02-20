@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 
 const upsertLocationBody = z.object({
@@ -12,7 +13,7 @@ const upsertLocationBody = z.object({
   description: z.string().max(2000).optional(),
   category: z.string().max(50).optional(),
   style: z.string().max(50).optional(),
-  sourceImageUrl: z.string().url().optional(),
+  sourceImageUrl: safeUrlSchema.optional(),
   timeOfDay: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   weather: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   angles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),

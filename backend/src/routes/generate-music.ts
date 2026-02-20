@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -12,7 +13,7 @@ const generateMusicBody = z.object({
   mood: z.string().optional(),
   instrumental: z.boolean().optional(),
   lyrics: z.string().max(2000).optional(),
-  referenceAudioUrl: z.string().url().optional(),
+  referenceAudioUrl: safeUrlSchema.optional(),
   modelVersion: z.string().optional(),
   userId: z.string().uuid().optional(),
 })

@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const addCaptionsBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   text: z.string().min(1),
   style: z.enum(["subtitle", "word-highlight", "karaoke"]).optional().default("subtitle"),
   position: z.enum(["bottom", "top", "center"]).optional().default("bottom"),

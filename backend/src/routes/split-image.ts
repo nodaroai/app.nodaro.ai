@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import sharp from "sharp"
 import { uploadBufferToR2 } from "../lib/storage.js"
 import { randomUUID } from "node:crypto"
 
 const splitImageBody = z.object({
-  imageUrl: z.string().url(),
+  imageUrl: safeUrlSchema,
   gridCols: z.number().int().min(1).max(6),
   gridRows: z.number().int().min(1).max(6),
   names: z.array(z.string().min(1)).min(1).max(36),

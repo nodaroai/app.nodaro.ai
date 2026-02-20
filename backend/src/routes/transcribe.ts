@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const transcribeBody = z.object({
-  audioUrl: z.string().url(),
+  audioUrl: safeUrlSchema,
   provider: z.enum(["whisper", "incredibly-fast-whisper"]).optional(),
   language: z.string().max(10).optional(),
   userId: z.string().uuid().optional(),

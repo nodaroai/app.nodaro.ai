@@ -1,12 +1,13 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const lipSyncBody = z.object({
-  imageUrl: z.string().url(),       // Portrait/face image
-  audioUrl: z.string().url(),       // Audio to sync (speech)
+  imageUrl: safeUrlSchema,       // Portrait/face image
+  audioUrl: safeUrlSchema,       // Audio to sync (speech)
   prompt: z.string().max(500).optional(),  // Optional prompt for infinitalk
   provider: z.enum(["kling-avatar", "kling-avatar-pro", "infinitalk"]).optional(),
   resolution: z.enum(["480p", "720p"]).optional(),  // For infinitalk

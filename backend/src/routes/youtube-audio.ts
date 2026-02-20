@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -17,7 +18,7 @@ const SUPPORTED_HOSTNAMES = [
 ]
 
 const videoAudioBody = z.object({
-  url: z.string().url().refine(
+  url: safeUrlSchema.refine(
     (url) => {
       try {
         const parsed = new URL(url)

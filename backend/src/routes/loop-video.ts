@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const loopVideoBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   mode: z.enum(["repeat", "duration"]),
   repeatCount: z.number().int().min(2).max(20).optional(),
   targetDuration: z.number().min(1).max(300).optional(),

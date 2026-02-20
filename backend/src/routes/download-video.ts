@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join, resolve, dirname } from "node:path"
@@ -17,7 +18,7 @@ const SUPPORTED_HOSTNAMES = [
 ]
 
 const downloadVideoBody = z.object({
-  url: z.string().url().refine(
+  url: safeUrlSchema.refine(
     (url) => {
       try {
         const parsed = new URL(url)
@@ -242,6 +243,12 @@ function runDownloadWithProgress(
 export async function downloadVideoRoutes(app: FastifyInstance) {
   // POST /v1/download-video - Start download, return downloadId immediately
   app.post("/v1/download-video", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = downloadVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

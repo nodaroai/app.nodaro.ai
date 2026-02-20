@@ -1,14 +1,15 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const generateVideoBody = z.object({
-  imageUrl: z.string().url(),
-  endFrameUrl: z.string().url().optional(),
-  audioUrl: z.string().url().optional(),
+  imageUrl: safeUrlSchema,
+  endFrameUrl: safeUrlSchema.optional(),
+  audioUrl: safeUrlSchema.optional(),
   prompt: z.string().max(2500).optional(),
   provider: z.enum([
     "veo3", "veo3.1", "kling", "minimax",

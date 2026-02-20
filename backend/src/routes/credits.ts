@@ -174,18 +174,24 @@ export async function creditsRoutes(app: FastifyInstance) {
    */
   app.post<{
     Body: {
-      userId: string
       jobId: string
       modelIdentifier: string
       providerCostUsd?: number
       displayCostUsd?: number
     }
   }>("/v1/credits/reserve", async (req, reply) => {
-    const { userId, jobId, modelIdentifier, providerCostUsd = 0, displayCostUsd = 0 } = req.body
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
 
-    if (!userId || !jobId || !modelIdentifier) {
+    const { jobId, modelIdentifier, providerCostUsd = 0, displayCostUsd = 0 } = req.body
+
+    if (!jobId || !modelIdentifier) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "userId, jobId, and modelIdentifier are required" },
+        error: { code: "bad_request", message: "jobId and modelIdentifier are required" },
       })
     }
 
