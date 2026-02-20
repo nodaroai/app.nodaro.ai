@@ -85,7 +85,7 @@ function WordHighlightCaptions({
 export function SocialReel(props: RenderVideoInputProps) {
   const {
     mediaAssets,
-    audioTrackLocalPath,
+    audioTrackUrl,
     durationInFrames,
     transitionDurationFrames,
     textOverlays,
@@ -140,7 +140,7 @@ export function SocialReel(props: RenderVideoInputProps) {
         />
       )}
 
-      {audioTrackLocalPath && <Audio src={audioTrackLocalPath} />}
+      {audioTrackUrl && <Audio src={audioTrackUrl} />}
     </AbsoluteFill>
   )
 }

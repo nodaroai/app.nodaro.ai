@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { safeUrlSchema } from "./url-validator.js"
 
 // ── Zod schemas ──────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ const textAnimationSchema = z.object({
   type: z.enum(["rotate-in", "scale-up", "fade-in", "slide-in", "none"]),
   axis: z.enum(["x", "y", "z"]).optional(),
   startFrame: z.number().min(0),
-  durationFrames: z.number().min(1),
+  durationFrames: z.number().min(1).max(54000),
   easing: easingSchema.optional(),
 })
 
@@ -87,9 +88,9 @@ export const threeDTitlePlanSchema = z.object({
   fps: z.number().min(15).max(60),
   width: z.number().min(100).max(3840),
   height: z.number().min(100).max(3840),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   backgroundColor: hexColorSchema,
-  backgroundMedia: z.string().url().optional(),
+  backgroundMedia: safeUrlSchema.optional(),
   camera: cameraSchema,
   lighting: lightingSchema,
   objects: z.array(threeDTitleObjectSchema).min(1),

@@ -4,6 +4,9 @@ import Anthropic from "@anthropic-ai/sdk"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { rateLimiter } from "../middleware/rate-limit.js"
+
+const aiRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "ai-mg" })
 import { CreditsService } from "../billing/credits.js"
 import { MOTION_GRAPHICS_SYSTEM_PROMPT } from "../prompts/motion-graphics-system.js"
 import { validateMotionGraphicsPlan } from "../lib/motion-graphics-validator.js"
@@ -39,7 +42,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/motion-graphics/generate",
     {
-      preHandler: creditGuard(() => "motion-graphics"),
+      preHandler: [aiRateLimit, creditGuard(() => "motion-graphics")],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {

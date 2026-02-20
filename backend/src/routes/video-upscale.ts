@@ -12,15 +12,15 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const videoUpscaleBody = z.object({
   videoUrl: z.string().url(),
   upscaleFactor: z.enum(["1", "2", "4"]).default("2"),
-  userId: z.string().uuid().optional(),
 })
 
 export async function videoUpscaleRoutes(app: FastifyInstance) {
-  app.post("/v1/video-upscale", async (req, reply) => {
+  app.post("/v1/video-upscale", { preHandler: creditGuard(() => "topaz-video") }, async (req, reply) => {
     const parsed = videoUpscaleBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -31,11 +31,12 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, upscaleFactor, userId } = parsed.data
+    const { videoUrl, upscaleFactor } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -61,10 +62,15 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       })
     }
 
+    const reservation = await reserveCreditsForJob(req, reply, job.id, "topaz-video")
+    if (reply.sent) return
+    const usageLogId = reservation?.usageLogId
+
     await videoQueue.add("video-upscale", {
       jobId: job.id,
       videoUrl,
       upscaleFactor,
+      usageLogId,
     })
 
     return { jobId: job.id }

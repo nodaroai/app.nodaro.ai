@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { safeUrlSchema } from "./url-validator.js"
 
 // ── Plan Types ──────────────────────────────────────────────────────────
 
@@ -8,6 +9,7 @@ export const PLAN_TYPES = [
   "lottie-overlay",
   "3d-title",
   "motion-graphics",
+  "composite",
 ] as const
 
 export type PlanType = (typeof PLAN_TYPES)[number]
@@ -60,7 +62,7 @@ const animatedBlurEffectSchema = z.object({
   startBlur: z.number().min(0).max(50),
   endBlur: z.number().min(0).max(50),
   startFrame: z.number().min(0),
-  durationFrames: z.number().min(1),
+  durationFrames: z.number().min(1).max(54000),
   easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut"]).optional(),
 })
 
@@ -86,7 +88,7 @@ const afterEffectsTextOverlaySchema = z.object({
   id: z.string(),
   text: z.string(),
   startFrame: z.number().min(0),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   position: z.enum(["top", "center", "bottom"]),
   fontSize: z.number(),
   fontFamily: z.string().optional(),
@@ -100,8 +102,8 @@ export const afterEffectsPlanSchema = z
     fps: z.number().min(15).max(60),
     width: z.number().min(100).max(3840),
     height: z.number().min(100).max(3840),
-    durationInFrames: z.number().min(1),
-    sourceVideo: z.string(),
+    durationInFrames: z.number().min(1).max(54000),
+    sourceVideo: safeUrlSchema,
     effects: z.array(afterEffectSchema),
     textOverlays: z.array(afterEffectsTextOverlaySchema).optional(),
   })
@@ -118,9 +120,9 @@ const lottieOverlayPositionSchema = z.object({
 
 const lottieOverlayItemSchema = z.object({
   id: z.string(),
-  src: z.string().url(),
+  src: safeUrlSchema,
   startFrame: z.number().min(0),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   position: lottieOverlayPositionSchema,
   opacity: z.number().min(0).max(1),
   playbackRate: z.number().min(0.1).max(3.0),
@@ -134,8 +136,8 @@ export const lottieOverlayPlanSchema = z
     fps: z.number().min(15).max(60),
     width: z.number().min(100).max(3840),
     height: z.number().min(100).max(3840),
-    durationInFrames: z.number().min(1),
-    sourceVideo: z.string(),
+    durationInFrames: z.number().min(1).max(54000),
+    sourceVideo: safeUrlSchema,
     overlays: z.array(lottieOverlayItemSchema).min(1),
   })
   .passthrough()
@@ -188,7 +190,7 @@ const threeDTextAnimationSchema = z.object({
   type: z.enum(["rotate-in", "scale-up", "fade-in", "slide-in", "none"]),
   axis: z.enum(["x", "y", "z"]).optional(),
   startFrame: z.number().min(0),
-  durationFrames: z.number().min(1),
+  durationFrames: z.number().min(1).max(54000),
   easing: threeDEasingSchema.optional(),
 })
 
@@ -226,9 +228,9 @@ export const threeDTitlePlanSchema = z
     fps: z.number().min(15).max(60),
     width: z.number().min(100).max(3840),
     height: z.number().min(100).max(3840),
-    durationInFrames: z.number().min(1),
+    durationInFrames: z.number().min(1).max(54000),
     backgroundColor: z.string(),
-    backgroundMedia: z.string().optional(),
+    backgroundMedia: safeUrlSchema.optional(),
     camera: cameraSchema,
     lighting: lightingSchema,
     objects: z.array(threeDTitleObjectSchema).min(1),
@@ -253,7 +255,7 @@ const mgElementAnimationSchema = z.object({
   ]),
   direction: z.enum(["left", "right", "up", "down"]).optional(),
   startFrame: z.number().min(0),
-  durationFrames: z.number().min(0),
+  durationFrames: z.number().min(0).max(54000),
   easing: mgEasingSchema.optional(),
 })
 
@@ -310,7 +312,7 @@ const mgElementSchema = z.discriminatedUnion("type", [
 const mgExitAnimationSchema = z.object({
   type: z.enum(["fade", "slide-down", "slide-up", "slide-left", "slide-right", "none"]),
   startFrame: z.number().min(0),
-  durationFrames: z.number().min(0),
+  durationFrames: z.number().min(0).max(54000),
 })
 
 export const motionGraphicsPlanSchema = z
@@ -319,38 +321,154 @@ export const motionGraphicsPlanSchema = z
     fps: z.number().min(15).max(60),
     width: z.number().min(100).max(3840),
     height: z.number().min(100).max(3840),
-    durationInFrames: z.number().min(1),
+    durationInFrames: z.number().min(1).max(54000),
     backgroundColor: z.string(),
     elements: z.array(mgElementSchema).min(1),
     exitAnimation: mgExitAnimationSchema.optional(),
   })
   .passthrough()
 
+// ── Composite Plan ────────────────────────────────────────────────────
+
+const compositeLayerSchema = z.object({
+  id: z.string(),
+  sourceVideo: safeUrlSchema,
+  position: z.enum(["fullscreen", "positioned"]),
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+  width: z.number().min(0).max(100),
+  height: z.number().min(0).max(100),
+  startFrame: z.number().min(0),
+  durationInFrames: z.number().min(1).max(54000).optional(),
+  opacity: z.number().min(0).max(1),
+  blendMode: z.enum(["normal", "multiply", "screen", "overlay"]),
+  zIndex: z.number(),
+})
+
+export const compositePlanSchema = z
+  .object({
+    planType: z.literal("composite"),
+    fps: z.number().min(15).max(60),
+    width: z.number().min(100).max(3840),
+    height: z.number().min(100).max(3840),
+    durationInFrames: z.number().min(1).max(54000),
+    backgroundColor: z.string(),
+    layers: z.array(compositeLayerSchema).min(1),
+  })
+  .passthrough()
+
+// ── Scene Graph Plan (for plan-based render pipeline) ──────────────────
+
+const sgTransitionSchema = z.object({
+  type: z.enum(["fade", "slide-left", "slide-right", "slide-up", "slide-down", "dissolve", "zoom-in", "zoom-out", "none"]),
+  durationFrames: z.number().min(0).max(120),
+})
+
+const sgEffectSchema = z.object({
+  type: z.enum(["ken-burns", "scale", "opacity", "blur"]),
+  startValue: z.number(),
+  endValue: z.number(),
+})
+
+const sgSegmentLayoutSchema = z.object({
+  mode: z.enum(["fullscreen", "positioned"]),
+  x: z.number().min(0).max(100).optional(),
+  y: z.number().min(0).max(100).optional(),
+  width: z.number().min(0).max(100).optional(),
+  height: z.number().min(0).max(100).optional(),
+  objectFit: z.enum(["cover", "contain", "fill"]).optional(),
+})
+
+const sgMediaSegmentSchema = z.object({
+  id: z.string(),
+  src: safeUrlSchema,
+  mediaType: z.enum(["image", "video", "gif"]),
+  startFrame: z.number().min(0),
+  durationInFrames: z.number().min(1).max(54000),
+  layout: sgSegmentLayoutSchema,
+  transitionIn: sgTransitionSchema.optional(),
+  transitionOut: sgTransitionSchema.optional(),
+  effects: z.array(sgEffectSchema).default([]),
+})
+
+const sgTextSegmentSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  startFrame: z.number().min(0),
+  durationInFrames: z.number().min(1).max(54000),
+  position: z.enum(["top", "center", "bottom"]),
+  fontSize: z.number().min(8).max(200),
+  fontFamily: z.string().optional(),
+  color: z.string(),
+  fontWeight: z.number().optional(),
+  fontStyle: z.enum(["normal", "italic"]).optional(),
+  animation: z.enum(["fade", "slide-up", "typewriter", "word-highlight", "none"]),
+})
+
+const sgMediaTrackSchema = z.object({
+  type: z.literal("media"),
+  id: z.string(),
+  zIndex: z.number(),
+  segments: z.array(sgMediaSegmentSchema).min(1),
+})
+
+const sgAudioTrackSchema = z.object({
+  type: z.literal("audio"),
+  id: z.string(),
+  src: safeUrlSchema,
+  volume: z.number().min(0).max(1),
+  fadeInFrames: z.number().min(0),
+  fadeOutFrames: z.number().min(0),
+  startFrame: z.number().min(0).optional(),
+})
+
+const sgTextTrackSchema = z.object({
+  type: z.literal("text"),
+  id: z.string(),
+  zIndex: z.number(),
+  segments: z.array(sgTextSegmentSchema).min(1),
+})
+
+const sgTrackSchema = z.discriminatedUnion("type", [sgMediaTrackSchema, sgAudioTrackSchema, sgTextTrackSchema])
+
+export const sceneGraphPlanSchema = z
+  .object({
+    planType: z.literal("scene-graph"),
+    fps: z.number().min(15).max(60),
+    width: z.number().min(100).max(3840),
+    height: z.number().min(100).max(3840),
+    durationInFrames: z.number().min(1).max(54000),
+    backgroundColor: z.string(),
+    tracks: z.array(sgTrackSchema).min(1),
+  })
+  .passthrough()
+
 // ── Render Plan Envelope (discriminated union) ──────────────────────────
 
 export const renderPlanSchema = z.discriminatedUnion("planType", [
+  sceneGraphPlanSchema,
   afterEffectsPlanSchema,
   lottieOverlayPlanSchema,
   threeDTitlePlanSchema,
   motionGraphicsPlanSchema,
+  compositePlanSchema,
 ])
 
 // ── Plan type → schema lookup ───────────────────────────────────────────
 
 const planSchemaMap: Record<string, z.ZodType> = {
+  "scene-graph": sceneGraphPlanSchema,
   "after-effects": afterEffectsPlanSchema,
   "lottie-overlay": lottieOverlayPlanSchema,
   "3d-title": threeDTitlePlanSchema,
   "motion-graphics": motionGraphicsPlanSchema,
+  "composite": compositePlanSchema,
 }
 
 /**
  * Validate a plan object against the schema for its planType.
  * Returns the validated (parsed) plan on success, or throws a
  * descriptive error with Zod issue details on failure.
- *
- * Note: "scene-graph" plans are not validated here because they use
- * a separate validation pipeline in scene-graph-validator.ts.
  */
 export function validatePlanByType(planType: string, plan: unknown): z.infer<typeof renderPlanSchema> {
   const schema = planSchemaMap[planType]

@@ -4,11 +4,17 @@ import { videoQueue } from "../lib/queue.js"
 
 export async function cancelJobsRoutes(app: FastifyInstance) {
   // Cancel a single job
-  app.post<{ Params: { jobId: string }; Body: { userId?: string } }>(
+  app.post<{ Params: { jobId: string } }>(
     "/v1/jobs/:jobId/cancel",
     async (req, reply) => {
       const { jobId } = req.params
-      const { userId } = req.body
+      const userId = req.userId
+
+      if (!userId) {
+        return reply.status(401).send({
+          error: { code: "unauthorized", message: "Authentication required" },
+        })
+      }
 
       try {
         // Get the job to verify ownership and current status
@@ -24,8 +30,8 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           })
         }
 
-        // Verify ownership if userId provided
-        if (userId && job.user_id !== userId) {
+        // Verify ownership
+        if (job.user_id !== userId) {
           return reply.status(403).send({
             error: { code: "forbidden", message: "You do not own this job" },
           })
@@ -68,12 +74,12 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
   )
 
   // Cancel all pending/processing jobs for a user
-  app.post<{ Body: { userId: string } }>("/v1/jobs/cancel-all", async (req, reply) => {
-    const { userId } = req.body
+  app.post("/v1/jobs/cancel-all", async (req, reply) => {
+    const userId = req.userId
 
     if (!userId) {
-      return reply.status(400).send({
-        error: { code: "bad_request", message: "userId is required" },
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

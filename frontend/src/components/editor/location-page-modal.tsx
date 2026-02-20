@@ -319,7 +319,7 @@ high quality, cinematic photography`
             setRefinedResults([...results])
           }
         } catch (err) {
-          console.error(`Failed to generate refined image ${i + 1}:`, err)
+          // Silently skip — continues generating remaining images
         }
       }
 
@@ -384,9 +384,9 @@ high quality, cinematic photography`
           category: data.category,
           style: data.style,
         })
-        console.log("[Refine] Saved refined image to database:", imageUrl)
+        // Saved successfully
       } catch (err) {
-        console.error("Failed to save refined image to database:", err)
+        toast.error("Failed to save refined image")
       }
     }
 
@@ -467,7 +467,7 @@ high quality, cinematic photography`
               })
             }
           } catch (err) {
-            console.error(`Failed to generate ${assetConfig.type} ${variant}:`, err)
+            // Silently skip — continues generating remaining assets
           }
         }
       }

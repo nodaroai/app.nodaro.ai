@@ -2,16 +2,16 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const editImageBody = z.object({
   imageUrl: z.string().url(),
   prompt: z.string().max(2000).optional(),
   provider: z.enum(["recraft-upscale", "recraft-remove-bg", "nano-banana-edit"]).optional(),
-  userId: z.string().uuid().optional(),
 })
 
 export async function editImageRoutes(app: FastifyInstance) {
-  app.post("/v1/edit-image", async (req, reply) => {
+  app.post("/v1/edit-image", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "recraft-upscale" }) }, async (req, reply) => {
     const parsed = editImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -22,11 +22,12 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, userId } = parsed.data
+    const { imageUrl, prompt, provider } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -39,6 +40,8 @@ export async function editImageRoutes(app: FastifyInstance) {
         },
       })
     }
+
+    const modelIdentifier = provider ?? "recraft-upscale"
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -57,11 +60,16 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
+    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+    if (reply.sent) return
+    const usageLogId = reservation?.usageLogId
+
     await videoQueue.add("edit-image", {
       jobId: job.id,
       imageUrl,
       prompt,
       provider,
+      usageLogId,
     })
 
     return { jobId: job.id }

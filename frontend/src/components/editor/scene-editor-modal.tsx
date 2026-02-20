@@ -182,7 +182,6 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
       const provider = data?.videoProvider ?? "minimax"
       const generateAudio = provider === "veo3" ? true : undefined
       const videoPrompt = data ? buildVideoPrompt(data) : "smooth cinematic motion"
-      console.log(`[SceneEditor] Generate Video - provider: ${provider}, prompt: "${videoPrompt.slice(0, 100)}..."`)
       const duration = data?.duration ?? 5
       const { jobId } = await generateVideo(activeUrl, videoPrompt, provider, generateAudio, duration, user?.id)
       await new Promise<void>((resolve, reject) => {

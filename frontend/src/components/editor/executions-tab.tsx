@@ -7,6 +7,7 @@ const ExecutionDetailModal = lazy(() => import("./execution-detail-modal").then(
 import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
 import { useStats } from "@/hooks/queries/use-stats-queries"
+import { toast } from "sonner"
 import { queryKeys } from "@/lib/query-keys"
 import {
   AlertDialog,
@@ -199,7 +200,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
       qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
       qc.invalidateQueries({ queryKey: queryKeys.stats.all })
     } catch (err) {
-      console.error("Failed to cancel job:", err)
+      toast.error("Failed to cancel job")
     } finally {
       setCancellingJobId(null)
     }
@@ -215,7 +216,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
         qc.invalidateQueries({ queryKey: queryKeys.stats.all })
       }
     } catch (err) {
-      console.error("Failed to cancel all jobs:", err)
+      toast.error("Failed to cancel jobs")
     } finally {
       setCancelAllDialogOpen(false)
     }

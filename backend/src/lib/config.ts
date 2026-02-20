@@ -19,6 +19,7 @@ const envSchema = z.object({
   EDITION: z.enum(["community", "business", "cloud"]).default("community"),
   /** Comma-separated list of allowed CORS origins (e.g. "https://app.scenenode.ai,http://localhost:3000") */
   CORS_ORIGIN: z.string().default(""),
+  PADDLE_WEBHOOK_SECRET: z.string().default(""),
 })
 
 export type Edition = "community" | "business" | "cloud"

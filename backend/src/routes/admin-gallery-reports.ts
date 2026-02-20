@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { checkIsAdmin } from "../lib/admin-check.js"
+import { requireAdmin } from "../middleware/require-admin.js"
 
 // ---- Zod Schemas ----
 
@@ -10,7 +10,6 @@ const reportIdParams = z.object({
 })
 
 const updateReportBody = z.object({
-  userId: z.string().uuid(),
   status: z.enum(["reviewed", "dismissed"]),
 })
 
@@ -25,22 +24,8 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
    *   limit   - items per page (default 50, max 100)
    *   userId  - admin user ID for auth
    */
-  app.get("/v1/admin/gallery-reports", async (req, reply) => {
+  app.get("/v1/admin/gallery-reports", { preHandler: requireAdmin }, async (req, reply) => {
     const query = req.query as Record<string, string | undefined>
-    const userId = query.userId
-
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
-      })
-    }
-
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Only admins can view gallery reports" },
-      })
-    }
 
     const page = Math.max(1, parseInt(query.page ?? "1", 10) || 1)
     const limit = Math.min(100, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
@@ -79,23 +64,7 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
    * Query params:
    *   userId - admin user ID for auth
    */
-  app.get("/v1/admin/gallery-reports/count", async (req, reply) => {
-    const query = req.query as Record<string, string | undefined>
-    const userId = query.userId
-
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
-      })
-    }
-
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Only admins can view report counts" },
-      })
-    }
-
+  app.get("/v1/admin/gallery-reports/count", { preHandler: requireAdmin }, async (req, reply) => {
     const { count, error } = await supabase
       .from("gallery_reports")
       .select("id", { count: "exact", head: true })
@@ -115,7 +84,7 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
    *
    * Body: { userId, status }
    */
-  app.patch<{ Params: { reportId: string } }>("/v1/admin/gallery-reports/:reportId", async (req, reply) => {
+  app.patch<{ Params: { reportId: string } }>("/v1/admin/gallery-reports/:reportId", { preHandler: requireAdmin }, async (req, reply) => {
     const paramsResult = reportIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -137,14 +106,7 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
     }
 
     const { reportId } = paramsResult.data
-    const { userId, status } = bodyResult.data
-
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Only admins can update report status" },
-      })
-    }
+    const { status } = bodyResult.data
 
     const { data, error } = await supabase
       .from("gallery_reports")

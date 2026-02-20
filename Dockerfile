@@ -61,24 +61,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
     libatspi2.0-0 \
+    fonts-dejavu-core fonts-liberation2 fontconfig \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/bin/caddy \
     && chmod +x /usr/bin/caddy
+
+# Create non-root user (node:20-slim already has uid 1000 node user, || true for safety)
+RUN groupadd --gid 1000 node || true \
+    && useradd --uid 1000 --gid node --shell /bin/bash --create-home node || true
 
 ENV NODE_ENV=production
 
 WORKDIR /app
 
 # Backend: compiled JS + production dependencies
-COPY --from=backend-builder /app/backend/dist ./backend/dist
-COPY --from=backend-builder /app/backend/node_modules ./backend/node_modules
-COPY --from=backend-builder /app/backend/package.json ./backend/package.json
+COPY --chown=node:node --from=backend-builder /app/backend/dist ./backend/dist
+COPY --chown=node:node --from=backend-builder /app/backend/node_modules ./backend/node_modules
+COPY --chown=node:node --from=backend-builder /app/backend/package.json ./backend/package.json
 
 # Remotion: source + node_modules (bundled at runtime by @remotion/bundler)
-COPY --from=remotion-builder /app/packages/remotion ./packages/remotion
+COPY --chown=node:node --from=remotion-builder /app/packages/remotion ./packages/remotion
 
 # Frontend: Vite static build + Caddy config
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --chown=node:node --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY frontend/Caddyfile /etc/caddy/Caddyfile
 
 # Startup script: run backend + worker + Caddy
@@ -113,5 +118,7 @@ exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 EOF
 
 RUN chmod +x /app/start.sh
+
+USER node
 
 CMD ["/app/start.sh"]

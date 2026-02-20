@@ -81,10 +81,20 @@ export async function jobRoutes(app: FastifyInstance) {
     return { data: sanitizeJobForPublic(job as JobRecord, isAdmin) }
   })
 
-  app.get<{ Querystring: { userId?: string; limit?: string; cursor?: string } }>("/v1/jobs", async (req) => {
-    const { userId, limit = "50", cursor } = req.query
+  app.get<{ Querystring: { userId?: string; limit?: string; cursor?: string } }>("/v1/jobs", async (req, reply) => {
+    const { userId: queryUserId, limit = "50", cursor } = req.query
     const limitNum = Math.min(parseInt(limit, 10) || 50, 100)
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+    const currentUserId = req.userId
+
+    if (!currentUserId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    // Non-admins always see only their own jobs; admins can optionally filter by userId
+    const filterUserId = isAdmin && queryUserId ? queryUserId : currentUserId
 
     let query = supabase
       .from("jobs")
@@ -92,10 +102,7 @@ export async function jobRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
       .limit(limitNum)
 
-    // Filter by user_id if provided
-    if (userId) {
-      query = query.eq("user_id", userId)
-    }
+    query = query.eq("user_id", filterUserId)
 
     // Cursor-based pagination (use created_at as cursor)
     if (cursor) {

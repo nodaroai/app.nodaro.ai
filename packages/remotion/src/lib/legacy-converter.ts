@@ -65,12 +65,12 @@ function buildTextTrack(props: RenderVideoInputProps, style?: {
 }
 
 function buildAudioTrack(props: RenderVideoInputProps): AudioTrack | null {
-  if (!props.audioTrackLocalPath) return null
+  if (!props.audioTrackUrl) return null
 
   return {
     type: "audio",
     id: "audio-track",
-    src: props.audioTrackLocalPath,
+    src: props.audioTrackUrl,
     volume: 1,
     fadeInFrames: 0,
     fadeOutFrames: 0,
@@ -96,7 +96,7 @@ function slideshowToSceneGraph(props: RenderVideoInputProps): SceneGraph {
 
     return {
       id: `segment-${i}`,
-      src: asset.localPath,
+      src: asset.src,
       mediaType: asset.type as "image" | "video",
       startFrame: i * framesPerAsset,
       durationInFrames: framesPerAsset,
@@ -137,7 +137,7 @@ function explainerToSceneGraph(props: RenderVideoInputProps): SceneGraph {
 
   const segments: MediaSegment[] = imageAssets.map((asset, i) => ({
     id: `segment-${i}`,
-    src: asset.localPath,
+    src: asset.src,
     mediaType: "image" as const,
     startFrame: i * framesPerSegment,
     durationInFrames: framesPerSegment,
@@ -177,7 +177,7 @@ function socialReelToSceneGraph(props: RenderVideoInputProps): SceneGraph {
 
   const segments: MediaSegment[] = visualAssets.map((asset, i) => ({
     id: `segment-${i}`,
-    src: asset.localPath,
+    src: asset.src,
     mediaType: asset.type as "image" | "video",
     startFrame: i * framesPerAsset,
     durationInFrames: framesPerAsset,
@@ -245,7 +245,7 @@ function documentaryToSceneGraph(props: RenderVideoInputProps): SceneGraph {
 
     return {
       id: `segment-${i}`,
-      src: asset.localPath,
+      src: asset.src,
       mediaType: asset.type as "image" | "video",
       startFrame: i * framesPerAsset,
       durationInFrames: framesPerAsset,

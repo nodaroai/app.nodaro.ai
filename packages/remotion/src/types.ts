@@ -1,4 +1,5 @@
 export type TemplateId = "slideshow" | "explainer" | "social-reel" | "documentary"
+export type CompositionId = TemplateId | "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics" | "composite"
 
 export type TransitionStyle = "fade" | "slide" | "dissolve" | "zoom" | "none"
 
@@ -7,7 +8,7 @@ export type CaptionStyle = "subtitle" | "word-highlight" | "karaoke"
 export type CaptionPosition = "bottom" | "top" | "center"
 
 export interface MediaAsset {
-  readonly localPath: string
+  readonly src: string
   readonly type: "image" | "video" | "audio"
   readonly durationSeconds?: number
 }
@@ -38,7 +39,7 @@ export interface RenderVideoInputProps {
   readonly transitionStyle: TransitionStyle
   readonly transitionDurationFrames: number
   readonly mediaAssets: readonly MediaAsset[]
-  readonly audioTrackLocalPath?: string
+  readonly audioTrackUrl?: string
   readonly textOverlays: readonly TextOverlay[]
   readonly captions: CaptionSettings
   readonly backgroundColor: string

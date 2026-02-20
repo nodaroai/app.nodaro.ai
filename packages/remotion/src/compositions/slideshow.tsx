@@ -44,7 +44,7 @@ function SlideshowSegment({
 export function Slideshow(props: RenderVideoInputProps) {
   const {
     mediaAssets,
-    audioTrackLocalPath,
+    audioTrackUrl,
     durationInFrames,
     transitionDurationFrames,
     textOverlays,
@@ -77,8 +77,8 @@ export function Slideshow(props: RenderVideoInputProps) {
 
       <TextOverlayLayer overlays={textOverlays} />
 
-      {audioTrackLocalPath && (
-        <Audio src={audioTrackLocalPath} />
+      {audioTrackUrl && (
+        <Audio src={audioTrackUrl} />
       )}
     </AbsoluteFill>
   )

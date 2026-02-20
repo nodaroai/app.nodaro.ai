@@ -39,8 +39,9 @@ function setCachedStats(key: string, data: StatsResponse): void {
 }
 
 export async function statsRoutes(app: FastifyInstance) {
-  app.get<{ Querystring: { scope?: string; userId?: string } }>("/v1/stats", async (req, reply) => {
-    const { scope = "user", userId } = req.query
+  app.get<{ Querystring: { scope?: string } }>("/v1/stats", async (req, reply) => {
+    const { scope = "user" } = req.query
+    const userId = req.userId
 
     try {
       // For user scope, userId is required

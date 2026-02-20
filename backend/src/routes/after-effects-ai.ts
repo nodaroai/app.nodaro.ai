@@ -1,9 +1,13 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import Anthropic from "@anthropic-ai/sdk"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { rateLimiter } from "../middleware/rate-limit.js"
+
+const aiRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "ai-ae" })
 import { CreditsService } from "../billing/credits.js"
 import { AFTER_EFFECTS_SYSTEM_PROMPT } from "../prompts/after-effects-system.js"
 import { validateAfterEffectsPlan } from "../lib/after-effects-validator.js"
@@ -26,7 +30,7 @@ const ASPECT_DIMENSIONS: Record<string, { width: number; height: number }> = {
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
-  inputVideoUrl: z.string().url(),
+  inputVideoUrl: safeUrlSchema,
   fps: z.number().min(15).max(60).default(30),
   width: z.number().min(100).max(3840).optional(),
   height: z.number().min(100).max(3840).optional(),
@@ -39,7 +43,7 @@ export async function afterEffectsAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/after-effects/generate",
     {
-      preHandler: creditGuard(() => "after-effects"),
+      preHandler: [aiRateLimit, creditGuard(() => "after-effects")],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {

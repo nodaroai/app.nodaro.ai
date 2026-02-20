@@ -394,6 +394,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Video Production",
   },
   {
+    type: "composite",
+    label: "Composite",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video Production",
+  },
+  {
     type: "render-video",
     label: "Render Video",
     icon: <Film className="h-4 w-4" />,

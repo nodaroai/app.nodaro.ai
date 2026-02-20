@@ -6,7 +6,7 @@ const animationSchema = z.object({
   type: z.enum(["wipe-in", "scale-up", "fade", "draw-path", "slide-up", "slide-down", "slide-left", "slide-right", "none"]),
   direction: z.enum(["left", "right", "up", "down"]).optional(),
   startFrame: z.number().min(0),
-  durationFrames: z.number().min(0),
+  durationFrames: z.number().min(0).max(54000),
   easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut", "spring"]).optional(),
 })
 
@@ -63,7 +63,7 @@ const mgElementSchema = z.discriminatedUnion("type", [
 const exitAnimationSchema = z.object({
   type: z.enum(["fade", "slide-down", "slide-up", "slide-left", "slide-right", "none"]),
   startFrame: z.number().min(0),
-  durationFrames: z.number().min(0),
+  durationFrames: z.number().min(0).max(54000),
 })
 
 export const motionGraphicsPlanSchema = z.object({
@@ -71,7 +71,7 @@ export const motionGraphicsPlanSchema = z.object({
   fps: z.number().min(15).max(60),
   width: z.number().min(100).max(3840),
   height: z.number().min(100).max(3840),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   backgroundColor: z.string(),
   elements: z.array(mgElementSchema).min(1),
   exitAnimation: exitAnimationSchema.optional(),

@@ -11,7 +11,6 @@ import { checkIsAdmin } from "../lib/admin-check.js"
 // ============================================================
 
 const listLibraryQuery = z.object({
-  userId: z.string().uuid(),
   type: z.enum(["all", "image", "video", "audio"]).optional().default("all"),
   search: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(40),
@@ -23,16 +22,7 @@ const assetIdParams = z.object({
   id: z.string().uuid(),
 })
 
-const deleteLibraryQuery = z.object({
-  userId: z.string().uuid(),
-})
-
-const promoteBody = z.object({
-  userId: z.string().uuid(),
-})
-
 const saveGeneratedBody = z.object({
-  userId: z.string().uuid(),
   url: z.string().url(),
   type: z.enum(["image", "video", "audio"]),
   filename: z.string().max(255).optional(),
@@ -47,6 +37,13 @@ const saveGeneratedBody = z.object({
 export async function libraryRoutes(app: FastifyInstance) {
   // GET /v1/library - List user's uploaded assets
   app.get("/v1/library", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = listLibraryQuery.safeParse(req.query)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -57,7 +54,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { userId, type, search, limit, cursor, owned } = parsed.data
+    const { type, search, limit, cursor, owned } = parsed.data
 
     let query = supabase
       .from("assets")
@@ -127,6 +124,13 @@ export async function libraryRoutes(app: FastifyInstance) {
 
   // POST /v1/library/:id/promote - Promote asset to shared library (admin only)
   app.post("/v1/library/:id/promote", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const paramsParsed = assetIdParams.safeParse(req.params)
     if (!paramsParsed.success) {
       return reply.status(400).send({
@@ -137,18 +141,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const bodyParsed = promoteBody.safeParse(req.body)
-    if (!bodyParsed.success) {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: bodyParsed.error.issues[0]?.message ?? "userId is required",
-        },
-      })
-    }
-
     const { id } = paramsParsed.data
-    const { userId } = bodyParsed.data
 
     // Only admins can promote
     const isAdmin = await checkIsAdmin(userId)
@@ -174,6 +167,13 @@ export async function libraryRoutes(app: FastifyInstance) {
 
   // POST /v1/library/:id/demote - Demote asset from shared library (admin only)
   app.post("/v1/library/:id/demote", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const paramsParsed = assetIdParams.safeParse(req.params)
     if (!paramsParsed.success) {
       return reply.status(400).send({
@@ -184,18 +184,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const bodyParsed = promoteBody.safeParse(req.body)
-    if (!bodyParsed.success) {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: bodyParsed.error.issues[0]?.message ?? "userId is required",
-        },
-      })
-    }
-
     const { id } = paramsParsed.data
-    const { userId } = bodyParsed.data
 
     // Only admins can demote
     const isAdmin = await checkIsAdmin(userId)
@@ -221,6 +210,13 @@ export async function libraryRoutes(app: FastifyInstance) {
 
   // DELETE /v1/library/:id - Delete asset and R2 file
   app.delete("/v1/library/:id", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const paramsParsed = assetIdParams.safeParse(req.params)
     if (!paramsParsed.success) {
       return reply.status(400).send({
@@ -231,18 +227,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const queryParsed = deleteLibraryQuery.safeParse(req.query)
-    if (!queryParsed.success) {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: queryParsed.error.issues[0]?.message ?? "userId is required",
-        },
-      })
-    }
-
     const { id } = paramsParsed.data
-    const { userId } = queryParsed.data
 
     // Fetch asset to verify ownership
     const { data: asset, error: fetchError } = await supabase
@@ -299,6 +284,13 @@ export async function libraryRoutes(app: FastifyInstance) {
 
   // POST /v1/library/save-generated - Save a generated asset to the library
   app.post("/v1/library/save-generated", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const parsed = saveGeneratedBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -309,7 +301,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { userId, url, type, filename, metadata, isLibraryItem } = parsed.data
+    const { url, type, filename, metadata, isLibraryItem } = parsed.data
 
     try {
       console.log("[save-generated] Request:", { userId, url: url.slice(0, 80), type, isLibraryItem })

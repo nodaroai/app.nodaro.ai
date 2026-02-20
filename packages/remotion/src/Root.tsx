@@ -10,18 +10,18 @@ import { SceneGraphRenderer } from "./compositions/scene-graph-renderer"
 import { AfterEffectsRenderer } from "./compositions/after-effects-renderer"
 import { LottieOverlayRenderer } from "./compositions/lottie-overlay-renderer"
 import { MotionGraphicsRenderer } from "./compositions/motion-graphics-renderer"
-import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan } from "./plan-types"
+import { CompositeRenderer } from "./compositions/composite-renderer"
+import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan, CompositePlan } from "./plan-types"
 
 /**
  * Bridge specific component prop types with Remotion's
  * LooseComponentType<Record<string, unknown>> requirement.
  * Props are always provided at runtime via inputProps/defaultProps.
  */
-function asRemotionComponent<P extends Record<string, unknown>>(
-  Comp: React.FC<P>,
-): React.FC<Record<string, unknown>> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function asRemotionComponent(Comp: React.FC<any>): React.FC<Record<string, unknown>> {
   const Wrapper: React.FC<Record<string, unknown>> = (props) => (
-    <Comp {...(props as P)} />
+    <Comp {...props} />
   )
   Wrapper.displayName = `Remotion(${Comp.displayName ?? Comp.name})`
   return Wrapper
@@ -109,6 +109,18 @@ const MOTION_GRAPHICS_DEFAULT_PROPS: { plan: MotionGraphicsPlan } = {
   },
 }
 
+const COMPOSITE_DEFAULT_PROPS: { plan: CompositePlan } = {
+  plan: {
+    planType: "composite",
+    fps: 30,
+    width: 1920,
+    height: 1080,
+    durationInFrames: 300,
+    backgroundColor: "#000000",
+    layers: [],
+  },
+}
+
 function RemotionRoot() {
   return (
     <>
@@ -159,6 +171,15 @@ function RemotionRoot() {
         width={1920}
         height={1080}
         defaultProps={MOTION_GRAPHICS_DEFAULT_PROPS}
+      />
+      <Composition
+        id="composite"
+        component={asRemotionComponent(CompositeRenderer)}
+        durationInFrames={300}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={COMPOSITE_DEFAULT_PROPS}
       />
     </>
   )

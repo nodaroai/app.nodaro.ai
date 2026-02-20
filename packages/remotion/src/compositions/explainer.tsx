@@ -19,7 +19,7 @@ const CLAMP = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
 export function Explainer(props: RenderVideoInputProps) {
   const {
     mediaAssets,
-    audioTrackLocalPath,
+    audioTrackUrl,
     durationInFrames,
     transitionDurationFrames,
     textOverlays,
@@ -47,7 +47,7 @@ export function Explainer(props: RenderVideoInputProps) {
               }}
             >
               <Img
-                src={asset.localPath}
+                src={asset.src}
                 style={{ width, height, objectFit: "cover" }}
               />
             </AbsoluteFill>
@@ -65,8 +65,8 @@ export function Explainer(props: RenderVideoInputProps) {
         }}
       />
 
-      {audioTrackLocalPath && (
-        <Audio src={audioTrackLocalPath} />
+      {audioTrackUrl && (
+        <Audio src={audioTrackUrl} />
       )}
     </AbsoluteFill>
   )

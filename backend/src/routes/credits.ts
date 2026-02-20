@@ -39,14 +39,12 @@ export async function creditsRoutes(app: FastifyInstance) {
    * GET /v1/user/credits
    * Get current user's credit balance and tier info
    */
-  app.get<{
-    Querystring: { userId: string }
-  }>("/v1/user/credits", async (req, reply) => {
-    const { userId } = req.query
+  app.get("/v1/user/credits", async (req, reply) => {
+    const userId = req.userId
 
     if (!userId) {
-      return reply.status(400).send({
-        error: { code: "bad_request", message: "userId is required" },
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -72,13 +70,20 @@ export async function creditsRoutes(app: FastifyInstance) {
    * Check if user has sufficient credits for a specific model
    */
   app.get<{
-    Querystring: { userId: string; model: string }
+    Querystring: { model: string }
   }>("/v1/credits/check", async (req, reply) => {
-    const { userId, model } = req.query
+    const userId = req.userId
+    const { model } = req.query
 
-    if (!userId || !model) {
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    if (!model) {
       return reply.status(400).send({
-        error: { code: "bad_request", message: "userId and model are required" },
+        error: { code: "bad_request", message: "model is required" },
       })
     }
 

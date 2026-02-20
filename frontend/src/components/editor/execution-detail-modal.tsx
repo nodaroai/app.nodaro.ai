@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import type { Job } from "@/lib/api"
 import { deleteJob } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
+import { toast } from "sonner"
 import { CachedImage } from "@/components/ui/cached-image"
 
 function getCostDisplayForModal(job: Job, showDollars: boolean): string {
@@ -265,7 +266,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
       onDeleted?.(job.id)
       onClose()
     } catch (error) {
-      console.error("Failed to delete job:", error)
+      toast.error("Failed to delete job")
     } finally {
       setIsDeleting(false)
     }

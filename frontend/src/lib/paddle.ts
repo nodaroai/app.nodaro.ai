@@ -17,7 +17,6 @@ export async function getPaddle(): Promise<Paddle | null> {
   if (paddleInstance) return paddleInstance
 
   if (!CLIENT_TOKEN) {
-    console.warn("[paddle] No VITE_PADDLE_CLIENT_TOKEN configured")
     return null
   }
 
@@ -29,7 +28,6 @@ export async function getPaddle(): Promise<Paddle | null> {
       paddleInstance = instance ?? null
       return paddleInstance
     }).catch((err) => {
-      console.error("[paddle] Failed to initialize:", err)
       initPromise = null
       return null
     })

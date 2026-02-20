@@ -2,17 +2,17 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const imageToImageBody = z.object({
   imageUrl: z.string().url(),
   prompt: z.string().min(1).max(2000),
   provider: z.enum(["nano-banana", "nano-banana-pro", "flux-i2i", "flux-pro-i2i", "grok-i2i", "gpt-image-i2i"]).optional(),
-  userId: z.string().uuid().optional(),
   referenceImageUrls: z.array(z.string().url()).max(13).optional(),
 })
 
 export async function imageToImageRoutes(app: FastifyInstance) {
-  app.post("/v1/image-to-image", async (req, reply) => {
+  app.post("/v1/image-to-image", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "nano-banana" }) }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -23,13 +23,16 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, userId, referenceImageUrls } = parsed.data
+    const { imageUrl, prompt, provider, referenceImageUrls } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+
+    const modelIdentifier = provider ?? "nano-banana"
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -48,12 +51,17 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
+    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+    if (reply.sent) return
+    const usageLogId = reservation?.usageLogId
+
     await videoQueue.add("image-to-image", {
       jobId: job.id,
       imageUrl,
       referenceImageUrls,
       prompt,
-      provider: provider ?? "nano-banana",
+      provider: modelIdentifier,
+      usageLogId,
     })
 
     return { jobId: job.id }

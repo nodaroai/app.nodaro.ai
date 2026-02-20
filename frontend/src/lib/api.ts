@@ -733,7 +733,6 @@ export async function generateVideo(
   // Handle both old and new API signatures
   if (typeof imageUrlOrOptions === "object") {
     const opts = imageUrlOrOptions
-    console.log(`[generateVideo] Sending request with provider: "${opts.provider ?? 'undefined (will default to minimax)'}"`)
     body = {
       imageUrl: opts.startFrameUrl,  // Backend still expects imageUrl for backward compat
       endFrameUrl: opts.endFrameUrl,
@@ -756,7 +755,6 @@ export async function generateVideo(
     }
   } else {
     // Legacy signature for backward compatibility
-    console.log(`[generateVideo] Sending request with provider: "${provider ?? 'undefined (will default to minimax)'}"`)
     body = { imageUrl: imageUrlOrOptions, prompt, provider, generateAudio, duration }
     if (userId) {
       body.userId = userId

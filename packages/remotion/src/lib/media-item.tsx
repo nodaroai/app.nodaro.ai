@@ -31,11 +31,11 @@ export function MediaItem({
 
   if (asset.type === "image") {
     return (
-      <Img src={asset.localPath} style={mediaStyle} />
+      <Img src={asset.src} style={mediaStyle} />
     )
   }
 
   return (
-    <Video src={asset.localPath} style={{ width, height, objectFit: "cover" }} />
+    <Video src={asset.src} style={{ width, height, objectFit: "cover" }} />
   )
 }

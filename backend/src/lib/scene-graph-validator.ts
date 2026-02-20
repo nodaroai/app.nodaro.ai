@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { safeUrlSchema } from "./url-validator.js"
 
 // ── Zod schema matching the scene graph types ──────────────────────────
 
@@ -24,10 +25,10 @@ const segmentLayoutSchema = z.object({
 
 const mediaSegmentSchema = z.object({
   id: z.string(),
-  src: z.string(),
+  src: safeUrlSchema,
   mediaType: z.enum(["image", "video", "gif"]),
   startFrame: z.number().min(0),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   layout: segmentLayoutSchema,
   transitionIn: transitionSchema.optional(),
   transitionOut: transitionSchema.optional(),
@@ -38,7 +39,7 @@ const textSegmentSchema = z.object({
   id: z.string(),
   text: z.string(),
   startFrame: z.number().min(0),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   position: z.enum(["top", "center", "bottom"]),
   fontSize: z.number().min(8).max(200),
   color: z.string(),
@@ -58,7 +59,7 @@ const mediaTrackSchema = z.object({
 const audioTrackSchema = z.object({
   type: z.literal("audio"),
   id: z.string(),
-  src: z.string(),
+  src: safeUrlSchema,
   volume: z.number().min(0).max(1),
   fadeInFrames: z.number().min(0),
   fadeOutFrames: z.number().min(0),
@@ -78,7 +79,7 @@ const sceneGraphSchema = z.object({
   fps: z.number().min(15).max(60),
   width: z.number().min(100).max(3840),
   height: z.number().min(100).max(3840),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   backgroundColor: z.string(),
   tracks: z.array(trackSchema).min(1),
 })
