@@ -2,10 +2,19 @@ import { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService, invalidateModelPricingCache } from "../billing/credits.js"
 import { invalidateBalanceCache } from "./credits.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 export async function adminCreditsRoutes(app: FastifyInstance) {
   // GET /v1/admin/users - List all users with credit info (paginated)
   app.get("/v1/admin/users", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const query = request.query as Record<string, string | undefined>
     const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
     const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
@@ -35,6 +44,14 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // GET /v1/admin/users/:id/balance - Get detailed balance for a user
   app.get("/v1/admin/users/:id/balance", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const { id } = request.params as { id: string }
     try {
       const balance = await CreditsService.getBalance(id)
@@ -46,6 +63,14 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // POST /v1/admin/users/:id/credits - Admin adjust credits
   app.post("/v1/admin/users/:id/credits", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const { id } = request.params as { id: string }
     const { amount, creditType, description, adminUserId } = request.body as {
       amount: number
@@ -75,6 +100,14 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // GET /v1/admin/users/:id/transactions - Credit transaction history
   app.get("/v1/admin/users/:id/transactions", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const { id } = request.params as { id: string }
     const { limit = 50, offset = 0 } = request.query as { limit?: number; offset?: number }
 
@@ -91,6 +124,14 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // PUT /v1/admin/users/:id/tier - Admin change user tier
   app.put("/v1/admin/users/:id/tier", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const { id } = request.params as { id: string }
     const { tier, adminUserId } = request.body as {
       tier: string
@@ -167,6 +208,14 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // PUT /v1/admin/users/:id/storage - Admin change user storage limit
   app.put("/v1/admin/users/:id/storage", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const { id } = request.params as { id: string }
     const { storageLimitBytes, adminUserId } = request.body as {
       storageLimitBytes: number
@@ -207,6 +256,14 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // PUT /v1/admin/users/:id/role - Admin change user role (super_admin only)
   app.put("/v1/admin/users/:id/role", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const { id } = request.params as { id: string }
     const { role, adminUserId } = request.body as {
       role: string
@@ -273,7 +330,15 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/admin/models - List all models with pricing
-  app.get("/v1/admin/models", async (_request, reply) => {
+  app.get("/v1/admin/models", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const { data, error } = await supabase
       .from("model_pricing")
       .select("*")
@@ -285,6 +350,14 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // PUT /v1/admin/models/:identifier/pricing - Update model pricing
   app.put("/v1/admin/models/:identifier/pricing", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     const { identifier } = request.params as { identifier: string }
     const { creditCost, isEnabled, tierRestriction } = request.body as {
       creditCost?: number
@@ -310,7 +383,15 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/admin/credits/summary - Platform-wide credit stats
-  app.get("/v1/admin/credits/summary", async (_request, reply) => {
+  app.get("/v1/admin/credits/summary", async (request, reply) => {
+    const callerId = request.userId
+    if (!callerId) {
+      return reply.code(401).send({ error: "Authentication required" })
+    }
+    if (!(await checkIsAdmin(callerId))) {
+      return reply.code(403).send({ error: "Admin access required" })
+    }
+
     // Use SQL aggregate RPC instead of fetching ALL profiles
     const { data, error } = await supabase.rpc("get_credit_summary")
 

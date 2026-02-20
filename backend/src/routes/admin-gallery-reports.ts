@@ -10,7 +10,6 @@ const reportIdParams = z.object({
 })
 
 const updateReportBody = z.object({
-  userId: z.string().uuid(),
   status: z.enum(["reviewed", "dismissed"]),
 })
 
@@ -27,11 +26,11 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
    */
   app.get("/v1/admin/gallery-reports", async (req, reply) => {
     const query = req.query as Record<string, string | undefined>
-    const userId = query.userId
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -80,12 +79,11 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
    *   userId - admin user ID for auth
    */
   app.get("/v1/admin/gallery-reports/count", async (req, reply) => {
-    const query = req.query as Record<string, string | undefined>
-    const userId = query.userId
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -116,6 +114,20 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
    * Body: { userId, status }
    */
   app.patch<{ Params: { reportId: string } }>("/v1/admin/gallery-reports/:reportId", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const isAdmin = await checkIsAdmin(userId)
+    if (!isAdmin) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Only admins can update report status" },
+      })
+    }
+
     const paramsResult = reportIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -137,14 +149,7 @@ export async function adminGalleryReportsRoutes(app: FastifyInstance) {
     }
 
     const { reportId } = paramsResult.data
-    const { userId, status } = bodyResult.data
-
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Only admins can update report status" },
-      })
-    }
+    const { status } = bodyResult.data
 
     const { data, error } = await supabase
       .from("gallery_reports")

@@ -16,6 +16,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const motionTransferBody = z.object({
   imageUrl: z.string().url(),
@@ -23,11 +24,10 @@ const motionTransferBody = z.object({
   prompt: z.string().max(2500).optional(),
   characterOrientation: z.enum(["image", "video"]).default("image"),
   resolution: z.enum(["720p", "1080p"]).default("720p"),
-  userId: z.string().uuid().optional(),
 })
 
 export async function motionTransferRoutes(app: FastifyInstance) {
-  app.post("/v1/motion-transfer", async (req, reply) => {
+  app.post("/v1/motion-transfer", { preHandler: creditGuard(() => "motion-transfer") }, async (req, reply) => {
     const parsed = motionTransferBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -38,11 +38,12 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, videoUrl, prompt, characterOrientation, resolution, userId } = parsed.data
+    const { imageUrl, videoUrl, prompt, characterOrientation, resolution } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -71,6 +72,10 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       })
     }
 
+    const reservation = await reserveCreditsForJob(req, reply, job.id, "motion-transfer")
+    if (reply.sent) return
+    const usageLogId = reservation?.usageLogId
+
     await videoQueue.add("motion-transfer", {
       jobId: job.id,
       imageUrl,
@@ -78,6 +83,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       prompt,
       characterOrientation,
       resolution,
+      usageLogId,
     })
 
     return { jobId: job.id }

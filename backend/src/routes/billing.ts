@@ -15,9 +15,9 @@ import { PRICE_TO_TIER, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS } 
 export async function billingRoutes(app: FastifyInstance) {
   // Get current subscription for a user
   app.get("/v1/billing/subscription", async (req, reply) => {
-    const { userId } = req.query as { userId?: string }
+    const userId = req.userId
     if (!userId) {
-      return reply.status(400).send({ error: "userId is required" })
+      return reply.status(401).send({ error: "Authentication required" })
     }
 
     const { data, error } = await supabase
@@ -39,9 +39,9 @@ export async function billingRoutes(app: FastifyInstance) {
 
   // Get transaction history for a user
   app.get("/v1/billing/transactions", async (req, reply) => {
-    const { userId } = req.query as { userId?: string }
+    const userId = req.userId
     if (!userId) {
-      return reply.status(400).send({ error: "userId is required" })
+      return reply.status(401).send({ error: "Authentication required" })
     }
 
     const { data, error } = await supabase
@@ -63,9 +63,9 @@ export async function billingRoutes(app: FastifyInstance) {
 
   // Create a Paddle customer portal session for subscription management
   app.post("/v1/billing/manage-subscription", async (req, reply) => {
-    const { userId } = req.body as { userId?: string }
+    const userId = req.userId
     if (!userId) {
-      return reply.status(400).send({ error: "userId is required" })
+      return reply.status(401).send({ error: "Authentication required" })
     }
 
     // Look up Paddle customer ID
@@ -103,13 +103,13 @@ export async function billingRoutes(app: FastifyInstance) {
 
   // Change subscription plan (upgrade/downgrade via Paddle API)
   app.post("/v1/billing/change-plan", async (req, reply) => {
-    const { userId, newPriceId } = req.body as {
-      userId?: string
+    const userId = req.userId
+    const { newPriceId } = req.body as {
       newPriceId?: string
     }
 
     if (!userId || !newPriceId) {
-      return reply.status(400).send({ error: "userId and newPriceId are required" })
+      return reply.status(400).send({ error: "Authentication and newPriceId are required" })
     }
 
     // Only allow known subscription price IDs (reject topup IDs)

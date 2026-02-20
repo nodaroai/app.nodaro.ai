@@ -9,11 +9,10 @@ export async function userSettingsRoutes(app: FastifyInstance) {
    * GET /v1/user/settings - Fetch user settings (public_outputs, tier)
    */
   app.get("/v1/user/settings", async (req, reply) => {
-    const query = req.query as Record<string, string | undefined>
-    const userId = query.userId
+    const userId = req.userId
 
     if (!userId) {
-      return reply.status(400).send({ error: "userId is required" })
+      return reply.status(401).send({ error: "Authentication required" })
     }
 
     const { data: profile, error } = await supabase
@@ -44,12 +43,12 @@ export async function userSettingsRoutes(app: FastifyInstance) {
    */
   app.patch("/v1/user/settings", async (req, reply) => {
     const body = req.body as Record<string, unknown> | undefined
-    const userId = body?.userId as string | undefined
+    const userId = req.userId
     const publicOutputs = body?.publicOutputs as boolean | undefined
     const promptTemplates = body?.promptTemplates as Record<string, string> | undefined
 
     if (!userId) {
-      return reply.status(400).send({ error: "userId is required" })
+      return reply.status(401).send({ error: "Authentication required" })
     }
 
     // Fetch current profile (include public_outputs for response accuracy)

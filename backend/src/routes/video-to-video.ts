@@ -2,16 +2,16 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const videoToVideoBody = z.object({
   videoUrl: z.string().url(),
   prompt: z.string().max(2000).optional(),
   // V2V uses Wan 2.6 only via KIE.ai (no provider selection)
-  userId: z.string().uuid().optional(),
 })
 
 export async function videoToVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/video-to-video", async (req, reply) => {
+  app.post("/v1/video-to-video", { preHandler: creditGuard(() => "wan") }, async (req, reply) => {
     const parsed = videoToVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -22,11 +22,12 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, prompt, userId } = parsed.data
+    const { videoUrl, prompt } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -52,10 +53,15 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
+    const reservation = await reserveCreditsForJob(req, reply, job.id, "wan")
+    if (reply.sent) return
+    const usageLogId = reservation?.usageLogId
+
     await videoQueue.add("video-to-video", {
       jobId: job.id,
       videoUrl,
       prompt,
+      usageLogId,
     })
 
     return { jobId: job.id }

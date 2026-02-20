@@ -166,10 +166,11 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     }
 
     const body = parsed.data
+    const userId = req.userId
 
-    if (!body.userId) {
+    if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -180,7 +181,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: null,
-        user_id: body.userId,
+        user_id: userId,
         status: "pending",
         input_data: {
           type: "render-video",
@@ -248,11 +249,12 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { sceneGraph, userId } = parsed.data
+    const { sceneGraph } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
@@ -302,11 +304,12 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { planType, plan, userId } = parsed.data
+    const { planType, plan } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

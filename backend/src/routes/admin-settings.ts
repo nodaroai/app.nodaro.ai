@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { invalidateSettingsCache } from "../lib/app-settings.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 const updateSettingBody = z.object({
   value: z.union([z.string(), z.number(), z.boolean(), z.record(z.unknown())]),
@@ -13,7 +14,20 @@ const settingKeyParams = z.object({
 
 export async function adminSettingsRoutes(app: FastifyInstance) {
   // Get all settings
-  app.get("/v1/admin/settings", async (_req, reply) => {
+  app.get("/v1/admin/settings", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    const isAdmin = await checkIsAdmin(userId)
+    if (!isAdmin) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Admin access required" },
+      })
+    }
+
     const { data, error } = await supabase
       .from("app_settings")
       .select("key, value, updated_at")
@@ -36,6 +50,19 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
 
   // Get single setting by key
   app.get("/v1/admin/settings/:key", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    const isAdmin = await checkIsAdmin(userId)
+    if (!isAdmin) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Admin access required" },
+      })
+    }
+
     const parsed = settingKeyParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -74,6 +101,19 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
 
   // Update setting (upsert)
   app.put("/v1/admin/settings/:key", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    const isAdmin = await checkIsAdmin(userId)
+    if (!isAdmin) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Admin access required" },
+      })
+    }
+
     const paramsResult = settingKeyParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({

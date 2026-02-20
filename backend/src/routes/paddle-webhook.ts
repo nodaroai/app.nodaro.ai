@@ -20,8 +20,9 @@ import {
   resolveUserId,
 } from "../billing/provision-credits.js"
 import { EventName } from "@paddle/paddle-node-sdk"
+import { config } from "../lib/config.js"
 
-const WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET ?? ""
+const WEBHOOK_SECRET = config.PADDLE_WEBHOOK_SECRET
 
 export async function paddleWebhookRoutes(app: FastifyInstance) {
   // Override JSON parser in this plugin scope to capture raw body
@@ -45,6 +46,11 @@ export async function paddleWebhookRoutes(app: FastifyInstance) {
     if (!rawBody || !signature) {
       console.warn("[paddle-webhook] Missing raw body or paddle-signature header")
       return reply.status(400).send({ error: "Missing signature" })
+    }
+
+    if (!WEBHOOK_SECRET) {
+      console.warn("[paddle-webhook] PADDLE_WEBHOOK_SECRET not configured — rejecting webhook")
+      return reply.status(500).send({ error: "Webhook secret not configured" })
     }
 
     // Verify webhook signature
