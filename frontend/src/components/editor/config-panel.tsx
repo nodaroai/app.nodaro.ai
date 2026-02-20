@@ -252,6 +252,19 @@ export function ConfigPanel() {
     deleteNode(selectedNodeId)
   }
 
+  // useMemo must be called unconditionally (before any early return) to satisfy React's rules of hooks
+  const configProps = useMemo(
+    () => ({
+      data: (displayNode?.data ?? {}) as any,
+      onUpdate: update,
+      sources,
+      fieldMappings,
+      onMapField: handleMapField,
+      nodes,
+    }),
+    [displayNode?.data, update, sources, fieldMappings, handleMapField, nodes]
+  )
+
   if (!displayNode) {
     return (
       <div className="absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out translate-x-full pointer-events-none" />
@@ -261,10 +274,6 @@ export function ConfigPanel() {
   const selectedNode = displayNode
   const nodeType = selectedNode.type as string
   const nodeData = selectedNode.data as Record<string, unknown>
-  const configProps = useMemo(
-    () => ({ data: nodeData as any, onUpdate: update, sources, fieldMappings, onMapField: handleMapField, nodes }),
-    [nodeData, update, sources, fieldMappings, handleMapField, nodes]
-  )
 
   const panelContent = (
     <div className={isExpanded

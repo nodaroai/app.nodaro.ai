@@ -86,6 +86,7 @@ export const EXECUTABLE_TYPES = new Set([
   "merge-video-audio",
   "extract-audio",
   "trim-video",
+  "transcode-video",
   "speed-ramp",
   "loop-video",
   "fade-video",

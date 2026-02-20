@@ -3,7 +3,7 @@ import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { uploadFileToR2 } from "../lib/storage.js"
-import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
+import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS, REMOTION_INPUT_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, generateAndUploadThumbnail } from "./shared.js"
 import { createServer } from "node:http"
@@ -618,11 +618,19 @@ async function normalizeInputVideos(
     const localPath = join(workDir, inputName)
     await downloadFile(url, localPath)
 
+    // Always transcode with all-intra keyframes (-g 1) so Remotion's
+    // compositor can seek to any frame instantly instead of decoding from
+    // a distant keyframe (which caused ~33s per frame extraction).
     const outName = `norm-${randomUUID()}.mp4`
-    const result = await transcodeToBrowserSafe(localPath, join(workDir, outName))
-    const serveName = result === localPath ? inputName : outName
-    fileMap.set(url, serveName)
-    console.log(`[render-worker] Prepared input video: ${url} -> ${serveName} (transcoded=${result !== localPath})`)
+    const outPath = join(workDir, outName)
+    await runFfmpeg([
+      "-y", "-i", localPath,
+      ...REMOTION_INPUT_VIDEO_ARGS,
+      "-an",
+      outPath,
+    ])
+    fileMap.set(url, outName)
+    console.log(`[render-worker] Prepared input video: ${url} -> ${outName} (remotion-optimized)`)
   }
 
   const { baseUrl, close } = await startLocalFileServer(workDir)
@@ -766,6 +774,7 @@ export function createRenderWorker() {
 
             // Bundle Remotion compositions (cached after first call per entry point)
             const bundlePath = await getBundlePath(compositionId)
+            console.log(`[render-worker] Bundle ready for ${compositionId}: ${bundlePath}`)
             await bullJob.updateProgress(40)
 
             // Select composition and render
@@ -774,6 +783,7 @@ export function createRenderWorker() {
             // Allow overriding Remotion's bundled chrome-headless-shell (e.g. custom Docker images)
             const browserExecutable = process.env.CHROME_PATH || undefined
 
+            console.log(`[render-worker] selectComposition(${compositionId}) starting...`)
             const composition = await selectComposition({
               serveUrl: bundlePath,
               id: compositionId,
@@ -781,11 +791,13 @@ export function createRenderWorker() {
               browserExecutable,
               timeoutInMilliseconds: 120_000,
             })
+            console.log(`[render-worker] selectComposition(${compositionId}) done: ${composition.width}x${composition.height} ${composition.fps}fps ${composition.durationInFrames}fr`)
 
             outputPath = join(workDir, "output.mp4")
 
             const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
 
+            console.log(`[render-worker] renderMedia(${compositionId}) starting... output: ${outputPath}`)
             const RENDER_TIMEOUT_MS = 25 * 60 * 1000
             let timer: ReturnType<typeof setTimeout> | undefined
             await Promise.race([
