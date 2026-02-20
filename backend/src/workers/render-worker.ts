@@ -2,10 +2,11 @@ import { Worker } from "bullmq"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { uploadFileToR2 } from "../lib/storage.js"
-import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
+import { uploadFileWithKeyToR2, uploadFileToR2 } from "../lib/storage.js"
+import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, generateAndUploadThumbnail } from "./shared.js"
+import { randomUUID } from "node:crypto"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { readdir, stat, rm } from "node:fs/promises"
@@ -442,6 +443,141 @@ function buildLegacyRender(data: LegacyRenderJobData): {
   }
 }
 
+// ── Input video normalization ────────────────────────────────────────────
+// Remotion's OffthreadVideo compositor may not support all codecs (e.g. H.265).
+// Pre-transcode incompatible videos to H.264/yuv420p before rendering.
+
+const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
+
+/** Collect all video URLs from Remotion inputProps. */
+function collectVideoUrls(props: Record<string, unknown>): string[] {
+  const urls: string[] = []
+
+  // Scene graph: props.sceneGraph.tracks[].segments[].src
+  const sg = props.sceneGraph as Record<string, unknown> | undefined
+  if (sg) {
+    for (const track of (sg.tracks as Array<Record<string, unknown>>)) {
+      const segments = track.segments as Array<Record<string, unknown>> | undefined
+      if (segments) {
+        for (const seg of segments) {
+          if (seg.mediaType === "video" && typeof seg.src === "string") urls.push(seg.src)
+        }
+      }
+    }
+    return [...new Set(urls)]
+  }
+
+  // Plan: props.plan.sourceVideo / backgroundMedia / layers[].sourceVideo
+  const plan = props.plan as Record<string, unknown> | undefined
+  if (plan) {
+    if (typeof plan.sourceVideo === "string" && VIDEO_URL_RE.test(plan.sourceVideo)) urls.push(plan.sourceVideo)
+    if (typeof plan.backgroundMedia === "string" && VIDEO_URL_RE.test(plan.backgroundMedia)) urls.push(plan.backgroundMedia)
+    const layers = plan.layers as Array<Record<string, unknown>> | undefined
+    if (layers) {
+      for (const layer of layers) {
+        if (typeof layer.sourceVideo === "string") urls.push(layer.sourceVideo)
+      }
+    }
+    return [...new Set(urls)]
+  }
+
+  // Legacy: props.mediaAssets[].src where type === "video"
+  const assets = props.mediaAssets as Array<{ src: string; type: string }> | undefined
+  if (assets) {
+    for (const asset of assets) {
+      if (asset.type === "video") urls.push(asset.src)
+    }
+  }
+  return [...new Set(urls)]
+}
+
+/** Replace video URLs in Remotion inputProps using a URL map. */
+function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, string>): void {
+  const sg = props.sceneGraph as Record<string, unknown> | undefined
+  if (sg) {
+    for (const track of (sg.tracks as Array<Record<string, unknown>>)) {
+      const segments = track.segments as Array<Record<string, unknown>> | undefined
+      if (segments) {
+        for (const seg of segments) {
+          if (typeof seg.src === "string" && urlMap.has(seg.src)) seg.src = urlMap.get(seg.src)!
+        }
+      }
+    }
+    return
+  }
+
+  const plan = props.plan as Record<string, unknown> | undefined
+  if (plan) {
+    if (typeof plan.sourceVideo === "string" && urlMap.has(plan.sourceVideo)) plan.sourceVideo = urlMap.get(plan.sourceVideo)!
+    if (typeof plan.backgroundMedia === "string" && urlMap.has(plan.backgroundMedia)) plan.backgroundMedia = urlMap.get(plan.backgroundMedia)!
+    const layers = plan.layers as Array<Record<string, unknown>> | undefined
+    if (layers) {
+      for (const layer of layers) {
+        if (typeof layer.sourceVideo === "string" && urlMap.has(layer.sourceVideo)) layer.sourceVideo = urlMap.get(layer.sourceVideo)!
+      }
+    }
+    return
+  }
+
+  const assets = props.mediaAssets as Array<{ src: string }> | undefined
+  if (assets) {
+    for (const asset of assets) {
+      if (urlMap.has(asset.src)) asset.src = urlMap.get(asset.src)!
+    }
+  }
+}
+
+/**
+ * Wait until a URL is reachable (HEAD 200). Retries up to `maxAttempts`
+ * with exponential backoff. Throws if the URL never becomes available.
+ */
+async function waitForUrl(url: string, maxAttempts = 8): Promise<void> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(10_000) })
+      if (res.ok) return
+    } catch { /* retry */ }
+    const delay = Math.min(1000 * 2 ** i, 10_000)
+    await new Promise((r) => setTimeout(r, delay))
+  }
+  throw new Error(`URL not reachable after ${maxAttempts} attempts: ${url}`)
+}
+
+/**
+ * Transcode any incompatible input videos to H.264/yuv420p, re-upload to R2,
+ * and replace URLs in inputProps. Must be called AFTER plan validation to
+ * avoid safeUrlSchema rejecting the replacement URLs (which are still CDN URLs).
+ */
+async function normalizeInputVideos(
+  inputProps: Record<string, unknown>,
+  workDir: string,
+): Promise<void> {
+  const urls = collectVideoUrls(inputProps)
+  if (urls.length === 0) return
+
+  const urlMap = new Map<string, string>()
+
+  for (const url of urls) {
+    if (urlMap.has(url)) continue
+    const localPath = join(workDir, `probe-${randomUUID()}.mp4`)
+    await downloadFile(url, localPath)
+    const outPath = join(workDir, `norm-${randomUUID()}.mp4`)
+    const result = await transcodeToBrowserSafe(localPath, outPath)
+    if (result !== localPath) {
+      // Upload transcoded file to R2 with a unique key
+      const r2Key = `render-input/${randomUUID()}.mp4`
+      const newUrl = await uploadFileWithKeyToR2(result, r2Key, "video/mp4")
+      await waitForUrl(newUrl)
+      urlMap.set(url, newUrl)
+      console.log(`[render-worker] Transcoded input video: ${url} -> ${newUrl}`)
+    }
+  }
+
+  if (urlMap.size > 0) {
+    replaceVideoUrls(inputProps, urlMap)
+  }
+}
+
 /**
  * Clean up orphaned render work directories from /tmp on startup.
  * Removes any render-* directories older than 24 hours.
@@ -540,11 +676,8 @@ export function createRenderWorker() {
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
 
-        // NOTE: Input video transcoding is NOT needed here because all Remotion
-        // compositions use <OffthreadVideo>, which extracts frames via FFmpeg
-        // (not the browser's HTML5 video element) and can decode any codec.
-        // Browser-safe transcoding only matters for final output uploads,
-        // which is handled by the FFmpeg fast path and video-worker.
+        // Transcode input videos to H.264 if Remotion's compositor can't decode them
+        await normalizeInputVideos(inputProps, workDir)
 
         await bullJob.updateProgress(30)
 
