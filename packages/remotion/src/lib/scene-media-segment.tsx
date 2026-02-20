@@ -1,5 +1,5 @@
 import type React from "react"
-import { Img, Video, useCurrentFrame, useVideoConfig, interpolate } from "remotion"
+import { Img, OffthreadVideo, useCurrentFrame, useVideoConfig, interpolate } from "remotion"
 import { Gif } from "@remotion/gif"
 import type { MediaSegment } from "../scene-graph"
 import {
@@ -116,7 +116,7 @@ export function SceneMediaSegment({
       case "image":
         return <Img src={segment.src} style={mediaStyle} />
       case "video":
-        return <Video src={segment.src} style={mediaStyle} />
+        return <OffthreadVideo src={segment.src} style={mediaStyle} />
     }
   }
 

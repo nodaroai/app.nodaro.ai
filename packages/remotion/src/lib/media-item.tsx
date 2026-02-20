@@ -1,5 +1,5 @@
 import React from "react"
-import { Img, Video } from "remotion"
+import { Img, OffthreadVideo } from "remotion"
 import type { MediaAsset } from "../types"
 import { useKenBurns } from "./use-asset"
 
@@ -36,6 +36,6 @@ export function MediaItem({
   }
 
   return (
-    <Video src={asset.src} style={{ width, height, objectFit: "cover" }} />
+    <OffthreadVideo src={asset.src} style={{ width, height, objectFit: "cover" }} />
   )
 }
