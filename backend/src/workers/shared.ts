@@ -1,7 +1,7 @@
 import type { Job } from "bullmq"
 import { promises as fs } from "node:fs"
 import { randomUUID } from "node:crypto"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import youtubedl from "youtube-dl-exec"
 import { hasCredits } from "../lib/config.js"
@@ -10,7 +10,7 @@ import { CreditsService } from "../services/credits.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
-import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
+import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
 
 export interface JobContext {
   jobId: string
@@ -194,18 +194,8 @@ export async function uploadVideoMaybeWatermark(
     }
 
     // Even without watermark, transcode if the codec isn't browser-safe
-    if (await needsTranscode(inputPath)) {
-      const outputPath = join(workDir, "output.mp4")
-      await runFfmpeg([
-        "-y", "-i", inputPath,
-        ...BROWSER_SAFE_VIDEO_ARGS,
-        "-c:a", "aac", "-b:a", "128k",
-        outputPath,
-      ])
-      return await uploadFileToR2(outputPath, jobId, "video", jobUserId)
-    }
-
-    return await uploadFileToR2(inputPath, jobId, "video", jobUserId)
+    const uploadPath = await transcodeToBrowserSafe(inputPath, join(workDir, "output.mp4"))
+    return await uploadFileToR2(uploadPath, jobId, "video", jobUserId)
   } finally {
     await cleanupWorkDir(workDir)
   }
@@ -222,24 +212,14 @@ export async function watermarkLocalVideoAndUpload(
   watermark: boolean,
 ): Promise<string> {
   if (watermark) {
-    const wmPath = localPath.replace(/\.mp4$/, "-wm.mp4")
+    const wmPath = `${localPath}-wm.mp4`
     await applyVideoWatermark(localPath, wmPath)
     return uploadFileToR2(wmPath, jobId, "video", jobUserId)
   }
 
   // Transcode if the codec isn't browser-safe
-  if (await needsTranscode(localPath)) {
-    const outPath = localPath.replace(/\.mp4$/, "-norm.mp4")
-    await runFfmpeg([
-      "-y", "-i", localPath,
-      ...BROWSER_SAFE_VIDEO_ARGS,
-      "-c:a", "aac", "-b:a", "128k",
-      outPath,
-    ])
-    return uploadFileToR2(outPath, jobId, "video", jobUserId)
-  }
-
-  return uploadFileToR2(localPath, jobId, "video", jobUserId)
+  const uploadPath = await transcodeToBrowserSafe(localPath, `${localPath}-norm.mp4`)
+  return uploadFileToR2(uploadPath, jobId, "video", jobUserId)
 }
 
 /**
@@ -258,4 +238,54 @@ export async function generateAndUploadThumbnail(
     console.error(`[worker] Thumbnail generation failed for job ${jobId}:`, err)
     return null
   }
+}
+
+/**
+ * Complete an FFmpeg video job: upload output, cleanup work dir, generate
+ * thumbnail, save to DB, and commit credits. Covers the common case where
+ * the FFmpeg operation produces a single video file on disk.
+ */
+export async function completeFfmpegVideoJob(
+  outputPath: string,
+  ctx: JobContext,
+): Promise<void> {
+  const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "video", ctx.jobUserId)
+  await cleanupWorkDir(dirname(outputPath))
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    completed_at: new Date().toISOString(),
+  }).eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+/**
+ * Complete an FFmpeg audio job: upload output, cleanup work dir,
+ * save to DB, and commit credits.
+ */
+export async function completeFfmpegAudioJob(
+  outputPath: string,
+  ctx: JobContext,
+): Promise<void> {
+  const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "audio", ctx.jobUserId)
+  await cleanupWorkDir(dirname(outputPath))
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+  }).eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }

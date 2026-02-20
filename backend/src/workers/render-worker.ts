@@ -1,20 +1,18 @@
 import { Worker } from "bullmq"
 import IORedis from "ioredis"
-import { config, hasCredits } from "../lib/config.js"
+import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { CreditsService } from "../services/credits.js"
-import { uploadFileToR2, uploadBufferToR2 } from "../lib/storage.js"
-import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
+import { uploadFileToR2 } from "../lib/storage.js"
+import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
-import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
-import { join, dirname } from "node:path"
+import { commitJobCredits, refundJobCredits, shouldSaveJobResult, generateAndUploadThumbnail } from "./shared.js"
+import { join, dirname, resolve as resolvePath } from "node:path"
 import { fileURLToPath } from "node:url"
 import { readdir, stat, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { randomUUID } from "node:crypto"
 import { createServer, type Server } from "node:http"
 import { createReadStream, statSync } from "node:fs"
-import { basename } from "node:path"
 import { validatePlanByType } from "../lib/plan-schemas.js"
 
 // Remotion types (inline to avoid cross-package import at compile time)
@@ -159,37 +157,6 @@ async function getBundlePath(compositionId: string): Promise<string> {
   return cachedMainBundlePath
 }
 
-async function handleCredits(
-  action: "commit" | "refund",
-  usageLogId: string | null | undefined,
-  jobId: string,
-): Promise<void> {
-  if (!hasCredits() || !usageLogId) return
-  try {
-    if (action === "commit") {
-      await CreditsService.commitCredits(usageLogId)
-    } else {
-      await CreditsService.refundCredits(usageLogId)
-    }
-    console.log(`[render-worker] Credits ${action}ed for job ${jobId}`)
-  } catch (error) {
-    console.error(`[render-worker] Failed to ${action} credits for job ${jobId}:`, error)
-  }
-}
-
-async function generateAndUploadThumbnail(
-  videoUrl: string,
-  jobId: string,
-  jobUserId: string | undefined,
-): Promise<string | null> {
-  try {
-    const thumbBuffer = await generateThumbnailFromUrl(videoUrl)
-    return await uploadBufferToR2(thumbBuffer, `thumbnails/${jobId}.png`, "image/png", jobUserId)
-  } catch (err) {
-    console.error(`[render-worker] Thumbnail generation failed for job ${jobId}:`, err)
-    return null
-  }
-}
 
 /**
  * Build composition ID and input props for generic plan mode.
@@ -413,8 +380,8 @@ async function renderSceneGraphViaFfmpeg(
 
     const transcode = await needsTranscode(videoPath)
     console.log(`[render-worker] FFmpeg fast path: merging video + ${audioTracks.length} audio track(s) (transcode=${transcode})`)
-    const videoCodecArgs = transcode
-      ? [...BROWSER_SAFE_VIDEO_ARGS]
+    const videoCodecArgs: readonly string[] = transcode
+      ? BROWSER_SAFE_VIDEO_ARGS
       : ["-c:v", "copy"]
     await runFfmpeg([
       ...inputs,
@@ -492,10 +459,17 @@ const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
  * Returns the base URL and a cleanup function.
  */
 function startLocalFileServer(serveDir: string): Promise<{ baseUrl: string; close: () => void }> {
+  const resolvedDir = resolvePath(serveDir)
   return new Promise((resolve, reject) => {
     const server: Server = createServer((req, res) => {
       const fileName = decodeURIComponent(req.url?.slice(1) ?? "")
-      const filePath = join(serveDir, fileName)
+      const filePath = join(resolvedDir, fileName)
+      // Prevent path traversal — resolved path must stay within the serve directory
+      if (!filePath.startsWith(resolvedDir)) {
+        res.writeHead(403)
+        res.end("Forbidden")
+        return
+      }
       try {
         const fileStat = statSync(filePath)
         res.writeHead(200, {
@@ -532,40 +506,31 @@ async function normalizeInputVideos(
   const urls = collectVideoUrls(data)
   if (urls.length === 0) return undefined
 
+  // Start server up front so we know the port for building replacement URLs.
+  // The server binds instantly; transcoded files are written into workDir before
+  // Remotion attempts to fetch them.
+  const { baseUrl, close } = await startLocalFileServer(workDir)
   const urlMap = new Map<string, string>()
-  const transcodedFiles: string[] = []
 
   for (const url of urls) {
     if (urlMap.has(url)) continue
     const localPath = join(workDir, `probe-${randomUUID()}.mp4`)
     await downloadFile(url, localPath)
-    if (await needsTranscode(localPath)) {
-      const outName = `norm-${randomUUID()}.mp4`
-      const outPath = join(workDir, outName)
-      await runFfmpeg([
-        "-y", "-i", localPath,
-        ...BROWSER_SAFE_VIDEO_ARGS,
-        "-c:a", "aac", "-b:a", "128k",
-        outPath,
-      ])
-      transcodedFiles.push(outName)
-      urlMap.set(url, outName) // placeholder — replaced with full URL below
+    const outName = `norm-${randomUUID()}.mp4`
+    const result = await transcodeToBrowserSafe(localPath, join(workDir, outName))
+    if (result !== localPath) {
+      urlMap.set(url, `${baseUrl}/${outName}`)
       console.log(`[render-worker] Transcoded input video: ${url} -> ${outName}`)
     }
   }
 
-  if (urlMap.size === 0) return undefined
-
-  // Serve transcoded files from a local HTTP server (avoids CDN propagation delays)
-  const { baseUrl, close } = await startLocalFileServer(workDir)
-  console.log(`[render-worker] Local file server for transcoded videos: ${baseUrl}`)
-
-  // Replace placeholder file names with full localhost URLs
-  for (const [oldUrl, fileName] of urlMap) {
-    urlMap.set(oldUrl, `${baseUrl}/${fileName}`)
+  if (urlMap.size === 0) {
+    close()
+    return undefined
   }
-  replaceVideoUrls(data, urlMap)
 
+  console.log(`[render-worker] Local file server for transcoded videos: ${baseUrl}`)
+  replaceVideoUrls(data, urlMap)
   return close
 }
 
@@ -651,24 +616,6 @@ function replaceVideoUrls(data: RenderJobData, urlMap: Map<string, string>): voi
       }
     }
   }
-}
-
-/**
- * Check if a job was cancelled before saving results.
- * Prevents wasted work when user cancels during a long render.
- */
-async function shouldSaveJobResult(jobId: string): Promise<boolean> {
-  const { data: currentJob } = await supabase
-    .from("jobs")
-    .select("status")
-    .eq("id", jobId)
-    .single()
-
-  if (currentJob?.status === "cancelled") {
-    console.log(`[render-worker] Job ${jobId} was cancelled, skipping save`)
-    return false
-  }
-  return true
 }
 
 /**
@@ -836,7 +783,7 @@ export function createRenderWorker() {
 
         // Check if job was cancelled during render
         if (!await shouldSaveJobResult(jobId)) {
-          await handleCredits("refund", effectiveUsageLogId, jobId)
+          await refundJobCredits(effectiveUsageLogId, jobId, "cancelled")
           return
         }
 
@@ -867,8 +814,7 @@ export function createRenderWorker() {
           })
           .eq("id", jobId)
 
-        // Commit credits
-        await handleCredits("commit", effectiveUsageLogId, jobId)
+        await commitJobCredits(effectiveUsageLogId, jobId)
 
         console.log(`[render-worker] Job ${jobId} completed successfully`)
       } catch (error) {
@@ -884,7 +830,7 @@ export function createRenderWorker() {
           })
           .eq("id", jobId)
 
-        await handleCredits("refund", effectiveUsageLogId, jobId)
+        await refundJobCredits(effectiveUsageLogId, jobId, errMsg)
 
         // Terminal errors won't resolve on retry — skip BullMQ retries
         const isTerminal = /composition.*not found|plan validation|zod|invalid plan|timed out/i.test(errMsg)
