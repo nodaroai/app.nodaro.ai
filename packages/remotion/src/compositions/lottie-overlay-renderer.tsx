@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import {
   AbsoluteFill,
-  Video,
+  OffthreadVideo,
   Sequence,
   delayRender,
   continueRender,
@@ -83,7 +83,7 @@ export function LottieOverlayRenderer({ plan }: LottieOverlayRendererProps) {
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
       {/* Base video layer */}
       <AbsoluteFill>
-        <Video
+        <OffthreadVideo
           src={sourceVideo}
           style={{
             width: "100%",

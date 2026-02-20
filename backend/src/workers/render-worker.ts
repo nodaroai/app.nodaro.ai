@@ -456,6 +456,8 @@ const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
 
 /**
  * Start a lightweight HTTP server that serves files from a directory.
+ * Supports HTTP Range requests (required by Chrome's <video> element for
+ * loading metadata/duration via partial content).
  * Returns the base URL and a cleanup function.
  */
 function startLocalFileServer(serveDir: string): Promise<{ baseUrl: string; close: () => void }> {
@@ -472,11 +474,31 @@ function startLocalFileServer(serveDir: string): Promise<{ baseUrl: string; clos
       }
       try {
         const fileStat = statSync(filePath)
-        res.writeHead(200, {
+        const fileSize = fileStat.size
+        const rangeHeader = req.headers.range
+
+        const headers: Record<string, string | number> = {
           "Content-Type": "video/mp4",
-          "Content-Length": fileStat.size,
+          "Accept-Ranges": "bytes",
           "Access-Control-Allow-Origin": "*",
-        })
+        }
+
+        if (rangeHeader) {
+          // Parse Range: bytes=start-end
+          const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
+          if (match) {
+            const start = parseInt(match[1], 10)
+            const end = match[2] ? parseInt(match[2], 10) : fileSize - 1
+            headers["Content-Range"] = `bytes ${start}-${end}/${fileSize}`
+            headers["Content-Length"] = end - start + 1
+            res.writeHead(206, headers)
+            createReadStream(filePath, { start, end }).pipe(res)
+            return
+          }
+        }
+
+        headers["Content-Length"] = fileSize
+        res.writeHead(200, headers)
         createReadStream(filePath).pipe(res)
       } catch {
         res.writeHead(404)
