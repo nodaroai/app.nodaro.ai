@@ -3,7 +3,7 @@ import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
-import { uploadFileToR2, uploadBufferToR2 } from "../lib/storage.js"
+import { uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
@@ -11,6 +11,7 @@ import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { readdir, stat, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
+import { randomUUID } from "node:crypto"
 import { validatePlanByType } from "../lib/plan-schemas.js"
 
 // Remotion types (inline to avoid cross-package import at compile time)
@@ -474,6 +475,132 @@ function buildLegacyRender(data: LegacyRenderJobData): {
   }
 }
 
+// ── Video URL normalization ──────────────────────────────────────────────
+// Pre-process input data to ensure all video URLs point to browser-safe
+// H.264/yuv420p files. AI providers may return H.265/HEVC or other codecs
+// that headless Chrome (Remotion) cannot decode.
+
+const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
+
+/**
+ * Recursively scan an object for video URLs, transcode incompatible ones,
+ * re-upload to R2, and return the data with replaced URLs.
+ */
+async function normalizeInputVideos(
+  data: RenderJobData,
+  workDir: string,
+): Promise<void> {
+  const urlMap = new Map<string, string>()
+  const urls = collectVideoUrls(data)
+
+  for (const url of urls) {
+    if (urlMap.has(url)) continue
+    const localPath = join(workDir, `probe-${randomUUID()}.mp4`)
+    await downloadFile(url, localPath)
+    if (await needsTranscode(localPath)) {
+      const outPath = localPath.replace(".mp4", "-norm.mp4")
+      await runFfmpeg([
+        "-y", "-i", localPath,
+        ...BROWSER_SAFE_VIDEO_ARGS,
+        "-c:a", "aac", "-b:a", "128k",
+        outPath,
+      ])
+      const r2Key = `videos/transcode-${randomUUID()}.mp4`
+      const newUrl = await uploadFileWithKeyToR2(outPath, r2Key, "video/mp4")
+      urlMap.set(url, newUrl)
+      console.log(`[render-worker] Transcoded input video: ${url} -> ${newUrl}`)
+    }
+  }
+
+  if (urlMap.size > 0) {
+    replaceVideoUrls(data, urlMap)
+  }
+}
+
+/** Collect all video URLs from any render job type. */
+function collectVideoUrls(data: RenderJobData): string[] {
+  const urls: string[] = []
+
+  if (isSceneGraphJob(data)) {
+    for (const track of data.sceneGraph.tracks as Array<Record<string, unknown>>) {
+      const segments = track.segments as Array<Record<string, unknown>> | undefined
+      if (segments) {
+        for (const seg of segments) {
+          if (seg.mediaType === "video" && typeof seg.src === "string") {
+            urls.push(seg.src)
+          }
+        }
+      }
+    }
+  } else if (isPlanJob(data)) {
+    const plan = data.plan as Record<string, unknown>
+    // after-effects + lottie-overlay: plan.sourceVideo
+    if (typeof plan.sourceVideo === "string" && VIDEO_URL_RE.test(plan.sourceVideo)) {
+      urls.push(plan.sourceVideo)
+    }
+    // 3d-title: plan.backgroundMedia (if video)
+    if (typeof plan.backgroundMedia === "string" && VIDEO_URL_RE.test(plan.backgroundMedia)) {
+      urls.push(plan.backgroundMedia)
+    }
+    // composite: plan.layers[].sourceVideo
+    const layers = plan.layers as Array<Record<string, unknown>> | undefined
+    if (layers) {
+      for (const layer of layers) {
+        if (typeof layer.sourceVideo === "string") {
+          urls.push(layer.sourceVideo)
+        }
+      }
+    }
+  } else {
+    // legacy: mediaAssets[].url where type === "video"
+    for (const asset of data.mediaAssets) {
+      if (asset.type === "video") {
+        urls.push(asset.url)
+      }
+    }
+  }
+
+  return [...new Set(urls)]
+}
+
+/** Deep-replace video URLs in the render job data. */
+function replaceVideoUrls(data: RenderJobData, urlMap: Map<string, string>): void {
+  if (isSceneGraphJob(data)) {
+    for (const track of data.sceneGraph.tracks as Array<Record<string, unknown>>) {
+      const segments = track.segments as Array<Record<string, unknown>> | undefined
+      if (segments) {
+        for (const seg of segments) {
+          if (typeof seg.src === "string" && urlMap.has(seg.src)) {
+            seg.src = urlMap.get(seg.src)!
+          }
+        }
+      }
+    }
+  } else if (isPlanJob(data)) {
+    const plan = data.plan as Record<string, unknown>
+    if (typeof plan.sourceVideo === "string" && urlMap.has(plan.sourceVideo)) {
+      plan.sourceVideo = urlMap.get(plan.sourceVideo)!
+    }
+    if (typeof plan.backgroundMedia === "string" && urlMap.has(plan.backgroundMedia)) {
+      plan.backgroundMedia = urlMap.get(plan.backgroundMedia)!
+    }
+    const layers = plan.layers as Array<Record<string, unknown>> | undefined
+    if (layers) {
+      for (const layer of layers) {
+        if (typeof layer.sourceVideo === "string" && urlMap.has(layer.sourceVideo)) {
+          layer.sourceVideo = urlMap.get(layer.sourceVideo)!
+        }
+      }
+    }
+  } else {
+    for (const asset of data.mediaAssets) {
+      if (urlMap.has(asset.url)) {
+        asset.url = urlMap.get(asset.url)!
+      }
+    }
+  }
+}
+
 /**
  * Check if a job was cancelled before saving results.
  * Prevents wasted work when user cancels during a long render.
@@ -571,6 +698,11 @@ export function createRenderWorker() {
 
       try {
         await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", jobId)
+
+        await bullJob.updateProgress(20)
+
+        // Normalize input videos: transcode any non-browser-safe codecs to H.264/yuv420p
+        await normalizeInputVideos(data, workDir)
 
         await bullJob.updateProgress(30)
 
