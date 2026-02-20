@@ -20,6 +20,8 @@ const envSchema = z.object({
   /** Comma-separated list of allowed CORS origins (e.g. "https://app.scenenode.ai,http://localhost:3000") */
   CORS_ORIGIN: z.string().default(""),
   PADDLE_WEBHOOK_SECRET: z.string().default(""),
+  /** Number of parallel browser tabs for Remotion renders. null = Remotion default (50% CPU cores) */
+  REMOTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).nullable().default(null),
 })
 
 export type Edition = "community" | "business" | "cloud"

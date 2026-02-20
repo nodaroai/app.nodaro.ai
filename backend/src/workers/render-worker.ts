@@ -4,7 +4,7 @@ import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
 import { uploadFileToR2, uploadBufferToR2 } from "../lib/storage.js"
-import { createWorkDir, cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
+import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { join, dirname } from "node:path"
@@ -235,6 +235,185 @@ function buildSceneGraphRender(data: SceneGraphRenderJobData): {
   }
 }
 
+// ── FFmpeg Fast Path ────────────────────────────────────────────────────
+// For simple scene graphs (1 video segment, no effects/text), skip Remotion
+// entirely and use FFmpeg to merge media — orders of magnitude faster.
+
+interface FastPathTrack {
+  type: string
+  src?: string
+  volume?: number
+  fadeInFrames?: number
+  fadeOutFrames?: number
+  startFrame?: number
+  segments?: Array<{
+    mediaType?: string
+    startFrame?: number
+    durationInFrames?: number
+    effects?: unknown[]
+    transitionIn?: unknown
+    transitionOut?: unknown
+    src?: string
+  }>
+}
+
+/**
+ * Check if a scene graph can be rendered via FFmpeg instead of Remotion.
+ * Eligible when: exactly 1 media track with 1 video segment that spans
+ * the full composition, no effects, no transitions, no text tracks.
+ * Audio tracks are fine (handled via FFmpeg filter chain).
+ */
+function canUseFfmpegFastPath(sceneGraph: SceneGraphData): boolean {
+  const tracks = sceneGraph.tracks as FastPathTrack[]
+
+  const mediaTracks = tracks.filter((t) => t.type === "media")
+  const textTracks = tracks.filter((t) => t.type === "text")
+
+  if (textTracks.length > 0) return false
+  if (mediaTracks.length !== 1) return false
+
+  const mediaTrack = mediaTracks[0]
+  const segments = mediaTrack.segments ?? []
+  if (segments.length !== 1) return false
+
+  const seg = segments[0]
+  if (seg.mediaType !== "video") return false
+  if (seg.startFrame !== 0) return false
+  if (seg.durationInFrames !== sceneGraph.durationInFrames) return false
+  if (seg.effects && seg.effects.length > 0) return false
+  if (seg.transitionIn || seg.transitionOut) return false
+
+  return true
+}
+
+/**
+ * Render a simple scene graph via FFmpeg (video copy + audio filter chain).
+ * Much faster than Remotion because no headless Chrome is involved.
+ */
+async function renderSceneGraphViaFfmpeg(
+  data: SceneGraphRenderJobData,
+  workDir: string,
+  bullJob: { updateProgress(p: number): Promise<void> },
+): Promise<string> {
+  const { sceneGraph } = data
+  const tracks = sceneGraph.tracks as FastPathTrack[]
+  const fps = sceneGraph.fps
+  const durationSec = sceneGraph.durationInFrames / fps
+
+  const mediaTracks = tracks.filter((t) => t.type === "media")
+  const audioTracks = tracks.filter((t) => t.type === "audio")
+
+  const videoSrc = mediaTracks[0].segments![0].src!
+  const videoPath = join(workDir, "input-video.mp4")
+  const outputPath = join(workDir, "output.mp4")
+
+  // Download video
+  console.log(`[render-worker] FFmpeg fast path: downloading video`)
+  await downloadFile(videoSrc, videoPath)
+  await bullJob.updateProgress(50)
+
+  if (audioTracks.length === 0) {
+    // No audio — just trim the video with stream copy (near-instant)
+    console.log(`[render-worker] FFmpeg fast path: trimming video only (no audio)`)
+    await runFfmpeg([
+      "-i", videoPath,
+      "-t", String(durationSec),
+      "-c", "copy",
+      "-y", outputPath,
+    ])
+  } else {
+    // Download audio files
+    const audioPaths: string[] = []
+    for (let i = 0; i < audioTracks.length; i++) {
+      const aTrack = audioTracks[i]
+      const aPath = join(workDir, `audio-${i}.mp3`)
+      await downloadFile(aTrack.src!, aPath)
+      audioPaths.push(aPath)
+    }
+    await bullJob.updateProgress(60)
+
+    // Build FFmpeg command with filter_complex for audio mixing
+    const inputs = ["-i", videoPath]
+    for (const aPath of audioPaths) {
+      inputs.push("-i", aPath)
+    }
+
+    // Build per-audio filters: delay + volume + fade
+    const filterParts: string[] = []
+    const mixInputs: string[] = []
+
+    for (let i = 0; i < audioTracks.length; i++) {
+      const aTrack = audioTracks[i]
+      const inputIdx = i + 1 // 0 is the video
+      const startFrame = aTrack.startFrame ?? 0
+      const delayMs = Math.round((startFrame / fps) * 1000)
+      const vol = aTrack.volume ?? 1
+      const fadeInSec = (aTrack.fadeInFrames ?? 0) / fps
+      const fadeOutSec = (aTrack.fadeOutFrames ?? 0) / fps
+
+      let chain = `[${inputIdx}:a]`
+      const filters: string[] = []
+
+      if (delayMs > 0) {
+        filters.push(`adelay=${delayMs}|${delayMs}`)
+      }
+      if (vol !== 1) {
+        filters.push(`volume=${vol}`)
+      }
+      if (fadeInSec > 0) {
+        filters.push(`afade=t=in:st=0:d=${fadeInSec}`)
+      }
+      if (fadeOutSec > 0) {
+        // Fade out ends at composition duration
+        const fadeOutStart = durationSec - fadeOutSec
+        if (fadeOutStart > 0) {
+          filters.push(`afade=t=out:st=${fadeOutStart}:d=${fadeOutSec}`)
+        }
+      }
+
+      const label = `a${i}`
+      if (filters.length > 0) {
+        chain += `${filters.join(",")}[${label}]`
+      } else {
+        chain += `anull[${label}]`
+      }
+      filterParts.push(chain)
+      mixInputs.push(`[${label}]`)
+    }
+
+    // Mix all audio tracks together
+    let filterComplex: string
+    if (audioTracks.length === 1) {
+      filterComplex = filterParts[0]
+      // Use the single processed audio label directly
+    } else {
+      filterComplex =
+        filterParts.join(";") +
+        ";" +
+        mixInputs.join("") +
+        `amix=inputs=${audioTracks.length}:duration=longest[aout]`
+    }
+
+    const audioLabel = audioTracks.length === 1 ? "a0" : "aout"
+
+    console.log(`[render-worker] FFmpeg fast path: merging video + ${audioTracks.length} audio track(s)`)
+    await runFfmpeg([
+      ...inputs,
+      "-filter_complex", filterComplex,
+      "-map", "0:v",
+      "-map", `[${audioLabel}]`,
+      "-c:v", "copy",
+      "-c:a", "aac",
+      "-t", String(durationSec),
+      "-y", outputPath,
+    ])
+  }
+
+  await bullJob.updateProgress(85)
+  console.log(`[render-worker] FFmpeg fast path: done`)
+  return outputPath
+}
+
 /**
  * Build composition ID and input props for legacy template mode.
  * Legacy templates still use their original composition IDs (slideshow, explainer, etc.)
@@ -396,51 +575,61 @@ export function createRenderWorker() {
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
 
-        console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
+        // FFmpeg fast path: skip Remotion for simple scene graphs (1 video, no effects/text)
+        let outputPath: string
+        if (isSceneGraphJob(data) && canUseFfmpegFastPath(data.sceneGraph)) {
+          console.log(`[render-worker] FFmpeg fast path for job ${jobId}`)
+          outputPath = await renderSceneGraphViaFfmpeg(data, workDir, bullJob)
+        } else {
+          console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
 
-        // Bundle Remotion compositions (cached after first call per entry point)
-        const bundlePath = await getBundlePath(compositionId)
-        await bullJob.updateProgress(40)
+          // Bundle Remotion compositions (cached after first call per entry point)
+          const bundlePath = await getBundlePath(compositionId)
+          await bullJob.updateProgress(40)
 
-        // Select composition and render
-        const { selectComposition, renderMedia } = await import("@remotion/renderer")
+          // Select composition and render
+          const { selectComposition, renderMedia } = await import("@remotion/renderer")
 
-        // Allow overriding Remotion's bundled chrome-headless-shell (e.g. custom Docker images)
-        const browserExecutable = process.env.CHROME_PATH || undefined
+          // Allow overriding Remotion's bundled chrome-headless-shell (e.g. custom Docker images)
+          const browserExecutable = process.env.CHROME_PATH || undefined
 
-        const composition = await selectComposition({
-          serveUrl: bundlePath,
-          id: compositionId,
-          inputProps,
-          browserExecutable,
-        })
-
-        const outputPath = join(workDir, "output.mp4")
-
-        const RENDER_TIMEOUT_MS = 25 * 60 * 1000
-        await Promise.race([
-          renderMedia({
-            composition: {
-              ...composition,
-              width,
-              height,
-              fps,
-              durationInFrames,
-            },
+          const composition = await selectComposition({
             serveUrl: bundlePath,
-            codec: "h264",
-            outputLocation: outputPath,
+            id: compositionId,
             inputProps,
             browserExecutable,
-            onProgress: ({ progress }: { progress: number }) => {
-              const overall = 40 + Math.round(progress * 50)
-              bullJob.updateProgress(overall).catch(() => {})
-            },
-          }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Render timed out after 25 minutes")), RENDER_TIMEOUT_MS)
-          ),
-        ])
+          })
+
+          outputPath = join(workDir, "output.mp4")
+
+          const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
+
+          const RENDER_TIMEOUT_MS = 25 * 60 * 1000
+          await Promise.race([
+            renderMedia({
+              composition: {
+                ...composition,
+                width,
+                height,
+                fps,
+                durationInFrames,
+              },
+              serveUrl: bundlePath,
+              codec: "h264",
+              outputLocation: outputPath,
+              inputProps,
+              browserExecutable,
+              concurrency: remotionConcurrency,
+              onProgress: ({ progress }: { progress: number }) => {
+                const overall = 40 + Math.round(progress * 50)
+                bullJob.updateProgress(overall).catch(() => {})
+              },
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Render timed out after 25 minutes")), RENDER_TIMEOUT_MS)
+            ),
+          ])
+        }
 
         await bullJob.updateProgress(90)
 
