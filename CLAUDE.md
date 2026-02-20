@@ -121,7 +121,7 @@ frontend/src/
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node)
+  components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node, composite-node)
   components/credits/     — CreditBalance, GenerateButton, etc.
   components/ui/          — shadcn/ui
   hooks/                  — useModelCredits, etc.
@@ -131,7 +131,7 @@ frontend/src/
   lib/pricing-data.ts     — Tier/model pricing constants
   types/nodes.ts          — Node data types
 
-packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary, scene-graph, after-effects, lottie-overlay, 3d-title, motion-graphics)
+packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary, scene-graph, after-effects, lottie-overlay, 3d-title, motion-graphics, composite)
 
 backend/src/
   server.ts               — Entry point
@@ -161,12 +161,13 @@ backend/src/
 | Execution model | Frontend DAG engine | Topological sort, parallel per level |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
-| Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + legacy template converters via BullMQ worker |
+| Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + composite renderer + legacy template converters via BullMQ worker |
 | AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
 | After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox, animated-blur, trail, motion-blur) applied to video (2 credits), `@remotion/motion-blur` for CameraMotionBlur + Trail |
 | Lottie Overlay | Claude Sonnet → Overlay Plan JSON | AI-placed timed Lottie animations over video (2 credits), `@remotion/lottie` + `delayRender`/`continueRender` per overlay |
 | 3D Title | Claude Sonnet → 3D Title Plan JSON | AI-generated animated 3D text scenes with camera, lighting, particles (3 credits), `@remotion/three` + Three.js + `@react-three/drei`, max 60s |
 | Motion Graphics | Claude Sonnet → Motion Graphics Plan JSON | AI-generated 2D motion graphics: lower thirds, title cards, kinetic typography, animated shapes/SVG paths (2 credits), pure Remotion primitives + `FONT_MAP` |
+| Composite | Client-side plan builder → Composite Plan JSON | Multi-layer video compositor: PiP, split screen, overlays with positioning/opacity/blend modes (0 credits), no AI, no backend route — plan built entirely in frontend DAG executor |
 | Multi-plan rendering | `POST /v1/render-video/plan` | Generic `{ planType, plan }` envelope — any composer node can feed plans to Render Video |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
@@ -190,5 +191,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-02-19*
-*Version: 1.32.1*
+*Last updated: 2026-02-20*
+*Version: 1.33.0*
