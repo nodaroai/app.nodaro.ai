@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { checkIsAdmin } from "../lib/admin-check.js"
+import { requireAdmin } from "../middleware/require-admin.js"
 
 // ============================================================
 // Admin Routes - Cost Alerts, Model Pricing & Asset Library
@@ -56,20 +56,7 @@ export async function adminRoutes(app: FastifyInstance) {
    * GET /v1/admin/alerts
    * List all cost alerts
    */
-  app.get("/v1/admin/alerts", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Admin access required" },
-      })
-    }
-
+  app.get("/v1/admin/alerts", { preHandler: requireAdmin }, async (req, reply) => {
     const { data, error } = await supabase
       .from("admin_alerts")
       .select("*")
@@ -88,20 +75,7 @@ export async function adminRoutes(app: FastifyInstance) {
    * POST /v1/admin/alerts
    * Create a new cost alert
    */
-  app.post("/v1/admin/alerts", async (req, reply) => {
-    const callerId = req.userId
-    if (!callerId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(callerId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Admin access required" },
-      })
-    }
-
+  app.post("/v1/admin/alerts", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = createAlertBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -119,7 +93,7 @@ export async function adminRoutes(app: FastifyInstance) {
       .insert({
         alert_type: alertType,
         threshold,
-        user_id: targetUserId ?? callerId,
+        user_id: targetUserId ?? req.userId!,
         is_enabled: isEnabled,
       })
       .select()
@@ -140,20 +114,7 @@ export async function adminRoutes(app: FastifyInstance) {
    */
   app.put<{
     Params: { id: string }
-  }>("/v1/admin/alerts/:id", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Admin access required" },
-      })
-    }
-
+  }>("/v1/admin/alerts/:id", { preHandler: requireAdmin }, async (req, reply) => {
     const paramsResult = alertIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -214,20 +175,7 @@ export async function adminRoutes(app: FastifyInstance) {
    */
   app.delete<{
     Params: { id: string }
-  }>("/v1/admin/alerts/:id", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Admin access required" },
-      })
-    }
-
+  }>("/v1/admin/alerts/:id", { preHandler: requireAdmin }, async (req, reply) => {
     const paramsResult = alertIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -262,20 +210,7 @@ export async function adminRoutes(app: FastifyInstance) {
    * GET /v1/admin/model-pricing
    * List all model pricing entries
    */
-  app.get("/v1/admin/model-pricing", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Admin access required" },
-      })
-    }
-
+  app.get("/v1/admin/model-pricing", { preHandler: requireAdmin }, async (req, reply) => {
     const { data, error } = await supabase
       .from("model_pricing")
       .select("*")
@@ -294,20 +229,7 @@ export async function adminRoutes(app: FastifyInstance) {
    * POST /v1/admin/model-pricing
    * Create or update model pricing (upsert on model_identifier)
    */
-  app.post("/v1/admin/model-pricing", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Admin access required" },
-      })
-    }
-
+  app.post("/v1/admin/model-pricing", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = upsertModelPricingBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -352,20 +274,7 @@ export async function adminRoutes(app: FastifyInstance) {
    */
   app.put<{
     Params: { id: string }
-  }>("/v1/admin/model-pricing/:id/toggle", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Admin access required" },
-      })
-    }
-
+  }>("/v1/admin/model-pricing/:id/toggle", { preHandler: requireAdmin }, async (req, reply) => {
     const paramsResult = modelIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -416,20 +325,7 @@ export async function adminRoutes(app: FastifyInstance) {
    */
   app.delete<{
     Params: { id: string }
-  }>("/v1/admin/model-pricing/:id", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Admin access required" },
-      })
-    }
-
+  }>("/v1/admin/model-pricing/:id", { preHandler: requireAdmin }, async (req, reply) => {
     const paramsResult = modelIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -466,20 +362,7 @@ export async function adminRoutes(app: FastifyInstance) {
    */
   app.post<{
     Params: { id: string }
-  }>("/v1/admin/assets/:id/promote-to-library", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Only admins can promote assets to library" },
-      })
-    }
-
+  }>("/v1/admin/assets/:id/promote-to-library", { preHandler: requireAdmin }, async (req, reply) => {
     const paramsResult = assetIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -516,7 +399,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const updatedMetadata = {
       ...cleanMetadata,
       promoted_at: new Date().toISOString(),
-      promoted_by: userId,
+      promoted_by: req.userId!,
     }
 
     const { data: asset, error: updateError } = await supabase
@@ -549,20 +432,7 @@ export async function adminRoutes(app: FastifyInstance) {
    */
   app.post<{
     Params: { id: string }
-  }>("/v1/admin/assets/:id/demote-from-library", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-    const isAdmin = await checkIsAdmin(userId)
-    if (!isAdmin) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Only admins can demote assets from library" },
-      })
-    }
-
+  }>("/v1/admin/assets/:id/demote-from-library", { preHandler: requireAdmin }, async (req, reply) => {
     const paramsResult = assetIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -599,7 +469,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const updatedMetadata = {
       ...restMetadata,
       demoted_at: new Date().toISOString(),
-      demoted_by: userId,
+      demoted_by: req.userId!,
     }
 
     const { data: asset, error: updateError } = await supabase
