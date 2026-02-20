@@ -31,7 +31,7 @@ import { mixAudio } from "../providers/video/mix-audio.js"
 import { speedRamp } from "../providers/video/speed-ramp.js"
 import { loopVideo } from "../providers/video/loop-video.js"
 import { fadeVideo } from "../providers/video/fade-video.js"
-import { cleanupWorkDir, createWorkDir, downloadFile } from "../providers/video/ffmpeg-utils.js"
+import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { generateMusic, type MusicProvider } from "../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../providers/audio/text-to-audio.js"
 import { KieAudioProvider } from "../providers/kie/audio.js"
@@ -208,16 +208,30 @@ async function uploadVideoMaybeWatermark(
   jobUserId: string | undefined,
   watermark: boolean,
 ): Promise<string> {
-  if (!watermark) {
-    return uploadToR2(sourceUrl, jobId, "video", jobUserId)
-  }
   const workDir = await createWorkDir("wm")
   try {
     const inputPath = join(workDir, "input.mp4")
-    const outputPath = join(workDir, "output.mp4")
     await downloadFile(sourceUrl, inputPath)
-    await applyVideoWatermark(inputPath, outputPath)
-    return await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+
+    if (watermark) {
+      const outputPath = join(workDir, "output.mp4")
+      await applyVideoWatermark(inputPath, outputPath)
+      return await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+    }
+
+    // Even without watermark, transcode if the codec isn't browser-safe
+    if (await needsTranscode(inputPath)) {
+      const outputPath = join(workDir, "output.mp4")
+      await runFfmpeg([
+        "-y", "-i", inputPath,
+        ...BROWSER_SAFE_VIDEO_ARGS,
+        "-c:a", "aac", "-b:a", "128k",
+        outputPath,
+      ])
+      return await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+    }
+
+    return await uploadFileToR2(inputPath, jobId, "video", jobUserId)
   } finally {
     await cleanupWorkDir(workDir)
   }
@@ -233,12 +247,25 @@ async function watermarkLocalVideoAndUpload(
   jobUserId: string | undefined,
   watermark: boolean,
 ): Promise<string> {
-  if (!watermark) {
-    return uploadFileToR2(localPath, jobId, "video", jobUserId)
+  if (watermark) {
+    const wmPath = localPath.replace(/\.mp4$/, "-wm.mp4")
+    await applyVideoWatermark(localPath, wmPath)
+    return uploadFileToR2(wmPath, jobId, "video", jobUserId)
   }
-  const wmPath = localPath.replace(/\.mp4$/, "-wm.mp4")
-  await applyVideoWatermark(localPath, wmPath)
-  return uploadFileToR2(wmPath, jobId, "video", jobUserId)
+
+  // Transcode if the codec isn't browser-safe
+  if (await needsTranscode(localPath)) {
+    const outPath = localPath.replace(/\.mp4$/, "-norm.mp4")
+    await runFfmpeg([
+      "-y", "-i", localPath,
+      ...BROWSER_SAFE_VIDEO_ARGS,
+      "-c:a", "aac", "-b:a", "128k",
+      outPath,
+    ])
+    return uploadFileToR2(outPath, jobId, "video", jobUserId)
+  }
+
+  return uploadFileToR2(localPath, jobId, "video", jobUserId)
 }
 
 /**

@@ -1,5 +1,5 @@
 import sharp from "sharp"
-import { runFfmpeg } from "../providers/video/ffmpeg-utils.js"
+import { runFfmpeg, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 
 const WATERMARK_TEXT = "SceneNode.ai"
 
@@ -41,7 +41,8 @@ export async function applyVideoWatermark(
     "-y",
     "-i", inputPath,
     "-vf", `drawtext=text='${WATERMARK_TEXT}':fontsize=24:fontcolor=white@0.5:x=w-tw-20:y=h-th-20`,
-    "-codec:a", "copy",
+    ...BROWSER_SAFE_VIDEO_ARGS,
+    "-c:a", "aac", "-b:a", "128k",
     outputPath,
   ])
 }

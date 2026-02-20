@@ -4,7 +4,7 @@ import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
 import { uploadFileToR2, uploadBufferToR2 } from "../lib/storage.js"
-import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg } from "../providers/video/ffmpeg-utils.js"
+import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { join, dirname } from "node:path"
@@ -313,14 +313,25 @@ async function renderSceneGraphViaFfmpeg(
   await bullJob.updateProgress(50)
 
   if (audioTracks.length === 0) {
-    // No audio — just trim the video with stream copy (near-instant)
-    console.log(`[render-worker] FFmpeg fast path: trimming video only (no audio)`)
-    await runFfmpeg([
-      "-i", videoPath,
-      "-t", String(durationSec),
-      "-c", "copy",
-      "-y", outputPath,
-    ])
+    // No audio — trim the video, transcoding to browser-safe H.264 if needed
+    const transcode = await needsTranscode(videoPath)
+    console.log(`[render-worker] FFmpeg fast path: trimming video only (no audio, transcode=${transcode})`)
+    if (transcode) {
+      await runFfmpeg([
+        "-i", videoPath,
+        "-t", String(durationSec),
+        ...BROWSER_SAFE_VIDEO_ARGS,
+        "-an",
+        "-y", outputPath,
+      ])
+    } else {
+      await runFfmpeg([
+        "-i", videoPath,
+        "-t", String(durationSec),
+        "-c", "copy",
+        "-y", outputPath,
+      ])
+    }
   } else {
     // Download audio files
     const audioPaths: string[] = []
@@ -396,14 +407,18 @@ async function renderSceneGraphViaFfmpeg(
 
     const audioLabel = audioTracks.length === 1 ? "a0" : "aout"
 
-    console.log(`[render-worker] FFmpeg fast path: merging video + ${audioTracks.length} audio track(s)`)
+    const transcode = await needsTranscode(videoPath)
+    console.log(`[render-worker] FFmpeg fast path: merging video + ${audioTracks.length} audio track(s) (transcode=${transcode})`)
+    const videoCodecArgs = transcode
+      ? [...BROWSER_SAFE_VIDEO_ARGS]
+      : ["-c:v", "copy"]
     await runFfmpeg([
       ...inputs,
       "-filter_complex", filterComplex,
       "-map", "0:v",
       "-map", `[${audioLabel}]`,
-      "-c:v", "copy",
-      "-c:a", "aac",
+      ...videoCodecArgs,
+      "-c:a", "aac", "-b:a", "128k",
       "-t", String(durationSec),
       "-y", outputPath,
     ])

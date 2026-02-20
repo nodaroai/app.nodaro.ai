@@ -54,6 +54,54 @@ export async function getVideoDuration(filePath: string): Promise<number> {
   return duration
 }
 
+/**
+ * Return the video codec name (e.g. "h264", "hevc", "vp9") for a local file.
+ */
+export async function getVideoCodec(filePath: string): Promise<string> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=codec_name",
+    "-of", "csv=p=0",
+    filePath,
+  ])
+  return output.trim().toLowerCase()
+}
+
+/**
+ * Return the pixel format (e.g. "yuv420p", "yuv444p") for a local file.
+ */
+export async function getPixelFormat(filePath: string): Promise<string> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=pix_fmt",
+    "-of", "csv=p=0",
+    filePath,
+  ])
+  return output.trim().toLowerCase()
+}
+
+/**
+ * Check whether a video file needs transcoding for browser playback.
+ * Browsers universally support H.264 baseline/main/high with yuv420p.
+ */
+export async function needsTranscode(filePath: string): Promise<boolean> {
+  const [codec, pixFmt] = await Promise.all([
+    getVideoCodec(filePath),
+    getPixelFormat(filePath),
+  ])
+  if (codec !== "h264") return true
+  if (pixFmt && pixFmt !== "yuv420p") return true
+  return false
+}
+
+/** Standard browser-safe H.264 encoding args (no input/output). */
+export const BROWSER_SAFE_VIDEO_ARGS = [
+  "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "23",
+  "-movflags", "+faststart",
+] as const
+
 export async function createWorkDir(prefix: string): Promise<string> {
   const workDir = join(tmpdir(), `${prefix}-${randomUUID()}`)
   await fs.mkdir(workDir, { recursive: true })
