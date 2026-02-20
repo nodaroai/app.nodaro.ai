@@ -41,10 +41,6 @@ export function useAppSettings() {
   })
 }
 
-export function useIsKieProvider(): boolean {
-  const { data } = useAppSettings()
-  return data?.ai_provider === "kie"
-}
 
 export function useUpdateSettingMutation() {
   const qc = useQueryClient()

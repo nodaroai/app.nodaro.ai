@@ -34,6 +34,64 @@ const edgeTypes = {
   animatedFlow: AnimatedFlowEdge as any,
 }
 
+// Module-level function — no closure dependencies, stable reference
+function getMiniMapNodeColor(node: { type?: string }): string {
+  const nodeType = node.type as string
+  // Character nodes - bubblegum pink
+  if (nodeType === 'character') return '#F472B6'
+  // Face nodes - warm orange
+  if (nodeType === 'face') return '#FB923C'
+  // Object nodes - mint green
+  if (nodeType === 'object') return '#34D399'
+  // Location nodes - cyan/turquoise
+  if (nodeType === 'location') return '#22D3EE'
+  // Scene and AI nodes - brand pink (spotlight)
+  if (nodeType === 'scene' ||
+      nodeType === 'ai-writer' ||
+      nodeType.startsWith('generate-') ||
+      nodeType.startsWith('text-to-') ||
+      nodeType.startsWith('image-to-') ||
+      nodeType.startsWith('video-to-') ||
+      nodeType === 'qa-check') return '#ff0073'
+  // Input nodes - neon cyan
+  if (nodeType === 'text-prompt' ||
+      nodeType === 'list' ||
+      nodeType === 'loop' ||
+      nodeType === 'upload-image' ||
+      nodeType === 'upload-video' ||
+      nodeType === 'upload-audio' ||
+      nodeType === 'rss-feed' ||
+      nodeType === 'reference-audio') return '#38BDF8'
+  // Parameter nodes - modern indigo
+  if (nodeType === 'image-provider' ||
+      nodeType === 'video-provider' ||
+      nodeType === 'voice-provider' ||
+      nodeType === 'script-provider' ||
+      nodeType === 'duration' ||
+      nodeType === 'aspect-ratio' ||
+      nodeType === 'motion' ||
+      nodeType === 'camera-motion' ||
+      nodeType === 'voice' ||
+      nodeType === 'text') return '#818CF8'
+  // Processing nodes - steel grey
+  if (nodeType === 'combine-videos' ||
+      nodeType === 'merge-video-audio' ||
+      nodeType === 'add-captions' ||
+      nodeType === 'resize-video' ||
+      nodeType === 'extract-audio' ||
+      nodeType === 'mix-audio' ||
+      nodeType === 'adjust-volume' ||
+      nodeType === 'trim-video' ||
+      nodeType === 'combine-text') return '#475569'
+  // Output nodes - green
+  if (nodeType === 'save-to-storage' ||
+      nodeType === 'webhook-output') return '#22c55e'
+  // Sticky notes - hidden from MiniMap
+  if (nodeType === 'sticky-note') return 'transparent'
+  // Default fallback
+  return '#6b7280'
+}
+
 interface NodeContextMenuState {
   readonly nodeId: string
   readonly x: number
@@ -77,7 +135,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
-  const { screenToFlowPosition, setNodes } = useReactFlow()
+  const { screenToFlowPosition, setNodes, getNode } = useReactFlow()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
   const [canvasContextMenu, setCanvasContextMenu] = useState<CanvasContextMenuState | null>(null)
   const [showMiniMap, setShowMiniMap] = useState(true)
@@ -93,12 +151,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const isValidConnection = useCallback<IsValidConnection>(
     (connection) => {
       if (connection.sourceHandle === "composition") {
-        const targetNode = nodes.find((n) => n.id === connection.target)
+        const targetNode = getNode(connection.target ?? "")
         return targetNode?.type === "render-video"
       }
       return true
     },
-    [nodes],
+    [getNode],
   )
 
   // Transform edges to be animated when source or target node is running, or highlighted when dragging
@@ -206,6 +264,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setCanvasContextMenu(null)
     setNodeContextMenu(null)
   }, [])
+
+  const handleOpenSearch = useCallback(() => setSearchModalOpen(true), [])
+  const handleOpenAssetLibrary = useCallback(() => setAssetLibraryOpen(true), [])
+  const handleOpenMediaLibrary = useCallback(() => setMediaLibraryOpen(true), [])
+  const handleToggleMiniMap = useCallback(() => setShowMiniMap((prev) => !prev), [])
+  const handleCloseAddNodePopup = useCallback(() => {
+    setAddNodePopupOpen(false)
+    setAddNodePopupPosition(undefined)
+  }, [])
+  const handleNodeDragStart = useCallback((_event: React.MouseEvent, node: { id: string }) => setDraggingNodeId(node.id), [])
+  const handleNodeDragStop = useCallback(() => setDraggingNodeId(null), [])
 
   const handleTidyUp = useCallback(() => {
     // Simple auto-arrange: sort nodes by type and arrange in a grid
@@ -413,11 +482,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     <>
       {/* Canvas Toolbar (icon buttons on left) */}
       <CanvasToolbar
-        onAddNode={() => handleOpenAddNodePopup()}
-        onSearch={() => setSearchModalOpen(true)}
-        onAssetLibrary={() => setAssetLibraryOpen(true)}
-        onMediaLibrary={() => setMediaLibraryOpen(true)}
-        onAddStickyNote={() => handleAddStickyNote()}
+        onAddNode={handleOpenAddNodePopup}
+        onSearch={handleOpenSearch}
+        onAssetLibrary={handleOpenAssetLibrary}
+        onMediaLibrary={handleOpenMediaLibrary}
+        onAddStickyNote={handleAddStickyNote}
         onTidyUp={handleTidyUp}
         onToggleSidebar={onToggleSidebar}
         sidebarVisible={sidebarVisible}
@@ -427,17 +496,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       {!isMobile && (
         <CanvasControls
           showMiniMap={showMiniMap}
-          onToggleMiniMap={() => setShowMiniMap(!showMiniMap)}
+          onToggleMiniMap={handleToggleMiniMap}
         />
       )}
 
       {/* Add Node Popup */}
       <AddNodePopup
         open={addNodePopupOpen}
-        onClose={() => {
-          setAddNodePopupOpen(false)
-          setAddNodePopupPosition(undefined)
-        }}
+        onClose={handleCloseAddNodePopup}
         onAddNode={handleAddNode}
         position={addNodePopupPosition}
       />
@@ -485,8 +551,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onPaneClick={handlePaneClick}
           onNodeContextMenu={handleNodeContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
-          onNodeDragStart={(_event, node) => setDraggingNodeId(node.id)}
-          onNodeDragStop={() => setDraggingNodeId(null)}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDragStop={handleNodeDragStop}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: 'default' }}
@@ -503,63 +569,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           {!isMobile && showMiniMap && (
             <MiniMap
               className="!bg-card !border !shadow-sm"
-              nodeColor={(node) => {
-                // Return category-specific colors for each node type (vibrant for dark mode)
-                const nodeType = node.type as string
-                // Character nodes - bubblegum pink
-                if (nodeType === 'character') return '#F472B6'
-                // Face nodes - warm orange
-                if (nodeType === 'face') return '#FB923C'
-                // Object nodes - mint green
-                if (nodeType === 'object') return '#34D399'
-                // Location nodes - cyan/turquoise
-                if (nodeType === 'location') return '#22D3EE'
-                // Scene and AI nodes - brand pink (spotlight)
-                if (nodeType === 'scene' ||
-                    nodeType === 'ai-writer' ||
-                    nodeType.startsWith('generate-') ||
-                    nodeType.startsWith('text-to-') ||
-                    nodeType.startsWith('image-to-') ||
-                    nodeType.startsWith('video-to-') ||
-                    nodeType === 'qa-check') return '#ff0073'
-                // Input nodes - neon cyan
-                if (nodeType === 'text-prompt' ||
-                    nodeType === 'list' ||
-                    nodeType === 'loop' ||
-                    nodeType === 'upload-image' ||
-                    nodeType === 'upload-video' ||
-                    nodeType === 'upload-audio' ||
-                    nodeType === 'rss-feed' ||
-                    nodeType === 'reference-audio') return '#38BDF8'
-                // Parameter nodes - modern indigo
-                if (nodeType === 'image-provider' ||
-                    nodeType === 'video-provider' ||
-                    nodeType === 'voice-provider' ||
-                    nodeType === 'script-provider' ||
-                    nodeType === 'duration' ||
-                    nodeType === 'aspect-ratio' ||
-                    nodeType === 'motion' ||
-                    nodeType === 'camera-motion' ||
-                    nodeType === 'voice' ||
-                    nodeType === 'text') return '#818CF8'
-                // Processing nodes - steel grey
-                if (nodeType === 'combine-videos' ||
-                    nodeType === 'merge-video-audio' ||
-                    nodeType === 'add-captions' ||
-                    nodeType === 'resize-video' ||
-                    nodeType === 'extract-audio' ||
-                    nodeType === 'mix-audio' ||
-                    nodeType === 'adjust-volume' ||
-                    nodeType === 'trim-video' ||
-                    nodeType === 'combine-text') return '#475569'
-                // Output nodes - green
-                if (nodeType === 'save-to-storage' ||
-                    nodeType === 'webhook-output') return '#22c55e'
-                // Sticky notes - hidden from MiniMap
-                if (nodeType === 'sticky-note') return 'transparent'
-                // Default fallback
-                return '#6b7280'
-              }}
+              nodeColor={getMiniMapNodeColor}
               maskColor="rgba(0, 0, 0, 0.2)"
             />
           )}

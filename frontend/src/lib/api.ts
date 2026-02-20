@@ -63,49 +63,6 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
   throw new Error((errObj?.message as string) ?? fallback)
 }
 
-interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-  meta?: {
-    total: number
-    page: number
-    limit: number
-  }
-}
-
-async function request<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
-  try {
-    const authHeaders = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders,
-        ...options.headers,
-      },
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null)
-      return {
-        success: false,
-        error: errorData?.error?.message || `Request failed with status ${response.status}`,
-      }
-    }
-
-    const data = await response.json()
-    return { success: true, data }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
-    }
-  }
-}
 
 // --- Generate Image (E2E spike) ---
 
@@ -1622,72 +1579,6 @@ export interface CharacterDefinitionRaw {
   readonly description?: string
 }
 
-// --- Replicate Predictions API ---
-
-export interface ReplicatePrediction {
-  id: string
-  model: string
-  version: string
-  input: Record<string, unknown>
-  output: unknown
-  status: "starting" | "processing" | "succeeded" | "failed" | "canceled"
-  error: string | null
-  logs: string | null
-  metrics: {
-    predict_time?: number
-    total_time?: number
-  }
-  created_at: string
-  started_at: string | null
-  completed_at: string | null
-  urls: {
-    get: string
-    cancel: string
-  }
-  source: string
-}
-
-export async function getPredictions(cursor?: string): Promise<{
-  data: ReplicatePrediction[]
-  next: string | null
-  previous: string | null
-}> {
-  const url = cursor ? `/v1/predictions?cursor=${encodeURIComponent(cursor)}` : "/v1/predictions"
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}${url}`, {
-    headers: authHeaders,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch predictions")
-  }
-  return res.json()
-}
-
-export async function getPrediction(id: string): Promise<{ data: ReplicatePrediction }> {
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}/v1/predictions/${id}`, {
-    headers: authHeaders,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch prediction")
-  }
-  return res.json()
-}
-
-export async function cancelPrediction(id: string): Promise<{ data: ReplicatePrediction }> {
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}/v1/predictions/${id}/cancel`, {
-    method: "POST",
-    headers: authHeaders,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to cancel prediction")
-  }
-  return res.json()
-}
 
 export async function motionTransferApi(
   imageUrl: string,
@@ -1887,26 +1778,6 @@ export async function generateMotionGraphics(params: {
 
 // --- AI Writer ---
 
-export async function generateAIWriter(params: {
-  userId: string
-  systemPrompt: string
-  userInput: string
-  provider?: string
-  model?: string
-  temperature?: number
-  maxTokens?: number
-}): Promise<{ jobId: string; generatedText: string }> {
-  const res = await fetch(`/v1/ai-writer/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "AI Agent generation failed")
-  }
-  return res.json()
-}
 
 export async function generateAIWriterStream(params: {
   systemPrompt: string
@@ -2325,18 +2196,4 @@ export async function changePlan(
   }
   const json = await res.json()
   return (json as Record<string, unknown>).data as { subscriptionId: string; tier: string }
-}
-
-export const api = {
-  get: <T>(path: string, headers?: HeadersInit) =>
-    request<T>(path, { method: 'GET', headers }),
-
-  post: <T>(path: string, body?: unknown, headers?: HeadersInit) =>
-    request<T>(path, { method: 'POST', body: JSON.stringify(body), headers }),
-
-  patch: <T>(path: string, body?: unknown, headers?: HeadersInit) =>
-    request<T>(path, { method: 'PATCH', body: JSON.stringify(body), headers }),
-
-  delete: <T>(path: string, headers?: HeadersInit) =>
-    request<T>(path, { method: 'DELETE', headers }),
 }

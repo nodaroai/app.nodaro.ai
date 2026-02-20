@@ -12,9 +12,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { AddCaptionsData } from "@/types/nodes"
 
 function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
-  // Subscribe to nodes to ensure re-render when node data changes
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as AddCaptionsData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as AddCaptionsData | undefined
   const nodeData = currentNodeData ?? (data as AddCaptionsData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)

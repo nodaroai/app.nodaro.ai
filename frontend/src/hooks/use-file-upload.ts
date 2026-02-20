@@ -1,5 +1,3 @@
-"use client"
-
 import { useCallback, useState } from "react"
 import { uploadFile, StorageExceededError, type UploadResult } from "@/lib/api"
 import { useAuth } from "./use-auth"

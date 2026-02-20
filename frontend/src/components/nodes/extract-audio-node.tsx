@@ -11,9 +11,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { ExtractAudioData } from "@/types/nodes"
 
 function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
-  // Subscribe to nodes to ensure re-render when node data changes
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as ExtractAudioData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ExtractAudioData | undefined
   const nodeData = currentNodeData ?? (data as ExtractAudioData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)

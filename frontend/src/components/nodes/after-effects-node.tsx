@@ -8,8 +8,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { AfterEffectsData } from "@/types/nodes"
 
 function AfterEffectsNodeComponent({ id, data, selected }: NodeProps) {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as AfterEffectsData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as AfterEffectsData | undefined
   const nodeData = currentNodeData ?? (data as AfterEffectsData)
   const credits = useModelCredits("after-effects", 2)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

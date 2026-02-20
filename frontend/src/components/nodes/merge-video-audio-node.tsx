@@ -27,11 +27,10 @@ function getSourceIcon(nodeType: string) {
 }
 
 function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
-  // Subscribe to nodes to ensure re-render when node data changes
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MergeVideoAudioData | undefined
+  const nodeData = currentNodeData ?? (data as MergeVideoAudioData)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as MergeVideoAudioData | undefined
-  const nodeData = currentNodeData ?? (data as MergeVideoAudioData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)

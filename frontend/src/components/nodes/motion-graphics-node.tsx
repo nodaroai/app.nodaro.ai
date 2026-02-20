@@ -8,8 +8,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as MotionGraphicsData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MotionGraphicsData | undefined
   const nodeData = currentNodeData ?? (data as MotionGraphicsData)
   const credits = useModelCredits("motion-graphics", 2)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

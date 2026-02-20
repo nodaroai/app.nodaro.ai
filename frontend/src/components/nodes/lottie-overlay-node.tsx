@@ -8,8 +8,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { LottieOverlayData } from "@/types/nodes"
 
 function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as LottieOverlayData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as LottieOverlayData | undefined
   const nodeData = currentNodeData ?? (data as LottieOverlayData)
   const credits = useModelCredits("lottie-overlay", 2)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

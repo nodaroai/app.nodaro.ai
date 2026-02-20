@@ -8,8 +8,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { ThreeDTitleData } from "@/types/nodes"
 
 function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as ThreeDTitleData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ThreeDTitleData | undefined
   const nodeData = currentNodeData ?? (data as ThreeDTitleData)
   const credits = useModelCredits("3d-title", 3)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

@@ -11,9 +11,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { MixAudioData } from "@/types/nodes"
 
 function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
-  // Subscribe to nodes to ensure re-render when node data changes
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as MixAudioData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MixAudioData | undefined
   const nodeData = currentNodeData ?? (data as MixAudioData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)

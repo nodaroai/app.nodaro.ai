@@ -12,8 +12,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { LoopVideoData } from "@/types/nodes"
 
 function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as LoopVideoData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as LoopVideoData | undefined
   const nodeData = currentNodeData ?? (data as LoopVideoData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
