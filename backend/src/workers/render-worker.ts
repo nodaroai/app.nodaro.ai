@@ -3,7 +3,7 @@ import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
-import { uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
+import { uploadFileToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
@@ -12,6 +12,9 @@ import { fileURLToPath } from "node:url"
 import { readdir, stat, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { randomUUID } from "node:crypto"
+import { createServer, type Server } from "node:http"
+import { createReadStream, statSync } from "node:fs"
+import { basename } from "node:path"
 import { validatePlanByType } from "../lib/plan-schemas.js"
 
 // Remotion types (inline to avoid cross-package import at compile time)
@@ -479,42 +482,91 @@ function buildLegacyRender(data: LegacyRenderJobData): {
 // Pre-process input data to ensure all video URLs point to browser-safe
 // H.264/yuv420p files. AI providers may return H.265/HEVC or other codecs
 // that headless Chrome (Remotion) cannot decode.
+// Transcoded files are served from a local HTTP server to avoid CDN
+// propagation delays that cause ERR_HTTP2_PROTOCOL_ERROR.
 
 const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
 
 /**
- * Recursively scan an object for video URLs, transcode incompatible ones,
- * re-upload to R2, and return the data with replaced URLs.
+ * Start a lightweight HTTP server that serves files from a directory.
+ * Returns the base URL and a cleanup function.
+ */
+function startLocalFileServer(serveDir: string): Promise<{ baseUrl: string; close: () => void }> {
+  return new Promise((resolve, reject) => {
+    const server: Server = createServer((req, res) => {
+      const fileName = decodeURIComponent(req.url?.slice(1) ?? "")
+      const filePath = join(serveDir, fileName)
+      try {
+        const fileStat = statSync(filePath)
+        res.writeHead(200, {
+          "Content-Type": "video/mp4",
+          "Content-Length": fileStat.size,
+          "Access-Control-Allow-Origin": "*",
+        })
+        createReadStream(filePath).pipe(res)
+      } catch {
+        res.writeHead(404)
+        res.end("Not found")
+      }
+    })
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address() as { port: number }
+      resolve({
+        baseUrl: `http://127.0.0.1:${addr.port}`,
+        close: () => server.close(),
+      })
+    })
+    server.on("error", reject)
+  })
+}
+
+/**
+ * Scan render job data for video URLs, transcode incompatible ones to
+ * browser-safe H.264/yuv420p, and serve them from a local HTTP server.
+ * Returns a cleanup function to stop the server (or undefined if no transcoding needed).
  */
 async function normalizeInputVideos(
   data: RenderJobData,
   workDir: string,
-): Promise<void> {
-  const urlMap = new Map<string, string>()
+): Promise<(() => void) | undefined> {
   const urls = collectVideoUrls(data)
+  if (urls.length === 0) return undefined
+
+  const urlMap = new Map<string, string>()
+  const transcodedFiles: string[] = []
 
   for (const url of urls) {
     if (urlMap.has(url)) continue
     const localPath = join(workDir, `probe-${randomUUID()}.mp4`)
     await downloadFile(url, localPath)
     if (await needsTranscode(localPath)) {
-      const outPath = localPath.replace(".mp4", "-norm.mp4")
+      const outName = `norm-${randomUUID()}.mp4`
+      const outPath = join(workDir, outName)
       await runFfmpeg([
         "-y", "-i", localPath,
         ...BROWSER_SAFE_VIDEO_ARGS,
         "-c:a", "aac", "-b:a", "128k",
         outPath,
       ])
-      const r2Key = `videos/transcode-${randomUUID()}.mp4`
-      const newUrl = await uploadFileWithKeyToR2(outPath, r2Key, "video/mp4")
-      urlMap.set(url, newUrl)
-      console.log(`[render-worker] Transcoded input video: ${url} -> ${newUrl}`)
+      transcodedFiles.push(outName)
+      urlMap.set(url, outName) // placeholder — replaced with full URL below
+      console.log(`[render-worker] Transcoded input video: ${url} -> ${outName}`)
     }
   }
 
-  if (urlMap.size > 0) {
-    replaceVideoUrls(data, urlMap)
+  if (urlMap.size === 0) return undefined
+
+  // Serve transcoded files from a local HTTP server (avoids CDN propagation delays)
+  const { baseUrl, close } = await startLocalFileServer(workDir)
+  console.log(`[render-worker] Local file server for transcoded videos: ${baseUrl}`)
+
+  // Replace placeholder file names with full localhost URLs
+  for (const [oldUrl, fileName] of urlMap) {
+    urlMap.set(oldUrl, `${baseUrl}/${fileName}`)
   }
+  replaceVideoUrls(data, urlMap)
+
+  return close
 }
 
 /** Collect all video URLs from any render job type. */
@@ -695,6 +747,7 @@ export function createRenderWorker() {
       const isPublic = profileData?.public_outputs !== false
 
       const workDir = await createWorkDir("render")
+      let stopFileServer: (() => void) | undefined
 
       try {
         await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", jobId)
@@ -702,7 +755,8 @@ export function createRenderWorker() {
         await bullJob.updateProgress(20)
 
         // Normalize input videos: transcode any non-browser-safe codecs to H.264/yuv420p
-        await normalizeInputVideos(data, workDir)
+        // Returns a cleanup function to stop the local file server (if transcoding occurred)
+        stopFileServer = await normalizeInputVideos(data, workDir)
 
         await bullJob.updateProgress(30)
 
@@ -840,6 +894,7 @@ export function createRenderWorker() {
         }
         throw error
       } finally {
+        stopFileServer?.()
         await cleanupWorkDir(workDir)
       }
     },
