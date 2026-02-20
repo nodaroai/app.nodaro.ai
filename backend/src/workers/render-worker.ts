@@ -23,8 +23,8 @@ interface RenderInputProps extends Record<string, unknown> {
   durationInFrames: number
   transitionStyle: string
   transitionDurationFrames: number
-  mediaAssets: Array<{ localPath: string; type: "image" | "video" | "audio"; durationSeconds?: number }>
-  audioTrackLocalPath?: string
+  mediaAssets: Array<{ src: string; type: "image" | "video" | "audio"; durationSeconds?: number }>
+  audioTrackUrl?: string
   textOverlays: Array<{ text: string; position: "top" | "center" | "bottom"; fontSize: number; color: string; startFrame: number; endFrame: number }>
   captions: { enabled: boolean; style: string; position: string; fontSize: number; color: string }
   backgroundColor: string
@@ -199,13 +199,8 @@ function buildPlanRender(data: PlanRenderJobData): {
   fps: number
   durationInFrames: number
 } {
-  // Validate plan structure (scene-graph uses its own validator)
-  let validatedPlan: Record<string, unknown>
-  if (data.planType !== "scene-graph") {
-    validatedPlan = validatePlanByType(data.planType, data.plan) as Record<string, unknown>
-  } else {
-    validatedPlan = data.plan as Record<string, unknown>
-  }
+  // Validate plan structure against its planType schema
+  const validatedPlan = validatePlanByType(data.planType, data.plan) as Record<string, unknown>
 
   return {
     compositionId: data.planType,
@@ -253,8 +248,8 @@ function buildLegacyRender(data: LegacyRenderJobData): {
   fps: number
   durationInFrames: number
 } {
-  const localAssets = data.mediaAssets.map((asset) => ({
-    localPath: asset.url,
+  const mappedAssets = data.mediaAssets.map((asset) => ({
+    src: asset.url,
     type: asset.type,
     durationSeconds: asset.durationSeconds,
   }))
@@ -267,8 +262,8 @@ function buildLegacyRender(data: LegacyRenderJobData): {
     durationInFrames: data.durationInFrames,
     transitionStyle: data.transitionStyle,
     transitionDurationFrames: data.transitionDurationFrames,
-    mediaAssets: localAssets,
-    audioTrackLocalPath: data.audioTrackUrl,
+    mediaAssets: mappedAssets,
+    audioTrackUrl: data.audioTrackUrl,
     textOverlays: data.textOverlays,
     captions: data.captions,
     backgroundColor: data.backgroundColor,

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { safeUrlSchema } from "./url-validator.js"
 
 // ── Zod schemas for each effect type ────────────────────────────────
 
@@ -48,7 +49,7 @@ const animatedBlurSchema = z.object({
   startBlur: z.number().min(0).max(50),
   endBlur: z.number().min(0).max(50),
   startFrame: z.number().min(0),
-  durationFrames: z.number().min(1),
+  durationFrames: z.number().min(1).max(54000),
   easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut"]).optional(),
 })
 
@@ -74,7 +75,7 @@ const textOverlaySchema = z.object({
   id: z.string(),
   text: z.string(),
   startFrame: z.number().min(0),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   position: z.enum(["top", "center", "bottom"]),
   fontSize: z.number().min(8).max(200),
   fontFamily: z.string().optional(),
@@ -87,8 +88,8 @@ export const afterEffectsPlanSchema = z.object({
   fps: z.number().min(15).max(60),
   width: z.number().min(100).max(3840),
   height: z.number().min(100).max(3840),
-  durationInFrames: z.number().min(1),
-  sourceVideo: z.string(),
+  durationInFrames: z.number().min(1).max(54000),
+  sourceVideo: safeUrlSchema,
   effects: z.array(afterEffectSchema).min(1),
   textOverlays: z.array(textOverlaySchema).optional(),
 })

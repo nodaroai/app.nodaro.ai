@@ -11,6 +11,19 @@ import { Composition, registerRoot } from "remotion"
 import { ThreeDTitleRenderer } from "./compositions/three-d-title-renderer"
 import type { ThreeDTitlePlan } from "./plan-types"
 
+/**
+ * Bridge specific component prop types with Remotion's
+ * LooseComponentType<Record<string, unknown>> requirement.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function asRemotionComponent(Comp: React.FC<any>): React.FC<Record<string, unknown>> {
+  const Wrapper: React.FC<Record<string, unknown>> = (props) => (
+    <Comp {...props} />
+  )
+  Wrapper.displayName = `Remotion(${Comp.displayName ?? Comp.name})`
+  return Wrapper
+}
+
 const THREE_D_TITLE_DEFAULT_PROPS: { plan: ThreeDTitlePlan } = {
   plan: {
     planType: "3d-title",
@@ -36,8 +49,7 @@ function Root3D() {
   return (
     <Composition
       id="3d-title"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      component={ThreeDTitleRenderer as React.FC<any>}
+      component={asRemotionComponent(ThreeDTitleRenderer)}
       durationInFrames={300}
       fps={30}
       width={1920}

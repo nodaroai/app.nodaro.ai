@@ -55,7 +55,7 @@ function DocumentarySegment({
 export function Documentary(props: RenderVideoInputProps) {
   const {
     mediaAssets,
-    audioTrackLocalPath,
+    audioTrackUrl,
     durationInFrames,
     textOverlays,
     backgroundColor,
@@ -92,7 +92,7 @@ export function Documentary(props: RenderVideoInputProps) {
         }}
       />
 
-      {audioTrackLocalPath && <Audio src={audioTrackLocalPath} />}
+      {audioTrackUrl && <Audio src={audioTrackUrl} />}
     </AbsoluteFill>
   )
 }

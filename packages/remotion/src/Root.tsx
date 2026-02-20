@@ -18,11 +18,10 @@ import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan, Composite
  * LooseComponentType<Record<string, unknown>> requirement.
  * Props are always provided at runtime via inputProps/defaultProps.
  */
-function asRemotionComponent<P extends Record<string, unknown>>(
-  Comp: React.FC<P>,
-): React.FC<Record<string, unknown>> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function asRemotionComponent(Comp: React.FC<any>): React.FC<Record<string, unknown>> {
   const Wrapper: React.FC<Record<string, unknown>> = (props) => (
-    <Comp {...(props as P)} />
+    <Comp {...props} />
   )
   Wrapper.displayName = `Remotion(${Comp.displayName ?? Comp.name})`
   return Wrapper

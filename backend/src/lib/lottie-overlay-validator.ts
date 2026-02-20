@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { safeUrlSchema } from "./url-validator.js"
 
 // ── Zod schemas ──────────────────────────────────────────────────────
 
@@ -11,9 +12,9 @@ const overlayPositionSchema = z.object({
 
 const lottieOverlayItemSchema = z.object({
   id: z.string(),
-  src: z.string().url(),
+  src: safeUrlSchema,
   startFrame: z.number().min(0),
-  durationInFrames: z.number().min(1),
+  durationInFrames: z.number().min(1).max(54000),
   position: overlayPositionSchema,
   opacity: z.number().min(0).max(1).default(1),
   playbackRate: z.number().min(0.1).max(3.0).default(1),
@@ -26,8 +27,8 @@ export const lottieOverlayPlanSchema = z.object({
   fps: z.number().min(15).max(60),
   width: z.number().min(100).max(3840),
   height: z.number().min(100).max(3840),
-  durationInFrames: z.number().min(1),
-  sourceVideo: z.string(),
+  durationInFrames: z.number().min(1).max(54000),
+  sourceVideo: safeUrlSchema,
   overlays: z.array(lottieOverlayItemSchema).min(1),
 })
 

@@ -1,9 +1,13 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import Anthropic from "@anthropic-ai/sdk"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { rateLimiter } from "../middleware/rate-limit.js"
+
+const aiRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "ai-lo" })
 import { CreditsService } from "../billing/credits.js"
 import { LOTTIE_OVERLAY_SYSTEM_PROMPT } from "../prompts/lottie-overlay-system.js"
 import { validateLottieOverlayPlan } from "../lib/lottie-overlay-validator.js"
@@ -19,14 +23,14 @@ function getAnthropicClient(): Anthropic {
 
 const lottieAssetSchema = z.object({
   id: z.string(),
-  url: z.string().url(),
+  url: safeUrlSchema,
   name: z.string(),
   durationSeconds: z.number().optional(),
 })
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
-  inputVideoUrl: z.string().url(),
+  inputVideoUrl: safeUrlSchema,
   fps: z.number().min(15).max(60).default(30),
   durationSeconds: z.number().min(1).max(300),
   width: z.number().min(100).max(3840).optional(),
@@ -39,7 +43,7 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/lottie-overlay/generate",
     {
-      preHandler: creditGuard(() => "lottie-overlay"),
+      preHandler: [aiRateLimit, creditGuard(() => "lottie-overlay")],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {

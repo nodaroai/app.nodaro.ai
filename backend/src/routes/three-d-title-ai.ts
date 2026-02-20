@@ -1,9 +1,13 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import Anthropic from "@anthropic-ai/sdk"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { rateLimiter } from "../middleware/rate-limit.js"
+
+const aiRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "ai-3d" })
 import { CreditsService } from "../billing/credits.js"
 import { THREE_D_TITLE_SYSTEM_PROMPT } from "../prompts/three-d-title-system.js"
 import { validateThreeDTitlePlan } from "../lib/three-d-title-validator.js"
@@ -32,7 +36,7 @@ const generateBody = z.object({
   height: z.number().min(100).max(3840).optional(),
   durationSeconds: z.number().min(1).max(60),
   backgroundColor: z.string().optional(),
-  backgroundMediaUrl: z.string().url().optional(),
+  backgroundMediaUrl: safeUrlSchema.optional(),
   userId: z.string().uuid(),
 })
 
@@ -40,7 +44,7 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/3d-title/generate",
     {
-      preHandler: creditGuard(() => "3d-title"),
+      preHandler: [aiRateLimit, creditGuard(() => "3d-title")],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
