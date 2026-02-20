@@ -52,7 +52,7 @@
 | Step | File | What to Update |
 |------|------|----------------|
 | 1 | `frontend/src/types/nodes.ts` | TypeScript type for node data |
-| 2 | `frontend/src/components/editor/config-panel.tsx` | `<SelectItem>` options |
+| 2 | `frontend/src/components/editor/config-panels/*.tsx` | `<SelectItem>` options (split by node category) |
 | 3 | `backend/src/routes/<node-type>.ts` | **Zod validation schema** ⚠️ MOST COMMONLY FORGOTTEN |
 | 4 | `backend/src/providers/kie/*.ts` or `replicate/*.ts` | Provider implementation |
 | 5 | `backend/src/providers/kie/models.ts` | KIE model config (cost, params) |
@@ -122,6 +122,11 @@ frontend/src/
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
   components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node, composite-node)
+  components/editor/
+    config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
+    config-panels/        — 22 files: per-category node config components (image, video, audio, composition, entity, etc.)
+    workflow-editor/      — 13 files: DAG execution engine, node executors, polling, main component
+    editor-error-boundary.tsx — React error boundary for Canvas + ConfigPanel
   components/credits/     — CreditBalance, GenerateButton, etc.
   components/ui/          — shadcn/ui
   hooks/                  — useModelCredits, etc.
@@ -158,7 +163,7 @@ backend/src/
 | Backend language | TypeScript (Node.js) | Same as frontend, BullMQ native |
 | Backend framework | Fastify | Fast, TypeScript-first, plugin system |
 | Job queue | BullMQ | Best for Node.js, excellent dashboard |
-| Execution model | Frontend DAG engine | Topological sort, parallel per level |
+| Execution model | Frontend DAG engine (`workflow-editor/`) | Topological sort, parallel per level |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
 | Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + composite renderer + legacy template converters via BullMQ worker |
@@ -192,4 +197,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-20*
-*Version: 1.33.0*
+*Version: 1.34.0*
