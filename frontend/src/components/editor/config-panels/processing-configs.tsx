@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,6 +24,7 @@ import type {
   SpeedRampData,
   LoopVideoData,
   FadeVideoData,
+  TranscodeVideoData,
 } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ConfigProps } from "./types"
@@ -576,6 +578,97 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
       <p className="text-[10px] text-muted-foreground">
         Apply fade in/out transitions to video. Audio fades are applied automatically when the video has an audio track.
       </p>
+    </div>
+  )
+}
+
+export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVideoData>) {
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const isDefault = data.codec === "h264" && (data.crf ?? 23) === 23 && data.resolution === "original" && data.audioBitrate === "128k"
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">
+        Auto-transcodes video to browser/phone-safe H.264 + AAC MP4.
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setShowAdvanced((v) => !v)}
+        className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        Advanced Settings {isDefault && "(using defaults)"}
+      </button>
+
+      {showAdvanced && (
+        <div className="flex flex-col gap-3 pl-1 border-l-2 border-muted-foreground/10 ml-1">
+          <div>
+            <Label>Codec</Label>
+            <Select
+              value={data.codec ?? "h264"}
+              onValueChange={(v) => onUpdate({ codec: v as TranscodeVideoData["codec"] })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="h264">H.264 (recommended)</SelectItem>
+                <SelectItem value="h265">H.265 (HEVC)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="transcode-crf">Quality (CRF): {data.crf ?? 23}</Label>
+            <input
+              id="transcode-crf"
+              type="range"
+              min={0}
+              max={51}
+              step={1}
+              value={data.crf ?? 23}
+              onChange={(e) => onUpdate({ crf: parseInt(e.target.value, 10) })}
+              className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+              <span>0 (best)</span>
+              <span>23 (default)</span>
+              <span>51 (worst)</span>
+            </div>
+          </div>
+
+          <div>
+            <Label>Resolution</Label>
+            <Select
+              value={data.resolution ?? "original"}
+              onValueChange={(v) => onUpdate({ resolution: v as TranscodeVideoData["resolution"] })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="original">Original</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="480p">480p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Audio Bitrate</Label>
+            <Select
+              value={data.audioBitrate ?? "128k"}
+              onValueChange={(v) => onUpdate({ audioBitrate: v as TranscodeVideoData["audioBitrate"] })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="128k">128 kbps (default)</SelectItem>
+                <SelectItem value="192k">192 kbps</SelectItem>
+                <SelectItem value="256k">256 kbps</SelectItem>
+                <SelectItem value="320k">320 kbps</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

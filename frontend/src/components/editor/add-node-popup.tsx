@@ -49,6 +49,7 @@ import {
   Repeat,
   Gauge,
   SunDim,
+  RefreshCw,
   Shapes,
   Box,
 } from "lucide-react";
@@ -425,6 +426,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "fade-video",
     label: "Fade In/Out",
     icon: <SunDim className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video",
+  },
+  {
+    type: "transcode-video",
+    label: "Transcode Video",
+    icon: <RefreshCw className="h-4 w-4" />,
     category: "Processing",
     group: "Video",
   },

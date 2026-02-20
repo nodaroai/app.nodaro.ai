@@ -905,6 +905,23 @@ export async function trimVideoApi(videoUrl: string, startTime: number, endTime?
   return res.json()
 }
 
+export async function transcodeVideoApi(videoUrl: string, codec?: string, crf?: number, resolution?: string, audioBitrate?: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, codec, crf, resolution, audioBitrate }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/transcode-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start transcode-video")
+  }
+  return res.json()
+}
+
 export async function speedRampApi(videoUrl: string, speed: number, adjustAudio: boolean, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, speed, adjustAudio }
   if (userId) {

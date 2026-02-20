@@ -1,5 +1,5 @@
 import React from "react"
-import { AbsoluteFill, Video, Sequence, useCurrentFrame, interpolate, Easing } from "remotion"
+import { AbsoluteFill, OffthreadVideo, Sequence, useCurrentFrame, interpolate, Easing } from "remotion"
 import { CameraMotionBlur, Trail } from "@remotion/motion-blur"
 import type { AfterEffectsPlan, AfterEffect } from "../plan-types"
 import {
@@ -71,7 +71,7 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
   const content = (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
       {/* 1. Base video layer with color grading + blur applied directly to Video */}
-      <Video
+      <OffthreadVideo
         src={sourceVideo}
         style={{
           width: "100%",
