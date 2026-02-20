@@ -1,5 +1,5 @@
 import React, { Suspense } from "react"
-import { AbsoluteFill, Img, Video } from "remotion"
+import { AbsoluteFill, Img, OffthreadVideo } from "remotion"
 import { ThreeCanvas } from "@remotion/three"
 import { AnimatedCamera } from "../lib/three-d-camera"
 import { AnimatedText3D } from "../lib/three-d-text"
@@ -22,7 +22,7 @@ export function ThreeDTitleRenderer({ plan }: ThreeDTitleRendererProps) {
       {/* Optional background media */}
       {bgMedia && isVideoUrl(bgMedia) && (
         <AbsoluteFill>
-          <Video src={bgMedia} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <OffthreadVideo src={bgMedia} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </AbsoluteFill>
       )}
       {bgMedia && !isVideoUrl(bgMedia) && (

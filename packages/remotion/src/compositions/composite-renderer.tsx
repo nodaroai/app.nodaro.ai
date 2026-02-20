@@ -1,5 +1,5 @@
 import React from "react"
-import { AbsoluteFill, Video, Sequence } from "remotion"
+import { AbsoluteFill, OffthreadVideo, Sequence } from "remotion"
 import type { CompositePlan, CompositeLayer } from "../plan-types"
 
 interface CompositeRendererProps {
@@ -19,7 +19,7 @@ function CompositeLayerView({ layer }: { readonly layer: CompositeLayer }) {
   if (layer.position === "fullscreen") {
     return (
       <AbsoluteFill style={{ opacity: layer.opacity, mixBlendMode: blendMode }}>
-        <Video
+        <OffthreadVideo
           src={layer.sourceVideo}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
@@ -40,7 +40,7 @@ function CompositeLayerView({ layer }: { readonly layer: CompositeLayer }) {
         overflow: "hidden",
       }}
     >
-      <Video
+      <OffthreadVideo
         src={layer.sourceVideo}
         style={{ width: "100%", height: "100%", objectFit: "cover" }}
       />
