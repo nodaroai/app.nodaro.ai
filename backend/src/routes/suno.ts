@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -24,7 +25,7 @@ const sunoGenerateBody = z.object({
 
 const sunoCoverBody = z.object({
   prompt: z.string().min(1).max(3000),
-  uploadUrl: z.string().url(),
+  uploadUrl: safeUrlSchema,
   model: sunoModelEnum,
   lyrics: z.string().max(3000).optional(),
   style: z.string().max(500).optional(),

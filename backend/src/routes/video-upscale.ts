@@ -10,12 +10,13 @@
 
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const videoUpscaleBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   upscaleFactor: z.enum(["1", "2", "4"]).default("2"),
 })
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { BaseEdge, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react"
 import type { CSSProperties } from "react"
 
@@ -10,7 +11,7 @@ type AnimatedFlowEdgeData = {
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
 
-export function AnimatedFlowEdge({
+function AnimatedFlowEdgeComponent({
   id,
   sourceX,
   sourceY,
@@ -78,3 +79,5 @@ export function AnimatedFlowEdge({
     </>
   )
 }
+
+export const AnimatedFlowEdge = memo(AnimatedFlowEdgeComponent)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, type ReactNode, type MouseEvent } from "react"
+import { memo, useEffect, type ReactNode, type MouseEvent } from "react"
 import { Handle, Position, NodeResizer } from "@xyflow/react"
 import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -80,7 +80,7 @@ const CATEGORY_ICON_COLOR: Record<string, string> = {
   i2v: "text-white",
 }
 
-export function BaseNode({
+function BaseNodeComponent({
   id,
   label,
   icon,
@@ -272,3 +272,5 @@ export function BaseNode({
     </>
   )
 }
+
+export const BaseNode = memo(BaseNodeComponent)

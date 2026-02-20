@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const mixAudioBody = z.object({
-  audioUrls: z.array(z.string().url()).min(2),
+  audioUrls: z.array(safeUrlSchema).min(2),
   trackVolumes: z.array(z.number().min(0).max(200)).optional(),
   userId: z.string().uuid().optional(),
 })

@@ -11,9 +11,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { MixAudioData } from "@/types/nodes"
 
 function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
-  // Subscribe to nodes to ensure re-render when node data changes
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as MixAudioData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MixAudioData | undefined
   const nodeData = currentNodeData ?? (data as MixAudioData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -73,7 +71,7 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <div className={`w-10 h-10 flex items-center justify-center rounded cursor-pointer transition-opacity bg-muted ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) }}>
+                <div role="button" tabIndex={0} className={`w-10 h-10 flex items-center justify-center rounded cursor-pointer transition-opacity bg-muted ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) } }}>
                   <AudioLines className="w-4 h-4" />
                 </div>
                 <button type="button" aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>

@@ -228,7 +228,7 @@ export default function SettingsPage() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleExport}>
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleExport} aria-label="Export templates">
                     <Download className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
@@ -238,7 +238,7 @@ export default function SettingsPage() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleImport}>
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={handleImport} aria-label="Import templates">
                     <Upload className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
@@ -254,6 +254,7 @@ export default function SettingsPage() {
                       size="sm"
                       className="h-8 w-8 p-0 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
                       onClick={handleResetAll}
+                      aria-label="Reset all templates"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                     </Button>

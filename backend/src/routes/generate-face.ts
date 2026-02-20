@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -10,7 +11,7 @@ const generateFaceBody = z.object({
   description: z.string().max(2000).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   prompt: z.string().max(4000).optional(),
-  sourceImageUrl: z.string().url().optional(),
+  sourceImageUrl: safeUrlSchema.optional(),
   userId: z.string().uuid().optional(),
 })
 

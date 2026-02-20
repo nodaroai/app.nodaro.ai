@@ -144,18 +144,9 @@ export function registerAuthHook(app: FastifyInstance): void {
       return
     }
 
-    // --- Migration fallback: no token, use body/query userId ---
-    const body = req.body as Record<string, unknown> | undefined
-    const query = req.query as Record<string, unknown> | undefined
-    const fallbackUserId = (body?.userId as string) ?? (query?.userId as string) ?? undefined
-
-    if (fallbackUserId) {
-      req.userId = fallbackUserId
-      // No role set — legacy path cannot determine admin status
-      req.log.warn(
-        { userId: fallbackUserId, url: req.url },
-        "[auth] DEPRECATION: Request without Authorization header — using body/query userId fallback"
-      )
-    }
+    // No valid token — reject
+    reply.status(401).send({
+      error: { code: "unauthorized", message: "Authentication required" },
+    })
   })
 }

@@ -26,6 +26,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
+const STATUS_COLORS: Record<string, string> = {
+  completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
+  failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
+  processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
+  pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+  queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+  cancelled: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
+}
+
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString)
   const now = new Date()
@@ -80,36 +89,36 @@ function getQueueTime(createdAt: string, startedAt: string | undefined): string 
   return `${(queueMs / 1000).toFixed(1)}s`
 }
 
+const JOB_TYPE_MAP: Record<string, string> = {
+  "generate-image": "Image",
+  "image-to-video": "Video",
+  "video-to-video": "Video",
+  "text-to-video": "Video",
+  "text-to-speech": "TTS",
+  "generate-script": "Script",
+  "combine-videos": "Combine",
+  "merge-video-audio": "Merge",
+  "extract-audio": "Extract",
+  "trim-video": "Trim",
+  "resize-video": "Resize",
+  "adjust-volume": "Volume",
+  "add-captions": "Captions",
+  "mix-audio": "Mix",
+  "generate-music": "Music",
+  "text-to-audio": "Audio",
+  "generate-character": "Character",
+  "generate-character-asset": "Asset",
+  "generate-object": "Object",
+  "generate-object-asset": "Asset",
+  "generate-location": "Location",
+  "generate-location-asset": "Asset",
+  "motion-transfer": "Motion",
+  "video-upscale": "Upscale",
+}
+
 function extractJobType(inputData: Job["input_data"]): string {
   const type = inputData?.type ?? "unknown"
-  // Convert from internal type to display name
-  const typeMap: Record<string, string> = {
-    "generate-image": "Image",
-    "image-to-video": "Video",
-    "video-to-video": "Video",
-    "text-to-video": "Video",
-    "text-to-speech": "TTS",
-    "generate-script": "Script",
-    "combine-videos": "Combine",
-    "merge-video-audio": "Merge",
-    "extract-audio": "Extract",
-    "trim-video": "Trim",
-    "resize-video": "Resize",
-    "adjust-volume": "Volume",
-    "add-captions": "Captions",
-    "mix-audio": "Mix",
-    "generate-music": "Music",
-    "text-to-audio": "Audio",
-    "generate-character": "Character",
-    "generate-character-asset": "Asset",
-    "generate-object": "Object",
-    "generate-object-asset": "Asset",
-    "generate-location": "Location",
-    "generate-location-asset": "Asset",
-    "motion-transfer": "Motion",
-    "video-upscale": "Upscale",
-  }
-  return typeMap[type] ?? type
+  return JOB_TYPE_MAP[type] ?? type
 }
 
 function extractProvider(inputData: Job["input_data"]): string {
@@ -222,15 +231,6 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
     }
   }
 
-  const statusColors: Record<string, string> = {
-    completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
-    failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
-    processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
-    pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
-    queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
-    cancelled: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
-  }
-
   if (!userId || (loading && jobs.length === 0)) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
@@ -336,6 +336,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
               size="icon"
               onClick={handlePrev}
               disabled={prevCursors.length === 0 || loading}
+              aria-label="Previous page"
               className="h-8 w-8 dark:border-[#2D2D2D] dark:hover:bg-[#2D2D2D]"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -345,6 +346,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
               size="icon"
               onClick={handleNext}
               disabled={!nextCursor || loading}
+              aria-label="Next page"
               className="h-8 w-8 dark:border-[#2D2D2D] dark:hover:bg-[#2D2D2D]"
             >
               <ChevronRight className="w-4 h-4" />
@@ -444,7 +446,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                       })()}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
                         {job.status}
                       </span>
                     </td>
@@ -479,6 +481,7 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
                                 className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
                                 onClick={(e) => handleCancelJob(job.id, e)}
                                 disabled={cancellingJobId === job.id}
+                                aria-label="Cancel job"
                               >
                                 {cancellingJobId === job.id ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />

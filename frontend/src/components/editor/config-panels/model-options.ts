@@ -1,5 +1,3 @@
-"use client"
-
 export const IMAGE_GEN_MODELS = [
   { value: "nano-banana", label: "Nano Banana", desc: "Fast drafts, iteration, storyboards" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },

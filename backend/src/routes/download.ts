@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { config } from "../lib/config.js"
 import path from "path"
 
 const downloadQuery = z.object({
-  url: z.string().url(),
+  url: safeUrlSchema,
 })
 
 const ALLOWED_DOMAIN = "pub-c813076fe3024da78029786e7b9fd59d.r2.dev"

@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import Anthropic from "@anthropic-ai/sdk"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -11,21 +10,8 @@ import { CreditsService } from "../billing/credits.js"
 import { MOTION_GRAPHICS_SYSTEM_PROMPT } from "../prompts/motion-graphics-system.js"
 import { validateMotionGraphicsPlan } from "../lib/motion-graphics-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
-
-let _anthropic: Anthropic | null = null
-function getAnthropicClient(): Anthropic {
-  if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
-  }
-  return _anthropic
-}
-
-const ASPECT_DIMENSIONS: Record<string, { width: number; height: number }> = {
-  "16:9": { width: 1920, height: 1080 },
-  "9:16": { width: 1080, height: 1920 },
-  "1:1": { width: 1080, height: 1080 },
-  "4:5": { width: 1080, height: 1350 },
-}
+import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
+import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -127,7 +113,7 @@ Prompt: ${prompt}`
         console.log(`[motion-graphics-ai] Generating for job ${job.id}, ${durationSeconds}s`)
 
         const response = await anthropic.messages.create({
-          model: "claude-sonnet-4-5-20250929",
+          model: CLAUDE_MODEL,
           max_tokens: 2048,
           temperature: 0.3,
           system: MOTION_GRAPHICS_SYSTEM_PROMPT,

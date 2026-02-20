@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const resizeVideoBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   targetAspect: z.enum(["1:1", "16:9", "9:16", "4:5"]),
   method: z.enum(["crop", "pad", "stretch"]).optional().default("pad"),
   padColor: z.string().optional().default("#000000"),

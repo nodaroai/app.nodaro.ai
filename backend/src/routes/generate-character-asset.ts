@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -21,7 +22,7 @@ const generateCharacterAssetBody = z.object({
   gender: z.string().max(50).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   baseOutfit: z.string().max(1000).optional(),
-  sourceImageUrl: z.string().url().optional(),
+  sourceImageUrl: safeUrlSchema.optional(),
   userId: z.string().uuid().optional(),
 })
 

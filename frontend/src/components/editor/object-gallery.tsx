@@ -150,7 +150,7 @@ export function ObjectGalleryButton() {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="text-sm font-semibold">Object Library</h3>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)}>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)} aria-label="Close">
                 <X className="h-4 w-4" />
               </Button>
             </div>

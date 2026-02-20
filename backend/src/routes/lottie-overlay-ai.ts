@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
-import Anthropic from "@anthropic-ai/sdk"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -12,14 +11,7 @@ import { CreditsService } from "../billing/credits.js"
 import { LOTTIE_OVERLAY_SYSTEM_PROMPT } from "../prompts/lottie-overlay-system.js"
 import { validateLottieOverlayPlan } from "../lib/lottie-overlay-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
-
-let _anthropic: Anthropic | null = null
-function getAnthropicClient(): Anthropic {
-  if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
-  }
-  return _anthropic
-}
+import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -127,7 +119,7 @@ Overlay style: ${prompt}${assetSection}`
         console.log(`[lottie-overlay-ai] Generating for job ${job.id}, ${durationSeconds}s video`)
 
         const response = await anthropic.messages.create({
-          model: "claude-sonnet-4-5-20250929",
+          model: CLAUDE_MODEL,
           max_tokens: 2048,
           temperature: 0.3,
           system: LOTTIE_OVERLAY_SYSTEM_PROMPT,

@@ -6,6 +6,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
+import { getAuthHeaders } from "@/lib/api"
 import type { AppSettings } from "./use-app-settings-queries"
 
 // --- Types ---
@@ -189,10 +190,8 @@ export function useAdminModels() {
   return useQuery({
     queryKey: queryKeys.admin.models(),
     queryFn: async () => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/models`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: await getAuthHeaders(),
       })
       if (!res.ok) throw new Error("Failed to fetch models")
       return res.json() as Promise<{ data: unknown[] }>
@@ -215,7 +214,7 @@ export function useAdminReports(page: number, status?: string) {
       })
       if (status) params.set("status", status)
       const res = await fetch(`/v1/admin/gallery-reports?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: await getAuthHeaders(),
       })
       if (!res.ok) throw new Error("Failed to fetch reports")
       return res.json()
@@ -229,10 +228,8 @@ export function useAdminAlerts() {
   return useQuery({
     queryKey: queryKeys.admin.alerts(),
     queryFn: async () => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/alerts`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: await getAuthHeaders(),
       })
       if (!res.ok) throw new Error("Failed to fetch alerts")
       return res.json()
@@ -246,10 +243,8 @@ export function useAdminSettings() {
   return useQuery({
     queryKey: queryKeys.admin.settings(),
     queryFn: async (): Promise<AppSettings> => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/settings`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: await getAuthHeaders(),
       })
       if (!res.ok) throw new Error("Failed to fetch settings")
       const data = await res.json()
@@ -268,10 +263,8 @@ export function useAdminUserTransactions(userId: string) {
   return useQuery({
     queryKey: queryKeys.admin.userTransactions(userId),
     queryFn: async () => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/users/${userId}/transactions?limit=20`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: await getAuthHeaders(),
       })
       if (!res.ok) throw new Error("Failed to fetch transactions")
       return res.json()
@@ -287,13 +280,11 @@ export function useUpdateModelPricingMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ modelId, pricing }: { modelId: string; pricing: unknown }) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/models/${modelId}/pricing`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+          ...await getAuthHeaders(),
         },
         body: JSON.stringify(pricing),
       })
@@ -310,13 +301,11 @@ export function useAdminAdjustCreditsMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (params: { userId: string; amount: number; type: string }) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/users/${params.userId}/credits`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+          ...await getAuthHeaders(),
         },
         body: JSON.stringify({ amount: params.amount, type: params.type }),
       })
@@ -334,13 +323,11 @@ export function useResolveReportMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ reportId, action }: { reportId: string; action: string }) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/gallery-reports/${reportId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+          ...await getAuthHeaders(),
         },
         body: JSON.stringify({ action }),
       })
@@ -359,13 +346,11 @@ export function useCreateAlertMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (alert: Record<string, unknown>) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/alerts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+          ...await getAuthHeaders(),
         },
         body: JSON.stringify(alert),
       })
@@ -382,13 +367,11 @@ export function useUpdateAlertMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Record<string, unknown>) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/alerts/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+          ...await getAuthHeaders(),
         },
         body: JSON.stringify(updates),
       })
@@ -405,11 +388,9 @@ export function useDeleteAlertMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/alerts/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: await getAuthHeaders(),
       })
       if (!res.ok) throw new Error("Failed to delete alert")
       return res.json()
@@ -424,13 +405,11 @@ export function useAdminChangeTierMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ userId, tier }: { userId: string; tier: string }) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/users/${userId}/tier`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+          ...await getAuthHeaders(),
         },
         body: JSON.stringify({ tier }),
       })
@@ -447,13 +426,11 @@ export function useAdminChangeStorageMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ userId, storageLimitBytes }: { userId: string; storageLimitBytes: number }) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/users/${userId}/storage`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+          ...await getAuthHeaders(),
         },
         body: JSON.stringify({ storageLimitBytes }),
       })
@@ -471,13 +448,11 @@ export function useAdminChangeRoleMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(`/v1/admin/users/${userId}/role`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
+          ...await getAuthHeaders(),
         },
         body: JSON.stringify({ role }),
       })

@@ -12,9 +12,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { TrimVideoData } from "@/types/nodes"
 
 function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
-  // Subscribe to nodes to ensure re-render when node data changes
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as TrimVideoData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as TrimVideoData | undefined
   const nodeData = currentNodeData ?? (data as TrimVideoData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -70,7 +68,7 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
         {status !== "running" && activeUrl && videoError && (
           <div className="relative group">
-            <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}>
+            <div role="button" tabIndex={0} className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setPreviewOpen(true) } }}>
               <AlertCircle className="w-5 h-5 text-amber-500" />
               <span className="text-[10px] text-amber-500">Video load failed</span>
               <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>

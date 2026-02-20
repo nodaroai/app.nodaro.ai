@@ -63,14 +63,25 @@ function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | Pub
 
 export async function jobRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const { id } = req.params
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
-    const { data: job, error } = await supabase
+    let query = supabase
       .from("jobs")
       .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits_used, credits_estimated")
       .eq("id", id)
-      .single()
+
+    if (!isAdmin) {
+      query = query.eq("user_id", req.userId)
+    }
+
+    const { data: job, error } = await query.single()
 
     if (error || !job) {
       return reply.status(404).send({
@@ -128,6 +139,12 @@ export async function jobRoutes(app: FastifyInstance) {
 
   // Batch fetch job statuses by IDs (for workflow sync)
   app.post<{ Body: { jobIds: string[] } }>("/v1/jobs/batch-status", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const { jobIds } = req.body
 
     if (!jobIds || !Array.isArray(jobIds) || jobIds.length === 0) {
@@ -143,10 +160,18 @@ export async function jobRoutes(app: FastifyInstance) {
       })
     }
 
-    const { data: jobs, error } = await supabase
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+
+    let query = supabase
       .from("jobs")
       .select("id, status, output_data, error_message")
       .in("id", jobIds)
+
+    if (!isAdmin) {
+      query = query.eq("user_id", req.userId)
+    }
+
+    const { data: jobs, error } = await query
 
     if (error) {
       return reply.status(500).send({
@@ -158,12 +183,25 @@ export async function jobRoutes(app: FastifyInstance) {
   })
 
   app.delete<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
-    const { id } = req.params
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
 
-    const { error } = await supabase
+    const { id } = req.params
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+
+    let query = supabase
       .from("jobs")
       .delete()
       .eq("id", id)
+
+    if (!isAdmin) {
+      query = query.eq("user_id", req.userId)
+    }
+
+    const { error } = await query
 
     if (error) {
       return reply.status(500).send({

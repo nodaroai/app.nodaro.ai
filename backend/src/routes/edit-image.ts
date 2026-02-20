@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const editImageBody = z.object({
-  imageUrl: z.string().url(),
+  imageUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
   provider: z.enum(["recraft-upscale", "recraft-remove-bg", "nano-banana-edit"]).optional(),
 })

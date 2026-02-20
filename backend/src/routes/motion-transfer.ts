@@ -14,13 +14,14 @@
 
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const motionTransferBody = z.object({
-  imageUrl: z.string().url(),
-  videoUrl: z.string().url(),
+  imageUrl: safeUrlSchema,
+  videoUrl: safeUrlSchema,
   prompt: z.string().max(2500).optional(),
   characterOrientation: z.enum(["image", "video"]).default("image"),
   resolution: z.enum(["720p", "1080p"]).default("720p"),

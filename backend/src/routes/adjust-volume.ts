@@ -1,12 +1,13 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const adjustVolumeBody = z.object({
-  audioUrl: z.string().url().optional(),
-  videoUrl: z.string().url().optional(),
+  audioUrl: safeUrlSchema.optional(),
+  videoUrl: safeUrlSchema.optional(),
   volume: z.number().min(0).max(200).optional().default(100),
   normalize: z.boolean().optional().default(false),
   fadeIn: z.number().min(0).max(10).optional().default(0),

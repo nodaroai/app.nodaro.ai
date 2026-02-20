@@ -1,14 +1,15 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const imageToImageBody = z.object({
-  imageUrl: z.string().url(),
+  imageUrl: safeUrlSchema,
   prompt: z.string().min(1).max(2000),
   provider: z.enum(["nano-banana", "nano-banana-pro", "flux-i2i", "flux-pro-i2i", "grok-i2i", "gpt-image-i2i"]).optional(),
-  referenceImageUrls: z.array(z.string().url()).max(13).optional(),
+  referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
 })
 
 export async function imageToImageRoutes(app: FastifyInstance) {

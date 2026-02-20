@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 
 const upsertCharacterBody = z.object({
@@ -13,7 +14,7 @@ const upsertCharacterBody = z.object({
   gender: z.string().max(50).optional(),
   style: z.string().max(50).optional(),
   baseOutfit: z.string().max(1000).optional(),
-  sourceImageUrl: z.string().url().optional(),
+  sourceImageUrl: safeUrlSchema.optional(),
   expressions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   poses: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   lightingVariations: z.array(z.object({ name: z.string(), url: z.string() })).optional(),

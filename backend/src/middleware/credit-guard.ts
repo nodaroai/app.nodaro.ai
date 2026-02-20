@@ -44,12 +44,7 @@ export function creditGuard(
     // Only cloud edition uses credits
     if (!hasCredits()) return
 
-    // Prefer auth middleware userId, fall back to body for migration period
-    const body = req.body as Record<string, unknown> | undefined
-    const userId = req.userId ?? (body?.userId as string) ?? undefined
-
-    // Store on request so route handlers can access it
-    if (userId) req.userId = userId
+    const userId = req.userId
 
     // No userId means anonymous request - skip credit check
     if (!userId) return
@@ -150,9 +145,7 @@ export async function reserveCreditsForJob(
   // FFmpeg operations are free — skip reservation
   if (modelIdentifier === "ffmpeg") return undefined
 
-  // Prefer auth middleware userId, fall back to body for migration period
-  const body = req.body as Record<string, unknown> | undefined
-  const userId = req.userId ?? (body?.userId as string) ?? undefined
+  const userId = req.userId
   if (!userId) return undefined
 
   const routeName = req.url.split("?")[0] ?? "unknown"

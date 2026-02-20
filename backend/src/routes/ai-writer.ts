@@ -1,20 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import Anthropic from "@anthropic-ai/sdk"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
-
-// Lazy singleton — avoid creating a new client on every request
-let _anthropic: Anthropic | null = null
-function getAnthropicClient(): Anthropic {
-  if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY })
-  }
-  return _anthropic
-}
+import { getAnthropicClient } from "../lib/anthropic.js"
 
 const aiWriterBody = z.object({
   systemPrompt: z.string().max(10000),

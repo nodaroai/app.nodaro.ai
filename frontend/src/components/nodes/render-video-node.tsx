@@ -10,8 +10,7 @@ import { useModelCredits } from "@/hooks/use-model-credits"
 import type { RenderVideoData } from "@/types/nodes"
 
 function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as RenderVideoData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as RenderVideoData | undefined
   const nodeData = currentNodeData ?? (data as RenderVideoData)
   const credits = useModelCredits("render-video", 3)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)

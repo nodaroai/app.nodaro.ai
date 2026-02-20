@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const trimVideoBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   startTime: z.number().min(0),
   endTime: z.number().min(0),
   userId: z.string().uuid().optional(),

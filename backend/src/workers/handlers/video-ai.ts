@@ -1,0 +1,334 @@
+import { dirname } from "node:path"
+import { supabase } from "../../lib/supabase.js"
+import { uploadToR2 } from "../../lib/storage.js"
+import {
+  imageToVideo,
+  textToVideo,
+  videoToVideo,
+  lipSync,
+  motionTransfer,
+  videoUpscale,
+} from "../../providers/index.js"
+import type { ProgressCallback } from "../../providers/provider.interface.js"
+import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
+import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
+import {
+  commitJobCredits,
+  shouldSaveJobResult,
+  uploadVideoMaybeWatermark,
+  watermarkLocalVideoAndUpload,
+  generateAndUploadThumbnail,
+  type HandlerFn,
+} from "../shared.js"
+
+const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements } = job.data as {
+    jobId: string
+    imageUrl: string
+    endFrameUrl?: string
+    audioUrl?: string
+    prompt?: string
+    provider?: string
+    generateAudio?: boolean
+    duration?: number
+    mode?: string
+    sound?: boolean
+    negativePrompt?: string
+    cfgScale?: number
+    aspectRatio?: string
+    multiShot?: boolean
+    shots?: Array<{ prompt: string; duration: number }>
+    elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
+  }
+  console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
+
+  // Map frontend shots/elements to provider format for Kling 3.0
+  const multiPrompt = shots?.map((s) => ({ prompt: s.prompt, duration: s.duration }))
+  const klingElements = elements?.map((el) => ({
+    name: el.name,
+    description: el.description,
+    ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
+  }))
+
+  // Create progress callback that updates the job record in the database
+  const onProgress: ProgressCallback = async (progress: number) => {
+    console.log(`[worker] Job ${ctx.jobId} progress: ${progress}%`)
+    await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+  }
+
+  const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements })
+  await job.updateProgress(40)
+
+  // Upload the generated video to R2
+  // If audio merge follows, upload without watermark (watermark applied to final)
+  let finalVideoUrl = audioUrl
+    ? await uploadToR2(result.url, ctx.jobId, "video", ctx.jobUserId)
+    : await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(70)
+
+  // If audio URL is provided, merge it with the video
+  if (audioUrl) {
+    console.log(`[worker] Merging audio into video for job ${ctx.jobId}`)
+    const mergedPath = await mergeVideoAudio({
+      videoUrl: finalVideoUrl,
+      audioUrl,
+      voiceoverVolume: 100,
+      backgroundVolume: 30,
+      keepOriginalAudio: generateAudio ?? false,
+    })
+    await job.updateProgress(90)
+
+    // Upload merged video (with watermark if applicable)
+    finalVideoUrl = await watermarkLocalVideoAndUpload(mergedPath, `${ctx.jobId}-merged`, ctx.jobUserId, ctx.shouldWatermark)
+    await cleanupWorkDir(dirname(mergedPath))
+  }
+
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(finalVideoUrl, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase
+    .from("jobs")
+    .update({
+      status: "completed",
+      progress: 100,
+      output_data: { videoUrl: finalVideoUrl, thumbnailUrl: thumbUrl },
+      completed_at: new Date().toISOString(),
+      provider: result.providerUsed,
+      provider_cost: result.cost,
+      display_cost: result.displayCost,
+    })
+    .eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${finalVideoUrl} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
+const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx) {
+  const { videoUrl, prompt, provider } = job.data as {
+    jobId: string
+    videoUrl: string
+    prompt?: string
+    provider?: string
+  }
+  console.log(`[worker] video-to-video ${ctx.jobId} (provider: ${provider ?? "wan"})`)
+
+  const result = await videoToVideo(videoUrl, provider ?? "wan", prompt)
+  await job.updateProgress(50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase
+    .from("jobs")
+    .update({
+      status: "completed",
+      progress: 100,
+      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+      completed_at: new Date().toISOString(),
+      provider: result.providerUsed,
+      provider_cost: result.cost,
+      display_cost: result.displayCost,
+    })
+    .eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
+const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements } = job.data as {
+    jobId: string
+    prompt: string
+    provider?: string
+    duration?: number
+    mode?: string
+    sound?: boolean
+    negativePrompt?: string
+    cfgScale?: number
+    aspectRatio?: string
+    multiShot?: boolean
+    shots?: Array<{ prompt: string; duration: number }>
+    elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
+  }
+  console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})`)
+
+  // Map frontend shots/elements to provider format for Kling 3.0
+  const multiPrompt = shots?.map((s) => ({ prompt: s.prompt, duration: s.duration }))
+  const klingElements = elements?.map((el) => ({
+    name: el.name,
+    description: el.description,
+    ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
+  }))
+
+  const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements })
+  await job.updateProgress(50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase
+    .from("jobs")
+    .update({
+      status: "completed",
+      progress: 100,
+      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+      completed_at: new Date().toISOString(),
+      provider: result.providerUsed,
+      provider_cost: result.cost,
+      display_cost: result.displayCost,
+    })
+    .eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
+const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
+  const { imageUrl, audioUrl, prompt, provider, resolution } = job.data as {
+    jobId: string
+    imageUrl: string
+    audioUrl: string
+    prompt?: string
+    provider?: string
+    resolution?: string
+  }
+  console.log(`[worker] lip-sync ${ctx.jobId} (provider: ${provider ?? "kling-avatar"})`)
+
+  const result = await lipSync(imageUrl, audioUrl, provider ?? "kling-avatar", prompt, resolution)
+  await job.updateProgress(50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase
+    .from("jobs")
+    .update({
+      status: "completed",
+      progress: 100,
+      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+      completed_at: new Date().toISOString(),
+      provider: result.providerUsed,
+      provider_cost: result.cost,
+      display_cost: result.displayCost,
+    })
+    .eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
+const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job, ctx) {
+  const { imageUrl, videoUrl, prompt, characterOrientation, resolution } = job.data as {
+    jobId: string
+    imageUrl: string
+    videoUrl: string
+    prompt?: string
+    characterOrientation?: "image" | "video"
+    resolution?: "720p" | "1080p"
+  }
+  console.log(`[worker] motion-transfer ${ctx.jobId} (orientation: ${characterOrientation ?? "image"}, resolution: ${resolution ?? "720p"})`)
+
+  const onProgress: ProgressCallback = async (progress: number) => {
+    console.log(`[worker] Job ${ctx.jobId} motion-transfer progress: ${progress}%`)
+    await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+  }
+
+  const result = await motionTransfer(
+    imageUrl,
+    videoUrl,
+    "kling",
+    prompt,
+    {
+      onProgress,
+      characterOrientation: characterOrientation ?? "image",
+      resolution: resolution ?? "720p",
+    }
+  )
+  await job.updateProgress(50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    completed_at: new Date().toISOString(),
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  }).eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
+const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx) {
+  const { videoUrl, upscaleFactor } = job.data as {
+    jobId: string
+    videoUrl: string
+    upscaleFactor?: "1" | "2" | "4"
+  }
+  console.log(`[worker] video-upscale ${ctx.jobId} (factor: ${upscaleFactor ?? "2"}x)`)
+
+  const onProgress: ProgressCallback = async (progress: number) => {
+    console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
+    await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+  }
+
+  const result = await videoUpscale(
+    videoUrl,
+    "topaz",
+    upscaleFactor ?? "2",
+    { onProgress }
+  )
+  await job.updateProgress(50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    completed_at: new Date().toISOString(),
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  }).eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
+export const videoAIHandlers: Record<string, HandlerFn> = {
+  "image-to-video": handleImageToVideo,
+  "video-to-video": handleVideoToVideo,
+  "text-to-video": handleTextToVideo,
+  "lip-sync": handleLipSync,
+  "motion-transfer": handleMotionTransfer,
+  "video-upscale": handleVideoUpscale,
+}

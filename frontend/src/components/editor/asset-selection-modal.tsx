@@ -137,13 +137,15 @@ export function AssetSelectionModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         className="bg-card rounded-xl shadow-2xl border w-full max-w-2xl max-h-[80vh] flex flex-col mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -154,6 +156,7 @@ export function AssetSelectionModal({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search assets..."
+              aria-label="Search assets"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"

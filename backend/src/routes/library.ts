@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { config, isCloud } from "../lib/config.js"
 import { deleteFromR2 } from "../lib/storage.js"
@@ -23,7 +24,7 @@ const assetIdParams = z.object({
 })
 
 const saveGeneratedBody = z.object({
-  url: z.string().url(),
+  url: safeUrlSchema,
   type: z.enum(["image", "video", "audio"]),
   filename: z.string().max(255).optional(),
   metadata: z.record(z.unknown()).optional(),

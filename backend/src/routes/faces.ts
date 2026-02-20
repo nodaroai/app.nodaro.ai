@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 
 const upsertFaceBody = z.object({
@@ -11,7 +12,7 @@ const upsertFaceBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   style: z.string().max(50).optional(),
-  sourceImageUrl: z.string().url().optional(),
+  sourceImageUrl: safeUrlSchema.optional(),
   expressions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
 })
 

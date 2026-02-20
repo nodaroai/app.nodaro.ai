@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const speedRampBody = z.object({
-  videoUrl: z.string().url(),
+  videoUrl: safeUrlSchema,
   speed: z.number().min(0.25).max(4.0),
   adjustAudio: z.boolean().optional().default(true),
   userId: z.string().uuid().optional(),

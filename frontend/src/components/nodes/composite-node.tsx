@@ -7,8 +7,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { CompositeData } from "@/types/nodes"
 
 function CompositeNodeComponent({ id, data, selected }: NodeProps) {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const currentNodeData = nodes.find((n) => n.id === id)?.data as CompositeData | undefined
+  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as CompositeData | undefined
   const nodeData = currentNodeData ?? (data as CompositeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
