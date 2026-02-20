@@ -495,15 +495,17 @@ function startLocalFileServer(serveDir: string): Promise<{ baseUrl: string; clos
 }
 
 /**
- * Scan render job data for video URLs, transcode incompatible ones to
+ * Scan Remotion inputProps for video URLs, transcode incompatible ones to
  * browser-safe H.264/yuv420p, and serve them from a local HTTP server.
+ * Must be called AFTER plan validation (buildPlanRender etc.) to avoid
+ * safeUrlSchema rejecting the localhost replacement URLs.
  * Returns a cleanup function to stop the server (or undefined if no transcoding needed).
  */
 async function normalizeInputVideos(
-  data: RenderJobData,
+  inputProps: Record<string, unknown>,
   workDir: string,
 ): Promise<(() => void) | undefined> {
-  const urls = collectVideoUrls(data)
+  const urls = collectVideoUrls(inputProps)
   if (urls.length === 0) return undefined
 
   // Start server up front so we know the port for building replacement URLs.
@@ -530,16 +532,21 @@ async function normalizeInputVideos(
   }
 
   console.log(`[render-worker] Local file server for transcoded videos: ${baseUrl}`)
-  replaceVideoUrls(data, urlMap)
+  replaceVideoUrls(inputProps, urlMap)
   return close
 }
 
-/** Collect all video URLs from any render job type. */
-function collectVideoUrls(data: RenderJobData): string[] {
+/**
+ * Collect all video URLs from Remotion inputProps.
+ * Works on the validated props (after buildPlanRender/buildSceneGraphRender/buildLegacyRender).
+ */
+function collectVideoUrls(props: Record<string, unknown>): string[] {
   const urls: string[] = []
 
-  if (isSceneGraphJob(data)) {
-    for (const track of data.sceneGraph.tracks as Array<Record<string, unknown>>) {
+  // Scene graph: props.sceneGraph.tracks[].segments[].src
+  const sg = props.sceneGraph as Record<string, unknown> | undefined
+  if (sg) {
+    for (const track of sg.tracks as Array<Record<string, unknown>>) {
       const segments = track.segments as Array<Record<string, unknown>> | undefined
       if (segments) {
         for (const seg of segments) {
@@ -549,17 +556,18 @@ function collectVideoUrls(data: RenderJobData): string[] {
         }
       }
     }
-  } else if (isPlanJob(data)) {
-    const plan = data.plan as Record<string, unknown>
-    // after-effects + lottie-overlay: plan.sourceVideo
+    return [...new Set(urls)]
+  }
+
+  // Plan: props.plan.sourceVideo / backgroundMedia / layers[].sourceVideo
+  const plan = props.plan as Record<string, unknown> | undefined
+  if (plan) {
     if (typeof plan.sourceVideo === "string" && VIDEO_URL_RE.test(plan.sourceVideo)) {
       urls.push(plan.sourceVideo)
     }
-    // 3d-title: plan.backgroundMedia (if video)
     if (typeof plan.backgroundMedia === "string" && VIDEO_URL_RE.test(plan.backgroundMedia)) {
       urls.push(plan.backgroundMedia)
     }
-    // composite: plan.layers[].sourceVideo
     const layers = plan.layers as Array<Record<string, unknown>> | undefined
     if (layers) {
       for (const layer of layers) {
@@ -568,11 +576,15 @@ function collectVideoUrls(data: RenderJobData): string[] {
         }
       }
     }
-  } else {
-    // legacy: mediaAssets[].url where type === "video"
-    for (const asset of data.mediaAssets) {
+    return [...new Set(urls)]
+  }
+
+  // Legacy: props.mediaAssets[].src where type === "video"
+  const assets = props.mediaAssets as Array<{ src: string; type: string }> | undefined
+  if (assets) {
+    for (const asset of assets) {
       if (asset.type === "video") {
-        urls.push(asset.url)
+        urls.push(asset.src)
       }
     }
   }
@@ -580,10 +592,12 @@ function collectVideoUrls(data: RenderJobData): string[] {
   return [...new Set(urls)]
 }
 
-/** Deep-replace video URLs in the render job data. */
-function replaceVideoUrls(data: RenderJobData, urlMap: Map<string, string>): void {
-  if (isSceneGraphJob(data)) {
-    for (const track of data.sceneGraph.tracks as Array<Record<string, unknown>>) {
+/** Replace video URLs in Remotion inputProps. */
+function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, string>): void {
+  // Scene graph
+  const sg = props.sceneGraph as Record<string, unknown> | undefined
+  if (sg) {
+    for (const track of sg.tracks as Array<Record<string, unknown>>) {
       const segments = track.segments as Array<Record<string, unknown>> | undefined
       if (segments) {
         for (const seg of segments) {
@@ -593,8 +607,12 @@ function replaceVideoUrls(data: RenderJobData, urlMap: Map<string, string>): voi
         }
       }
     }
-  } else if (isPlanJob(data)) {
-    const plan = data.plan as Record<string, unknown>
+    return
+  }
+
+  // Plan
+  const plan = props.plan as Record<string, unknown> | undefined
+  if (plan) {
     if (typeof plan.sourceVideo === "string" && urlMap.has(plan.sourceVideo)) {
       plan.sourceVideo = urlMap.get(plan.sourceVideo)!
     }
@@ -609,10 +627,15 @@ function replaceVideoUrls(data: RenderJobData, urlMap: Map<string, string>): voi
         }
       }
     }
-  } else {
-    for (const asset of data.mediaAssets) {
-      if (urlMap.has(asset.url)) {
-        asset.url = urlMap.get(asset.url)!
+    return
+  }
+
+  // Legacy
+  const assets = props.mediaAssets as Array<{ src: string }> | undefined
+  if (assets) {
+    for (const asset of assets) {
+      if (urlMap.has(asset.src)) {
+        asset.src = urlMap.get(asset.src)!
       }
     }
   }
@@ -701,13 +724,8 @@ export function createRenderWorker() {
 
         await bullJob.updateProgress(20)
 
-        // Normalize input videos: transcode any non-browser-safe codecs to H.264/yuv420p
-        // Returns a cleanup function to stop the local file server (if transcoding occurred)
-        stopFileServer = await normalizeInputVideos(data, workDir)
-
-        await bullJob.updateProgress(30)
-
-        // Build render config — plan mode, scene graph mode, or legacy template mode
+        // Build render config FIRST — plan validation uses safeUrlSchema which
+        // rejects localhost URLs, so we must validate before URL normalization
         let renderConfig
         let modeLabel: string
         if (isPlanJob(data)) {
@@ -722,6 +740,14 @@ export function createRenderWorker() {
         }
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
+
+        // Normalize input videos: transcode any non-browser-safe codecs to H.264/yuv420p.
+        // Operates on the validated inputProps (after plan validation).
+        // For scene graph jobs, inputProps.sceneGraph is the same object ref as data.sceneGraph,
+        // so the FFmpeg fast path (which reads from data) also sees the normalized URLs.
+        stopFileServer = await normalizeInputVideos(inputProps, workDir)
+
+        await bullJob.updateProgress(30)
 
         // FFmpeg fast path: skip Remotion for simple scene graphs (1 video, no effects/text)
         let outputPath: string
