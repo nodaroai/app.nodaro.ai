@@ -280,5 +280,32 @@ export interface MotionGraphicsPlan {
   readonly exitAnimation?: MGExitAnimation
 }
 
+// ── Composite Plan Types ─────────────────────────────────────────────
+
+export interface CompositeLayer {
+  readonly id: string
+  readonly sourceVideo: string
+  readonly position: "fullscreen" | "positioned"
+  readonly x: number        // 0-100 percentage
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly startFrame: number
+  readonly durationInFrames?: number  // undefined = full duration
+  readonly opacity: number            // 0-1
+  readonly blendMode: "normal" | "multiply" | "screen" | "overlay"
+  readonly zIndex: number
+}
+
+export interface CompositePlan {
+  readonly planType: "composite"
+  readonly fps: number
+  readonly width: number
+  readonly height: number
+  readonly durationInFrames: number
+  readonly backgroundColor: string
+  readonly layers: CompositeLayer[]
+}
+
 // Union type for all composer plans (extend as more composers are added)
-export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics"
+export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics" | "composite"

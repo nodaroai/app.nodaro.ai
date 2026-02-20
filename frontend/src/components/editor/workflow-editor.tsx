@@ -119,6 +119,7 @@ import type {
   LottieOverlayData,
   ThreeDTitleData,
   MotionGraphicsData,
+  CompositeData,
   RenderVideoData,
   CombineVideosData,
   MergeVideoAudioData,
@@ -199,6 +200,7 @@ const NODE_CREDIT_COSTS: Record<string, number> = {
   "lottie-overlay": 2,
   "3d-title": 3,
   "motion-graphics": 2,
+  "composite": 0,
   "render-video": 3,
   character: 5,
   object: 5,
@@ -285,6 +287,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       "location",
       "ai-writer",
       "video-composer",
+      "composite",
       "render-video",
     ]);
     const executableNodes = storeNodes.filter((n) =>
@@ -719,6 +722,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "lottie-overlay",
     "3d-title",
     "motion-graphics",
+    "composite",
     "render-video",
     "combine-videos",
     "merge-video-audio",
@@ -1112,6 +1116,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
     if (type === "motion-graphics") {
       return (data.motionPlan as Record<string, unknown> | undefined)
+        ? "plan-ready"
+        : undefined;
+    }
+    if (type === "composite") {
+      return (data.compositePlan as Record<string, unknown> | undefined)
         ? "plan-ready"
         : undefined;
     }
@@ -5628,6 +5637,118 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         });
     }
 
+    if (node.type === "composite") {
+      const d = node.data as CompositeData;
+      const { updateNodeData } = useWorkflowStore.getState();
+      updateNodeData(node.id, {
+        executionStatus: "running",
+        compositePlan: undefined,
+        errorMessage: undefined,
+      });
+      try {
+        const ASPECT_DIMS: Record<string, { width: number; height: number }> = {
+          "16:9": { width: 1920, height: 1080 },
+          "9:16": { width: 1080, height: 1920 },
+          "1:1": { width: 1080, height: 1080 },
+          "4:5": { width: 1080, height: 1350 },
+        };
+        const dims = ASPECT_DIMS[d.aspectRatio] ?? { width: 1920, height: 1080 };
+        const durationInFrames = Math.round(d.durationSeconds * d.fps);
+
+        // Collect upstream video URLs from incoming edges
+        const incomingEdges = edges.filter((e) => e.target === node.id);
+        const handleVideoMap = new Map<string, string>();
+        for (const edge of incomingEdges) {
+          const sourceNode = nodes.find((n) => n.id === edge.source);
+          if (!sourceNode) continue;
+          const output = extractNodeOutput(sourceNode);
+          if (!output || output === "plan-ready") continue;
+          const targetHandle = edge.targetHandle ?? "video1";
+          handleVideoMap.set(targetHandle, output);
+        }
+
+        if (handleVideoMap.size === 0) {
+          throw new Error("No video inputs connected. Connect at least one video to an input handle.");
+        }
+
+        // Build layers: use existing config if handles match, auto-create for new connections
+        const layers: Array<{
+          id: string;
+          sourceVideo: string;
+          position: "fullscreen" | "positioned";
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          startFrame: number;
+          durationInFrames?: number;
+          opacity: number;
+          blendMode: "normal" | "multiply" | "screen" | "overlay";
+          zIndex: number;
+        }> = [];
+        const existingLayerMap = new Map(d.layers.map((l) => [l.inputHandle, l]));
+
+        for (const [handle, videoUrl] of handleVideoMap) {
+          const existing = existingLayerMap.get(handle);
+          if (existing) {
+            layers.push({
+              id: existing.id,
+              sourceVideo: videoUrl,
+              position: existing.position,
+              x: existing.x,
+              y: existing.y,
+              width: existing.width,
+              height: existing.height,
+              startFrame: existing.startFrame,
+              durationInFrames: existing.durationInFrames,
+              opacity: existing.opacity,
+              blendMode: existing.blendMode,
+              zIndex: existing.zIndex,
+            });
+          } else {
+            layers.push({
+              id: `layer-${handle}-${Date.now()}`,
+              sourceVideo: videoUrl,
+              position: "fullscreen",
+              x: 0,
+              y: 0,
+              width: 100,
+              height: 100,
+              startFrame: 0,
+              opacity: 1,
+              blendMode: "normal",
+              zIndex: layers.length,
+            });
+          }
+        }
+
+        layers.sort((a, b) => a.zIndex - b.zIndex);
+
+        const compositePlan = {
+          planType: "composite" as const,
+          fps: d.fps,
+          width: dims.width,
+          height: dims.height,
+          durationInFrames,
+          backgroundColor: d.backgroundColor,
+          layers,
+        };
+
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          compositePlan,
+        });
+        toast.success("Composite plan built");
+        return Promise.resolve();
+      } catch (err) {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
+    }
+
     if (node.type === "render-video") {
       const d = node.data as RenderVideoData;
       // Generic upstream composer detection via COMPOSER_PLAN_MAP
@@ -5637,6 +5758,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         "lottie-overlay": { planType: "lottie-overlay", planField: "overlayPlan" },
         "3d-title": { planType: "3d-title", planField: "titlePlan" },
         "motion-graphics": { planType: "motion-graphics", planField: "motionPlan" },
+        "composite": { planType: "composite", planField: "compositePlan" },
       };
       const incomingEdges = edges.filter((e) => e.target === node.id);
       let upstreamPlanType: string | undefined;

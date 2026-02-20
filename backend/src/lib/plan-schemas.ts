@@ -8,6 +8,7 @@ export const PLAN_TYPES = [
   "lottie-overlay",
   "3d-title",
   "motion-graphics",
+  "composite",
 ] as const
 
 export type PlanType = (typeof PLAN_TYPES)[number]
@@ -326,6 +327,35 @@ export const motionGraphicsPlanSchema = z
   })
   .passthrough()
 
+// ── Composite Plan ────────────────────────────────────────────────────
+
+const compositeLayerSchema = z.object({
+  id: z.string(),
+  sourceVideo: z.string().url(),
+  position: z.enum(["fullscreen", "positioned"]),
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+  width: z.number().min(0).max(100),
+  height: z.number().min(0).max(100),
+  startFrame: z.number().min(0),
+  durationInFrames: z.number().min(1).optional(),
+  opacity: z.number().min(0).max(1),
+  blendMode: z.enum(["normal", "multiply", "screen", "overlay"]),
+  zIndex: z.number(),
+})
+
+export const compositePlanSchema = z
+  .object({
+    planType: z.literal("composite"),
+    fps: z.number().min(15).max(60),
+    width: z.number().min(100).max(3840),
+    height: z.number().min(100).max(3840),
+    durationInFrames: z.number().min(1),
+    backgroundColor: z.string(),
+    layers: z.array(compositeLayerSchema).min(1),
+  })
+  .passthrough()
+
 // ── Render Plan Envelope (discriminated union) ──────────────────────────
 
 export const renderPlanSchema = z.discriminatedUnion("planType", [
@@ -333,6 +363,7 @@ export const renderPlanSchema = z.discriminatedUnion("planType", [
   lottieOverlayPlanSchema,
   threeDTitlePlanSchema,
   motionGraphicsPlanSchema,
+  compositePlanSchema,
 ])
 
 // ── Plan type → schema lookup ───────────────────────────────────────────
@@ -342,6 +373,7 @@ const planSchemaMap: Record<string, z.ZodType> = {
   "lottie-overlay": lottieOverlayPlanSchema,
   "3d-title": threeDTitlePlanSchema,
   "motion-graphics": motionGraphicsPlanSchema,
+  "composite": compositePlanSchema,
 }
 
 /**

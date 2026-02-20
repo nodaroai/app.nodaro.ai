@@ -1003,6 +1003,34 @@ export type MotionGraphicsData = {
   errorMessage?: string
 }
 
+export interface CompositeLayerConfig {
+  id: string
+  inputHandle: string      // "video1" | "video2" | "video3" | "video4"
+  position: "fullscreen" | "positioned"
+  x: number
+  y: number
+  width: number
+  height: number
+  startFrame: number
+  durationInFrames?: number
+  opacity: number
+  blendMode: "normal" | "multiply" | "screen" | "overlay"
+  zIndex: number
+}
+
+export type CompositeData = {
+  [key: string]: unknown
+  label: string
+  layers: CompositeLayerConfig[]
+  compositePlan?: Record<string, unknown>
+  fps: number
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
+  durationSeconds: number
+  backgroundColor: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 export type RenderVideoData = {
   [key: string]: unknown
   label: string
@@ -1436,6 +1464,7 @@ export type SceneNodeData =
   | LottieOverlayData
   | ThreeDTitleData
   | MotionGraphicsData
+  | CompositeData
   | RenderVideoData
   | SpeedRampData
   | LoopVideoData
@@ -1506,6 +1535,7 @@ export type SceneNodeType =
   | "lottie-overlay"
   | "3d-title"
   | "motion-graphics"
+  | "composite"
   | "render-video"
   | "speed-ramp"
   | "loop-video"
@@ -2016,6 +2046,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as MotionGraphicsData,
+  },
+  {
+    type: "composite",
+    label: "Composite",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["video1", "video2", "video3", "video4"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "Composite",
+      layers: [],
+      fps: 30,
+      aspectRatio: "16:9",
+      durationSeconds: 10,
+      backgroundColor: "#000000",
+      executionStatus: "idle",
+    } as CompositeData,
   },
   {
     type: "render-video",

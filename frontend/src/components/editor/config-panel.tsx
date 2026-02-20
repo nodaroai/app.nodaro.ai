@@ -94,6 +94,8 @@ import type {
   LottieOverlayData,
   ThreeDTitleData,
   MotionGraphicsData,
+  CompositeData,
+  CompositeLayerConfig,
   RenderVideoData,
   SpeedRampData,
   LoopVideoData,
@@ -122,6 +124,7 @@ const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ 
 import type { SelectedAsset } from "./asset-selection-modal"
 const AssetSelectionModal = lazy(() => import("./asset-selection-modal").then(m => ({ default: m.AssetSelectionModal })))
 import { IterationResultsPanel } from "./iteration-results-panel"
+import { CompositePreview } from "./composite-preview"
 
 interface SourceNodeInfo {
   readonly id: string
@@ -712,6 +715,9 @@ export function ConfigPanel() {
           {selectedNode.type === "motion-graphics" && (
             <MotionGraphicsConfig data={selectedNode.data as MotionGraphicsData} onUpdate={update} />
           )}
+          {selectedNode.type === "composite" && (
+            <CompositeConfig data={selectedNode.data as CompositeData} onUpdate={update} />
+          )}
           {selectedNode.type === "render-video" && (
             <RenderVideoConfig data={selectedNode.data as RenderVideoData} onUpdate={update} sources={sources} fieldMappings={fieldMappings} onMapField={handleMapField} nodes={nodes} />
           )}
@@ -787,7 +793,7 @@ export function ConfigPanel() {
               />
             )}
 
-            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "loop-video" || selectedNode.type === "fade-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text" || selectedNode.type === "render-video") && (
+            {(selectedNode.type === "merge-video-audio" || selectedNode.type === "combine-videos" || selectedNode.type === "extract-audio" || selectedNode.type === "trim-video" || selectedNode.type === "speed-ramp" || selectedNode.type === "loop-video" || selectedNode.type === "fade-video" || selectedNode.type === "resize-video" || selectedNode.type === "adjust-volume" || selectedNode.type === "add-captions" || selectedNode.type === "mix-audio" || selectedNode.type === "combine-text" || selectedNode.type === "split-text" || selectedNode.type === "composite" || selectedNode.type === "render-video") && (
               <button
                 type="button"
                 onClick={() => runSingleNode?.(selectedNode.id)}
@@ -5352,6 +5358,230 @@ function MotionGraphicsConfig({ data, onUpdate }: { data: MotionGraphicsData; on
                   />
                   <Input
                     value={data.backgroundColor ?? "#00000000"}
+                    onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                    className="h-8 text-xs flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  )
+}
+
+function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpdate: (d: Partial<CompositeData>) => void }) {
+  const HANDLES = ["video1", "video2", "video3", "video4"] as const
+
+  function updateLayer(layerId: string, patch: Partial<CompositeLayerConfig>) {
+    const updated = data.layers.map((l) => (l.id === layerId ? { ...l, ...patch } : l))
+    onUpdate({ layers: updated })
+  }
+
+  function addLayer(handle: string) {
+    const newLayer: CompositeLayerConfig = {
+      id: `layer-${handle}-${Date.now()}`,
+      inputHandle: handle,
+      position: "fullscreen",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      startFrame: 0,
+      opacity: 1,
+      blendMode: "normal",
+      zIndex: data.layers.length,
+    }
+    onUpdate({ layers: [...data.layers, newLayer] })
+  }
+
+  function removeLayer(layerId: string) {
+    onUpdate({ layers: data.layers.filter((l) => l.id !== layerId) })
+  }
+
+  const usedHandles = new Set(data.layers.map((l) => l.inputHandle))
+  const availableHandles = HANDLES.filter((h) => !usedHandles.has(h))
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="p-2.5 rounded-md bg-muted/30 border border-[var(--border-primary)]">
+        <p className="text-xs text-muted-foreground">
+          Connect rendered videos to input handles, then configure layers below. 0 credits — plan is built client-side.
+        </p>
+      </div>
+
+      <CompositePreview layers={data.layers} aspectRatio={data.aspectRatio} />
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-medium">Layers ({data.layers.length})</Label>
+          {availableHandles.length > 0 && (
+            <button
+              type="button"
+              onClick={() => addLayer(availableHandles[0])}
+              className="text-[10px] text-[#ff0073] hover:underline"
+            >
+              + Add Layer
+            </button>
+          )}
+        </div>
+
+        {data.layers.length === 0 && (
+          <div className="text-xs text-muted-foreground/60 py-2 text-center">
+            No layers. Add a layer for each connected video input.
+          </div>
+        )}
+
+        {data.layers.map((layer) => (
+          <div key={layer.id} className="p-2.5 rounded-md border border-[var(--border-primary)] bg-muted/10 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium">{layer.inputHandle}</span>
+              <button type="button" onClick={() => removeLayer(layer.id)} className="text-muted-foreground hover:text-red-500 transition-colors">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="mb-1 block text-[10px]">Position</Label>
+                <Select value={layer.position} onValueChange={(v) => updateLayer(layer.id, { position: v as "fullscreen" | "positioned" })}>
+                  <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fullscreen">Fullscreen</SelectItem>
+                    <SelectItem value="positioned">Positioned</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="mb-1 block text-[10px]">Blend Mode</Label>
+                <Select value={layer.blendMode} onValueChange={(v) => updateLayer(layer.id, { blendMode: v as CompositeLayerConfig["blendMode"] })}>
+                  <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="multiply">Multiply</SelectItem>
+                    <SelectItem value="screen">Screen</SelectItem>
+                    <SelectItem value="overlay">Overlay</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="mb-1 block text-[10px]">Opacity: {Math.round(layer.opacity * 100)}%</Label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={layer.opacity}
+                onChange={(e) => updateLayer(layer.id, { opacity: parseFloat(e.target.value) })}
+                className="w-full h-1.5 accent-[#ff0073]"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="mb-1 block text-[10px]">Z-Index</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={10}
+                  value={layer.zIndex}
+                  onChange={(e) => updateLayer(layer.id, { zIndex: parseInt(e.target.value, 10) || 0 })}
+                  className="h-7 text-[11px]"
+                />
+              </div>
+              <div>
+                <Label className="mb-1 block text-[10px]">Start Frame</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={layer.startFrame}
+                  onChange={(e) => updateLayer(layer.id, { startFrame: parseInt(e.target.value, 10) || 0 })}
+                  className="h-7 text-[11px]"
+                />
+              </div>
+            </div>
+
+            {layer.position === "positioned" && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="mb-1 block text-[10px]">X (%)</Label>
+                  <Input type="number" min={0} max={100} value={layer.x} onChange={(e) => updateLayer(layer.id, { x: parseFloat(e.target.value) || 0 })} className="h-7 text-[11px]" />
+                </div>
+                <div>
+                  <Label className="mb-1 block text-[10px]">Y (%)</Label>
+                  <Input type="number" min={0} max={100} value={layer.y} onChange={(e) => updateLayer(layer.id, { y: parseFloat(e.target.value) || 0 })} className="h-7 text-[11px]" />
+                </div>
+                <div>
+                  <Label className="mb-1 block text-[10px]">Width (%)</Label>
+                  <Input type="number" min={1} max={100} value={layer.width} onChange={(e) => updateLayer(layer.id, { width: parseFloat(e.target.value) || 50 })} className="h-7 text-[11px]" />
+                </div>
+                <div>
+                  <Label className="mb-1 block text-[10px]">Height (%)</Label>
+                  <Input type="number" min={1} max={100} value={layer.height} onChange={(e) => updateLayer(layer.id, { height: parseFloat(e.target.value) || 50 })} className="h-7 text-[11px]" />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Accordion type="single" collapsible>
+        <AccordionItem value="settings">
+          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="comp-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
+                    <SelectTrigger id="comp-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24</SelectItem>
+                      <SelectItem value="30">30</SelectItem>
+                      <SelectItem value="60">60</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="comp-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Input
+                    id="comp-duration"
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={data.durationSeconds}
+                    onChange={(e) => onUpdate({ durationSeconds: parseInt(e.target.value, 10) || 10 })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="comp-aspect" className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <Select value={data.aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v as CompositeData["aspectRatio"] })}>
+                  <SelectTrigger id="comp-aspect" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                    <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                    <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                    <SelectItem value="4:5">4:5 (Social)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="comp-bg" className="mb-1.5 block text-xs">Background Color</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={data.backgroundColor}
+                    onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+                    className="w-8 h-8 rounded border border-[var(--border-primary)] cursor-pointer bg-transparent"
+                  />
+                  <Input
+                    id="comp-bg"
+                    value={data.backgroundColor}
                     onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
                     className="h-8 text-xs flex-1"
                   />
