@@ -502,7 +502,7 @@ function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, st
       const segments = track.segments as Array<Record<string, unknown>> | undefined
       if (segments) {
         for (const seg of segments) {
-          if (typeof seg.src === "string" && urlMap.has(seg.src)) seg.src = urlMap.get(seg.src)!
+          if (seg.mediaType === "video" && typeof seg.src === "string" && urlMap.has(seg.src)) seg.src = urlMap.get(seg.src)!
         }
       }
     }
@@ -563,6 +563,11 @@ function startLocalFileServer(serveDir: string): Promise<{ baseUrl: string; clos
           if (match) {
             const start = parseInt(match[1], 10)
             const end = match[2] ? parseInt(match[2], 10) : fileSize - 1
+            if (start >= fileSize || end >= fileSize || start > end) {
+              res.writeHead(416, { "Content-Range": `bytes */${fileSize}` })
+              res.end()
+              return
+            }
             headers["Content-Range"] = `bytes ${start}-${end}/${fileSize}`
             headers["Content-Length"] = end - start + 1
             res.writeHead(206, headers)
@@ -620,8 +625,6 @@ async function normalizeInputVideos(
     console.log(`[render-worker] Prepared input video: ${url} -> ${serveName} (transcoded=${result !== localPath})`)
   }
 
-  if (fileMap.size === 0) return undefined
-
   const { baseUrl, close } = await startLocalFileServer(workDir)
 
   // Verify the server is working before proceeding
@@ -661,7 +664,6 @@ async function cleanupStaleWorkDirs(): Promise<void> {
   try {
     const entries = await readdir(tmp)
     let cleaned = 0
-    let totalBytes = 0
 
     for (const entry of entries) {
       if (!entry.startsWith("render-")) continue
@@ -670,7 +672,6 @@ async function cleanupStaleWorkDirs(): Promise<void> {
         const s = await stat(fullPath)
         if (!s.isDirectory()) continue
         if (now - s.mtimeMs > maxAge) {
-          totalBytes += s.size
           await rm(fullPath, { recursive: true, force: true })
           cleaned++
         }
@@ -786,6 +787,7 @@ export function createRenderWorker() {
             const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
 
             const RENDER_TIMEOUT_MS = 25 * 60 * 1000
+            let timer: ReturnType<typeof setTimeout> | undefined
             await Promise.race([
               renderMedia({
                 composition: {
@@ -807,10 +809,10 @@ export function createRenderWorker() {
                   bullJob.updateProgress(overall).catch(() => {})
                 },
               }),
-              new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Render timed out after 25 minutes")), RENDER_TIMEOUT_MS)
-              ),
-            ])
+              new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error("Render timed out after 25 minutes")), RENDER_TIMEOUT_MS)
+              }),
+            ]).finally(() => clearTimeout(timer))
           } finally {
             stopFileServer?.()
           }
