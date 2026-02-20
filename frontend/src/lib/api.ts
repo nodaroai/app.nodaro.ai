@@ -6,7 +6,7 @@ export const API_BASE_URL = ''
  * Get auth headers with the current session's JWT token.
  * Returns { Authorization: 'Bearer ...' } or {} if no session.
  */
-async function getAuthHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()

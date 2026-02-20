@@ -54,6 +54,7 @@ export default function ProjectsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search projects..."
+          aria-label="Search projects"
           className="pl-9"
         />
       </div>

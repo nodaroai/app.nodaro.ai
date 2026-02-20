@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Search, Folder, GitBranch, X, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -108,10 +108,10 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   }, [open, onClose])
 
   // Calculate all results for keyboard navigation
-  const allResults = [
+  const allResults = useMemo(() => [
     ...projects.map((p) => ({ type: "project" as const, item: p })),
     ...workflows.map((w) => ({ type: "workflow" as const, item: w })),
-  ]
+  ], [projects, workflows])
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
@@ -194,6 +194,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               setQuery(e.target.value)
               setSelectedIndex(0)
             }}
+            aria-label="Search projects and workflows"
             placeholder="Search projects and workflows..."
             className={cn(
               "flex-1 bg-transparent border-none outline-none",

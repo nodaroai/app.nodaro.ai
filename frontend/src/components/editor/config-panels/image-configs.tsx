@@ -126,6 +126,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
               className="shrink-0 h-6 w-6"
               onClick={() => onUpdate({ referenceImageUrl: undefined })}
               title="Remove reference image"
+              aria-label="Remove reference image"
             >
               <X className="w-3 h-3" />
             </Button>
@@ -154,6 +155,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
               disabled={uploadingRefImage}
               onClick={() => refImageInputRef.current?.click()}
               title="Upload reference image"
+              aria-label="Upload reference image"
             >
               {uploadingRefImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             </Button>

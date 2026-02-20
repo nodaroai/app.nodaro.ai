@@ -600,6 +600,8 @@ centered composition, high quality, single character`
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div
+          role="dialog"
+          aria-modal="true"
           className={cn(
             "bg-card rounded-xl w-[800px] max-w-[92vw] max-h-[88vh] flex flex-col shadow-2xl border",
             isDragging && "pointer-events-none"
@@ -657,18 +659,20 @@ centered composition, high quality, single character`
                   Delete Character
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={onClose}>
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
                 <X className="w-5 h-5" />
               </Button>
             </div>
           </div>
 
           {/* Tabs */}
-          <div className="border-b px-6 flex gap-1 shrink-0 overflow-x-auto">
+          <div role="tablist" className="border-b px-6 flex gap-1 shrink-0 overflow-x-auto">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={cn(
                   "px-3 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
@@ -930,7 +934,7 @@ centered composition, high quality, single character`
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Select Refined Image</h3>
-              <Button variant="ghost" size="icon" onClick={() => setShowRefinePicker(false)}>
+              <Button variant="ghost" size="icon" onClick={() => setShowRefinePicker(false)} aria-label="Close">
                 <X className="w-5 h-5" />
               </Button>
             </div>

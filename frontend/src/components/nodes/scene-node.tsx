@@ -242,10 +242,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity flex">
         <button
           type="button"
-          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-bl-md shadow-md transition-colors"
-          style={{ backgroundColor: '#ff0073' }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e60068'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff0073'}
+          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-bl-md shadow-md transition-colors bg-[#ff0073] hover:bg-[#e60068]"
           onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}
         >
           <Play className="w-3 h-3" />
@@ -253,10 +250,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
         </button>
         <button
           type="button"
-          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-br-md shadow-md transition-colors border-l border-white/20"
-          style={{ backgroundColor: '#8b5cf6' }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#8b5cf6'}
+          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-br-md shadow-md transition-colors border-l border-white/20 bg-[#8b5cf6] hover:bg-[#7c3aed]"
           onClick={(e) => { e.stopPropagation(); setEditorOpen(true) }}
         >
           <Maximize2 className="w-3 h-3" />

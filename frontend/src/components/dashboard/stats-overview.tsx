@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Loader2, Activity, CheckCircle, XCircle, Percent, Image, Video, Clock, Zap } from "lucide-react"
+import { toast } from "sonner"
 import { cancelAllJobs } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { useStats } from "@/hooks/queries/use-stats-queries"
@@ -69,7 +70,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
       await cancelAllJobs(user.id)
       qc.invalidateQueries({ queryKey: queryKeys.stats.all })
     } catch {
-      // Error is silently swallowed; the dialog will close and the user can retry
+      toast.error("Failed to cancel jobs")
     } finally {
       setCancelling(false)
       setCancelAllDialogOpen(false)

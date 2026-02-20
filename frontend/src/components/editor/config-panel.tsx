@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useRef, useEffect, lazy, Suspense } from "react"
+import { useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense } from "react"
 import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -230,12 +230,12 @@ export function ConfigPanel() {
     if (!isVisible) setIsExpanded(false)
   }, [isVisible])
 
-  function update(data: Record<string, unknown>) {
+  const update = useCallback((data: Record<string, unknown>) => {
     if (!selectedNodeId) return
     updateNodeData(selectedNodeId, data)
-  }
+  }, [selectedNodeId, updateNodeData])
 
-  function handleMapField(field: string, sourceNodeId: string | null) {
+  const handleMapField = useCallback((field: string, sourceNodeId: string | null) => {
     const current = { ...fieldMappings }
     if (sourceNodeId === null) {
       const { [field]: _, ...rest } = current
@@ -243,7 +243,7 @@ export function ConfigPanel() {
     } else {
       update({ fieldMappings: { ...current, [field]: { sourceNodeId } } })
     }
-  }
+  }, [fieldMappings, update])
 
   function handleDelete() {
     if (!selectedNodeId) return
@@ -259,7 +259,10 @@ export function ConfigPanel() {
   const selectedNode = displayNode
   const nodeType = selectedNode.type as string
   const nodeData = selectedNode.data as Record<string, unknown>
-  const configProps = { data: nodeData as any, onUpdate: update, sources, fieldMappings, onMapField: handleMapField, nodes }
+  const configProps = useMemo(
+    () => ({ data: nodeData as any, onUpdate: update, sources, fieldMappings, onMapField: handleMapField, nodes }),
+    [nodeData, update, sources, fieldMappings, handleMapField, nodes]
+  )
 
   const panelContent = (
     <div className={isExpanded
@@ -285,10 +288,11 @@ export function ConfigPanel() {
               className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
               onClick={() => setIsExpanded((v) => !v)}
               title={isExpanded ? "Collapse to side panel" : "Expand to full screen"}
+              aria-label={isExpanded ? "Collapse panel" : "Expand panel"}
             >
               {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
-            <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setIsExpanded(false); selectNode(null) }}>
+            <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setIsExpanded(false); selectNode(null) }} aria-label="Close panel">
               <X className="h-4 w-4" />
             </Button>
           </div>

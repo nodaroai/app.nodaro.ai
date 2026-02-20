@@ -67,18 +67,22 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <SuspenseWrapper><LoginPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
   },
   {
     path: "/signup",
     element: <SuspenseWrapper><SignupPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
   },
   {
     path: "/gallery",
     element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
   },
   {
     path: "/pricing",
     element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
   },
   {
     element: <DashboardLayout />,

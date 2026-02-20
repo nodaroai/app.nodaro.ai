@@ -9,6 +9,15 @@ import { isCloud } from "@/lib/edition"
 import { toast } from "sonner"
 import { CachedImage } from "@/components/ui/cached-image"
 
+const STATUS_COLORS: Record<string, string> = {
+  completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
+  failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
+  processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
+  pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+  queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+  cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400",
+}
+
 function getCostDisplayForModal(job: Job, showDollars: boolean): string {
   if (showDollars) {
     const cost = job.cost ?? job.display_cost ?? job.provider_cost
@@ -272,15 +281,6 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
     }
   }
 
-  const statusColors: Record<string, string> = {
-    completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
-    failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
-    processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
-    pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
-    queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
-    cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400",
-  }
-
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop */}
@@ -290,14 +290,14 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-6xl max-h-[90vh] bg-white dark:bg-[#121212] rounded-xl border border-gray-200 dark:border-[#2D2D2D] shadow-2xl overflow-hidden flex flex-col">
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-6xl max-h-[90vh] bg-white dark:bg-[#121212] rounded-xl border border-gray-200 dark:border-[#2D2D2D] shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#1E1E1E]">
           <div className="flex items-center gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Job</h2>
-                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
                   {job.status}
                 </span>
               </div>
@@ -347,6 +347,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               variant="ghost"
               size="icon"
               onClick={onClose}
+              aria-label="Close"
               className="text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
             >
               <X className="w-5 h-5" />
@@ -361,9 +362,11 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
             <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Input</h3>
-                <div className="flex items-center gap-1">
+                <div role="tablist" className="flex items-center gap-1">
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={inputTab === "form"}
                     onClick={() => setInputTab("form")}
                     className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
                       inputTab === "form"
@@ -375,6 +378,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                   </button>
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={inputTab === "json"}
                     onClick={() => setInputTab("json")}
                     className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
                       inputTab === "json"
@@ -423,9 +428,11 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
             <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Output</h3>
-                <div className="flex items-center gap-1">
+                <div role="tablist" className="flex items-center gap-1">
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={outputTab === "preview"}
                     onClick={() => setOutputTab("preview")}
                     className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
                       outputTab === "preview"
@@ -437,6 +444,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                   </button>
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={outputTab === "json"}
                     onClick={() => setOutputTab("json")}
                     className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
                       outputTab === "json"

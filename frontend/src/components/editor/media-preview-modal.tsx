@@ -31,11 +31,14 @@ export function MediaPreviewModal({ isOpen, onClose, type, url }: MediaPreviewMo
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         className="relative w-[60vw] max-h-[80vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
+          aria-label="Close preview"
           className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
           onClick={onClose}
         >

@@ -1,20 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { createClient } from "@/lib/supabase"
 import { queryKeys } from "@/lib/query-keys"
+import { getAuthHeaders } from "@/lib/api"
 
 interface UserSettings {
   publicOutputs: boolean
   tier: string
   promptTemplates: Record<string, string>
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  try {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.access_token) return { Authorization: `Bearer ${session.access_token}` }
-  } catch { /* fall back to no auth */ }
-  return {}
 }
 
 async function fetchUserSettings(userId: string): Promise<UserSettings> {

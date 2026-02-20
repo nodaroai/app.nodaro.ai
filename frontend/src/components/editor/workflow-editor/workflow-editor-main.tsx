@@ -600,6 +600,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     size="icon"
                     onClick={handleStop}
                     title="Stop current execution"
+                    aria-label="Stop current execution"
                     className="rounded-lg bg-background"
                   >
                     <Square className="w-4 h-4" />

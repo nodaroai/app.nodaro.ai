@@ -229,6 +229,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
               type="text"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
+              aria-label="Search files"
               placeholder="Search by filename..."
               className="w-full pl-9 pr-3 py-2 text-sm bg-muted/30 border border-border rounded-lg outline-none focus:border-[#ff0073]/50 transition-colors placeholder:text-muted-foreground/40"
             />
