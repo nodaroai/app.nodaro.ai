@@ -332,9 +332,6 @@
 }
 
 /* Enlarge handle hit area without changing visible dot */
-.react-flow__handle {
-  position: relative;
-}
 .react-flow__handle::after {
   content: '';
   position: absolute;
