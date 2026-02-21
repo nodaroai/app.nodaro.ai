@@ -21,6 +21,7 @@ interface WorkflowState {
   readonly edges: WorkflowEdge[]
   readonly selectedNodeId: string | null
   readonly isDirty: boolean
+  readonly loadGeneration: number
   readonly saveStatus: SaveStatus
   readonly saveError: string | null
   readonly videoAutoplay: boolean
@@ -99,6 +100,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   edges: [],
   selectedNodeId: null,
   isDirty: false,
+  loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,
   saveError: null,
   videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
@@ -312,34 +314,36 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         return isNaN(num) ? max : Math.max(max, num)
       }, 0) + 1
 
-    set({
+    set((state) => ({
       workflowId: id,
       workflowName: name,
       nodes,
       edges,
       selectedNodeId: null,
       isDirty: false,
+      loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       characterDefinitions: characterDefinitions ?? [],
       flowPromptTemplates: flowPromptTemplates ?? {},
-    })
+    }))
   },
 
   clearWorkflow: () => {
     nextNodeId = 1
-    set({
+    set((state) => ({
       workflowId: null,
       workflowName: "Untitled Workflow",
       nodes: [],
       edges: [],
       selectedNodeId: null,
       isDirty: false,
+      loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       characterDefinitions: [],
       flowPromptTemplates: {},
-    })
+    }))
   },
 
   markClean: () => set({ isDirty: false }),

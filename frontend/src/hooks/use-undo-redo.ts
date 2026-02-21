@@ -35,21 +35,19 @@ function flushPending(): void {
  */
 export function useUndoRedoSubscription(): void {
   useEffect(() => {
-    let prevIsDirty = useWorkflowStore.getState().isDirty
+    let prevGeneration = useWorkflowStore.getState().loadGeneration
 
     const unsub = useWorkflowStore.subscribe((state, prevState) => {
       // Skip if we're restoring a snapshot
       if (_isRestoring) return
 
-      // On load/clear (isDirty becomes false), clear history
-      if (!state.isDirty && prevIsDirty) {
+      // On workflow load/clear (generation changes), clear history
+      if (state.loadGeneration !== prevGeneration) {
         flushPending()
         useUndoRedoStore.getState().clear()
-        prevIsDirty = false
+        prevGeneration = state.loadGeneration
         return
       }
-
-      prevIsDirty = state.isDirty
 
       // Only track changes that set isDirty
       if (!state.isDirty) return
