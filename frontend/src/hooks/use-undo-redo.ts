@@ -21,6 +21,43 @@ function cleanEdges(edges: WorkflowEdge[]): WorkflowEdge[] {
   return edges.map(({ selected, ...rest }) => rest as WorkflowEdge)
 }
 
+/**
+ * Check if snapshot-relevant content actually changed between two states.
+ * Ignores React Flow transient fields (selected, dragging, measured) by
+ * comparing stable references: id, type, position, and data.
+ *
+ * This prevents dimension re-measurements, selection changes, etc. from
+ * triggering spurious undo snapshots that would clear the redo stack.
+ */
+function hasSnapshotChange(
+  prevNodes: WorkflowNode[],
+  currNodes: WorkflowNode[],
+  prevEdges: WorkflowEdge[],
+  currEdges: WorkflowEdge[],
+  prevName: string,
+  currName: string,
+  prevChars: unknown,
+  currChars: unknown,
+  prevTemplates: unknown,
+  currTemplates: unknown,
+): boolean {
+  if (prevName !== currName) return true
+  if (prevChars !== currChars) return true
+  if (prevTemplates !== currTemplates) return true
+  if (prevEdges !== currEdges) return true
+  if (prevNodes === currNodes) return false
+  if (prevNodes.length !== currNodes.length) return true
+  for (let i = 0; i < prevNodes.length; i++) {
+    const p = prevNodes[i]
+    const c = currNodes[i]
+    if (p.id !== c.id) return true
+    if (p.type !== c.type) return true
+    if (p.position !== c.position) return true
+    if (p.data !== c.data) return true
+  }
+  return false
+}
+
 function captureSnapshot(): WorkflowSnapshot {
   const s = useWorkflowStore.getState()
   return {
@@ -64,8 +101,16 @@ export function useUndoRedoSubscription(): void {
         return
       }
 
-      // Only track changes that set isDirty
-      if (!state.isDirty) return
+      // Skip if no snapshot-relevant content actually changed.
+      // This catches: dimension re-measurements, selection changes,
+      // isDirty/saveStatus toggles, and other transient updates.
+      if (!hasSnapshotChange(
+        prevState.nodes, state.nodes,
+        prevState.edges, state.edges,
+        prevState.workflowName, state.workflowName,
+        prevState.characterDefinitions, state.characterDefinitions,
+        prevState.flowPromptTemplates, state.flowPromptTemplates,
+      )) return
 
       // Capture the "before" state on first change in a burst
       if (!_pendingSnapshot) {

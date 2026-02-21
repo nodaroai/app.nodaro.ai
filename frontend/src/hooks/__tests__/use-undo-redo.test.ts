@@ -76,7 +76,22 @@ function setupUndoSubscription() {
       return
     }
 
-    if (!state.isDirty) return
+    // Skip if no snapshot-relevant content actually changed
+    if (
+      prevState.workflowName === state.workflowName &&
+      prevState.characterDefinitions === state.characterDefinitions &&
+      prevState.flowPromptTemplates === state.flowPromptTemplates &&
+      prevState.edges === state.edges &&
+      (() => {
+        const pn = prevState.nodes, cn = state.nodes
+        if (pn === cn) return true
+        if (pn.length !== cn.length) return false
+        for (let i = 0; i < pn.length; i++) {
+          if (pn[i].id !== cn[i].id || pn[i].type !== cn[i].type || pn[i].position !== cn[i].position || pn[i].data !== cn[i].data) return false
+        }
+        return true
+      })()
+    ) return
 
     if (!_pendingSnapshot) {
       _pendingSnapshot = {
@@ -295,5 +310,71 @@ describe("Undo/Redo System", () => {
 
     expect(sub.pastLength).toBe(0)
     expect(sub.canUndo).toBe(false)
+  })
+
+  it("should not capture snapshots for dimension re-measurements after undo", () => {
+    // 1. Add a node
+    useWorkflowStore.getState().addNode("generate-image", { x: 0, y: 0 })
+    vi.advanceTimersByTime(301)
+    expect(sub.pastLength).toBe(1)
+
+    // 2. Undo the add
+    sub.undo()
+    expect(useWorkflowStore.getState().nodes.length).toBe(0)
+    expect(sub.canRedo).toBe(true)
+    expect(sub.futureLength).toBe(1)
+
+    // 3. Simulate React Flow dimension re-measurement after undo.
+    //    restoreSnapshot sets isDirty: true. Then React Flow sends dimension
+    //    changes which create new node objects but don't change positions/data.
+    //    In the real app, this happens via onNodesChange with type="dimensions".
+    //    Here we simulate it by directly setting nodes with only measured changed.
+    //
+    //    Since our undo restored to 0 nodes, there's nothing to re-measure.
+    //    Let's test with a workflow that HAS nodes.
+
+    // Reset and test with a 2-node workflow
+    sub.unsub()
+    useWorkflowStore.getState().clearWorkflow()
+    useUndoRedoStore.getState().clear()
+    useWorkflowStore.getState().loadWorkflow("wf1", "Test", [
+      { id: "node_1", type: "generate-image", position: { x: 0, y: 0 }, data: { provider: "test" } },
+      { id: "node_2", type: "generate-image", position: { x: 200, y: 0 }, data: { provider: "test2" } },
+    ] as any, [], [], {})
+    sub = setupUndoSubscription()
+
+    // User renames workflow
+    useWorkflowStore.getState().setWorkflowName("Renamed")
+    vi.advanceTimersByTime(301)
+    expect(sub.pastLength).toBe(1)
+    expect(useWorkflowStore.getState().workflowName).toBe("Renamed")
+
+    // User undoes rename
+    sub.undo()
+    expect(useWorkflowStore.getState().workflowName).toBe("Test")
+    expect(sub.canRedo).toBe(true)
+    const futureBeforeDimensions = sub.futureLength
+
+    // NOW: simulate dimension re-measurement.
+    // restoreSnapshot set isDirty: true. React Flow re-measures nodes.
+    // onNodesChange creates new node objects with 'measured' field added.
+    // The position and data refs stay the same (spread copy).
+    const currentNodes = useWorkflowStore.getState().nodes
+    const measuredNodes = currentNodes.map(n => ({
+      ...n,
+      measured: { width: 200, height: 100 },
+    }))
+    // Directly set nodes as onNodesChange would (without setting isDirty for dimensions)
+    useWorkflowStore.setState({ nodes: measuredNodes as any })
+    vi.advanceTimersByTime(301)
+
+    // THE BUG: redo stack should NOT be cleared by dimension changes
+    expect(sub.futureLength).toBe(futureBeforeDimensions)
+    expect(sub.canRedo).toBe(true)
+
+    // Redo should still work
+    const redoResult = sub.redo()
+    expect(redoResult).toBe(true)
+    expect(useWorkflowStore.getState().workflowName).toBe("Renamed")
   })
 })
