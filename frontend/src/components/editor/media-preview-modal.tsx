@@ -8,7 +8,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 interface MediaPreviewModalProps {
   readonly isOpen: boolean
   readonly onClose: () => void
-  readonly type: "image" | "video"
+  readonly type: "image" | "video" | "audio"
   readonly url: string
 }
 
@@ -51,7 +51,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url }: MediaPreviewMo
             alt="Preview"
             className="max-w-full max-h-[80vh] rounded-lg object-contain"
           />
-        ) : (
+        ) : type === "video" ? (
           <video
             src={url}
             className="max-w-full max-h-[80vh] rounded-lg"
@@ -59,6 +59,8 @@ export function MediaPreviewModal({ isOpen, onClose, type, url }: MediaPreviewMo
             autoPlay
             playsInline
           />
+        ) : (
+          <audio src={url} controls autoPlay className="w-full" />
         )}
       </div>
     </div>,

@@ -7,6 +7,7 @@ import {
   ImageIcon,
   Film,
   Music,
+  Play,
   ArrowUpRight,
   FolderOpen,
   CheckSquare,
@@ -22,6 +23,7 @@ import {
 } from "@/hooks/queries/use-assets-queries"
 import { useStorageProfile } from "@/hooks/queries/use-billing-queries"
 import { CachedImage } from "@/components/ui/cached-image"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { LibraryAsset } from "@/lib/api"
 
 function formatBytes(bytes: number): string {
@@ -44,6 +46,7 @@ export default function LibraryPage() {
   const [filter, setFilter] = useState<TypeFilter>("all")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [previewAsset, setPreviewAsset] = useState<LibraryAsset | null>(null)
 
   // Storage profile (auto-refreshes after delete via query invalidation)
   const { data: storageData } = useStorageProfile(user?.id)
@@ -263,8 +266,8 @@ export default function LibraryPage() {
               >
                 {/* Thumbnail / Preview */}
                 <div
-                  className="h-32 bg-muted/30 flex items-center justify-center cursor-pointer"
-                  onClick={() => toggleSelect(asset.id)}
+                  className="h-32 bg-muted/30 flex items-center justify-center cursor-pointer relative"
+                  onClick={() => asset.url && setPreviewAsset(asset)}
                 >
                   {asset.type === "image" && asset.url ? (
                     <CachedImage
@@ -275,19 +278,53 @@ export default function LibraryPage() {
                       thumbnailWidth={320}
                     />
                   ) : asset.type === "video" ? (
-                    <Film className="h-10 w-10 text-muted-foreground/30" />
+                    asset.thumbnailUrl ? (
+                      <div className="relative w-full h-full">
+                        <CachedImage
+                          src={asset.thumbnailUrl}
+                          alt={asset.filename}
+                          className="w-full h-full object-cover"
+                          thumbnail
+                          thumbnailWidth={320}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="rounded-full bg-black/50 p-2">
+                            <Play className="h-5 w-5 text-white" fill="white" />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative flex items-center justify-center">
+                        <Film className="h-10 w-10 text-muted-foreground/30" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Play className="h-4 w-4 text-muted-foreground/50" />
+                        </div>
+                      </div>
+                    )
                   ) : (
-                    <Music className="h-10 w-10 text-muted-foreground/30" />
+                    <div className="relative flex items-center justify-center">
+                      <Music className="h-10 w-10 text-muted-foreground/30" />
+                      <div className="absolute inset-0 flex items-center justify-center mt-6">
+                        <Play className="h-4 w-4 text-muted-foreground/50" />
+                      </div>
+                    </div>
                   )}
 
                   {/* Checkbox overlay */}
-                  <div className={`absolute top-2 left-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                  <button
+                    type="button"
+                    className={`absolute top-2 left-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleSelect(asset.id)
+                    }}
+                  >
                     {isSelected ? (
                       <CheckSquare className="h-5 w-5 text-[#ff0073]" />
                     ) : (
                       <Square className="h-5 w-5 text-muted-foreground/60" />
                     )}
-                  </div>
+                  </button>
                 </div>
 
                 {/* Info */}
@@ -345,6 +382,13 @@ export default function LibraryPage() {
           </Button>
         </div>
       )}
+
+      <MediaPreviewModal
+        isOpen={previewAsset !== null}
+        onClose={() => setPreviewAsset(null)}
+        type={previewAsset?.type ?? "image"}
+        url={previewAsset?.url ?? ""}
+      />
     </div>
   )
 }
