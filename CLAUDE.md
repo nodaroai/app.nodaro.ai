@@ -125,6 +125,9 @@ frontend/src/
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
     config-panels/        — 22 files: per-category node config components (image, video, audio, composition, entity, etc.)
+    remotion-player-preview.tsx — Generic @remotion/player wrapper (lazy-loaded)
+    after-effects-player-preview.tsx — AE composition preview (shows when sourceVideo exists)
+    motion-graphics-player-preview.tsx — MG composition preview (always available)
     workflow-editor/      — 13 files: DAG execution engine, node executors, polling, main component
     editor-error-boundary.tsx — React error boundary for Canvas + ConfigPanel
   components/credits/     — CreditBalance, GenerateButton, etc.
@@ -168,7 +171,7 @@ backend/src/
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
 | Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + composite renderer + legacy template converters via BullMQ worker |
 | AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
-| After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox, animated-blur, trail, motion-blur) applied to video (2 credits), `@remotion/motion-blur` for CameraMotionBlur + Trail |
+| After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox, animated-blur, trail, motion-blur) applied to video (2 credits), CSS `filter:blur()` for motion-blur, OffthreadVideo ghost layers for trail |
 | Lottie Overlay | Claude Sonnet → Overlay Plan JSON | AI-placed timed Lottie animations over video (2 credits), `@remotion/lottie` + `delayRender`/`continueRender` per overlay |
 | 3D Title | Claude Sonnet → 3D Title Plan JSON | AI-generated animated 3D text scenes with camera, lighting, particles (3 credits), `@remotion/three` + Three.js + `@react-three/drei`, max 60s |
 | Motion Graphics | Claude Sonnet → Motion Graphics Plan JSON | AI-generated 2D motion graphics: lower thirds, title cards, kinetic typography, animated shapes/SVG paths (2 credits), pure Remotion primitives + `FONT_MAP` |
@@ -176,6 +179,7 @@ backend/src/
 | Multi-plan rendering | `POST /v1/render-video/plan` | Generic `{ planType, plan }` envelope — any composer node can feed plans to Render Video |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
+| Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
 
 ---
@@ -197,4 +201,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-21*
-*Version: 1.34.1*
+*Version: 1.35.0*
