@@ -516,7 +516,6 @@ export default function GalleryPage() {
                     role="button"
                     tabIndex={0}
                     className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
-                    style={index < 10 ? undefined : { contentVisibility: "auto", containIntrinsicSize: "auto 200px" }}
                     onClick={() => setSelectedIndex(index)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedIndex(index) }}
                   >
