@@ -113,8 +113,11 @@ export function useUndoRedoActions() {
     const snapshot = useUndoRedoStore.getState().undo(current)
     if (!snapshot) return
     _isRestoring = true
-    useWorkflowStore.getState().restoreSnapshot(snapshot)
-    _isRestoring = false
+    try {
+      useWorkflowStore.getState().restoreSnapshot(snapshot)
+    } finally {
+      _isRestoring = false
+    }
   }, [])
 
   const redo = useCallback(() => {
@@ -123,8 +126,11 @@ export function useUndoRedoActions() {
     const snapshot = useUndoRedoStore.getState().redo(current)
     if (!snapshot) return
     _isRestoring = true
-    useWorkflowStore.getState().restoreSnapshot(snapshot)
-    _isRestoring = false
+    try {
+      useWorkflowStore.getState().restoreSnapshot(snapshot)
+    } finally {
+      _isRestoring = false
+    }
   }, [])
 
   return { undo, redo, canUndo, canRedo }

@@ -338,14 +338,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
 
       // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y — Redo
-      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey && e.key === "z"))) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
         e.preventDefault()
         redo()
         return
       }
 
       // Ctrl/Cmd+Z — Undo
-      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault()
         undo()
         return
