@@ -331,6 +331,20 @@
   box-shadow: 0 0 20px rgba(52, 211, 153, 0.4) !important;
 }
 
+/* Enlarge handle hit area without changing visible dot */
+.react-flow__handle {
+  position: relative;
+}
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+}
+
 /* Connection port styling in dark mode */
 .dark .react-flow__handle {
   background: #ff0073 !important;
