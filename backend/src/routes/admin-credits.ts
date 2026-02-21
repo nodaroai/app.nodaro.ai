@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase.js"
 import { CreditsService, invalidateModelPricingCache } from "../billing/credits.js"
 import { invalidateBalanceCache } from "./credits.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { TIER_CREDITS } from "../billing/paddle-config.js"
 
 export async function adminCreditsRoutes(app: FastifyInstance) {
   // GET /v1/admin/users - List all users with credit info (paginated)
@@ -19,7 +20,11 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       .range(offset, offset + limit - 1)
 
     if (search) {
-      dbQuery = dbQuery.or(`display_name.ilike.%${search}%,email.ilike.%${search}%`)
+      // Sanitize special PostgREST filter characters to prevent filter injection
+      const sanitized = search.replace(/[%_,().\\]/g, "")
+      if (sanitized.length > 0) {
+        dbQuery = dbQuery.or(`display_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`)
+      }
     }
 
     const { data, count, error } = await dbQuery
@@ -104,14 +109,6 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     }
     if (!adminUserId) {
       return reply.code(400).send({ error: "Missing required field: adminUserId" })
-    }
-
-    const TIER_CREDITS: Record<string, number> = {
-      free: 50,
-      basic: 500,
-      standard: 1000,
-      pro: 2000,
-      business: 5000,
     }
 
     // Fetch current profile

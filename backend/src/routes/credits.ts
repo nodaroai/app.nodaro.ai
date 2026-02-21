@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { CreditsService } from "../services/credits.js"
+import { supabase } from "../lib/supabase.js"
 
 // ============================================================
 // Credits Routes
@@ -224,11 +225,31 @@ export async function creditsRoutes(app: FastifyInstance) {
       actualCredits?: number
     }
   }>("/v1/credits/commit", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const { usageLogId, actualCredits } = req.body
 
     if (!usageLogId) {
       return reply.status(400).send({
         error: { code: "bad_request", message: "usageLogId is required" },
+      })
+    }
+
+    // Verify the usage log belongs to the requesting user
+    const { data: log } = await supabase
+      .from("usage_logs")
+      .select("user_id")
+      .eq("id", usageLogId)
+      .single()
+
+    if (!log || log.user_id !== userId) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Usage log does not belong to you" },
       })
     }
 
@@ -252,11 +273,31 @@ export async function creditsRoutes(app: FastifyInstance) {
       usageLogId: string
     }
   }>("/v1/credits/refund", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const { usageLogId } = req.body
 
     if (!usageLogId) {
       return reply.status(400).send({
         error: { code: "bad_request", message: "usageLogId is required" },
+      })
+    }
+
+    // Verify the usage log belongs to the requesting user
+    const { data: log } = await supabase
+      .from("usage_logs")
+      .select("user_id")
+      .eq("id", usageLogId)
+      .single()
+
+    if (!log || log.user_id !== userId) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "Usage log does not belong to you" },
       })
     }
 
