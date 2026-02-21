@@ -244,6 +244,7 @@ function BaseNodeComponent({
       )}
 
       {children && <div className="px-3 py-2 text-xs overflow-hidden bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>}
+    </div>
 
       {handles.map((h) => (
         <div key={h.id}>
@@ -268,7 +269,6 @@ function BaseNodeComponent({
           )}
         </div>
       ))}
-    </div>
     </>
   )
 }

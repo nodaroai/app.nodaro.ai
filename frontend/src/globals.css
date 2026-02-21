@@ -341,8 +341,8 @@
   height: 12px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: hsl(var(--primary));
-  border: 2px solid hsl(var(--background));
+  background: var(--primary);
+  border: 2px solid var(--background);
   pointer-events: none;
 }
 .dark .react-flow__handle::after {
