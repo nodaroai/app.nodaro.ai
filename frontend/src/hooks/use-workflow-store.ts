@@ -118,21 +118,31 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setWorkflowName: (name) => set({ workflowName: name, isDirty: true }),
 
   onNodesChange: (changes) =>
-    set((state) => ({
-      nodes: applyNodeChanges(changes, state.nodes),
-      isDirty: true,
-    })),
+    set((state) => {
+      const newNodes = applyNodeChanges(changes, state.nodes)
+      // Only mark dirty for content changes (position, add, remove, replace)
+      // NOT for selection or dimension measurements from React Flow
+      const hasContentChange = changes.some(
+        (c) => c.type !== "select" && c.type !== "dimensions"
+      )
+      return {
+        nodes: newNodes,
+        ...(hasContentChange ? { isDirty: true } : {}),
+      }
+    }),
 
   onEdgesChange: (changes) =>
     set((state) => {
       const newEdges = applyEdgeChanges(changes, state.edges)
+      // Only mark dirty for content changes, not selection
+      const hasContentChange = changes.some((c) => c.type !== "select")
       const removedEdges = changes
         .filter((c): c is EdgeChange<WorkflowEdge> & { type: "remove" } => c.type === "remove")
         .map((c) => state.edges.find((e) => e.id === c.id))
         .filter((e): e is WorkflowEdge => e !== undefined)
 
       if (removedEdges.length === 0) {
-        return { edges: newEdges, isDirty: true }
+        return { edges: newEdges, ...(hasContentChange ? { isDirty: true } : {}) }
       }
 
       const nodes = state.nodes.map((node) => {

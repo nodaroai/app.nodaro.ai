@@ -1,17 +1,30 @@
 import { useEffect, useCallback } from "react"
 import { useWorkflowStore } from "./use-workflow-store"
 import { useUndoRedoStore, type WorkflowSnapshot } from "./use-undo-redo-store"
+import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 // Module-level state shared across hook instances
 let _isRestoring = false
 let _pendingSnapshot: WorkflowSnapshot | null = null
 let _debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * Strip React Flow internal/transient fields from nodes so they don't
+ * pollute undo snapshots (e.g. `selected`, `dragging`, `measured`).
+ */
+function cleanNodes(nodes: WorkflowNode[]): WorkflowNode[] {
+  return nodes.map(({ selected, dragging, measured, ...rest }) => rest as WorkflowNode)
+}
+
+function cleanEdges(edges: WorkflowEdge[]): WorkflowEdge[] {
+  return edges.map(({ selected, ...rest }) => rest as WorkflowEdge)
+}
+
 function captureSnapshot(): WorkflowSnapshot {
   const s = useWorkflowStore.getState()
   return {
-    nodes: s.nodes,
-    edges: s.edges,
+    nodes: cleanNodes(s.nodes),
+    edges: cleanEdges(s.edges),
     characterDefinitions: s.characterDefinitions,
     flowPromptTemplates: s.flowPromptTemplates,
     workflowName: s.workflowName,
@@ -55,8 +68,8 @@ export function useUndoRedoSubscription(): void {
       // Capture the "before" state on first change in a burst
       if (!_pendingSnapshot) {
         _pendingSnapshot = {
-          nodes: prevState.nodes,
-          edges: prevState.edges,
+          nodes: cleanNodes(prevState.nodes),
+          edges: cleanEdges(prevState.edges),
           characterDefinitions: prevState.characterDefinitions,
           flowPromptTemplates: prevState.flowPromptTemplates,
           workflowName: prevState.workflowName,
