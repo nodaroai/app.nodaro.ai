@@ -325,7 +325,7 @@ export class CreditsService {
   /**
    * Log a credit transaction (never throws -- errors are logged silently)
    */
-  private static async logTransaction(params: {
+  static async logTransaction(params: {
     userId: string
     amount: number
     creditType: "subscription" | "topup"

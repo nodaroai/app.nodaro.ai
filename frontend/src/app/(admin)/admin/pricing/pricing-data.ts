@@ -166,7 +166,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "suno-cover":        { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "suno-extend":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "suno-lyrics":       { provider: "KIE.ai",    providerCostUsd: 0.002, markupPct: 25 },
-  "suno-separate-vocal": { provider: "KIE.ai",  providerCostUsd: 0.050, markupPct: 25 },
+  "suno-separate":       { provider: "KIE.ai",  providerCostUsd: 0.050, markupPct: 25 },
   "suno-separate-stem": { provider: "KIE.ai",   providerCostUsd: 0.250, markupPct: 25 },
   "suno-music-video":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },
   "infinitalk":        { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },

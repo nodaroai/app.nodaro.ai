@@ -57,10 +57,15 @@ export async function adminRoutes(app: FastifyInstance) {
    * List all cost alerts
    */
   app.get("/v1/admin/alerts", { preHandler: requireAdmin }, async (req, reply) => {
-    const { data, error } = await supabase
+    const query = req.query as Record<string, string | undefined>
+    const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
+    const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
+
+    const { data, error, count } = await supabase
       .from("admin_alerts")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (error) {
       return reply.status(500).send({
@@ -68,7 +73,7 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: data ?? [] }
+    return { data: data ?? [], total: count ?? 0, limit, offset }
   })
 
   /**
@@ -211,10 +216,15 @@ export async function adminRoutes(app: FastifyInstance) {
    * List all model pricing entries
    */
   app.get("/v1/admin/model-pricing", { preHandler: requireAdmin }, async (req, reply) => {
-    const { data, error } = await supabase
+    const query = req.query as Record<string, string | undefined>
+    const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "100", 10) || 100))
+    const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
+
+    const { data, error, count } = await supabase
       .from("model_pricing")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("category", { ascending: true })
+      .range(offset, offset + limit - 1)
 
     if (error) {
       return reply.status(500).send({
@@ -222,7 +232,7 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: data ?? [] }
+    return { data: data ?? [], total: count ?? 0, limit, offset }
   })
 
   /**

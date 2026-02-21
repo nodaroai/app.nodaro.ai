@@ -674,13 +674,13 @@ export default function GalleryPage() {
                   </div>
                 </div>
 
-                {selectedItem.referenceImages.length > 0 && (
+                {(selectedItem.referenceImages ?? []).length > 0 && (
                   <div className="space-y-2">
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       References
                     </span>
                     <div className="flex items-center">
-                      {selectedItem.referenceImages.slice(0, 4).map((url, i) => (
+                      {(selectedItem.referenceImages ?? []).slice(0, 4).map((url, i) => (
                         <button
                           key={i}
                           onClick={() => setReferenceViewIndex(i)}
@@ -706,13 +706,13 @@ export default function GalleryPage() {
                           )}
                         </button>
                       ))}
-                      {selectedItem.referenceImages.length > 4 && (
+                      {(selectedItem.referenceImages ?? []).length > 4 && (
                         <button
                           onClick={() => setReferenceViewIndex(4)}
                           className="flex items-center justify-center w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-700 border-2 border-background dark:border-zinc-900 text-xs font-medium text-muted-foreground relative cursor-pointer hover:scale-110 hover:z-10 transition-transform"
                           style={{ marginLeft: "-0.5rem", zIndex: 0 }}
                         >
-                          +{selectedItem.referenceImages.length - 4}
+                          +{(selectedItem.referenceImages ?? []).length - 4}
                         </button>
                       )}
                     </div>
@@ -796,26 +796,26 @@ export default function GalleryPage() {
             if (e.key === "ArrowLeft" && referenceViewIndex !== null && referenceViewIndex > 0) {
               e.preventDefault()
               setReferenceViewIndex(referenceViewIndex - 1)
-            } else if (e.key === "ArrowRight" && referenceViewIndex !== null && selectedItem && referenceViewIndex < selectedItem.referenceImages.length - 1) {
+            } else if (e.key === "ArrowRight" && referenceViewIndex !== null && selectedItem && referenceViewIndex < (selectedItem.referenceImages ?? []).length - 1) {
               e.preventDefault()
               setReferenceViewIndex(referenceViewIndex + 1)
             }
           }}
         >
           <DialogTitle className="sr-only">Reference</DialogTitle>
-          {referenceViewIndex !== null && selectedItem && selectedItem.referenceImages.length > 0 && (
+          {referenceViewIndex !== null && selectedItem && (selectedItem.referenceImages ?? []).length > 0 && (
             <div className="relative flex items-center justify-center min-h-[200px]">
-              {isVideoUrl(selectedItem.referenceImages[referenceViewIndex] ?? "") ? (
+              {isVideoUrl((selectedItem.referenceImages ?? [])[referenceViewIndex] ?? "") ? (
                 <video
                   key={referenceViewIndex}
-                  src={selectedItem.referenceImages[referenceViewIndex]}
+                  src={(selectedItem.referenceImages ?? [])[referenceViewIndex]}
                   controls
                   autoPlay
                   className="max-w-full max-h-[60vh] object-contain"
                 />
               ) : (
                 <CachedImage
-                  src={selectedItem.referenceImages[referenceViewIndex]}
+                  src={(selectedItem.referenceImages ?? [])[referenceViewIndex]}
                   alt={`Reference ${referenceViewIndex + 1}`}
                   className="max-w-full max-h-[60vh] object-contain"
                 />
@@ -833,7 +833,7 @@ export default function GalleryPage() {
               )}
 
               {/* Right arrow */}
-              {referenceViewIndex < selectedItem.referenceImages.length - 1 && (
+              {referenceViewIndex < (selectedItem.referenceImages ?? []).length - 1 && (
                 <button
                   onClick={() => setReferenceViewIndex(referenceViewIndex + 1)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors"
@@ -844,9 +844,9 @@ export default function GalleryPage() {
               )}
 
               {/* Position indicator */}
-              {selectedItem.referenceImages.length > 1 && (
+              {(selectedItem.referenceImages ?? []).length > 1 && (
                 <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 font-medium">
-                  {referenceViewIndex + 1} / {selectedItem.referenceImages.length}
+                  {referenceViewIndex + 1} / {(selectedItem.referenceImages ?? []).length}
                 </span>
               )}
             </div>
