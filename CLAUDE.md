@@ -82,7 +82,7 @@
 | Backend | Fastify (Node.js/TypeScript), BullMQ (Redis) |
 | Database | Supabase (PostgreSQL + Auth + Realtime) |
 | Storage | Cloudflare R2 (S3-compatible) |
-| Auth | Supabase Auth (Google OAuth) + JWT middleware (`middleware/auth.ts`, 5-min token cache) |
+| Auth | Supabase Auth (Google OAuth) + JWT middleware (`middleware/auth.ts`, 5-min SHA-256 token cache) |
 | Payments | Paddle (Merchant of Record) |
 
 ---
@@ -94,7 +94,7 @@
 | `profiles` | id, email, tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, public_outputs | Extends auth.users |
 | `projects` | id, user_id, name, settings | |
 | `workflows` | id, project_id, user_id, nodes (JSONB), edges (JSONB), source_prompt | React Flow data |
-| `jobs` | id, workflow_id, user_id, status, progress, input_data, output_data, provider, provider_cost, is_public | Execution records |
+| `jobs` | id, workflow_id, user_id, status, progress, input_data, output_data, provider, provider_cost, is_public, should_watermark | Execution records |
 | `assets` | id, user_id, job_id, type, r2_key, r2_url, size_bytes | Generated files |
 | `characters` | id, project_id, name, description, reference_image_url, visual_traits (JSONB) | Per-project |
 | `style_presets` | id, name, settings (JSONB), is_system, user_id | System + user-created |
@@ -148,7 +148,7 @@ backend/src/
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
   billing/                — Credits, Paddle, cleanup (see Credit System)
-  middleware/             — credit-guard.ts, auth.ts (JWT verification + 5-min cache)
+  middleware/             — credit-guard.ts, auth.ts (JWT verification + 5-min SHA-256 cache)
   lib/config.ts           — Env config + edition helpers
   lib/admin-check.ts      — Shared cached admin check (30s TTL)
   lib/app-settings.ts     — Settings cache (60s TTL, stampede-safe)
@@ -196,5 +196,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-02-20*
-*Version: 1.34.0*
+*Last updated: 2026-02-21*
+*Version: 1.34.1*
