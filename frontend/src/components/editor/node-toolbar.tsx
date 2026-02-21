@@ -191,24 +191,19 @@ interface NodeToolbarProps {
 
 export function NodeToolbar({ visible = false }: NodeToolbarProps) {
   const addNode = useWorkflowStore((s) => s.addNode)
-  const { screenToFlowPosition, setNodes } = useReactFlow()
+  const { screenToFlowPosition } = useReactFlow()
   const [sheetOpen, setSheetOpen] = useState(false)
 
   const handleAddNode = useCallback(
     (type: SceneNodeType) => {
-      // Use the .react-flow element rect to find the true canvas center (accounts for sidebar)
-      const rfEl = document.querySelector('.react-flow')
-      const rect = rfEl?.getBoundingClientRect()
-      const center = rect
-        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-        : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-      const position = screenToFlowPosition(center)
+      const position = screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      })
       addNode(type, position)
-      // Force React Flow to re-initialize internal node state (makes node draggable immediately)
-      setNodes([...useWorkflowStore.getState().nodes])
       setSheetOpen(false)
     },
-    [addNode, screenToFlowPosition, setNodes],
+    [addNode, screenToFlowPosition],
   )
 
   // Close sheet on Escape

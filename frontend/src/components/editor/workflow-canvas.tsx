@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState, useMemo, useRef, lazy, Suspense } from "react"
+import { useCallback, useEffect, useState, useMemo, lazy, Suspense } from "react"
 import {
   ReactFlow,
   MiniMap,
@@ -136,7 +136,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
   const { screenToFlowPosition, setNodes, getNode } = useReactFlow()
-  const canvasRef = useRef<HTMLDivElement>(null)
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
   const [canvasContextMenu, setCanvasContextMenu] = useState<CanvasContextMenuState | null>(null)
   const [showMiniMap, setShowMiniMap] = useState(true)
@@ -238,37 +237,25 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [screenToFlowPosition]
   )
 
-  /** Screen-pixel center of the React Flow canvas (accounts for sidebar offset). */
-  const getCanvasCenter = useCallback(() => {
-    const rect = canvasRef.current?.querySelector('.react-flow')?.getBoundingClientRect()
-    return rect
-      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-      : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-  }, [])
-
   const handleAddStickyNote = useCallback(
     (position?: { x: number; y: number }) => {
-      const flowPosition = position || screenToFlowPosition(getCanvasCenter())
+      const flowPosition = position || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
       addNode("sticky-note", flowPosition)
       setCanvasContextMenu(null)
-      // Force React Flow to re-initialize internal node state
-      setNodes([...useWorkflowStore.getState().nodes])
     },
-    [addNode, screenToFlowPosition, getCanvasCenter, setNodes]
+    [addNode, screenToFlowPosition]
   )
 
   const handleAddNode = useCallback(
     (type: SceneNodeType) => {
       const position = addNodePopupPosition
         ? screenToFlowPosition(addNodePopupPosition)
-        : screenToFlowPosition(getCanvasCenter())
+        : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
       addNode(type, position)
       setAddNodePopupOpen(false)
       setAddNodePopupPosition(undefined)
-      // Force React Flow to re-initialize internal node state
-      setNodes([...useWorkflowStore.getState().nodes])
     },
-    [addNode, screenToFlowPosition, addNodePopupPosition, getCanvasCenter, setNodes]
+    [addNode, screenToFlowPosition, addNodePopupPosition]
   )
 
   const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }) => {
@@ -454,14 +441,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         executionStatus: "completed",
         generatedImageUrl: imageUrl,
       })
-      setNodes([...useWorkflowStore.getState().nodes])
     },
-    [screenToFlowPosition, addNode, setNodes],
+    [screenToFlowPosition, addNode],
   )
 
   const handleAddAssetToCanvas = useCallback(
     (asset: LibraryAsset) => {
-      const position = screenToFlowPosition(getCanvasCenter())
+      const position = screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      })
 
       const nodeTypeMap: Record<string, SceneNodeType> = {
         image: "upload-image",
@@ -482,10 +471,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         assetId: asset.id,
       })
 
-      setNodes([...useWorkflowStore.getState().nodes])
       setMediaLibraryOpen(false)
     },
-    [screenToFlowPosition, addNode, getCanvasCenter, setNodes],
+    [screenToFlowPosition, addNode],
   )
 
   const hasSelection = nodes.some((n) => n.selected)
@@ -551,7 +539,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         </Suspense>
       )}
 
-      <div ref={canvasRef} className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
+      <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
         <ReactFlow
           nodes={nodes}
           edges={animatedEdges}
