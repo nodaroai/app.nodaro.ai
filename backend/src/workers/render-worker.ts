@@ -1,4 +1,4 @@
-import { Worker } from "bullmq"
+import { Worker, type ConnectionOptions } from "bullmq"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -930,7 +930,7 @@ export function createRenderWorker() {
       }
     },
     {
-      connection,
+      connection: connection as unknown as ConnectionOptions,
       concurrency: 1,
       lockDuration: 1_800_000, // 30 minutes
     },

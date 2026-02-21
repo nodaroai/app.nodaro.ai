@@ -1,4 +1,4 @@
-import { Worker } from "bullmq"
+import { Worker, type ConnectionOptions } from "bullmq"
 import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -117,6 +117,6 @@ export function createVideoWorker() {
         throw err
       }
     },
-    { connection, concurrency: 8, lockDuration: 900_000, stalledInterval: 300_000 },
+    { connection: connection as unknown as ConnectionOptions, concurrency: 8, lockDuration: 900_000, stalledInterval: 300_000 },
   )
 }
