@@ -1,7 +1,9 @@
 "use client"
 
 import { memo } from "react"
-import { BaseEdge, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react"
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react"
+import { X } from "lucide-react"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { CSSProperties } from "react"
 
 type AnimatedFlowEdgeData = {
@@ -22,8 +24,10 @@ function AnimatedFlowEdgeComponent({
   style,
   markerEnd,
   data,
+  selected,
 }: AnimatedFlowEdgeProps) {
-  const [edgePath] = getBezierPath({
+  const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -43,7 +47,7 @@ function AnimatedFlowEdgeComponent({
   return (
     <>
       {/* Base edge line */}
-      <BaseEdge id={id} path={edgePath} style={style as CSSProperties} markerEnd={markerEnd as string | undefined} />
+      <BaseEdge id={id} path={edgePath} style={{ ...style, strokeWidth: selected ? 3 : (style as CSSProperties)?.strokeWidth, stroke: selected ? "#ff0073" : (style as CSSProperties)?.stroke } as CSSProperties} markerEnd={markerEnd as string | undefined} />
 
       {/* SVG filters for glow effects */}
       <defs>
@@ -75,6 +79,26 @@ function AnimatedFlowEdgeComponent({
         <circle r="8" fill="#ff0073" filter={`url(#${pinkGlowFilterId})`}>
           <animateMotion dur="2s" repeatCount="indefinite" path={edgePath} />
         </circle>
+      )}
+
+      {/* Delete button on selected edge */}
+      {selected && (
+        <EdgeLabelRenderer>
+          <button
+            className="nodrag nopan absolute flex items-center justify-center w-5 h-5 rounded-full bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 cursor-pointer"
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: "all",
+            }}
+            onClick={(e) => {
+              e.stopPropagation()
+              deleteEdge(id)
+            }}
+            aria-label="Delete connection"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </EdgeLabelRenderer>
       )}
     </>
   )
