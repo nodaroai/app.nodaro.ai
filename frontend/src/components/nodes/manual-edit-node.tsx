@@ -53,18 +53,16 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex items-center justify-center h-28 rounded-md bg-muted/30"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
         )}
         {status === "awaiting-user" && !activeUrl && (
-          <div className="relative">
-            <div className="flex flex-col items-center justify-center gap-2 h-28 rounded-md bg-amber-500/10 border-2 border-amber-500/40 animate-pulse">
-              <Scissors className="w-6 h-6 text-amber-500" />
-              <span className="text-xs font-medium text-amber-500">Awaiting Edit</span>
-              <button
-                type="button"
-                onClick={handleOpenEditor}
-                className="px-3 py-1 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-              >
-                Open Editor
-              </button>
-            </div>
+          <div className="flex flex-col items-center justify-center gap-2 h-28 rounded-md bg-amber-500/10 border-2 border-amber-500/40 animate-pulse">
+            <Scissors className="w-6 h-6 text-amber-500" />
+            <span className="text-xs font-medium text-amber-500">Awaiting Edit</span>
+            <button
+              type="button"
+              onClick={handleOpenEditor}
+              className="px-3 py-1 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+            >
+              Open Editor
+            </button>
           </div>
         )}
         {status !== "running" && status !== "awaiting-user" && activeUrl && !videoError && (

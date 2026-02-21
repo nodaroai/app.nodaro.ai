@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { X, Loader2, Upload } from "lucide-react"
 
 const FREECUT_URL = import.meta.env.VITE_FREECUT_URL || "http://localhost:5174"
+const FREECUT_ORIGIN = new URL(FREECUT_URL).origin
 
 interface FreeCutEditorModalProps {
   readonly videoUrl: string
@@ -21,7 +22,7 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
-      if (event.origin !== new URL(FREECUT_URL).origin) return
+      if (event.origin !== FREECUT_ORIGIN) return
 
       if (event.data?.type === "FREECUT_EXPORT_COMPLETE") {
         const buffer: ArrayBuffer = event.data.payload?.videoBuffer
@@ -50,7 +51,7 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
     const timer = setTimeout(() => {
       iframe.contentWindow!.postMessage(
         { type: "SCENENODE_LOAD_VIDEO", payload: { videoUrl } },
-        new URL(FREECUT_URL).origin,
+        FREECUT_ORIGIN,
       )
     }, 500)
     return () => clearTimeout(timer)

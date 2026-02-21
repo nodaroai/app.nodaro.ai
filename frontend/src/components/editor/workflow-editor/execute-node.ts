@@ -133,10 +133,10 @@ export function rejectManualEdit(nodeId: string, error: Error): void {
 }
 
 export function rejectAllManualEdits(): void {
-  for (const [nodeId, pending] of pendingManualEdits) {
+  for (const [, pending] of pendingManualEdits) {
     pending.reject(new Error("Workflow restarted"));
-    pendingManualEdits.delete(nodeId);
   }
+  pendingManualEdits.clear();
 }
 
 /**

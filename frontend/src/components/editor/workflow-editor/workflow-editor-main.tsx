@@ -100,26 +100,28 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const handleFreeCutExport = useCallback(
     async (blob: Blob) => {
       if (!manualEditNode) return;
+      const nodeId = manualEditNode.id;
       try {
         const file = new File([blob], "manual-edit.mp4", { type: "video/mp4" });
         const result = await uploadFile(file, user?.id);
         const url = result.url;
         const newResult: GeneratedResult = { url, jobId: `manual-edit-${Date.now()}`, timestamp: new Date().toISOString() };
-        const prev = (manualEditNode.data as ManualEditData).generatedResults ?? [];
-        updateNodeData(manualEditNode.id, {
+        const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
+        const prev = freshNode ? ((freshNode.data as ManualEditData).generatedResults ?? []) : [];
+        updateNodeData(nodeId, {
           executionStatus: "completed",
           generatedVideoUrl: url,
           generatedResults: [...prev, newResult],
           activeResultIndex: prev.length,
           isEditorOpen: false,
         });
-        resolveManualEdit(manualEditNode.id);
+        resolveManualEdit(nodeId);
       } catch (err) {
         if (err instanceof StorageExceededError) {
           setShowStorageExceeded(true);
           setStorageExceededData({ usedBytes: err.usedBytes, quotaBytes: err.quotaBytes, tier: err.tier });
         }
-        updateNodeData(manualEditNode.id, {
+        updateNodeData(nodeId, {
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : "Upload failed",
           isEditorOpen: false,
