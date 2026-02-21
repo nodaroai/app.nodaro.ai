@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from "react"
 import { useWorkflowStore } from "./use-workflow-store"
 import { useUndoRedoStore, type WorkflowSnapshot } from "./use-undo-redo-store"
+import { isSkipUndoCapture } from "./undo-flags"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 // Module-level state shared across hook instances
@@ -51,8 +52,9 @@ export function useUndoRedoSubscription(): void {
     let prevGeneration = useWorkflowStore.getState().loadGeneration
 
     const unsub = useWorkflowStore.subscribe((state, prevState) => {
-      // Skip if we're restoring a snapshot
+      // Skip if we're restoring a snapshot or if the change is execution-only
       if (_isRestoring) return
+      if (isSkipUndoCapture()) return
 
       // On workflow load/clear (generation changes), clear history
       if (state.loadGeneration !== prevGeneration) {

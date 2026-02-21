@@ -10,6 +10,33 @@ import {
 import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData } from "@/types/nodes"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
+import { setSkipUndoCapture } from "./undo-flags"
+
+/**
+ * Fields that are purely execution-related (job status, progress, results).
+ * When an `updateNodeData` call only touches these keys, the undo system
+ * will NOT capture a snapshot — preventing job polling from polluting the
+ * undo history and clearing the redo stack.
+ */
+const EXECUTION_DATA_KEYS = new Set([
+  "executionStatus",
+  "currentJobId",
+  "currentJobProgress",
+  "errorMessage",
+  "isStreaming",
+  "generatedImageUrl",
+  "generatedVideoUrl",
+  "generatedAudioUrl",
+  "generatedText",
+  "generatedScript",
+  "generatedItems",
+  "generatedResults",
+  "activeResultIndex",
+  "sourceImageUrl",
+  "__listTotal",
+  "__listCompleted",
+  "__listResults",
+])
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
@@ -227,7 +254,11 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     return id
   },
 
-  updateNodeData: (nodeId, data) =>
+  updateNodeData: (nodeId, data) => {
+    // If every key in the update is execution-related, tell the undo system
+    // to skip snapshot capture so job polling doesn't pollute undo history.
+    const isExecOnly = Object.keys(data).every((k) => EXECUTION_DATA_KEYS.has(k))
+    if (isExecOnly) setSkipUndoCapture(true)
     set((state) => {
       // Only dirty the store when the node actually exists. This prevents
       // stale polling callbacks (from a previously loaded workflow) from
@@ -241,7 +272,9 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         ),
         isDirty: true,
       }
-    }),
+    })
+    if (isExecOnly) setSkipUndoCapture(false)
+  },
 
   duplicateNode: (nodeId) =>
     set((state) => {
