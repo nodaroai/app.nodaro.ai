@@ -229,7 +229,8 @@ export function extractNodeOutput(node: WorkflowNode): string | undefined {
     type === "speed-ramp" ||
     type === "loop-video" ||
     type === "fade-video" ||
-    type === "manual-edit"
+    type === "manual-edit" ||
+    type === "transcode-video"
   ) {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
