@@ -62,10 +62,6 @@ const adminDeleteParams = z.object({
   jobId: z.string().uuid(),
 })
 
-const adminDeleteBody = z.object({
-  userId: z.string().uuid(),
-})
-
 export async function galleryRoutes(app: FastifyInstance) {
   /**
    * GET /v1/gallery - Public gallery of completed outputs
@@ -266,7 +262,6 @@ export async function galleryRoutes(app: FastifyInstance) {
    * DELETE /v1/gallery/:jobId - Admin soft-delete from gallery
    *
    * Sets is_public = false (does not delete the job).
-   * Body: { userId }
    */
   app.delete<{ Params: { jobId: string } }>("/v1/gallery/:jobId", async (req, reply) => {
     const paramsResult = adminDeleteParams.safeParse(req.params)
@@ -275,16 +270,6 @@ export async function galleryRoutes(app: FastifyInstance) {
         error: {
           code: "validation_error",
           message: paramsResult.error.issues[0]?.message ?? "Invalid job ID",
-        },
-      })
-    }
-
-    const bodyResult = adminDeleteBody.safeParse(req.body)
-    if (!bodyResult.success) {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: bodyResult.error.issues[0]?.message ?? "userId is required",
         },
       })
     }
