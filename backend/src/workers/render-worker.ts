@@ -811,9 +811,21 @@ export function createRenderWorker() {
 
             const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
 
+            // Warn about expensive motion effects that multiply render time
+            const planEffects = (inputProps.plan as Record<string, unknown> | undefined)?.effects as Array<{ type: string; samples?: number; layers?: number }> | undefined
+            if (planEffects) {
+              const mb = planEffects.find((e) => e.type === "motion-blur")
+              const tr = planEffects.find((e) => e.type === "trail")
+              const multiplier = (mb?.samples ?? 1) * ((tr?.layers ?? 0) + 1)
+              if (multiplier > 1) {
+                console.log(`[render-worker] Job ${jobId}: motion effects multiplier ${multiplier}x (${durationInFrames} frames → ~${durationInFrames * multiplier} renders)`)
+              }
+            }
+
             console.log(`[render-worker] renderMedia(${compositionId}) starting... output: ${outputPath}`)
             const RENDER_TIMEOUT_MS = 25 * 60 * 1000
             let timer: ReturnType<typeof setTimeout> | undefined
+            let lastLoggedPct = -10
             await Promise.race([
               renderMedia({
                 composition: {
@@ -830,9 +842,15 @@ export function createRenderWorker() {
                 browserExecutable,
                 concurrency: remotionConcurrency,
                 timeoutInMilliseconds: 120_000,
-                onProgress: ({ progress }: { progress: number }) => {
+                logLevel: "warn",
+                onProgress: ({ progress, renderedFrames, encodedFrames }: { progress: number; renderedFrames: number; encodedFrames: number }) => {
                   const overall = 40 + Math.round(progress * 50)
                   bullJob.updateProgress(overall).catch(() => {})
+                  const pct = Math.floor(progress * 100)
+                  if (pct >= lastLoggedPct + 10 || (progress >= 1 && lastLoggedPct < 100)) {
+                    lastLoggedPct = pct
+                    console.log(`[render-worker] Job ${jobId}: render ${pct}% (${renderedFrames} rendered, ${encodedFrames} encoded)`)
+                  }
                 },
               }),
               new Promise((_, reject) => {
