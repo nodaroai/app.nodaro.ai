@@ -31,6 +31,9 @@ COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
 
+# Remotion package source needed for @remotion-pkg TypeScript path alias
+COPY packages/remotion/src/ /app/packages/remotion/src/
+
 # Railway passes service variables as Docker build args.
 # Vite inlines VITE_* env vars at build time.
 ARG VITE_SUPABASE_URL
