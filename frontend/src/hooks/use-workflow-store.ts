@@ -9,6 +9,7 @@ import {
 } from "@xyflow/react"
 import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData } from "@/types/nodes"
 import { NODE_DEFINITIONS } from "@/types/nodes"
+import type { WorkflowSnapshot } from "./use-undo-redo-store"
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
@@ -62,6 +63,7 @@ interface WorkflowState {
   readonly toggleSkipNode: (nodeId: string) => void
   readonly skipSelectedNodes: (nodeIds: string[]) => void
   readonly unskipSelectedNodes: (nodeIds: string[]) => void
+  readonly restoreSnapshot: (snapshot: WorkflowSnapshot) => void
   readonly batchAddNodesAndEdges: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
   readonly expandStoryboard: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null
   readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null) => void
@@ -420,6 +422,25 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         isDirty: true,
       }
     }),
+
+  restoreSnapshot: (snapshot) => {
+    // Ensure nextNodeId never goes backwards
+    const maxId = snapshot.nodes.reduce((max, n) => {
+      const num = parseInt(n.id.replace("node_", ""), 10)
+      return isNaN(num) ? max : Math.max(max, num)
+    }, 0)
+    if (maxId >= nextNodeId) {
+      nextNodeId = maxId + 1
+    }
+    set({
+      nodes: snapshot.nodes,
+      edges: snapshot.edges,
+      characterDefinitions: snapshot.characterDefinitions,
+      flowPromptTemplates: snapshot.flowPromptTemplates,
+      workflowName: snapshot.workflowName,
+      isDirty: true,
+    })
+  },
 
   batchAddNodesAndEdges: (newNodes, newEdges) => {
     // Update nextNodeId to avoid collisions
