@@ -101,7 +101,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   isDirty: false,
   saveStatus: "idle" as SaveStatus,
   saveError: null,
-  videoAutoplay: typeof window !== "undefined" && localStorage.getItem("videoAutoplay") !== null
+  videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
     ? localStorage.getItem("videoAutoplay") === "true"
     : true,
   newNodeIds: new Set<string>(),

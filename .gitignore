@@ -16,3 +16,4 @@ build/
 *.egg-info/
 .venv/
 venv/
+coverage/
