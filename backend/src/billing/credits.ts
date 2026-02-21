@@ -184,6 +184,7 @@ function resolveTier(profile: Record<string, unknown>): string {
 /**
  * Check if daily_spent_credits needs resetting (new UTC day).
  * Returns the effective daily spent value (0 if reset needed).
+ * Uses atomic RPC with FOR UPDATE lock to prevent race conditions at midnight.
  */
 async function getEffectiveDailySpent(
   userId: string,
@@ -194,7 +195,14 @@ async function getEffectiveDailySpent(
   const lastResetDay = lastReset ? lastReset.slice(0, 10) : null
 
   if (lastResetDay !== todayUTC) {
-    // Reset daily counter
+    // Atomic reset via RPC (FOR UPDATE lock prevents race at midnight)
+    const { data, error } = await supabase.rpc("reset_daily_spent_if_needed", {
+      p_user_id: userId,
+    })
+    if (!error && data !== null && data !== undefined) {
+      return data as number
+    }
+    // Fallback: non-atomic reset if RPC not available
     await supabase
       .from("profiles")
       .update({

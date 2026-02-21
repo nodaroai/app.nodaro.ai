@@ -375,10 +375,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { id: assetId } = paramsResult.data
 
-    // Fetch the asset to merge metadata
+    // Fetch the asset metadata for merging
     const { data: existing, error: fetchError } = await supabase
       .from("assets")
-      .select("*")
+      .select("id, metadata")
       .eq("id", assetId)
       .single()
 
@@ -445,10 +445,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { id: assetId } = paramsResult.data
 
-    // Fetch the asset to merge metadata
+    // Fetch the asset metadata for merging
     const { data: existing, error: fetchError } = await supabase
       .from("assets")
-      .select("*")
+      .select("id, metadata")
       .eq("id", assetId)
       .single()
 

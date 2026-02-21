@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 interface StatsResponse {
   totalExecutions: number
@@ -44,6 +45,21 @@ export async function statsRoutes(app: FastifyInstance) {
     const userId = req.userId
 
     try {
+      // Platform scope requires admin access
+      if (scope === "platform") {
+        if (!userId) {
+          return reply.status(401).send({
+            error: { code: "unauthorized", message: "Authentication required" },
+          })
+        }
+        const isAdmin = await checkIsAdmin(userId)
+        if (!isAdmin) {
+          return reply.status(403).send({
+            error: { code: "forbidden", message: "Admin access required for platform stats" },
+          })
+        }
+      }
+
       // For user scope, userId is required
       if (scope !== "platform" && !userId) {
         return {

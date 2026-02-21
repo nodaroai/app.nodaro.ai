@@ -197,18 +197,21 @@ export async function handleSubscriptionUpdated(
   const isRenewal = existing.current_period_start !== data.currentPeriodStart
 
   if (tierChanged) {
+    // Idempotent SET (not ADD) — safe if change-plan endpoint already updated credits
     const isUpgrade = newCredits > oldCredits
+    const { error: creditError } = await supabase
+      .from("profiles")
+      .update({ subscription_credits: newCredits })
+      .eq("id", userId)
+
+    if (creditError) {
+      console.error("[paddle] subscription.updated: credit SET failed:", creditError.message)
+    }
+
     if (isUpgrade) {
-      // Grant the difference immediately
-      const diff = newCredits - oldCredits
-      await supabase.rpc("add_subscription_credits", {
-        p_user_id: userId,
-        p_credits: diff,
-      })
-      console.log(`[paddle] subscription.updated: upgrade ${oldTier}->${newTier}, granted +${diff} credits`)
+      console.log(`[paddle] subscription.updated: upgrade ${oldTier}->${newTier}, set credits to ${newCredits}`)
     } else {
-      // Downgrade: just update tier, credits adjust at next renewal
-      console.log(`[paddle] subscription.updated: downgrade ${oldTier}->${newTier}, credits adjust at renewal`)
+      console.log(`[paddle] subscription.updated: downgrade ${oldTier}->${newTier}, set credits to ${newCredits}`)
     }
   }
 
