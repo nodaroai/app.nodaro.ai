@@ -16,9 +16,12 @@ export async function downloadFile(url: string, dest: string): Promise<void> {
   await pipeline(nodeStream, createWriteStream(dest))
 }
 
-export function runFfmpeg(args: readonly string[]): Promise<string> {
+export function runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile("ffmpeg", args as string[], { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile("ffmpeg", args as string[], {
+      maxBuffer: 10 * 1024 * 1024,
+      ...(timeoutMs != null ? { timeout: timeoutMs } : {}),
+    }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(`ffmpeg failed: ${stderr || error.message}`))
       } else {

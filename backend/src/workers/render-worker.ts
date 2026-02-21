@@ -92,8 +92,10 @@ function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
 // @react-three/fiber creates its own React reconciler at module init time,
 // which conflicts with Remotion's reconciler and crashes ALL compositions
 // if bundled together.
-let cachedMainBundlePath: string | null = null
-let cached3DBundlePath: string | null = null
+// Cache the PROMISE (not the result) so concurrent callers (pre-warm + job)
+// share the same in-flight build instead of starting duplicate webpack builds.
+let mainBundlePromise: Promise<string> | null = null
+let threeDBundlePromise: Promise<string> | null = null
 
 const REMOTION_PKG_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -144,17 +146,23 @@ async function bundleEntry(
   return bundlePath
 }
 
-async function getBundlePath(compositionId: string): Promise<string> {
+function getBundlePath(compositionId: string): Promise<string> {
   if (compositionId === "3d-title") {
-    if (!cached3DBundlePath) {
-      cached3DBundlePath = await bundleEntry("Root3D.tsx", "3D compositions", true)
+    if (!threeDBundlePromise) {
+      threeDBundlePromise = bundleEntry("Root3D.tsx", "3D compositions", true).catch((err) => {
+        threeDBundlePromise = null
+        throw err
+      })
     }
-    return cached3DBundlePath
+    return threeDBundlePromise
   }
-  if (!cachedMainBundlePath) {
-    cachedMainBundlePath = await bundleEntry("Root.tsx", "main compositions", false)
+  if (!mainBundlePromise) {
+    mainBundlePromise = bundleEntry("Root.tsx", "main compositions", false).catch((err) => {
+      mainBundlePromise = null
+      throw err
+    })
   }
-  return cachedMainBundlePath
+  return mainBundlePromise
 }
 
 
@@ -628,7 +636,7 @@ async function normalizeInputVideos(
       ...REMOTION_INPUT_VIDEO_ARGS,
       "-an",
       outPath,
-    ])
+    ], 300_000) // 5 minute timeout — all-intra encode is slow but shouldn't exceed this
     fileMap.set(url, outName)
     console.log(`[render-worker] Prepared input video: ${url} -> ${outName} (remotion-optimized)`)
   }
@@ -733,6 +741,8 @@ export function createRenderWorker() {
       const shouldWatermark = userTier === "free"
       const isPublic = profileData?.public_outputs !== false
 
+      console.log(`[render-worker] Job ${jobId} picked up (tier=${userTier})`)
+
       const workDir = await createWorkDir("render")
 
       try {
@@ -756,6 +766,7 @@ export function createRenderWorker() {
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
 
+        console.log(`[render-worker] Job ${jobId}: mode=${modeLabel}, composition=${compositionId}, ${width}x${height} ${fps}fps ${durationInFrames}fr`)
         await bullJob.updateProgress(30)
 
         // FFmpeg fast path: skip Remotion for simple scene graphs (1 video, no effects/text)
@@ -767,7 +778,10 @@ export function createRenderWorker() {
           // Remotion path — pre-download input videos and serve from localhost
           // so the compositor doesn't rely on CDN downloads (which often fail
           // with "Request closed" errors on Cloudflare R2).
+          console.log(`[render-worker] Job ${jobId}: normalizing input videos...`)
+          const t0 = Date.now()
           const stopFileServer = await normalizeInputVideos(inputProps, workDir)
+          console.log(`[render-worker] Job ${jobId}: input videos ready (${((Date.now() - t0) / 1000).toFixed(1)}s)`)
 
           try {
             console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
