@@ -33,7 +33,7 @@ interface RenderInputProps extends Record<string, unknown> {
   kenBurnsEnabled: boolean
 }
 
-interface SceneGraphData extends Record<string, unknown> {
+export interface SceneGraphData extends Record<string, unknown> {
   fps: number
   width: number
   height: number
@@ -79,11 +79,11 @@ interface PlanRenderJobData {
 
 type RenderJobData = LegacyRenderJobData | SceneGraphRenderJobData | PlanRenderJobData
 
-function isPlanJob(data: RenderJobData): data is PlanRenderJobData {
+export function isPlanJob(data: RenderJobData): data is PlanRenderJobData {
   return "planType" in data && data.planType != null
 }
 
-function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
+export function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
   return "sceneGraph" in data && data.sceneGraph != null
 }
 
@@ -170,7 +170,7 @@ function getBundlePath(compositionId: string): Promise<string> {
  * Build composition ID and input props for generic plan mode.
  * Routes to the composition matching the planType (e.g. "after-effects").
  */
-function buildPlanRender(data: PlanRenderJobData): {
+export function buildPlanRender(data: PlanRenderJobData): {
   compositionId: string
   inputProps: Record<string, unknown>
   width: number
@@ -195,7 +195,7 @@ function buildPlanRender(data: PlanRenderJobData): {
  * Build composition ID and input props for scene graph mode.
  * Uses the "scene-graph" composition registered in Root.tsx.
  */
-function buildSceneGraphRender(data: SceneGraphRenderJobData): {
+export function buildSceneGraphRender(data: SceneGraphRenderJobData): {
   compositionId: string
   inputProps: SceneGraphInputProps
   width: number
@@ -242,7 +242,7 @@ interface FastPathTrack {
  * the full composition, no effects, no transitions, no text tracks.
  * Audio tracks are fine (handled via FFmpeg filter chain).
  */
-function canUseFfmpegFastPath(sceneGraph: SceneGraphData): boolean {
+export function canUseFfmpegFastPath(sceneGraph: SceneGraphData): boolean {
   const tracks = sceneGraph.tracks as FastPathTrack[]
 
   const mediaTracks = tracks.filter((t) => t.type === "media")
@@ -413,7 +413,7 @@ async function renderSceneGraphViaFfmpeg(
  * Legacy templates still use their original composition IDs (slideshow, explainer, etc.)
  * and are rendered by the original composition components registered in Root.tsx.
  */
-function buildLegacyRender(data: LegacyRenderJobData): {
+export function buildLegacyRender(data: LegacyRenderJobData): {
   compositionId: string
   inputProps: RenderInputProps
   width: number
@@ -464,7 +464,7 @@ function buildLegacyRender(data: LegacyRenderJobData): {
 const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
 
 /** Collect all video URLs from Remotion inputProps. */
-function collectVideoUrls(props: Record<string, unknown>): string[] {
+export function collectVideoUrls(props: Record<string, unknown>): string[] {
   const urls: string[] = []
 
   const sg = props.sceneGraph as Record<string, unknown> | undefined
@@ -503,7 +503,7 @@ function collectVideoUrls(props: Record<string, unknown>): string[] {
 }
 
 /** Replace video URLs in Remotion inputProps using a URL map. */
-function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, string>): void {
+export function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, string>): void {
   const sg = props.sceneGraph as Record<string, unknown> | undefined
   if (sg) {
     for (const track of (sg.tracks as Array<Record<string, unknown>>)) {
