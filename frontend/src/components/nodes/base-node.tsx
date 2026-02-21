@@ -252,7 +252,7 @@ function BaseNodeComponent({
             id={h.id}
             type={h.type}
             position={h.position}
-            className="!w-6 !h-6 !bg-transparent !border-0 touch-manipulation"
+            className="!w-9 !h-9 !bg-transparent !border-0 touch-manipulation"
             style={h.top ? { top: h.top } : undefined}
           />
           {h.label && h.top && (

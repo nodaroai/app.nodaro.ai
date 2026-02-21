@@ -331,19 +331,23 @@
   box-shadow: 0 0 20px rgba(52, 211, 153, 0.4) !important;
 }
 
-/* Visible 12px dot centered inside 24px transparent handle */
+/* Visible 18px dot centered inside 36px transparent handle */
 .react-flow__handle::after {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 12px;
-  height: 12px;
+  width: 18px;
+  height: 18px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: var(--primary);
   border: 2px solid var(--background);
   pointer-events: none;
+  transition: transform 0.15s ease;
+}
+.react-flow__handle:hover::after {
+  transform: translate(-50%, -50%) scale(1.2);
 }
 .dark .react-flow__handle::after {
   background: #ff0073;
