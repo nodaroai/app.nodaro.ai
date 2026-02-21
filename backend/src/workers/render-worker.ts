@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { uploadFileToR2 } from "../lib/storage.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS, REMOTION_INPUT_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
-import { commitJobCredits, refundJobCredits, shouldSaveJobResult, generateAndUploadThumbnail } from "./shared.js"
+import { commitJobCredits, refundJobCredits, shouldSaveJobResult, generateAndUploadThumbnail, createAssetFromJob } from "./shared.js"
 import { createServer } from "node:http"
 import { createReadStream, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
@@ -866,6 +866,9 @@ export function createRenderWorker() {
           .eq("id", jobId)
 
         await commitJobCredits(effectiveUsageLogId, jobId)
+
+        // Create asset records so rendered media appears in /library
+        await createAssetFromJob(jobId, jobUserId)
 
         console.log(`[render-worker] Job ${jobId} completed successfully`)
       } catch (error) {

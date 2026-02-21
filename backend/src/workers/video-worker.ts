@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { initProviders } from "../providers/index.js"
 import { KieError } from "../providers/kie/client.js"
 import { isPromptBlocked } from "../config/content-filter.js"
-import { refundJobCredits, type HandlerFn, type JobContext } from "./shared.js"
+import { refundJobCredits, createAssetFromJob, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
 import { videoAIHandlers } from "./handlers/video-ai.js"
 import { ffmpegHandlers } from "./handlers/ffmpeg.js"
@@ -82,6 +82,9 @@ export function createVideoWorker() {
         }
 
         await handler(job, ctx)
+
+        // Create asset records so generated media appears in /library
+        await createAssetFromJob(jobId, jobUserId)
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error"
 
