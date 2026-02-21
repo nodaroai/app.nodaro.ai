@@ -115,7 +115,7 @@ function AudioCard({ url }: { readonly url: string }) {
   )
 }
 
-function VideoCard({ item, children }: { readonly item: GalleryItem; readonly children?: React.ReactNode }) {
+function VideoCard({ item, children, priority }: { readonly item: GalleryItem; readonly children?: React.ReactNode; readonly priority?: boolean }) {
   const [hovered, setHovered] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -205,7 +205,7 @@ function VideoCard({ item, children }: { readonly item: GalleryItem; readonly ch
               "w-full h-full object-cover absolute inset-0 z-[1]",
               hovered && videoReady && "invisible",
             )}
-            loading="lazy"
+            {...(priority ? { fetchPriority: "high" } : { loading: "lazy" })}
           />
           <video
             ref={videoRef}
@@ -516,7 +516,7 @@ export default function GalleryPage() {
                     role="button"
                     tabIndex={0}
                     className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
-                    style={{ contentVisibility: "auto", containIntrinsicSize: "auto 200px" }}
+                    style={index < 10 ? undefined : { contentVisibility: "auto", containIntrinsicSize: "auto 200px" }}
                     onClick={() => setSelectedIndex(index)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedIndex(index) }}
                   >
@@ -526,13 +526,13 @@ export default function GalleryPage() {
                           src={item.outputUrl}
                           alt=""
                           className="w-full h-full object-cover"
-                          loading="lazy"
+                          {...(index < 10 ? (index === 0 ? { fetchPriority: "high" } : {}) : { loading: "lazy" })}
                           thumbnail
                         />
                         {overlay}
                       </>
                     ) : item.type === "video" ? (
-                      <VideoCard item={item}>{overlay}</VideoCard>
+                      <VideoCard item={item} priority={index < 10}>{overlay}</VideoCard>
                     ) : (
                       <>
                         <AudioCard url={item.outputUrl} />
