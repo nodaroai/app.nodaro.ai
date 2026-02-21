@@ -1,0 +1,289 @@
+import { describe, it, expect, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+
+// ---------------------------------------------------------------------------
+// Mocks — all declared before component imports
+// ---------------------------------------------------------------------------
+
+vi.mock("@xyflow/react", () => ({
+  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
+  Handle: ({ type, position, id }: any) => (
+    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+  ),
+  NodeResizer: () => null,
+  useStore: vi.fn(() => 1),
+  useNodeId: vi.fn(() => "test-node"),
+}))
+
+vi.mock("../base-node", () => ({
+  BaseNode: ({ children, label, category, credits, id }: any) => (
+    <div
+      data-testid="base-node"
+      data-label={label}
+      data-category={category}
+      data-credits={credits}
+      data-id={id}
+    >
+      {children}
+    </div>
+  ),
+}))
+
+vi.mock("lucide-react", () =>
+  new Proxy(
+    {},
+    {
+      get: (_t: any, prop: string) => {
+        if (prop === "__esModule") return false
+        return (p: any) => <span data-testid={`icon-${prop}`} {...p} />
+      },
+    },
+  ),
+)
+
+vi.mock("@/hooks/use-workflow-store", () => ({
+  useWorkflowStore: Object.assign(
+    (selector: any) =>
+      selector({
+        updateNodeData: () => {},
+        runSingleNode: () => {},
+        selectNode: () => {},
+        duplicateNode: () => {},
+        newNodeIds: new Set(),
+        clearNewNode: () => {},
+        nodes: [],
+        edges: [],
+      }),
+    { getState: () => ({ nodes: [], edges: [] }) },
+  ),
+}))
+
+vi.mock("../run-node-button", () => ({
+  RunNodeButton: (props: any) => (
+    <div data-testid="run-node-button" data-credits={props.credits} />
+  ),
+}))
+
+vi.mock("@/lib/providers-config", () => ({
+  getProviderLabel: (_cat: string, provider: string) => provider,
+}))
+
+// ---------------------------------------------------------------------------
+// Component imports (after all mocks)
+// ---------------------------------------------------------------------------
+
+import { ListNode } from "../list-node"
+import { ToneNode } from "../tone-node"
+import { StyleGuideNode } from "../style-guide-node"
+import { ProviderNode } from "../provider-node"
+import { SceneCountNode } from "../scene-count-node"
+import { DurationNode } from "../duration-node"
+import { AspectRatioNode } from "../aspect-ratio-node"
+import { MotionNode } from "../motion-node"
+import { CameraMotionNode } from "../camera-motion-node"
+import { QACheckNode } from "../qa-check-node"
+import { RSSFeedNode } from "../rss-feed-node"
+import { WebhookOutputNode } from "../webhook-output-node"
+import { SaveToStorageNode } from "../save-to-storage-node"
+import { SplitTextNode } from "../split-text-node"
+
+// ---------------------------------------------------------------------------
+// Test config
+// ---------------------------------------------------------------------------
+
+interface SimpleNodeTestConfig {
+  name: string
+  Component: React.ComponentType<any>
+  defaultData: Record<string, unknown>
+  expectedCategory: string
+  expectedCredits: number
+  contentAssertion?: { text: string }
+  placeholderAssertion?: { text: string }
+}
+
+const SIMPLE_NODES: SimpleNodeTestConfig[] = [
+  {
+    name: "ListNode",
+    Component: ListNode,
+    expectedCategory: "input",
+    expectedCredits: 0,
+    defaultData: { label: "List", items: "one\ntwo\nthree" },
+    contentAssertion: { text: "3 items" },
+    placeholderAssertion: { text: "No items yet" },
+  },
+  {
+    name: "ToneNode",
+    Component: ToneNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Tone", tone: "cinematic" },
+    contentAssertion: { text: "cinematic" },
+    placeholderAssertion: { text: "Set tone..." },
+  },
+  {
+    name: "StyleGuideNode",
+    Component: StyleGuideNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Style Guide", text: "dark moody" },
+    contentAssertion: { text: "dark moody" },
+    placeholderAssertion: { text: "Set style guide..." },
+  },
+  {
+    name: "ProviderNode",
+    Component: ProviderNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Provider", provider: "openai", model: "gpt-4", category: "text" },
+    placeholderAssertion: { text: "Select provider..." },
+  },
+  {
+    name: "SceneCountNode",
+    Component: SceneCountNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Scene Count", count: 5 },
+    contentAssertion: { text: "5 scenes" },
+  },
+  {
+    name: "DurationNode",
+    Component: DurationNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Duration", seconds: 30 },
+    contentAssertion: { text: "30s" },
+  },
+  {
+    name: "AspectRatioNode",
+    Component: AspectRatioNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Aspect Ratio", ratio: "16:9" },
+    contentAssertion: { text: "16:9" },
+  },
+  {
+    name: "MotionNode",
+    Component: MotionNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Motion", motion: "smooth" },
+    contentAssertion: { text: "smooth" },
+  },
+  {
+    name: "CameraMotionNode",
+    Component: CameraMotionNode,
+    expectedCategory: "parameter",
+    expectedCredits: 0,
+    defaultData: { label: "Camera Motion", cameraMotion: "pan-left" },
+    contentAssertion: { text: "pan-left" },
+  },
+  {
+    name: "QACheckNode",
+    Component: QACheckNode,
+    expectedCategory: "ai",
+    expectedCredits: 1,
+    defaultData: { label: "QA Check", checkType: "quality", provider: "claude" },
+    contentAssertion: { text: "quality (claude)" },
+  },
+  {
+    name: "RSSFeedNode",
+    Component: RSSFeedNode,
+    expectedCategory: "input",
+    expectedCredits: 0,
+    defaultData: { label: "RSS Feed", feedUrl: "https://example.com/feed" },
+    contentAssertion: { text: "https://example.com/feed" },
+    placeholderAssertion: { text: "Enter feed URL..." },
+  },
+  {
+    name: "WebhookOutputNode",
+    Component: WebhookOutputNode,
+    expectedCategory: "output",
+    expectedCredits: 0,
+    defaultData: { label: "Webhook Output", webhookId: "abc-123" },
+    contentAssertion: { text: "abc-123" },
+    placeholderAssertion: { text: "Set webhook..." },
+  },
+  {
+    name: "SaveToStorageNode",
+    Component: SaveToStorageNode,
+    expectedCategory: "output",
+    expectedCredits: 0,
+    defaultData: { label: "Save to Storage", format: "mp4", quality: "high" },
+    contentAssertion: { text: "mp4 (high)" },
+  },
+  {
+    name: "SplitTextNode",
+    Component: SplitTextNode,
+    expectedCategory: "processing",
+    expectedCredits: 0,
+    defaultData: { label: "Split Text" },
+  },
+]
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function renderNode(
+  Component: React.ComponentType<any>,
+  data: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+) {
+  return render(
+    <Component id="node-1" data={data} selected={false} {...overrides} />,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Data-driven tests
+// ---------------------------------------------------------------------------
+
+describe.each(SIMPLE_NODES)(
+  "$name",
+  ({ Component, defaultData, expectedCategory, expectedCredits, contentAssertion, placeholderAssertion }) => {
+    it("renders without crashing", () => {
+      renderNode(Component, defaultData)
+      expect(screen.getByTestId("base-node")).toBeInTheDocument()
+    })
+
+    it("passes correct label to BaseNode", () => {
+      renderNode(Component, defaultData)
+      expect(screen.getByTestId("base-node")).toHaveAttribute(
+        "data-label",
+        defaultData.label as string,
+      )
+    })
+
+    it("passes correct category to BaseNode", () => {
+      renderNode(Component, defaultData)
+      expect(screen.getByTestId("base-node")).toHaveAttribute(
+        "data-category",
+        expectedCategory,
+      )
+    })
+
+    it("passes correct credits to BaseNode", () => {
+      renderNode(Component, defaultData)
+      expect(screen.getByTestId("base-node")).toHaveAttribute(
+        "data-credits",
+        String(expectedCredits),
+      )
+    })
+
+    if (contentAssertion) {
+      it("shows expected content", () => {
+        renderNode(Component, defaultData)
+        expect(screen.getByText(contentAssertion.text)).toBeInTheDocument()
+      })
+    }
+
+    if (placeholderAssertion) {
+      it("shows placeholder when value is empty", () => {
+        // Create data with empty/missing values to trigger placeholder
+        const emptyData: Record<string, unknown> = { label: defaultData.label }
+        renderNode(Component, emptyData)
+        expect(screen.getByText(placeholderAssertion.text)).toBeInTheDocument()
+      })
+    }
+  },
+)

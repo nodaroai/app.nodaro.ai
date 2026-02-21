@@ -13,7 +13,6 @@ export interface GalleryItem {
   readonly createdAt: string
   readonly prompt: string | null
   readonly model: string | null
-  readonly referenceImages: readonly string[]
 }
 
 export function useGalleryInfinite(filter: string) {

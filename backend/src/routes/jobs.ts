@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase.js"
 import { isCloud } from "../lib/config.js"
 
 // Job type from database
-interface JobRecord {
+export interface JobRecord {
   id: string
   status: string
   progress: number
@@ -22,7 +22,7 @@ interface JobRecord {
 }
 
 // Public job type (for cloud edition regular users)
-interface PublicJob {
+export interface PublicJob {
   id: string
   status: string
   progress: number
@@ -45,7 +45,7 @@ interface PublicJob {
  * - Remove `provider_cost` field (our actual cost - sensitive)
  * - Rename `display_cost` to `cost` (what the user pays)
  */
-function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
+export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
   // Self-hosted edition or admin users: return full data
   if (!isCloud() || isAdmin) {
     return job

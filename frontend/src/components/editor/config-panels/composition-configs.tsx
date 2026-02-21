@@ -81,6 +81,7 @@ export function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<Vid
 }
 
 const LazyAfterEffectsPreview = lazy(() => import("@/components/editor/after-effects-preview").then(m => ({ default: m.AfterEffectsPreview })))
+const LazyAfterEffectsPlayerPreview = lazy(() => import("@/components/editor/after-effects-player-preview").then(m => ({ default: m.AfterEffectsPlayerPreview })))
 
 export function AfterEffectsConfig({ data, onUpdate }: { data: AfterEffectsData; onUpdate: (d: Partial<AfterEffectsData>) => void }) {
   return (
@@ -99,6 +100,14 @@ export function AfterEffectsConfig({ data, onUpdate }: { data: AfterEffectsData;
       {data.effectPlan && (
         <>
           <Separator />
+          {(data.effectPlan as Record<string, unknown>).sourceVideo && (
+            <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
+              <LazyAfterEffectsPlayerPreview
+                effectPlan={data.effectPlan}
+                fps={data.fps}
+              />
+            </Suspense>
+          )}
           <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
             <LazyAfterEffectsPreview
               effectPlan={data.effectPlan}
@@ -311,6 +320,7 @@ export function ThreeDTitleConfig({ data, onUpdate }: { data: ThreeDTitleData; o
 }
 
 const LazyMotionGraphicsPreview = lazy(() => import("@/components/editor/motion-graphics-preview").then(m => ({ default: m.MotionGraphicsPreview })))
+const LazyMotionGraphicsPlayerPreview = lazy(() => import("@/components/editor/motion-graphics-player-preview").then(m => ({ default: m.MotionGraphicsPlayerPreview })))
 
 export function MotionGraphicsConfig({ data, onUpdate }: { data: MotionGraphicsData; onUpdate: (d: Partial<MotionGraphicsData>) => void }) {
   const [showInfo, setShowInfo] = useState(false)
@@ -370,6 +380,12 @@ export function MotionGraphicsConfig({ data, onUpdate }: { data: MotionGraphicsD
       {data.motionPlan && (
         <>
           <Separator />
+          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
+            <LazyMotionGraphicsPlayerPreview
+              motionPlan={data.motionPlan}
+              fps={data.fps}
+            />
+          </Suspense>
           <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
             <LazyMotionGraphicsPreview
               motionPlan={data.motionPlan}

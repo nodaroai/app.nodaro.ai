@@ -1,0 +1,120 @@
+import { describe, it, expect } from "vitest"
+
+import {
+  getKieModelConfig,
+  isKieSupported,
+  getKieCost,
+  getAllowedDurations,
+  usesNFrames,
+  durationToNFrames,
+  supportsEndFrame,
+  getEndFrameParam,
+} from "../models.js"
+
+describe("getKieModelConfig", () => {
+  it("returns config for image model nano-banana", () => {
+    const config = getKieModelConfig("image", "nano-banana")
+    expect(config).not.toBeNull()
+    expect(config!.model).toBe("nano-banana-pro")
+    expect(config!.credits).toBe(4)
+    expect(config!.cost).toBe(0.02)
+  })
+
+  it("returns config for video model veo3", () => {
+    const config = getKieModelConfig("video", "veo3")
+    expect(config).not.toBeNull()
+    expect(config!.model).toBe("veo3")
+    expect(config!.credits).toBe(400)
+    expect(config!.cost).toBe(2.0)
+    expect(config!.allowedDurations).toEqual([8])
+  })
+
+  it("returns config for tts model elevenlabs-turbo", () => {
+    const config = getKieModelConfig("tts", "elevenlabs-turbo")
+    expect(config).not.toBeNull()
+    expect(config!.model).toBe("elevenlabs/text-to-speech-turbo-2-5")
+    expect(config!.credits).toBe(10)
+  })
+
+  it("returns null for unknown category/provider", () => {
+    expect(getKieModelConfig("image", "nonexistent-model")).toBeNull()
+    expect(getKieModelConfig("video", "nonexistent-model")).toBeNull()
+    expect(getKieModelConfig("tts", "nonexistent-model")).toBeNull()
+    // @ts-expect-error -- testing invalid category at runtime
+    expect(getKieModelConfig("bogus-category", "nano-banana")).toBeNull()
+  })
+})
+
+describe("isKieSupported", () => {
+  it("returns true for a known model", () => {
+    expect(isKieSupported("image", "nano-banana")).toBe(true)
+    expect(isKieSupported("video", "kling")).toBe(true)
+    expect(isKieSupported("music", "suno")).toBe(true)
+  })
+
+  it("returns false for an unknown model", () => {
+    expect(isKieSupported("image", "nonexistent")).toBe(false)
+    expect(isKieSupported("video", "nonexistent")).toBe(false)
+    expect(isKieSupported("tts", "nonexistent")).toBe(false)
+  })
+})
+
+describe("getKieCost", () => {
+  it("returns cost for a known model", () => {
+    expect(getKieCost("image", "nano-banana")).toBe(0.02)
+    expect(getKieCost("video", "veo3")).toBe(2.0)
+    expect(getKieCost("music", "suno")).toBe(0.1)
+  })
+
+  it("returns 0 for an unknown model", () => {
+    expect(getKieCost("image", "nonexistent")).toBe(0)
+    expect(getKieCost("video", "nonexistent")).toBe(0)
+  })
+})
+
+describe("getAllowedDurations", () => {
+  it("returns [5, 10] for kling video", () => {
+    expect(getAllowedDurations("video", "kling")).toEqual([5, 10])
+  })
+
+  it("returns [8] for veo3 video (fixed duration)", () => {
+    expect(getAllowedDurations("video", "veo3")).toEqual([8])
+  })
+})
+
+describe("usesNFrames", () => {
+  it("returns true for sora2-pro and false for kling", () => {
+    expect(usesNFrames("video", "sora2-pro")).toBe(true)
+    expect(usesNFrames("text-to-video", "sora2-pro")).toBe(true)
+    expect(usesNFrames("video", "kling")).toBe(false)
+    expect(usesNFrames("text-to-video", "kling")).toBe(false)
+  })
+})
+
+describe("durationToNFrames", () => {
+  it('returns "10" for 5s and "15" for 10s', () => {
+    expect(durationToNFrames(5)).toBe("10")
+    expect(durationToNFrames(10)).toBe("15")
+    // Edge case: durations shorter than 5s should also map to "10"
+    expect(durationToNFrames(3)).toBe("10")
+  })
+})
+
+describe("supportsEndFrame", () => {
+  it("returns true for minimax and veo3, false for kling and grok-i2v", () => {
+    expect(supportsEndFrame("video", "minimax")).toBe(true)
+    expect(supportsEndFrame("video", "veo3")).toBe(true)
+    expect(supportsEndFrame("video", "veo3.1")).toBe(true)
+    expect(supportsEndFrame("video", "kling")).toBe(false)
+    expect(supportsEndFrame("video", "grok-i2v")).toBe(false)
+  })
+})
+
+describe("getEndFrameParam", () => {
+  it("returns correct param name per model, or undefined for array-format models", () => {
+    expect(getEndFrameParam("video", "minimax")).toBe("end_image_url")
+    expect(getEndFrameParam("video", "kling-turbo")).toBe("tail_image_url")
+    // veo3 uses imageUrls array format -- no separate endFrameParam
+    expect(getEndFrameParam("video", "veo3")).toBeUndefined()
+  })
+})

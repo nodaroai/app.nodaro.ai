@@ -112,7 +112,8 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     // Parse optional fields from multipart form
     const fields = data.fields as Record<string, { value?: string } | undefined>
-    const userId = fields?.userId?.value ?? null
+    // Use authenticated userId from JWT; fall back to form field for unauthenticated uploads
+    const userId = req.userId ?? fields?.userId?.value ?? null
     const projectId = fields?.projectId?.value ?? null
     const filenameOverride = fields?.filename?.value ?? null
 
@@ -209,8 +210,6 @@ export async function uploadRoutes(app: FastifyInstance) {
       await updateStorageUsage(userId, buffer.length)
     }
 
-    console.log(`[upload] ${category} uploaded: ${publicUrl} (${buffer.length} bytes)`)
-
     return {
       data: {
         url: publicUrl,
@@ -256,7 +255,6 @@ export async function uploadRoutes(app: FastifyInstance) {
     const key = `uploads/${randomUUID()}.${ext}`
 
     const publicUrl = await uploadBufferToS3(buffer, key, file.mimetype)
-    console.log(`[upload] Audio uploaded: ${publicUrl}`)
 
     return { url: publicUrl }
   })
@@ -283,11 +281,11 @@ export async function uploadRoutes(app: FastifyInstance) {
       })
     }
 
-    const ext = file.mimetype === "image/png" ? "png" : file.mimetype === "image/webp" ? "webp" : "jpg"
+    const MIME_TO_EXT: Record<string, string> = { "image/png": "png", "image/webp": "webp" }
+    const ext = MIME_TO_EXT[file.mimetype] ?? "jpg"
     const key = `uploads/${randomUUID()}.${ext}`
 
     const publicUrl = await uploadBufferToS3(buffer, key, file.mimetype)
-    console.log(`[upload] Image uploaded: ${publicUrl}`)
 
     return { url: publicUrl }
   })

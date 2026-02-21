@@ -38,7 +38,7 @@ export interface LetterboxEffect {
 export interface MotionBlurEffect {
   readonly type: "motion-blur"
   readonly shutterAngle: number  // 0 - 360
-  readonly samples: number       // 1 - 16
+  readonly samples: number       // 1 - 8
 }
 
 export interface AnimatedBlurEffect {
@@ -52,7 +52,7 @@ export interface AnimatedBlurEffect {
 
 export interface TrailEffect {
   readonly type: "trail"
-  readonly layers: number        // 1-10 integer
+  readonly layers: number        // 1-5 integer
   readonly lagInFrames: number   // 0.5-5
   readonly trailOpacity: number  // 0-1
 }

@@ -113,7 +113,7 @@ function EffectEditor({
           {effect.type === "motion-blur" && (
             <>
               <SliderField label="Shutter Angle" value={effect.shutterAngle as number ?? 180} min={0} max={360} step={1} onChange={(v) => onChange({ ...effect, shutterAngle: v })} />
-              <SliderField label="Samples" value={effect.samples as number ?? 10} min={1} max={16} step={1} onChange={(v) => onChange({ ...effect, samples: v })} />
+              <SliderField label="Samples" value={effect.samples as number ?? 10} min={1} max={8} step={1} onChange={(v) => onChange({ ...effect, samples: v })} />
             </>
           )}
           {effect.type === "animated-blur" && (
@@ -126,7 +126,7 @@ function EffectEditor({
           )}
           {effect.type === "trail" && (
             <>
-              <SliderField label="Layers" value={effect.layers as number ?? 3} min={1} max={10} step={1} onChange={(v) => onChange({ ...effect, layers: v })} />
+              <SliderField label="Layers" value={effect.layers as number ?? 3} min={1} max={5} step={1} onChange={(v) => onChange({ ...effect, layers: v })} />
               <SliderField label="Lag (frames)" value={effect.lagInFrames as number ?? 1.5} min={0.5} max={5} step={0.5} onChange={(v) => onChange({ ...effect, lagInFrames: v })} />
               <SliderField label="Opacity" value={effect.trailOpacity as number ?? 0.4} min={0} max={1} step={0.05} onChange={(v) => onChange({ ...effect, trailOpacity: v })} />
             </>

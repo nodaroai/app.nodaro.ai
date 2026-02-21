@@ -1,6 +1,5 @@
 import React from "react"
 import { AbsoluteFill, OffthreadVideo, Sequence, useCurrentFrame, interpolate, Easing } from "remotion"
-import { CameraMotionBlur, Trail } from "@remotion/motion-blur"
 import type { AfterEffectsPlan, AfterEffect } from "../plan-types"
 import {
   buildColorGradeFilter,
@@ -49,7 +48,7 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
   const motionBlur = getEffectByType(effects, "motion-blur")
   const trail = getEffectByType(effects, "trail")
 
-  // Build combined CSS filter (color grading + animated blur)
+  // Build combined CSS filter (color grading + animated blur + motion blur)
   const filters: string[] = []
   if (colorGrade) {
     const cg = buildColorGradeFilter(colorGrade)
@@ -65,11 +64,38 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
     )
     if (blur > 0.1) filters.push(`blur(${blur.toFixed(1)}px)`)
   }
+  if (motionBlur) {
+    const blurPx = (motionBlur.shutterAngle / 360) * 4 // 0-4px
+    if (blurPx > 0.1) filters.push(`blur(${blurPx.toFixed(1)}px)`)
+  }
   const videoFilter = filters.length > 0 ? filters.join(" ") : undefined
 
-  // Build the core content (effects + overlays)
-  const content = (
+  return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
+      {/* Trail ghost layers (behind main video) */}
+      {trail && Array.from({ length: trail.layers }, (_, i) => {
+        const layerIndex = i + 1
+        const frameOffset = Math.round(trail.lagInFrames * layerIndex)
+        const opacity = trail.trailOpacity * (1 - layerIndex / (trail.layers + 1))
+        if (frame < frameOffset) return null
+        return (
+          <Sequence key={`trail-${i}`} from={frameOffset} layout="none">
+            <OffthreadVideo
+              src={sourceVideo}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                opacity,
+                filter: videoFilter,
+              }}
+            />
+          </Sequence>
+        )
+      })}
+
       {/* 1. Base video layer with color grading + blur applied directly to Video */}
       <OffthreadVideo
         src={sourceVideo}
@@ -142,27 +168,4 @@ export function AfterEffectsRenderer({ plan }: AfterEffectsRendererProps) {
       ))}
     </AbsoluteFill>
   )
-
-  // Wrap with Trail if present (inner wrapper)
-  const withTrail = trail ? (
-    <Trail
-      layers={trail.layers}
-      lagInFrames={trail.lagInFrames}
-      trailOpacity={trail.trailOpacity}
-    >
-      {content}
-    </Trail>
-  ) : content
-
-  // Wrap with CameraMotionBlur if present (outer wrapper)
-  const withMotionBlur = motionBlur ? (
-    <CameraMotionBlur
-      shutterAngle={motionBlur.shutterAngle}
-      samples={motionBlur.samples}
-    >
-      {withTrail}
-    </CameraMotionBlur>
-  ) : withTrail
-
-  return withMotionBlur
 }

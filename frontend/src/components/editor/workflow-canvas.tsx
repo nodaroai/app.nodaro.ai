@@ -25,6 +25,7 @@ const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").th
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 import { SelectionActionBar } from "./selection-action-bar"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
 
@@ -136,6 +137,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
   const { screenToFlowPosition, setNodes, getNode } = useReactFlow()
+  const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
   const [canvasContextMenu, setCanvasContextMenu] = useState<CanvasContextMenuState | null>(null)
   const [showMiniMap, setShowMiniMap] = useState(true)
@@ -335,6 +337,20 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y — Redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
+        e.preventDefault()
+        redo()
+        return
+      }
+
+      // Ctrl/Cmd+Z — Undo
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault()
+        undo()
+        return
+      }
+
       // Tab - Open Add Node popup
       if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault()
@@ -414,7 +430,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar])
+  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes("application/scenenode-image")) {
@@ -490,6 +506,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onTidyUp={handleTidyUp}
         onToggleSidebar={onToggleSidebar}
         sidebarVisible={sidebarVisible}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
       />
 
       {/* Canvas Controls (zoom, fit, minimap toggle - bottom left) */}

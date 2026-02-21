@@ -1,8 +1,20 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService, invalidateModelPricingCache } from "../billing/credits.js"
 import { invalidateBalanceCache } from "./credits.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { invalidateAuthCache } from "../middleware/auth.js"
+import { TIER_CREDITS } from "../billing/paddle-config.js"
+
+// ---- Zod Schemas ----
+
+const adjustCreditsBody = z.object({
+  amount: z.number(),
+  creditType: z.enum(["subscription", "topup"]),
+  description: z.string().min(1),
+  adminUserId: z.string().uuid(),
+})
 
 export async function adminCreditsRoutes(app: FastifyInstance) {
   // GET /v1/admin/users - List all users with credit info (paginated)
@@ -19,7 +31,11 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       .range(offset, offset + limit - 1)
 
     if (search) {
-      dbQuery = dbQuery.or(`display_name.ilike.%${search}%,email.ilike.%${search}%`)
+      // Strict allowlist: only alphanumeric, spaces, and email characters
+      const sanitized = search.replace(/[^a-zA-Z0-9\s@.\-]/g, "")
+      if (sanitized.length > 0) {
+        dbQuery = dbQuery.or(`display_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`)
+      }
     }
 
     const { data, count, error } = await dbQuery
@@ -48,16 +64,13 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // POST /v1/admin/users/:id/credits - Admin adjust credits
   app.post("/v1/admin/users/:id/credits", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const { amount, creditType, description, adminUserId } = request.body as {
-      amount: number
-      creditType: "subscription" | "topup"
-      description: string
-      adminUserId: string
+    const parsed = adjustCreditsBody.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: parsed.error.issues[0]?.message ?? "Invalid request: amount (number), creditType (subscription|topup), description, adminUserId required",
+      })
     }
-
-    if (!amount || !creditType || !description || !adminUserId) {
-      return reply.code(400).send({ error: "Missing required fields: amount, creditType, description, adminUserId" })
-    }
+    const { amount, creditType, description, adminUserId } = parsed.data
 
     try {
       const result = await CreditsService.adminAdjustCredits({
@@ -77,14 +90,16 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // GET /v1/admin/users/:id/transactions - Credit transaction history
   app.get("/v1/admin/users/:id/transactions", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const { limit = 50, offset = 0 } = request.query as { limit?: number; offset?: number }
+    const query = request.query as Record<string, string | undefined>
+    const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
+    const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
 
     const { data, error } = await supabase
       .from("credit_transactions")
       .select("*")
       .eq("user_id", id)
       .order("created_at", { ascending: false })
-      .range(Number(offset), Number(offset) + Number(limit) - 1)
+      .range(offset, offset + limit - 1)
 
     if (error) return reply.code(500).send({ error: error.message })
     return data
@@ -104,14 +119,6 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     }
     if (!adminUserId) {
       return reply.code(400).send({ error: "Missing required field: adminUserId" })
-    }
-
-    const TIER_CREDITS: Record<string, number> = {
-      free: 50,
-      basic: 500,
-      standard: 1000,
-      pro: 2000,
-      business: 5000,
     }
 
     // Fetch current profile
@@ -265,6 +272,9 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     if (updateError) {
       return reply.code(500).send({ error: updateError.message })
     }
+
+    // Invalidate auth cache so the new role takes effect immediately
+    invalidateAuthCache(id)
 
     return { role, previous_role: previousRole }
   })

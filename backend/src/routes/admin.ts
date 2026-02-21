@@ -57,10 +57,15 @@ export async function adminRoutes(app: FastifyInstance) {
    * List all cost alerts
    */
   app.get("/v1/admin/alerts", { preHandler: requireAdmin }, async (req, reply) => {
-    const { data, error } = await supabase
+    const query = req.query as Record<string, string | undefined>
+    const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
+    const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
+
+    const { data, error, count } = await supabase
       .from("admin_alerts")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (error) {
       return reply.status(500).send({
@@ -68,7 +73,7 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: data ?? [] }
+    return { data: data ?? [], total: count ?? 0, limit, offset }
   })
 
   /**
@@ -88,12 +93,18 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { alertType, threshold, userId: targetUserId, isEnabled } = parsed.data
 
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const { data, error } = await supabase
       .from("admin_alerts")
       .insert({
         alert_type: alertType,
         threshold,
-        user_id: targetUserId ?? req.userId!,
+        user_id: targetUserId ?? req.userId,
         is_enabled: isEnabled,
       })
       .select()
@@ -211,10 +222,15 @@ export async function adminRoutes(app: FastifyInstance) {
    * List all model pricing entries
    */
   app.get("/v1/admin/model-pricing", { preHandler: requireAdmin }, async (req, reply) => {
-    const { data, error } = await supabase
+    const query = req.query as Record<string, string | undefined>
+    const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "100", 10) || 100))
+    const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
+
+    const { data, error, count } = await supabase
       .from("model_pricing")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("category", { ascending: true })
+      .range(offset, offset + limit - 1)
 
     if (error) {
       return reply.status(500).send({
@@ -222,7 +238,7 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: data ?? [] }
+    return { data: data ?? [], total: count ?? 0, limit, offset }
   })
 
   /**
@@ -375,10 +391,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { id: assetId } = paramsResult.data
 
-    // Fetch the asset to merge metadata
+    // Fetch the asset metadata for merging
     const { data: existing, error: fetchError } = await supabase
       .from("assets")
-      .select("*")
+      .select("id, metadata")
       .eq("id", assetId)
       .single()
 
@@ -393,13 +409,19 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     // Merge promotion info, removing stale demote metadata from previous cycle
     const existingMetadata = (existing.metadata as Record<string, unknown>) ?? {}
     const { demoted_at: _da, demoted_by: _db, ...cleanMetadata } = existingMetadata
     const updatedMetadata = {
       ...cleanMetadata,
       promoted_at: new Date().toISOString(),
-      promoted_by: req.userId!,
+      promoted_by: req.userId,
     }
 
     const { data: asset, error: updateError } = await supabase
@@ -445,10 +467,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { id: assetId } = paramsResult.data
 
-    // Fetch the asset to merge metadata
+    // Fetch the asset metadata for merging
     const { data: existing, error: fetchError } = await supabase
       .from("assets")
-      .select("*")
+      .select("id, metadata")
       .eq("id", assetId)
       .single()
 
@@ -463,13 +485,19 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     // Remove promotion metadata
     const existingMetadata = (existing.metadata as Record<string, unknown>) ?? {}
     const { promoted_at, promoted_by, ...restMetadata } = existingMetadata
     const updatedMetadata = {
       ...restMetadata,
       demoted_at: new Date().toISOString(),
-      demoted_by: req.userId!,
+      demoted_by: req.userId,
     }
 
     const { data: asset, error: updateError } = await supabase

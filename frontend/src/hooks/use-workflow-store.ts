@@ -9,6 +9,34 @@ import {
 } from "@xyflow/react"
 import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData } from "@/types/nodes"
 import { NODE_DEFINITIONS } from "@/types/nodes"
+import type { WorkflowSnapshot } from "./use-undo-redo-store"
+import { setSkipUndoCapture } from "./undo-flags"
+
+/**
+ * Fields that are purely execution-related (job status, progress, results).
+ * When an `updateNodeData` call only touches these keys, the undo system
+ * will NOT capture a snapshot — preventing job polling from polluting the
+ * undo history and clearing the redo stack.
+ */
+const EXECUTION_DATA_KEYS = new Set([
+  "executionStatus",
+  "currentJobId",
+  "currentJobProgress",
+  "errorMessage",
+  "isStreaming",
+  "generatedImageUrl",
+  "generatedVideoUrl",
+  "generatedAudioUrl",
+  "generatedText",
+  "generatedScript",
+  "generatedItems",
+  "generatedResults",
+  "activeResultIndex",
+  "sourceImageUrl",
+  "__listTotal",
+  "__listCompleted",
+  "__listResults",
+])
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
@@ -20,6 +48,7 @@ interface WorkflowState {
   readonly edges: WorkflowEdge[]
   readonly selectedNodeId: string | null
   readonly isDirty: boolean
+  readonly loadGeneration: number
   readonly saveStatus: SaveStatus
   readonly saveError: string | null
   readonly videoAutoplay: boolean
@@ -62,6 +91,7 @@ interface WorkflowState {
   readonly toggleSkipNode: (nodeId: string) => void
   readonly skipSelectedNodes: (nodeIds: string[]) => void
   readonly unskipSelectedNodes: (nodeIds: string[]) => void
+  readonly restoreSnapshot: (snapshot: WorkflowSnapshot) => void
   readonly batchAddNodesAndEdges: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
   readonly expandStoryboard: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null
   readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null) => void
@@ -97,9 +127,10 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   edges: [],
   selectedNodeId: null,
   isDirty: false,
+  loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,
   saveError: null,
-  videoAutoplay: typeof window !== "undefined" && localStorage.getItem("videoAutoplay") !== null
+  videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
     ? localStorage.getItem("videoAutoplay") === "true"
     : true,
   newNodeIds: new Set<string>(),
@@ -114,21 +145,31 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setWorkflowName: (name) => set({ workflowName: name, isDirty: true }),
 
   onNodesChange: (changes) =>
-    set((state) => ({
-      nodes: applyNodeChanges(changes, state.nodes),
-      isDirty: true,
-    })),
+    set((state) => {
+      const newNodes = applyNodeChanges(changes, state.nodes)
+      // Only mark dirty for content changes (position, add, remove, replace)
+      // NOT for selection or dimension measurements from React Flow
+      const hasContentChange = changes.some(
+        (c) => c.type !== "select" && c.type !== "dimensions"
+      )
+      return {
+        nodes: newNodes,
+        ...(hasContentChange ? { isDirty: true } : {}),
+      }
+    }),
 
   onEdgesChange: (changes) =>
     set((state) => {
       const newEdges = applyEdgeChanges(changes, state.edges)
+      // Only mark dirty for content changes, not selection
+      const hasContentChange = changes.some((c) => c.type !== "select")
       const removedEdges = changes
         .filter((c): c is EdgeChange<WorkflowEdge> & { type: "remove" } => c.type === "remove")
         .map((c) => state.edges.find((e) => e.id === c.id))
         .filter((e): e is WorkflowEdge => e !== undefined)
 
       if (removedEdges.length === 0) {
-        return { edges: newEdges, isDirty: true }
+        return { edges: newEdges, ...(hasContentChange ? { isDirty: true } : {}) }
       }
 
       const nodes = state.nodes.map((node) => {
@@ -213,7 +254,11 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     return id
   },
 
-  updateNodeData: (nodeId, data) =>
+  updateNodeData: (nodeId, data) => {
+    // If every key in the update is execution-related, tell the undo system
+    // to skip snapshot capture so job polling doesn't pollute undo history.
+    const isExecOnly = Object.keys(data).every((k) => EXECUTION_DATA_KEYS.has(k))
+    if (isExecOnly) setSkipUndoCapture(true)
     set((state) => {
       // Only dirty the store when the node actually exists. This prevents
       // stale polling callbacks (from a previously loaded workflow) from
@@ -227,7 +272,9 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         ),
         isDirty: true,
       }
-    }),
+    })
+    if (isExecOnly) setSkipUndoCapture(false)
+  },
 
   duplicateNode: (nodeId) =>
     set((state) => {
@@ -310,34 +357,36 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         return isNaN(num) ? max : Math.max(max, num)
       }, 0) + 1
 
-    set({
+    set((state) => ({
       workflowId: id,
       workflowName: name,
       nodes,
       edges,
       selectedNodeId: null,
       isDirty: false,
+      loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       characterDefinitions: characterDefinitions ?? [],
       flowPromptTemplates: flowPromptTemplates ?? {},
-    })
+    }))
   },
 
   clearWorkflow: () => {
     nextNodeId = 1
-    set({
+    set((state) => ({
       workflowId: null,
       workflowName: "Untitled Workflow",
       nodes: [],
       edges: [],
       selectedNodeId: null,
       isDirty: false,
+      loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       characterDefinitions: [],
       flowPromptTemplates: {},
-    })
+    }))
   },
 
   markClean: () => set({ isDirty: false }),
@@ -420,6 +469,25 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         isDirty: true,
       }
     }),
+
+  restoreSnapshot: (snapshot) => {
+    // Ensure nextNodeId never goes backwards
+    const maxId = snapshot.nodes.reduce((max, n) => {
+      const num = parseInt(n.id.replace("node_", ""), 10)
+      return isNaN(num) ? max : Math.max(max, num)
+    }, 0)
+    if (maxId >= nextNodeId) {
+      nextNodeId = maxId + 1
+    }
+    set({
+      nodes: snapshot.nodes,
+      edges: snapshot.edges,
+      characterDefinitions: snapshot.characterDefinitions,
+      flowPromptTemplates: snapshot.flowPromptTemplates,
+      workflowName: snapshot.workflowName,
+      isDirty: true,
+    })
+  },
 
   batchAddNodesAndEdges: (newNodes, newEdges) => {
     // Update nextNodeId to avoid collisions

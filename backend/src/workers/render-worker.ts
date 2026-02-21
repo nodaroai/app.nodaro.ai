@@ -33,7 +33,7 @@ interface RenderInputProps extends Record<string, unknown> {
   kenBurnsEnabled: boolean
 }
 
-interface SceneGraphData extends Record<string, unknown> {
+export interface SceneGraphData extends Record<string, unknown> {
   fps: number
   width: number
   height: number
@@ -79,11 +79,11 @@ interface PlanRenderJobData {
 
 type RenderJobData = LegacyRenderJobData | SceneGraphRenderJobData | PlanRenderJobData
 
-function isPlanJob(data: RenderJobData): data is PlanRenderJobData {
+export function isPlanJob(data: RenderJobData): data is PlanRenderJobData {
   return "planType" in data && data.planType != null
 }
 
-function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
+export function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
   return "sceneGraph" in data && data.sceneGraph != null
 }
 
@@ -92,8 +92,10 @@ function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJobData {
 // @react-three/fiber creates its own React reconciler at module init time,
 // which conflicts with Remotion's reconciler and crashes ALL compositions
 // if bundled together.
-let cachedMainBundlePath: string | null = null
-let cached3DBundlePath: string | null = null
+// Cache the PROMISE (not the result) so concurrent callers (pre-warm + job)
+// share the same in-flight build instead of starting duplicate webpack builds.
+let mainBundlePromise: Promise<string> | null = null
+let threeDBundlePromise: Promise<string> | null = null
 
 const REMOTION_PKG_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -144,17 +146,23 @@ async function bundleEntry(
   return bundlePath
 }
 
-async function getBundlePath(compositionId: string): Promise<string> {
+function getBundlePath(compositionId: string): Promise<string> {
   if (compositionId === "3d-title") {
-    if (!cached3DBundlePath) {
-      cached3DBundlePath = await bundleEntry("Root3D.tsx", "3D compositions", true)
+    if (!threeDBundlePromise) {
+      threeDBundlePromise = bundleEntry("Root3D.tsx", "3D compositions", true).catch((err) => {
+        threeDBundlePromise = null
+        throw err
+      })
     }
-    return cached3DBundlePath
+    return threeDBundlePromise
   }
-  if (!cachedMainBundlePath) {
-    cachedMainBundlePath = await bundleEntry("Root.tsx", "main compositions", false)
+  if (!mainBundlePromise) {
+    mainBundlePromise = bundleEntry("Root.tsx", "main compositions", false).catch((err) => {
+      mainBundlePromise = null
+      throw err
+    })
   }
-  return cachedMainBundlePath
+  return mainBundlePromise
 }
 
 
@@ -162,7 +170,7 @@ async function getBundlePath(compositionId: string): Promise<string> {
  * Build composition ID and input props for generic plan mode.
  * Routes to the composition matching the planType (e.g. "after-effects").
  */
-function buildPlanRender(data: PlanRenderJobData): {
+export function buildPlanRender(data: PlanRenderJobData): {
   compositionId: string
   inputProps: Record<string, unknown>
   width: number
@@ -187,7 +195,7 @@ function buildPlanRender(data: PlanRenderJobData): {
  * Build composition ID and input props for scene graph mode.
  * Uses the "scene-graph" composition registered in Root.tsx.
  */
-function buildSceneGraphRender(data: SceneGraphRenderJobData): {
+export function buildSceneGraphRender(data: SceneGraphRenderJobData): {
   compositionId: string
   inputProps: SceneGraphInputProps
   width: number
@@ -234,7 +242,7 @@ interface FastPathTrack {
  * the full composition, no effects, no transitions, no text tracks.
  * Audio tracks are fine (handled via FFmpeg filter chain).
  */
-function canUseFfmpegFastPath(sceneGraph: SceneGraphData): boolean {
+export function canUseFfmpegFastPath(sceneGraph: SceneGraphData): boolean {
   const tracks = sceneGraph.tracks as FastPathTrack[]
 
   const mediaTracks = tracks.filter((t) => t.type === "media")
@@ -405,7 +413,7 @@ async function renderSceneGraphViaFfmpeg(
  * Legacy templates still use their original composition IDs (slideshow, explainer, etc.)
  * and are rendered by the original composition components registered in Root.tsx.
  */
-function buildLegacyRender(data: LegacyRenderJobData): {
+export function buildLegacyRender(data: LegacyRenderJobData): {
   compositionId: string
   inputProps: RenderInputProps
   width: number
@@ -456,7 +464,7 @@ function buildLegacyRender(data: LegacyRenderJobData): {
 const VIDEO_URL_RE = /^https?:\/\/.+\.(mp4|mov|webm)(\?.*)?$/i
 
 /** Collect all video URLs from Remotion inputProps. */
-function collectVideoUrls(props: Record<string, unknown>): string[] {
+export function collectVideoUrls(props: Record<string, unknown>): string[] {
   const urls: string[] = []
 
   const sg = props.sceneGraph as Record<string, unknown> | undefined
@@ -495,7 +503,7 @@ function collectVideoUrls(props: Record<string, unknown>): string[] {
 }
 
 /** Replace video URLs in Remotion inputProps using a URL map. */
-function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, string>): void {
+export function replaceVideoUrls(props: Record<string, unknown>, urlMap: Map<string, string>): void {
   const sg = props.sceneGraph as Record<string, unknown> | undefined
   if (sg) {
     for (const track of (sg.tracks as Array<Record<string, unknown>>)) {
@@ -628,7 +636,7 @@ async function normalizeInputVideos(
       ...REMOTION_INPUT_VIDEO_ARGS,
       "-an",
       outPath,
-    ])
+    ], 300_000) // 5 minute timeout — all-intra encode is slow but shouldn't exceed this
     fileMap.set(url, outName)
     console.log(`[render-worker] Prepared input video: ${url} -> ${outName} (remotion-optimized)`)
   }
@@ -733,6 +741,8 @@ export function createRenderWorker() {
       const shouldWatermark = userTier === "free"
       const isPublic = profileData?.public_outputs !== false
 
+      console.log(`[render-worker] Job ${jobId} picked up (tier=${userTier})`)
+
       const workDir = await createWorkDir("render")
 
       try {
@@ -756,6 +766,7 @@ export function createRenderWorker() {
 
         const { compositionId, inputProps, width, height, fps, durationInFrames } = renderConfig
 
+        console.log(`[render-worker] Job ${jobId}: mode=${modeLabel}, composition=${compositionId}, ${width}x${height} ${fps}fps ${durationInFrames}fr`)
         await bullJob.updateProgress(30)
 
         // FFmpeg fast path: skip Remotion for simple scene graphs (1 video, no effects/text)
@@ -767,7 +778,10 @@ export function createRenderWorker() {
           // Remotion path — pre-download input videos and serve from localhost
           // so the compositor doesn't rely on CDN downloads (which often fail
           // with "Request closed" errors on Cloudflare R2).
+          console.log(`[render-worker] Job ${jobId}: normalizing input videos...`)
+          const t0 = Date.now()
           const stopFileServer = await normalizeInputVideos(inputProps, workDir)
+          console.log(`[render-worker] Job ${jobId}: input videos ready (${((Date.now() - t0) / 1000).toFixed(1)}s)`)
 
           try {
             console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
@@ -797,9 +811,21 @@ export function createRenderWorker() {
 
             const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
 
+            // Warn about expensive motion effects that multiply render time
+            const planEffects = (inputProps.plan as Record<string, unknown> | undefined)?.effects as Array<{ type: string; samples?: number; layers?: number }> | undefined
+            if (planEffects) {
+              const mb = planEffects.find((e) => e.type === "motion-blur")
+              const tr = planEffects.find((e) => e.type === "trail")
+              const multiplier = (mb?.samples ?? 1) * ((tr?.layers ?? 0) + 1)
+              if (multiplier > 1) {
+                console.log(`[render-worker] Job ${jobId}: motion effects multiplier ${multiplier}x (${durationInFrames} frames → ~${durationInFrames * multiplier} renders)`)
+              }
+            }
+
             console.log(`[render-worker] renderMedia(${compositionId}) starting... output: ${outputPath}`)
             const RENDER_TIMEOUT_MS = 25 * 60 * 1000
             let timer: ReturnType<typeof setTimeout> | undefined
+            let lastLoggedPct = -10
             await Promise.race([
               renderMedia({
                 composition: {
@@ -816,9 +842,15 @@ export function createRenderWorker() {
                 browserExecutable,
                 concurrency: remotionConcurrency,
                 timeoutInMilliseconds: 120_000,
-                onProgress: ({ progress }: { progress: number }) => {
+                logLevel: "warn",
+                onProgress: ({ progress, renderedFrames, encodedFrames }: { progress: number; renderedFrames: number; encodedFrames: number }) => {
                   const overall = 40 + Math.round(progress * 50)
                   bullJob.updateProgress(overall).catch(() => {})
+                  const pct = Math.floor(progress * 100)
+                  if (pct >= lastLoggedPct + 10 || (progress >= 1 && lastLoggedPct < 100)) {
+                    lastLoggedPct = pct
+                    console.log(`[render-worker] Job ${jobId}: render ${pct}% (${renderedFrames} rendered, ${encodedFrames} encoded)`)
+                  }
                 },
               }),
               new Promise((_, reject) => {

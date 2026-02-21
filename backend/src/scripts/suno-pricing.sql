@@ -7,7 +7,7 @@ VALUES
   ('suno-cover',          'Suno Cover',               3,  0.06,  0.25, true, 'KIE.ai', 'music'),
   ('suno-extend',         'Suno Extend',              3,  0.06,  0.25, true, 'KIE.ai', 'music'),
   ('suno-lyrics',         'Suno Lyrics',              1,  0.002, 0.25, true, 'KIE.ai', 'music'),
-  ('suno-separate-vocal', 'Suno Vocal Separation',    2,  0.05,  0.25, true, 'KIE.ai', 'music'),
+  ('suno-separate',       'Suno Separate',              2,  0.05,  0.25, true, 'KIE.ai', 'music'),
   ('suno-separate-stem',  'Suno Multi-Stem Split',    4,  0.25,  0.25, true, 'KIE.ai', 'music'),
   ('suno-music-video',    'Suno Music Video',         1,  0.01,  0.25, true, 'KIE.ai', 'music')
 ON CONFLICT (model_identifier) DO UPDATE SET

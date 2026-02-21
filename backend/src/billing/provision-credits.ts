@@ -13,6 +13,7 @@ import {
   TIER_CREDITS,
   TIER_STORAGE_LIMITS,
 } from "./paddle-config.js"
+import { CreditsService } from "./credits.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 
 // ── Paddle Customer Mapping ──────────────────────────────────────
@@ -148,6 +149,16 @@ export async function handleSubscriptionCreated(
     })
   }
 
+  // Audit log: subscription creation
+  await CreditsService.logTransaction({
+    userId,
+    amount: credits,
+    creditType: "subscription",
+    source: "subscription_created",
+    description: `Subscription created: ${tier} tier (${credits} credits)`,
+    balanceAfter: credits,
+  })
+
   console.log(`[paddle] subscription.created: user=${userId} tier=${tier} credits=${credits}`)
 }
 
@@ -198,17 +209,41 @@ export async function handleSubscriptionUpdated(
 
   if (tierChanged) {
     const isUpgrade = newCredits > oldCredits
+
     if (isUpgrade) {
-      // Grant the difference immediately
-      const diff = newCredits - oldCredits
-      await supabase.rpc("add_subscription_credits", {
-        p_user_id: userId,
-        p_credits: diff,
+      // Idempotent SET (not ADD) — safe if change-plan endpoint already updated credits
+      const { error: creditError } = await supabase
+        .from("profiles")
+        .update({ subscription_credits: newCredits })
+        .eq("id", userId)
+
+      if (creditError) {
+        console.error("[paddle] subscription.updated: credit SET failed:", creditError.message)
+      }
+
+      // Audit log: upgrade
+      await CreditsService.logTransaction({
+        userId,
+        amount: newCredits,
+        creditType: "subscription",
+        source: "subscription_renewal",
+        description: `Tier upgrade: ${oldTier} → ${newTier} (credits set to ${newCredits})`,
+        balanceAfter: newCredits,
       })
-      console.log(`[paddle] subscription.updated: upgrade ${oldTier}->${newTier}, granted +${diff} credits`)
+
+      console.log(`[paddle] subscription.updated: upgrade ${oldTier}->${newTier}, set credits to ${newCredits}`)
     } else {
-      // Downgrade: just update tier, credits adjust at next renewal
-      console.log(`[paddle] subscription.updated: downgrade ${oldTier}->${newTier}, credits adjust at renewal`)
+      // Downgrade: don't reduce credits immediately — let user keep current credits until next renewal
+      await CreditsService.logTransaction({
+        userId,
+        amount: newCredits,
+        creditType: "subscription",
+        source: "subscription_renewal",
+        description: `Tier downgrade: ${oldTier} → ${newTier} (credits unchanged until renewal)`,
+        balanceAfter: newCredits,
+      })
+
+      console.log(`[paddle] subscription.updated: downgrade ${oldTier}->${newTier}, credits unchanged until renewal`)
     }
   }
 
@@ -225,6 +260,15 @@ export async function handleSubscriptionUpdated(
     if (resetError) {
       console.error("[paddle] subscription.updated: credit reset failed:", resetError.message)
     } else {
+      // Audit log: renewal
+      await CreditsService.logTransaction({
+        userId,
+        amount: newCredits,
+        creditType: "subscription",
+        source: "subscription_renewal",
+        description: `Subscription renewal: ${newTier} tier (credits reset to ${newCredits})`,
+        balanceAfter: newCredits,
+      })
       console.log(`[paddle] subscription.updated: renewal, reset credits to ${newCredits}`)
     }
   }
@@ -327,6 +371,16 @@ export async function handleSubscriptionCanceled(
   }
 
   invalidateBalanceCache(userId)
+
+  // Audit log: cancellation
+  await CreditsService.logTransaction({
+    userId,
+    amount: cappedCredits - currentSubCredits,
+    creditType: "subscription",
+    source: "expiry",
+    description: `Subscription canceled: downgraded to free tier (credits capped at ${cappedCredits})`,
+    balanceAfter: cappedCredits,
+  })
 
   console.log(
     `[paddle] subscription.canceled: sub=${data.subscriptionId} user=${userId} downgraded to free (credits: ${cappedCredits})`

@@ -55,9 +55,9 @@ Add cinematic black bars for wider aspect ratio.
 
 ### motion-blur
 Add motion blur (uses Remotion's CameraMotionBlur).
-{ "type": "motion-blur", "shutterAngle": 180, "samples": 10 }
+{ "type": "motion-blur", "shutterAngle": 180, "samples": 4 }
 - shutterAngle: 0-360 (180 = standard film)
-- samples: 1-16 (quality, higher = smoother but slower)
+- samples: 1-8 (each sample re-renders the entire frame — use 3-4 for good quality; higher = exponentially slower)
 
 ### animated-blur
 Animate blur over time (reveal, defocus, dream transitions).
@@ -72,9 +72,10 @@ Common patterns: blur-to-clear reveal (20→0), defocus outro (0→20), dream se
 ### trail
 Echo/trail effect that leaves ghosted copies of previous frames.
 { "type": "trail", "layers": 3, "lagInFrames": 1.5, "trailOpacity": 0.4 }
-- layers: 1-10 integer (number of ghost copies)
+- layers: 1-5 integer (each layer re-renders the full frame — keep at 2-3 for best balance)
 - lagInFrames: 0.5-5 (delay between ghost layers)
 - trailOpacity: 0-1 (opacity of ghost layers)
+IMPORTANT: Never combine motion-blur and trail — the render cost multiplies (samples × layers).
 
 ## Text Overlays (optional)
 
@@ -91,10 +92,11 @@ Echo/trail effect that leaves ghosted copies of previous frames.
 - **Dreamy**: low contrast (0.8) + warm temperature (20-40) + soft grain (0.1-0.2) + slight desaturation (0.85) + animated-blur (0→8, easeOut)
 - **Reveal/Intro**: animated-blur (20→0, easeOut) over first 2 seconds + vignette (0.3)
 - **Documentary**: subtle grain (0.1-0.2) + neutral color grade + letterbox 1.85
-- **Music Video**: high saturation (1.3-1.8) + high contrast (1.2) + no grain + trail (3-5 layers, 0.3-0.5 opacity)
+- **Music Video**: high saturation (1.3-1.8) + high contrast (1.2) + no grain + trail (2-3 layers, 0.3-0.5 opacity)
 - **Clean/Modern**: minimal effects, slight contrast boost (1.1), no grain
 
 Use 2-4 effects for most prompts. Don't over-process. Match the user's intent.
+Prefer lightweight effects (color-grade, vignette, film-grain, letterbox, animated-blur) — they render instantly. motion-blur and trail are expensive; only use them when the user explicitly requests motion/echo effects.
 
 ## Example
 

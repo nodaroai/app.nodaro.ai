@@ -133,10 +133,19 @@ export async function refundJobCredits(usageLogId: string | null | undefined, jo
   if (!hasCredits() || !usageLogId) return
 
   try {
-    // Don't refund if provider charged us (provider errors)
-    const isProviderError = errorMessage?.toLowerCase().includes("provider") ||
-                           errorMessage?.toLowerCase().includes("api error") ||
-                           errorMessage?.toLowerCase().includes("kie.ai")
+    // Don't refund if the provider already charged us.
+    // Check for known provider error patterns (case-insensitive).
+    const lower = errorMessage?.toLowerCase() ?? ""
+    const isProviderError =
+      lower.includes("provider error") ||
+      lower.includes("provider returned") ||
+      lower.includes("provider rejected") ||
+      lower.includes("api error") ||
+      lower.includes("kie.ai") ||
+      lower.includes("replicate") ||
+      lower.includes("model error") ||
+      lower.includes("content moderation") ||
+      lower.includes("nsfw")
 
     if (!isProviderError) {
       await CreditsService.refundCredits(usageLogId)

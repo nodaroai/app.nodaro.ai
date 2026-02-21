@@ -62,10 +62,6 @@ const adminDeleteParams = z.object({
   jobId: z.string().uuid(),
 })
 
-const adminDeleteBody = z.object({
-  userId: z.string().uuid(),
-})
-
 export async function galleryRoutes(app: FastifyInstance) {
   /**
    * GET /v1/gallery - Public gallery of completed outputs
@@ -145,26 +141,6 @@ export async function galleryRoutes(app: FastifyInstance) {
           ?? (job.provider as string)
           ?? null
 
-        // Collect all media input URLs from inputData (arrays + singles)
-        const collected = new Set<string>()
-
-        const addStr = (v: unknown) => {
-          if (typeof v === "string" && v.length > 0) collected.add(v)
-        }
-        const addArr = (v: unknown) => {
-          if (Array.isArray(v)) v.forEach(addStr)
-        }
-
-        addArr(inputData.referenceImageUrls)
-        addArr(inputData.videoUrls)
-        addArr(inputData.audioUrls)
-        addStr(inputData.imageUrl)
-        addStr(inputData.endFrameUrl)
-        addStr(inputData.videoUrl)
-        addStr(inputData.audioUrl)
-
-        const referenceImages = [...collected]
-
         return {
           id: job.id,
           type,
@@ -174,7 +150,6 @@ export async function galleryRoutes(app: FastifyInstance) {
           createdAt: job.completed_at,
           prompt,
           model,
-          referenceImages,
         }
       })
       .filter(Boolean)
@@ -266,7 +241,6 @@ export async function galleryRoutes(app: FastifyInstance) {
    * DELETE /v1/gallery/:jobId - Admin soft-delete from gallery
    *
    * Sets is_public = false (does not delete the job).
-   * Body: { userId }
    */
   app.delete<{ Params: { jobId: string } }>("/v1/gallery/:jobId", async (req, reply) => {
     const paramsResult = adminDeleteParams.safeParse(req.params)
@@ -279,20 +253,13 @@ export async function galleryRoutes(app: FastifyInstance) {
       })
     }
 
-    const bodyResult = adminDeleteBody.safeParse(req.body)
-    if (!bodyResult.success) {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: bodyResult.error.issues[0]?.message ?? "userId is required",
-        },
-      })
-    }
-
     const { jobId } = paramsResult.data
-    const { userId } = bodyResult.data
 
-    const isAdmin = await checkIsAdmin(userId)
+    // Use authenticated user's ID from JWT, NOT body-supplied userId
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    const isAdmin = await checkIsAdmin(req.userId)
     if (!isAdmin) {
       return reply.status(403).send({
         error: { code: "forbidden", message: "Only admins can remove gallery items" },

@@ -54,7 +54,7 @@ const letterboxEffectSchema = z.object({
 const motionBlurEffectSchema = z.object({
   type: z.literal("motion-blur"),
   shutterAngle: z.number().min(0).max(360),
-  samples: z.number().min(1).max(16),
+  samples: z.number().min(1).max(8),
 })
 
 const animatedBlurEffectSchema = z.object({
@@ -68,7 +68,7 @@ const animatedBlurEffectSchema = z.object({
 
 const trailEffectSchema = z.object({
   type: z.literal("trail"),
-  layers: z.number().int().min(1).max(10),
+  layers: z.number().int().min(1).max(5),
   lagInFrames: z.number().min(0.5).max(5),
   trailOpacity: z.number().min(0).max(1),
 })

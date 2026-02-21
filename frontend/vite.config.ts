@@ -5,7 +5,11 @@ import path from "path"
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      "@remotion-pkg": path.resolve(__dirname, "../packages/remotion/src"),
+    },
+    dedupe: ["remotion", "react", "react-dom"],
   },
   server: {
     port: 3000,
@@ -50,6 +54,13 @@ export default defineConfig({
             id.includes("node_modules/devlop/")
           )
             return "markdown";
+
+          // Remotion (lazy-loaded for Player preview)
+          if (
+            id.includes("node_modules/remotion/") ||
+            id.includes("node_modules/@remotion/")
+          )
+            return "remotion";
 
           // Zod standalone
           if (id.includes("node_modules/zod/")) return "zod";

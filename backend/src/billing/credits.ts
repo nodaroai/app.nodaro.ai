@@ -184,6 +184,7 @@ function resolveTier(profile: Record<string, unknown>): string {
 /**
  * Check if daily_spent_credits needs resetting (new UTC day).
  * Returns the effective daily spent value (0 if reset needed).
+ * Uses atomic RPC with FOR UPDATE lock to prevent race conditions at midnight.
  */
 async function getEffectiveDailySpent(
   userId: string,
@@ -194,12 +195,19 @@ async function getEffectiveDailySpent(
   const lastResetDay = lastReset ? lastReset.slice(0, 10) : null
 
   if (lastResetDay !== todayUTC) {
-    // Reset daily counter
+    // Atomic reset via RPC (FOR UPDATE lock prevents race at midnight)
+    const { data, error } = await supabase.rpc("reset_daily_spent_if_needed", {
+      p_user_id: userId,
+    })
+    if (!error && data !== null && data !== undefined) {
+      return data as number
+    }
+    // Fallback: non-atomic reset if RPC not available
     await supabase
       .from("profiles")
       .update({
         daily_spent_credits: 0,
-        last_daily_reset: new Date().toISOString(),
+        last_daily_reset: new Date().toISOString().slice(0, 10),
       })
       .eq("id", userId)
     return 0
@@ -317,17 +325,17 @@ export class CreditsService {
   /**
    * Log a credit transaction (never throws -- errors are logged silently)
    */
-  private static async logTransaction(params: {
+  static async logTransaction(params: {
     userId: string
     amount: number
     creditType: "subscription" | "topup"
-    source: "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "refund" | "paddle_refund" | "expiry"
+    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "refund" | "paddle_refund" | "expiry"
     description?: string
     jobId?: string
     paddleTransactionId?: string
     adminUserId?: string
     balanceAfter: number
-  }): Promise<void> {
+  }): Promise<boolean> {
     try {
       const { error } = await supabase
         .from("credit_transactions")
@@ -344,9 +352,12 @@ export class CreditsService {
         })
       if (error) {
         console.error("[credits] Failed to log transaction:", error)
+        return false
       }
+      return true
     } catch (err) {
       console.error("[credits] Failed to log transaction:", err)
+      return false
     }
   }
 
@@ -648,15 +659,45 @@ export class CreditsService {
       return { usageLogId: "log-failed", creditsReserved: pricing.creditCost, watermark }
     }
 
-    // Log credit transaction (fire-and-forget, balanceAfter=0 to avoid extra query)
+    // Fetch usage_log metadata (from_sub/from_topup) for accurate creditType,
+    // and current user balance for accurate balanceAfter (C3 + H6 fix)
+    let creditType: "subscription" | "topup" = "subscription"
+    let balanceAfter = 0
+    try {
+      const [{ data: usageLog }, { data: balanceProfile }] = await Promise.all([
+        supabase
+          .from("usage_logs")
+          .select("metadata")
+          .eq("id", usageLogId)
+          .single(),
+        supabase
+          .from("profiles")
+          .select("subscription_credits, topup_credits")
+          .eq("id", userId)
+          .single(),
+      ])
+      const meta = usageLog?.metadata as Record<string, unknown> | null
+      const fromSub = (meta?.from_sub as number) ?? 0
+      const fromTopup = (meta?.from_topup as number) ?? 0
+      if (fromTopup > 0 && fromSub === 0) {
+        creditType = "topup"
+      }
+      if (balanceProfile) {
+        balanceAfter = (balanceProfile.subscription_credits ?? 0) + (balanceProfile.topup_credits ?? 0)
+      }
+    } catch {
+      // Non-critical: fall back to defaults if fetch fails
+    }
+
+    // Log credit transaction
     await CreditsService.logTransaction({
       userId,
       amount: -pricing.creditCost,
-      creditType: "subscription",
+      creditType,
       source: "usage",
       description: `Job ${jobId}: ${modelIdentifier}`,
       jobId,
-      balanceAfter: 0,
+      balanceAfter,
     })
 
     return { usageLogId: usageLogId as string, creditsReserved: pricing.creditCost, watermark }
@@ -730,21 +771,52 @@ export class CreditsService {
       return
     }
 
-    // Restore credits to topup balance (simpler than tracking source)
-    const { error: updateError } = await supabase.rpc("add_topup_credits", {
-      p_user_id: usageLog.user_id,
-      p_credits: usageLog.credits_used,
-    })
+    // Restore credits to the original pools based on metadata from reserve_credits RPC
+    const meta = usageLog.metadata as Record<string, unknown> | null
+    const fromSub = (meta?.from_sub as number) ?? 0
+    const fromTopup = (meta?.from_topup as number) ?? 0
 
-    if (updateError) {
-      console.error("[credits] add_topup_credits RPC failed for refund:", usageLogId, updateError.message)
+    // Restore subscription credits if any were deducted from that pool
+    if (fromSub > 0) {
+      const { error: subError } = await supabase.rpc("add_subscription_credits", {
+        p_user_id: usageLog.user_id,
+        p_credits: fromSub,
+      })
+      if (subError) {
+        console.error("[credits] add_subscription_credits RPC failed for refund:", usageLogId, subError.message)
+      }
     }
 
-    // Log the refund (use balanceAfter=0 to avoid extra profile query)
+    // Restore topup credits if any were deducted from that pool
+    if (fromTopup > 0) {
+      const { error: topupError } = await supabase.rpc("add_topup_credits", {
+        p_user_id: usageLog.user_id,
+        p_credits: fromTopup,
+      })
+      if (topupError) {
+        console.error("[credits] add_topup_credits RPC failed for refund:", usageLogId, topupError.message)
+      }
+    }
+
+    // Fallback: if metadata didn't record pool split, restore all to topup
+    if (fromSub === 0 && fromTopup === 0 && usageLog.credits_used > 0) {
+      const { error: fallbackError } = await supabase.rpc("add_topup_credits", {
+        p_user_id: usageLog.user_id,
+        p_credits: usageLog.credits_used,
+      })
+      if (fallbackError) {
+        console.error("[credits] Fallback add_topup_credits RPC failed:", usageLogId, fallbackError.message)
+      }
+    }
+
+    // Determine creditType for transaction log based on which pool was dominant
+    const refundCreditType: "subscription" | "topup" =
+      fromSub > 0 && fromTopup === 0 ? "subscription" : "topup"
+
     await CreditsService.logTransaction({
       userId: usageLog.user_id,
       amount: usageLog.credits_used,
-      creditType: "topup",
+      creditType: refundCreditType,
       source: "refund",
       description: "Refund for failed job",
       jobId: usageLog.job_id ?? undefined,
