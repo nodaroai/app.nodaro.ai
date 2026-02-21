@@ -14,7 +14,8 @@
     "jsx": "react-jsx",
     "incremental": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@remotion-pkg/*": ["../packages/remotion/src/*"]
     }
   },
   "include": [
