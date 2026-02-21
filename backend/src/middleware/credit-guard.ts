@@ -160,12 +160,13 @@ export async function reserveCreditsForJob(
       req.creditReservation?.watermark, // pass watermark from checkCredits
     )
 
-    // Store usageLogId and estimated credits on the job
+    // Store usageLogId, estimated credits, and watermark decision on the job
     await supabase
       .from("jobs")
       .update({
         usage_log_id: reservation.usageLogId,
         credits_estimated: reservation.creditsReserved,
+        should_watermark: reservation.watermark,
       })
       .eq("id", jobId)
 

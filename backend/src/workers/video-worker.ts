@@ -34,23 +34,21 @@ export function createVideoWorker() {
     async (job) => {
       const { jobId } = job.data as { jobId: string }
 
-      // Fetch job + user profile in a single join query (avoids sequential DB calls)
+      // Fetch job record (with should_watermark from reservation) + user profile for public_outputs
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, profiles!user_id(tier, public_outputs)")
+        .select("usage_log_id, user_id, should_watermark, profiles!user_id(public_outputs)")
         .eq("id", jobId)
         .single()
       const usageLogId = jobRecord?.usage_log_id
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
 
-      // Extract profile from join result
-      let shouldWatermark = false
+      // Use watermark decision from reservation time (C4 fix: prevents bypass via tier upgrade)
+      const shouldWatermark = hasCredits() ? (jobRecord?.should_watermark ?? false) : false
+
       let isPublicOutput = true
       if (jobUserId && jobRecord?.profiles) {
-        const profile = jobRecord.profiles as unknown as { tier?: string; public_outputs?: boolean }
-        if (hasCredits()) {
-          shouldWatermark = profile?.tier === "free"
-        }
+        const profile = jobRecord.profiles as unknown as { public_outputs?: boolean }
         isPublicOutput = profile?.public_outputs ?? true
       }
 

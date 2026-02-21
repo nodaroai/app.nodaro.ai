@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { warmAdminCache } from "../lib/admin-check.js"
@@ -28,7 +29,7 @@ const AUTH_CACHE_TTL_MS = 300_000 // 5 minutes
 const authCache = new Map<string, CachedAuth>()
 
 function cacheKey(token: string): string {
-  return token.slice(-32)
+  return createHash("sha256").update(token).digest("hex").slice(0, 32)
 }
 
 function getCached(token: string): CachedAuth | undefined {

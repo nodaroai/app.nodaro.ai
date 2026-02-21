@@ -1,4 +1,17 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
+import { config } from "./config.js"
+
+// Build allowed origins set (mirrors CORS config in app.ts)
+const allowedOrigins = new Set([
+  "http://localhost:3000",
+  "https://app.scenenode.ai",
+])
+if (config.CORS_ORIGIN) {
+  for (const o of config.CORS_ORIGIN.split(",")) {
+    const trimmed = o.trim()
+    if (trimmed) allowedOrigins.add(trimmed)
+  }
+}
 
 // ---------------------------------------------------------------------------
 // SSE Event Protocol
@@ -46,12 +59,11 @@ export function createSSEStream(
 ): SSEController {
   // -- Headers ---------------------------------------------------------------
   // Because we write to reply.raw directly, Fastify's onSend hooks (where
-  // @fastify/cors injects headers) are bypassed. Reflect the request Origin
-  // manually so cross-origin SSE calls succeed. The preflight (OPTIONS) is
-  // still validated by the CORS plugin, so reflecting here is safe.
+  // @fastify/cors injects headers) are bypassed. Only reflect origins that
+  // are in the allowed set (H8 fix: prevents arbitrary origin reflection).
   const corsHeaders: Record<string, string> = {}
   const origin = req.headers.origin
-  if (origin) {
+  if (origin && allowedOrigins.has(origin)) {
     corsHeaders["Access-Control-Allow-Origin"] = origin
     corsHeaders["Access-Control-Allow-Credentials"] = "true"
   }

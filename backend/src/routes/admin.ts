@@ -93,12 +93,18 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { alertType, threshold, userId: targetUserId, isEnabled } = parsed.data
 
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     const { data, error } = await supabase
       .from("admin_alerts")
       .insert({
         alert_type: alertType,
         threshold,
-        user_id: targetUserId ?? req.userId!,
+        user_id: targetUserId ?? req.userId,
         is_enabled: isEnabled,
       })
       .select()
@@ -403,13 +409,19 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     // Merge promotion info, removing stale demote metadata from previous cycle
     const existingMetadata = (existing.metadata as Record<string, unknown>) ?? {}
     const { demoted_at: _da, demoted_by: _db, ...cleanMetadata } = existingMetadata
     const updatedMetadata = {
       ...cleanMetadata,
       promoted_at: new Date().toISOString(),
-      promoted_by: req.userId!,
+      promoted_by: req.userId,
     }
 
     const { data: asset, error: updateError } = await supabase
@@ -473,13 +485,19 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
     // Remove promotion metadata
     const existingMetadata = (existing.metadata as Record<string, unknown>) ?? {}
     const { promoted_at, promoted_by, ...restMetadata } = existingMetadata
     const updatedMetadata = {
       ...restMetadata,
       demoted_at: new Date().toISOString(),
-      demoted_by: req.userId!,
+      demoted_by: req.userId,
     }
 
     const { data: asset, error: updateError } = await supabase
