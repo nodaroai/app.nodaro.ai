@@ -25,6 +25,7 @@ import type {
   LoopVideoData,
   FadeVideoData,
   TranscodeVideoData,
+  ManualEditData,
 } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ConfigProps } from "./types"
@@ -669,6 +670,37 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+export function ManualEditConfig({ data }: ConfigProps<ManualEditData>) {
+  const status = data.executionStatus ?? "idle"
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">
+        Pauses the workflow so you can manually edit the video in a browser-based editor. The edited video is sent back to continue the pipeline.
+      </p>
+
+      {status === "awaiting-user" && (
+        <div className="flex items-center gap-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2">
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          <span className="text-xs font-medium text-amber-500">Waiting for your edit</span>
+        </div>
+      )}
+
+      {data.inputVideoUrl && (
+        <div>
+          <Label>Input Video</Label>
+          <p className="text-[10px] text-muted-foreground truncate" title={data.inputVideoUrl}>
+            {data.inputVideoUrl}
+          </p>
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground">
+        0 credits — no AI processing. Click "Open Editor" on the node when prompted during execution.
+      </p>
     </div>
   )
 }

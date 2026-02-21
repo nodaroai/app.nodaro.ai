@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import youtubedl from "youtube-dl-exec"
-import { hasCredits } from "../lib/config.js"
+import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
@@ -288,4 +288,74 @@ export async function completeFfmpegAudioJob(
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+/**
+ * Create asset records in the `assets` table for a completed job's media outputs.
+ * This makes generated media appear in the /library page.
+ * Wrapped in try-catch — never fails the job if asset creation fails.
+ */
+export async function createAssetFromJob(
+  jobId: string,
+  userId: string | undefined,
+): Promise<void> {
+  if (!userId) return
+
+  try {
+    const { data: job } = await supabase
+      .from("jobs")
+      .select("output_data, status")
+      .eq("id", jobId)
+      .single()
+
+    if (!job || job.status !== "completed") return
+
+    const output = job.output_data as Record<string, unknown> | null
+    if (!output) return
+
+    const mediaFields: Array<{ key: string; type: "image" | "video" | "audio"; mime: string }> = [
+      { key: "imageUrl", type: "image", mime: "image/png" },
+      { key: "videoUrl", type: "video", mime: "video/mp4" },
+      { key: "audioUrl", type: "audio", mime: "audio/mpeg" },
+    ]
+
+    const thumbnailUrl = (output.thumbnail_url ?? output.thumbnailUrl ?? null) as string | null
+
+    for (const { key, type, mime } of mediaFields) {
+      const url = output[key]
+      if (typeof url !== "string" || !url) continue
+
+      // Check if an asset already exists for this job + type
+      const { data: existing } = await supabase
+        .from("assets")
+        .select("id")
+        .eq("job_id", jobId)
+        .eq("type", type)
+        .maybeSingle()
+
+      if (existing) continue
+
+      // Derive R2 key from public URL
+      const r2Key = config.R2_PUBLIC_URL
+        ? url.replace(config.R2_PUBLIC_URL + "/", "")
+        : url
+
+      const filename = url.split("/").pop() ?? `${jobId}.${type === "image" ? "png" : type === "video" ? "mp4" : "mp3"}`
+
+      await supabase.from("assets").insert({
+        user_id: userId,
+        job_id: jobId,
+        type,
+        r2_key: r2Key,
+        r2_url: url,
+        filename,
+        mime_type: mime,
+        size_bytes: 0,
+        upload_source: "generated",
+        metadata: thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {},
+      })
+    }
+  } catch (err) {
+    console.error(`[worker] Failed to create asset records for job ${jobId}:`, err)
+  }
 }

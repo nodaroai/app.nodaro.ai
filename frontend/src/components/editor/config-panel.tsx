@@ -73,6 +73,7 @@ import {
   LoopVideoConfig,
   FadeVideoConfig,
   TranscodeVideoConfig,
+  ManualEditConfig,
   VideoComposerConfig,
   AfterEffectsConfig,
   LottieOverlayConfig,
@@ -138,6 +139,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "loop-video": "Loop Video",
   "fade-video": "Fade In/Out",
   "transcode-video": "Transcode Video",
+  "manual-edit": "Manual Edit",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
   "loop": "Loop",
@@ -164,7 +166,7 @@ const GENERATE_BUTTON_TYPES = new Set([
 
 const RUN_BUTTON_TYPES = new Set([
   "merge-video-audio", "combine-videos", "extract-audio", "trim-video",
-  "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "adjust-volume",
+  "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "adjust-volume",
   "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
 ])
 
@@ -413,6 +415,7 @@ export function ConfigPanel() {
           {nodeType === "loop-video" && <LoopVideoConfig {...configProps} />}
           {nodeType === "fade-video" && <FadeVideoConfig {...configProps} />}
           {nodeType === "transcode-video" && <TranscodeVideoConfig {...configProps} />}
+          {nodeType === "manual-edit" && <ManualEditConfig {...configProps} />}
           {nodeType === "combine-text" && <CombineTextConfig {...configProps} />}
           {nodeType === "split-text" && <SplitTextConfig {...configProps} />}
 

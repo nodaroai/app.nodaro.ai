@@ -1107,6 +1107,19 @@ export type TranscodeVideoData = {
   activeResultIndex?: number
 }
 
+export type ManualEditData = {
+  [key: string]: unknown
+  label: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "awaiting-user" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  inputVideoUrl?: string
+  isEditorOpen?: boolean
+}
+
 // --- Output Node Data ---
 
 export type SaveToStorageData = {
@@ -1485,6 +1498,7 @@ export type SceneNodeData =
   | LoopVideoData
   | FadeVideoData
   | TranscodeVideoData
+  | ManualEditData
   | LipSyncData
   | MotionTransferData
   | VideoUpscaleData
@@ -1557,6 +1571,7 @@ export type SceneNodeType =
   | "loop-video"
   | "fade-video"
   | "transcode-video"
+  | "manual-edit"
   | "lip-sync"
   | "motion-transfer"
   | "video-upscale"
@@ -2135,6 +2150,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Transcode Video", codec: "h264", crf: 23, resolution: "original", audioBitrate: "128k", fieldMappings: {} },
+  },
+  {
+    type: "manual-edit",
+    label: "Manual Edit",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: { label: "Manual Edit", fieldMappings: {} },
   },
   // Lip Sync / AI Avatar
   {

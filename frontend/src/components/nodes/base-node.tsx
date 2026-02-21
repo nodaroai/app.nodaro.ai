@@ -251,7 +251,7 @@ function BaseNodeComponent({
             id={h.id}
             type={h.type}
             position={h.position}
-            className="!w-3 !h-3 !bg-primary !border-2 !border-background touch-manipulation [@media(pointer:coarse)]:!w-5 [@media(pointer:coarse)]:!h-5"
+            className="!w-6 !h-6 !bg-transparent !border-0 touch-manipulation"
             style={h.top ? { top: h.top } : undefined}
           />
           {h.label && h.top && (

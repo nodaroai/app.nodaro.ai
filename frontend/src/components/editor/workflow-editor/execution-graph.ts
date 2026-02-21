@@ -228,7 +228,9 @@ export function extractNodeOutput(node: WorkflowNode): string | undefined {
     type === "trim-video" ||
     type === "speed-ramp" ||
     type === "loop-video" ||
-    type === "fade-video"
+    type === "fade-video" ||
+    type === "manual-edit" ||
+    type === "transcode-video"
   ) {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];

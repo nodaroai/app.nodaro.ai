@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
@@ -24,7 +24,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase";
-import { StorageExceededError } from "@/lib/api";
+import { StorageExceededError, uploadFile } from "@/lib/api";
 import { hasCredits } from "@/lib/edition";
 import { getCachedCredits } from "@/hooks/use-model-credits";
 import { useStats } from "@/hooks/queries/use-stats-queries";
@@ -45,6 +45,9 @@ import {
 import { handleGenerateSceneImage as generateSceneImage, handleExpandStoryboard as expandStoryboard, handleCreateSceneNode as createSceneNode } from "./scene-story-handlers";
 import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerateLocationAsset } from "./asset-executors";
 import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWriterImageNodes as runAllWriterImageNodes } from "./ai-writer-handlers";
+import { resolveManualEdit } from "./execute-node";
+import type { ManualEditData, GeneratedResult } from "@/types/nodes";
+const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 
 interface WorkflowEditorProps {
   readonly projectId?: string;
@@ -83,10 +86,59 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   } | null>(null);
 
   // ---------------------------------------------------------------------------
-  // Credit estimate
+  // Manual-edit FreeCut modal
   // ---------------------------------------------------------------------------
 
   const storeNodes = useWorkflowStore((s) => s.nodes);
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData);
+
+  const manualEditNode = useMemo(
+    () => storeNodes.find((n) => n.type === "manual-edit" && (n.data as ManualEditData).isEditorOpen),
+    [storeNodes],
+  );
+
+  const handleFreeCutExport = useCallback(
+    async (blob: Blob) => {
+      if (!manualEditNode) return;
+      const nodeId = manualEditNode.id;
+      try {
+        const file = new File([blob], "manual-edit.mp4", { type: "video/mp4" });
+        const result = await uploadFile(file, user?.id);
+        const url = result.url;
+        const newResult: GeneratedResult = { url, jobId: `manual-edit-${Date.now()}`, timestamp: new Date().toISOString() };
+        const freshNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
+        const prev = freshNode ? ((freshNode.data as ManualEditData).generatedResults ?? []) : [];
+        updateNodeData(nodeId, {
+          executionStatus: "completed",
+          generatedVideoUrl: url,
+          generatedResults: [...prev, newResult],
+          activeResultIndex: prev.length,
+          isEditorOpen: false,
+        });
+        resolveManualEdit(nodeId);
+      } catch (err) {
+        if (err instanceof StorageExceededError) {
+          setShowStorageExceeded(true);
+          setStorageExceededData({ usedBytes: err.usedBytes, quotaBytes: err.quotaBytes, tier: err.tier });
+        }
+        updateNodeData(nodeId, {
+          executionStatus: "failed",
+          errorMessage: err instanceof Error ? err.message : "Upload failed",
+          isEditorOpen: false,
+        });
+      }
+    },
+    [manualEditNode, user?.id, updateNodeData],
+  );
+
+  const handleFreeCutClose = useCallback(() => {
+    if (!manualEditNode) return;
+    updateNodeData(manualEditNode.id, { isEditorOpen: false });
+  }, [manualEditNode, updateNodeData]);
+
+  // ---------------------------------------------------------------------------
+  // Credit estimate
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!hasCredits()) return;
     const executableNodes = storeNodes.filter((n) => isExecutableNode(n));
@@ -661,6 +713,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         quotaBytes={storageExceededData?.quotaBytes ?? 0}
         tier={storageExceededData?.tier ?? "free"}
       />
+
+      {manualEditNode && (
+        <Suspense fallback={null}>
+          <FreeCutEditorModal
+            videoUrl={(manualEditNode.data as ManualEditData).inputVideoUrl ?? ""}
+            onExportComplete={handleFreeCutExport}
+            onClose={handleFreeCutClose}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
