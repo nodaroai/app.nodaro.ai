@@ -118,7 +118,7 @@ function BaseNodeComponent({
   }
 
   return (
-    <>
+    <div>
       <NodeResizer
         minWidth={minWidth}
         minHeight={minHeight}
@@ -244,6 +244,7 @@ function BaseNodeComponent({
       )}
 
       {children && <div className="px-3 py-2 text-xs overflow-hidden bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>}
+    </div>
 
       {handles.map((h) => (
         <div key={h.id}>
@@ -251,7 +252,7 @@ function BaseNodeComponent({
             id={h.id}
             type={h.type}
             position={h.position}
-            className="!w-6 !h-6 !bg-transparent !border-0 touch-manipulation"
+            className="!w-9 !h-9 !bg-transparent !border-0 touch-manipulation"
             style={h.top ? { top: h.top } : undefined}
           />
           {h.label && h.top && (
@@ -269,7 +270,6 @@ function BaseNodeComponent({
         </div>
       ))}
     </div>
-    </>
   )
 }
 

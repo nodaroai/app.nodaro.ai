@@ -239,25 +239,33 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [screenToFlowPosition]
   )
 
+  const getViewportCenter = useCallback(() => {
+    const el = document.querySelector('.react-flow')
+    const rect = el?.getBoundingClientRect()
+    return rect
+      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+  }, [])
+
   const handleAddStickyNote = useCallback(
     (position?: { x: number; y: number }) => {
-      const flowPosition = position || screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+      const flowPosition = position || screenToFlowPosition(getViewportCenter())
       addNode("sticky-note", flowPosition)
       setCanvasContextMenu(null)
     },
-    [addNode, screenToFlowPosition]
+    [addNode, screenToFlowPosition, getViewportCenter]
   )
 
   const handleAddNode = useCallback(
     (type: SceneNodeType) => {
       const position = addNodePopupPosition
         ? screenToFlowPosition(addNodePopupPosition)
-        : screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+        : screenToFlowPosition(getViewportCenter())
       addNode(type, position)
       setAddNodePopupOpen(false)
       setAddNodePopupPosition(undefined)
     },
-    [addNode, screenToFlowPosition, addNodePopupPosition]
+    [addNode, screenToFlowPosition, addNodePopupPosition, getViewportCenter]
   )
 
   const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }) => {
@@ -463,10 +471,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   const handleAddAssetToCanvas = useCallback(
     (asset: LibraryAsset) => {
-      const position = screenToFlowPosition({
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
-      })
+      const position = screenToFlowPosition(getViewportCenter())
 
       const nodeTypeMap: Record<string, SceneNodeType> = {
         image: "upload-image",
@@ -489,7 +494,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       setMediaLibraryOpen(false)
     },
-    [screenToFlowPosition, addNode],
+    [screenToFlowPosition, addNode, getViewportCenter],
   )
 
   const hasSelection = nodes.some((n) => n.selected)
