@@ -196,10 +196,12 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
 
   const handleAddNode = useCallback(
     (type: SceneNodeType) => {
-      const position = screenToFlowPosition({
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
-      })
+      const el = document.querySelector('.react-flow')
+      const rect = el?.getBoundingClientRect()
+      const center = rect
+        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+        : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+      const position = screenToFlowPosition(center)
       addNode(type, position)
       setSheetOpen(false)
     },
