@@ -36,7 +36,7 @@ ALTER TABLE characters ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES profiles
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
-    WHERE table_name = 'characters' AND constraint_name = 'characters_workflow_id_fkey'
+    WHERE table_name = 'characters' AND constraint_name = 'characters_workflow_id_fkey' AND constraint_schema = 'public'
   ) THEN
     ALTER TABLE characters
       ADD CONSTRAINT characters_workflow_id_fkey
@@ -48,7 +48,7 @@ END $$;
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
-    WHERE table_name = 'faces' AND constraint_name = 'faces_workflow_id_fkey'
+    WHERE table_name = 'faces' AND constraint_name = 'faces_workflow_id_fkey' AND constraint_schema = 'public'
   ) THEN
     ALTER TABLE faces
       ADD CONSTRAINT faces_workflow_id_fkey
@@ -60,7 +60,7 @@ END $$;
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
-    WHERE table_name = 'locations' AND constraint_name = 'locations_workflow_id_fkey'
+    WHERE table_name = 'locations' AND constraint_name = 'locations_workflow_id_fkey' AND constraint_schema = 'public'
   ) THEN
     ALTER TABLE locations
       ADD CONSTRAINT locations_workflow_id_fkey
@@ -72,7 +72,7 @@ END $$;
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
-    WHERE table_name = 'objects' AND constraint_name = 'objects_workflow_id_fkey'
+    WHERE table_name = 'objects' AND constraint_name = 'objects_workflow_id_fkey' AND constraint_schema = 'public'
   ) THEN
     ALTER TABLE objects
       ADD CONSTRAINT objects_workflow_id_fkey
@@ -119,3 +119,18 @@ DROP POLICY IF EXISTS "Anyone can insert reports" ON gallery_reports;
 CREATE INDEX IF NOT EXISTS idx_faces_node_id ON faces(node_id) WHERE node_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_locations_node_id ON locations(node_id) WHERE node_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_objects_node_id ON objects(node_id) WHERE node_id IS NOT NULL;
+
+-- ============================================================
+-- 7. BILLING: Add 'subscription_created' to credit_transactions source CHECK
+--    Migration 025 defined the CHECK without this value; provision-credits.ts
+--    now uses it to distinguish initial subscription from renewals.
+-- ============================================================
+
+ALTER TABLE credit_transactions DROP CONSTRAINT IF EXISTS credit_transactions_source_check;
+ALTER TABLE credit_transactions ADD CONSTRAINT credit_transactions_source_check
+  CHECK (source IN (
+    'subscription_created', 'subscription_renewal', 'one_time_purchase', 'admin_adjustment',
+    'usage', 'refund', 'paddle_refund', 'expiry',
+    -- Legacy values that may exist in older rows
+    'purchase', 'subscription', 'admin', 'renewal', 'topup', 'adjustment'
+  ));

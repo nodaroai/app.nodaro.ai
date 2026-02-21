@@ -256,7 +256,10 @@ export async function galleryRoutes(app: FastifyInstance) {
     const { jobId } = paramsResult.data
 
     // Use authenticated user's ID from JWT, NOT body-supplied userId
-    const isAdmin = await checkIsAdmin(req.userId!)
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    const isAdmin = await checkIsAdmin(req.userId)
     if (!isAdmin) {
       return reply.status(403).send({
         error: { code: "forbidden", message: "Only admins can remove gallery items" },

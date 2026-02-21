@@ -207,7 +207,7 @@ async function getEffectiveDailySpent(
       .from("profiles")
       .update({
         daily_spent_credits: 0,
-        last_daily_reset: new Date().toISOString(),
+        last_daily_reset: new Date().toISOString().slice(0, 10),
       })
       .eq("id", userId)
     return 0
@@ -329,7 +329,7 @@ export class CreditsService {
     userId: string
     amount: number
     creditType: "subscription" | "topup"
-    source: "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "refund" | "paddle_refund" | "expiry"
+    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "refund" | "paddle_refund" | "expiry"
     description?: string
     jobId?: string
     paddleTransactionId?: string
