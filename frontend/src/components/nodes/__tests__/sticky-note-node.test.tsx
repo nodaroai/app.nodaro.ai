@@ -21,12 +21,13 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => new Proxy({}, {
-  get: (_t: any, prop: string) => {
-    if (prop === '__esModule') return false
-    return (p: any) => <span data-testid={`icon-${prop}`} {...p} />
-  },
-}))
+vi.mock("lucide-react", () => {
+  const I = (p: any) => <span data-testid="mock-icon" {...p} />
+  return {
+    Bold: I, Italic: I, AlignLeft: I, AlignCenter: I, AlignRight: I,
+    Link: I, Image: I, Table: I, List: I,
+  }
+})
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({

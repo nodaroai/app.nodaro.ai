@@ -11,7 +11,7 @@ import {
 import { useSidebar } from "@/components/layout/sidebar-context"
 
 interface CanvasToolbarProps {
-  readonly onAddNode: () => void
+  readonly onAddNode: (position?: { x: number; y: number }, placeAtCenter?: boolean) => void
   readonly onSearch: () => void
   readonly onAssetLibrary: () => void
   readonly onMediaLibrary: () => void
@@ -29,7 +29,7 @@ interface ToolbarButtonProps {
   readonly icon: React.ReactNode
   readonly label: string
   readonly shortcut: string
-  readonly onClick: () => void
+  readonly onClick: (e: React.MouseEvent) => void
   readonly active?: boolean
   readonly disabled?: boolean
 }
@@ -131,7 +131,10 @@ export function CanvasToolbar({
         icon={<Plus className="w-5 h-5" />}
         label="Add Node"
         shortcut="Tab"
-        onClick={onAddNode}
+        onClick={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+          onAddNode({ x: rect.right + 8, y: rect.top }, true)
+        }}
       />
 
       <ToolbarButton

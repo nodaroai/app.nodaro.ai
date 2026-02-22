@@ -102,6 +102,7 @@ export const EXECUTABLE_TYPES = new Set([
   "ai-writer",
   "combine-text",
   "split-text",
+  "audio-isolation",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 5;

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState, useMemo, lazy, Suspense } from "react"
+import { useCallback, useEffect, useState, useMemo, useRef, lazy, Suspense } from "react"
 import {
   ReactFlow,
   MiniMap,
@@ -148,6 +148,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
   const isMobile = useIsMobile()
+  const lastMousePositionRef = useRef({ x: 0, y: 0 })
 
   // Prevent composition handles from connecting to non-Render-Video nodes
   const isValidConnection = useCallback<IsValidConnection>(
@@ -256,24 +257,28 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [addNode, screenToFlowPosition, getViewportCenter]
   )
 
+  const [addNodeAtCenter, setAddNodeAtCenter] = useState(false)
+
   const handleAddNode = useCallback(
     (type: SceneNodeType) => {
-      const position = addNodePopupPosition
-        ? screenToFlowPosition(addNodePopupPosition)
-        : screenToFlowPosition(getViewportCenter())
+      const position = addNodeAtCenter || !addNodePopupPosition
+        ? screenToFlowPosition(getViewportCenter())
+        : screenToFlowPosition(addNodePopupPosition)
       addNode(type, position)
       setAddNodePopupOpen(false)
       setAddNodePopupPosition(undefined)
+      setAddNodeAtCenter(false)
     },
-    [addNode, screenToFlowPosition, addNodePopupPosition, getViewportCenter]
+    [addNode, screenToFlowPosition, addNodePopupPosition, getViewportCenter, addNodeAtCenter]
   )
 
-  const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }) => {
-    setAddNodePopupPosition(position)
+  const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }, placeAtCenter = false) => {
+    setAddNodePopupPosition(position ?? getViewportCenter())
+    setAddNodeAtCenter(placeAtCenter)
     setAddNodePopupOpen(true)
     setCanvasContextMenu(null)
     setNodeContextMenu(null)
-  }, [])
+  }, [getViewportCenter])
 
   const handleOpenSearch = useCallback(() => setSearchModalOpen(true), [])
   const handleOpenAssetLibrary = useCallback(() => setAssetLibraryOpen(true), [])
@@ -359,10 +364,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Tab - Open Add Node popup
+      // Tab - Open Add Node popup at mouse position
       if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault()
-        handleOpenAddNodePopup()
+        const pos = lastMousePositionRef.current
+        handleOpenAddNodePopup(pos.x !== 0 || pos.y !== 0 ? pos : undefined)
         return
       }
 
@@ -564,7 +570,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         </Suspense>
       )}
 
-      <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop}>
+      <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
         <ReactFlow
           nodes={nodes}
           edges={animatedEdges}
