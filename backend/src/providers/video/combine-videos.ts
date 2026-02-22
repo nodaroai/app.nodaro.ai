@@ -37,7 +37,7 @@ async function generateColorClip(
   await runFfmpeg([
     "-y",
     "-f", "lavfi",
-    "-i", `color=c=${color}:s=${width}x${height}:d=${durationSec}:r=30`,
+    "-i", `color=c=${color}:s=${width}x${height}:d=${durationSec}:r=24`,
     "-f", "lavfi",
     "-i", `anullsrc=r=44100:cl=stereo`,
     "-t", String(durationSec),
