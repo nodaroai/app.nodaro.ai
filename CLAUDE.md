@@ -209,7 +209,7 @@ backend/src/
 | Composite | Client-side plan builder → Composite Plan JSON | Multi-layer video compositor: PiP, split screen, overlays with positioning/opacity/blend modes (0 credits), no AI, no backend route — plan built entirely in frontend DAG executor |
 | Multi-plan rendering | `POST /v1/render-video/plan` | Generic `{ planType, plan }` envelope — any composer node can feed plans to Render Video |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
-| Image generation | Per-model params via `model-options.ts` | Aspect ratios, resolution (Flux only), quality (GPT Image) filtered per provider; Nano Banana uses `image_size` (not `aspect_ratio`) and has no `resolution`; `output_format` only sent to Nano Banana family; style appended to prompt; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: ..." for others; Ideogram uses `reference_image_urls` for character refs; reference image UI hidden for models that don't support it (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`: nano-banana, nano-banana-pro, ideogram only) |
+| Image generation | Per-model params via `model-options.ts` | Config panel layout: Provider → Prompt → Style → Negative Prompt → Assets → Model Settings; style uses `IMAGE_STYLE_PRESETS` dropdown (16 presets) + "Custom..." free text; aspect ratios, resolution (Flux only), quality (GPT Image/Seedream) filtered per provider; Nano Banana uses `image_size` (not `aspect_ratio`) and has no `resolution`; `output_format` only sent to Nano Banana family; style appended to prompt at execution; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: ..." for others; Ideogram uses `reference_image_urls` for character refs; reference image UI hidden for models that don't support it (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`: nano-banana, nano-banana-pro, ideogram only) |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
 | Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
 | Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
@@ -234,4 +234,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-22*
-*Version: 1.36.4*
+*Version: 1.36.5*
