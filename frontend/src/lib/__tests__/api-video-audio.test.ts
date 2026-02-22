@@ -381,13 +381,13 @@ describe("combineVideos", () => {
       ["http://a.mp4", "http://b.mp4"],
       "dissolve",
       1.0,
-      "first",
+      "keep",
     )
 
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body.transition).toBe("dissolve")
     expect(body.transitionDuration).toBe(1.0)
-    expect(body.audioMode).toBe("first")
+    expect(body.audioMode).toBe("keep")
   })
 
   it("throws on error response", async () => {
@@ -414,7 +414,7 @@ describe("mergeVideoAudioApi", () => {
     vi.stubGlobal("fetch", mock)
 
     const tracks = [
-      { url: "http://audio.mp3", startTime: 0, volume: 0.8, sourceType: "music" as const },
+      { url: "http://audio.mp3", startTime: 0, volume: 0.8, sourceType: "audio" as const },
     ]
     const result = await mergeVideoAudioApi("http://vid.mp4", tracks)
 

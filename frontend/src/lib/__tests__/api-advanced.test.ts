@@ -272,14 +272,14 @@ describe("sunoSeparateApi", () => {
     const res = await sunoSeparateApi({
       taskId: "task-1",
       audioId: "aud-1",
-      type: "vocals",
+      type: "separate_vocal",
     })
 
     expect(res).toEqual({ jobId: "j-sep-1" })
     const body = JSON.parse(fetch.mock.calls[0][1].body)
     expect(body.taskId).toBe("task-1")
     expect(body.audioId).toBe("aud-1")
-    expect(body.type).toBe("vocals")
+    expect(body.type).toBe("separate_vocal")
   })
 
   it("throws on 402 insufficient credits", async () => {
@@ -349,7 +349,7 @@ describe("motionTransferApi", () => {
       "https://r2/img.png",
       "https://r2/vid.mp4",
       "dancing person",
-      "front",
+      "image",
       "720p",
       "u6"
     )
@@ -359,7 +359,7 @@ describe("motionTransferApi", () => {
     expect(body.imageUrl).toBe("https://r2/img.png")
     expect(body.videoUrl).toBe("https://r2/vid.mp4")
     expect(body.prompt).toBe("dancing person")
-    expect(body.characterOrientation).toBe("front")
+    expect(body.characterOrientation).toBe("image")
     expect(body.resolution).toBe("720p")
   })
 
@@ -382,12 +382,12 @@ describe("videoUpscaleApi", () => {
     const fetch = mockFetchJson({ jobId: "j-vu-1" })
     vi.stubGlobal("fetch", fetch)
 
-    const res = await videoUpscaleApi("https://r2/vid.mp4", 2, "u7")
+    const res = await videoUpscaleApi("https://r2/vid.mp4", "2", "u7")
 
     expect(res).toEqual({ jobId: "j-vu-1" })
     const body = JSON.parse(fetch.mock.calls[0][1].body)
     expect(body.videoUrl).toBe("https://r2/vid.mp4")
-    expect(body.upscaleFactor).toBe(2)
+    expect(body.upscaleFactor).toBe("2")
   })
 
   it("works with only videoUrl", async () => {
@@ -470,14 +470,14 @@ describe("generateLottieOverlay", () => {
       durationSeconds: 5,
       width: 1280,
       height: 720,
-      lottieAssets: ["sparkle.json"],
+      lottieAssets: [{ id: "sparkle-1", url: "https://r2/sparkle.json", name: "sparkle.json" }],
       userId: "u9",
     })
 
     expect(res).toEqual({ jobId: "j-lot-1", overlayPlan: { overlays: [] } })
     const body = JSON.parse(fetch.mock.calls[0][1].body)
     expect(body.prompt).toBe("confetti celebration")
-    expect(body.lottieAssets).toEqual(["sparkle.json"])
+    expect(body.lottieAssets).toEqual([{ id: "sparkle-1", url: "https://r2/sparkle.json", name: "sparkle.json" }])
     expect(body.width).toBe(1280)
   })
 
@@ -714,7 +714,7 @@ describe("imageToTextApi", () => {
 
     const res = await imageToTextApi(
       "https://r2/sunset.jpg",
-      "high",
+      "detailed",
       "describe the mood",
       "u15"
     )

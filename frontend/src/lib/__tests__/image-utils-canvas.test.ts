@@ -106,7 +106,7 @@ describe("cropImageElementToBlob", () => {
   })
 
   it("rejects when canvas context is null", async () => {
-    mockCanvas.getContext.mockReturnValueOnce(null)
+    mockCanvas.getContext.mockReturnValueOnce(null as unknown as typeof mockContext)
     const img = makeImg()
 
     await expect(
@@ -259,7 +259,7 @@ describe("cropPolygonToBlob", () => {
   })
 
   it("rejects when canvas context is null", async () => {
-    mockCanvas.getContext.mockReturnValueOnce(null)
+    mockCanvas.getContext.mockReturnValueOnce(null as unknown as typeof mockContext)
     const img = makeImg(500, 500)
     const points = [
       { x: 10, y: 10 },
