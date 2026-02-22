@@ -14,19 +14,18 @@ vi.mock("@xyflow/react", () => ({
 }))
 
 vi.mock("../base-node", () => ({
-  BaseNode: ({ children, label, category, credits, id, isRunning }: any) => (
+  BaseNode: ({ children, label, category, credits, id, isRunning, handles }: any) => (
     <div data-testid="base-node" data-label={label} data-category={category} data-credits={credits} data-id={id} data-is-running={isRunning}>
+      {handles?.map((h: any) => <div key={h.id} data-testid={`handle-${h.id}`} data-type={h.type} />)}
       {children}
     </div>
   ),
 }))
 
-vi.mock("lucide-react", () => new Proxy({}, {
-  get: (_t: any, prop: string) => {
-    if (prop === '__esModule') return false
-    return (p: any) => <span data-testid={`icon-${prop}`} {...p} />
-  },
-}))
+vi.mock("lucide-react", () => {
+  const I = (p: any) => <span data-testid="mock-icon" {...p} />
+  return { Repeat: I }
+})
 
 vi.mock("../run-node-button", () => ({
   RunNodeButton: (props: any) => <div data-testid="run-node-button" />,

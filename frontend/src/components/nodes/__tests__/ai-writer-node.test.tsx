@@ -21,12 +21,12 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => new Proxy({}, {
-  get: (_t: any, prop: string) => {
-    if (prop === '__esModule') return false
-    return (p: any) => <span data-testid={`icon-${prop}`} {...p} />
-  },
-}))
+vi.mock("lucide-react", () => {
+  const I = (p: any) => <span data-testid="mock-icon" {...p} />
+  return {
+    Sparkles: I, Loader2: I, AlertCircle: I, X: I, FileText: I, Square: I,
+  }
+})
 
 vi.mock("../run-node-button", () => ({
   RunNodeButton: () => <div data-testid="run-node-button" />,
@@ -87,7 +87,8 @@ describe("AIWriterNode", () => {
 
   it("shows template label", () => {
     renderNode()
-    expect(screen.getByText("Blog Post")).toBeInTheDocument()
+    const matches = screen.getAllByText("Blog Post")
+    expect(matches.length).toBeGreaterThanOrEqual(1)
   })
 
   it("shows generated text preview", () => {

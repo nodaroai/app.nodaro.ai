@@ -21,12 +21,10 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => new Proxy({}, {
-  get: (_t: any, prop: string) => {
-    if (prop === '__esModule') return false
-    return (p: any) => <span data-testid={`icon-${prop}`} {...p} />
-  },
-}))
+vi.mock("lucide-react", () => {
+  const I = (p: any) => <span data-testid="mock-icon" {...p} />
+  return { Merge: I, FileText: I, X: I }
+})
 
 vi.mock("../run-node-button", () => ({
   RunNodeButton: () => <div data-testid="run-node-button" />,

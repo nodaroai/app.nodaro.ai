@@ -21,12 +21,10 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => new Proxy({}, {
-  get: (_t: any, prop: string) => {
-    if (prop === '__esModule') return false
-    return (p: any) => <span data-testid={`icon-${prop}`} {...p} />
-  },
-}))
+vi.mock("lucide-react", () => {
+  const I = (p: any) => <span data-testid="mock-icon" {...p} />
+  return { Music: I, Loader2: I, AlertCircle: I, CheckCircle2: I }
+})
 
 vi.mock("@/components/ui/cached-image", () => ({
   CachedImage: (props: any) => <img data-testid="cached-image" src={props.src} alt={props.alt} />,

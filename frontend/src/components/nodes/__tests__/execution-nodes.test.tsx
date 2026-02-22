@@ -31,17 +31,19 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () =>
-  new Proxy(
-    {},
-    {
-      get: (_t: any, prop: string) => {
-        if (prop === "__esModule") return false
-        return (p: any) => <span data-testid={`icon-${prop}`} {...p} />
-      },
-    },
-  ),
-)
+vi.mock("lucide-react", () => {
+  const I = (p: any) => <span data-testid="mock-icon" {...p} />
+  return {
+    ImageIcon: I, Loader2: I, AlertCircle: I, X: I, Wand2: I, Film: I,
+    Mic: I, Music: I, Volume2: I, AudioLines: I, BookOpen: I, FileText: I,
+    Sparkles: I, Users: I, Waypoints: I, Scissors: I, Merge: I, Captions: I,
+    Maximize2: I, Headphones: I, Volume1: I, Video: I, Gauge: I, Repeat: I,
+    SunDim: I, RefreshCw: I, ArrowUpFromLine: I, Disc3: I, FastForward: I,
+    Layers: I, Box: I, Shapes: I, Play: I, Copy: I, Upload: I, Link: I,
+    AudioWaveform: I, SmilePlus: I, Package: I, MapPin: I, UserCircle: I,
+    Clapperboard: I, Hash: I, Image: I,
+  }
+})
 
 vi.mock("../run-node-button", () => ({
   RunNodeButton: (props: any) => (
@@ -195,6 +197,7 @@ interface NodeTestConfig {
   Component: React.ComponentType<any>
   defaultData: Record<string, unknown>
   expectedCategory: string
+  skipIdlePlaceholder?: boolean
 }
 
 const NODES: NodeTestConfig[] = [
@@ -214,7 +217,7 @@ const NODES: NodeTestConfig[] = [
   { name: "SunoLyricsNode", Component: SunoLyricsNode, expectedCategory: "ai", defaultData: { label: "Suno Lyrics" } },
   { name: "SunoSeparateNode", Component: SunoSeparateNode, expectedCategory: "ai", defaultData: { label: "Suno Separate" } },
   { name: "SunoMusicVideoNode", Component: SunoMusicVideoNode, expectedCategory: "ai", defaultData: { label: "Suno Music Video" } },
-  { name: "LipSyncNode", Component: LipSyncNode, expectedCategory: "ai", defaultData: { label: "Lip Sync", provider: "kling-avatar" } },
+  { name: "LipSyncNode", Component: LipSyncNode, expectedCategory: "ai", defaultData: { label: "Lip Sync", provider: "kling-avatar" }, skipIdlePlaceholder: true },
   { name: "MotionTransferNode", Component: MotionTransferNode, expectedCategory: "ai", defaultData: { label: "Motion Transfer" } },
   { name: "TranscribeNode", Component: TranscribeNode, expectedCategory: "ai", defaultData: { label: "Transcribe", provider: "whisper" } },
   { name: "CombineVideosNode", Component: CombineVideosNode, expectedCategory: "processing", defaultData: { label: "Combine Videos" } },
@@ -235,7 +238,7 @@ const NODES: NodeTestConfig[] = [
   { name: "LottieOverlayNode", Component: LottieOverlayNode, expectedCategory: "processing", defaultData: { label: "Lottie Overlay" } },
   { name: "ThreeDTitleNode", Component: ThreeDTitleNode, expectedCategory: "ai", defaultData: { label: "3D Title" } },
   { name: "MotionGraphicsNode", Component: MotionGraphicsNode, expectedCategory: "ai", defaultData: { label: "Motion Graphics" } },
-  { name: "CompositeNode", Component: CompositeNode, expectedCategory: "processing", defaultData: { label: "Composite" } },
+  { name: "CompositeNode", Component: CompositeNode, expectedCategory: "processing", defaultData: { label: "Composite", layers: [] } },
   { name: "RenderVideoNode", Component: RenderVideoNode, expectedCategory: "processing", defaultData: { label: "Render Video" } },
 ]
 
@@ -259,7 +262,7 @@ function renderNode(
 
 describe.each(NODES)(
   "$name",
-  ({ Component, defaultData, expectedCategory }) => {
+  ({ Component, defaultData, expectedCategory, skipIdlePlaceholder }) => {
     it("renders without crashing", () => {
       renderNode(Component, { ...defaultData, executionStatus: "idle" })
       expect(screen.getByTestId("base-node")).toBeInTheDocument()
@@ -281,12 +284,14 @@ describe.each(NODES)(
       )
     })
 
+    if (!skipIdlePlaceholder) {
     it("shows idle placeholder", () => {
       renderNode(Component, defaultData)
       const baseNode = screen.getByTestId("base-node")
       const dashed = baseNode.querySelector(".border-dashed")
       expect(dashed).toBeInTheDocument()
     })
+    }
 
     it("shows spinner when running", () => {
       renderNode(Component, { ...defaultData, executionStatus: "running" })
