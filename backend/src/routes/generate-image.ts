@@ -47,8 +47,41 @@ const generateImageBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
+/**
+ * Build composite model identifier for variable credit pricing.
+ * Appends the setting that affects pricing (quality or resolution) to the provider name.
+ * Only appends for models/settings that differ from the cheapest default.
+ *
+ * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K", "flux-flex:2K"
+ */
+function buildCreditModelIdentifier(provider: string, quality?: string, resolution?: string): string {
+  // GPT Image: quality affects cost (medium=default/cheap, high=expensive)
+  if ((provider === "gpt-image" || provider === "gpt-image-i2i") && quality === "high") {
+    return `${provider}:high`
+  }
+  // Flux Pro: resolution affects cost (1K=default/cheap, 2K=expensive)
+  if ((provider === "flux" || provider === "flux-pro-i2i") && resolution === "2K") {
+    return `${provider}:2K`
+  }
+  // Flux Flex: resolution affects cost (1K=default/cheap, 2K=expensive)
+  if ((provider === "flux-flex" || provider === "flux-i2i") && resolution === "2K") {
+    return `${provider}:2K`
+  }
+  // Nano Banana Pro: resolution affects cost (1K/2K=default/cheap, 4K=expensive)
+  if (provider === "nano-banana-pro" && resolution === "4K") {
+    return `${provider}:4K`
+  }
+  return provider
+}
+
 export async function generateImageRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-image", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "nano-banana" }) }, async (req, reply) => {
+  app.post("/v1/generate-image", { preHandler: creditGuard((req) => {
+    const body = req.body as Record<string, unknown>
+    const provider = (body?.provider as string) ?? "nano-banana"
+    const quality = body?.quality as string | undefined
+    const resolution = body?.resolution as string | undefined
+    return buildCreditModelIdentifier(provider, quality, resolution)
+  }) }, async (req, reply) => {
     const parsed = generateImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -67,8 +100,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    // Determine model identifier for credit check (default to nano-banana)
-    const modelIdentifier = provider ?? "nano-banana"
+    // Determine model identifier for credit reservation (composite for variable pricing)
+    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution)
 
     // Append character descriptions to prompt
     const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")

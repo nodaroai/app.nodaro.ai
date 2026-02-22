@@ -1,5 +1,10 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
+import {
+  VARIABLE_PRICING_MODELS,
+  VARIABLE_PRICING_RESOLUTION_TRIGGERS,
+  VARIABLE_PRICING_QUALITY_TRIGGERS,
+} from "./model-options"
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
   prompt: ["text-prompt"],
@@ -105,11 +110,44 @@ export function extractDisplayValue(data: Record<string, unknown>, nodeType: str
   }
 }
 
+/**
+ * Build composite model identifier for credit cost lookup.
+ * Appends settings that affect pricing (quality or resolution) for variable-pricing models.
+ * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K"
+ */
 export function getModelIdentifier(node: WorkflowNode): string {
   // AI Writer always uses "ai-writer" for credit cost lookup (not the LLM provider name)
   if (node.type === "ai-writer") return "ai-writer"
   const data = node.data as Record<string, unknown>
   const provider = data.provider as string | undefined
-  if (provider) return provider
-  return node.type ?? "unknown"
+  if (!provider) return node.type ?? "unknown"
+
+  return buildCreditModelIdentifier(provider, data)
+}
+
+/**
+ * Build composite credit model identifier from provider + node data.
+ * Shared by getModelIdentifier (for node objects) and direct calls (for loose data).
+ */
+export function buildCreditModelIdentifier(provider: string, data: Record<string, unknown>): string {
+  const pricingType = VARIABLE_PRICING_MODELS[provider]
+  if (!pricingType) return provider
+
+  if (pricingType === "quality") {
+    const quality = data.quality as string | undefined
+    const triggers = VARIABLE_PRICING_QUALITY_TRIGGERS[provider]
+    if (quality && triggers?.includes(quality)) {
+      return `${provider}:${quality}`
+    }
+  }
+
+  if (pricingType === "resolution") {
+    const resolution = data.resolution as string | undefined
+    const triggers = VARIABLE_PRICING_RESOLUTION_TRIGGERS[provider]
+    if (resolution && triggers?.includes(resolution)) {
+      return `${provider}:${resolution}`
+    }
+  }
+
+  return provider
 }

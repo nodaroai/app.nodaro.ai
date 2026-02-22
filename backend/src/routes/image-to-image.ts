@@ -10,10 +10,30 @@ const imageToImageBody = z.object({
   prompt: z.string().min(1).max(2000),
   provider: z.enum(["nano-banana", "nano-banana-pro", "flux-i2i", "flux-pro-i2i", "grok-i2i", "gpt-image-i2i"]).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
+  resolution: z.enum(["1K", "2K", "4K"]).optional(),
+  quality: z.enum(["medium", "high"]).optional(),
 })
 
+/**
+ * Build composite model identifier for variable credit pricing.
+ * See generate-image.ts for the full version with all models.
+ */
+function buildCreditModelIdentifier(provider: string, quality?: string, resolution?: string): string {
+  if (provider === "gpt-image-i2i" && quality === "high") return `${provider}:high`
+  if ((provider === "flux-pro-i2i") && resolution === "2K") return `${provider}:2K`
+  if (provider === "flux-i2i" && resolution === "2K") return `${provider}:2K`
+  if (provider === "nano-banana-pro" && resolution === "4K") return `${provider}:4K`
+  return provider
+}
+
 export async function imageToImageRoutes(app: FastifyInstance) {
-  app.post("/v1/image-to-image", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "nano-banana" }) }, async (req, reply) => {
+  app.post("/v1/image-to-image", { preHandler: creditGuard((req) => {
+    const body = req.body as Record<string, unknown>
+    const provider = (body?.provider as string) ?? "nano-banana"
+    const quality = body?.quality as string | undefined
+    const resolution = body?.resolution as string | undefined
+    return buildCreditModelIdentifier(provider, quality, resolution)
+  }) }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -24,7 +44,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, referenceImageUrls } = parsed.data
+    const { imageUrl, prompt, provider, referenceImageUrls, resolution, quality } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -33,7 +53,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = provider ?? "nano-banana"
+    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution)
 
     const { data: job, error } = await supabase
       .from("jobs")

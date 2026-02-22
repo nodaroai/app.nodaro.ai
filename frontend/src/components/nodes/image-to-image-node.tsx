@@ -11,6 +11,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import type { ImageToImageData } from "@/types/nodes"
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -34,7 +35,11 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = rawUrl && rawUrl.trim() ? rawUrl : undefined
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const credits = useModelCredits(nodeData.provider ?? "nano-banana", 1)
+  const creditModelId = buildCreditModelIdentifier(
+    nodeData.provider ?? "nano-banana",
+    nodeData as unknown as Record<string, unknown>,
+  )
+  const credits = useModelCredits(creditModelId, 1)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

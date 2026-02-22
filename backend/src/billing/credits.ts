@@ -71,19 +71,26 @@ export interface StorageProfile {
 // ============================================================
 
 const STATIC_CREDIT_COSTS: Record<string, number> = {
-  // ── Image Generation ── (formula: ceil(providerCost * 1.25 / 0.10))
+  // ── Image Generation ── (formula: ceil(KIE_credits * $0.005 * 1.25 / $0.10))
+  // Base entries = default/cheapest setting. Composite entries = specific setting.
   "nano-banana": 1,
-  "nano-banana-pro": 2,
-  "flux": 1,
+  "nano-banana-pro": 2,          // 18 KIE credits (1K/2K default)
+  "nano-banana-pro:4K": 2,       // 24 KIE credits (4K resolution)
+  "flux": 1,                     // 5 KIE credits (1K default)
+  "flux:2K": 1,                  // 7 KIE credits (2K resolution)
   "grok": 1,
-  "gpt-image": 1,
+  "gpt-image": 1,                // 4 KIE credits (medium quality default)
+  "gpt-image:high": 2,           // 22 KIE credits (high quality)
   "imagen4": 1,
   "imagen4-fast": 1,
-  "imagen4-ultra": 2,
-  "ideogram": 1,
+  "imagen4-ultra": 1,
+  "ideogram": 2,                 // 18 KIE credits (BALANCED default)
+  "ideogram:TURBO": 1,           // 12 KIE credits
+  "ideogram:QUALITY": 2,         // 24 KIE credits
   "qwen": 1,
   "seedream": 1,
-  "flux-flex": 1,
+  "flux-flex": 1,                // 14 KIE credits (1K default)
+  "flux-flex:2K": 2,             // 24 KIE credits (2K resolution)
   "z-image": 1,
   // ── Image Editing ──
   "recraft-upscale": 1,
@@ -92,13 +99,22 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "topaz-image-upscale": 1,
   "grok-upscale": 1,
   // ── Image-to-Image ──
-  "flux-i2i": 1,
-  "flux-pro-i2i": 1,
+  "flux-i2i": 1,                 // 14 KIE credits (1K default)
+  "flux-i2i:2K": 2,              // 24 KIE credits (2K resolution)
+  "flux-pro-i2i": 1,             // 5 KIE credits (1K default)
+  "flux-pro-i2i:2K": 1,          // 7 KIE credits (2K resolution)
   "grok-i2i": 1,
-  "gpt-image-i2i": 1,
-  "ideogram-edit": 1,
-  "ideogram-remix": 1,
-  "ideogram-reframe": 1,
+  "gpt-image-i2i": 1,            // 4 KIE credits (medium quality default)
+  "gpt-image-i2i:high": 2,       // 22 KIE credits (high quality)
+  "ideogram-edit": 2,            // 18 KIE credits (BALANCED default)
+  "ideogram-edit:TURBO": 1,      // 12 KIE credits
+  "ideogram-edit:QUALITY": 2,    // 24 KIE credits
+  "ideogram-remix": 2,           // 18 KIE credits (BALANCED default)
+  "ideogram-remix:TURBO": 1,     // 12 KIE credits
+  "ideogram-remix:QUALITY": 2,   // 24 KIE credits
+  "ideogram-reframe": 2,         // 18 KIE credits (BALANCED default)
+  "ideogram-reframe:TURBO": 1,   // 12 KIE credits
+  "ideogram-reframe:QUALITY": 2, // 24 KIE credits
   "qwen-i2i": 1,
   "qwen-edit": 1,
   "seedream-edit": 1,

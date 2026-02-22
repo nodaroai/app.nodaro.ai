@@ -37,15 +37,16 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "nano-banana": {
     model: "nano-banana-pro",   // Pro version supports image_input for reference images
     credits: 4,
-    cost: 0.02,  // 4 credits * $0.005
+    ***REDACTED-OSS-SCRUB***
     extraParams: { image_size: "16:9" },
   },
   "nano-banana-pro": {
     model: "nano-banana-pro",
-    credits: 6,
-    cost: 0.03,
+    credits: 18,
+    ***REDACTED-OSS-SCRUB***
     // Pro uses `aspect_ratio` (NOT `image_size`) and supports `resolution` (1K/2K/4K)
     // See: docs.kie.ai/market/google/pro-image-to-image.md
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
   "nano-banana-edit": {
@@ -60,22 +61,25 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Flux family
   "flux": {
     model: "flux-2/pro-text-to-image",
-    credits: 10,
-    cost: 0.05,
+    credits: 5,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
   "flux-i2i": {
     model: "flux-2/flex-image-to-image",
-    credits: 8,
-    cost: 0.04,
+    credits: 14,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "input_urls",  // Flux uses input_urls array, not "image"
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
   "flux-pro-i2i": {
     model: "flux-2/pro-image-to-image",
-    credits: 10,
-    cost: 0.05,
+    credits: 5,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "input_urls",  // Flux uses input_urls array, not "image"
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
@@ -84,14 +88,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Grok family
   "grok": {
     model: "grok-imagine/text-to-image",
-    credits: 8,
-    cost: 0.04,
+    credits: 4,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9" },
   },
   "grok-i2i": {
     model: "grok-imagine/image-to-image",
-    credits: 8,
-    cost: 0.04,
+    credits: 4,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_urls",  // Grok uses image_urls array, not "image"
     extraParams: {},
@@ -102,14 +106,16 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Quality parameter: "medium", "high"
   "gpt-image": {
     model: "gpt-image/1.5-text-to-image",
-    credits: 12,
-    cost: 0.06,
+    credits: 4,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "3:2", quality: "medium" },
   },
   "gpt-image-i2i": {
     model: "gpt-image/1.5-image-to-image",
-    credits: 12,
-    cost: 0.06,
+    credits: 4,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "input_urls",  // GPT Image uses input_urls array, not "image"
     extraParams: { aspect_ratio: "3:2", quality: "medium" },
@@ -120,19 +126,19 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "imagen4": {
     model: "google/imagen4",
     credits: 8,
-    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9" },
   },
   "imagen4-fast": {
     model: "google/imagen4-fast",
-    credits: 6,
-    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    credits: 4,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9" },
   },
   "imagen4-ultra": {
     model: "google/imagen4-ultra",
     credits: 12,
-    cost: 0.06,  // TODO: verify credit cost from KIE pricing
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9" },
   },
 
@@ -141,30 +147,32 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // NOTE: Ideogram uses `image_size` with named values (square, square_hd, portrait_4_3, etc.)
   "ideogram": {
     model: "ideogram/character",
-    credits: 8,
-    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    credits: 18,
+    cost: 0.09,  // 18 KIE credits * $0.005 (BALANCED rendering_speed default)
+    // NOTE: TURBO = 12 credits ($0.06), QUALITY = 24 credits ($0.12)
+    // Handled via composite identifiers "ideogram:TURBO", "ideogram:QUALITY"
     extraParams: { image_size: "landscape_16_9", style: "AUTO", rendering_speed: "BALANCED" },
   },
   "ideogram-edit": {
     model: "ideogram/character-edit",
-    credits: 8,
-    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    credits: 18,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string + mask_url required
     extraParams: { style: "AUTO", rendering_speed: "BALANCED" },
   },
   "ideogram-remix": {
     model: "ideogram/character-remix",
-    credits: 8,
-    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    credits: 18,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
     extraParams: { image_size: "landscape_16_9", style: "AUTO", rendering_speed: "BALANCED", strength: 0.8 },
   },
   "ideogram-reframe": {
     model: "ideogram/v3-reframe",
-    credits: 6,
-    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    credits: 18,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
     extraParams: { image_size: "landscape_16_9", rendering_speed: "BALANCED" },
@@ -176,13 +184,13 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "qwen": {
     model: "qwen/text-to-image",
     credits: 4,
-    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    ***REDACTED-OSS-SCRUB***
     extraParams: { image_size: "landscape_16_9", output_format: "png" },
   },
   "qwen-i2i": {
     model: "qwen/image-to-image",
     credits: 4,
-    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
     extraParams: { output_format: "png", strength: 0.8 },
@@ -190,7 +198,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "qwen-edit": {
     model: "qwen/image-edit",
     credits: 4,
-    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
     extraParams: { image_size: "landscape_4_3", output_format: "png" },
@@ -200,14 +208,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/seedream/4.5-text-to-image.md
   "seedream": {
     model: "seedream/4.5-text-to-image",
-    credits: 6,
-    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    credits: 6.5,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
   },
   "seedream-edit": {
     model: "seedream/4.5-edit",
-    credits: 6,
-    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    credits: 6.5,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_urls",  // Array of URLs
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
@@ -217,8 +225,9 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/flux2/flex-text-to-image.md
   "flux-flex": {
     model: "flux-2/flex-text-to-image",
-    credits: 8,
-    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    credits: 14,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
 
@@ -226,8 +235,8 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/z-image/z-image.md
   "z-image": {
     model: "z-image",
-    credits: 4,
-    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    credits: 0.8,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9" },
   },
 
@@ -250,7 +259,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "topaz-image-upscale": {
     model: "topaz/image-upscale",
     credits: 6,
-    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    cost: 0.03,  // 6 KIE credits * $0.005
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
     extraParams: { upscale_factor: "2" },
@@ -262,7 +271,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "grok-upscale": {
     model: "grok-imagine/upscale",
     credits: 4,
-    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     extraParams: {},
   },
