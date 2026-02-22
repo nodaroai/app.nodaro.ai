@@ -43,11 +43,25 @@ export class KieImageProvider
     // Build input with model-specific parameters, then caller overrides
     const input: Record<string, unknown> = {
       prompt,
-      output_format: "png",
       // Apply model-specific extra params (aspect_ratio, image_size, resolution, etc.)
       ...modelConfig.extraParams,
       // Caller overrides (e.g. face generation uses 1:1 aspect ratio)
       ...extraParams,
+    }
+
+    // Only Nano Banana family supports output_format parameter
+    if (provider.startsWith("nano-banana")) {
+      input.output_format = "png"
+    }
+
+    // Nano Banana text-to-image uses `image_size` for aspect ratio (NOT `aspect_ratio`)
+    // and does NOT support `resolution` — see docs.kie.ai/market/google/nano-banana.md
+    if (provider === "nano-banana" || provider === "nano-banana-pro") {
+      if (input.aspect_ratio) {
+        input.image_size = input.aspect_ratio
+        delete input.aspect_ratio
+      }
+      delete input.resolution
     }
 
     // Add reference images based on input type
@@ -120,9 +134,13 @@ export class KieImageProvider
     )
 
     const input: Record<string, unknown> = {
-      output_format: "png",
       // Apply model-specific extra params
       ...modelConfig.extraParams,
+    }
+
+    // Only Nano Banana family supports output_format parameter
+    if (provider.startsWith("nano-banana")) {
+      input.output_format = "png"
     }
 
     // Set the image parameter based on model config

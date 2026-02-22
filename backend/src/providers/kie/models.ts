@@ -32,17 +32,19 @@ export interface KieModelConfig {
 // =============================================================================
 export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Google Nano Banana family
+  // Nano Banana uses `image_size` param (NOT `aspect_ratio`) and does NOT support `resolution`
+  // See: docs.kie.ai/market/google/nano-banana.md
   "nano-banana": {
     model: "nano-banana-pro",   // Pro version supports image_input for reference images
     credits: 4,
     cost: 0.02,  // 4 credits * $0.005
-    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+    extraParams: { image_size: "16:9" },
   },
   "nano-banana-pro": {
     model: "nano-banana-pro",
     credits: 6,
     cost: 0.03,
-    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+    extraParams: { image_size: "16:9" },
   },
   "nano-banana-edit": {
     model: "google/nano-banana-edit",

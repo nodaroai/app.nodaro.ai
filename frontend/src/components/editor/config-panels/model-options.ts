@@ -107,18 +107,9 @@ export function getAspectRatiosForModel(provider: string): readonly { value: str
   return IMAGE_ASPECT_RATIOS[provider] ?? DEFAULT_RATIOS
 }
 
-// Models that support resolution selection (1K/2K or 1K/2K/4K)
+// Models that support resolution selection
+// Note: Nano Banana does NOT support resolution (only image_size for aspect ratio)
 export const IMAGE_RESOLUTION_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  "nano-banana": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-    { value: "4K", label: "4K (Ultra)" },
-  ],
-  "nano-banana-pro": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-    { value: "4K", label: "4K (Ultra)" },
-  ],
   "flux": [
     { value: "1K", label: "1K (Standard)" },
     { value: "2K", label: "2K (High)" },
