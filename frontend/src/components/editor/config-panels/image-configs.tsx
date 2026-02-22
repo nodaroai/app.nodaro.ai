@@ -24,7 +24,7 @@ import type {
   ImageToImageData,
   CharacterDefinition,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS } from "./model-options"
+import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
@@ -34,6 +34,19 @@ const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m
 
 export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
+  const currentProvider = data.provider || "nano-banana-pro"
+  const aspectRatioOptions = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
+  const resolutionOptions = useMemo(() => IMAGE_RESOLUTION_OPTIONS[currentProvider], [currentProvider])
+  const qualityOptions = useMemo(() => IMAGE_QUALITY_OPTIONS[currentProvider], [currentProvider])
+
+  // When provider changes, reset aspect ratio if current value isn't valid for new provider
+  useEffect(() => {
+    const validValues = aspectRatioOptions.map((o) => o.value)
+    if (data.aspectRatio && !validValues.includes(data.aspectRatio)) {
+      onUpdate({ aspectRatio: validValues[0] || "1:1" })
+    }
+  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -179,23 +192,55 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.aspectRatio}
-          onValueChange={(v) => onUpdate({ aspectRatio: v as GenerateImageData["aspectRatio"] })}
+          onValueChange={(v) => onUpdate({ aspectRatio: v })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="1:1">1:1 (Square)</SelectItem>
-            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-            <SelectItem value="4:3">4:3</SelectItem>
+            {aspectRatioOptions.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </MappableField>
+      {resolutionOptions && (
+        <div>
+          <Label className="text-xs">Resolution</Label>
+          <Select
+            value={data.resolution || "1K"}
+            onValueChange={(v) => onUpdate({ resolution: v })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {resolutionOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {qualityOptions && (
+        <div>
+          <Label className="text-xs">Quality</Label>
+          <Select
+            value={data.quality || "medium"}
+            onValueChange={(v) => onUpdate({ quality: v })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {qualityOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           value={data.style}
           onChange={(e) => onUpdate({ style: e.target.value })}
           placeholder="e.g. children-book, photorealistic"
         />
+        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as style guidance</p>
       </MappableField>
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
@@ -204,6 +249,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
           placeholder="Things to avoid..."
         />
+        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>
 
       {/* Assets section (characters, locations, objects) */}

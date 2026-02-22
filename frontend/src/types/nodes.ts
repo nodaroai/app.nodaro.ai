@@ -425,7 +425,7 @@ export type ReplicateImageProvider = "nano-banana" | "flux" | "dalle"
 // Additional image providers available only on KIE.ai
 export type KieImageProvider =
   | "nano-banana" | "nano-banana-pro"
-  | "flux" | "flux-i2i"
+  | "flux" | "flux-i2i" | "flux-pro-i2i"
   | "grok" | "grok-i2i"
   | "gpt-image" | "gpt-image-i2i"
 
@@ -439,8 +439,10 @@ export type GenerateImageData = {
   provider: ImageProvider
   model: string
   style: string
-  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3"
+  aspectRatio: string
   negativePrompt: string
+  resolution?: string
+  quality?: string
   referenceImageUrl?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"

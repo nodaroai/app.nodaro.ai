@@ -8,20 +8,25 @@ import {
 } from "../shared.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
-  const { prompt, referenceImageUrls, provider, aspectRatio } = job.data as {
+  const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality } = job.data as {
     jobId: string
     prompt: string
     referenceImageUrls?: string[]
     provider?: string
     aspectRatio?: string
+    resolution?: string
+    quality?: string
   }
   console.log(`[worker] generate-image ${ctx.jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
   if (referenceImageUrls?.length) {
     console.log(`[worker] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
   }
 
-  const extraParams = aspectRatio ? { aspect_ratio: aspectRatio } : undefined
-  const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, extraParams)
+  const extraParams: Record<string, unknown> = {}
+  if (aspectRatio) extraParams.aspect_ratio = aspectRatio
+  if (resolution) extraParams.resolution = resolution
+  if (quality) extraParams.quality = quality
+  const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, Object.keys(extraParams).length > 0 ? extraParams : undefined)
   await job.updateProgress(50)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
@@ -87,7 +92,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     imageUrl: string
     referenceImageUrls?: string[]
     prompt: string
-    provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "grok-i2i" | "gpt-image-i2i"
+    provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i"
   }
   const resolvedProvider = provider ?? "nano-banana"
   // Combine main image with additional reference images (e.g., from Location/Character nodes)

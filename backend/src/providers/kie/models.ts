@@ -94,8 +94,8 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
 
   // GPT Image family
-  // Supported aspect_ratio values: "1:1", "3:2", "2:3", "4:3" (NOT "16:9")
-  // Quality parameter: "low", "medium", "high"
+  // Supported aspect_ratio values: "1:1", "3:2", "2:3" ONLY (NOT "16:9", "9:16", or "4:3")
+  // Quality parameter: "medium", "high"
   "gpt-image": {
     model: "gpt-image/1.5-text-to-image",
     credits: 12,

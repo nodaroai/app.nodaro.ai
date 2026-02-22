@@ -44,6 +44,107 @@ export const VIDEO_T2V_MODELS = [
   { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
 ] as const
 
+// =============================================================================
+// IMAGE MODEL ASPECT RATIOS (per KIE.ai API docs)
+// =============================================================================
+const NANO_BANANA_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+  { value: "3:2", label: "3:2" },
+  { value: "2:3", label: "2:3" },
+  { value: "5:4", label: "5:4" },
+  { value: "4:5", label: "4:5" },
+  { value: "21:9", label: "21:9 (Ultra-wide)" },
+] as const
+
+const FLUX_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+  { value: "3:2", label: "3:2" },
+  { value: "2:3", label: "2:3" },
+] as const
+
+const GROK_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "3:2", label: "3:2" },
+  { value: "2:3", label: "2:3" },
+] as const
+
+// GPT Image only supports these 3 aspect ratios (NOT 16:9, 9:16, or 4:3)
+const GPT_IMAGE_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "3:2", label: "3:2 (Landscape)" },
+  { value: "2:3", label: "2:3 (Portrait)" },
+] as const
+
+const DEFAULT_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+] as const
+
+export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label: string }[]> = {
+  "nano-banana": NANO_BANANA_RATIOS,
+  "nano-banana-pro": NANO_BANANA_RATIOS,
+  "flux": FLUX_RATIOS,
+  "flux-i2i": FLUX_RATIOS,
+  "flux-pro-i2i": FLUX_RATIOS,
+  "grok": GROK_RATIOS,
+  "gpt-image": GPT_IMAGE_RATIOS,
+  "gpt-image-i2i": GPT_IMAGE_RATIOS,
+}
+
+export function getAspectRatiosForModel(provider: string): readonly { value: string; label: string }[] {
+  return IMAGE_ASPECT_RATIOS[provider] ?? DEFAULT_RATIOS
+}
+
+// Models that support resolution selection (1K/2K or 1K/2K/4K)
+export const IMAGE_RESOLUTION_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  "nano-banana": [
+    { value: "1K", label: "1K (Standard)" },
+    { value: "2K", label: "2K (High)" },
+    { value: "4K", label: "4K (Ultra)" },
+  ],
+  "nano-banana-pro": [
+    { value: "1K", label: "1K (Standard)" },
+    { value: "2K", label: "2K (High)" },
+    { value: "4K", label: "4K (Ultra)" },
+  ],
+  "flux": [
+    { value: "1K", label: "1K (Standard)" },
+    { value: "2K", label: "2K (High)" },
+  ],
+  "flux-i2i": [
+    { value: "1K", label: "1K (Standard)" },
+    { value: "2K", label: "2K (High)" },
+  ],
+  "flux-pro-i2i": [
+    { value: "1K", label: "1K (Standard)" },
+    { value: "2K", label: "2K (High)" },
+  ],
+}
+
+// Models that support quality selection
+export const IMAGE_QUALITY_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  "gpt-image": [
+    { value: "medium", label: "Medium (Balanced)" },
+    { value: "high", label: "High (Detailed)" },
+  ],
+  "gpt-image-i2i": [
+    { value: "medium", label: "Medium (Balanced)" },
+    { value: "high", label: "High (Detailed)" },
+  ],
+}
+
 // Kling 3.0 supports continuous durations from 3s to 15s
 export const KLING3_DURATIONS = Array.from({ length: 13 }, (_, i) => i + 3)
 

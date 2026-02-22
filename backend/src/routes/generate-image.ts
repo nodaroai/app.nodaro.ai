@@ -13,17 +13,22 @@ const generateImageBody = z.object({
     // Replicate providers
     "nano-banana",
     "flux",
-    "dalle",
-    "midjourney",
-    // KIE.ai providers
+    // KIE.ai text-to-image providers
     "nano-banana-pro",
     "grok",
     "gpt-image",
+    // KIE.ai image-to-image providers
     "flux-i2i",
+    "flux-pro-i2i",
     "grok-i2i",
     "gpt-image-i2i",
   ]).optional(),
-  aspectRatio: z.enum(["1:1", "16:9", "9:16", "4:3"]).optional(),
+  aspectRatio: z.enum([
+    "1:1", "16:9", "9:16", "4:3", "3:4",
+    "3:2", "2:3", "5:4", "4:5", "21:9",
+  ]).optional(),
+  resolution: z.enum(["1K", "2K", "4K"]).optional(),
+  quality: z.enum(["medium", "high"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -39,7 +44,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, userId } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -82,6 +87,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
       referenceImageUrls,
       provider,
       aspectRatio,
+      resolution,
+      quality,
       usageLogId,
     })
 

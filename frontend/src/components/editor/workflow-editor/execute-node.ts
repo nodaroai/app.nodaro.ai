@@ -263,6 +263,15 @@ export function executeNode(
     } else {
       finalPrompt = prompt;
     }
+    // Append style and negative prompt to the generation prompt
+    const styleText = imgData.style?.trim();
+    if (styleText) {
+      finalPrompt += `\nStyle: ${styleText}`;
+    }
+    const negPrompt = imgData.negativePrompt?.trim();
+    if (negPrompt) {
+      finalPrompt += `\nAvoid: ${negPrompt}`;
+    }
     if (finalPrompt.length > 2000) {
       finalPrompt = finalPrompt.slice(0, 1997) + "...";
     }
@@ -273,6 +282,8 @@ export function executeNode(
       refImages.length > 0 ? refImages : undefined,
       imgData.provider || undefined,
       imgData.aspectRatio || undefined,
+      imgData.resolution || undefined,
+      imgData.quality || undefined,
     );
   }
 
