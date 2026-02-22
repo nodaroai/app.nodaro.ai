@@ -141,7 +141,7 @@ describe("getConnectedProviderModel", () => {
   it("returns model from connected provider node", () => {
     const fieldMappings = { provider: { sourceNodeId: "p1" } }
     const sources: SourceNodeInfo[] = [makeSource({ id: "p1", type: "provider" })]
-    const nodes = [makeNode({ id: "p1", type: "provider", data: { provider: "flux", model: "flux-pro" } })]
+    const nodes = [makeNode({ id: "p1", type: "provider", data: { provider: "flux", model: "flux-pro" } as any })]
     const result = getConnectedProviderModel(fieldMappings, sources, nodes)
     expect(result).toBe("flux-pro")
   })
@@ -219,22 +219,22 @@ describe("extractDisplayValue", () => {
 
 describe("getModelIdentifier", () => {
   it("returns 'ai-writer' for ai-writer nodes", () => {
-    const node = makeNode({ type: "ai-writer", data: { label: "Writer", provider: "claude" } })
+    const node = makeNode({ type: "ai-writer", data: { label: "Writer", provider: "claude" } as any })
     expect(getModelIdentifier(node)).toBe("ai-writer")
   })
 
   it("returns provider from node data when available", () => {
-    const node = makeNode({ type: "generate-image", data: { label: "Img", provider: "flux" } })
+    const node = makeNode({ type: "generate-image", data: { label: "Img", provider: "flux" } as any })
     expect(getModelIdentifier(node)).toBe("flux")
   })
 
   it("returns node type when no provider in data", () => {
-    const node = makeNode({ type: "generate-image", data: { label: "Img" } })
+    const node = makeNode({ type: "generate-image", data: { label: "Img" } as any })
     expect(getModelIdentifier(node)).toBe("generate-image")
   })
 
   it("returns 'unknown' when node has no type and no provider", () => {
-    const node = makeNode({ type: undefined as any, data: { label: "X" } })
+    const node = makeNode({ type: undefined as any, data: { label: "X" } as any })
     expect(getModelIdentifier(node)).toBe("unknown")
   })
 })
