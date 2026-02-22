@@ -6,7 +6,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -32,6 +32,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
+  { type: "youtube-video", label: "Video URL", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "reference-audio", label: "Reference Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
   // Parameter
   { type: "tone", label: "Tone", icon: <Palette className="h-4 w-4" />, category: "Parameter" },
@@ -60,6 +61,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-speech", label: "Text to Speech", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "generate-music", label: "Generate Music", icon: <Music className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
+  { type: "audio-isolation", label: "Voice Extractor", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   // AI — Suno Music
   { type: "suno-generate", label: "Suno Generate", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-cover", label: "Suno Cover", icon: <Disc3 className="h-4 w-4" />, category: "AI", group: "Suno Music" },
@@ -73,9 +75,12 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "trim-video", label: "Trim Video", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Video" },
+  { type: "video-upscale", label: "Video Upscale", icon: <ArrowUpFromLine className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "speed-ramp", label: "Adjust Speed", icon: <Gauge className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "loop-video", label: "Loop Video", icon: <Repeat className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "fade-video", label: "Fade In/Out", icon: <SunDim className="h-4 w-4" />, category: "Processing", group: "Video" },
+  { type: "transcode-video", label: "Transcode Video", icon: <RefreshCw className="h-4 w-4" />, category: "Processing", group: "Video" },
+  { type: "manual-edit", label: "Manual Edit", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "add-captions", label: "Add Captions", icon: <Captions className="h-4 w-4" />, category: "Processing", group: "Video" },
   // Processing — Audio
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing", group: "Audio" },
@@ -191,21 +196,25 @@ interface NodeToolbarProps {
 
 export function NodeToolbar({ visible = false }: NodeToolbarProps) {
   const addNode = useWorkflowStore((s) => s.addNode)
-  const { screenToFlowPosition } = useReactFlow()
+  const { getViewport } = useReactFlow()
   const [sheetOpen, setSheetOpen] = useState(false)
 
   const handleAddNode = useCallback(
     (type: SceneNodeType) => {
       const el = document.querySelector('.react-flow')
       const rect = el?.getBoundingClientRect()
-      const center = rect
-        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-        : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-      const position = screenToFlowPosition(center)
+      const viewportWidth = rect?.width ?? window.innerWidth
+      const viewportHeight = rect?.height ?? window.innerHeight
+      const { x, y, zoom } = getViewport()
+      const z = zoom || 1
+      const position = {
+        x: (-x + viewportWidth / 2) / z,
+        y: (-y + viewportHeight / 2) / z,
+      }
       addNode(type, position)
       setSheetOpen(false)
     },
-    [addNode, screenToFlowPosition],
+    [addNode, getViewport],
   )
 
   // Close sheet on Escape
