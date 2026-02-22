@@ -233,6 +233,15 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "sora2-pro": [5, 10],
 }
 
+// Models that accept negative_prompt as a native API parameter.
+// All other models get negative prompt appended to the prompt text as "Avoid: ...".
+// Keep in sync with backend/src/providers/kie/image.ts NATIVE_NEGATIVE_PROMPT_MODELS.
+export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
+  "imagen4", "imagen4-fast", "imagen4-ultra",  // up to 5000 chars
+  "ideogram", "ideogram-remix",                 // up to 500 chars
+  "qwen", "qwen-edit",                          // up to 500 chars
+])
+
 // Providers that support start + end frame (2 images -> video)
 export const PROVIDERS_WITH_END_FRAME: string[] = [
   "minimax",

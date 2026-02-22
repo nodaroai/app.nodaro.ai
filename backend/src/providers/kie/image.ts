@@ -19,7 +19,8 @@ const NAMED_IMAGE_SIZE_PROVIDERS = new Set([
   "qwen", "qwen-i2i", "qwen-edit",
 ])
 
-// Models that accept negative_prompt as a native API parameter
+// Models that accept negative_prompt as a native API parameter.
+// Keep in sync with frontend/src/components/editor/config-panels/model-options.ts
 const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "imagen4", "imagen4-fast", "imagen4-ultra",  // up to 5000 chars
   "ideogram", "ideogram-remix",                 // up to 500 chars

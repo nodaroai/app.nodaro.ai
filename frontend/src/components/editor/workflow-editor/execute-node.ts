@@ -120,6 +120,7 @@ import {
   runObjectGeneration,
   runLocationGeneration,
 } from "./asset-executors";
+import { NATIVE_NEGATIVE_PROMPT_MODELS } from "@/components/editor/config-panels/model-options";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -270,16 +271,11 @@ export function executeNode(
     }
     // Models with native negative_prompt support get it as a separate API param.
     // All other models get it appended to the prompt as "Avoid: ...".
-    const NATIVE_NEG_PROMPT_MODELS = new Set([
-      "imagen4", "imagen4-fast", "imagen4-ultra",
-      "ideogram", "ideogram-remix",
-      "qwen", "qwen-edit",
-    ]);
     const negPrompt = imgData.negativePrompt?.trim();
     const providerKey = imgData.provider || "nano-banana";
     let nativeNegativePrompt: string | undefined;
     if (negPrompt) {
-      if (NATIVE_NEG_PROMPT_MODELS.has(providerKey)) {
+      if (NATIVE_NEGATIVE_PROMPT_MODELS.has(providerKey)) {
         nativeNegativePrompt = negPrompt;
       } else {
         finalPrompt += `\nAvoid: ${negPrompt}`;
