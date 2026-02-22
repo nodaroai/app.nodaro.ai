@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest"
 
 // ---------------------------------------------------------------------------
-// Mocks — stub out all dependencies so both modules can load
+// Mocks — stub out JSX-returning dependencies so the add-node-popup module
+// can be evaluated without pulling in lucide-react icons at runtime.
 // ---------------------------------------------------------------------------
 
 vi.mock("lucide-react", () =>
@@ -16,22 +17,6 @@ vi.mock("lucide-react", () =>
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
-}))
-
-vi.mock("@/components/ui/button", () => ({
-  Button: () => null,
-}))
-
-vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: vi.fn(() => vi.fn()),
-}))
-
-vi.mock("@xyflow/react", () => ({
-  useReactFlow: () => ({ getViewport: () => ({ x: 0, y: 0, zoom: 1 }) }),
-}))
-
-vi.mock("../unified-asset-library", () => ({
-  UnifiedAssetLibraryButton: () => null,
 }))
 
 // ---------------------------------------------------------------------------
