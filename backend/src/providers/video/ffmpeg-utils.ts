@@ -132,3 +132,15 @@ export async function createWorkDir(prefix: string): Promise<string> {
 export async function cleanupWorkDir(workDir: string): Promise<void> {
   await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
 }
+
+export async function normalizeVideoForCombine(inputPath: string, outputPath: string): Promise<string> {
+  await runFfmpeg([
+    "-y", "-i", inputPath,
+    "-vf", "fps=24,scale=trunc(iw/2)*2:trunc(ih/2)*2",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "23",
+    "-c:a", "aac", "-b:a", "128k",
+    "-movflags", "+faststart",
+    outputPath,
+  ])
+  return outputPath
+}

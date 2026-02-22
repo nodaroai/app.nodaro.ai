@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine } from "./ffmpeg-utils.js"
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]
@@ -47,6 +47,25 @@ async function generateColorClip(
     outputPath,
   ])
   return outputPath
+}
+
+/**
+ * Check whether a file contains at least one audio stream.
+ */
+async function hasAudioStream(filePath: string): Promise<boolean> {
+  const { runFfprobe } = await import("./ffmpeg-utils.js")
+  try {
+    const output = await runFfprobe([
+      "-v", "error",
+      "-select_streams", "a:0",
+      "-show_entries", "stream=codec_type",
+      "-of", "csv=p=0",
+      filePath,
+    ])
+    return output.trim().length > 0
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -135,7 +154,9 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       const inputPath = join(workDir, `input_${i}.mp4`)
       console.log(`[combineVideos] Downloading video ${i + 1}/${videoUrls.length}`)
       await downloadFile(videoUrls[i], inputPath)
-      inputPaths.push(inputPath)
+      const normalizedPath = join(workDir, `normalized_${i}.mp4`)
+      await normalizeVideoForCombine(inputPath, normalizedPath)
+      inputPaths.push(normalizedPath)
     }
 
     const outputPath = join(workDir, "output.mp4")
@@ -242,36 +263,37 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     } else {
       // audioMode === "keep": concat audio streams without crossfade
       // We still need xfade for video, but concat audio separately
-      // Build audio amerge/concat filter: just concatenate audio streams
-      const audioConcat = clipPaths.map((_, i) => `[${i}:a]`).join("") +
-        `concat=n=${clipPaths.length}:v=0:a=1[aout]`
-      const fullFilter = `${videoFilter.filter};${audioConcat}`
+      // Probe each clip for audio; generate silent placeholders for clips without audio
+      const audioFlags = await Promise.all(clipPaths.map((p) => hasAudioStream(p)))
+      const silentParts: string[] = []
+      const concatInputs: string[] = []
 
-      try {
-        await runFfmpeg([
-          "-y",
-          ...inputs,
-          "-filter_complex", fullFilter,
-          "-map", videoFilter.outputLabel,
-          "-map", "[aout]",
-          "-c:v", "libx264",
-          "-preset", "fast",
-          "-c:a", "aac",
-          outputPath,
-        ])
-      } catch {
-        console.log("[combineVideos] Audio concat failed, falling back to video-only")
-        await runFfmpeg([
-          "-y",
-          ...inputs,
-          "-filter_complex", videoFilter.filter,
-          "-map", videoFilter.outputLabel,
-          "-c:v", "libx264",
-          "-preset", "fast",
-          "-an",
-          outputPath,
-        ])
+      for (let i = 0; i < clipPaths.length; i++) {
+        if (audioFlags[i]) {
+          concatInputs.push(`[${i}:a]`)
+        } else {
+          const label = `[silent_${i}]`
+          silentParts.push(`aevalsrc=0:c=stereo:s=44100:d=${durations[i]}${label}`)
+          concatInputs.push(label)
+        }
       }
+
+      const audioPreamble = silentParts.length > 0 ? silentParts.join(";") + ";" : ""
+      const audioConcat = concatInputs.join("") +
+        `concat=n=${clipPaths.length}:v=0:a=1[aout]`
+      const fullFilter = `${videoFilter.filter};${audioPreamble}${audioConcat}`
+
+      await runFfmpeg([
+        "-y",
+        ...inputs,
+        "-filter_complex", fullFilter,
+        "-map", videoFilter.outputLabel,
+        "-map", "[aout]",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-c:a", "aac",
+        outputPath,
+      ])
     }
 
     console.log(`[combineVideos] Output: ${outputPath}`)
