@@ -383,6 +383,7 @@ export function resolveNodeInputs(
       src.type === "text-to-speech" ||
       src.type === "generate-music" ||
       src.type === "text-to-audio" ||
+      src.type === "audio-isolation" ||
       src.type === "suno-generate" ||
       src.type === "suno-cover" ||
       src.type === "suno-extend" ||

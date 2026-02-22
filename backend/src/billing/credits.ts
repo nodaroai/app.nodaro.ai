@@ -118,6 +118,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-separate": 2,
   "suno-separate-stem": 4,
   "suno-music-video": 1,
+  "elevenlabs-isolation": 1,
   "infinitalk": 0,
   // ── Processing ──
   "topaz": 0,
@@ -157,6 +158,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "fade-video": 0,
   "generate-music": 1,
   "text-to-audio": 1,
+  "audio-isolation": 1,
 }
 
 // Tier order for restriction checks

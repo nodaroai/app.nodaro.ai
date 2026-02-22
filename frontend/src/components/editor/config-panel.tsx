@@ -53,6 +53,7 @@ import {
   TextToVideoConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
+  AudioIsolationConfig,
   SunoGenerateConfig,
   SunoCoverConfig,
   SunoExtendConfig,
@@ -119,6 +120,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "qa-check": "QA Check",
   "generate-music": "Generate Music",
   "text-to-audio": "Text to Audio",
+  "audio-isolation": "Audio Isolation",
   "suno-generate": "Suno Generate",
   "suno-cover": "Suno Cover",
   "suno-extend": "Suno Extend",
@@ -158,7 +160,7 @@ function getNodeTypeDisplayName(type: string): string {
 const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
-  "text-to-audio", "generate-music", "motion-transfer", "lip-sync",
+  "text-to-audio", "audio-isolation", "generate-music", "motion-transfer", "lip-sync",
   "video-upscale", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video", "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
@@ -384,6 +386,7 @@ export function ConfigPanel() {
           {nodeType === "qa-check" && <QACheckConfig {...configProps} />}
           {nodeType === "generate-music" && <GenerateMusicConfig {...configProps} />}
           {nodeType === "text-to-audio" && <TextToAudioConfig {...configProps} />}
+          {nodeType === "audio-isolation" && <AudioIsolationConfig {...configProps} />}
           {nodeType === "suno-generate" && <SunoGenerateConfig {...configProps} />}
           {nodeType === "suno-cover" && <SunoCoverConfig {...configProps} />}
           {nodeType === "suno-extend" && <SunoExtendConfig {...configProps} />}
@@ -485,7 +488,7 @@ export function ConfigPanel() {
               const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
               if (!activeUrl) return null
               const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync"])
-              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
+              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
               const mediaType: "image" | "video" | "audio" = videoTypes.has(nodeType) ? "video" : audioTypes.has(nodeType) ? "audio" : "image"
               return (
                 <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />

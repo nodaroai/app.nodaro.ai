@@ -1201,6 +1201,21 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   return res.json()
 }
 
+export async function audioIsolationApi(audioUrl: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl }
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/audio-isolation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start audio isolation")
+  }
+  return res.json()
+}
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string

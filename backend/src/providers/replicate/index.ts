@@ -62,6 +62,7 @@ const replicateInfo: ProviderInfo = {
     "music-generation": [],
     "text-to-speech": [],
     "sound-effect": [],
+    "audio-isolation": [],
     "transcription": [],
   },
 }

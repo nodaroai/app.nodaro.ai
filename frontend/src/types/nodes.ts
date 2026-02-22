@@ -784,6 +784,17 @@ export type SunoMusicVideoData = {
   fieldMappings?: FieldMappings
 }
 
+export type AudioIsolationData = {
+  [key: string]: unknown
+  label: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type TranscribeData = {
   [key: string]: unknown
   label: string
@@ -1479,6 +1490,7 @@ export type SceneNodeData =
   | SunoSeparateData
   | SunoMusicVideoData
   | TranscribeData
+  | AudioIsolationData
   | CombineVideosData
   | MergeVideoAudioData
   | AddCaptionsData
@@ -1552,6 +1564,7 @@ export type SceneNodeType =
   | "suno-separate"
   | "suno-music-video"
   | "transcribe"
+  | "audio-isolation"
   | "combine-videos"
   | "merge-video-audio"
   | "add-captions"
@@ -1919,6 +1932,21 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["text"],
     defaultData: { label: "Transcribe", provider: "whisper", language: "auto", fieldMappings: {} },
+  },
+  {
+    type: "audio-isolation",
+    label: "Audio Isolation",
+    category: "ai",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: {
+      label: "Audio Isolation",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as AudioIsolationData,
   },
   // Processing
   {

@@ -15,6 +15,7 @@ import { TTS_VOICES } from "@/lib/tts-voices"
 import type {
   TextToSpeechData,
   TextToAudioData,
+  AudioIsolationData,
   SunoGenerateData,
   SunoCoverData,
   SunoExtendData,
@@ -522,6 +523,24 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       </MappableField>
       <p className="text-xs text-muted-foreground">
         Connect a portrait image and an audio track (speech/voiceover) to generate a talking head video.
+      </p>
+    </div>
+  )
+}
+
+export function AudioIsolationConfig({ data, onUpdate }: ConfigProps<AudioIsolationData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Label</Label>
+        <Input
+          value={data.label}
+          onChange={(e) => onUpdate({ label: e.target.value })}
+          placeholder="Audio Isolation"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Removes background noise and isolates voice from any audio input using ElevenLabs Audio Isolation. Connect an audio source (Upload Audio, Text to Speech, etc.) to the input.
       </p>
     </div>
   )

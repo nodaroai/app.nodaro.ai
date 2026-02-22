@@ -21,6 +21,7 @@ import {
   KIE_MUSIC_MODELS,
   KIE_TTS_MODELS,
   KIE_SOUND_EFFECT_MODELS,
+  KIE_AUDIO_ISOLATION_MODELS,
 } from "./models.js"
 
 const kieInfo: ProviderInfo = {
@@ -37,6 +38,7 @@ const kieInfo: ProviderInfo = {
     "lip-sync",
     "music-generation",
     "text-to-speech",
+    "audio-isolation",
   ],
   supportedModels: {
     "image-generation": Object.keys(KIE_IMAGE_MODELS),
@@ -52,6 +54,7 @@ const kieInfo: ProviderInfo = {
     "music-generation": Object.keys(KIE_MUSIC_MODELS),
     "text-to-speech": Object.keys(KIE_TTS_MODELS),
     "sound-effect": Object.keys(KIE_SOUND_EFFECT_MODELS),
+    "audio-isolation": Object.keys(KIE_AUDIO_ISOLATION_MODELS),
     "transcription": [], // KIE doesn't support transcription
   },
 }

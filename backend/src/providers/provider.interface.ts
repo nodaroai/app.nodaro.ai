@@ -17,6 +17,7 @@ export type ProviderCapability =
   | "music-generation" // text -> music
   | "text-to-speech" // text -> speech audio
   | "sound-effect" // text -> sound effect audio
+  | "audio-isolation" // audio -> isolated voice audio
   | "transcription" // audio -> text
 
 // Progress callback for long-running tasks

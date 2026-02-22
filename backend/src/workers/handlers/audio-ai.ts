@@ -127,10 +127,31 @@ const handleExtractYoutubeAudio: HandlerFn = async function handleExtractYoutube
   console.log(`[worker] Job ${ctx.jobId} completed: ${audioUrl}`)
 }
 
+const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job, ctx) {
+  const { audioUrl } = job.data as { jobId: string; audioUrl: string }
+  console.log(`[worker] audio-isolation ${ctx.jobId}`)
+  const kieAudio = new KieAudioProvider()
+  const result = await kieAudio.isolateAudio(audioUrl)
+  await job.updateProgress(50)
+  const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+    provider_cost: result.cost,
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
 export const audioAIHandlers: Record<string, HandlerFn> = {
   "text-to-speech": handleTextToSpeech,
   "generate-music": handleGenerateMusic,
   "text-to-audio": handleTextToAudio,
   "transcribe": handleTranscribe,
   "extract-youtube-audio": handleExtractYoutubeAudio,
+  "audio-isolation": handleAudioIsolation,
 }

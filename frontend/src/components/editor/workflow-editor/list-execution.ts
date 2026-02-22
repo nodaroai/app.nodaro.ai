@@ -106,6 +106,7 @@ const AUDIO_TYPES = new Set([
   "text-to-speech",
   "generate-music",
   "text-to-audio",
+  "audio-isolation",
   "suno-generate",
   "suno-cover",
   "suno-extend",

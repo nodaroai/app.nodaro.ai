@@ -426,6 +426,17 @@ export const KIE_SOUND_EFFECT_MODELS: Record<string, KieModelConfig> = {
 }
 
 // =============================================================================
+// AUDIO ISOLATION MODELS
+// =============================================================================
+export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
+  "elevenlabs-isolation": {
+    model: "elevenlabs/audio-isolation",
+    credits: 1,
+    cost: 0.01,
+  },
+}
+
+// =============================================================================
 // SPECIAL MODELS
 // =============================================================================
 export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
@@ -441,7 +452,7 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "music" | "tts" | "sound-effect" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "music" | "tts" | "sound-effect" | "audio-isolation" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -472,6 +483,8 @@ export function getKieModelConfig(
       return KIE_TTS_MODELS[provider] ?? null
     case "sound-effect":
       return KIE_SOUND_EFFECT_MODELS[provider] ?? null
+    case "audio-isolation":
+      return KIE_AUDIO_ISOLATION_MODELS[provider] ?? null
     case "special":
       return KIE_SPECIAL_MODELS[provider] ?? null
     default:

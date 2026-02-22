@@ -16,7 +16,7 @@ import {
   runKieTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
-import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS } from "./models.js"
+import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS } from "./models.js"
 
 export class KieAudioProvider
   implements MusicGenerationProvider, TextToSpeechProvider
@@ -171,5 +171,40 @@ export class KieAudioProvider
     )
 
     return { url: audioUrl, cost: modelConfig.cost }
+  }
+
+  async isolateAudio(audioUrl: string): Promise<ProviderResult> {
+    const modelConfig = KIE_AUDIO_ISOLATION_MODELS["elevenlabs-isolation"]
+    if (!modelConfig) {
+      throw createSanitizedError(
+        "elevenlabs-isolation model not configured",
+        "Audio isolation"
+      )
+    }
+
+    console.log(
+      `[KIE.ai] Isolating audio with ${modelConfig.model}`
+    )
+
+    const { resultJson } = await runKieTask(
+      modelConfig.model,
+      { audio_url: audioUrl },
+      MAX_POLL_ATTEMPTS_VIDEO
+    )
+
+    const resultUrl =
+      resultJson.resultUrls?.[0] ?? resultJson.audioUrl
+    if (!resultUrl) {
+      throw createSanitizedError(
+        "audio isolation task succeeded but no URL found",
+        "Audio isolation"
+      )
+    }
+
+    console.log(
+      `[KIE.ai] Audio isolation completed: ${resultUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+    )
+
+    return { url: resultUrl, cost: modelConfig.cost }
   }
 }

@@ -52,6 +52,7 @@ import {
   RefreshCw,
   Shapes,
   Box,
+  AudioWaveform,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
@@ -261,6 +262,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "text-to-audio",
     label: "Text to Audio",
     icon: <Volume2 className="h-4 w-4" />,
+    category: "AI",
+    group: "Audio & Speech",
+  },
+  {
+    type: "audio-isolation",
+    label: "Audio Isolation",
+    icon: <AudioWaveform className="h-4 w-4" />,
     category: "AI",
     group: "Audio & Speech",
   },

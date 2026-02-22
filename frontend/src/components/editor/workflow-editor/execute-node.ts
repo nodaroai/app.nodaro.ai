@@ -3,6 +3,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import {
   generateMusicApi,
   textToAudioApi,
+  audioIsolationApi,
   sunoGenerateApi,
   sunoCoverApi,
   sunoExtendApi,
@@ -51,6 +52,7 @@ import type {
   TextToSpeechData,
   GenerateMusicData,
   TextToAudioData,
+  AudioIsolationData,
   SunoGenerateData,
   SunoCoverData,
   SunoExtendData,
@@ -571,6 +573,23 @@ export function executeNode(
         ),
       "generatedAudioUrl",
       "Text to Audio",
+      ctx,
+    );
+  }
+
+  if (node.type === "audio-isolation") {
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(
+        `Node "${(node.data as AudioIsolationData).label}": no audio input found`,
+      );
+      return Promise.reject(new Error("No audio input"));
+    }
+    return runProcessingNode(
+      node.id,
+      () => audioIsolationApi(audioUrl, ctx.userId),
+      "generatedAudioUrl",
+      "Audio Isolation",
       ctx,
     );
   }
