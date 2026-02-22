@@ -536,11 +536,11 @@ export function AudioIsolationConfig({ data, onUpdate }: ConfigProps<AudioIsolat
         <Input
           value={data.label}
           onChange={(e) => onUpdate({ label: e.target.value })}
-          placeholder="Audio Isolation"
+          placeholder="Voice Extractor"
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        Removes background noise and isolates voice from any audio input using ElevenLabs Audio Isolation. Connect an audio source (Upload Audio, Text to Speech, etc.) to the input.
+        Removes background noise and extracts clean voice from any audio input. Connect an audio source (Upload Audio, Text to Speech, etc.) to the input.
       </p>
     </div>
   )

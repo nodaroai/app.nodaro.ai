@@ -120,7 +120,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "qa-check": "QA Check",
   "generate-music": "Generate Music",
   "text-to-audio": "Text to Audio",
-  "audio-isolation": "Audio Isolation",
+  "audio-isolation": "Voice Extractor",
   "suno-generate": "Suno Generate",
   "suno-cover": "Suno Cover",
   "suno-extend": "Suno Extend",

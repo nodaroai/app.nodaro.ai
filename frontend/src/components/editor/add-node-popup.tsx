@@ -267,7 +267,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   {
     type: "audio-isolation",
-    label: "Audio Isolation",
+    label: "Voice Extractor",
     icon: <AudioWaveform className="h-4 w-4" />,
     category: "AI",
     group: "Audio & Speech",

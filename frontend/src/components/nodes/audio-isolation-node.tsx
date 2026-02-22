@@ -142,7 +142,7 @@ function AudioIsolationNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>ElevenLabs Isolation</span>
+          <span>Voice Extractor</span>
         </div>
       </div>
     </BaseNode>

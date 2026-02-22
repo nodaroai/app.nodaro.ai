@@ -1935,13 +1935,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "audio-isolation",
-    label: "Audio Isolation",
+    label: "Voice Extractor",
     category: "ai",
     creditCost: 1,
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: {
-      label: "Audio Isolation",
+      label: "Voice Extractor",
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],

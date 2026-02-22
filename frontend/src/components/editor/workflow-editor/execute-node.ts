@@ -589,7 +589,7 @@ export function executeNode(
       node.id,
       () => audioIsolationApi(audioUrl, ctx.userId),
       "generatedAudioUrl",
-      "Audio Isolation",
+      "Voice Extractor",
       ctx,
     );
   }
