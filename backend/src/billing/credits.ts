@@ -159,6 +159,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "generate-music": 1,
   "text-to-audio": 1,
   "audio-isolation": 1,
+  "image-to-text": 1,
 }
 
 // Tier order for restriction checks

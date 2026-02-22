@@ -808,6 +808,19 @@ export type TranscribeData = {
   activeResultIndex?: number
 }
 
+export type ImageToTextData = {
+  [key: string]: unknown
+  label: string
+  detailLevel: "brief" | "detailed" | "structured"
+  customPrompt: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedText?: string
+  generatedResults?: Array<{ text: string; jobId: string; timestamp: string }>
+  activeResultIndex?: number
+}
+
 // --- Processing Node Data ---
 
 export type CombineVideosData = {
@@ -1490,6 +1503,7 @@ export type SceneNodeData =
   | SunoSeparateData
   | SunoMusicVideoData
   | TranscribeData
+  | ImageToTextData
   | AudioIsolationData
   | CombineVideosData
   | MergeVideoAudioData
@@ -1564,6 +1578,7 @@ export type SceneNodeType =
   | "suno-separate"
   | "suno-music-video"
   | "transcribe"
+  | "image-to-text"
   | "audio-isolation"
   | "combine-videos"
   | "merge-video-audio"
@@ -1932,6 +1947,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["text"],
     defaultData: { label: "Transcribe", provider: "whisper", language: "auto", fieldMappings: {} },
+  },
+  {
+    type: "image-to-text",
+    label: "Describe Image",
+    category: "ai",
+    creditCost: 1,
+    inputs: ["image"],
+    outputs: ["text"],
+    defaultData: { label: "Describe Image", detailLevel: "detailed", customPrompt: "", fieldMappings: {} } as ImageToTextData,
   },
   {
     type: "audio-isolation",

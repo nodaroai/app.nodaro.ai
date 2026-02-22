@@ -65,6 +65,35 @@
 
 **Forgetting step 3 (Zod enum) has caused the same validation bug 3 times.**
 
+### New Node Registration (CRITICAL)
+
+**When adding a new node type, register it in ALL of these files:**
+
+| Step | File | What to Update |
+|------|------|----------------|
+| 1 | `backend/src/routes/<node-type>.ts` | Route handler (Zod schema, credit guard, API call) |
+| 2 | `backend/src/app.ts` | `app.register()` the route |
+| 3 | `backend/src/billing/credits.ts` | `STATIC_CREDIT_COSTS` entry |
+| 4 | `backend/src/billing/credit-manager.ts` | `CREDIT_COSTS` entry |
+| 5 | `frontend/src/types/nodes.ts` | Data type + `SceneNodeData` union + `SceneNodeType` union + `NODE_DEFINITIONS` |
+| 6 | `frontend/src/components/nodes/<node>-node.tsx` | Node component |
+| 7 | `frontend/src/components/nodes/index.ts` | `nodeTypes` map |
+| 8 | `frontend/src/components/editor/add-node-popup.tsx` | `NODE_OPTIONS` (popup/context menu) |
+| 9 | `frontend/src/components/editor/node-toolbar.tsx` | Sidebar node list ⚠️ **SEPARATE from popup** |
+| 10 | `frontend/src/components/editor/editor-toolbar.tsx` | Reset/clear `switch` case |
+| 11 | `frontend/src/components/editor/config-panels/<cat>-configs.tsx` | Config component |
+| 12 | `frontend/src/components/editor/config-panels/index.ts` | Export |
+| 13 | `frontend/src/components/editor/config-panel.tsx` | Import, display name, button type set, render conditional |
+| 14 | `frontend/src/lib/api.ts` | API client function |
+| 15 | `frontend/src/components/editor/workflow-editor/types.ts` | `EXECUTABLE_NODE_TYPES` set ⚠️ **Without this, Run button fails** |
+| 16 | `frontend/src/components/editor/workflow-editor/execute-node.ts` | DAG execution block |
+| 17 | `frontend/src/components/editor/workflow-editor/execution-graph.ts` | `extractNodeOutput()` |
+| 18 | `frontend/src/components/editor/workflow-editor/node-input-resolver.ts` | Input source mapping |
+
+**Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
+
+Full guide: `docs/adding-a-new-node.md`
+
 ### Database Rules
 - RLS on all tables
 - Use `SECURITY DEFINER` functions for service-role operations

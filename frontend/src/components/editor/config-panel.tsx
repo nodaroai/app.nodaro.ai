@@ -61,6 +61,7 @@ import {
   SunoSeparateConfig,
   SunoMusicVideoConfig,
   TranscribeConfig,
+  ImageToTextConfig,
   LipSyncConfig,
   GenerateMusicConfig,
   CombineVideosConfig,
@@ -128,6 +129,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-separate": "Suno Separate",
   "suno-music-video": "Suno Music Video",
   "transcribe": "Transcribe",
+  "image-to-text": "Describe Image",
   "ai-writer": "AI Agent",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
@@ -164,6 +166,7 @@ const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video", "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
+  "image-to-text",
 ])
 
 const RUN_BUTTON_TYPES = new Set([
@@ -396,6 +399,7 @@ export function ConfigPanel() {
           {nodeType === "lip-sync" && <LipSyncConfig {...configProps} />}
           {nodeType === "motion-transfer" && <MotionTransferConfig {...configProps} />}
           {nodeType === "transcribe" && <TranscribeConfig {...configProps} />}
+          {nodeType === "image-to-text" && <ImageToTextConfig {...configProps} />}
           {nodeType === "ai-writer" && <AIWriterConfig {...configProps} />}
 
           {nodeType === "video-upscale" && <VideoUpscaleConfig {...configProps} />}

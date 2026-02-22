@@ -1408,6 +1408,28 @@ export async function transcribeApi(audioUrl: string, provider?: string, languag
   return res.json()
 }
 
+export async function imageToTextApi(
+  imageUrl: string,
+  detailLevel?: "brief" | "detailed" | "structured",
+  customPrompt?: string,
+  userId?: string,
+): Promise<{ jobId: string; generatedText: string }> {
+  const body: Record<string, unknown> = { imageUrl }
+  if (detailLevel) body.detailLevel = detailLevel
+  if (customPrompt) body.customPrompt = customPrompt
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/image-to-text/describe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to describe image")
+  }
+  return res.json()
+}
+
 export async function lipSyncApi(
   imageUrl: string,
   audioUrl: string,

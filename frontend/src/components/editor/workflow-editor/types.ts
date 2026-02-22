@@ -103,6 +103,7 @@ export const EXECUTABLE_TYPES = new Set([
   "combine-text",
   "split-text",
   "audio-isolation",
+  "image-to-text",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 5;

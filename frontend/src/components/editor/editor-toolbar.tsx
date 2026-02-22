@@ -243,6 +243,14 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.errorMessage = undefined
           break
 
+        case "image-to-text":
+          data.generatedResults = []
+          data.activeResultIndex = 0
+          data.generatedText = undefined
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          break
+
         case "ai-writer":
           data.generatedResults = []
           data.activeResultIndex = 0

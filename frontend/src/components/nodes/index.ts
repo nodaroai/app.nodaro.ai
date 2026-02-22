@@ -33,7 +33,8 @@ import { SunoLyricsNode } from "./suno-lyrics-node";
 import { SunoSeparateNode } from "./suno-separate-node";
 import { SunoMusicVideoNode } from "./suno-music-video-node";
 import { TranscribeNode } from "./transcribe-node";
-import { AudioIsolationNode } from "./audio-isolation-node";
+import { AudioIsolationNode } from "./audio-isolation-node"
+import { ImageToTextNode } from "./image-to-text-node";
 import { AIWriterNode } from "./ai-writer-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { MergeVideoAudioNode } from "./merge-video-audio-node";
@@ -111,6 +112,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "lip-sync": LipSyncNode,
   "motion-transfer": MotionTransferNode,
   transcribe: TranscribeNode,
+  "image-to-text": ImageToTextNode,
   "audio-isolation": AudioIsolationNode,
   "ai-writer": AIWriterNode,
   // Processing

@@ -11,6 +11,7 @@ import {
   sunoSeparateApi,
   sunoMusicVideoApi,
   transcribeApi,
+  imageToTextApi,
   downloadYouTubeAudio,
   lipSyncApi,
   motionTransferApi,
@@ -60,6 +61,7 @@ import type {
   SunoSeparateData,
   SunoMusicVideoData,
   TranscribeData,
+  ImageToTextData,
   AIWriterNodeData,
   LipSyncData,
   MotionTransferData,
@@ -1049,6 +1051,60 @@ export function executeNode(
           reject(err);
         });
     });
+  }
+
+  if (node.type === "image-to-text") {
+    const imageUrl = inputs.imageUrl;
+    if (!imageUrl) {
+      toast.error(
+        `Node "${(node.data as ImageToTextData).label}": no image input found`,
+      );
+      return Promise.reject(new Error("No image input"));
+    }
+    const itData = node.data as ImageToTextData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      generatedText: undefined,
+      errorMessage: undefined,
+    });
+
+    return imageToTextApi(
+      imageUrl,
+      itData.detailLevel || "detailed",
+      itData.customPrompt || undefined,
+      ctx.userId,
+    )
+      .then((result) => {
+        const existingResults =
+          (
+            useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+              ?.data as ImageToTextData | undefined
+          )?.generatedResults ?? [];
+        const newResult = {
+          text: result.generatedText,
+          jobId: result.jobId,
+          timestamp: new Date().toISOString(),
+        };
+        const newResults = [...existingResults, newResult];
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          generatedText: result.generatedText,
+          generatedResults: newResults,
+          activeResultIndex: newResults.length - 1,
+          errorMessage: undefined,
+        });
+        toast.success("Image described successfully");
+      })
+      .catch((err) => {
+        const errMsg = err instanceof Error ? err.message : "Unknown error";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: errMsg,
+        });
+        toast.error("Image description failed", { description: errMsg });
+        throw err;
+      });
   }
 
   if (node.type === "ai-writer") {

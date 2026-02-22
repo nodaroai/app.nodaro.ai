@@ -418,7 +418,7 @@ export function resolveNodeInputs(
           inputs.sunoTaskId = srcData.sunoTaskId as string;
         }
       }
-    } else if (src.type === "transcribe" || src.type === "suno-lyrics") {
+    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "image-to-text") {
       inputs.prompt = output;
     } else if (src.type === "ai-writer") {
       inputs.prompt = output;

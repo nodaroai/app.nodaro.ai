@@ -25,6 +25,7 @@ import type {
   GeneratedScript,
   ScriptScene,
   QACheckData,
+  ImageToTextData,
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
@@ -266,6 +267,81 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
           onChange={(e) => onUpdate({ threshold: parseFloat(e.target.value) || 0.8 })}
         />
       </div>
+    </div>
+  )
+}
+
+export function ImageToTextConfig({ data, onUpdate }: ConfigProps<ImageToTextData>) {
+  const imageToTextData = data as ImageToTextData
+  const results = imageToTextData.generatedResults ?? []
+  const activeIndex = imageToTextData.activeResultIndex ?? 0
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Detail Level</Label>
+        <Select
+          value={imageToTextData.detailLevel ?? "detailed"}
+          onValueChange={(v) => onUpdate({ detailLevel: v as ImageToTextData["detailLevel"] })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="brief">Brief (1-2 sentences)</SelectItem>
+            <SelectItem value="detailed">Detailed (3-6 sentences)</SelectItem>
+            <SelectItem value="structured">Structured (labeled sections)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Custom Prompt (optional)</Label>
+        <Textarea
+          value={imageToTextData.customPrompt ?? ""}
+          onChange={(e) => onUpdate({ customPrompt: e.target.value })}
+          placeholder="Override the detail level with a custom instruction..."
+          rows={3}
+          maxLength={2000}
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          If provided, overrides the detail level preset.
+        </p>
+      </div>
+
+      {results.length > 1 && (
+        <div>
+          <Label>Result History</Label>
+          <div className="flex gap-1 flex-wrap mt-1">
+            {results.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                className={`px-2 py-1 text-xs rounded ${
+                  i === activeIndex
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+                onClick={() =>
+                  onUpdate({
+                    activeResultIndex: i,
+                    generatedText: results[i]?.text,
+                  })
+                }
+              >
+                #{i + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {imageToTextData.generatedText && (
+        <div>
+          <Label>Output</Label>
+          <div className="mt-1 rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap max-h-60 overflow-y-auto">
+            {imageToTextData.generatedText}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

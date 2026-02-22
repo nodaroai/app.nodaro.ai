@@ -1,6 +1,6 @@
 export { TextPromptConfig, ListConfig, LoopConfig, UploadImageConfig, UploadVideoConfig, UploadAudioConfig, RSSFeedConfig, YouTubeVideoConfig, ReferenceAudioConfig } from "./input-configs"
 export { ToneConfig, StyleGuideConfig, ProviderConfig, SceneCountConfig, DurationConfig, AspectRatioConfig, MotionConfig, CameraMotionConfig } from "./parameter-configs"
-export { GenerateScriptConfig, QACheckConfig } from "./script-configs"
+export { GenerateScriptConfig, QACheckConfig, ImageToTextConfig } from "./script-configs"
 export { GenerateImageConfig, EditImageConfig, ImageToImageConfig } from "./image-configs"
 export { ImageToVideoConfig, VideoToVideoConfig, MotionTransferConfig, VideoUpscaleConfig, TextToVideoConfig } from "./video-configs"
 export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, SunoGenerateConfig, SunoCoverConfig, SunoExtendConfig, SunoLyricsConfig, SunoSeparateConfig, SunoMusicVideoConfig, TranscribeConfig, LipSyncConfig } from "./audio-configs"
