@@ -252,6 +252,26 @@ export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "qwen", "qwen-edit",                          // up to 500 chars
 ])
 
+// Predefined style presets for image generation
+export const IMAGE_STYLE_PRESETS = [
+  { value: "photorealistic", label: "Photorealistic" },
+  { value: "cinematic", label: "Cinematic" },
+  { value: "anime", label: "Anime" },
+  { value: "digital-art", label: "Digital Art" },
+  { value: "oil-painting", label: "Oil Painting" },
+  { value: "watercolor", label: "Watercolor" },
+  { value: "children-book", label: "Children's Book" },
+  { value: "comic-book", label: "Comic Book" },
+  { value: "pixel-art", label: "Pixel Art" },
+  { value: "3d-render", label: "3D Render" },
+  { value: "pencil-sketch", label: "Pencil Sketch" },
+  { value: "pop-art", label: "Pop Art" },
+  { value: "minimalist", label: "Minimalist" },
+  { value: "retro-vintage", label: "Retro / Vintage" },
+  { value: "fantasy", label: "Fantasy" },
+  { value: "noir", label: "Noir" },
+] as const
+
 // Providers that support start + end frame (2 images -> video)
 export const PROVIDERS_WITH_END_FRAME: string[] = [
   "minimax",
