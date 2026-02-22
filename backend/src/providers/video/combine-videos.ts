@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine } from "./ffmpeg-utils.js"
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]
@@ -135,7 +135,9 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       const inputPath = join(workDir, `input_${i}.mp4`)
       console.log(`[combineVideos] Downloading video ${i + 1}/${videoUrls.length}`)
       await downloadFile(videoUrls[i], inputPath)
-      inputPaths.push(inputPath)
+      const normalizedPath = join(workDir, `normalized_${i}.mp4`)
+      await normalizeVideoForCombine(inputPath, normalizedPath)
+      inputPaths.push(normalizedPath)
     }
 
     const outputPath = join(workDir, "output.mp4")
