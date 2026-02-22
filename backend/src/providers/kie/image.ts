@@ -19,6 +19,13 @@ const NAMED_IMAGE_SIZE_PROVIDERS = new Set([
   "qwen", "qwen-i2i", "qwen-edit",
 ])
 
+// Models that accept negative_prompt as a native API parameter
+const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
+  "imagen4", "imagen4-fast", "imagen4-ultra",  // up to 5000 chars
+  "ideogram", "ideogram-remix",                 // up to 500 chars
+  "qwen", "qwen-edit",                          // up to 500 chars
+])
+
 // Map ratio strings → named image_size values for models that require them
 const RATIO_TO_NAMED_SIZE: Record<string, string> = {
   "1:1": "square_hd",
@@ -102,6 +109,12 @@ export class KieImageProvider
       delete input.resolution
     }
 
+    // Native negative_prompt: keep for supported models, remove for others.
+    // The caller passes negative_prompt via extraParams; it was already spread into input above.
+    if (input.negative_prompt && !NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
+      delete input.negative_prompt
+    }
+
     // Add reference images based on input type
     if (referenceImageUrls?.length) {
       if (modelConfig.inputType === "image-to-image") {
@@ -122,6 +135,9 @@ export class KieImageProvider
             input.image_input = referenceImageUrls.slice(1)
           }
         }
+      } else if (provider === "ideogram") {
+        // Ideogram character requires reference_image_urls (not image_input)
+        input.reference_image_urls = referenceImageUrls
       } else {
         // Text-to-image models use "image_input" for reference images
         input.image_input = referenceImageUrls

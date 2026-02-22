@@ -66,7 +66,7 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
 
 // --- Generate Image (E2E spike) ---
 
-export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[], aspectRatio?: string, userId?: string, resolution?: string, quality?: string): Promise<{ jobId: string }> {
+export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[], aspectRatio?: string, userId?: string, resolution?: string, quality?: string, negativePrompt?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     body.referenceImageUrls = referenceImageUrls
@@ -85,6 +85,9 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   }
   if (quality) {
     body.quality = quality
+  }
+  if (negativePrompt) {
+    body.negativePrompt = negativePrompt
   }
   if (userId) {
     body.userId = userId

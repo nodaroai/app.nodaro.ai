@@ -44,6 +44,7 @@ export function runImageGeneration(
   aspectRatio?: string,
   resolution?: string,
   quality?: string,
+  negativePrompt?: string,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -61,6 +62,7 @@ export function runImageGeneration(
       ctx.userId,
       resolution,
       quality,
+      negativePrompt,
     )
       .then(({ jobId }) => {
         toast.info("Image generation started", {

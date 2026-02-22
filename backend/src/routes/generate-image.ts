@@ -43,6 +43,7 @@ const generateImageBody = z.object({
   ]).optional(),
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
+  negativePrompt: z.string().max(5000).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -58,7 +59,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, userId } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -103,6 +104,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       aspectRatio,
       resolution,
       quality,
+      negativePrompt,
       usageLogId,
     })
 

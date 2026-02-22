@@ -8,7 +8,7 @@ import {
 } from "../shared.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
-  const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality } = job.data as {
+  const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality, negativePrompt } = job.data as {
     jobId: string
     prompt: string
     referenceImageUrls?: string[]
@@ -16,6 +16,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     aspectRatio?: string
     resolution?: string
     quality?: string
+    negativePrompt?: string
   }
   console.log(`[worker] generate-image ${ctx.jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
   if (referenceImageUrls?.length) {
@@ -26,6 +27,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   if (aspectRatio) extraParams.aspect_ratio = aspectRatio
   if (resolution) extraParams.resolution = resolution
   if (quality) extraParams.quality = quality
+  if (negativePrompt) extraParams.negative_prompt = negativePrompt
   const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, Object.keys(extraParams).length > 0 ? extraParams : undefined)
   await job.updateProgress(50)
 

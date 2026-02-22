@@ -263,14 +263,27 @@ export function executeNode(
     } else {
       finalPrompt = prompt;
     }
-    // Append style and negative prompt to the generation prompt
+    // Append style to the generation prompt
     const styleText = imgData.style?.trim();
     if (styleText) {
       finalPrompt += `\nStyle: ${styleText}`;
     }
+    // Models with native negative_prompt support get it as a separate API param.
+    // All other models get it appended to the prompt as "Avoid: ...".
+    const NATIVE_NEG_PROMPT_MODELS = new Set([
+      "imagen4", "imagen4-fast", "imagen4-ultra",
+      "ideogram", "ideogram-remix",
+      "qwen", "qwen-edit",
+    ]);
     const negPrompt = imgData.negativePrompt?.trim();
+    const providerKey = imgData.provider || "nano-banana";
+    let nativeNegativePrompt: string | undefined;
     if (negPrompt) {
-      finalPrompt += `\nAvoid: ${negPrompt}`;
+      if (NATIVE_NEG_PROMPT_MODELS.has(providerKey)) {
+        nativeNegativePrompt = negPrompt;
+      } else {
+        finalPrompt += `\nAvoid: ${negPrompt}`;
+      }
     }
     if (finalPrompt.length > 2000) {
       finalPrompt = finalPrompt.slice(0, 1997) + "...";
@@ -284,6 +297,7 @@ export function executeNode(
       imgData.aspectRatio || undefined,
       imgData.resolution || undefined,
       imgData.quality || undefined,
+      nativeNegativePrompt,
     );
   }
 
