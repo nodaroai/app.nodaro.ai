@@ -727,7 +727,7 @@ describe("imageToTextApi", () => {
     expect(url).toContain("/v1/image-to-text/describe")
     const body = JSON.parse(opts.body)
     expect(body.imageUrl).toBe("https://r2/sunset.jpg")
-    expect(body.detailLevel).toBe("high")
+    expect(body.detailLevel).toBe("detailed")
     expect(body.customPrompt).toBe("describe the mood")
   })
 
