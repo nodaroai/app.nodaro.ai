@@ -120,7 +120,7 @@ import {
   runObjectGeneration,
   runLocationGeneration,
 } from "./asset-executors";
-import { NATIVE_NEGATIVE_PROMPT_MODELS } from "@/components/editor/config-panels/model-options";
+import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "@/components/editor/config-panels/model-options";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -284,11 +284,14 @@ export function executeNode(
     if (finalPrompt.length > 2000) {
       finalPrompt = finalPrompt.slice(0, 1997) + "...";
     }
+    // Only send reference images for models that support them
+    const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(providerKey);
+    const refsToSend = supportsRefs && refImages.length > 0 ? refImages : undefined;
     return runImageGeneration(
       node.id,
       finalPrompt,
       ctx,
-      refImages.length > 0 ? refImages : undefined,
+      refsToSend,
       imgData.provider || undefined,
       imgData.aspectRatio || undefined,
       imgData.resolution || undefined,

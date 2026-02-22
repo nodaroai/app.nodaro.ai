@@ -233,6 +233,16 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "sora2-pro": [5, 10],
 }
 
+// Text-to-image models that accept reference images via their API.
+// All other T2I models silently ignore reference images.
+// I2I models always require a source image (handled separately).
+// Keep in sync with backend/src/providers/kie/image.ts reference image handling.
+export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
+  "nano-banana",      // uses image_input (maps to nano-banana-pro model)
+  "nano-banana-pro",  // uses image_input
+  "ideogram",         // uses reference_image_urls
+])
+
 // Models that accept negative_prompt as a native API parameter.
 // All other models get negative prompt appended to the prompt text as "Avoid: ...".
 // Keep in sync with backend/src/providers/kie/image.ts NATIVE_NEGATIVE_PROMPT_MODELS.

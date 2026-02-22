@@ -24,7 +24,7 @@ import type {
   ImageToImageData,
   CharacterDefinition,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS } from "./model-options"
+import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
@@ -35,15 +35,24 @@ const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m
 export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "nano-banana-pro"
+  const supportsRefImage = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
   const aspectRatioOptions = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
   const resolutionOptions = useMemo(() => IMAGE_RESOLUTION_OPTIONS[currentProvider], [currentProvider])
   const qualityOptions = useMemo(() => IMAGE_QUALITY_OPTIONS[currentProvider], [currentProvider])
 
-  // When provider changes, reset aspect ratio if current value isn't valid for new provider
+  // When provider changes, reset aspect ratio if current value isn't valid for new provider,
+  // and clear reference image if new provider doesn't support it
   useEffect(() => {
     const validValues = aspectRatioOptions.map((o) => o.value)
+    const updates: Partial<GenerateImageData> = {}
     if (data.aspectRatio && !validValues.includes(data.aspectRatio)) {
-      onUpdate({ aspectRatio: validValues[0] || "1:1" })
+      updates.aspectRatio = validValues[0] || "1:1"
+    }
+    if (!supportsRefImage && data.referenceImageUrl) {
+      updates.referenceImageUrl = undefined
+    }
+    if (Object.keys(updates).length > 0) {
+      onUpdate(updates)
     }
   }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -117,64 +126,66 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
         />
       </MappableField>
 
-      {/* Reference Image */}
-      <div>
-        <Label className="text-xs">Reference Image</Label>
-        <p className="text-[10px] text-muted-foreground mb-1">
-          Upload an image to use as visual reference for generation.
-        </p>
-        {data.referenceImageUrl ? (
-          <div className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
-            <CachedImage
-              src={data.referenceImageUrl}
-              alt="Reference"
-              className="w-10 h-10 rounded object-cover flex-shrink-0"
-              thumbnail
-              thumbnailWidth={80}
-            />
-            <span className="text-xs text-muted-foreground truncate flex-1">Reference image</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 h-6 w-6"
-              onClick={() => onUpdate({ referenceImageUrl: undefined })}
-              title="Remove reference image"
-              aria-label="Remove reference image"
-            >
-              <X className="w-3 h-3" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex gap-1.5">
-            <Input
-              value=""
-              onChange={(e) => {
-                if (e.target.value.trim()) onUpdate({ referenceImageUrl: e.target.value.trim() })
-              }}
-              placeholder="https://... or upload"
-              className="flex-1"
-            />
-            <input
-              ref={refImageInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={handleRefImageUpload}
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="shrink-0 h-9 w-9"
-              disabled={uploadingRefImage}
-              onClick={() => refImageInputRef.current?.click()}
-              title="Upload reference image"
-              aria-label="Upload reference image"
-            >
-              {uploadingRefImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            </Button>
-          </div>
-        )}
-      </div>
+      {/* Reference Image — only shown for models that support it */}
+      {supportsRefImage && (
+        <div>
+          <Label className="text-xs">Reference Image</Label>
+          <p className="text-[10px] text-muted-foreground mb-1">
+            Upload an image to use as visual reference for generation.
+          </p>
+          {data.referenceImageUrl ? (
+            <div className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
+              <CachedImage
+                src={data.referenceImageUrl}
+                alt="Reference"
+                className="w-10 h-10 rounded object-cover flex-shrink-0"
+                thumbnail
+                thumbnailWidth={80}
+              />
+              <span className="text-xs text-muted-foreground truncate flex-1">Reference image</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 h-6 w-6"
+                onClick={() => onUpdate({ referenceImageUrl: undefined })}
+                title="Remove reference image"
+                aria-label="Remove reference image"
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-1.5">
+              <Input
+                value=""
+                onChange={(e) => {
+                  if (e.target.value.trim()) onUpdate({ referenceImageUrl: e.target.value.trim() })
+                }}
+                placeholder="https://... or upload"
+                className="flex-1"
+              />
+              <input
+                ref={refImageInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleRefImageUpload}
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 h-9 w-9"
+                disabled={uploadingRefImage}
+                onClick={() => refImageInputRef.current?.click()}
+                title="Upload reference image"
+                aria-label="Upload reference image"
+              >
+                {uploadingRefImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
