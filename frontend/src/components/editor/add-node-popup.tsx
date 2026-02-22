@@ -66,7 +66,7 @@ interface NodeOption {
   readonly group?: string;
 }
 
-const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
+export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   {
     type: "text-prompt",
@@ -549,7 +549,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
 ];
 
-const CATEGORIES = [
+export const CATEGORIES = [
   {
     id: "Input",
     label: "INPUT",

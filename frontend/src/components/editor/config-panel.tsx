@@ -155,11 +155,11 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "scene": "Scene",
 }
 
-function getNodeTypeDisplayName(type: string): string {
+export function getNodeTypeDisplayName(type: string): string {
   return NODE_TYPE_DISPLAY_NAMES[type] || type.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
 }
 
-const GENERATE_BUTTON_TYPES = new Set([
+export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "generate-music", "motion-transfer", "lip-sync",
@@ -169,7 +169,7 @@ const GENERATE_BUTTON_TYPES = new Set([
   "image-to-text",
 ])
 
-const RUN_BUTTON_TYPES = new Set([
+export const RUN_BUTTON_TYPES = new Set([
   "merge-video-audio", "combine-videos", "extract-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "adjust-volume",
   "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
