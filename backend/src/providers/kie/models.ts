@@ -44,7 +44,9 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     model: "nano-banana-pro",
     credits: 6,
     cost: 0.03,
-    extraParams: { image_size: "16:9" },
+    // Pro uses `aspect_ratio` (NOT `image_size`) and supports `resolution` (1K/2K/4K)
+    // See: docs.kie.ai/market/google/pro-image-to-image.md
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
   "nano-banana-edit": {
     model: "google/nano-banana-edit",
@@ -113,6 +115,122 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "3:2", quality: "medium" },
   },
 
+  // Google Imagen4 family
+  // See: docs.kie.ai/market/google/imagen4.md
+  "imagen4": {
+    model: "google/imagen4",
+    credits: 8,
+    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    extraParams: { aspect_ratio: "16:9" },
+  },
+  "imagen4-fast": {
+    model: "google/imagen4-fast",
+    credits: 6,
+    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    extraParams: { aspect_ratio: "16:9" },
+  },
+  "imagen4-ultra": {
+    model: "google/imagen4-ultra",
+    credits: 12,
+    cost: 0.06,  // TODO: verify credit cost from KIE pricing
+    extraParams: { aspect_ratio: "16:9" },
+  },
+
+  // Ideogram family
+  // See: docs.kie.ai/market/ideogram/character.md
+  // NOTE: Ideogram uses `image_size` with named values (square, square_hd, portrait_4_3, etc.)
+  "ideogram": {
+    model: "ideogram/character",
+    credits: 8,
+    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    extraParams: { image_size: "landscape_16_9", style: "AUTO", rendering_speed: "BALANCED" },
+  },
+  "ideogram-edit": {
+    model: "ideogram/character-edit",
+    credits: 8,
+    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    inputType: "image-to-image",
+    imageParam: "image_url",  // Single URL string + mask_url required
+    extraParams: { style: "AUTO", rendering_speed: "BALANCED" },
+  },
+  "ideogram-remix": {
+    model: "ideogram/character-remix",
+    credits: 8,
+    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    inputType: "image-to-image",
+    imageParam: "image_url",  // Single URL string
+    extraParams: { image_size: "landscape_16_9", style: "AUTO", rendering_speed: "BALANCED", strength: 0.8 },
+  },
+  "ideogram-reframe": {
+    model: "ideogram/v3-reframe",
+    credits: 6,
+    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    inputType: "image-to-image",
+    imageParam: "image_url",  // Single URL string
+    extraParams: { image_size: "landscape_16_9", rendering_speed: "BALANCED" },
+  },
+
+  // Qwen family
+  // See: docs.kie.ai/market/qwen/text-to-image.md
+  // NOTE: Qwen uses `image_size` with named values (square, square_hd, portrait_4_3, etc.)
+  "qwen": {
+    model: "qwen/text-to-image",
+    credits: 4,
+    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    extraParams: { image_size: "landscape_16_9", output_format: "png" },
+  },
+  "qwen-i2i": {
+    model: "qwen/image-to-image",
+    credits: 4,
+    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    inputType: "image-to-image",
+    imageParam: "image_url",  // Single URL string
+    extraParams: { output_format: "png", strength: 0.8 },
+  },
+  "qwen-edit": {
+    model: "qwen/image-edit",
+    credits: 4,
+    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    inputType: "image-to-image",
+    imageParam: "image_url",  // Single URL string
+    extraParams: { image_size: "landscape_4_3", output_format: "png" },
+  },
+
+  // Seedream family (Bytedance)
+  // See: docs.kie.ai/market/seedream/4.5-text-to-image.md
+  "seedream": {
+    model: "seedream/4.5-text-to-image",
+    credits: 6,
+    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    extraParams: { aspect_ratio: "16:9", quality: "basic" },
+  },
+  "seedream-edit": {
+    model: "seedream/4.5-edit",
+    credits: 6,
+    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    inputType: "image-to-image",
+    imageParam: "image_urls",  // Array of URLs
+    extraParams: { aspect_ratio: "16:9", quality: "basic" },
+  },
+
+  // Flux-2 Flex text-to-image (we already have Flex I2I but were missing T2I)
+  // See: docs.kie.ai/market/flux2/flex-text-to-image.md
+  "flux-flex": {
+    model: "flux-2/flex-text-to-image",
+    credits: 8,
+    cost: 0.04,  // TODO: verify credit cost from KIE pricing
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+
+  // Z-Image
+  // See: docs.kie.ai/market/z-image/z-image.md
+  "z-image": {
+    model: "z-image",
+    credits: 4,
+    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    extraParams: { aspect_ratio: "16:9" },
+  },
+
   // Recraft utilities
   "recraft-remove-bg": {
     model: "recraft/remove-background",
@@ -125,6 +243,28 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     credits: 6,
     cost: 0.03,
     inputType: "image-to-image",
+  },
+
+  // Topaz image upscale (image enhancement utility)
+  // See: docs.kie.ai/market/topaz/image-upscale.md
+  "topaz-image-upscale": {
+    model: "topaz/image-upscale",
+    credits: 6,
+    cost: 0.03,  // TODO: verify credit cost from KIE pricing
+    inputType: "image-to-image",
+    imageParam: "image_url",  // Single URL string
+    extraParams: { upscale_factor: "2" },
+  },
+
+  // Grok image upscale (requires task_id from previous grok generation)
+  // See: docs.kie.ai/market/grok-imagine/upscale.md
+  // NOTE: This uses task_id, not image_url — requires special handling
+  "grok-upscale": {
+    model: "grok-imagine/upscale",
+    credits: 4,
+    cost: 0.02,  // TODO: verify credit cost from KIE pricing
+    inputType: "image-to-image",
+    extraParams: {},
   },
 }
 

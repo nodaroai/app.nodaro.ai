@@ -106,7 +106,7 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
 export async function editImage(
   imageUrl: string,
   prompt?: string,
-  provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit",
+  provider?: string,
   userId?: string
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl }
@@ -136,7 +136,7 @@ export async function editImage(
 export async function imageToImage(
   imageUrl: string,
   prompt: string,
-  provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i",
+  provider?: string,
   userId?: string,
   referenceImageUrls?: string[]
 ): Promise<{ jobId: string }> {

@@ -3,7 +3,15 @@ export const IMAGE_GEN_MODELS = [
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },
   { value: "grok", label: "Grok", desc: "Creative and stylized imagery" },
   { value: "flux", label: "Flux", desc: "Photorealistic, highest quality output" },
+  { value: "flux-flex", label: "Flux Flex", desc: "Flexible Flux, fast generation" },
   { value: "gpt-image", label: "GPT Image", desc: "Text rendering, complex compositions" },
+  { value: "imagen4", label: "Imagen 4", desc: "Google's latest, strong prompt adherence" },
+  { value: "imagen4-fast", label: "Imagen 4 Fast", desc: "Fast Imagen, lower latency" },
+  { value: "imagen4-ultra", label: "Imagen 4 Ultra", desc: "Highest quality Google image gen" },
+  { value: "ideogram", label: "Ideogram", desc: "Excellent text rendering, character consistency" },
+  { value: "qwen", label: "Qwen", desc: "Versatile, good at diverse styles" },
+  { value: "seedream", label: "Seedream", desc: "Photorealistic, high detail" },
+  { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
 ] as const
 
 export const IMAGE_I2I_MODELS = [
@@ -13,6 +21,11 @@ export const IMAGE_I2I_MODELS = [
   { value: "flux-i2i", label: "Flux-2", desc: "Style-faithful transformations" },
   { value: "flux-pro-i2i", label: "Flux-2 Pro", desc: "Premium quality image transforms" },
   { value: "gpt-image-i2i", label: "GPT Image", desc: "Text rendering, complex compositions" },
+  { value: "ideogram-remix", label: "Ideogram Remix", desc: "Restyle with character consistency" },
+  { value: "ideogram-reframe", label: "Ideogram Reframe", desc: "Change aspect ratio intelligently" },
+  { value: "qwen-i2i", label: "Qwen", desc: "Versatile image transformation" },
+  { value: "qwen-edit", label: "Qwen Edit", desc: "Targeted image editing" },
+  { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
 ] as const
 
 export const VIDEO_I2V_MODELS = [
@@ -92,15 +105,67 @@ const DEFAULT_RATIOS = [
   { value: "4:3", label: "4:3" },
 ] as const
 
+// Imagen4 family: 1:1, 16:9, 9:16, 3:4, 4:3
+const IMAGEN4_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+] as const
+
+// Ideogram/Qwen: uses named sizes, but we display as ratios (backend converts)
+const IDEOGRAM_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+] as const
+
+// Seedream 4.5: 1:1, 4:3, 3:4, 16:9, 9:16, 2:3, 3:2, 21:9
+const SEEDREAM_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+  { value: "3:2", label: "3:2" },
+  { value: "2:3", label: "2:3" },
+  { value: "21:9", label: "21:9 (Ultra-wide)" },
+] as const
+
+// Z-Image: 1:1, 4:3, 3:4, 16:9, 9:16
+const Z_IMAGE_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+] as const
+
 export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label: string }[]> = {
   "nano-banana": NANO_BANANA_RATIOS,
   "nano-banana-pro": NANO_BANANA_RATIOS,
   "flux": FLUX_RATIOS,
+  "flux-flex": FLUX_RATIOS,
   "flux-i2i": FLUX_RATIOS,
   "flux-pro-i2i": FLUX_RATIOS,
   "grok": GROK_RATIOS,
   "gpt-image": GPT_IMAGE_RATIOS,
   "gpt-image-i2i": GPT_IMAGE_RATIOS,
+  "imagen4": IMAGEN4_RATIOS,
+  "imagen4-fast": IMAGEN4_RATIOS,
+  "imagen4-ultra": IMAGEN4_RATIOS,
+  "ideogram": IDEOGRAM_RATIOS,
+  "ideogram-remix": IDEOGRAM_RATIOS,
+  "ideogram-reframe": IDEOGRAM_RATIOS,
+  "qwen": IDEOGRAM_RATIOS,
+  "qwen-i2i": IDEOGRAM_RATIOS,
+  "qwen-edit": IDEOGRAM_RATIOS,
+  "seedream": SEEDREAM_RATIOS,
+  "seedream-edit": SEEDREAM_RATIOS,
+  "z-image": Z_IMAGE_RATIOS,
 }
 
 export function getAspectRatiosForModel(provider: string): readonly { value: string; label: string }[] {
@@ -108,9 +173,18 @@ export function getAspectRatiosForModel(provider: string): readonly { value: str
 }
 
 // Models that support resolution selection
-// Note: Nano Banana does NOT support resolution (only image_size for aspect ratio)
+// Note: Base Nano Banana does NOT support resolution. Nano Banana Pro DOES (1K/2K/4K).
 export const IMAGE_RESOLUTION_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  "nano-banana-pro": [
+    { value: "1K", label: "1K (Standard)" },
+    { value: "2K", label: "2K (High)" },
+    { value: "4K", label: "4K (Ultra)" },
+  ],
   "flux": [
+    { value: "1K", label: "1K (Standard)" },
+    { value: "2K", label: "2K (High)" },
+  ],
+  "flux-flex": [
     { value: "1K", label: "1K (Standard)" },
     { value: "2K", label: "2K (High)" },
   ],
@@ -133,6 +207,14 @@ export const IMAGE_QUALITY_OPTIONS: Record<string, { value: string; label: strin
   "gpt-image-i2i": [
     { value: "medium", label: "Medium (Balanced)" },
     { value: "high", label: "High (Detailed)" },
+  ],
+  "seedream": [
+    { value: "basic", label: "Basic (2K)" },
+    { value: "high", label: "High (4K)" },
+  ],
+  "seedream-edit": [
+    { value: "basic", label: "Basic (2K)" },
+    { value: "high", label: "High (4K)" },
   ],
 }
 

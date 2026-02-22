@@ -161,7 +161,7 @@ export function runEditImage(
   imageUrl: string,
   ctx: ExecutionContext,
   prompt?: string,
-  provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit",
+  provider?: EditImageData["provider"],
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {

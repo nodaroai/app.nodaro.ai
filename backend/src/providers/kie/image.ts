@@ -13,6 +13,23 @@ import type {
 import { createSanitizedError, runKieTask } from "./client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
 
+// Models that use named image_size values instead of ratio strings (e.g. "landscape_16_9")
+const NAMED_IMAGE_SIZE_PROVIDERS = new Set([
+  "ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe",
+  "qwen", "qwen-i2i", "qwen-edit",
+])
+
+// Map ratio strings → named image_size values for models that require them
+const RATIO_TO_NAMED_SIZE: Record<string, string> = {
+  "1:1": "square_hd",
+  "16:9": "landscape_16_9",
+  "9:16": "portrait_16_9",
+  "4:3": "landscape_4_3",
+  "3:4": "portrait_4_3",
+  "3:2": "landscape_4_3",   // closest match
+  "2:3": "portrait_4_3",    // closest match
+}
+
 export class KieImageProvider
   implements ImageGenerationProvider, ImageEditingProvider
 {
@@ -54,13 +71,34 @@ export class KieImageProvider
       input.output_format = "png"
     }
 
-    // Nano Banana text-to-image uses `image_size` for aspect ratio (NOT `aspect_ratio`)
+    // Base Nano Banana uses `image_size` for aspect ratio (NOT `aspect_ratio`)
     // and does NOT support `resolution` — see docs.kie.ai/market/google/nano-banana.md
-    if (provider === "nano-banana" || provider === "nano-banana-pro") {
+    // NOTE: nano-banana-pro uses `aspect_ratio` and DOES support `resolution` (1K/2K/4K)
+    if (provider === "nano-banana") {
       if (input.aspect_ratio) {
         input.image_size = input.aspect_ratio
         delete input.aspect_ratio
       }
+      delete input.resolution
+    }
+
+    // Ideogram, Qwen use named image_size values (e.g. "landscape_16_9")
+    // Convert caller's aspect_ratio (e.g. "16:9") to named format
+    if (NAMED_IMAGE_SIZE_PROVIDERS.has(provider)) {
+      if (input.aspect_ratio) {
+        input.image_size = RATIO_TO_NAMED_SIZE[input.aspect_ratio as string] ?? "square_hd"
+        delete input.aspect_ratio
+      }
+      delete input.resolution
+    }
+
+    // Imagen4 family: supports negative_prompt natively, no resolution
+    if (provider.startsWith("imagen4")) {
+      delete input.resolution
+    }
+
+    // Z-Image: minimal params, no resolution
+    if (provider === "z-image") {
       delete input.resolution
     }
 
@@ -156,8 +194,15 @@ export class KieImageProvider
       input[imageParamName] = imageUrl
     }
 
-    // Add prompt only for nano-banana-edit (general editing with instructions)
-    if (provider === "nano-banana-edit" && prompt) {
+    // Add prompt for edit models that support it
+    if (prompt && (
+      provider === "nano-banana-edit" ||
+      provider === "ideogram-edit" ||
+      provider === "ideogram-remix" ||
+      provider === "qwen-i2i" ||
+      provider === "qwen-edit" ||
+      provider === "seedream-edit"
+    )) {
       input.prompt = prompt
     }
 
