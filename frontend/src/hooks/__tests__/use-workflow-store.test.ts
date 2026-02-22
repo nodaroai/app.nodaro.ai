@@ -85,7 +85,7 @@ describe("useWorkflowStore", () => {
       useWorkflowStore.getState().addNode("generate-image", { x: 0, y: 0 })
 
       const node = useWorkflowStore.getState().nodes[0]
-      expect(node.data.label).toBe("Text to Image")
+      expect(node.data.label).toBe("Generate Image")
       expect((node.data as Record<string, unknown>).provider).toBe("nano-banana-pro")
     })
 
