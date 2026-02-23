@@ -255,7 +255,7 @@ describe("PUT /v1/admin/users/:id/tier", () => {
       return updateChain
     })
 
-    vi.mocked(CreditsService.adminAdjustCredits).mockResolvedValue({ newBalance: 115 })
+    vi.mocked(CreditsService.adminAdjustCredits).mockResolvedValue({ newBalance: 495 })
 
     const res = await app.inject({
       method: "PUT",
@@ -267,8 +267,8 @@ describe("PUT /v1/admin/users/:id/tier", () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.tier).toBe("basic")
-    expect(body.subscription_credits).toBe(95)
-    expect(body.total_credits).toBe(115)
+    expect(body.subscription_credits).toBe(475)
+    expect(body.total_credits).toBe(495)
   })
 })
 

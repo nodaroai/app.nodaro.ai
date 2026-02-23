@@ -87,7 +87,7 @@ describe("KieImageProvider.generateImage", () => {
     await provider.generateImage("wide shot", undefined, "nano-banana", { aspect_ratio: "16:9" })
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       "nano-banana-pro",
-      expect.objectContaining({ aspect_ratio: "16:9" }),
+      expect.objectContaining({ image_size: "16:9" }),
     )
   })
 })

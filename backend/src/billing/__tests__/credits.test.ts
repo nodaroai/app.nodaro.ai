@@ -101,11 +101,11 @@ describe("CreditsService", () => {
     })
 
     it("returns correct cost for a known node type (generate-image)", () => {
-      expect(CreditsService.estimateWorkflowCredits([{ type: "generate-image" }])).toBe(1)
+      expect(CreditsService.estimateWorkflowCredits([{ type: "generate-image" }])).toBe(2)
     })
 
     it("returns correct cost for veo3", () => {
-      expect(CreditsService.estimateWorkflowCredits([{ type: "veo3" }])).toBe(25)
+      expect(CreditsService.estimateWorkflowCredits([{ type: "veo3" }])).toBe(125)
     })
 
     it("returns 0 for an unknown node type", () => {
@@ -114,12 +114,12 @@ describe("CreditsService", () => {
 
     it("sums costs for mixed node types", () => {
       const nodes = [
-        { type: "generate-image" },   // 1
-        { type: "veo3" },             // 25
-        { type: "text-to-speech" },   // 1
+        { type: "generate-image" },   // 2
+        { type: "veo3" },             // 125
+        { type: "text-to-speech" },   // 4
         { type: "ffmpeg" },           // 0
       ]
-      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(27)
+      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(131)
     })
 
     it("returns 0 for all zero-cost nodes", () => {
@@ -336,15 +336,15 @@ describe("CreditsService", () => {
         tier: "free",
         subscription_credits: 30,
         topup_credits: 10,
-        daily_spent_credits: 10, // already at cap of 10
+        daily_spent_credits: 50, // already at cap of 50
         last_daily_reset: new Date().toISOString(), // today, so no reset
       }
 
       const result = await CreditsService.checkCreditsWithProfile(userId, dailyCapProfile, "flux")
       expect(result.allowed).toBe(false)
       expect(result.error).toContain("Daily credit limit reached")
-      expect(result.dailyLimit).toBe(10)
-      expect(result.dailySpent).toBe(10)
+      expect(result.dailyLimit).toBe(50)
+      expect(result.dailySpent).toBe(50)
       expect(result.watermark).toBe(true)
     })
 
@@ -421,10 +421,10 @@ describe("CreditsService", () => {
         features: {},
       })
 
-      // "flux" has STATIC_CREDIT_COSTS["flux"] = 1
+      // "flux" has STATIC_CREDIT_COSTS["flux"] = 2
       const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "flux")
       expect(result.allowed).toBe(true)
-      expect(result.required).toBe(1)
+      expect(result.required).toBe(2)
     })
 
     it("uses subscription_tier when tier is missing", async () => {
