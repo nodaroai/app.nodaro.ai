@@ -18,6 +18,52 @@ import {
 } from "./client.js"
 import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS } from "./models.js"
 
+// ---------------------------------------------------------------------------
+// KIE.ai voice resolution
+// ---------------------------------------------------------------------------
+// KIE's ElevenLabs TTS endpoints accept 21 voice names but NOT arbitrary
+// ElevenLabs UUIDs. When the voice browser returns a real ElevenLabs UUID,
+// we must resolve it back to a name before sending to KIE.
+
+const KIE_ACCEPTED_VOICE_NAMES = new Set([
+  "Rachel", "Aria", "Roger", "Sarah", "Laura", "Charlie", "George",
+  "Callum", "River", "Liam", "Charlotte", "Alice", "Matilda", "Will",
+  "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Bill",
+])
+
+/** Voice name cache populated from /v1/voices endpoint data */
+let voiceIdToName: Map<string, string> | null = null
+
+/**
+ * Register the live voice list so KIE can resolve UUIDs → names.
+ * Called from the voices route after fetching from ElevenLabs API.
+ */
+export function registerVoiceLookup(voices: Array<{ voice_id: string; name: string }>) {
+  voiceIdToName = new Map(voices.map((v) => [v.voice_id, v.name]))
+}
+
+/**
+ * Resolve a voice identifier to a value KIE.ai accepts.
+ * - If it's already one of the 21 accepted names, pass through.
+ * - If it's a UUID, look up the name from the cached voice list.
+ * - Fall back to "Rachel" if unresolvable.
+ */
+function resolveVoiceForKie(voice: string | undefined): string {
+  if (!voice) return "Rachel"
+
+  // Already an accepted name
+  if (KIE_ACCEPTED_VOICE_NAMES.has(voice)) return voice
+
+  // UUID → look up name from cached voice list
+  if (voiceIdToName) {
+    const name = voiceIdToName.get(voice)
+    if (name && KIE_ACCEPTED_VOICE_NAMES.has(name)) return name
+  }
+
+  // Unknown voice — pass through (may be a KIE-accepted UUID)
+  return voice
+}
+
 export class KieAudioProvider
   implements MusicGenerationProvider, TextToSpeechProvider
 {
@@ -92,9 +138,15 @@ export class KieAudioProvider
       `[KIE.ai] Generating TTS with ${modelConfig.model}, voice: ${voice ?? "default"}`
     )
 
+    const resolvedVoice = resolveVoiceForKie(voice)
+
+    console.log(
+      `[KIE.ai] Resolved voice: "${voice ?? "(none)"}" → "${resolvedVoice}"`
+    )
+
     const input: Record<string, unknown> = {
       text,
-      voice: voice ?? "Rachel",
+      voice: resolvedVoice,
     }
 
     // Pass optional ElevenLabs parameters
@@ -262,7 +314,13 @@ export class KieAudioProvider
       `[KIE.ai] Generating dialogue with ${modelConfig.model}: ${dialogue.length} lines`
     )
 
-    const input: Record<string, unknown> = { dialogue }
+    // Resolve each voice UUID to a KIE-accepted name
+    const resolvedDialogue = dialogue.map((line) => ({
+      ...line,
+      voice: resolveVoiceForKie(line.voice),
+    }))
+
+    const input: Record<string, unknown> = { dialogue: resolvedDialogue }
     if (options?.stability != null) input.stability = options.stability
     if (options?.languageCode) input.language_code = options.languageCode
 
