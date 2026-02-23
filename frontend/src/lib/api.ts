@@ -675,12 +675,17 @@ export interface GenerateVideoOptions {
   duration?: number
   mode?: string            // Kling 3.0 quality mode (pro/std)
   sound?: boolean          // Kling 2.6 / 3.0 sound effects
-  negativePrompt?: string  // Kling Turbo negative prompt
-  cfgScale?: number        // Kling Turbo cfg_scale (0-1)
-  aspectRatio?: string     // Kling 3.0 aspect ratio
+  negativePrompt?: string  // Kling Turbo / Kling Master negative prompt
+  cfgScale?: number        // Kling Turbo / Kling Master cfg_scale (0-1)
+  aspectRatio?: string     // Kling 3.0 / Seedance aspect ratio
   multiShot?: boolean      // Kling 3.0 multi-shot mode
   shots?: Array<{ prompt: string; duration: number }>     // Kling 3.0 shot list
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>  // Kling 3.0 elements
+  resolution?: string      // Video resolution (various providers)
+  grokMode?: string        // Grok I2V mode: fun/normal/spicy
+  videoSize?: string       // Sora2 Pro size: standard/high
+  seed?: number            // Seed (Wan Turbo, Bytedance)
+  cameraFixed?: boolean    // Camera fixed (Bytedance, Seedance)
   userId?: string
 }
 
@@ -715,6 +720,11 @@ export async function generateVideo(
       multiShot: opts.multiShot,
       shots: opts.shots,
       elements: opts.elements,
+      resolution: opts.resolution,
+      grokMode: opts.grokMode,
+      videoSize: opts.videoSize,
+      seed: opts.seed,
+      cameraFixed: opts.cameraFixed,
     }
     if (opts.userId) {
       body.userId = opts.userId

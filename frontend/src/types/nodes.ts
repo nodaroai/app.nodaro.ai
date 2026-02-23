@@ -493,7 +493,7 @@ export type ImageToImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro"
+  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro" | "seedance" | "wan-i2v" | "wan-turbo" | "hailuo-2.3-pro" | "hailuo-2.3" | "hailuo-standard" | "sora2" | "bytedance-lite" | "bytedance-pro" | "bytedance-pro-fast" | "kling-master"
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
@@ -506,8 +506,13 @@ export type ImageToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
-  aspectRatio?: "16:9" | "9:16" | "1:1"
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "21:9"
   multiShot?: boolean
+  resolution?: string
+  grokMode?: "fun" | "normal" | "spicy"
+  videoSize?: "standard" | "high"
+  seed?: number
+  cameraFixed?: boolean
   shots?: Array<{ prompt: string; duration: number }>
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
   // Multi-input selection fields

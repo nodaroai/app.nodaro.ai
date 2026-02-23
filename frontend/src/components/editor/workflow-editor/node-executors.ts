@@ -398,6 +398,11 @@ export function runVideoGeneration(
   }>,
   negativePrompt?: string,
   cfgScale?: number,
+  resolution?: string,
+  grokMode?: string,
+  videoSize?: string,
+  seed?: number,
+  cameraFixed?: boolean,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -424,6 +429,11 @@ export function runVideoGeneration(
       multiShot,
       shots,
       elements,
+      resolution,
+      grokMode,
+      videoSize,
+      seed,
+      cameraFixed,
       userId: ctx.userId,
     })
       .then(({ jobId }) => {

@@ -182,11 +182,11 @@ export class KieVideoProvider
       `[KIE.ai] Using image parameter: ${imageParamName}`
     )
 
-    if (imageParamName === "image_urls") {
-      // Array format for kling, grok, sora
+    if (imageParamName === "image_urls" || imageParamName === "input_urls") {
+      // Array format for kling, grok, sora, seedance, wan-i2v
       input[imageParamName] = [imageUrl]
     } else {
-      // Single URL format for hailuo, kling-turbo
+      // Single URL format for hailuo, kling-turbo, bytedance, wan-turbo, kling-master
       input[imageParamName] = imageUrl
     }
 
@@ -210,8 +210,8 @@ export class KieVideoProvider
     if (endFrameUrl) {
       if (provider === "kling-turbo") {
         input.tail_image_url = endFrameUrl
-      } else if (provider === "minimax") {
-        input.end_image_url = endFrameUrl // Hailuo uses end_image_url
+      } else if (provider === "minimax" || provider === "hailuo-standard" || provider === "bytedance-lite") {
+        input.end_image_url = endFrameUrl
       } else {
         input.end_frame = endFrameUrl
       }
@@ -221,12 +221,66 @@ export class KieVideoProvider
     if (options?.sound !== undefined) {
       input.sound = options.sound
     }
-    // Kling Turbo supports negative_prompt and cfg_scale
+    // Kling Turbo / Kling Master supports negative_prompt and cfg_scale
     if (options?.negativePrompt) {
       input.negative_prompt = options.negativePrompt
     }
     if (options?.cfgScale !== undefined) {
       input.cfg_scale = options.cfgScale
+    }
+
+    // Resolution override for models that support it
+    if (options?.resolution) {
+      input.resolution = options.resolution
+    }
+
+    // Grok I2V mode (fun/normal/spicy)
+    if (options?.grokMode && provider === "grok-i2v") {
+      input.mode = options.grokMode
+    }
+
+    // Sora2 Pro size (standard/high)
+    if (options?.videoSize && provider === "sora2-pro") {
+      input.size = options.videoSize
+    }
+
+    // Seed for deterministic generation (Wan Turbo, Bytedance Lite/Pro)
+    if (options?.seed !== undefined && options.seed >= 0) {
+      input.seed = options.seed
+    }
+
+    // Camera fixed / fixed lens
+    if (options?.cameraFixed !== undefined) {
+      if (provider === "seedance") {
+        input.fixed_lens = options.cameraFixed
+      } else if (provider === "bytedance-lite" || provider === "bytedance-pro") {
+        input.camera_fixed = options.cameraFixed
+      }
+    }
+
+    // Seedance generate_audio
+    if (options?.generateAudio !== undefined && provider === "seedance") {
+      input.generate_audio = options.generateAudio
+    }
+
+    // Seedance aspect_ratio override
+    if (options?.aspectRatio && provider === "seedance") {
+      input.aspect_ratio = options.aspectRatio
+    }
+
+    // Wan Turbo specific params
+    if (provider === "wan-turbo") {
+      if (options?.acceleration !== undefined) {
+        input.acceleration = options.acceleration
+      }
+      if (options?.enablePromptExpansion !== undefined) {
+        input.enable_prompt_expansion = options.enablePromptExpansion
+      }
+    }
+
+    // Hailuo prompt_optimizer
+    if (options?.promptOptimizer !== undefined && (provider === "hailuo-standard" || provider === "minimax")) {
+      input.prompt_optimizer = options.promptOptimizer
     }
 
     console.log(

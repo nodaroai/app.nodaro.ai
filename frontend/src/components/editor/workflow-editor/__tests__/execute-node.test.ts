@@ -550,6 +550,11 @@ describe("image-to-video", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
     )
   })
 })
