@@ -15,6 +15,10 @@ const generateVideoBody = z.object({
     "veo3", "veo3.1", "kling", "minimax",
     "veo", "runway", "pika", "sora",
     "kling-turbo", "kling-3.0", "grok-i2v", "sora2-pro",
+    "seedance", "wan-i2v", "wan-turbo",
+    "hailuo-2.3-pro", "hailuo-2.3", "hailuo-standard",
+    "sora2", "bytedance-lite", "bytedance-pro", "bytedance-pro-fast",
+    "kling-master",
   ]).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
@@ -22,10 +26,15 @@ const generateVideoBody = z.object({
   sound: z.boolean().optional(),
   negativePrompt: z.string().max(2500).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
-  aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
+  aspectRatio: z.enum(["16:9", "9:16", "1:1", "21:9"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
+  resolution: z.string().optional(),
+  grokMode: z.enum(["fun", "normal", "spicy"]).optional(),
+  videoSize: z.enum(["standard", "high"]).optional(),
+  seed: z.number().int().min(-1).max(2147483647).optional(),
+  cameraFixed: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -41,7 +50,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, userId } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -58,7 +67,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         workflow_id: null,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, type: "image-to-video" },
+        input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, type: "image-to-video" },
       })
       .select("id")
       .single()
@@ -91,6 +100,11 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       multiShot,
       shots,
       elements,
+      resolution,
+      grokMode,
+      videoSize,
+      seed,
+      cameraFixed,
       usageLogId,
     })
 

@@ -129,6 +129,17 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-3.0": 32,               // $0.50
   "grok-i2v": 19,                // 60 KIE cr, $0.30
   "sora2-pro": 63,               // 200 KIE cr, $1.00
+  "seedance": 32,                // 100 KIE cr, $0.50
+  "wan-i2v": 25,                 // 80 KIE cr, $0.40
+  "wan-turbo": 13,               // 40 KIE cr, $0.20
+  "hailuo-2.3-pro": 32,          // 100 KIE cr, $0.50
+  "hailuo-2.3": 19,              // 60 KIE cr, $0.30
+  "hailuo-standard": 16,         // 50 KIE cr, $0.25
+  "sora2": 38,                   // 120 KIE cr, $0.60
+  "bytedance-lite": 16,          // 50 KIE cr, $0.25
+  "bytedance-pro": 22,           // 70 KIE cr, $0.35
+  "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30
+  "kling-master": 22,            // 70 KIE cr, $0.35
   // ── Video-to-Video / Motion ──
   "wan": 25,                     // 80 KIE cr, $0.40
   "topaz-video": 0,

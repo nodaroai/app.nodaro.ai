@@ -444,6 +444,11 @@ export function executeNode(
       i2vData.elements,
       i2vNegativePrompt,
       i2vCfgScale,
+      i2vData.resolution,
+      i2vData.grokMode,
+      i2vData.videoSize,
+      i2vData.seed,
+      i2vData.cameraFixed,
     );
   }
 

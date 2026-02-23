@@ -376,6 +376,131 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     usesNFrames: true,  // Uses n_frames parameter instead of duration
     supportsEndFrame: false,  // Sora2 Pro only accepts 1 image
   },
+
+  // Seedance 1.5 Pro - docs.kie.ai/market/bytedance/seedance-1.5-pro
+  // Uses input_urls array (0-2 images for start/end frame)
+  "seedance": {
+    model: "bytedance/seedance-1.5-pro",
+    credits: 100,
+    cost: 0.50,
+    imageParam: "input_urls",  // Array format: [startFrame] or [startFrame, endFrame]
+    extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
+    allowedDurations: [4, 8, 12],
+    supportsEndFrame: false,  // End frame via input_urls array (handled in video.ts)
+  },
+
+  // Wan 2.6 I2V - docs.kie.ai/market/wan/2-6-image-to-video
+  "wan-i2v": {
+    model: "wan/2-6-image-to-video",
+    credits: 80,
+    cost: 0.40,
+    imageParam: "image_urls",  // Array format (max 1)
+    extraParams: { resolution: "720p" },
+    allowedDurations: [5, 10, 15],
+    supportsEndFrame: false,
+  },
+
+  // Wan 2.2 Turbo I2V - docs.kie.ai/market/wan/2-2-a14b-image-to-video-turbo
+  "wan-turbo": {
+    model: "wan/2-2-a14b-image-to-video-turbo",
+    credits: 40,
+    cost: 0.20,
+    imageParam: "image_url",  // Single URL string
+    extraParams: { resolution: "480p" },
+    allowedDurations: [5],
+    supportsEndFrame: false,
+  },
+
+  // Hailuo 2.3 Pro I2V - docs.kie.ai/market/hailuo/2-3-image-to-video-pro
+  "hailuo-2.3-pro": {
+    model: "hailuo/2-3-image-to-video-pro",
+    credits: 100,
+    cost: 0.50,
+    imageParam: "image_url",  // Single URL string
+    extraParams: { resolution: "768P" },
+    allowedDurations: [6, 10],
+    supportsEndFrame: false,
+  },
+
+  // Hailuo 2.3 Standard I2V - docs.kie.ai/market/hailuo/2-3-image-to-video-standard
+  "hailuo-2.3": {
+    model: "hailuo/2-3-image-to-video-standard",
+    credits: 60,
+    cost: 0.30,
+    imageParam: "image_url",  // Single URL string
+    extraParams: { resolution: "768P" },
+    allowedDurations: [6, 10],
+    supportsEndFrame: false,
+  },
+
+  // Hailuo Standard (02) I2V - docs.kie.ai/market/hailuo/02-image-to-video-standard
+  "hailuo-standard": {
+    model: "hailuo/02-image-to-video-standard",
+    credits: 50,
+    cost: 0.25,
+    imageParam: "image_url",  // Single URL string
+    extraParams: { prompt_optimizer: false, resolution: "768P" },
+    allowedDurations: [6, 10],
+    supportsEndFrame: true,
+    endFrameParam: "end_image_url",
+  },
+
+  // Sora 2 (non-Pro) I2V - docs.kie.ai/market/sora2/sora-2-image-to-video
+  "sora2": {
+    model: "sora-2-image-to-video",
+    credits: 120,
+    cost: 0.60,
+    imageParam: "image_urls",  // Array format
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    allowedDurations: [5, 10],
+    usesNFrames: true,
+    supportsEndFrame: false,
+  },
+
+  // Bytedance V1 Lite I2V - docs.kie.ai/market/bytedance/v1-lite-image-to-video
+  "bytedance-lite": {
+    model: "bytedance/v1-lite-image-to-video",
+    credits: 50,
+    cost: 0.25,
+    imageParam: "image_url",  // Single URL string
+    extraParams: { resolution: "480p" },
+    allowedDurations: [5, 10],
+    supportsEndFrame: true,
+    endFrameParam: "end_image_url",
+  },
+
+  // Bytedance V1 Pro I2V - docs.kie.ai/market/bytedance/v1-pro-image-to-video
+  "bytedance-pro": {
+    model: "bytedance/v1-pro-image-to-video",
+    credits: 70,
+    cost: 0.35,
+    imageParam: "image_url",  // Single URL string
+    extraParams: { resolution: "480p" },
+    allowedDurations: [5, 10],
+    supportsEndFrame: false,
+  },
+
+  // Bytedance V1 Pro Fast I2V - docs.kie.ai/market/bytedance/v1-pro-fast-image-to-video
+  "bytedance-pro-fast": {
+    model: "bytedance/v1-pro-fast-image-to-video",
+    credits: 60,
+    cost: 0.30,
+    imageParam: "image_url",  // Single URL string
+    extraParams: { resolution: "720p" },
+    allowedDurations: [5, 10],
+    supportsEndFrame: false,
+  },
+
+  // Kling V2.1 Master I2V - docs.kie.ai/market/kling/v2-1-master-image-to-video
+  "kling-master": {
+    model: "kling/v2-1-master-image-to-video",
+    credits: 70,
+    cost: 0.35,
+    imageParam: "image_url",  // Single URL string
+    extraParams: { duration: "5", cfg_scale: 0.5 },
+    allowedDurations: [5, 10],
+    supportsEndFrame: false,
+  },
 }
 
 // =============================================================================

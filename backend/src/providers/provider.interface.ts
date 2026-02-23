@@ -29,12 +29,22 @@ export interface ProviderOptions {
   onProgress?: ProgressCallback
   mode?: string   // Provider-specific quality mode (e.g. "pro" | "std" for Kling 3.0)
   sound?: boolean // Enable sound effects (Kling 2.6 / 3.0)
-  negativePrompt?: string // Negative prompt (Kling Turbo)
-  cfgScale?: number       // CFG scale 0-1 (Kling Turbo)
+  negativePrompt?: string // Negative prompt (Kling Turbo / Kling Master)
+  cfgScale?: number       // CFG scale 0-1 (Kling Turbo / Kling Master)
   aspectRatio?: string
   multiShots?: boolean
   multiPrompt?: Array<{ prompt: string; duration: number }>
   klingElements?: Array<{ name: string; description: string; element_input_urls?: string[]; element_input_video_urls?: string[] }>
+  // Per-model video params
+  resolution?: string      // Video resolution (e.g. "480p", "720p", "1080p", "768P", "1080P")
+  grokMode?: string        // Grok I2V mode: "fun" | "normal" | "spicy"
+  videoSize?: string       // Sora2 Pro size: "standard" | "high"
+  seed?: number            // Seed for deterministic generation (Wan Turbo, Bytedance)
+  cameraFixed?: boolean    // Camera fixed / fixed_lens (Bytedance, Seedance)
+  generateAudio?: boolean  // Generate audio track (Seedance)
+  acceleration?: boolean   // Wan Turbo acceleration
+  enablePromptExpansion?: boolean // Wan Turbo prompt expansion
+  promptOptimizer?: boolean // Hailuo prompt optimizer
 }
 
 // Each provider implements the capabilities it supports

@@ -22,7 +22,7 @@ import {
 } from "../shared.js"
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed } = job.data as {
     jobId: string
     imageUrl: string
     endFrameUrl?: string
@@ -39,6 +39,11 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     multiShot?: boolean
     shots?: Array<{ prompt: string; duration: number }>
     elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
+    resolution?: string
+    grokMode?: string
+    videoSize?: string
+    seed?: number
+    cameraFixed?: boolean
   }
   console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
@@ -56,7 +61,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
   }
 
-  const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements })
+  const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, videoSize, seed, cameraFixed, generateAudio })
   await job.updateProgress(40)
 
   // Upload the generated video to R2

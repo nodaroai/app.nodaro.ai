@@ -40,7 +40,7 @@ const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "veo3": [8],
   "kling": [5, 10],
   "kling-turbo": [5, 10],
-  "grok": [10],
+  "grok": [6, 10],
   "sora2-pro": [5, 10],
   "kling-3.0": KLING3_DURATIONS,
 }
@@ -309,7 +309,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </div>
       )}
 
-      {data.provider === "kling-turbo" && (
+      {(data.provider === "kling-turbo" || data.provider === "kling-master") && (
         <div>
           <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
           <Input
@@ -321,6 +321,224 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             onChange={(e) => onUpdate({ cfgScale: parseFloat(e.target.value) || 0.5 })}
           />
           <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+        </div>
+      )}
+
+      {data.provider === "kling-master" && (
+        <div>
+          <Label className="text-xs">Negative Prompt</Label>
+          <Textarea
+            rows={2}
+            value={(data as Record<string, unknown>).negativePrompt as string || ""}
+            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+            placeholder="Things to avoid..."
+          />
+        </div>
+      )}
+
+      {data.provider === "grok-i2v" && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "480p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Mode</Label>
+            <Select
+              value={data.grokMode || "normal"}
+              onValueChange={(v) => onUpdate({ grokMode: v as "fun" | "normal" | "spicy" })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="fun">Fun</SelectItem>
+                <SelectItem value="spicy">Spicy</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+
+      {data.provider === "sora2-pro" && (
+        <div>
+          <Label className="text-xs">Quality</Label>
+          <Select
+            value={data.videoSize || "standard"}
+            onValueChange={(v) => onUpdate({ videoSize: v as "standard" | "high" })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard">Standard (720p)</SelectItem>
+              <SelectItem value="high">High (1080p)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {data.provider === "seedance" && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "720p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.aspectRatio || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                <SelectItem value="21:9">21:9 (Ultra-wide)</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="seedanceFixedLens"
+              checked={data.cameraFixed || false}
+              onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="seedanceFixedLens" className="text-xs">Fixed Lens (no camera movement)</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="seedanceAudio"
+              checked={data.generateAudio || false}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="seedanceAudio" className="text-xs">Generate Audio</label>
+          </div>
+        </>
+      )}
+
+      {(data.provider === "wan-i2v" || data.provider === "wan-turbo") && (
+        <div>
+          <Label className="text-xs">Resolution</Label>
+          <Select
+            value={data.resolution || (data.provider === "wan-turbo" ? "480p" : "720p")}
+            onValueChange={(v) => onUpdate({ resolution: v })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {data.provider === "wan-turbo" ? (
+                <>
+                  <SelectItem value="480p">480p</SelectItem>
+                  <SelectItem value="720p">720p</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="720p">720p</SelectItem>
+                  <SelectItem value="1080p">1080p</SelectItem>
+                </>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {(data.provider === "hailuo-2.3-pro" || data.provider === "hailuo-2.3" || data.provider === "hailuo-standard") && (
+        <div>
+          <Label className="text-xs">Resolution</Label>
+          <Select
+            value={data.resolution || "768P"}
+            onValueChange={(v) => onUpdate({ resolution: v })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {data.provider === "hailuo-standard" ? (
+                <>
+                  <SelectItem value="512P">512P</SelectItem>
+                  <SelectItem value="768P">768P</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="768P">768P</SelectItem>
+                  <SelectItem value="1080P">1080P</SelectItem>
+                </>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {(data.provider === "bytedance-lite" || data.provider === "bytedance-pro") && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "480p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="bytedanceCameraFixed"
+              checked={data.cameraFixed || false}
+              onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="bytedanceCameraFixed" className="text-xs">Camera Fixed</label>
+          </div>
+          <div>
+            <Label className="text-xs">Seed (-1 for random)</Label>
+            <Input
+              type="number"
+              min={-1}
+              max={2147483647}
+              value={data.seed ?? -1}
+              onChange={(e) => onUpdate({ seed: parseInt(e.target.value, 10) })}
+            />
+          </div>
+        </>
+      )}
+
+      {data.provider === "bytedance-pro-fast" && (
+        <div>
+          <Label className="text-xs">Resolution</Label>
+          <Select
+            value={data.resolution || "720p"}
+            onValueChange={(v) => onUpdate({ resolution: v })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="720p">720p</SelectItem>
+              <SelectItem value="1080p">1080p</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       )}
 
