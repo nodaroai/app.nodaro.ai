@@ -1,14 +1,15 @@
-version: '3.8'
-
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - VITE_SUPABASE_URL=${SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+        - VITE_APP_URL=http://localhost:3000
+        - VITE_API_URL=http://localhost:8000
+        - VITE_EDITION=${EDITION:-community}
     ports:
       - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     depends_on:
       - backend
 
@@ -18,7 +19,6 @@ services:
       - "8000:8000"
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - REDIS_URL=redis://redis:6379
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
@@ -26,28 +26,34 @@ services:
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
       - R2_PUBLIC_URL=${R2_PUBLIC_URL}
-      - API_SECRET_KEY=${API_SECRET_KEY}
-      - WEBHOOK_SECRET_KEY=${WEBHOOK_SECRET_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - KIE_API_KEY=${KIE_API_KEY}
+      - REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - EDITION=${EDITION:-community}
     depends_on:
       - redis
-      - postgres
 
   worker:
     build: ./backend
-    command: python -m scenenode.workers
+    command: node dist/worker.js
     environment:
-      - REDIS_URL=redis://redis:6379
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - REDIS_URL=redis://redis:6379
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - KIE_API_KEY=${KIE_API_KEY}
+      - REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - EDITION=${EDITION:-community}
     depends_on:
       - redis
       - backend
-    deploy:
-      replicas: 2
 
   redis:
     image: redis:7-alpine
@@ -56,17 +62,5 @@ services:
     volumes:
       - redis_data:/data
 
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_DB=scenenode
-      - POSTGRES_USER=scenenode
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-scenenode_dev}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
 volumes:
   redis_data:
-  postgres_data:
