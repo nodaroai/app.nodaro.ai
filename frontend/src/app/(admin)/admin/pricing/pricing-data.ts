@@ -16,11 +16,11 @@ export interface SubscriptionTier {
 }
 
 export const SUBSCRIPTION_TIERS: readonly SubscriptionTier[] = [
-  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 50, perCredit: null, llmRequests: "20/mo", estimatedCost: 5, marginMonthly: null, marginAnnual: null, notes: "10 cr/day, VEO 3 blocked, watermark" },
-  { name: "Basic", priceMonthly: 24, priceAnnual: 19, credits: 95, perCredit: 0.20, llmRequests: "100/mo", estimatedCost: 9.6, marginMonthly: 60, marginAnnual: 49 },
-  { name: "Standard", priceMonthly: 49, priceAnnual: 39, credits: 235, perCredit: 0.166, llmRequests: "300/mo", estimatedCost: 23.8, marginMonthly: 51, marginAnnual: 39 },
-  { name: "Pro", priceMonthly: 99, priceAnnual: 79, credits: 530, perCredit: 0.149, llmRequests: "1,000/mo", estimatedCost: 54, marginMonthly: 45, marginAnnual: 32 },
-  { name: "Business", priceMonthly: 189, priceAnnual: 149, credits: 1120, perCredit: 0.133, llmRequests: "Unlimited", estimatedCost: 112, marginMonthly: 41, marginAnnual: 25 },
+  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 250, perCredit: null, llmRequests: "20/mo", estimatedCost: 5, marginMonthly: null, marginAnnual: null, notes: "50 cr/day, VEO 3 blocked, watermark" },
+  { name: "Basic", priceMonthly: 24, priceAnnual: 19, credits: 475, perCredit: 0.04, llmRequests: "100/mo", estimatedCost: 9.5, marginMonthly: 60, marginAnnual: 50 },
+  { name: "Standard", priceMonthly: 49, priceAnnual: 39, credits: 1175, perCredit: 0.033, llmRequests: "300/mo", estimatedCost: 23.5, marginMonthly: 52, marginAnnual: 40 },
+  { name: "Pro", priceMonthly: 99, priceAnnual: 79, credits: 2650, perCredit: 0.030, llmRequests: "1,000/mo", estimatedCost: 53, marginMonthly: 46, marginAnnual: 33 },
+  { name: "Business", priceMonthly: 189, priceAnnual: 149, credits: 5600, perCredit: 0.027, llmRequests: "Unlimited", estimatedCost: 112, marginMonthly: 41, marginAnnual: 25 },
 ] as const
 
 export interface TopUpPackage {
@@ -31,9 +31,10 @@ export interface TopUpPackage {
 }
 
 export const TOPUP_PACKAGES: readonly TopUpPackage[] = [
-  { name: "Small", price: 10, credits: 50, perCredit: 0.20 },
-  { name: "Medium", price: 25, credits: 130, perCredit: 0.19 },
-  { name: "Large", price: 50, credits: 275, perCredit: 0.18 },
+  { name: "Small", price: 10, credits: 275, perCredit: 0.036 },
+  { name: "Medium", price: 25, credits: 750, perCredit: 0.033 },
+  { name: "Large", price: 50, credits: 1650, perCredit: 0.030 },
+  { name: "XL", price: 100, credits: 3500, perCredit: 0.029 },
 ] as const
 
 export interface LLMPricing {
@@ -106,11 +107,11 @@ export interface ModelReferenceData {
 }
 
 /** [comment removed] */
-export const CREDIT_VALUE_USD = 0.10
+export const CREDIT_VALUE_USD = [REMOVED]
 
 /** [comment removed] */
-export const SELL_PRICE_PER_CREDIT_MAX = 0.20   // Basic tier
-export const SELL_PRICE_PER_CREDIT_MIN = 0.133  // Business tier
+export const SELL_PRICE_PER_CREDIT_MAX = 0.04   // Basic tier ($10/275cr)
+export const SELL_PRICE_PER_CREDIT_MIN = 0.027  // Business tier
 
 /**
  * [comment removed]

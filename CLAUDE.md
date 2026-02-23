@@ -58,7 +58,7 @@
 | 4 | `backend/src/providers/kie/*.ts` or `replicate/*.ts` | Provider implementation |
 | 5 | `backend/src/providers/kie/models.ts` | KIE model config (cost, params) |
 | 6 | `backend/src/providers/kie/index.ts` or `replicate/index.ts` | `supportedModels` array |
-| 7 | `backend/src/billing/credits.ts` | NODE_CREDIT_COSTS |
+| 7 | `backend/src/billing/credits.ts` | `STATIC_CREDIT_COSTS` (supports composite identifiers like `"gpt-image:high"`) |
 | 8 | `frontend/src/lib/pricing-data.ts` | MODEL_REFERENCE |
 | 9 | `model_pricing` DB table | Include actual provider cost |
 | 10 | `backend/src/billing/paddle-config.ts` | If pricing tiers or credit allocations change |
@@ -199,7 +199,8 @@ backend/src/
 | Execution model | Frontend DAG engine (`workflow-editor/`) | Topological sort, parallel per level |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
-| Voice Extractor | ElevenLabs via KIE.ai | Isolates voice from any audio, removes background noise (1 credit) |
+| Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers |
+| Voice Extractor | ElevenLabs via KIE.ai | Isolates voice from any audio, removes background noise |
 | Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + composite renderer + legacy template converters via BullMQ worker |
 | AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
 | After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox, animated-blur, trail, motion-blur) applied to video (2 credits), CSS `filter:blur()` for motion-blur, OffthreadVideo ghost layers for trail |
@@ -233,5 +234,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-02-22*
-*Version: 1.36.5*
+*Last updated: 2026-02-23*
+*Version: 1.37.0*
