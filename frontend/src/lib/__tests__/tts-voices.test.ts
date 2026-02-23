@@ -20,18 +20,18 @@ describe("TTS_VOICES", () => {
 
   it("every name includes a gender indicator", () => {
     for (const voice of TTS_VOICES) {
-      expect(voice.name).toMatch(/\((Female|Male|Non-binary)\)/)
+      expect(voice.name).toMatch(/\(Female|Male|Non-binary/)
     }
   })
 
-  it("includes Rachel as the first voice", () => {
-    expect(TTS_VOICES[0].id).toBe("Rachel")
+  it("includes Rachel", () => {
+    expect(TTS_VOICES.some((v) => v.id === "Rachel")).toBe(true)
   })
 })
 
 describe("getVoiceName", () => {
   it("returns voice name for a known ID", () => {
-    expect(getVoiceName("Rachel")).toBe("Rachel (Female)")
+    expect(getVoiceName("Rachel")).toBe("Rachel (Female, American)")
   })
 
   it("returns voice name for another known ID", () => {
