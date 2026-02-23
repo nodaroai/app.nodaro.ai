@@ -176,7 +176,7 @@ backend/src/
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
@@ -217,6 +217,7 @@ backend/src/
 | Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
 | Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
+| Voice browser | ElevenLabs v2 API → VoiceBrowser dialog | `GET /v1/voices` (public, 6hr cache, stampede-safe), `useVoices()` hook, dialog with search/gender/accent filters + audio preview; `DIALOGUE_VOICE_IDS` restricts dialogue node to 20 supported voices; fallback to static 52-voice list when no API key |
 
 ---
 
@@ -229,7 +230,7 @@ backend/src/
 - [ ] Version history per node
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
-- [ ] TTS voice browser with categories, search, audio previews
+- [x] TTS voice browser with categories, search, audio previews
 - [ ] Translation: use AI (Gemini/Claude) not Google Translate
 - [ ] Build from Prompt: MVP + Director Mode versions
 - [ ] Scene Node + Shot Node as optional "Director Mode"
@@ -237,4 +238,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-23*
-*Version: 1.38.0*
+*Version: 1.39.0*
