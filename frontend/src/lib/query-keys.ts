@@ -89,6 +89,12 @@ export const queryKeys = {
     results: (query: string) => ["search", query] as const,
   },
 
+  // Voices
+  voices: {
+    all: ["voices"] as const,
+    list: () => ["voices", "list"] as const,
+  },
+
   // Admin
   admin: {
     all: ["admin"] as const,

@@ -103,6 +103,7 @@ export const EXECUTABLE_TYPES = new Set([
   "combine-text",
   "split-text",
   "audio-isolation",
+  "text-to-dialogue",
   "image-to-text",
 ]);
 

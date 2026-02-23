@@ -588,6 +588,28 @@ export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
 }
 
 // =============================================================================
+// SPEECH-TO-TEXT MODELS
+// =============================================================================
+export const KIE_STT_MODELS: Record<string, KieModelConfig> = {
+  "elevenlabs-stt": {
+    model: "elevenlabs/speech-to-text",
+    credits: 10,
+    ***REDACTED-OSS-SCRUB***
+  },
+}
+
+// =============================================================================
+// TEXT-TO-DIALOGUE MODELS (Multi-speaker TTS)
+// =============================================================================
+export const KIE_DIALOGUE_MODELS: Record<string, KieModelConfig> = {
+  "elevenlabs-dialogue": {
+    model: "elevenlabs/text-to-dialogue-v3",
+    credits: 10,
+    ***REDACTED-OSS-SCRUB***
+  },
+}
+
+// =============================================================================
 // SPECIAL MODELS
 // =============================================================================
 export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
@@ -603,7 +625,7 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "music" | "tts" | "sound-effect" | "audio-isolation" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "dialogue" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -636,6 +658,10 @@ export function getKieModelConfig(
       return KIE_SOUND_EFFECT_MODELS[provider] ?? null
     case "audio-isolation":
       return KIE_AUDIO_ISOLATION_MODELS[provider] ?? null
+    case "stt":
+      return KIE_STT_MODELS[provider] ?? null
+    case "dialogue":
+      return KIE_DIALOGUE_MODELS[provider] ?? null
     case "special":
       return KIE_SPECIAL_MODELS[provider] ?? null
     default:

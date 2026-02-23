@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { Plus, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -11,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { TTS_VOICES } from "@/lib/tts-voices"
+import { VoiceBrowser } from "./voice-browser"
+import { DIALOGUE_VOICE_IDS, DEFAULT_DIALOGUE_VOICE } from "@/lib/tts-voices"
 import type {
   TextToSpeechData,
   TextToAudioData,
@@ -24,6 +27,8 @@ import type {
   SunoMusicVideoData,
   TranscribeData,
   LipSyncData,
+  TextToDialogueData,
+  DialogueLine,
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
@@ -76,19 +81,10 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       <div>
         <Label>Voice</Label>
-        <Select
+        <VoiceBrowser
           value={data.voiceId || "Rachel"}
-          onValueChange={(v) => onUpdate({ voiceId: v })}
-        >
-          <SelectTrigger><SelectValue placeholder="Select voice" /></SelectTrigger>
-          <SelectContent>
-            {TTS_VOICES.map((voice) => (
-              <SelectItem key={voice.id} value={voice.id}>
-                {voice.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onSelect={(v) => onUpdate({ voiceId: v })}
+        />
       </div>
       <div>
         <Label>Language</Label>
@@ -461,6 +457,7 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
           <SelectContent>
             <SelectItem value="whisper">Whisper (default)</SelectItem>
             <SelectItem value="incredibly-fast-whisper">Incredibly Fast Whisper</SelectItem>
+            <SelectItem value="elevenlabs-stt">ElevenLabs STT</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -492,6 +489,26 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
           </SelectContent>
         </Select>
       </MappableField>
+      {data.provider === "elevenlabs-stt" && (
+        <>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="diarize"
+              checked={data.diarize ?? false}
+              onCheckedChange={(v: boolean) => onUpdate({ diarize: v })}
+            />
+            <Label htmlFor="diarize">Speaker Diarization</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="tagAudioEvents"
+              checked={data.tagAudioEvents ?? false}
+              onCheckedChange={(v: boolean) => onUpdate({ tagAudioEvents: v })}
+            />
+            <Label htmlFor="tagAudioEvents">Tag Audio Events</Label>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -541,6 +558,115 @@ export function AudioIsolationConfig({ data, onUpdate }: ConfigProps<AudioIsolat
       </div>
       <p className="text-xs text-muted-foreground">
         Removes background noise and extracts clean voice from any audio input. Connect an audio source (Upload Audio, Text to Speech, etc.) to the input.
+      </p>
+    </div>
+  )
+}
+
+export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialogueData>) {
+  const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
+  const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
+
+  function updateLine(index: number, updates: Partial<DialogueLine>) {
+    const newDialogue = dialogue.map((line, i) =>
+      i === index ? { ...line, ...updates } : line
+    )
+    onUpdate({ dialogue: newDialogue })
+  }
+
+  function addLine() {
+    const newId = String(Date.now())
+    onUpdate({ dialogue: [...dialogue, { id: newId, text: "", voice: DEFAULT_DIALOGUE_VOICE }] })
+  }
+
+  function removeLine(index: number) {
+    if (dialogue.length <= 1) return
+    onUpdate({ dialogue: dialogue.filter((_, i) => i !== index) })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <Label>Dialogue Lines</Label>
+        <span className={`text-xs ${totalChars > 5000 ? "text-red-500" : "text-muted-foreground"}`}>
+          {totalChars}/5000
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
+        {dialogue.map((line, i) => (
+          <div key={line.id} className="flex flex-col gap-1 p-2 rounded-md border border-border bg-muted/20">
+            <div className="flex items-center gap-2">
+              <VoiceBrowser
+                compact
+                value={line.voice}
+                onSelect={(v) => updateLine(i, { voice: v })}
+                allowedVoiceNames={DIALOGUE_VOICE_IDS}
+              />
+              {dialogue.length > 1 && (
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeLine(i)}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            <Textarea
+              rows={2}
+              value={line.text}
+              onChange={(e) => updateLine(i, { text: e.target.value })}
+              placeholder={`Line ${i + 1}...`}
+              className="text-sm"
+            />
+          </div>
+        ))}
+      </div>
+
+      <Button variant="outline" size="sm" onClick={addLine} className="w-full">
+        <Plus className="h-3 w-3 mr-1" /> Add Line
+      </Button>
+
+      <div>
+        <Label>Stability</Label>
+        <Select
+          value={String(data.stability ?? 0.5)}
+          onValueChange={(v) => onUpdate({ stability: parseFloat(v) })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0">Most Variable (0)</SelectItem>
+            <SelectItem value="0.5">Balanced (0.5)</SelectItem>
+            <SelectItem value="1">Most Stable (1.0)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Language</Label>
+        <Select
+          value={data.languageCode || "auto"}
+          onValueChange={(v) => onUpdate({ languageCode: v === "auto" ? "" : v })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto-detect</SelectItem>
+            <SelectItem value="en">English</SelectItem>
+            <SelectItem value="he">Hebrew</SelectItem>
+            <SelectItem value="es">Spanish</SelectItem>
+            <SelectItem value="fr">French</SelectItem>
+            <SelectItem value="de">German</SelectItem>
+            <SelectItem value="it">Italian</SelectItem>
+            <SelectItem value="pt">Portuguese</SelectItem>
+            <SelectItem value="ja">Japanese</SelectItem>
+            <SelectItem value="zh">Chinese</SelectItem>
+            <SelectItem value="ko">Korean</SelectItem>
+            <SelectItem value="ar">Arabic</SelectItem>
+            <SelectItem value="ru">Russian</SelectItem>
+            <SelectItem value="hi">Hindi</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Multi-speaker dialogue using ElevenLabs voices. Each line is spoken by the selected voice. All lines are combined into a single audio output.
       </p>
     </div>
   )

@@ -16,7 +16,7 @@ import {
   runKieTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
-import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS } from "./models.js"
+import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS } from "./models.js"
 
 export class KieAudioProvider
   implements MusicGenerationProvider, TextToSpeechProvider
@@ -206,5 +206,85 @@ export class KieAudioProvider
     )
 
     return { url: resultUrl, cost: modelConfig.cost }
+  }
+
+  async speechToText(
+    audioUrl: string,
+    options?: { languageCode?: string; diarize?: boolean; tagAudioEvents?: boolean }
+  ): Promise<{ text: string; language: string; cost: number }> {
+    const modelConfig = KIE_STT_MODELS["elevenlabs-stt"]
+    if (!modelConfig) {
+      throw createSanitizedError(
+        "elevenlabs-stt model not configured",
+        "Speech-to-text"
+      )
+    }
+
+    console.log(
+      `[KIE.ai] Speech-to-text with ${modelConfig.model}`
+    )
+
+    const input: Record<string, unknown> = { audio_url: audioUrl }
+    if (options?.languageCode) input.language_code = options.languageCode
+    if (options?.diarize != null) input.diarize = options.diarize
+    if (options?.tagAudioEvents != null) input.tag_audio_events = options.tagAudioEvents
+
+    const { resultJson } = await runKieTask(
+      modelConfig.model,
+      input,
+      MAX_POLL_ATTEMPTS_VIDEO
+    )
+
+    const raw = resultJson as Record<string, unknown>
+    const text = (raw.text as string) ?? (raw.transcription as string) ?? ""
+    const language = (raw.language_code as string) ?? (raw.detected_language as string) ?? "unknown"
+
+    console.log(
+      `[KIE.ai] STT completed: ${text.length} chars (cost: $${modelConfig.cost.toFixed(4)})`
+    )
+
+    return { text, language, cost: modelConfig.cost }
+  }
+
+  async generateDialogue(
+    dialogue: Array<{ text: string; voice: string }>,
+    options?: { stability?: number; languageCode?: string }
+  ): Promise<ProviderResult> {
+    const modelConfig = KIE_DIALOGUE_MODELS["elevenlabs-dialogue"]
+    if (!modelConfig) {
+      throw createSanitizedError(
+        "elevenlabs-dialogue model not configured",
+        "Dialogue generation"
+      )
+    }
+
+    console.log(
+      `[KIE.ai] Generating dialogue with ${modelConfig.model}: ${dialogue.length} lines`
+    )
+
+    const input: Record<string, unknown> = { dialogue }
+    if (options?.stability != null) input.stability = options.stability
+    if (options?.languageCode) input.language_code = options.languageCode
+
+    const { resultJson } = await runKieTask(
+      modelConfig.model,
+      input,
+      MAX_POLL_ATTEMPTS_VIDEO
+    )
+
+    const audioUrl =
+      resultJson.resultUrls?.[0] ?? resultJson.audioUrl
+    if (!audioUrl) {
+      throw createSanitizedError(
+        "dialogue task succeeded but no URL found",
+        "Dialogue generation"
+      )
+    }
+
+    console.log(
+      `[KIE.ai] Dialogue completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+    )
+
+    return { url: audioUrl, cost: modelConfig.cost }
   }
 }

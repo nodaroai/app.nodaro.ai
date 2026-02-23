@@ -1048,6 +1048,8 @@ describe("transcribe", () => {
       "deepgram",
       "en",
       "u1",
+      undefined,
+      undefined,
     )
 
     // Advance timer to trigger the poll interval

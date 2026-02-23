@@ -3,7 +3,7 @@ export { ToneConfig, StyleGuideConfig, ProviderConfig, SceneCountConfig, Duratio
 export { GenerateScriptConfig, QACheckConfig, ImageToTextConfig } from "./script-configs"
 export { GenerateImageConfig, EditImageConfig, ImageToImageConfig } from "./image-configs"
 export { ImageToVideoConfig, VideoToVideoConfig, MotionTransferConfig, VideoUpscaleConfig, TextToVideoConfig } from "./video-configs"
-export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, SunoGenerateConfig, SunoCoverConfig, SunoExtendConfig, SunoLyricsConfig, SunoSeparateConfig, SunoMusicVideoConfig, TranscribeConfig, LipSyncConfig } from "./audio-configs"
+export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, TextToDialogueConfig, SunoGenerateConfig, SunoCoverConfig, SunoExtendConfig, SunoLyricsConfig, SunoSeparateConfig, SunoMusicVideoConfig, TranscribeConfig, LipSyncConfig } from "./audio-configs"
 export { GenerateMusicConfig } from "./music-config"
 export { CombineVideosConfig, AddCaptionsConfig, ResizeVideoConfig, ExtractAudioConfig, MixAudioConfig, AdjustVolumeConfig, TrimVideoConfig, SpeedRampConfig, LoopVideoConfig, FadeVideoConfig, TranscodeVideoConfig, ManualEditConfig } from "./processing-configs"
 export { VideoComposerConfig, AfterEffectsConfig, LottieOverlayConfig, ThreeDTitleConfig, MotionGraphicsConfig, CompositeConfig, RenderVideoConfig } from "./composition-configs"

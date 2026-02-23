@@ -805,14 +805,38 @@ export type AudioIsolationData = {
 export type TranscribeData = {
   [key: string]: unknown
   label: string
-  provider: "whisper" | "incredibly-fast-whisper"
+  provider: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
   language: string
+  diarize?: boolean
+  tagAudioEvents?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedText?: string
   generatedResults?: Array<{ text: string; language: string; jobId: string; timestamp: string }>
   activeResultIndex?: number
+}
+
+export interface DialogueLine {
+  readonly id: string
+  readonly text: string
+  readonly voice: string
+}
+
+export type TextToDialogueData = {
+  [key: string]: unknown
+  label: string
+  dialogue: DialogueLine[]
+  stability: number
+  languageCode: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
 }
 
 export type ImageToTextData = {
@@ -1512,6 +1536,7 @@ export type SceneNodeData =
   | TranscribeData
   | ImageToTextData
   | AudioIsolationData
+  | TextToDialogueData
   | CombineVideosData
   | MergeVideoAudioData
   | AddCaptionsData
@@ -1587,6 +1612,7 @@ export type SceneNodeType =
   | "transcribe"
   | "image-to-text"
   | "audio-isolation"
+  | "text-to-dialogue"
   | "combine-videos"
   | "merge-video-audio"
   | "add-captions"
@@ -1978,6 +2004,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as AudioIsolationData,
+  },
+  {
+    type: "text-to-dialogue",
+    label: "Text to Dialogue",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: {
+      label: "Text to Dialogue",
+      dialogue: [{ id: "1", text: "", voice: "Sarah" }],
+      stability: 0.5,
+      languageCode: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as TextToDialogueData,
   },
   // Processing
   {

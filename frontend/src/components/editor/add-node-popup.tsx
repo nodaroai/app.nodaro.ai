@@ -281,6 +281,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Audio & Speech",
   },
   {
+    type: "text-to-dialogue",
+    label: "Text to Dialogue",
+    icon: <Users className="h-4 w-4" />,
+    category: "AI",
+    group: "Audio & Speech",
+  },
+  {
     type: "generate-music",
     label: "Generate Music",
     icon: <Music className="h-4 w-4" />,

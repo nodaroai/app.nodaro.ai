@@ -63,6 +63,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "generate-music", label: "Generate Music", icon: <Music className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "audio-isolation", label: "Voice Extractor", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
+  { type: "text-to-dialogue", label: "Text to Dialogue", icon: <Users className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   // AI — Suno Music
   { type: "suno-generate", label: "Suno Generate", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-cover", label: "Suno Cover", icon: <Disc3 className="h-4 w-4" />, category: "AI", group: "Suno Music" },
