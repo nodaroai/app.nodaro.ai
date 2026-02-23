@@ -2284,3 +2284,28 @@ export async function changePlan(
   const json = await res.json()
   return (json as Record<string, unknown>).data as { subscriptionId: string; tier: string }
 }
+
+// ============================================================
+// Voices (ElevenLabs)
+// ============================================================
+
+export interface ElevenLabsVoice {
+  voice_id: string
+  name: string
+  preview_url: string
+  gender: string
+  accent: string
+  age: string
+  description: string
+  use_case: string
+  category: string
+}
+
+export async function getVoices(): Promise<ElevenLabsVoice[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/voices`)
+  if (!res.ok) {
+    throw new Error("Failed to fetch voices")
+  }
+  const body = await res.json()
+  return body.voices
+}

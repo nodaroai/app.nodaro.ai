@@ -49,4 +49,17 @@ describe("getVoiceName", () => {
   it("returns 'Rachel' for empty string", () => {
     expect(getVoiceName("")).toBe("Rachel")
   })
+
+  it("finds voice from dynamic list when provided", () => {
+    const dynamicVoices = [
+      { name: "CustomVoice", gender: "female" },
+      { name: "Rachel", gender: "female" },
+    ]
+    expect(getVoiceName("CustomVoice", dynamicVoices)).toBe("CustomVoice")
+  })
+
+  it("falls back to static list when dynamic list does not contain voice", () => {
+    const dynamicVoices = [{ name: "CustomVoice" }]
+    expect(getVoiceName("Rachel", dynamicVoices)).toBe("Rachel (Female, American)")
+  })
 })

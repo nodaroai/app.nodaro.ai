@@ -75,6 +75,7 @@ import { motionGraphicsAIRoutes } from "./routes/motion-graphics-ai.js"
 import { audioIsolationRoutes } from "./routes/audio-isolation.js"
 import { textToDialogueRoutes } from "./routes/text-to-dialogue.js"
 import { imageToTextRoutes } from "./routes/image-to-text.js"
+import { voicesRoutes } from "./routes/voices.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -176,6 +177,7 @@ export async function buildApp() {
   await app.register(audioIsolationRoutes)
   await app.register(textToDialogueRoutes)
   await app.register(imageToTextRoutes)
+  await app.register(voicesRoutes)
 
   return app
 }
