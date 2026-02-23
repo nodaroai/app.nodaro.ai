@@ -58,6 +58,25 @@ export const VIDEO_T2V_MODELS = [
 ] as const
 
 // =============================================================================
+// VARIABLE CREDIT RANGES — for displaying price ranges in model dropdowns
+// Models with variable pricing (quality/resolution) show "min-max CR" instead of a single value.
+// =============================================================================
+
+export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> = {
+  "gpt-image": { min: 2, max: 7 },
+  "gpt-image-i2i": { min: 2, max: 7 },
+  "nano-banana-pro": { min: 6, max: 8 },
+  "flux": { min: 2, max: 3 },
+  "flux-flex": { min: 5, max: 8 },
+  "flux-i2i": { min: 5, max: 8 },
+  "flux-pro-i2i": { min: 2, max: 3 },
+  "ideogram": { min: 4, max: 8 },
+  "ideogram-edit": { min: 4, max: 8 },
+  "ideogram-remix": { min: 4, max: 8 },
+  "ideogram-reframe": { min: 4, max: 8 },
+}
+
+// =============================================================================
 // IMAGE MODEL ASPECT RATIOS (per KIE.ai API docs)
 // =============================================================================
 const NANO_BANANA_RATIOS = [
