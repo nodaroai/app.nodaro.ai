@@ -43,6 +43,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "motion-transfer": "Motion Transfer",
   "video-upscale": "Video Upscale",
   "lip-sync": "Lip Sync",
+  "text-to-dialogue": "Text to Dialogue",
 }
 
 function formatNodeType(type: string): string {

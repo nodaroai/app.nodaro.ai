@@ -188,7 +188,8 @@ export function extractNodeOutput(node: WorkflowNode): string | undefined {
     type === "suno-generate" ||
     type === "suno-cover" ||
     type === "suno-extend" ||
-    type === "suno-separate"
+    type === "suno-separate" ||
+    type === "text-to-dialogue"
   ) {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];

@@ -19,6 +19,7 @@ export type ProviderCapability =
   | "sound-effect" // text -> sound effect audio
   | "audio-isolation" // audio -> isolated voice audio
   | "transcription" // audio -> text
+  | "dialogue" // multi-speaker text -> dialogue audio
 
 // Progress callback for long-running tasks
 export type ProgressCallback = (progress: number) => Promise<void>

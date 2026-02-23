@@ -34,6 +34,7 @@ import { SunoSeparateNode } from "./suno-separate-node";
 import { SunoMusicVideoNode } from "./suno-music-video-node";
 import { TranscribeNode } from "./transcribe-node";
 import { AudioIsolationNode } from "./audio-isolation-node"
+import { TextToDialogueNode } from "./text-to-dialogue-node"
 import { ImageToTextNode } from "./image-to-text-node";
 import { AIWriterNode } from "./ai-writer-node";
 import { CombineVideosNode } from "./combine-videos-node";
@@ -114,6 +115,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   transcribe: TranscribeNode,
   "image-to-text": ImageToTextNode,
   "audio-isolation": AudioIsolationNode,
+  "text-to-dialogue": TextToDialogueNode,
   "ai-writer": AIWriterNode,
   // Processing
   "combine-videos": CombineVideosNode,

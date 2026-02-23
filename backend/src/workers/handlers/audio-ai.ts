@@ -101,9 +101,9 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
 }
 
 const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
-  const { audioUrl, provider, language } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string }
+  const { audioUrl, provider, language, diarize, tagAudioEvents } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean }
   console.log(`[worker] transcribe ${ctx.jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
-  const result = await transcribe(audioUrl, provider, language)
+  const result = await transcribe(audioUrl, provider, language, { diarize, tagAudioEvents })
   await job.updateProgress(100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   await supabase.from("jobs").update({
@@ -147,6 +147,34 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job, ctx) {
+  const { dialogue, stability, languageCode } = job.data as {
+    jobId: string
+    dialogue: Array<{ text: string; voice: string }>
+    stability?: number
+    languageCode?: string
+  }
+  console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines)`)
+  const kieAudio = new KieAudioProvider()
+  const result = await kieAudio.generateDialogue(dialogue, {
+    stability,
+    languageCode,
+  })
+  await job.updateProgress(50)
+  const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+    provider_cost: result.cost,
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
 export const audioAIHandlers: Record<string, HandlerFn> = {
   "text-to-speech": handleTextToSpeech,
   "generate-music": handleGenerateMusic,
@@ -154,4 +182,5 @@ export const audioAIHandlers: Record<string, HandlerFn> = {
   "transcribe": handleTranscribe,
   "extract-youtube-audio": handleExtractYoutubeAudio,
   "audio-isolation": handleAudioIsolation,
+  "text-to-dialogue": handleTextToDialogue,
 }

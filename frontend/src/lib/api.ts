@@ -1225,6 +1225,28 @@ export async function audioIsolationApi(audioUrl: string, userId?: string): Prom
   return res.json()
 }
 
+export async function textToDialogueApi(
+  dialogue: Array<{ text: string; voice: string }>,
+  userId?: string,
+  stability?: number,
+  languageCode?: string,
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { dialogue }
+  if (userId) body.userId = userId
+  if (stability != null) body.stability = stability
+  if (languageCode) body.languageCode = languageCode
+  const res = await fetch(`${API_BASE_URL}/v1/text-to-dialogue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start dialogue generation")
+  }
+  return res.json()
+}
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string
@@ -1400,11 +1422,13 @@ export async function sunoMusicVideoApi(params: {
   return res.json()
 }
 
-export async function transcribeApi(audioUrl: string, provider?: string, language?: string, userId?: string): Promise<{ jobId: string }> {
+export async function transcribeApi(audioUrl: string, provider?: string, language?: string, userId?: string, diarize?: boolean, tagAudioEvents?: boolean): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl }
   if (provider) body.provider = provider
   if (language) body.language = language
   if (userId) body.userId = userId
+  if (diarize != null) body.diarize = diarize
+  if (tagAudioEvents != null) body.tagAudioEvents = tagAudioEvents
   const res = await fetch(`${API_BASE_URL}/v1/transcribe`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

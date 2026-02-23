@@ -153,6 +153,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-separate-stem": 10,      // full stem separation
   "suno-music-video": 5,
   "elevenlabs-isolation": 1,     // 1 KIE cr, $0.005
+  "elevenlabs-stt": 4,           // 10 KIE cr, $0.05
+  "elevenlabs-dialogue": 4,     // 10 KIE cr, $0.05
   "infinitalk": 19,              // 60 KIE cr, $0.30
   // ── Processing ──
   "topaz": 0,
@@ -193,6 +195,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "generate-music": 7,
   "text-to-audio": 4,
   "audio-isolation": 1,
+  "text-to-dialogue": 4,
   "image-to-text": 5,
 }
 

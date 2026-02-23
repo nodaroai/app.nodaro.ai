@@ -164,7 +164,7 @@ describe("transcribe handler", () => {
     const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, undefined)
+    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, undefined, { diarize: undefined, tagAudioEvents: undefined })
     expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
       output_data: { text: "Hello world", language: "en", segments: [] },
     }))
@@ -174,7 +174,7 @@ describe("transcribe handler", () => {
   it("passes language parameter", async () => {
     const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3", language: "fr" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, "fr")
+    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, "fr", { diarize: undefined, tagAudioEvents: undefined })
   })
 })
 

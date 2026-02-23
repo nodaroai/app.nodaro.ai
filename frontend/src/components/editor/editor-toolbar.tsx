@@ -193,6 +193,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
         case "generate-music":
         case "text-to-audio":
+        case "text-to-dialogue":
           // Clear generated audio results, keep settings
           data.generatedResults = []
           data.generatedAudioUrl = undefined

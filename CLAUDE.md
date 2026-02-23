@@ -176,7 +176,7 @@ backend/src/
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, render-video)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
@@ -201,6 +201,8 @@ backend/src/
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
 | Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers |
 | Voice Extractor | ElevenLabs via KIE.ai | Isolates voice from any audio, removes background noise |
+| Speech-to-Text | ElevenLabs STT via KIE.ai | Transcription with diarization + audio event tagging (provider option on transcribe node) |
+| Text-to-Dialogue | ElevenLabs Dialogue V3 via KIE.ai | Multi-speaker TTS — each dialogue line gets a different voice, outputs single audio file |
 | Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + composite renderer + legacy template converters via BullMQ worker |
 | AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
 | After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox, animated-blur, trail, motion-blur) applied to video (2 credits), CSS `filter:blur()` for motion-blur, OffthreadVideo ghost layers for trail |
@@ -235,4 +237,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-23*
-*Version: 1.37.0*
+*Version: 1.38.0*

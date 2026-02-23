@@ -1,6 +1,7 @@
 import { replicate } from "../replicate/client.js"
+import { KieAudioProvider } from "../kie/audio.js"
 
-export type TranscribeProvider = "whisper" | "incredibly-fast-whisper"
+export type TranscribeProvider = "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
 
 interface WhisperOutput {
   transcription: string
@@ -31,7 +32,7 @@ interface TranscribeResult {
   }>
 }
 
-const TRANSCRIBE_MODELS: Record<TranscribeProvider, string> = {
+const TRANSCRIBE_MODELS: Record<string, string> = {
   whisper: "openai/whisper:8099696689d249cf8b122d833c36ac3f75505c666a395ca40ef26f68e7d3d16e",
   "incredibly-fast-whisper": "vaibhavs10/incredibly-fast-whisper:3ab86df6c8f54c11309d4d1f930ac292bad43ace52d10c80d87eb258b3c9f79c",
 }
@@ -40,11 +41,26 @@ export async function transcribe(
   audioUrl: string,
   provider?: TranscribeProvider,
   language?: string,
+  options?: { diarize?: boolean; tagAudioEvents?: boolean },
 ): Promise<TranscribeResult> {
   const resolvedProvider = provider ?? "whisper"
-  const model = TRANSCRIBE_MODELS[resolvedProvider] ?? TRANSCRIBE_MODELS.whisper
-  console.log(`[transcribe] Provider: ${resolvedProvider}, Model: ${model}`)
+  console.log(`[transcribe] Provider: ${resolvedProvider}`)
   console.log(`[transcribe] Audio URL: "${audioUrl}", Language: ${language ?? "auto"}`)
+
+  if (resolvedProvider === "elevenlabs-stt") {
+    const kieAudio = new KieAudioProvider()
+    const result = await kieAudio.speechToText(audioUrl, {
+      languageCode: language && language !== "auto" ? language : undefined,
+      diarize: options?.diarize,
+      tagAudioEvents: options?.tagAudioEvents,
+    })
+    return {
+      text: result.text,
+      language: result.language,
+    }
+  }
+
+  const model = TRANSCRIBE_MODELS[resolvedProvider as keyof typeof TRANSCRIBE_MODELS] ?? TRANSCRIBE_MODELS.whisper
 
   if (resolvedProvider === "incredibly-fast-whisper") {
     const input: Record<string, unknown> = {

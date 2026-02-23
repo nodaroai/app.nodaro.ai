@@ -4,6 +4,7 @@ import {
   generateMusicApi,
   textToAudioApi,
   audioIsolationApi,
+  textToDialogueApi,
   sunoGenerateApi,
   sunoCoverApi,
   sunoExtendApi,
@@ -54,6 +55,7 @@ import type {
   GenerateMusicData,
   TextToAudioData,
   AudioIsolationData,
+  TextToDialogueData,
   SunoGenerateData,
   SunoCoverData,
   SunoExtendData,
@@ -620,6 +622,28 @@ export function executeNode(
     );
   }
 
+  if (node.type === "text-to-dialogue") {
+    const d = node.data as TextToDialogueData;
+    const dialogue = d.dialogue?.filter((l) => l.text.trim());
+    if (!dialogue || dialogue.length === 0) {
+      toast.error(`Node "${d.label}": no dialogue lines`);
+      return Promise.reject(new Error("No dialogue lines"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        textToDialogueApi(
+          dialogue.map((l) => ({ text: l.text, voice: l.voice })),
+          ctx.userId,
+          d.stability,
+          d.languageCode || undefined,
+        ),
+      "generatedAudioUrl",
+      "Text to Dialogue",
+      ctx,
+    );
+  }
+
   if (node.type === "suno-generate") {
     const d = node.data as SunoGenerateData;
     const prompt = overridePrompt ?? inputs.prompt ?? d.prompt?.trim();
@@ -955,6 +979,8 @@ export function executeNode(
             d.provider || undefined,
             d.language || undefined,
             ctx.userId,
+            d.diarize,
+            d.tagAudioEvents,
           );
         })
         .then(({ jobId }) => {
