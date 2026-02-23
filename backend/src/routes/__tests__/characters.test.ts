@@ -100,7 +100,7 @@ function mockListChain(result: { data: unknown; error: unknown }) {
     eq: vi.fn().mockReturnThis(),
   }
   // Make chainable thenable so `await query` resolves
-  chainable.then = (resolve: Function) => Promise.resolve(result).then(resolve)
+  chainable.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) => Promise.resolve(result).then(resolve)
   const mockOrder = vi.fn().mockReturnValue(chainable)
   const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
   return { mockSelect, mockOrder, chainable }
