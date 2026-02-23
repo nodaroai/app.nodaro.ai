@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
-import { ChevronDown, Play, Pause, Search, Loader2, Mic, Upload, Trash2, Square, SlidersHorizontal } from "lucide-react"
+import { ChevronDown, Play, Pause, Search, Loader2, Mic, Upload, Trash2, Square, SlidersHorizontal, Info } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { useVoices } from "@/hooks/use-voices"
 import { useVoiceLibrary } from "@/hooks/use-voices"
@@ -920,7 +921,7 @@ function VoiceList({
               key={voice.id}
               type="button"
               onClick={() => onSelect(voice)}
-              className={`flex items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${isSelected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted border border-transparent"}`}
+              className={`group relative flex items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${isSelected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted border border-transparent"}`}
             >
               {voice.preview_url ? (
                 <Button
@@ -958,6 +959,23 @@ function VoiceList({
                   ].filter(Boolean).join(" \u00B7 ")}
                 </div>
               </div>
+
+              {voice.description && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      role="button"
+                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-accent"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="max-w-xs">
+                    {voice.description}
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </button>
           )
         })}
