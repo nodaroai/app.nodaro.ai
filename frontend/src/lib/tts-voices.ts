@@ -3,66 +3,37 @@ export interface TTSVoice {
   readonly name: string
 }
 
+// Only voices supported by KIE.ai's ElevenLabs TTS endpoints.
+// 21 voices accepted by name, plus Adam & Harry via their ElevenLabs UUIDs.
 export const TTS_VOICES: readonly TTSVoice[] = [
   // Female voices
   { id: "Alice", name: "Alice (Female, British)" },
-  { id: "Aria", name: "Aria (Female)" },
+  { id: "Aria", name: "Aria (Female, American)" },
   { id: "Charlotte", name: "Charlotte (Female, English-Swedish)" },
-  { id: "Domi", name: "Domi (Female, American)" },
-  { id: "Dorothy", name: "Dorothy (Female, British)" },
-  { id: "Emily", name: "Emily (Female, American)" },
-  { id: "Freya", name: "Freya (Female, American)" },
-  { id: "Gigi", name: "Gigi (Female, American)" },
-  { id: "Glinda", name: "Glinda (Female, American)" },
-  { id: "Grace", name: "Grace (Female, American-Southern)" },
-  { id: "Jessica", name: "Jessica (Female)" },
-  { id: "Laura", name: "Laura (Female)" },
+  { id: "Jessica", name: "Jessica (Female, American)" },
+  { id: "Laura", name: "Laura (Female, American)" },
   { id: "Lily", name: "Lily (Female, British)" },
   { id: "Matilda", name: "Matilda (Female, American)" },
-  { id: "Mimi", name: "Mimi (Female, English-Swedish)" },
-  { id: "Nicole", name: "Nicole (Female, American)" },
   { id: "Rachel", name: "Rachel (Female, American)" },
   { id: "Sarah", name: "Sarah (Female, American)" },
-  { id: "Serena", name: "Serena (Female, American)" },
 
   // Male voices
-  { id: "Adam", name: "Adam (Male, American)" },
-  { id: "Antoni", name: "Antoni (Male, American)" },
-  { id: "Arnold", name: "Arnold (Male, American)" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam (Male, American)" },
   { id: "Bill", name: "Bill (Male, American)" },
   { id: "Brian", name: "Brian (Male, American)" },
-  { id: "Callum", name: "Callum (Male, American)" },
+  { id: "Callum", name: "Callum (Male, Transatlantic)" },
   { id: "Charlie", name: "Charlie (Male, Australian)" },
   { id: "Chris", name: "Chris (Male, American)" },
-  { id: "Clyde", name: "Clyde (Male, American)" },
   { id: "Daniel", name: "Daniel (Male, British)" },
-  { id: "Dave", name: "Dave (Male, British-Essex)" },
-  { id: "Drew", name: "Drew (Male, American)" },
-  { id: "Eric", name: "Eric (Male)" },
-  { id: "Ethan", name: "Ethan (Male, American)" },
-  { id: "Fin", name: "Fin (Male, Irish)" },
+  { id: "Eric", name: "Eric (Male, American)" },
   { id: "George", name: "George (Male, British)" },
-  { id: "Giovanni", name: "Giovanni (Male, English-Italian)" },
-  { id: "Harry", name: "Harry (Male, American)" },
-  { id: "James", name: "James (Male, Australian)" },
-  { id: "Jeremy", name: "Jeremy (Male, American-Irish)" },
-  { id: "Jessie", name: "Jessie (Male, American)" },
-  { id: "Josh", name: "Josh (Male, American)" },
-  { id: "Joseph", name: "Joseph (Male, British)" },
+  { id: "SOYHLrjzK2X1ezoPC6cr", name: "Harry (Male, American)" },
   { id: "Liam", name: "Liam (Male, American)" },
-  { id: "Michael", name: "Michael (Male, American)" },
-  { id: "Patrick", name: "Patrick (Male, American)" },
-  { id: "Paul", name: "Paul (Male, American)" },
-  { id: "Roger", name: "Roger (Male)" },
-  { id: "Sam", name: "Sam (Male, American)" },
-  { id: "Thomas", name: "Thomas (Male, American)" },
-  { id: "Will", name: "Will (Male)" },
+  { id: "Roger", name: "Roger (Male, American)" },
+  { id: "Will", name: "Will (Male, American)" },
 
   // Non-binary voices
-  { id: "River", name: "River (Non-binary)" },
-
-  // Character voices
-  { id: "Santa Claus", name: "Santa Claus (Male)" },
+  { id: "River", name: "River (Non-binary, American)" },
 ]
 
 /**
@@ -70,8 +41,8 @@ export const TTS_VOICES: readonly TTSVoice[] = [
  * @deprecated No longer used for filtering — all voices are now available for dialogue.
  */
 export const DIALOGUE_VOICE_IDS = new Set([
-  "Adam", "Alice", "Bill", "Brian", "Callum", "Charlie", "Chris",
-  "Daniel", "Eric", "George", "Harry", "Jessica", "Laura", "Liam",
+  "pNInz6obpgDQGcFmaJgB", "Alice", "Bill", "Brian", "Callum", "Charlie", "Chris",
+  "Daniel", "Eric", "George", "SOYHLrjzK2X1ezoPC6cr", "Jessica", "Laura", "Liam",
   "Lily", "Matilda", "River", "Roger", "Sarah", "Will",
 ])
 
