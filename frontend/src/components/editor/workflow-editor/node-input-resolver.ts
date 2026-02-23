@@ -393,7 +393,8 @@ export function resolveNodeInputs(
       src.type === "mix-audio" ||
       src.type === "voice-changer" ||
       src.type === "dubbing" ||
-      src.type === "voice-remix"
+      src.type === "voice-remix" ||
+      src.type === "voice-design"
     ) {
       if (node.type === "mix-audio") {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];

@@ -12,6 +12,7 @@ const mockGetLocations = vi.fn()
 const mockGetFaces = vi.fn()
 const mockGetLibraryAssets = vi.fn()
 const mockDeleteLibraryAsset = vi.fn()
+const mockRemoveLibraryAsset = vi.fn()
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (opts: unknown) => mockUseQuery(opts),
@@ -27,6 +28,7 @@ vi.mock("@/lib/api", () => ({
   getFaces: (...args: unknown[]) => mockGetFaces(...args),
   getLibraryAssets: (...args: unknown[]) => mockGetLibraryAssets(...args),
   deleteLibraryAsset: (...args: unknown[]) => mockDeleteLibraryAsset(...args),
+  removeLibraryAsset: (...args: unknown[]) => mockRemoveLibraryAsset(...args),
 }))
 
 vi.mock("@/lib/query-keys", () => ({
@@ -59,6 +61,7 @@ import {
   useFaces,
   useLibraryInfinite,
   useDeleteLibraryAssetMutation,
+  useRemoveLibraryAssetMutation,
 } from "../use-assets-queries"
 
 describe("useCharacters", () => {
@@ -239,6 +242,31 @@ describe("useDeleteLibraryAssetMutation", () => {
     })
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["billing", "storage", "user6"],
+    })
+  })
+})
+
+describe("useRemoveLibraryAssetMutation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUseQueryClient.mockReturnValue({ invalidateQueries: mockInvalidateQueries })
+  })
+
+  it("calls useMutation with a mutationFn", () => {
+    mockUseMutation.mockReturnValue({ mutate: vi.fn() })
+    useRemoveLibraryAssetMutation()
+    expect(mockUseMutation).toHaveBeenCalledTimes(1)
+    const opts = mockUseMutation.mock.calls[0][0]
+    expect(opts.mutationFn).toBeDefined()
+  })
+
+  it("onSuccess invalidates library.all", () => {
+    mockUseMutation.mockReturnValue({ mutate: vi.fn() })
+    useRemoveLibraryAssetMutation()
+    const opts = mockUseMutation.mock.calls[0][0]
+    opts.onSuccess(undefined, { assetId: "a1", userId: "user6" })
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["library"],
     })
   })
 })

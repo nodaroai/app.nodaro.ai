@@ -779,7 +779,7 @@ export function runTextToSpeechGeneration(
     style?: number;
     speed?: number;
     languageCode?: string;
-    voiceType?: "premade" | "custom";
+    voiceType?: "premade" | "custom" | "library";
   },
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();

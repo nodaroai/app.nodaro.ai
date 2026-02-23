@@ -55,6 +55,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "voice-changer": 4,
   "dubbing": 8,
   "voice-remix": 4,
+  "voice-design": 5,
   "forced-alignment": 3,
 };
 
@@ -112,6 +113,7 @@ export const EXECUTABLE_TYPES = new Set([
   "voice-changer",
   "dubbing",
   "voice-remix",
+  "voice-design",
   "forced-alignment",
 ]);
 

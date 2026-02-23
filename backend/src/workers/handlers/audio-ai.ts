@@ -1,15 +1,16 @@
 import { supabase } from "../../lib/supabase.js"
 import { uploadToR2, uploadBufferToR2 } from "../../lib/storage.js"
 import { textToSpeech as routedTextToSpeech } from "../../providers/index.js"
-import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
+import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
-import { KieAudioProvider } from "../../providers/kie/audio.js"
+import { KieAudioProvider, isKieAcceptedVoice } from "../../providers/kie/audio.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../../providers/audio/youtube-extractor.js"
 import { voiceChangerFromUrl } from "../../providers/elevenlabs/voice-changer.js"
 import { startDubbing, waitForDubbing, downloadDubbedAudio } from "../../providers/elevenlabs/dubbing.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
+import { designVoice } from "../../providers/elevenlabs/voice-design.js"
 import { forcedAlignment } from "../../providers/elevenlabs/forced-alignment.js"
 import {
   commitJobCredits,
@@ -23,7 +24,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     text: string
     voice?: string
     provider?: string
-    voiceType?: "premade" | "custom"
+    voiceType?: "premade" | "custom" | "library"
     stability?: number
     similarityBoost?: number
     style?: number
@@ -35,8 +36,17 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   const ttsOptions = { stability, similarityBoost, style, speed, languageCode }
   const hasOptions = stability != null || similarityBoost != null || style != null || speed != null || languageCode != null
 
-  if (voiceType === "custom" && voice) {
-    const audioBuffer = await directElevenLabsTTS(text, voice, provider, hasOptions ? ttsOptions : undefined)
+  // Route through direct ElevenLabs API for: v3 model, custom clones, Voice Library voices,
+  // or any premade voice UUID that isn't in KIE's 21 accepted voices.
+  const useDirectApi = provider === "elevenlabs-v3" || (voice && (
+    voiceType === "custom" || voiceType === "library" || !isKieAcceptedVoice(voice)
+  ))
+
+  // Strip [audio tags] from text when NOT using v3 — v2 models speak them as literal text
+  const processedText = provider === "elevenlabs-v3" ? text : stripAudioTags(text)
+
+  if (useDirectApi) {
+    const audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, hasOptions ? ttsOptions : undefined)
     await job.updateProgress(50)
 
     const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
@@ -60,7 +70,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     return
   }
 
-  const result = await routedTextToSpeech(text, provider ?? "elevenlabs-turbo", voice, hasOptions ? ttsOptions : undefined)
+  const result = await routedTextToSpeech(processedText, provider ?? "elevenlabs-turbo", voice, hasOptions ? ttsOptions : undefined)
   await job.updateProgress(50)
 
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
@@ -270,6 +280,28 @@ const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) {
+  const { text, voiceDescription, model, loudness, guidanceScale, seed, quality, shouldEnhance } = job.data as {
+    jobId: string; text: string; voiceDescription: string
+    model?: string; loudness?: number; guidanceScale?: number
+    seed?: number; quality?: number; shouldEnhance?: boolean
+  }
+  console.log(`[worker] voice-design ${ctx.jobId}`)
+  const result = await designVoice(text, voiceDescription, { model, loudness, guidanceScale, seed, quality, shouldEnhance })
+  await job.updateProgress(50)
+  const r2Url = await uploadBufferToR2(result.audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { audioUrl: r2Url, generatedVoiceId: result.generatedVoiceId },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (voiceId: ${result.generatedVoiceId})`)
+}
+
 const handleForcedAlignment: HandlerFn = async function handleForcedAlignment(job, ctx) {
   const { audioUrl, transcript } = job.data as { jobId: string; audioUrl: string; transcript: string }
   console.log(`[worker] forced-alignment ${ctx.jobId}`)
@@ -297,5 +329,6 @@ export const audioAIHandlers: Record<string, HandlerFn> = {
   "voice-changer": handleVoiceChanger,
   "dubbing": handleDubbing,
   "voice-remix": handleVoiceRemix,
+  "voice-design": handleVoiceDesign,
   "forced-alignment": handleForcedAlignment,
 }

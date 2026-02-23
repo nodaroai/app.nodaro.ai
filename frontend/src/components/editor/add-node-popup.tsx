@@ -311,6 +311,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Audio & Speech",
   },
   {
+    type: "voice-design",
+    label: "Voice Design",
+    icon: <Wand2 className="h-4 w-4" />,
+    category: "AI",
+    group: "Audio & Speech",
+  },
+  {
     type: "forced-alignment",
     label: "Forced Alignment",
     icon: <AlignLeft className="h-4 w-4" />,

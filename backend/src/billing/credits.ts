@@ -141,7 +141,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30
   "kling-master": 22,            // 70 KIE cr, $0.35
   // ── Video-to-Video / Motion ──
-  "wan": 25,                     // 80 KIE cr, $0.40
+  "wan": 25,                     // 80 KIE cr, $0.40 (also used for T2V wan key)
   "topaz-video": 0,
   "motion-transfer": 32,         // 100 KIE cr, $0.50
   "kling-motion": 0,
@@ -150,6 +150,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-avatar-pro": 19,        // 60 KIE cr, $0.30
   "hailuo-avatar": 19,           // ~$0.30 estimated
   // ── Audio / TTS / Music ──
+  "elevenlabs-v3": 4,             // direct ElevenLabs API, $0.05
   "elevenlabs-turbo": 4,         // 10 KIE cr flat, $0.05
   "elevenlabs-multilingual": 4,  // 10 KIE cr flat, $0.05
   "elevenlabs": 4,               // alias for turbo
@@ -170,6 +171,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-voice-changer": 4,  // ElevenLabs speech-to-speech
   "elevenlabs-dubbing": 8,        // ElevenLabs dubbing (async)
   "elevenlabs-voice-remix": 4,    // ElevenLabs voice remix/preview
+  "elevenlabs-voice-design": 5,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
   "infinitalk": 19,              // 60 KIE cr, $0.30
   // ── Processing ──
@@ -216,6 +218,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "voice-changer": 4,
   "dubbing": 8,
   "voice-remix": 4,
+  "voice-design": 5,
   "forced-alignment": 3,
 }
 

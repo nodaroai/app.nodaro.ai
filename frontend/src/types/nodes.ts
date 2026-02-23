@@ -527,10 +527,10 @@ export type ImageToVideoData = {
 export type TextToSpeechData = {
   [key: string]: unknown
   label: string
-  provider: "elevenlabs-turbo" | "elevenlabs-multilingual" | "elevenlabs"
+  provider: "elevenlabs-v3" | "elevenlabs-turbo" | "elevenlabs-multilingual" | "elevenlabs"
   voiceId: string
   voiceLabel?: string
-  voiceType: "premade" | "custom"
+  voiceType: "premade" | "custom" | "library"
   voiceDisplayName: string
   language: string
   speed: number
@@ -552,7 +552,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "kling-3.0" | "grok" | "sora2-pro"
+  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "kling-3.0" | "grok" | "sora2-pro" | "seedance" | "wan" | "sora2" | "hailuo-standard" | "bytedance-lite" | "bytedance-pro" | "wan-turbo"
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"
@@ -859,7 +859,7 @@ export type VoiceChangerData = {
   label: string
   voiceId: string
   voiceLabel: string
-  voiceType: "premade" | "custom"
+  voiceType: "premade" | "custom" | "library"
   stability: number
   similarityBoost: number
   removeBackgroundNoise: boolean
@@ -898,6 +898,28 @@ export type VoiceRemixData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type VoiceDesignData = {
+  [key: string]: unknown
+  label: string
+  text: string
+  voiceDescription: string
+  model?: string
+  loudness?: number
+  guidanceScale?: number
+  seed?: number
+  quality?: number
+  shouldEnhance?: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedVoiceId?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   currentJobId?: string
@@ -1617,6 +1639,7 @@ export type SceneNodeData =
   | VoiceChangerData
   | DubbingData
   | VoiceRemixData
+  | VoiceDesignData
   | ForcedAlignmentData
   | CombineVideosData
   | MergeVideoAudioData
@@ -1697,6 +1720,7 @@ export type SceneNodeType =
   | "voice-changer"
   | "dubbing"
   | "voice-remix"
+  | "voice-design"
   | "forced-alignment"
   | "combine-videos"
   | "merge-video-audio"
@@ -1974,7 +1998,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Text to Speech", provider: "elevenlabs-turbo", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
+    defaultData: { label: "Text to Speech", provider: "elevenlabs-v3", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
   },
   {
     type: "qa-check",
@@ -2161,6 +2185,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as VoiceRemixData,
+  },
+  {
+    type: "voice-design",
+    label: "Voice Design",
+    category: "ai",
+    creditCost: 5,
+    inputs: ["in"],
+    outputs: ["audio", "voiceId"],
+    defaultData: {
+      label: "Voice Design",
+      text: "",
+      voiceDescription: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VoiceDesignData,
   },
   {
     type: "forced-alignment",

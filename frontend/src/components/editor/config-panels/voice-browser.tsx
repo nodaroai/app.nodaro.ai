@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
-import { ChevronDown, Play, Pause, Search, Loader2, Mic, Upload, Trash2, Square } from "lucide-react"
+import { ChevronDown, Play, Pause, Search, Loader2, Mic, Upload, Trash2, Square, SlidersHorizontal } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { useVoices } from "@/hooks/use-voices"
 import { useVoiceLibrary } from "@/hooks/use-voices"
 import { useVoiceClones, useCreateVoiceClone, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
@@ -24,13 +25,57 @@ import { toast } from "sonner"
 interface VoiceBrowserProps {
   readonly value: string              // voice_id UUID or legacy name
   readonly valueLabel?: string        // display name for trigger button
-  readonly onSelect: (voiceId: string, voiceName: string, voiceType?: "premade" | "custom") => void
+  readonly onSelect: (voiceId: string, voiceName: string, voiceType?: "premade" | "custom" | "library") => void
   readonly compact?: boolean
   readonly showCustomVoices?: boolean  // default false — only TTS node sets this
 }
 
 const GENDER_FILTERS = ["All", "Female", "Male", "Other"] as const
 type GenderFilter = (typeof GENDER_FILTERS)[number]
+
+const LIBRARY_CATEGORIES = [
+  { key: "featured", label: "Featured", isFeatured: true },
+  { key: "professional", label: "Professional", isFeatured: false },
+  { key: "famous", label: "Famous", isFeatured: false },
+] as const
+
+const SORT_OPTIONS = [
+  { value: "trending", label: "Trending" },
+  { value: "latest", label: "Latest" },
+  { value: "most_users", label: "Most Popular" },
+  { value: "usage", label: "Most Used" },
+] as const
+
+const ACCENT_OPTIONS = [
+  "american", "british", "australian", "indian", "african", "irish",
+  "italian", "german", "french", "spanish", "latin", "scandinavian",
+  "korean", "japanese", "chinese", "arabic", "portuguese", "dutch",
+  "polish", "turkish", "swedish", "russian",
+] as const
+
+const AGE_OPTIONS = [
+  { value: "young", label: "Young" },
+  { value: "middle_aged", label: "Middle Aged" },
+  { value: "old", label: "Old" },
+] as const
+
+const USE_CASE_OPTIONS = [
+  { value: "advertisement", label: "Advertisement" },
+  { value: "characters_animation", label: "Characters & Animation" },
+  { value: "conversational", label: "Conversational" },
+  { value: "entertainment_tv", label: "Entertainment & TV" },
+  { value: "informative_educational", label: "Informative & Educational" },
+  { value: "narrative_story", label: "Narrative & Story" },
+  { value: "social_media", label: "Social Media" },
+] as const
+
+const TONE_OPTIONS = [
+  "anxious", "calm", "casual", "chill", "classy", "confident", "crisp",
+  "cute", "deep", "excited", "formal", "gentle", "grumpy", "husky",
+  "hyped", "intense", "mature", "meditative", "modulated", "neutral",
+  "pleasant", "professional", "raspy", "relaxed", "rough", "sad",
+  "sassy", "serious", "soft", "upbeat", "whispery", "wise",
+] as const
 
 type TabId = "my-voices" | "premade" | "library"
 
@@ -61,6 +106,34 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [libraryGender, setLibraryGender] = useState<GenderFilter>("All")
   const [libraryPage, setLibraryPage] = useState(0)
+  const [libraryCategory, setLibraryCategory] = useState<string | undefined>(undefined)
+  const [libraryFeatured, setLibraryFeatured] = useState(false)
+  const [librarySort, setLibrarySort] = useState("trending")
+  const [libraryHighQuality, setLibraryHighQuality] = useState(false)
+  const [libraryAccent, setLibraryAccent] = useState("All")
+  const [libraryAge, setLibraryAge] = useState("All")
+  const [libraryLanguage, setLibraryLanguage] = useState("All")
+  const [libraryUseCase, setLibraryUseCase] = useState("All")
+  const [libraryDescriptive, setLibraryDescriptive] = useState("All")
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+
+  const hasActiveAdvancedFilters = libraryAccent !== "All" || libraryAge !== "All" || libraryLanguage !== "All" || libraryUseCase !== "All" || libraryDescriptive !== "All"
+
+  const resetAllFilters = useCallback(() => {
+    setLibrarySearch("")
+    setDebouncedSearch("")
+    setLibraryGender("All")
+    setLibraryCategory(undefined)
+    setLibraryFeatured(false)
+    setLibraryHighQuality(false)
+    setLibrarySort("trending")
+    setLibraryAccent("All")
+    setLibraryAge("All")
+    setLibraryLanguage("All")
+    setLibraryUseCase("All")
+    setLibraryDescriptive("All")
+    setLibraryPage(0)
+  }, [])
 
   // -- Audio --
   const [playingId, setPlayingId] = useState<string | null>(null)
@@ -83,6 +156,14 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
     {
       search: debouncedSearch || undefined,
       gender: libraryGenderParam,
+      category: libraryHighQuality ? "high_quality" : libraryCategory,
+      featured: libraryFeatured ? "true" : undefined,
+      sort: librarySort !== "trending" ? librarySort : undefined,
+      accent: libraryAccent !== "All" ? libraryAccent : undefined,
+      age: libraryAge !== "All" ? libraryAge : undefined,
+      language: libraryLanguage !== "All" ? libraryLanguage : undefined,
+      use_cases: libraryUseCase !== "All" ? libraryUseCase : undefined,
+      descriptives: libraryDescriptive !== "All" ? libraryDescriptive : undefined,
       page: libraryPage,
       page_size: 30,
     },
@@ -130,7 +211,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
     setPlayingId(id)
   }, [playingId])
 
-  const handleSelect = useCallback((voiceId: string, voiceName: string, voiceType?: "premade" | "custom") => {
+  const handleSelect = useCallback((voiceId: string, voiceName: string, voiceType?: "premade" | "custom" | "library") => {
     onSelect(voiceId, voiceName, voiceType)
     setOpen(false)
     if (audioRef.current) {
@@ -269,19 +350,158 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
               />
             </div>
 
-            {/* Gender filter */}
-            <div className="flex gap-1">
-              {GENDER_FILTERS.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => { setLibraryGender(g); setLibraryPage(0) }}
-                  className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${libraryGender === g ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
-                >
-                  {g}
-                </button>
-              ))}
+            {/* Category chips + HQ toggle */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {LIBRARY_CATEGORIES.map((cat) => {
+                const isActive = cat.isFeatured
+                  ? libraryFeatured
+                  : libraryCategory === cat.key
+                return (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => {
+                      if (cat.isFeatured) {
+                        setLibraryFeatured(!libraryFeatured)
+                        if (!libraryFeatured) setLibraryCategory(undefined)
+                      } else {
+                        setLibraryCategory(isActive ? undefined : cat.key)
+                        if (!isActive) setLibraryFeatured(false)
+                      }
+                      setLibraryPage(0)
+                    }}
+                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${isActive ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                  >
+                    {cat.label}
+                  </button>
+                )
+              })}
+              <span className="mx-1 h-4 w-px bg-border" />
+              <button
+                type="button"
+                onClick={() => { setLibraryHighQuality(!libraryHighQuality); setLibraryPage(0) }}
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${libraryHighQuality ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
+              >
+                <span className={`inline-flex h-3 w-3 items-center justify-center rounded-sm border text-[8px] leading-none ${libraryHighQuality ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
+                  {libraryHighQuality && "✓"}
+                </span>
+                High Quality
+              </button>
             </div>
+
+            {/* Gender chips + Sort */}
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1 flex-1">
+                {GENDER_FILTERS.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => { setLibraryGender(g); setLibraryPage(0) }}
+                    className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${libraryGender === g ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+              <Select value={librarySort} onValueChange={(v) => { setLibrarySort(v); setLibraryPage(0) }}>
+                <SelectTrigger className="h-7 w-[120px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Advanced filters toggle + reset */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className={`flex items-center gap-1 text-xs transition-colors ${hasActiveAdvancedFilters ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <SlidersHorizontal className="h-3 w-3" />
+                {showAdvancedFilters ? "Hide filters" : "More filters"}
+                {!showAdvancedFilters && hasActiveAdvancedFilters && (
+                  <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                )}
+              </button>
+              {(hasActiveAdvancedFilters || libraryGender !== "All" || libraryCategory || libraryFeatured || libraryHighQuality || debouncedSearch) && (
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {showAdvancedFilters && (
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <Select value={libraryAccent} onValueChange={(v) => { setLibraryAccent(v); setLibraryPage(0) }}>
+                    <SelectTrigger className="h-7 text-xs flex-1">
+                      <SelectValue placeholder="Accent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All accents</SelectItem>
+                      {ACCENT_OPTIONS.map((a) => (
+                        <SelectItem key={a} value={a}>{capitalize(a)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={libraryAge} onValueChange={(v) => { setLibraryAge(v); setLibraryPage(0) }}>
+                    <SelectTrigger className="h-7 text-xs flex-1">
+                      <SelectValue placeholder="Age" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All ages</SelectItem>
+                      {AGE_OPTIONS.map((a) => (
+                        <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={libraryLanguage} onValueChange={(v) => { setLibraryLanguage(v); setLibraryPage(0) }}>
+                    <SelectTrigger className="h-7 text-xs flex-1">
+                      <SelectValue placeholder="Language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All languages</SelectItem>
+                      {ALL_LANGUAGES.map((l) => (
+                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2">
+                  <Select value={libraryUseCase} onValueChange={(v) => { setLibraryUseCase(v); setLibraryPage(0) }}>
+                    <SelectTrigger className="h-7 text-xs flex-1">
+                      <SelectValue placeholder="Use case" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All use cases</SelectItem>
+                      {USE_CASE_OPTIONS.map((uc) => (
+                        <SelectItem key={uc.value} value={uc.value}>{uc.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={libraryDescriptive} onValueChange={(v) => { setLibraryDescriptive(v); setLibraryPage(0) }}>
+                    <SelectTrigger className="h-7 text-xs flex-1">
+                      <SelectValue placeholder="Tone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All tones</SelectItem>
+                      {TONE_OPTIONS.map((d) => (
+                        <SelectItem key={d} value={d}>{capitalize(d)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
 
             {/* Results */}
             {libraryLoading && (!libraryData || libraryData.voices.length === 0) ? (
@@ -303,7 +523,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                   selectedValue={value}
                   playingId={playingId}
                   onPlay={handlePlay}
-                  onSelect={(v) => handleSelect(v.id, v.name, "premade")}
+                  onSelect={(v) => handleSelect(v.id, v.name, "library")}
                   showCategory
                 />
                 {libraryData?.hasMore && (
@@ -320,7 +540,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                 )}
                 {!libraryLoading && libraryData?.voices.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    {debouncedSearch ? "No voices found" : "Search to explore thousands of community voices"}
+                    No voices found — try adjusting your filters
                   </p>
                 )}
               </>

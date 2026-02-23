@@ -38,6 +38,10 @@ export function useVoiceLibrary(params: VoiceLibraryParams, enabled: boolean) {
     accent: params.accent,
     language: params.language,
     category: params.category,
+    use_cases: params.use_cases,
+    descriptives: params.descriptives,
+    featured: params.featured,
+    sort: params.sort,
     page: params.page !== undefined ? String(params.page) : undefined,
     page_size: params.page_size !== undefined ? String(params.page_size) : undefined,
   }

@@ -7,9 +7,9 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 const textToSpeechBody = z.object({
   text: z.string().min(1).max(5000),
   voice: z.string().optional(),
-  provider: z.enum(["elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs"]).optional(),
+  provider: z.enum(["elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs"]).optional(),
   userId: z.string().uuid().optional(),
-  voiceType: z.enum(["premade", "custom"]).optional().default("premade"),
+  voiceType: z.enum(["premade", "custom", "library"]).optional().default("premade"),
   stability: z.number().min(0).max(1).optional(),
   similarityBoost: z.number().min(0).max(1).optional(),
   style: z.number().min(0).max(1).optional(),

@@ -38,6 +38,7 @@ import { TextToDialogueNode } from "./text-to-dialogue-node"
 import { VoiceChangerNode } from "./voice-changer-node"
 import { DubbingNode } from "./dubbing-node"
 import { VoiceRemixNode } from "./voice-remix-node"
+import { VoiceDesignNode } from "./voice-design-node"
 import { ForcedAlignmentNode } from "./forced-alignment-node"
 import { ImageToTextNode } from "./image-to-text-node";
 import { AIWriterNode } from "./ai-writer-node";
@@ -123,6 +124,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "voice-changer": VoiceChangerNode,
   "dubbing": DubbingNode,
   "voice-remix": VoiceRemixNode,
+  "voice-design": VoiceDesignNode,
   "forced-alignment": ForcedAlignmentNode,
   "ai-writer": AIWriterNode,
   // Processing

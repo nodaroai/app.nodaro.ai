@@ -804,7 +804,7 @@ export async function textToSpeech(
     style?: number
     speed?: number
     languageCode?: string
-    voiceType?: "premade" | "custom"
+    voiceType?: "premade" | "custom" | "library"
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { text, voice, provider }
@@ -1305,6 +1305,33 @@ export async function voiceRemixApi(text: string, voiceDescription: string, user
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start voice remix")
+  }
+  return res.json()
+}
+
+export async function voiceDesignApi(
+  text: string,
+  voiceDescription: string,
+  options?: {
+    model?: string
+    loudness?: number
+    guidanceScale?: number
+    seed?: number
+    quality?: number
+    shouldEnhance?: boolean
+  },
+  userId?: string,
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { text, voiceDescription, ...options }
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/voice-design`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start voice design")
   }
   return res.json()
 }
@@ -2143,12 +2170,28 @@ export async function deleteLibraryAsset(
 ): Promise<{ success: boolean }> {
   const authHeaders = await getAuthHeaders()
   const res = await fetch(
-    `${API_BASE_URL}/v1/library/${assetId}?userId=${encodeURIComponent(userId)}`,
+    `${API_BASE_URL}/v1/library/${assetId}?userId=${encodeURIComponent(userId)}&permanent=true`,
     { method: "DELETE", headers: authHeaders },
   )
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to delete asset")
+  }
+  return res.json()
+}
+
+export async function removeLibraryAsset(
+  assetId: string,
+  userId: string,
+): Promise<{ success: boolean }> {
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(
+    `${API_BASE_URL}/v1/library/${assetId}?userId=${encodeURIComponent(userId)}`,
+    { method: "DELETE", headers: authHeaders },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to remove from library")
   }
   return res.json()
 }
@@ -2408,6 +2451,10 @@ export interface VoiceLibraryParams {
   accent?: string
   language?: string
   category?: string
+  use_cases?: string
+  descriptives?: string
+  featured?: string
+  sort?: string
   page?: number
   page_size?: number
 }

@@ -43,6 +43,20 @@ export function registerVoiceLookup(voices: Array<{ voice_id: string; name: stri
 }
 
 /**
+ * Check whether a voice identifier can be resolved to a KIE-accepted voice.
+ * Returns false for Voice Library UUIDs and other non-KIE voices.
+ */
+export function isKieAcceptedVoice(voice: string | undefined): boolean {
+  if (!voice) return true // will default to "Rachel"
+  if (KIE_ACCEPTED_VOICE_NAMES.has(voice)) return true
+  if (voiceIdToName) {
+    const name = voiceIdToName.get(voice)
+    if (name && KIE_ACCEPTED_VOICE_NAMES.has(name)) return true
+  }
+  return false
+}
+
+/**
  * Resolve a voice identifier to a value KIE.ai accepts.
  * - If it's already one of the 21 accepted names, pass through.
  * - If it's a UUID, look up the name from the cached voice list.

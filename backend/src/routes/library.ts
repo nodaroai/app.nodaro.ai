@@ -62,9 +62,11 @@ export async function libraryRoutes(app: FastifyInstance) {
       .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, created_at")
 
     if (owned) {
+      // Storage page: show ALL user assets (regardless of in_library flag)
       query = query.eq("user_id", userId)
     } else {
-      query = query.or(`user_id.eq.${userId},is_library_item.eq.true`)
+      // Workflow modal: only show assets explicitly saved to library + shared items
+      query = query.or(`and(user_id.eq.${userId},in_library.eq.true),is_library_item.eq.true`)
     }
 
     query = query
@@ -209,7 +211,9 @@ export async function libraryRoutes(app: FastifyInstance) {
     return { success: true }
   })
 
-  // DELETE /v1/library/:id - Delete asset and R2 file
+  // DELETE /v1/library/:id - Remove or permanently delete an asset
+  // ?permanent=true → delete R2 file + DB record (used by /library storage page)
+  // default         → set in_library=false only (used by workflow Media Library modal)
   app.delete("/v1/library/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
@@ -229,55 +233,70 @@ export async function libraryRoutes(app: FastifyInstance) {
     }
 
     const { id } = paramsParsed.data
+    const permanent = (req.query as Record<string, string>)?.permanent === "true"
 
-    // Fetch asset to verify ownership
-    const { data: asset, error: fetchError } = await supabase
-      .from("assets")
-      .select("id, user_id, r2_key, size_bytes")
-      .eq("id", id)
-      .single()
+    if (permanent) {
+      // Permanent delete: remove R2 file + DB record + update storage
+      const { data: asset, error: fetchError } = await supabase
+        .from("assets")
+        .select("id, user_id, r2_key, size_bytes")
+        .eq("id", id)
+        .single()
 
-    if (fetchError || !asset) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: "Asset not found" },
-      })
-    }
-
-    if (asset.user_id !== userId) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "You do not own this asset" },
-      })
-    }
-
-    // Delete file from R2 (best-effort, don't fail if R2 delete fails)
-    try {
-      if (asset.r2_key) {
-        await deleteFromR2(asset.r2_key)
+      if (fetchError || !asset) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Asset not found" },
+        })
       }
-    } catch (err) {
-      console.error("[library] R2 delete failed (continuing):", err)
+
+      if (asset.user_id !== userId) {
+        return reply.status(403).send({
+          error: { code: "forbidden", message: "You do not own this asset" },
+        })
+      }
+
+      try {
+        if (asset.r2_key) {
+          await deleteFromR2(asset.r2_key)
+        }
+      } catch (err) {
+        console.error("[library] R2 delete failed (continuing):", err)
+      }
+
+      const { error: deleteError } = await supabase
+        .from("assets")
+        .delete()
+        .eq("id", id)
+
+      if (deleteError) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: deleteError.message },
+        })
+      }
+
+      try {
+        const sizeBytes = asset.size_bytes ?? 0
+        if (sizeBytes > 0) {
+          await updateStorageUsage(userId, -sizeBytes)
+        }
+      } catch (err) {
+        console.error("[library] Storage usage update failed:", err)
+      }
+
+      return { success: true }
     }
 
-    // Delete asset record from database
-    const { error: deleteError } = await supabase
+    // Soft remove: set in_library = false (keeps R2 file and asset record)
+    const { error: updateError } = await supabase
       .from("assets")
-      .delete()
+      .update({ in_library: false })
       .eq("id", id)
+      .eq("user_id", userId)
 
-    if (deleteError) {
+    if (updateError) {
       return reply.status(500).send({
-        error: { code: "internal_error", message: deleteError.message },
+        error: { code: "internal_error", message: updateError.message },
       })
-    }
-
-    // Decrement storage usage (guard against negative)
-    try {
-      const sizeBytes = asset.size_bytes ?? 0
-      if (sizeBytes > 0) {
-        await updateStorageUsage(userId, -sizeBytes)
-      }
-    } catch (err) {
-      console.error("[library] Storage usage update failed:", err)
     }
 
     return { success: true }
@@ -364,15 +383,24 @@ export async function libraryRoutes(app: FastifyInstance) {
       }
 
       if (existing) {
-        return reply.status(409).send({
-          error: {
-            code: "already_exists",
-            message: "This asset is already in your library",
-          },
-        })
+        // Asset record exists — just mark it as in_library
+        const { error: updateError } = await supabase
+          .from("assets")
+          .update({ in_library: true })
+          .eq("id", existing.id)
+
+        if (updateError) {
+          console.error("[save-generated] Update error:", updateError)
+          return reply.status(500).send({
+            error: { code: "internal_error", message: updateError.message },
+          })
+        }
+
+        console.log("[save-generated] Existing asset marked in_library:", existing.id)
+        return { data: { id: existing.id, isLibraryItem } }
       }
 
-      // Create asset record
+      // Create asset record with in_library = true
       const { data: asset, error: insertError } = await supabase
         .from("assets")
         .insert({
@@ -386,6 +414,7 @@ export async function libraryRoutes(app: FastifyInstance) {
           metadata: metadata ?? {},
           is_library_item: isLibraryItem,
           upload_source: "generated",
+          in_library: true,
         })
         .select("id")
         .single()

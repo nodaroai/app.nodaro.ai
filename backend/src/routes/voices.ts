@@ -197,6 +197,10 @@ export async function voicesRoutes(app: FastifyInstance) {
       accent: query.accent,
       language: query.language,
       category: query.category,
+      use_cases: query.use_cases,
+      descriptives: query.descriptives,
+      featured: query.featured,
+      sort: query.sort,
       page: query.page || "0",
       page_size: query.page_size || "30",
     }

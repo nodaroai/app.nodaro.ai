@@ -548,7 +548,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "grok-imagine/text-to-video",
     credits: 60,
     cost: 0.30,
-    extraParams: { aspect_ratio: "16:9", mode: "normal", duration: "6" },
+    extraParams: { aspect_ratio: "16:9", mode: "normal", duration: "6", resolution: "720p" },
     allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
   },
 
@@ -569,6 +569,70 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.50,
     extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
+
+  // Seedance 1.5 Pro T2V - docs.kie.ai/market/bytedance/seedance-1.5-pro
+  "seedance": {
+    model: "bytedance/seedance-1.5-pro",
+    credits: 100,
+    cost: 0.50,
+    extraParams: { resolution: "720p", fixed_lens: false, generate_audio: false },
+    allowedDurations: [4, 8, 12],
+  },
+
+  // Wan 2.6 T2V - docs.kie.ai/market/wan/2-6-text-to-video
+  "wan": {
+    model: "wan/2-6-text-to-video",
+    credits: 80,
+    cost: 0.40,
+    extraParams: { resolution: "1080p" },
+    allowedDurations: [5, 10, 15],
+  },
+
+  // Sora 2 (non-Pro) T2V - docs.kie.ai/market/sora2/sora-2-text-to-video
+  "sora2": {
+    model: "sora-2-text-to-video",
+    credits: 120,
+    cost: 0.60,
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+    allowedDurations: [5, 10],
+    usesNFrames: true,
+  },
+
+  // Hailuo Standard (02) T2V - docs.kie.ai/market/hailuo/02-text-to-video-standard
+  "hailuo-standard": {
+    model: "hailuo/02-text-to-video-standard",
+    credits: 50,
+    cost: 0.25,
+    extraParams: { prompt_optimizer: false },
+    allowedDurations: [6, 10],
+  },
+
+  // Bytedance V1 Lite T2V - docs.kie.ai/market/bytedance/v1-lite-text-to-video
+  "bytedance-lite": {
+    model: "bytedance/v1-lite-text-to-video",
+    credits: 50,
+    cost: 0.25,
+    extraParams: { aspect_ratio: "16:9", resolution: "720p" },
+    allowedDurations: [5, 10],
+  },
+
+  // Bytedance V1 Pro T2V - docs.kie.ai/market/bytedance/v1-pro-text-to-video
+  "bytedance-pro": {
+    model: "bytedance/v1-pro-text-to-video",
+    credits: 70,
+    cost: 0.35,
+    extraParams: { aspect_ratio: "16:9", resolution: "720p" },
+    allowedDurations: [5, 10],
+  },
+
+  // Wan 2.2 Turbo T2V - docs.kie.ai/market/wan/2-2-a14b-text-to-video-turbo
+  "wan-turbo": {
+    model: "wan/2-2-a14b-text-to-video-turbo",
+    credits: 40,
+    cost: 0.20,
+    extraParams: { aspect_ratio: "16:9", resolution: "720p" },
+    allowedDurations: [5],
   },
 }
 

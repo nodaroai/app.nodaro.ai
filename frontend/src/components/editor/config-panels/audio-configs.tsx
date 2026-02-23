@@ -4,6 +4,9 @@ import { Plus, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { TagTextarea } from "./tag-textarea"
+import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags"
+import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -32,6 +35,7 @@ import type {
   VoiceChangerData,
   DubbingData,
   VoiceRemixData,
+  VoiceDesignData,
   ForcedAlignmentData,
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
@@ -63,21 +67,24 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       {textSource === "direct" && (
         <div>
           <Label>Text</Label>
-          <Textarea
+          <TagTextarea
             rows={4}
             value={data.directText || ""}
-            onChange={(e) => onUpdate({ directText: e.target.value })}
+            onChange={(v) => onUpdate({ directText: v })}
             placeholder="Enter text to convert to speech..."
+            provider={data.provider}
           />
+          <p className="text-[10px] text-muted-foreground mt-1">Type [ or / for audio tags</p>
         </div>
       )}
       <MappableField field="provider" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
         <Select
-          value={data.provider === "elevenlabs" ? "elevenlabs-turbo" : (data.provider || "elevenlabs-turbo")}
+          value={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")}
           onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="elevenlabs-v3">ElevenLabs v3 (recommended)</SelectItem>
             <SelectItem value="elevenlabs-turbo">ElevenLabs Turbo v2.5 (fast)</SelectItem>
             <SelectItem value="elevenlabs-multilingual">ElevenLabs Multilingual v2</SelectItem>
           </SelectContent>
@@ -89,8 +96,8 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           value={data.voiceId || "Rachel"}
           valueLabel={data.voiceDisplayName || data.voiceLabel}
           onSelect={(id, name, voiceType) => {
-            if (voiceType === "custom") {
-              onUpdate({ voiceId: id, voiceType: "custom", voiceDisplayName: name, voiceLabel: name })
+            if (voiceType === "custom" || voiceType === "library") {
+              onUpdate({ voiceId: id, voiceType: voiceType, voiceDisplayName: name, voiceLabel: name })
             } else {
               onUpdate({ voiceId: id, voiceType: "premade", voiceDisplayName: name, voiceLabel: name })
             }
@@ -107,18 +114,9 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto-detect</SelectItem>
-            <SelectItem value="en">English</SelectItem>
-            <SelectItem value="he">Hebrew</SelectItem>
-            <SelectItem value="es">Spanish</SelectItem>
-            <SelectItem value="fr">French</SelectItem>
-            <SelectItem value="de">German</SelectItem>
-            <SelectItem value="it">Italian</SelectItem>
-            <SelectItem value="pt">Portuguese</SelectItem>
-            <SelectItem value="ja">Japanese</SelectItem>
-            <SelectItem value="zh">Chinese</SelectItem>
-            <SelectItem value="ko">Korean</SelectItem>
-            <SelectItem value="ar">Arabic</SelectItem>
-            <SelectItem value="ru">Russian</SelectItem>
+            {getLanguagesForModel(data.provider).map((l) => (
+              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -127,21 +125,25 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         <Input id="stability" type="range" min={0} max={1} step={0.05} value={data.stability ?? 0.5} onChange={(e) => onUpdate({ stability: parseFloat(e.target.value) })} className="h-2" />
         <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Variable</span><span>Stable</span></div>
       </div>
-      <div>
-        <Label htmlFor="similarityBoost">Similarity ({data.similarityBoost ?? 0.75})</Label>
-        <Input id="similarityBoost" type="range" min={0} max={1} step={0.05} value={data.similarityBoost ?? 0.75} onChange={(e) => onUpdate({ similarityBoost: parseFloat(e.target.value) })} className="h-2" />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Low</span><span>High</span></div>
-      </div>
-      <div>
-        <Label htmlFor="style">Style Exaggeration ({data.style ?? 0})</Label>
-        <Input id="style" type="range" min={0} max={1} step={0.05} value={data.style ?? 0} onChange={(e) => onUpdate({ style: parseFloat(e.target.value) })} className="h-2" />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>None</span><span>Exaggerated</span></div>
-      </div>
-      <div>
-        <Label htmlFor="speed">Speed ({data.speed ?? 1})</Label>
-        <Input id="speed" type="range" min={0.7} max={1.2} step={0.05} value={data.speed ?? 1} onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) })} className="h-2" />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>0.7x</span><span>1.2x</span></div>
-      </div>
+      {!isV3Model(data.provider) && (
+        <>
+          <div>
+            <Label htmlFor="similarityBoost">Similarity ({data.similarityBoost ?? 0.75})</Label>
+            <Input id="similarityBoost" type="range" min={0} max={1} step={0.05} value={data.similarityBoost ?? 0.75} onChange={(e) => onUpdate({ similarityBoost: parseFloat(e.target.value) })} className="h-2" />
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Low</span><span>High</span></div>
+          </div>
+          <div>
+            <Label htmlFor="style">Style Exaggeration ({data.style ?? 0})</Label>
+            <Input id="style" type="range" min={0} max={1} step={0.05} value={data.style ?? 0} onChange={(e) => onUpdate({ style: parseFloat(e.target.value) })} className="h-2" />
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>None</span><span>Exaggerated</span></div>
+          </div>
+          <div>
+            <Label htmlFor="speed">Speed ({data.speed ?? 1})</Label>
+            <Input id="speed" type="range" min={0.7} max={1.2} step={0.05} value={data.speed ?? 1} onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) })} className="h-2" />
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>0.7x</span><span>1.2x</span></div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -225,7 +227,14 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea rows={3} value={data.prompt} onChange={(e) => { const v = e.target.value; if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the song you want to generate..." />
+        <TagTextarea
+          rows={3}
+          value={data.prompt}
+          onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
+          placeholder="Describe the song... (type [ or / for tags)"
+          maxLength={3000}
+          customTags={SUNO_SUGGESTION_ITEMS}
+        />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -244,13 +253,34 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
       </MappableField>
       <MappableField field="lyrics" label="Lyrics (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea rows={4} value={data.lyrics ?? ""} onChange={(e) => { const v = e.target.value; if (v.length <= 3000) onUpdate({ lyrics: v }) }} placeholder="Write custom lyrics..." />
+        <TagTextarea
+          rows={4}
+          value={data.lyrics ?? ""}
+          onChange={(v) => { if (v.length <= 3000) onUpdate({ lyrics: v }) }}
+          placeholder="Write custom lyrics... (type [ or / for metatags)"
+          maxLength={3000}
+          customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
+        />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input value={data.style ?? ""} maxLength={500} onChange={(e) => onUpdate({ style: e.target.value })} placeholder="e.g. pop, rock, jazz, lo-fi..." />
+        <TagTextarea
+          rows={2}
+          value={data.style ?? ""}
+          onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }}
+          placeholder="e.g. pop, rock, jazz, lo-fi... (type [ or / for suggestions)"
+          maxLength={500}
+          customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+        />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input value={data.negativeStyle ?? ""} maxLength={500} onChange={(e) => onUpdate({ negativeStyle: e.target.value })} placeholder="Styles to avoid..." />
+        <TagTextarea
+          rows={2}
+          value={data.negativeStyle ?? ""}
+          onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }}
+          placeholder="Styles to avoid... (type [ or / for suggestions)"
+          maxLength={500}
+          customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+        />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? undefined : v })}>
@@ -286,7 +316,14 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea rows={3} value={data.prompt} onChange={(e) => { const v = e.target.value; if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the cover style..." />
+        <TagTextarea
+          rows={3}
+          value={data.prompt}
+          onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
+          placeholder="Describe the cover style... (type [ or / for tags)"
+          maxLength={3000}
+          customTags={SUNO_SUGGESTION_ITEMS}
+        />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
       </MappableField>
       <MappableField field="uploadUrl" label="Source Audio URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -308,13 +345,34 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Cover title" />
       </MappableField>
       <MappableField field="lyrics" label="Lyrics (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea rows={4} value={data.lyrics ?? ""} onChange={(e) => { const v = e.target.value; if (v.length <= 3000) onUpdate({ lyrics: v }) }} placeholder="Write custom lyrics for the cover..." />
+        <TagTextarea
+          rows={4}
+          value={data.lyrics ?? ""}
+          onChange={(v) => { if (v.length <= 3000) onUpdate({ lyrics: v }) }}
+          placeholder="Write custom lyrics for the cover... (type [ or / for metatags)"
+          maxLength={3000}
+          customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
+        />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input value={data.style ?? ""} maxLength={500} onChange={(e) => onUpdate({ style: e.target.value })} placeholder="e.g. pop, rock, jazz, lo-fi..." />
+        <TagTextarea
+          rows={2}
+          value={data.style ?? ""}
+          onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }}
+          placeholder="e.g. pop, rock, jazz, lo-fi... (type [ or / for suggestions)"
+          maxLength={500}
+          customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+        />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input value={data.negativeStyle ?? ""} maxLength={500} onChange={(e) => onUpdate({ negativeStyle: e.target.value })} placeholder="Styles to avoid..." />
+        <TagTextarea
+          rows={2}
+          value={data.negativeStyle ?? ""}
+          onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }}
+          placeholder="Styles to avoid... (type [ or / for suggestions)"
+          maxLength={500}
+          customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+        />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? undefined : v })}>
@@ -344,7 +402,14 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Input type="number" min={0} value={data.continueAt ?? 0} onChange={(e) => onUpdate({ continueAt: Number(e.target.value) })} placeholder="0" />
       </MappableField>
       <MappableField field="prompt" label="Extension Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea rows={3} value={data.prompt ?? ""} onChange={(e) => { const v = e.target.value; if (v.length <= 5000) onUpdate({ prompt: v }) }} placeholder="Describe how the music should continue..." />
+        <TagTextarea
+          rows={3}
+          value={data.prompt ?? ""}
+          onChange={(v) => { if (v.length <= 5000) onUpdate({ prompt: v }) }}
+          placeholder="Describe how the music should continue... (type [ or / for tags)"
+          maxLength={5000}
+          customTags={SUNO_SUGGESTION_ITEMS}
+        />
         <p className="text-xs text-muted-foreground mt-1">{(data.prompt ?? "").length}/5000</p>
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -363,7 +428,14 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
         <Input value={data.title ?? ""} maxLength={80} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Extended track title" />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input value={data.style ?? ""} maxLength={1000} onChange={(e) => onUpdate({ style: e.target.value })} placeholder="e.g. pop, rock, jazz..." />
+        <TagTextarea
+          rows={2}
+          value={data.style ?? ""}
+          onChange={(v) => { if (v.length <= 1000) onUpdate({ style: v }) }}
+          placeholder="e.g. pop, rock, jazz... (type [ or / for suggestions)"
+          maxLength={1000}
+          customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+        />
       </MappableField>
       <div className="flex items-center gap-2">
         <input type="checkbox" id="suno-extend-customParams" checked={data.defaultParamFlag ?? true} onChange={(e) => onUpdate({ defaultParamFlag: e.target.checked })} className="accent-[#ff0073]" />
@@ -377,7 +449,14 @@ export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMap
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea rows={3} value={data.prompt} onChange={(e) => { const v = e.target.value; if (v.length <= 1000) onUpdate({ prompt: v }) }} placeholder="Describe the lyrics you want (theme, mood, style)..." />
+        <TagTextarea
+          rows={3}
+          value={data.prompt}
+          onChange={(v) => { if (v.length <= 1000) onUpdate({ prompt: v }) }}
+          placeholder="Describe the lyrics you want... (type [ or / for genre/mood suggestions)"
+          maxLength={1000}
+          customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+        />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/1000</p>
       </MappableField>
       {data.generatedText && (
@@ -611,6 +690,7 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
             <div className="flex items-center gap-2">
               <VoiceBrowser
                 compact
+                showCustomVoices
                 value={line.voice}
                 valueLabel={line.voiceLabel}
                 onSelect={(id, name) => updateLine(i, { voice: id, voiceLabel: name })}
@@ -621,11 +701,11 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
                 </Button>
               )}
             </div>
-            <Textarea
+            <TagTextarea
               rows={2}
               value={line.text}
-              onChange={(e) => updateLine(i, { text: e.target.value })}
-              placeholder={`Line ${i + 1}...`}
+              onChange={(v) => updateLine(i, { text: v })}
+              placeholder={`Line ${i + 1}... (type [ or / for audio tags)`}
               className="text-sm"
             />
           </div>
@@ -660,19 +740,9 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto-detect</SelectItem>
-            <SelectItem value="en">English</SelectItem>
-            <SelectItem value="he">Hebrew</SelectItem>
-            <SelectItem value="es">Spanish</SelectItem>
-            <SelectItem value="fr">French</SelectItem>
-            <SelectItem value="de">German</SelectItem>
-            <SelectItem value="it">Italian</SelectItem>
-            <SelectItem value="pt">Portuguese</SelectItem>
-            <SelectItem value="ja">Japanese</SelectItem>
-            <SelectItem value="zh">Chinese</SelectItem>
-            <SelectItem value="ko">Korean</SelectItem>
-            <SelectItem value="ar">Arabic</SelectItem>
-            <SelectItem value="ru">Russian</SelectItem>
-            <SelectItem value="hi">Hindi</SelectItem>
+            {ALL_LANGUAGES.map((l) => (
+              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -693,8 +763,8 @@ export function VoiceChangerConfig({ data, onUpdate }: ConfigProps<VoiceChangerD
           value={data.voiceId || "Rachel"}
           valueLabel={data.voiceLabel}
           onSelect={(id, name, voiceType) => {
-            if (voiceType === "custom") {
-              onUpdate({ voiceId: id, voiceType: "custom", voiceLabel: name })
+            if (voiceType === "custom" || voiceType === "library") {
+              onUpdate({ voiceId: id, voiceType: voiceType, voiceLabel: name })
             } else {
               onUpdate({ voiceId: id, voiceType: "premade", voiceLabel: name })
             }
@@ -738,22 +808,9 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="en">English</SelectItem>
-            <SelectItem value="he">Hebrew</SelectItem>
-            <SelectItem value="es">Spanish</SelectItem>
-            <SelectItem value="fr">French</SelectItem>
-            <SelectItem value="de">German</SelectItem>
-            <SelectItem value="it">Italian</SelectItem>
-            <SelectItem value="pt">Portuguese</SelectItem>
-            <SelectItem value="ja">Japanese</SelectItem>
-            <SelectItem value="zh">Chinese</SelectItem>
-            <SelectItem value="ko">Korean</SelectItem>
-            <SelectItem value="ar">Arabic</SelectItem>
-            <SelectItem value="ru">Russian</SelectItem>
-            <SelectItem value="hi">Hindi</SelectItem>
-            <SelectItem value="nl">Dutch</SelectItem>
-            <SelectItem value="tr">Turkish</SelectItem>
-            <SelectItem value="pl">Polish</SelectItem>
+            {ALL_LANGUAGES.map((l) => (
+              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -766,18 +823,9 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto-detect</SelectItem>
-            <SelectItem value="en">English</SelectItem>
-            <SelectItem value="he">Hebrew</SelectItem>
-            <SelectItem value="es">Spanish</SelectItem>
-            <SelectItem value="fr">French</SelectItem>
-            <SelectItem value="de">German</SelectItem>
-            <SelectItem value="it">Italian</SelectItem>
-            <SelectItem value="pt">Portuguese</SelectItem>
-            <SelectItem value="ja">Japanese</SelectItem>
-            <SelectItem value="zh">Chinese</SelectItem>
-            <SelectItem value="ko">Korean</SelectItem>
-            <SelectItem value="ar">Arabic</SelectItem>
-            <SelectItem value="ru">Russian</SelectItem>
+            {ALL_LANGUAGES.map((l) => (
+              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -822,6 +870,120 @@ export function VoiceRemixConfig({ data, onUpdate }: ConfigProps<VoiceRemixData>
       </div>
       <p className="text-xs text-muted-foreground">
         Generates a new voice from a natural language description and creates an audio preview with the specified text.
+      </p>
+    </div>
+  )
+}
+
+// Map voice design model IDs to TTS provider IDs for TagTextarea audio tag support
+const VOICE_DESIGN_MODEL_TO_TTS_PROVIDER: Record<string, string> = {
+  "eleven_ttv_v3": "elevenlabs-v3",
+  "eleven_multilingual_ttv_v2": "elevenlabs-multilingual",
+}
+
+export function VoiceDesignConfig({ data, onUpdate }: ConfigProps<VoiceDesignData>) {
+  const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] || "elevenlabs-v3"
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Voice Description</Label>
+        <Textarea
+          rows={3}
+          value={data.voiceDescription || ""}
+          onChange={(e) => onUpdate({ voiceDescription: e.target.value })}
+          placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
+        />
+      </div>
+      <div>
+        <Label>Preview Text <span className="text-muted-foreground text-[10px]">(100-1000 chars)</span></Label>
+        <TagTextarea
+          rows={3}
+          value={data.text || ""}
+          onChange={(v) => { if (v.length <= 1000) onUpdate({ text: v }) }}
+          placeholder="Text to preview the generated voice with (min 100 characters, type [ for audio tags)..."
+          maxLength={1000}
+          provider={ttsProvider}
+        />
+        {data.text && data.text.length < 100 && (
+          <p className="text-[10px] text-amber-500 mt-0.5">{data.text.length}/100 characters (minimum 100 required)</p>
+        )}
+      </div>
+      <div>
+        <Label>Model</Label>
+        <Select value={data.model || "eleven_ttv_v3"} onValueChange={(v) => onUpdate({ model: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="eleven_ttv_v3">ElevenLabs v3 (recommended)</SelectItem>
+            <SelectItem value="eleven_multilingual_ttv_v2">ElevenLabs Multilingual v2</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Loudness: {data.loudness?.toFixed(1) ?? "0.0"}</Label>
+        <Input
+          type="range"
+          min={-1}
+          max={1}
+          step={0.1}
+          value={data.loudness ?? 0}
+          onChange={(e) => onUpdate({ loudness: parseFloat(e.target.value) })}
+          className="w-full"
+        />
+        <div className="flex justify-between text-[10px] text-muted-foreground">
+          <span>Quiet</span>
+          <span>Loud</span>
+        </div>
+      </div>
+      <div>
+        <Label>Guidance Scale: {data.guidanceScale ?? 5}</Label>
+        <Input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={data.guidanceScale ?? 5}
+          onChange={(e) => onUpdate({ guidanceScale: parseInt(e.target.value) })}
+          className="w-full"
+        />
+        <div className="flex justify-between text-[10px] text-muted-foreground">
+          <span>Creative</span>
+          <span>Strict</span>
+        </div>
+      </div>
+      <div>
+        <Label>Seed (optional)</Label>
+        <Input
+          type="number"
+          value={data.seed ?? ""}
+          onChange={(e) => onUpdate({ seed: e.target.value ? parseInt(e.target.value) : undefined })}
+          placeholder="Random"
+        />
+      </div>
+      <div>
+        <Label>Quality (optional)</Label>
+        <Input
+          type="number"
+          value={data.quality ?? ""}
+          onChange={(e) => onUpdate({ quality: e.target.value ? parseFloat(e.target.value) : undefined })}
+          placeholder="Default — higher = better quality, less variety"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="should-enhance"
+          checked={data.shouldEnhance ?? false}
+          onCheckedChange={(v) => onUpdate({ shouldEnhance: !!v })}
+        />
+        <Label htmlFor="should-enhance" className="cursor-pointer">Enhance audio quality</Label>
+      </div>
+      {data.generatedVoiceId && (
+        <div className="rounded-md bg-muted/50 p-2">
+          <Label className="text-[10px] text-muted-foreground">Generated Voice ID</Label>
+          <p className="text-xs font-mono break-all select-all">{data.generatedVoiceId}</p>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Designs a new voice using full controls (model, loudness, guidance, quality). Outputs audio preview and a reusable voice ID.
       </p>
     </div>
   )

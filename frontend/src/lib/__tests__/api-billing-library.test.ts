@@ -24,6 +24,7 @@ import {
   getWorkflowCostSummary,
   getLibraryAssets,
   deleteLibraryAsset,
+  removeLibraryAsset,
   getUserCredits,
   getModelCreditCost,
   getBatchModelCreditCosts,
@@ -291,11 +292,11 @@ describe("getLibraryAssets", () => {
 })
 
 // ---------------------------------------------------------------------------
-// deleteLibraryAsset
+// deleteLibraryAsset (permanent delete — used by /library storage page)
 // ---------------------------------------------------------------------------
 
 describe("deleteLibraryAsset", () => {
-  it("sends DELETE /v1/library/:assetId?userId=...", async () => {
+  it("sends DELETE /v1/library/:assetId?userId=...&permanent=true", async () => {
     sessionWith("tok-dla")
     const mock = mockFetchJson({ success: true })
     vi.stubGlobal("fetch", mock)
@@ -303,7 +304,7 @@ describe("deleteLibraryAsset", () => {
     const result = await deleteLibraryAsset("asset-1", "user-3")
 
     expect(mock).toHaveBeenCalledWith(
-      "/v1/library/asset-1?userId=user-3",
+      "/v1/library/asset-1?userId=user-3&permanent=true",
       expect.objectContaining({
         method: "DELETE",
         headers: { Authorization: "Bearer tok-dla" },
@@ -320,6 +321,39 @@ describe("deleteLibraryAsset", () => {
     )
 
     await expect(deleteLibraryAsset("bad", "u-1")).rejects.toThrow("Asset not found")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// removeLibraryAsset (soft remove — used by workflow Media Library modal)
+// ---------------------------------------------------------------------------
+
+describe("removeLibraryAsset", () => {
+  it("sends DELETE /v1/library/:assetId?userId=... (no permanent flag)", async () => {
+    sessionWith("tok-rla")
+    const mock = mockFetchJson({ success: true })
+    vi.stubGlobal("fetch", mock)
+
+    const result = await removeLibraryAsset("asset-2", "user-4")
+
+    expect(mock).toHaveBeenCalledWith(
+      "/v1/library/asset-2?userId=user-4",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: { Authorization: "Bearer tok-rla" },
+      }),
+    )
+    expect(result).toEqual({ success: true })
+  })
+
+  it("throws on non-ok response", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(404, { error: { message: "Asset not found" } }),
+    )
+
+    await expect(removeLibraryAsset("bad", "u-1")).rejects.toThrow("Asset not found")
   })
 })
 

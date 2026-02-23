@@ -212,7 +212,29 @@ describe("GET /v1/library", () => {
 // ---------------------------------------------------------------------------
 
 describe("DELETE /v1/library/:id", () => {
-  it("returns 403 for wrong owner", async () => {
+  it("soft remove sets in_library=false (no ownership error)", async () => {
+    const assetId = "00000000-0000-4000-8000-000000000010"
+
+    // Mock: update succeeds (eq on user_id means no rows affected if wrong owner, but no error)
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.update = vi.fn().mockReturnValue(chain)
+      chain.eq = vi.fn().mockReturnValue(chain)
+      ;(chain as Record<string, unknown>).error = null
+      return chain as never
+    })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/library/${assetId}?userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.success).toBe(true)
+  })
+
+  it("permanent delete returns 403 for wrong owner", async () => {
     const assetId = "00000000-0000-4000-8000-000000000010"
 
     // Mock: asset lookup returns asset owned by a different user
@@ -234,7 +256,7 @@ describe("DELETE /v1/library/:id", () => {
 
     const res = await app.inject({
       method: "DELETE",
-      url: `/v1/library/${assetId}?userId=${TEST_USER_ID}`,
+      url: `/v1/library/${assetId}?userId=${TEST_USER_ID}&permanent=true`,
     })
 
     expect(res.statusCode).toBe(403)

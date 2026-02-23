@@ -12,6 +12,17 @@ const mocks = vi.hoisted(() => {
   const mockTranscribe = vi.fn()
   const mockExtractYouTubeAudio = vi.fn()
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/audio/job-1.mp3")
+  const mockUploadBufferToR2 = vi.fn().mockResolvedValue("https://r2.example.com/audio/job-1.mp3")
+  const mockDirectElevenLabsTTS = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
+  const mockStripAudioTags = vi.fn((text: string) => text)
+  const mockIsKieAcceptedVoice = vi.fn().mockReturnValue(true)
+  const mockVoiceChangerFromUrl = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
+  const mockStartDubbing = vi.fn().mockResolvedValue("dub-id")
+  const mockWaitForDubbing = vi.fn().mockResolvedValue(undefined)
+  const mockDownloadDubbedAudio = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
+  const mockRemixVoice = vi.fn().mockResolvedValue({ audioUrl: "https://example.com/remix.mp3" })
+  const mockDesignVoice = vi.fn().mockResolvedValue({ audioUrl: "https://example.com/design.mp3", generatedVoiceId: "voice-123" })
+  const mockForcedAlignment = vi.fn().mockResolvedValue({ words: [] })
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
 
@@ -28,6 +39,17 @@ const mocks = vi.hoisted(() => {
     mockTranscribe,
     mockExtractYouTubeAudio,
     mockUploadToR2,
+    mockUploadBufferToR2,
+    mockDirectElevenLabsTTS,
+    mockStripAudioTags,
+    mockIsKieAcceptedVoice,
+    mockVoiceChangerFromUrl,
+    mockStartDubbing,
+    mockWaitForDubbing,
+    mockDownloadDubbedAudio,
+    mockRemixVoice,
+    mockDesignVoice,
+    mockForcedAlignment,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
     mockFrom,
@@ -37,11 +59,17 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
-vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2 }))
+vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2, uploadBufferToR2: mocks.mockUploadBufferToR2 }))
 vi.mock("@/providers/index.js", () => ({ textToSpeech: mocks.mockRoutedTextToSpeech }))
 vi.mock("@/providers/audio/generate-music.js", () => ({ generateMusic: mocks.mockGenerateMusic }))
 vi.mock("@/providers/audio/text-to-audio.js", () => ({ textToAudio: mocks.mockTextToAudio }))
-vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider }))
+vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mocks.mockDirectElevenLabsTTS, stripAudioTags: mocks.mockStripAudioTags }))
+vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider, isKieAcceptedVoice: mocks.mockIsKieAcceptedVoice }))
+vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl }))
+vi.mock("@/providers/elevenlabs/dubbing.js", () => ({ startDubbing: mocks.mockStartDubbing, waitForDubbing: mocks.mockWaitForDubbing, downloadDubbedAudio: mocks.mockDownloadDubbedAudio }))
+vi.mock("@/providers/elevenlabs/voice-remix.js", () => ({ remixVoice: mocks.mockRemixVoice }))
+vi.mock("@/providers/elevenlabs/voice-design.js", () => ({ designVoice: mocks.mockDesignVoice }))
+vi.mock("@/providers/elevenlabs/forced-alignment.js", () => ({ forcedAlignment: mocks.mockForcedAlignment }))
 vi.mock("@/providers/audio/transcribe.js", () => ({ transcribe: mocks.mockTranscribe }))
 vi.mock("@/providers/audio/youtube-extractor.js", () => ({ extractYouTubeAudio: mocks.mockExtractYouTubeAudio }))
 vi.mock("../../shared.js", () => ({

@@ -155,7 +155,7 @@ frontend/src/
   components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node, composite-node)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
-    config-panels/        — 22 files: per-category node config components (image, video, audio, composition, entity, etc.)
+    config-panels/        — 22 files: per-category node config components (image, video, audio, composition, entity, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags)
     remotion-player-preview.tsx — Generic @remotion/player wrapper (lazy-loaded)
     after-effects-player-preview.tsx — AE composition preview (shows when sourceVideo exists)
     motion-graphics-player-preview.tsx — MG composition preview (always available)
@@ -167,6 +167,8 @@ frontend/src/
   lib/api.ts              — API client
   lib/paddle.ts           — Paddle.js singleton
   lib/edition.ts          — Edition helpers
+  lib/audio-tags.ts       — Audio tags, SSML breaks, model-aware language lists (getLanguagesForModel, ALL_LANGUAGES)
+  lib/suno-tags.ts        — Suno metatags for lyrics autocomplete ([Verse], [Chorus], genres, etc.)
   lib/pricing-data.ts     — Tier/model pricing constants
   types/nodes.ts          — Node data types
 
@@ -177,7 +179,7 @@ backend/src/
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, forced-alignment)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
@@ -218,12 +220,16 @@ backend/src/
 | Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
 | Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
-| Voice browser | ElevenLabs v2 API → VoiceBrowser dialog | `GET /v1/voices` (public, 6hr cache, stampede-safe), `useVoices()` hook, dialog with search/gender/accent filters + audio preview; `DIALOGUE_VOICE_IDS` restricts dialogue node to 20 supported voices; fallback to static 52-voice list when no API key |
+| TTS models | ElevenLabs v3 (default), Turbo v2.5, Multilingual v2 | v3 (`eleven_v3`) supports `[audio tags]` for emotions/SFX; v2 models don't — worker `stripAudioTags()` removes `[...]` before sending to v2; v3 always routes through direct ElevenLabs API (never KIE); frontend `TagTextarea` shows persistent warning when audio tags + v2 model |
+| TTS languages | Model-aware lists in `audio-tags.ts` | `getLanguagesForModel(provider)` returns correct set per model: Multilingual v2 = 29, Flash v2.5 = 32, v3 = 46 (adds Hebrew, Thai, Bengali, etc.); `ALL_LANGUAGES` for non-model-specific dropdowns (dialogue, dubbing, voice browser) |
+| Voice browser | ElevenLabs v2 API → VoiceBrowser dialog | `GET /v1/voices` (public, 6hr cache, stampede-safe), `useVoices()` hook, dialog with search/gender/accent/age/language/sort filters + audio preview; `DIALOGUE_VOICE_IDS` restricts dialogue node to 20 supported voices; fallback to static 52-voice list when no API key |
 | Voice cloning | ElevenLabs Instant Clone → direct TTS | `POST /v1/voice-clones` (multipart, 5 credits), `voice_clones` DB table with RLS; custom voices use `directElevenLabsTTS()` bypassing KIE.ai; TTS node `voiceType: "premade" \| "custom"` field; Voice Browser "My Voices" tab with record/upload UI (MediaRecorder API) |
 | Voice Changer | ElevenLabs Speech-to-Speech direct API | `POST /v1/voice-changer` (4 credits), audio input + target voice → audio output preserving emotion/delivery; uses `POST /v1/speech-to-speech/{voice_id}` multipart sync API |
 | Dubbing | ElevenLabs Dubbing direct API | `POST /v1/dubbing` (8 credits), audio + target language → translated audio preserving speaker identity; async with polling (`startDubbing` → `waitForDubbing` → `downloadDubbedAudio`) |
 | Voice Remix | ElevenLabs Text-to-Voice direct API | `POST /v1/voice-remix` (4 credits), natural language voice description + preview text → audio preview; uses `POST /v1/text-to-voice/create-previews` |
+| Voice Design | ElevenLabs Text-to-Voice Design direct API | `POST /v1/voice-design` (5 credits), full controls: model (multilingual v2/english v2/turbo v2.5), loudness, guidance_scale, seed, quality, should_enhance; outputs audio + `generatedVoiceId`; uses `POST /v1/text-to-voice/design`; node has dual output handles (`audio` + `voiceId`) |
 | Forced Alignment | ElevenLabs Forced Alignment direct API | `POST /v1/forced-alignment` (3 credits), audio + transcript → word-level timestamps JSON; output is data (not audio) |
+| Suno metatags | `suno-tags.ts` + `TagTextarea` | Autocomplete for `[Verse]`, `[Chorus]`, genre tags, etc. in lyrics fields; `TagTextarea` component with portal-rendered dropdown, supports both Suno metatags and ElevenLabs audio tags via `customTags` prop |
 
 ---
 
@@ -245,4 +251,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-23*
-*Version: 1.42.0*
+*Version: 1.45.0*

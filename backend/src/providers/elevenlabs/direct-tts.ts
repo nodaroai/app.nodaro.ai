@@ -3,8 +3,14 @@ import { config } from "../../lib/config.js"
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
 
 function resolveModel(provider?: string): string {
+  if (provider === "elevenlabs-v3") return "eleven_v3"
   if (provider === "elevenlabs-multilingual") return "eleven_multilingual_v2"
   return "eleven_turbo_v2_5"
+}
+
+/** Strip [audio tags] from text — v2 models speak them as literal text */
+export function stripAudioTags(text: string): string {
+  return text.replace(/\[[^\]]+\]/g, "").replace(/\s{2,}/g, " ").trim()
 }
 
 export interface DirectTTSOptions {
@@ -26,13 +32,18 @@ export async function directElevenLabsTTS(
     throw new Error("ELEVENLABS_API_KEY is not configured")
   }
 
+  const isV3 = provider === "elevenlabs-v3"
+
+  // v3 only supports stability — similarity_boost, style, speed are deprecated
   const voiceSettings: Record<string, number> = {
     stability: options?.stability ?? 0.5,
-    similarity_boost: options?.similarityBoost ?? 0.75,
-    style: options?.style ?? 0,
   }
-  if (options?.speed != null) {
-    voiceSettings.speed = options.speed
+  if (!isV3) {
+    voiceSettings.similarity_boost = options?.similarityBoost ?? 0.75
+    voiceSettings.style = options?.style ?? 0
+    if (options?.speed != null) {
+      voiceSettings.speed = options.speed
+    }
   }
 
   const body: Record<string, unknown> = {

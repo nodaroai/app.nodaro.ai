@@ -11,6 +11,7 @@ import {
   getFaces,
   getLibraryAssets,
   deleteLibraryAsset,
+  removeLibraryAsset,
 } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 
@@ -99,6 +100,17 @@ export function useDeleteLibraryAssetMutation() {
     onSuccess: (_data, { userId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.library.all })
       qc.invalidateQueries({ queryKey: queryKeys.billing.storage(userId) })
+    },
+  })
+}
+
+export function useRemoveLibraryAssetMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ assetId, userId }: { assetId: string; userId: string }) =>
+      removeLibraryAsset(assetId, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.library.all })
     },
   })
 }

@@ -16,6 +16,7 @@ import {
   voiceChangerApi,
   dubbingApi,
   voiceRemixApi,
+  voiceDesignApi,
   forcedAlignmentApi,
   downloadYouTubeAudio,
   lipSyncApi,
@@ -102,6 +103,7 @@ import type {
   VoiceChangerData,
   DubbingData,
   VoiceRemixData,
+  VoiceDesignData,
   ForcedAlignmentData,
 } from "@/types/nodes";
 import {
@@ -542,7 +544,7 @@ export function executeNode(
       ...(ttsData.style != null && { style: ttsData.style }),
       ...(ttsData.speed != null && { speed: ttsData.speed }),
       ...(ttsData.languageCode && { languageCode: ttsData.languageCode }),
-      voiceType: (ttsData.voiceType as "premade" | "custom" | undefined) || "premade",
+      voiceType: (ttsData.voiceType as "premade" | "custom" | "library" | undefined) || "premade",
     };
     return runTextToSpeechGeneration(
       node.id,
@@ -734,6 +736,41 @@ export function executeNode(
       "generatedAudioUrl",
       "Voice Remix",
       ctx,
+    );
+  }
+
+  if (node.type === "voice-design") {
+    const d = node.data as VoiceDesignData;
+    if (!d.text?.trim()) {
+      toast.error(`Node "${d.label}": no preview text provided`);
+      return Promise.reject(new Error("No text"));
+    }
+    if (!d.voiceDescription?.trim()) {
+      toast.error(`Node "${d.label}": no voice description provided`);
+      return Promise.reject(new Error("No voice description"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        voiceDesignApi(
+          d.text!,
+          d.voiceDescription!,
+          {
+            model: d.model,
+            loudness: d.loudness,
+            guidanceScale: d.guidanceScale,
+            seed: d.seed,
+            quality: d.quality,
+            shouldEnhance: d.shouldEnhance,
+          },
+          ctx.userId,
+        ),
+      "generatedAudioUrl",
+      "Voice Design",
+      ctx,
+      (outputData) => ({
+        generatedVoiceId: outputData.generatedVoiceId as string | undefined,
+      }),
     );
   }
 

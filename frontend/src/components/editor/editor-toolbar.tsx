@@ -197,9 +197,11 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "voice-changer":
         case "dubbing":
         case "voice-remix":
+        case "voice-design":
           // Clear generated audio results, keep settings
           data.generatedResults = []
           data.generatedAudioUrl = undefined
+          data.generatedVoiceId = undefined
           data.activeResultIndex = 0
           data.executionStatus = undefined
           break

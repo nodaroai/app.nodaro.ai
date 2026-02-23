@@ -67,6 +67,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "voice-changer", label: "Voice Changer", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "dubbing", label: "Dubbing", icon: <Languages className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "voice-remix", label: "Voice Remix", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
+  { type: "voice-design", label: "Voice Design", icon: <Wand2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "forced-alignment", label: "Forced Alignment", icon: <AlignLeft className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   // AI — Suno Music
   { type: "suno-generate", label: "Suno Generate", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },

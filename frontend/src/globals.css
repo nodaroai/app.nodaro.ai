@@ -363,3 +363,55 @@
 .dark .react-flow__background pattern circle {
   fill: #2D2D2D;
 }
+
+/* ── Tag textarea highlight backdrop ────────────────────────── */
+.tag-textarea-container {
+  position: relative;
+  display: grid;               /* stack backdrop + textarea in same cell */
+}
+.tag-textarea-container > * {
+  grid-area: 1 / 1;
+}
+.tag-textarea-backdrop {
+  /* Mirror textarea typography exactly (shadcn Textarea defaults) */
+  padding: 0.5rem 0.75rem;     /* py-2 px-3 */
+  font: inherit;
+  font-size: 1rem;             /* text-base */
+  line-height: 1.5rem;
+  letter-spacing: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: hidden;
+  color: var(--foreground);    /* render all text visibly */
+  pointer-events: none;
+  border: 1px solid transparent; /* match textarea border space */
+  border-radius: var(--radius-md);
+}
+@media (min-width: 768px) {
+  .tag-textarea-backdrop {
+    font-size: 0.875rem;       /* md:text-sm */
+    line-height: 1.25rem;
+  }
+}
+.tag-textarea-input {
+  color: transparent !important;       /* hide textarea text — backdrop renders it */
+  caret-color: var(--foreground);      /* keep cursor visible */
+  background: transparent !important;  /* let backdrop show through */
+}
+.tag-textarea-input::selection {
+  background: color-mix(in srgb, var(--primary) 40%, transparent);
+}
+.tag-textarea-input::placeholder {
+  color: var(--muted-foreground) !important; /* placeholder visible when backdrop is empty */
+}
+.tag-highlight {
+  color: #ff0073;
+  background: color-mix(in srgb, #ff0073 12%, transparent);
+  border-radius: 3px;
+  padding: 1px 2px;
+  margin: 0 -2px;
+}
+.dark .tag-highlight {
+  color: #ff4da6;
+  background: color-mix(in srgb, #ff0073 18%, transparent);
+}

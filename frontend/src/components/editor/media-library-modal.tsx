@@ -6,7 +6,7 @@ import {
   Image as ImageIcon,
   Video,
   Music,
-  Trash2,
+  BookmarkMinus,
   Download,
   Loader2,
   FileQuestion,
@@ -18,7 +18,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import {
   useLibraryInfinite,
-  useDeleteLibraryAssetMutation,
+  useRemoveLibraryAssetMutation,
 } from "@/hooks/queries/use-assets-queries"
 import {
   promoteToLibrary,
@@ -122,7 +122,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
   })
 
   const assets = data?.pages.flatMap((p) => p.data) ?? []
-  const deleteMutation = useDeleteLibraryAssetMutation()
+  const removeMutation = useRemoveLibraryAssetMutation()
 
   // Debounce search input
   useEffect(() => {
@@ -147,15 +147,15 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
     return () => window.removeEventListener("keydown", handler)
   }, [open, onClose])
 
-  const handleDelete = async (asset: LibraryAsset) => {
+  const handleRemove = async (asset: LibraryAsset) => {
     if (!user?.id) return
 
     setDeletingId(asset.id)
     try {
-      await deleteMutation.mutateAsync({ assetId: asset.id, userId: user.id })
+      await removeMutation.mutateAsync({ assetId: asset.id, userId: user.id })
       setConfirmDeleteId(null)
     } catch (err) {
-      toast.error("Failed to delete asset")
+      toast.error("Failed to remove from library")
     } finally {
       setDeletingId(null)
     }
@@ -279,7 +279,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
                     isAdmin={isAdmin}
                     isDeleting={deletingId === asset.id}
                     isConfirmingDelete={confirmDeleteId === asset.id}
-                    onDelete={() => handleDelete(asset)}
+                    onDelete={() => handleRemove(asset)}
                     onConfirmDelete={() => setConfirmDeleteId(asset.id)}
                     onCancelDelete={() => setConfirmDeleteId(null)}
                     onDownload={() => handleDownload(asset)}
@@ -488,7 +488,7 @@ function AssetCard({
                 {isDeleting ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
                 ) : (
-                  "Delete"
+                  "Remove"
                 )}
               </button>
               <button
@@ -510,9 +510,9 @@ function AssetCard({
                 onConfirmDelete()
               }}
               className="w-8 h-8 rounded-lg bg-white/20 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors"
-              title="Delete"
+              title="Remove from library"
             >
-              <Trash2 className="w-4 h-4" />
+              <BookmarkMinus className="w-4 h-4" />
             </button>
           )}
         </div>
