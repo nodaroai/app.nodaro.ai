@@ -53,6 +53,7 @@ import {
   Shapes,
   Box,
   AudioWaveform,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
@@ -65,7 +66,7 @@ interface NodeOption {
   readonly group?: string;
 }
 
-const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
+export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   {
     type: "text-prompt",
@@ -211,6 +212,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "image-to-image",
     label: "Image to Image",
     icon: <Layers className="h-4 w-4" />,
+    category: "AI",
+    group: "Image",
+  },
+  {
+    type: "image-to-text",
+    label: "Describe Image",
+    icon: <Eye className="h-4 w-4" />,
     category: "AI",
     group: "Image",
   },
@@ -541,7 +549,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
 ];
 
-const CATEGORIES = [
+export const CATEGORIES = [
   {
     id: "Input",
     label: "INPUT",

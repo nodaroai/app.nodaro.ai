@@ -53,17 +53,47 @@
 |------|------|----------------|
 | 1 | `frontend/src/types/nodes.ts` | TypeScript type for node data |
 | 2 | `frontend/src/components/editor/config-panels/*.tsx` | `<SelectItem>` options (split by node category) |
+| 2b | `frontend/src/components/editor/config-panels/model-options.ts` | `IMAGE_ASPECT_RATIOS`, `IMAGE_RESOLUTION_OPTIONS`, `IMAGE_QUALITY_OPTIONS` if image model |
 | 3 | `backend/src/routes/<node-type>.ts` | **Zod validation schema** ⚠️ MOST COMMONLY FORGOTTEN |
 | 4 | `backend/src/providers/kie/*.ts` or `replicate/*.ts` | Provider implementation |
 | 5 | `backend/src/providers/kie/models.ts` | KIE model config (cost, params) |
 | 6 | `backend/src/providers/kie/index.ts` or `replicate/index.ts` | `supportedModels` array |
-| 7 | `backend/src/billing/credits.ts` | NODE_CREDIT_COSTS |
+| 7 | `backend/src/billing/credits.ts` | `STATIC_CREDIT_COSTS` (supports composite identifiers like `"gpt-image:high"`) |
 | 8 | `frontend/src/lib/pricing-data.ts` | MODEL_REFERENCE |
 | 9 | `model_pricing` DB table | Include actual provider cost |
 | 10 | `backend/src/billing/paddle-config.ts` | If pricing tiers or credit allocations change |
 | 11 | `frontend/src/lib/pricing-data.ts` | PRICING_TIERS if tier features/prices change |
 
 **Forgetting step 3 (Zod enum) has caused the same validation bug 3 times.**
+
+### New Node Registration (CRITICAL)
+
+**When adding a new node type, register it in ALL of these files:**
+
+| Step | File | What to Update |
+|------|------|----------------|
+| 1 | `backend/src/routes/<node-type>.ts` | Route handler (Zod schema, credit guard, API call) |
+| 2 | `backend/src/app.ts` | `app.register()` the route |
+| 3 | `backend/src/billing/credits.ts` | `STATIC_CREDIT_COSTS` entry |
+| 4 | `backend/src/billing/credit-manager.ts` | `CREDIT_COSTS` entry |
+| 5 | `frontend/src/types/nodes.ts` | Data type + `SceneNodeData` union + `SceneNodeType` union + `NODE_DEFINITIONS` |
+| 6 | `frontend/src/components/nodes/<node>-node.tsx` | Node component |
+| 7 | `frontend/src/components/nodes/index.ts` | `nodeTypes` map |
+| 8 | `frontend/src/components/editor/add-node-popup.tsx` | `NODE_OPTIONS` (popup/context menu) |
+| 9 | `frontend/src/components/editor/node-toolbar.tsx` | Sidebar node list ⚠️ **SEPARATE from popup** |
+| 10 | `frontend/src/components/editor/editor-toolbar.tsx` | Reset/clear `switch` case |
+| 11 | `frontend/src/components/editor/config-panels/<cat>-configs.tsx` | Config component |
+| 12 | `frontend/src/components/editor/config-panels/index.ts` | Export |
+| 13 | `frontend/src/components/editor/config-panel.tsx` | Import, display name, button type set, render conditional |
+| 14 | `frontend/src/lib/api.ts` | API client function |
+| 15 | `frontend/src/components/editor/workflow-editor/types.ts` | `EXECUTABLE_NODE_TYPES` set ⚠️ **Without this, Run button fails** |
+| 16 | `frontend/src/components/editor/workflow-editor/execute-node.ts` | DAG execution block |
+| 17 | `frontend/src/components/editor/workflow-editor/execution-graph.ts` | `extractNodeOutput()` |
+| 18 | `frontend/src/components/editor/workflow-editor/node-input-resolver.ts` | Input source mapping |
+
+**Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
+
+Full guide: `docs/adding-a-new-node.md`
 
 ### Database Rules
 - RLS on all tables
@@ -169,7 +199,8 @@ backend/src/
 | Execution model | Frontend DAG engine (`workflow-editor/`) | Topological sort, parallel per level |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
-| Voice Extractor | ElevenLabs via KIE.ai | Isolates voice from any audio, removes background noise (1 credit) |
+| Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers |
+| Voice Extractor | ElevenLabs via KIE.ai | Isolates voice from any audio, removes background noise |
 | Video composition | Remotion (`packages/remotion/`) | Scene graph renderer + after-effects renderer + lottie-overlay renderer + 3d-title renderer + motion-graphics renderer + composite renderer + legacy template converters via BullMQ worker |
 | AI composition | Claude Sonnet → Scene Graph JSON | Natural language → track-based video composition (2 credits) |
 | After Effects | Claude Sonnet → Effect Plan JSON | AI-generated post-processing (color grade, vignette, grain, noise, letterbox, animated-blur, trail, motion-blur) applied to video (2 credits), CSS `filter:blur()` for motion-blur, OffthreadVideo ghost layers for trail |
@@ -179,6 +210,7 @@ backend/src/
 | Composite | Client-side plan builder → Composite Plan JSON | Multi-layer video compositor: PiP, split screen, overlays with positioning/opacity/blend modes (0 credits), no AI, no backend route — plan built entirely in frontend DAG executor |
 | Multi-plan rendering | `POST /v1/render-video/plan` | Generic `{ planType, plan }` envelope — any composer node can feed plans to Render Video |
 | Media processing | FFmpeg in worker | 12 processing nodes (combine, merge, extract, captions, resize, trim, speed-ramp, loop, fade, mix-audio, adjust-volume, video-upscale), 0 credits |
+| Image generation | Per-model params via `model-options.ts` | Config panel layout: Provider → Prompt → Style → Negative Prompt → Assets → Model Settings; style uses `IMAGE_STYLE_PRESETS` dropdown (16 presets) + "Custom..." free text; aspect ratios, resolution (Flux only), quality (GPT Image/Seedream) filtered per provider; Nano Banana uses `image_size` (not `aspect_ratio`) and has no `resolution`; `output_format` only sent to Nano Banana family; style appended to prompt at execution; `negative_prompt` sent natively for imagen4/ideogram/qwen, appended as "Avoid: ..." for others; Ideogram uses `reference_image_urls` for character refs; reference image UI hidden for models that don't support it (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`: nano-banana, nano-banana-pro, ideogram only) |
 | Translation | Gemini Flash via Replicate | Creative prompt translation |
 | Composition preview | `@remotion/player` in frontend | Lazy-loaded Player preview for After Effects + Motion Graphics config panels; `@remotion-pkg` Vite alias resolves `packages/remotion/src`; `resolve.dedupe` prevents duplicate remotion bundles |
 | Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
@@ -202,5 +234,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-02-22*
-*Version: 1.36.0*
+*Last updated: 2026-02-23*
+*Version: 1.37.0*

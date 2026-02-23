@@ -66,7 +66,7 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
 
 // --- Generate Image (E2E spike) ---
 
-export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[], aspectRatio?: string, userId?: string): Promise<{ jobId: string }> {
+export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[], aspectRatio?: string, userId?: string, resolution?: string, quality?: string, negativePrompt?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     body.referenceImageUrls = referenceImageUrls
@@ -79,6 +79,15 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   }
   if (aspectRatio) {
     body.aspectRatio = aspectRatio
+  }
+  if (resolution) {
+    body.resolution = resolution
+  }
+  if (quality) {
+    body.quality = quality
+  }
+  if (negativePrompt) {
+    body.negativePrompt = negativePrompt
   }
   if (userId) {
     body.userId = userId
@@ -100,7 +109,7 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
 export async function editImage(
   imageUrl: string,
   prompt?: string,
-  provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit",
+  provider?: string,
   userId?: string
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl }
@@ -130,7 +139,7 @@ export async function editImage(
 export async function imageToImage(
   imageUrl: string,
   prompt: string,
-  provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i",
+  provider?: string,
   userId?: string,
   referenceImageUrls?: string[]
 ): Promise<{ jobId: string }> {
@@ -1404,6 +1413,28 @@ export async function transcribeApi(audioUrl: string, provider?: string, languag
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start transcription")
+  }
+  return res.json()
+}
+
+export async function imageToTextApi(
+  imageUrl: string,
+  detailLevel?: "brief" | "detailed" | "structured",
+  customPrompt?: string,
+  userId?: string,
+): Promise<{ jobId: string; generatedText: string }> {
+  const body: Record<string, unknown> = { imageUrl }
+  if (detailLevel) body.detailLevel = detailLevel
+  if (customPrompt) body.customPrompt = customPrompt
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/image-to-text/describe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to describe image")
   }
   return res.json()
 }

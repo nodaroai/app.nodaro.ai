@@ -11,6 +11,7 @@ import {
   sunoSeparateApi,
   sunoMusicVideoApi,
   transcribeApi,
+  imageToTextApi,
   downloadYouTubeAudio,
   lipSyncApi,
   motionTransferApi,
@@ -60,6 +61,7 @@ import type {
   SunoSeparateData,
   SunoMusicVideoData,
   TranscribeData,
+  ImageToTextData,
   AIWriterNodeData,
   LipSyncData,
   MotionTransferData,
@@ -118,6 +120,7 @@ import {
   runObjectGeneration,
   runLocationGeneration,
 } from "./asset-executors";
+import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "@/components/editor/config-panels/model-options";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -261,16 +264,39 @@ export function executeNode(
     } else {
       finalPrompt = prompt;
     }
+    // Append style to the generation prompt
+    const styleText = imgData.style?.trim();
+    if (styleText) {
+      finalPrompt += `\nStyle: ${styleText}`;
+    }
+    // Models with native negative_prompt support get it as a separate API param.
+    // All other models get it appended to the prompt as "Avoid: ...".
+    const negPrompt = imgData.negativePrompt?.trim();
+    const providerKey = imgData.provider || "nano-banana";
+    let nativeNegativePrompt: string | undefined;
+    if (negPrompt) {
+      if (NATIVE_NEGATIVE_PROMPT_MODELS.has(providerKey)) {
+        nativeNegativePrompt = negPrompt;
+      } else {
+        finalPrompt += `\nAvoid: ${negPrompt}`;
+      }
+    }
     if (finalPrompt.length > 2000) {
       finalPrompt = finalPrompt.slice(0, 1997) + "...";
     }
+    // Only send reference images for models that support them
+    const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(providerKey);
+    const refsToSend = supportsRefs && refImages.length > 0 ? refImages : undefined;
     return runImageGeneration(
       node.id,
       finalPrompt,
       ctx,
-      refImages.length > 0 ? refImages : undefined,
+      refsToSend,
       imgData.provider || undefined,
       imgData.aspectRatio || undefined,
+      imgData.resolution || undefined,
+      imgData.quality || undefined,
+      nativeNegativePrompt,
     );
   }
 
@@ -1049,6 +1075,60 @@ export function executeNode(
           reject(err);
         });
     });
+  }
+
+  if (node.type === "image-to-text") {
+    const imageUrl = inputs.imageUrl;
+    if (!imageUrl) {
+      toast.error(
+        `Node "${(node.data as ImageToTextData).label}": no image input found`,
+      );
+      return Promise.reject(new Error("No image input"));
+    }
+    const itData = node.data as ImageToTextData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      generatedText: undefined,
+      errorMessage: undefined,
+    });
+
+    return imageToTextApi(
+      imageUrl,
+      itData.detailLevel || "detailed",
+      itData.customPrompt || undefined,
+      ctx.userId,
+    )
+      .then((result) => {
+        const existingResults =
+          (
+            useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+              ?.data as ImageToTextData | undefined
+          )?.generatedResults ?? [];
+        const newResult = {
+          text: result.generatedText,
+          jobId: result.jobId,
+          timestamp: new Date().toISOString(),
+        };
+        const newResults = [...existingResults, newResult];
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          generatedText: result.generatedText,
+          generatedResults: newResults,
+          activeResultIndex: newResults.length - 1,
+          errorMessage: undefined,
+        });
+        toast.success("Image described successfully");
+      })
+      .catch((err) => {
+        const errMsg = err instanceof Error ? err.message : "Unknown error";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: errMsg,
+        });
+        toast.error("Image description failed", { description: errMsg });
+        throw err;
+      });
   }
 
   if (node.type === "ai-writer") {

@@ -42,6 +42,9 @@ export function runImageGeneration(
   referenceImageUrls?: string[],
   provider?: string,
   aspectRatio?: string,
+  resolution?: string,
+  quality?: string,
+  negativePrompt?: string,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -57,6 +60,9 @@ export function runImageGeneration(
       undefined,
       aspectRatio,
       ctx.userId,
+      resolution,
+      quality,
+      negativePrompt,
     )
       .then(({ jobId }) => {
         toast.info("Image generation started", {
@@ -157,7 +163,7 @@ export function runEditImage(
   imageUrl: string,
   ctx: ExecutionContext,
   prompt?: string,
-  provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit",
+  provider?: EditImageData["provider"],
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {

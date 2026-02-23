@@ -86,7 +86,7 @@ export async function handleSubscriptionCreated(
   }
 
   const tier = getTierFromPriceId(data.priceId)
-  const credits = TIER_CREDITS[tier] ?? 50
+  const credits = TIER_CREDITS[tier] ?? TIER_CREDITS.free
   const storageLimit = TIER_STORAGE_LIMITS[tier] ?? TIER_STORAGE_LIMITS.free
 
   // Idempotent: skip if subscription already exists

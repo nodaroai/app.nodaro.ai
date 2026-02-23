@@ -24,7 +24,7 @@ import type {
   ImageToImageData,
   CharacterDefinition,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS } from "./model-options"
+import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
@@ -34,6 +34,31 @@ const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m
 
 export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
+  const currentProvider = data.provider || "nano-banana-pro"
+  const supportsRefImage = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
+  const aspectRatioOptions = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
+  const resolutionOptions = useMemo(() => IMAGE_RESOLUTION_OPTIONS[currentProvider], [currentProvider])
+  const qualityOptions = useMemo(() => IMAGE_QUALITY_OPTIONS[currentProvider], [currentProvider])
+
+  // When provider changes, reset aspect ratio if current value isn't valid for new provider,
+  // and clear reference image if new provider doesn't support it
+  useEffect(() => {
+    const validValues = aspectRatioOptions.map((o) => o.value)
+    const updates: Partial<GenerateImageData> = {}
+    if (data.aspectRatio && !validValues.includes(data.aspectRatio)) {
+      updates.aspectRatio = validValues[0] || "1:1"
+    }
+    if (!supportsRefImage && data.referenceImageUrl) {
+      updates.referenceImageUrl = undefined
+    }
+    if (Object.keys(updates).length > 0) {
+      onUpdate(updates)
+    }
+  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [isCustomStyle, setIsCustomStyle] = useState(
+    () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)
+  )
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
@@ -95,74 +120,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
-          rows={3}
-          value={data.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Describe the image to generate..."
-        />
-      </MappableField>
-
-      {/* Reference Image */}
-      <div>
-        <Label className="text-xs">Reference Image</Label>
-        <p className="text-[10px] text-muted-foreground mb-1">
-          Upload an image to use as visual reference for generation.
-        </p>
-        {data.referenceImageUrl ? (
-          <div className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
-            <CachedImage
-              src={data.referenceImageUrl}
-              alt="Reference"
-              className="w-10 h-10 rounded object-cover flex-shrink-0"
-              thumbnail
-              thumbnailWidth={80}
-            />
-            <span className="text-xs text-muted-foreground truncate flex-1">Reference image</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 h-6 w-6"
-              onClick={() => onUpdate({ referenceImageUrl: undefined })}
-              title="Remove reference image"
-              aria-label="Remove reference image"
-            >
-              <X className="w-3 h-3" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex gap-1.5">
-            <Input
-              value=""
-              onChange={(e) => {
-                if (e.target.value.trim()) onUpdate({ referenceImageUrl: e.target.value.trim() })
-              }}
-              placeholder="https://... or upload"
-              className="flex-1"
-            />
-            <input
-              ref={refImageInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={handleRefImageUpload}
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="shrink-0 h-9 w-9"
-              disabled={uploadingRefImage}
-              onClick={() => refImageInputRef.current?.click()}
-              title="Upload reference image"
-              aria-label="Upload reference image"
-            >
-              {uploadingRefImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            </Button>
-          </div>
-        )}
-      </div>
-
+      {/* Provider — primary decision, determines which model-specific fields appear below */}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "nano-banana"}
@@ -176,26 +134,50 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           </SelectContent>
         </Select>
       </MappableField>
-      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select
-          value={data.aspectRatio}
-          onValueChange={(v) => onUpdate({ aspectRatio: v as GenerateImageData["aspectRatio"] })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1:1">1:1 (Square)</SelectItem>
-            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
-            <SelectItem value="4:3">4:3</SelectItem>
-          </SelectContent>
-        </Select>
+
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          value={data.prompt}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe the image to generate..."
+        />
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input
-          value={data.style}
-          onChange={(e) => onUpdate({ style: e.target.value })}
-          placeholder="e.g. children-book, photorealistic"
-        />
+        <Select
+          value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
+          onValueChange={(v) => {
+            if (v === "__custom__") {
+              setIsCustomStyle(true)
+              onUpdate({ style: "" })
+            } else if (v === "__none__") {
+              setIsCustomStyle(false)
+              onUpdate({ style: "" })
+            } else {
+              setIsCustomStyle(false)
+              onUpdate({ style: v })
+            }
+          }}
+        >
+          <SelectTrigger><SelectValue placeholder="No style" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">No style</SelectItem>
+            {IMAGE_STYLE_PRESETS.map((p) => (
+              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+            ))}
+            <SelectItem value="__custom__">Custom...</SelectItem>
+          </SelectContent>
+        </Select>
+        {isCustomStyle && (
+          <Input
+            className="mt-1.5"
+            value={data.style}
+            onChange={(e) => onUpdate({ style: e.target.value })}
+            placeholder="Describe your style..."
+            autoFocus
+          />
+        )}
+        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as style guidance</p>
       </MappableField>
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
@@ -204,9 +186,10 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
           placeholder="Things to avoid..."
         />
+        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>
 
-      {/* Assets section (characters, locations, objects) */}
+      {/* Assets section (characters, locations, objects) — descriptions work for all models */}
       <div className="pt-1">
         <Separator className="mb-3" />
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Assets</label>
@@ -299,6 +282,81 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Model-specific settings — these change based on selected provider */}
+      <div className="pt-1">
+        <Separator className="mb-3" />
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model Settings</label>
+        <div className="flex flex-col gap-3 mt-2">
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {aspectRatioOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </MappableField>
+          {resolutionOptions && (
+            <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+              <Select
+                value={data.resolution || resolutionOptions[0]?.value || "1K"}
+                onValueChange={(v) => onUpdate({ resolution: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {resolutionOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </MappableField>
+          )}
+          {qualityOptions && (
+            <MappableField field="quality" label="Quality" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+              <Select
+                value={data.quality || qualityOptions[0]?.value}
+                onValueChange={(v) => onUpdate({ quality: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {qualityOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </MappableField>
+          )}
+          {supportsRefImage && (
+            <>
+              <div>
+                <Label className="text-xs">Reference Image</Label>
+                {data.referenceImageUrl ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <CachedImage src={data.referenceImageUrl} alt="Reference" className="w-16 h-16 rounded object-cover" thumbnail thumbnailWidth={128} />
+                    <Button variant="ghost" size="sm" onClick={() => onUpdate({ referenceImageUrl: undefined })}>
+                      <X className="w-3 h-3 mr-1" /> Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-1">
+                    <input ref={refImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleRefImageUpload} />
+                    <Button variant="outline" size="sm" onClick={() => refImageInputRef.current?.click()} disabled={uploadingRefImage}>
+                      {uploadingRefImage ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Upload className="w-3 h-3 mr-1" />}
+                      Upload Reference
+                    </Button>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Optional image to guide generation style</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

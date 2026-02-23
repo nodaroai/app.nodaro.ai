@@ -71,80 +71,114 @@ export interface StorageProfile {
 // ============================================================
 
 const STATIC_CREDIT_COSTS: Record<string, number> = {
-  // ── Image Generation ── (formula: ceil(providerCost * 1.25 / 0.10))
-  "nano-banana": 1,
-  "nano-banana-pro": 2,
-  "flux": 1,
-  "grok": 1,
-  "gpt-image": 1,
+  // 1 credit = $0.02. Formula: ceil(providerCost * 1.25 / 0.02)
+  // Base entries = default/cheapest setting. Composite entries = specific setting.
+  //
+  // ── Image Generation ──
+  "nano-banana": 2,              // 4 KIE cr, $0.02
+  "nano-banana-pro": 6,          // 18 KIE cr, $0.09 (1K/2K default)
+  "nano-banana-pro:4K": 8,       // 24 KIE cr, $0.12
+  ***REDACTED-OSS-SCRUB***
+  "flux:2K": 3,                  // 7 KIE cr, $0.035
+  "grok": 2,                     // 4 KIE cr, $0.02
+  "gpt-image": 2,                // 4 KIE cr, $0.02 (medium default)
+  "gpt-image:high": 7,           // 22 KIE cr, $0.11
+  "imagen4": 3,                  // 8 KIE cr, $0.04
+  "imagen4-fast": 2,             // 4 KIE cr, $0.02
+  "imagen4-ultra": 4,            // 12 KIE cr, $0.06
+  "ideogram": 6,                 // 18 KIE cr, $0.09 (BALANCED default)
+  "ideogram:TURBO": 4,           // 12 KIE cr, $0.06
+  "ideogram:QUALITY": 8,         // 24 KIE cr, $0.12
+  "qwen": 2,                     // 4 KIE cr, $0.02
+  "seedream": 3,                 // 6.5 KIE cr, $0.032
+  "flux-flex": 5,                // 14 KIE cr, $0.07 (1K default)
+  "flux-flex:2K": 8,             // 24 KIE cr, $0.12
+  ***REDACTED-OSS-SCRUB***
   // ── Image Editing ──
-  "recraft-upscale": 1,
+  "recraft-upscale": 2,          // 6 KIE cr, $0.03
   "recraft-remove-bg": 0,
-  "nano-banana-edit": 1,
+  "nano-banana-edit": 2,         // 6 KIE cr, $0.03
+  "topaz-image-upscale": 2,      // 6 KIE cr, $0.03
+  "grok-upscale": 2,             // 4 KIE cr, $0.02
   // ── Image-to-Image ──
-  "flux-i2i": 1,
-  "flux-pro-i2i": 1,
-  "grok-i2i": 1,
-  "gpt-image-i2i": 1,
+  "flux-i2i": 5,                 // 14 KIE cr, $0.07 (1K default)
+  "flux-i2i:2K": 8,              // 24 KIE cr, $0.12
+  ***REDACTED-OSS-SCRUB***
+  "flux-pro-i2i:2K": 3,          // 7 KIE cr, $0.035
+  "grok-i2i": 2,                 // 4 KIE cr, $0.02
+  "gpt-image-i2i": 2,            // 4 KIE cr, $0.02 (medium default)
+  "gpt-image-i2i:high": 7,       // 22 KIE cr, $0.11
+  "ideogram-edit": 6,            // 18 KIE cr, $0.09 (BALANCED default)
+  "ideogram-edit:TURBO": 4,      // 12 KIE cr, $0.06
+  "ideogram-edit:QUALITY": 8,    // 24 KIE cr, $0.12
+  "ideogram-remix": 6,           // 18 KIE cr, $0.09 (BALANCED default)
+  "ideogram-remix:TURBO": 4,     // 12 KIE cr, $0.06
+  "ideogram-remix:QUALITY": 8,   // 24 KIE cr, $0.12
+  "ideogram-reframe": 6,         // 18 KIE cr, $0.09 (BALANCED default)
+  "ideogram-reframe:TURBO": 4,   // 12 KIE cr, $0.06
+  "ideogram-reframe:QUALITY": 8, // 24 KIE cr, $0.12
+  "qwen-i2i": 2,                 // 4 KIE cr, $0.02
+  "qwen-edit": 2,                // 4 KIE cr, $0.02
+  "seedream-edit": 3,            // 6.5 KIE cr, $0.032
   // ── Video Generation (I2V / T2V) ──
-  "minimax": 1,
-  "veo3": 25,
-  "veo3.1": 16,
-  "kling": 4,
-  "kling-turbo": 3,
-  "kling-3.0": 10,
-  "grok-i2v": 1,
-  "sora2-pro": 10,
+  "minimax": 25,                 // 80 KIE cr, $0.40
+  "veo3": 125,                   // 400 KIE cr, $2.00
+  "veo3.1": 79,                  // 250 KIE cr, $1.25
+  "kling": 22,                   // 70 KIE cr, $0.35
+  "kling-turbo": 16,             // 50 KIE cr, $0.25
+  "kling-3.0": 32,               // $0.50
+  "grok-i2v": 19,                // 60 KIE cr, $0.30
+  "sora2-pro": 63,               // 200 KIE cr, $1.00
   // ── Video-to-Video / Motion ──
-  "wan": 5,
+  "wan": 25,                     // 80 KIE cr, $0.40
   "topaz-video": 0,
-  "motion-transfer": 7,
+  "motion-transfer": 32,         // 100 KIE cr, $0.50
   "kling-motion": 0,
   // ── Lip Sync ──
-  "kling-avatar": 0,
-  "kling-avatar-pro": 0,
-  "hailuo-avatar": 5,
+  "kling-avatar": 13,            // 40 KIE cr, $0.20
+  "kling-avatar-pro": 19,        // 60 KIE cr, $0.30
+  "hailuo-avatar": 19,           // ~$0.30 estimated
   // ── Audio / TTS / Music ──
-  "elevenlabs-turbo": 1,
-  "elevenlabs-multilingual": 1,
-  "elevenlabs": 1,
-  "elevenlabs-sfx": 1,
-  "suno": 1,
-  "suno-v5": 1,
-  "suno-generate": 3,
-  "suno-cover": 3,
-  "suno-extend": 3,
-  "suno-lyrics": 1,
-  "suno-separate": 2,
-  "suno-separate-stem": 4,
-  "suno-music-video": 1,
-  "elevenlabs-isolation": 1,
-  "infinitalk": 0,
+  "elevenlabs-turbo": 4,         // 10 KIE cr flat, $0.05
+  "elevenlabs-multilingual": 4,  // 10 KIE cr flat, $0.05
+  "elevenlabs": 4,               // alias for turbo
+  "elevenlabs-sfx": 4,           // 10 KIE cr flat, $0.05
+  "suno": 7,                     // 20 KIE cr, $0.10
+  "suno-v5": 13,                 // 40 KIE cr, $0.20
+  "suno-generate": 7,            // ~20 KIE cr
+  "suno-cover": 7,               // ~20 KIE cr
+  "suno-extend": 7,              // ~20 KIE cr
+  "suno-lyrics": 2,              // cheap text-only
+  "suno-separate": 5,            // vocal separation
+  "suno-separate-stem": 10,      // full stem separation
+  "suno-music-video": 5,
+  "elevenlabs-isolation": 1,     // 1 KIE cr, $0.005
+  "infinitalk": 19,              // 60 KIE cr, $0.30
   // ── Processing ──
   "topaz": 0,
   "ffmpeg": 0,
-  "render-video": 3,
+  "render-video": 15,            // Remotion compute
   // ── Replicate (dynamic per-second) ──
   "runway": 0,
   "pika": 0,
   "sora": 0,
   // ── LLM ──
-  "ai-writer": 1,
-  "scene-graph-ai": 2,
-  "video-composer": 2,
-  "after-effects": 2,
-  "lottie-overlay": 2,
-  "3d-title": 3,
-  "motion-graphics": 2,
+  "ai-writer": 5,                // Claude Sonnet
+  "scene-graph-ai": 10,          // Claude Sonnet
+  "video-composer": 10,          // Claude Sonnet
+  "after-effects": 10,           // Claude Sonnet
+  "lottie-overlay": 10,          // Claude Sonnet
+  "3d-title": 15,                // Claude Sonnet
+  "motion-graphics": 10,         // Claude Sonnet
   "composite": 0,
   // ── Node types (legacy fallback for workflow estimation) ──
-  "generate-script": 2,
-  "generate-image": 1,
-  "image-to-video": 4,
-  "video-to-video": 5,
-  "text-to-video": 4,
-  "text-to-speech": 1,
-  "qa-check": 1,
+  "generate-script": 10,
+  "generate-image": 2,
+  "image-to-video": 20,
+  "video-to-video": 25,
+  "text-to-video": 20,
+  "text-to-speech": 4,
+  "qa-check": 5,
   "combine-videos": 0,
   "merge-video-audio": 0,
   "add-captions": 0,
@@ -156,9 +190,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "speed-ramp": 0,
   "loop-video": 0,
   "fade-video": 0,
-  "generate-music": 1,
-  "text-to-audio": 1,
+  "generate-music": 7,
+  "text-to-audio": 4,
   "audio-isolation": 1,
+  "image-to-text": 5,
 }
 
 // Tier order for restriction checks

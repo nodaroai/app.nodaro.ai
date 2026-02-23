@@ -425,9 +425,14 @@ export type ReplicateImageProvider = "nano-banana" | "flux" | "dalle"
 // Additional image providers available only on KIE.ai
 export type KieImageProvider =
   | "nano-banana" | "nano-banana-pro"
-  | "flux" | "flux-i2i"
+  | "flux" | "flux-flex" | "flux-i2i" | "flux-pro-i2i"
   | "grok" | "grok-i2i"
   | "gpt-image" | "gpt-image-i2i"
+  | "imagen4" | "imagen4-fast" | "imagen4-ultra"
+  | "ideogram" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe"
+  | "qwen" | "qwen-i2i" | "qwen-edit"
+  | "seedream" | "seedream-edit"
+  | "z-image"
 
 // All image providers (union of both)
 export type ImageProvider = ReplicateImageProvider | KieImageProvider
@@ -439,8 +444,10 @@ export type GenerateImageData = {
   provider: ImageProvider
   model: string
   style: string
-  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3"
+  aspectRatio: string
   negativePrompt: string
+  resolution?: string
+  quality?: string
   referenceImageUrl?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -452,7 +459,7 @@ export type GenerateImageData = {
 }
 
 // Edit Image providers (KIE.ai only)
-export type EditImageProvider = "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit"
+export type EditImageProvider = "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit" | "topaz-image-upscale" | "grok-upscale"
 
 export type EditImageData = {
   [key: string]: unknown
@@ -468,7 +475,7 @@ export type EditImageData = {
 }
 
 // Image-to-Image providers (transform source image with prompt)
-export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i"
+export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit"
 
 export type ImageToImageData = {
   [key: string]: unknown
@@ -805,6 +812,19 @@ export type TranscribeData = {
   errorMessage?: string
   generatedText?: string
   generatedResults?: Array<{ text: string; language: string; jobId: string; timestamp: string }>
+  activeResultIndex?: number
+}
+
+export type ImageToTextData = {
+  [key: string]: unknown
+  label: string
+  detailLevel: "brief" | "detailed" | "structured"
+  customPrompt: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedText?: string
+  generatedResults?: Array<{ text: string; jobId: string; timestamp: string }>
   activeResultIndex?: number
 }
 
@@ -1490,6 +1510,7 @@ export type SceneNodeData =
   | SunoSeparateData
   | SunoMusicVideoData
   | TranscribeData
+  | ImageToTextData
   | AudioIsolationData
   | CombineVideosData
   | MergeVideoAudioData
@@ -1564,6 +1585,7 @@ export type SceneNodeType =
   | "suno-separate"
   | "suno-music-video"
   | "transcribe"
+  | "image-to-text"
   | "audio-isolation"
   | "combine-videos"
   | "merge-video-audio"
@@ -1932,6 +1954,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["text"],
     defaultData: { label: "Transcribe", provider: "whisper", language: "auto", fieldMappings: {} },
+  },
+  {
+    type: "image-to-text",
+    label: "Describe Image",
+    category: "ai",
+    creditCost: 1,
+    inputs: ["image"],
+    outputs: ["text"],
+    defaultData: { label: "Describe Image", detailLevel: "detailed", customPrompt: "", fieldMappings: {} } as ImageToTextData,
   },
   {
     type: "audio-isolation",

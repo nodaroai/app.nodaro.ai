@@ -24,11 +24,11 @@ export const PRICE_TO_TIER: Record<string, string> = {
 }
 
 export const TIER_CREDITS: Record<string, number> = {
-  free: 50,
-  basic: 95,
-  standard: 235,
-  pro: 530,
-  business: 1120,
+  free: 250,
+  basic: 475,
+  standard: 1175,
+  pro: 2650,
+  business: 5600,
 }
 
 export const TIER_LLM_LIMITS: Record<string, number> = {
@@ -40,10 +40,10 @@ export const TIER_LLM_LIMITS: Record<string, number> = {
 }
 
 export const TOPUP_CREDITS: Record<string, number> = {
-  [PADDLE_PRICES.credits_55]: 55,
-  [PADDLE_PRICES.credits_150]: 150,
-  [PADDLE_PRICES.credits_330]: 330,
-  [PADDLE_PRICES.credits_700]: 700,
+  [PADDLE_PRICES.credits_55]: 275,
+  [PADDLE_PRICES.credits_150]: 750,
+  [PADDLE_PRICES.credits_330]: 1650,
+  [PADDLE_PRICES.credits_700]: 3500,
 }
 
 export const TIER_STORAGE_LIMITS: Record<string, number> = {
@@ -61,7 +61,7 @@ export const RETENTION_DAYS = {
 } as const
 
 export const FREE_TIER_RESTRICTIONS = {
-  dailyCreditCap: 10,
+  dailyCreditCap: 50,
   blockedModels: ["veo3", "veo3.1", "sora2-pro"],
   watermark: true,
 } as const

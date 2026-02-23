@@ -12,6 +12,7 @@ const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-re
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -34,7 +35,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [extractOpen, setExtractOpen] = useState(false)
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
-  const credits = useModelCredits(nodeData.provider ?? "nano-banana", 1)
+  const creditModelId = buildCreditModelIdentifier(
+    nodeData.provider ?? "nano-banana",
+    nodeData as unknown as Record<string, unknown>,
+  )
+  const credits = useModelCredits(creditModelId, 1)
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"

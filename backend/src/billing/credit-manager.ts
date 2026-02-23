@@ -14,6 +14,7 @@ const CREDIT_COSTS: Record<string, number> = {
   "mix-audio": 1,
   "adjust-volume": 0,
   "trim-video": 0,
+  "image-to-text": 1,
 }
 
 export function estimateWorkflowCredits(

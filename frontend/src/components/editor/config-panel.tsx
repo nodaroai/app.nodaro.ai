@@ -61,6 +61,7 @@ import {
   SunoSeparateConfig,
   SunoMusicVideoConfig,
   TranscribeConfig,
+  ImageToTextConfig,
   LipSyncConfig,
   GenerateMusicConfig,
   CombineVideosConfig,
@@ -128,6 +129,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-separate": "Suno Separate",
   "suno-music-video": "Suno Music Video",
   "transcribe": "Transcribe",
+  "image-to-text": "Describe Image",
   "ai-writer": "AI Agent",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
@@ -153,20 +155,21 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "scene": "Scene",
 }
 
-function getNodeTypeDisplayName(type: string): string {
+export function getNodeTypeDisplayName(type: string): string {
   return NODE_TYPE_DISPLAY_NAMES[type] || type.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
 }
 
-const GENERATE_BUTTON_TYPES = new Set([
+export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "generate-music", "motion-transfer", "lip-sync",
   "video-upscale", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video", "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
+  "image-to-text",
 ])
 
-const RUN_BUTTON_TYPES = new Set([
+export const RUN_BUTTON_TYPES = new Set([
   "merge-video-audio", "combine-videos", "extract-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "adjust-volume",
   "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
@@ -396,6 +399,7 @@ export function ConfigPanel() {
           {nodeType === "lip-sync" && <LipSyncConfig {...configProps} />}
           {nodeType === "motion-transfer" && <MotionTransferConfig {...configProps} />}
           {nodeType === "transcribe" && <TranscribeConfig {...configProps} />}
+          {nodeType === "image-to-text" && <ImageToTextConfig {...configProps} />}
           {nodeType === "ai-writer" && <AIWriterConfig {...configProps} />}
 
           {nodeType === "video-upscale" && <VideoUpscaleConfig {...configProps} />}

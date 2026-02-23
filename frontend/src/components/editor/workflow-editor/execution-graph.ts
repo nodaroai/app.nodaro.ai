@@ -210,6 +210,15 @@ export function extractNodeOutput(node: WorkflowNode): string | undefined {
       (data.generatedText as string | undefined)
     );
   }
+  if (type === "image-to-text") {
+    const itResults =
+      (data.generatedResults as Array<{ text: string }> | undefined) ?? [];
+    const itActiveIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return (
+      itResults[itActiveIndex]?.text ??
+      (data.generatedText as string | undefined)
+    );
+  }
   if (type === "generate-script") {
     const scriptResults =
       (data.generatedResults as GeneratedScriptResult[] | undefined) ?? [];
