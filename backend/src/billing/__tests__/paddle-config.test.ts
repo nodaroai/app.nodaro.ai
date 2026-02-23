@@ -42,20 +42,20 @@ describe("paddle-config", () => {
   // ── getTopupCredits ──
 
   describe("getTopupCredits", () => {
-    it("returns 55 for the credits_55 price ID", () => {
-      expect(getTopupCredits(PADDLE_PRICES.credits_55)).toBe(55)
+    it("returns 275 for the credits_55 price ID", () => {
+      expect(getTopupCredits(PADDLE_PRICES.credits_55)).toBe(275)
     })
 
-    it("returns 150 for the credits_150 price ID", () => {
-      expect(getTopupCredits(PADDLE_PRICES.credits_150)).toBe(150)
+    it("returns 750 for the credits_150 price ID", () => {
+      expect(getTopupCredits(PADDLE_PRICES.credits_150)).toBe(750)
     })
 
-    it("returns 330 for the credits_330 price ID", () => {
-      expect(getTopupCredits(PADDLE_PRICES.credits_330)).toBe(330)
+    it("returns 1650 for the credits_330 price ID", () => {
+      expect(getTopupCredits(PADDLE_PRICES.credits_330)).toBe(1650)
     })
 
-    it("returns 700 for the credits_700 price ID", () => {
-      expect(getTopupCredits(PADDLE_PRICES.credits_700)).toBe(700)
+    it("returns 3500 for the credits_700 price ID", () => {
+      expect(getTopupCredits(PADDLE_PRICES.credits_700)).toBe(3500)
     })
 
     it("returns null for an unknown price ID", () => {
@@ -80,11 +80,11 @@ describe("paddle-config", () => {
     })
 
     it("has correct credit values for each tier", () => {
-      expect(TIER_CREDITS.free).toBe(50)
-      expect(TIER_CREDITS.basic).toBe(95)
-      expect(TIER_CREDITS.standard).toBe(235)
-      expect(TIER_CREDITS.pro).toBe(530)
-      expect(TIER_CREDITS.business).toBe(1120)
+      expect(TIER_CREDITS.free).toBe(250)
+      expect(TIER_CREDITS.basic).toBe(475)
+      expect(TIER_CREDITS.standard).toBe(1175)
+      expect(TIER_CREDITS.pro).toBe(2650)
+      expect(TIER_CREDITS.business).toBe(5600)
     })
 
     it("has credits in ascending order by tier", () => {
@@ -131,8 +131,8 @@ describe("paddle-config", () => {
   // ── FREE_TIER_RESTRICTIONS ──
 
   describe("FREE_TIER_RESTRICTIONS", () => {
-    it("has a daily credit cap of 10", () => {
-      expect(FREE_TIER_RESTRICTIONS.dailyCreditCap).toBe(10)
+    it("has a daily credit cap of 50", () => {
+      expect(FREE_TIER_RESTRICTIONS.dailyCreditCap).toBe(50)
     })
 
     it("blocks veo3, veo3.1, and sora2-pro models", () => {
@@ -164,10 +164,10 @@ describe("paddle-config", () => {
   describe("TOPUP_CREDITS", () => {
     it("maps all 4 topup price IDs to credit amounts", () => {
       expect(Object.keys(TOPUP_CREDITS)).toHaveLength(4)
-      expect(TOPUP_CREDITS[PADDLE_PRICES.credits_55]).toBe(55)
-      expect(TOPUP_CREDITS[PADDLE_PRICES.credits_150]).toBe(150)
-      expect(TOPUP_CREDITS[PADDLE_PRICES.credits_330]).toBe(330)
-      expect(TOPUP_CREDITS[PADDLE_PRICES.credits_700]).toBe(700)
+      expect(TOPUP_CREDITS[PADDLE_PRICES.credits_55]).toBe(275)
+      expect(TOPUP_CREDITS[PADDLE_PRICES.credits_150]).toBe(750)
+      expect(TOPUP_CREDITS[PADDLE_PRICES.credits_330]).toBe(1650)
+      expect(TOPUP_CREDITS[PADDLE_PRICES.credits_700]).toBe(3500)
     })
   })
 })

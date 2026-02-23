@@ -277,7 +277,7 @@ describe("CreditsService — extended", () => {
       mockTable("model_pricing", null, { code: "PGRST116" })
 
       const staticCost = await CreditsService.getModelCreditCost("flux")
-      expect(staticCost).toBe(1)
+      expect(staticCost).toBe(2)
     })
   })
 

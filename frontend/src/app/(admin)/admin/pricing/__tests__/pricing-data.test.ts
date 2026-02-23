@@ -51,8 +51,8 @@ describe("SUBSCRIPTION_TIERS", () => {
 })
 
 describe("TOPUP_PACKAGES", () => {
-  it("has exactly 3 packages", () => {
-    expect(TOPUP_PACKAGES).toHaveLength(3)
+  it("has exactly 4 packages", () => {
+    expect(TOPUP_PACKAGES).toHaveLength(4)
   })
 
   it("credits increase with price", () => {
@@ -148,8 +148,8 @@ describe("CATEGORY_COLORS", () => {
 })
 
 describe("CREDIT_VALUE_USD", () => {
-  it("is 0.10", () => {
-    expect(CREDIT_VALUE_USD).toBe(0.10)
+  it("is 0.02", () => {
+    expect(CREDIT_VALUE_USD).toBe(0.02)
   })
 })
 
