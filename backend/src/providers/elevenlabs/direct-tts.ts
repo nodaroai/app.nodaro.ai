@@ -2,7 +2,6 @@ import { config } from "../../lib/config.js"
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
 
-/** Map our provider names to ElevenLabs model IDs */
 function resolveModel(provider?: string): string {
   if (provider === "elevenlabs-multilingual") return "eleven_multilingual_v2"
   return "eleven_turbo_v2_5"
@@ -16,11 +15,6 @@ export interface DirectTTSOptions {
   languageCode?: string
 }
 
-/**
- * Call ElevenLabs TTS API directly (bypasses KIE.ai).
- * Used for custom cloned voices that only exist in our ElevenLabs account.
- * Returns raw audio buffer (audio/mpeg).
- */
 export async function directElevenLabsTTS(
   text: string,
   voiceId: string,
@@ -32,20 +26,19 @@ export async function directElevenLabsTTS(
     throw new Error("ELEVENLABS_API_KEY is not configured")
   }
 
-  const modelId = resolveModel(provider)
+  const voiceSettings: Record<string, number> = {
+    stability: options?.stability ?? 0.5,
+    similarity_boost: options?.similarityBoost ?? 0.75,
+    style: options?.style ?? 0,
+  }
+  if (options?.speed != null) {
+    voiceSettings.speed = options.speed
+  }
 
   const body: Record<string, unknown> = {
     text,
-    model_id: modelId,
-    voice_settings: {
-      stability: options?.stability ?? 0.5,
-      similarity_boost: options?.similarityBoost ?? 0.75,
-      style: options?.style ?? 0,
-    },
-  }
-
-  if (options?.speed != null) {
-    body.voice_settings = { ...(body.voice_settings as Record<string, unknown>), speed: options.speed }
+    model_id: resolveModel(provider),
+    voice_settings: voiceSettings,
   }
   if (options?.languageCode) {
     body.language_code = options.languageCode

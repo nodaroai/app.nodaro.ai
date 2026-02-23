@@ -15,20 +15,15 @@ export function useVoiceClones() {
 export function useCreateVoiceClone() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ name, file }: { name: string; file: Blob }) =>
-      createVoiceClone(name, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.voices.clones() })
-    },
+    mutationFn: ({ name, file }: { name: string; file: Blob }) => createVoiceClone(name, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.voices.clones() }),
   })
 }
 
 export function useDeleteVoiceClone() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => deleteVoiceClone(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.voices.clones() })
-    },
+    mutationFn: deleteVoiceClone,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.voices.clones() }),
   })
 }

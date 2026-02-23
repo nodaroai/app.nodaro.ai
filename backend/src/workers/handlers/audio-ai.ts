@@ -28,17 +28,11 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   }
   console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider ?? "elevenlabs-turbo"}, voiceType: ${voiceType ?? "premade"})`)
 
-  const ttsOptions = {
-    ...(stability != null && { stability }),
-    ...(similarityBoost != null && { similarityBoost }),
-    ...(style != null && { style }),
-    ...(speed != null && { speed }),
-    ...(languageCode && { languageCode }),
-  }
+  const ttsOptions = { stability, similarityBoost, style, speed, languageCode }
+  const hasOptions = stability != null || similarityBoost != null || style != null || speed != null || languageCode != null
 
-  // Custom voices call ElevenLabs directly (cloned voices exist only in our EL account)
   if (voiceType === "custom" && voice) {
-    const audioBuffer = await directElevenLabsTTS(text, voice, provider, ttsOptions)
+    const audioBuffer = await directElevenLabsTTS(text, voice, provider, hasOptions ? ttsOptions : undefined)
     await job.updateProgress(50)
 
     const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
@@ -62,8 +56,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     return
   }
 
-  // Premade voices go through KIE.ai routing
-  const result = await routedTextToSpeech(text, provider ?? "elevenlabs-turbo", voice, Object.keys(ttsOptions).length > 0 ? ttsOptions : undefined)
+  const result = await routedTextToSpeech(text, provider ?? "elevenlabs-turbo", voice, hasOptions ? ttsOptions : undefined)
   await job.updateProgress(50)
 
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)

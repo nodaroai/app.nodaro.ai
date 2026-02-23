@@ -2397,7 +2397,7 @@ export async function createVoiceClone(name: string, file: Blob): Promise<VoiceC
 }
 
 export async function deleteVoiceClone(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/v1/voice-clones/${id}`, {
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: await getAuthHeaders(),
   })
@@ -2408,7 +2408,7 @@ export async function deleteVoiceClone(id: string): Promise<void> {
 }
 
 export async function renameVoiceClone(id: string, name: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/v1/voice-clones/${id}`, {
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
     body: JSON.stringify({ name }),

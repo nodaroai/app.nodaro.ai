@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
 import { ChevronDown, Play, Pause, Search, Loader2, Mic, Upload, Trash2, Square } from "lucide-react"
 import {
@@ -119,15 +117,12 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
       return
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.removeAttribute("src")
-    }
-
     if (!audioRef.current) {
       audioRef.current = new Audio()
       audioRef.current.addEventListener("ended", () => setPlayingId(null))
       audioRef.current.addEventListener("error", () => setPlayingId(null))
+    } else {
+      audioRef.current.pause()
     }
 
     audioRef.current.src = previewUrl
@@ -337,10 +332,6 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   )
 }
 
-// ---------------------------------------------------------------------------
-// My Voices tab — record/upload + list custom voices
-// ---------------------------------------------------------------------------
-
 function MyVoicesTab({
   selectedValue,
   playingId,
@@ -456,9 +447,12 @@ function MyVoicesTab({
     }
   }, [deleteMutation])
 
-  // Clean up recorded URL on unmount
   useEffect(() => {
     return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop()
+      }
       if (recordedUrlRef.current) URL.revokeObjectURL(recordedUrlRef.current)
     }
   }, [])
@@ -665,10 +659,6 @@ function MyVoicesTab({
     </div>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Shared voice list component
-// ---------------------------------------------------------------------------
 
 interface VoiceListItem {
   id: string

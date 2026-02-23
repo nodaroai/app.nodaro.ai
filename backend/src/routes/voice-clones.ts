@@ -10,25 +10,25 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
 const MAX_AUDIO_SIZE = 10 * 1024 * 1024 // 10 MB
 
+const idParams = z.object({
+  id: z.string().uuid(),
+})
+
 const renameBody = z.object({
   name: z.string().min(1).max(200),
 })
 
-const deleteParams = z.object({
-  id: z.string().uuid(),
-})
-
-const patchParams = z.object({
-  id: z.string().uuid(),
-})
+function audioExtensionFromMime(mimeType: string): string {
+  if (mimeType.includes("wav")) return "wav"
+  if (mimeType.includes("mp3") || mimeType.includes("mpeg")) return "mp3"
+  return "webm"
+}
 
 export async function voiceCloneRoutes(app: FastifyInstance) {
-  // Register multipart for file upload
   await app.register(multipart, {
     limits: { fileSize: MAX_AUDIO_SIZE },
   })
 
-  // ─── GET /v1/voice-clones ── List user's custom voices ───────────────
   app.get("/v1/voice-clones", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
@@ -65,7 +65,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     return { voiceClones }
   })
 
-  // ─── POST /v1/voice-clones ── Clone a voice ─────────────────────────
   app.post("/v1/voice-clones", {
     preHandler: creditGuard(() => "voice-clone"),
   }, async (req, reply) => {
@@ -82,7 +81,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       })
     }
 
-    // Parse multipart: file + name field
     const data = await req.file()
     if (!data) {
       return reply.status(400).send({
@@ -102,7 +100,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     const buffer = await data.toBuffer()
     const mimeType = data.mimetype
 
-    // Create a job record for credit audit trail
     const { data: job, error: jobError } = await supabase
       .from("jobs")
       .insert({
@@ -120,17 +117,14 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       })
     }
 
-    // Reserve credits
     const reservation = await reserveCreditsForJob(req, reply, job.id, "voice-clone")
     if (reply.sent) return
 
     try {
-      // 1. Backup audio sample to R2
-      const ext = mimeType.includes("wav") ? "wav" : mimeType.includes("mp3") || mimeType.includes("mpeg") ? "mp3" : "webm"
+      const ext = audioExtensionFromMime(mimeType)
       const r2Key = `voice-samples/${userId}/${randomUUID()}.${ext}`
       const sampleAudioUrl = await uploadBufferToR2(buffer, r2Key, mimeType, userId)
 
-      // 2. Call ElevenLabs voice clone API
       const formData = new FormData()
       formData.append("name", name)
       formData.append("remove_background_noise", "true")
@@ -152,7 +146,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
 
       const cloneResult = (await cloneResponse.json()) as { voice_id: string }
 
-      // 3. Insert into DB
       const { data: voiceClone, error: insertError } = await supabase
         .from("voice_clones")
         .insert({
@@ -168,7 +161,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
         throw new Error(`Failed to save voice clone: ${insertError.message}`)
       }
 
-      // 4. Mark job as completed + commit credits
       await supabase
         .from("jobs")
         .update({
@@ -193,7 +185,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
         createdAt: voiceClone.created_at,
       }
     } catch (err) {
-      // Mark job as failed so credits are refunded
       await supabase
         .from("jobs")
         .update({
@@ -208,7 +199,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     }
   })
 
-  // ─── PATCH /v1/voice-clones/:id ── Rename voice ─────────────────────
   app.patch("/v1/voice-clones/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
@@ -217,7 +207,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       })
     }
 
-    const paramsParsed = patchParams.safeParse(req.params)
+    const paramsParsed = idParams.safeParse(req.params)
     if (!paramsParsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", message: "Invalid voice clone ID" },
@@ -246,7 +236,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     return { success: true }
   })
 
-  // ─── DELETE /v1/voice-clones/:id ── Delete voice ─────────────────────
   app.delete("/v1/voice-clones/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
@@ -255,14 +244,13 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       })
     }
 
-    const paramsParsed = deleteParams.safeParse(req.params)
+    const paramsParsed = idParams.safeParse(req.params)
     if (!paramsParsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", message: "Invalid voice clone ID" },
       })
     }
 
-    // Fetch record to get ElevenLabs voice_id
     const { data: voiceClone, error: fetchError } = await supabase
       .from("voice_clones")
       .select("elevenlabs_voice_id")
@@ -281,7 +269,6 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       })
     }
 
-    // Best-effort delete from ElevenLabs
     if (config.ELEVENLABS_API_KEY && voiceClone.elevenlabs_voice_id) {
       try {
         await fetch(`${ELEVENLABS_BASE_URL}/v1/voices/${voiceClone.elevenlabs_voice_id}`, {
@@ -289,11 +276,10 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
           headers: { "xi-api-key": config.ELEVENLABS_API_KEY },
         })
       } catch {
-        // Best-effort — don't block DB delete
+        // Best-effort: don't block DB delete
       }
     }
 
-    // Delete from DB regardless
     const { error: deleteError } = await supabase
       .from("voice_clones")
       .delete()
