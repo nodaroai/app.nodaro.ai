@@ -2014,7 +2014,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["audio"],
     defaultData: {
       label: "Text to Dialogue",
-      dialogue: [{ id: "1", text: "", voice: "Rachel" }],
+      dialogue: [{ id: "1", text: "", voice: "Sarah" }],
       stability: 0.5,
       languageCode: "",
       fieldMappings: {},

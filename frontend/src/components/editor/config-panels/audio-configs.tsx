@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { TTS_VOICES } from "@/lib/tts-voices"
+import { VoiceBrowser } from "./voice-browser"
+import { DIALOGUE_VOICE_IDS, DEFAULT_DIALOGUE_VOICE } from "@/lib/tts-voices"
 import type {
   TextToSpeechData,
   TextToAudioData,
@@ -81,19 +81,10 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       <div>
         <Label>Voice</Label>
-        <Select
+        <VoiceBrowser
           value={data.voiceId || "Rachel"}
-          onValueChange={(v) => onUpdate({ voiceId: v })}
-        >
-          <SelectTrigger><SelectValue placeholder="Select voice" /></SelectTrigger>
-          <SelectContent>
-            {TTS_VOICES.map((voice) => (
-              <SelectItem key={voice.id} value={voice.id}>
-                {voice.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onSelect={(v) => onUpdate({ voiceId: v })}
+        />
       </div>
       <div>
         <Label>Language</Label>
@@ -573,7 +564,7 @@ export function AudioIsolationConfig({ data, onUpdate }: ConfigProps<AudioIsolat
 }
 
 export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialogueData>) {
-  const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: "Rachel" }]
+  const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
   const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
 
   function updateLine(index: number, updates: Partial<DialogueLine>) {
@@ -585,7 +576,7 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
 
   function addLine() {
     const newId = String(Date.now())
-    onUpdate({ dialogue: [...dialogue, { id: newId, text: "", voice: "Rachel" }] })
+    onUpdate({ dialogue: [...dialogue, { id: newId, text: "", voice: DEFAULT_DIALOGUE_VOICE }] })
   }
 
   function removeLine(index: number) {
@@ -606,18 +597,12 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
         {dialogue.map((line, i) => (
           <div key={line.id} className="flex flex-col gap-1 p-2 rounded-md border border-border bg-muted/20">
             <div className="flex items-center gap-2">
-              <Select value={line.voice} onValueChange={(v) => updateLine(i, { voice: v })}>
-                <SelectTrigger className="w-[140px] h-8 text-xs">
-                  <SelectValue placeholder="Voice" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TTS_VOICES.map((voice) => (
-                    <SelectItem key={voice.id} value={voice.id}>
-                      {voice.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <VoiceBrowser
+                compact
+                value={line.voice}
+                onSelect={(v) => updateLine(i, { voice: v })}
+                allowedVoiceNames={DIALOGUE_VOICE_IDS}
+              />
               {dialogue.length > 1 && (
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeLine(i)}>
                   <Trash2 className="h-3 w-3" />
