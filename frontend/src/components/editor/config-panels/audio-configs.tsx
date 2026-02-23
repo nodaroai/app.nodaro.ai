@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { VoiceBrowser } from "./voice-browser"
-import { DIALOGUE_VOICE_IDS, DEFAULT_DIALOGUE_VOICE } from "@/lib/tts-voices"
+import { DEFAULT_DIALOGUE_VOICE } from "@/lib/tts-voices"
 import type {
   TextToSpeechData,
   TextToAudioData,
@@ -83,7 +83,8 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         <Label>Voice</Label>
         <VoiceBrowser
           value={data.voiceId || "Rachel"}
-          onSelect={(v) => onUpdate({ voiceId: v })}
+          valueLabel={data.voiceLabel}
+          onSelect={(id, name) => onUpdate({ voiceId: id, voiceLabel: name })}
         />
       </div>
       <div>
@@ -600,8 +601,8 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
               <VoiceBrowser
                 compact
                 value={line.voice}
-                onSelect={(v) => updateLine(i, { voice: v })}
-                allowedVoiceNames={DIALOGUE_VOICE_IDS}
+                valueLabel={line.voiceLabel}
+                onSelect={(id, name) => updateLine(i, { voice: id, voiceLabel: name })}
               />
               {dialogue.length > 1 && (
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeLine(i)}>

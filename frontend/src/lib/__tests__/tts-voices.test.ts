@@ -50,16 +50,24 @@ describe("getVoiceName", () => {
     expect(getVoiceName("")).toBe("Rachel")
   })
 
-  it("finds voice from dynamic list when provided", () => {
+  it("finds voice from dynamic list by voice_id", () => {
     const dynamicVoices = [
-      { name: "CustomVoice", gender: "female" },
-      { name: "Rachel", gender: "female" },
+      { voice_id: "abc-123", name: "CustomVoice" },
+      { voice_id: "def-456", name: "Rachel" },
+    ]
+    expect(getVoiceName("abc-123", dynamicVoices)).toBe("CustomVoice")
+  })
+
+  it("finds voice from dynamic list by name (backward compat)", () => {
+    const dynamicVoices = [
+      { voice_id: "abc-123", name: "CustomVoice" },
+      { voice_id: "def-456", name: "Rachel" },
     ]
     expect(getVoiceName("CustomVoice", dynamicVoices)).toBe("CustomVoice")
   })
 
   it("falls back to static list when dynamic list does not contain voice", () => {
-    const dynamicVoices = [{ name: "CustomVoice" }]
+    const dynamicVoices = [{ voice_id: "abc-123", name: "CustomVoice" }]
     expect(getVoiceName("Rachel", dynamicVoices)).toBe("Rachel (Female, American)")
   })
 })

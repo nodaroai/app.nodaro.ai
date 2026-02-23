@@ -144,7 +144,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
 
         <div className="flex justify-between text-muted-foreground">
           <span>{nodeData.provider}</span>
-          <span>{getVoiceName(nodeData.voiceId)}</span>
+          <span>{nodeData.voiceLabel || getVoiceName(nodeData.voiceId)}</span>
         </div>
       </div>
     </BaseNode>

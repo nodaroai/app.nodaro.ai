@@ -524,6 +524,7 @@ export type TextToSpeechData = {
   label: string
   provider: "elevenlabs-turbo" | "elevenlabs-multilingual" | "elevenlabs"
   voiceId: string
+  voiceLabel?: string
   language: string
   speed: number
   stability: number
@@ -821,6 +822,7 @@ export interface DialogueLine {
   readonly id: string
   readonly text: string
   readonly voice: string
+  readonly voiceLabel?: string
 }
 
 export type TextToDialogueData = {

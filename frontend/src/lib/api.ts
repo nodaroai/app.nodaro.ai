@@ -2309,3 +2309,45 @@ export async function getVoices(): Promise<ElevenLabsVoice[]> {
   const body = await res.json()
   return body.voices
 }
+
+// Voice Library (shared/community voices)
+
+export interface SharedVoice {
+  voice_id: string
+  name: string
+  preview_url: string
+  gender: string
+  accent: string
+  age: string
+  description: string
+  use_case: string
+  category: string
+}
+
+export interface VoiceLibraryParams {
+  search?: string
+  gender?: string
+  age?: string
+  accent?: string
+  language?: string
+  category?: string
+  page?: number
+  page_size?: number
+}
+
+export interface VoiceLibraryResponse {
+  voices: SharedVoice[]
+  hasMore: boolean
+}
+
+export async function searchVoiceLibrary(params: VoiceLibraryParams): Promise<VoiceLibraryResponse> {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") qs.set(k, String(v))
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/voices/library?${qs.toString()}`)
+  if (!res.ok) {
+    return { voices: [], hasMore: false }
+  }
+  return res.json()
+}

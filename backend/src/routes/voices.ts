@@ -170,6 +170,35 @@ async function getVoices(): Promise<ElevenLabsVoice[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Shared voices search cache (5-min TTL, max 200 entries)
+// ---------------------------------------------------------------------------
+
+interface SharedVoice {
+  voice_id: string
+  name: string
+  preview_url: string
+  gender: string
+  accent: string
+  age: string
+  description: string
+  use_case: string
+  category: string
+}
+
+interface SharedVoiceCacheEntry {
+  data: { voices: SharedVoice[]; hasMore: boolean }
+  expiresAt: number
+}
+
+const SHARED_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+const SHARED_CACHE_MAX = 200
+const sharedVoiceCache = new Map<string, SharedVoiceCacheEntry>()
+
+function getSharedCacheKey(params: Record<string, string | undefined>): string {
+  return JSON.stringify(params)
+}
+
+// ---------------------------------------------------------------------------
 // Route
 // ---------------------------------------------------------------------------
 
@@ -177,5 +206,98 @@ export async function voicesRoutes(app: FastifyInstance) {
   app.get("/v1/voices", async (_req, reply) => {
     const voices = await getVoices()
     return reply.send({ voices })
+  })
+
+  app.get("/v1/voices/library", async (req, reply) => {
+    // No API key — return empty gracefully
+    if (!config.ELEVENLABS_API_KEY) {
+      return reply.send({ voices: [], hasMore: false })
+    }
+
+    const query = req.query as Record<string, string | undefined>
+    const params: Record<string, string | undefined> = {
+      search: query.search,
+      gender: query.gender,
+      age: query.age,
+      accent: query.accent,
+      language: query.language,
+      category: query.category,
+      page: query.page || "0",
+      page_size: query.page_size || "30",
+    }
+
+    // Clamp page_size
+    const pageSize = Math.min(Math.max(1, parseInt(params.page_size || "30", 10) || 30), 100)
+    params.page_size = String(pageSize)
+
+    // Check cache
+    const cacheKey = getSharedCacheKey(params)
+    const cached = sharedVoiceCache.get(cacheKey)
+    if (cached && Date.now() < cached.expiresAt) {
+      return reply.send(cached.data)
+    }
+
+    try {
+      // Build query string for ElevenLabs shared-voices API
+      const qs = new URLSearchParams()
+      for (const [k, v] of Object.entries(params)) {
+        if (v) qs.set(k, v)
+      }
+
+      const res = await fetch(
+        `https://api.elevenlabs.io/v1/shared-voices?${qs.toString()}`,
+        {
+          headers: {
+            "xi-api-key": config.ELEVENLABS_API_KEY,
+            Accept: "application/json",
+          },
+        },
+      )
+
+      if (!res.ok) {
+        console.error(`[voices/library] ElevenLabs API error: ${res.status}`)
+        return reply.send({ voices: [], hasMore: false })
+      }
+
+      const data = (await res.json()) as {
+        voices: Array<{
+          voice_id: string
+          name: string
+          preview_url?: string
+          gender?: string
+          accent?: string
+          age?: string
+          description?: string
+          use_case?: string
+          category?: string
+        }>
+        has_more?: boolean
+      }
+
+      const voices: SharedVoice[] = data.voices.map((v) => ({
+        voice_id: v.voice_id,
+        name: v.name,
+        preview_url: v.preview_url ?? "",
+        gender: v.gender ?? "",
+        accent: v.accent ?? "",
+        age: v.age ?? "",
+        description: v.description ?? "",
+        use_case: v.use_case ?? "",
+        category: v.category ?? "",
+      }))
+
+      const result = { voices, hasMore: data.has_more ?? false }
+
+      // Cache result (clear all on overflow)
+      if (sharedVoiceCache.size >= SHARED_CACHE_MAX) {
+        sharedVoiceCache.clear()
+      }
+      sharedVoiceCache.set(cacheKey, { data: result, expiresAt: Date.now() + SHARED_CACHE_TTL_MS })
+
+      return reply.send(result)
+    } catch (err) {
+      console.error("[voices/library] Failed to fetch shared voices:", (err as Error).message)
+      return reply.send({ voices: [], hasMore: false })
+    }
   })
 }
