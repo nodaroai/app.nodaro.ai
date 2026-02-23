@@ -14,7 +14,7 @@ import {
 import { supabase } from "@/lib/supabase.js"
 
 const mockFrom = supabase.from as ReturnType<typeof vi.fn>
-const mockSelect = mockFrom().select as ReturnType<typeof vi.fn>
+const mockSelect = (mockFrom as (...args: unknown[]) => Record<string, ReturnType<typeof vi.fn>>)().select as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   vi.clearAllMocks()
