@@ -7,10 +7,8 @@ const eslintConfig = defineConfig([
   ...tseslint.configs.recommended,
   {
     rules: {
-      // New in eslint 10 — disable for now, enable incrementally
-      "no-unassigned-vars": "off",
+      // ESLint 10 promoted this to recommended — disable for now, enable incrementally
       "no-useless-assignment": "off",
-      "preserve-caught-error": "off",
     },
   },
   globalIgnores([
