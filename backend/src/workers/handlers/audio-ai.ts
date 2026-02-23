@@ -7,6 +7,10 @@ import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-a
 import { KieAudioProvider } from "../../providers/kie/audio.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../../providers/audio/youtube-extractor.js"
+import { voiceChangerFromUrl } from "../../providers/elevenlabs/voice-changer.js"
+import { startDubbing, waitForDubbing, downloadDubbedAudio } from "../../providers/elevenlabs/dubbing.js"
+import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
+import { forcedAlignment } from "../../providers/elevenlabs/forced-alignment.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
@@ -198,6 +202,90 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx) {
+  const { audioUrl, voiceId, stability, similarityBoost, removeBackgroundNoise } = job.data as {
+    jobId: string; audioUrl: string; voiceId: string
+    stability?: number; similarityBoost?: number; removeBackgroundNoise?: boolean
+  }
+  console.log(`[worker] voice-changer ${ctx.jobId}`)
+  const audioBuffer = await voiceChangerFromUrl(audioUrl, voiceId, { stability, similarityBoost, removeBackgroundNoise })
+  await job.updateProgress(50)
+  const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
+  const { audioUrl, targetLanguage, sourceLanguage, numSpeakers } = job.data as {
+    jobId: string; audioUrl: string; targetLanguage: string
+    sourceLanguage?: string; numSpeakers?: number
+  }
+  console.log(`[worker] dubbing ${ctx.jobId} (target: ${targetLanguage})`)
+  const { dubbingId } = await startDubbing(audioUrl, targetLanguage, { sourceLang: sourceLanguage, numSpeakers })
+  await job.updateProgress(20)
+
+  await waitForDubbing(dubbingId, (status) => {
+    if (status === "dubbing") void job.updateProgress(50)
+  })
+  await job.updateProgress(70)
+
+  const audioBuffer = await downloadDubbedAudio(dubbingId, targetLanguage)
+  await job.updateProgress(85)
+  const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {
+  const { text, voiceDescription } = job.data as { jobId: string; text: string; voiceDescription: string }
+  console.log(`[worker] voice-remix ${ctx.jobId}`)
+  const audioBuffer = await remixVoice(text, voiceDescription)
+  await job.updateProgress(50)
+  const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleForcedAlignment: HandlerFn = async function handleForcedAlignment(job, ctx) {
+  const { audioUrl, transcript } = job.data as { jobId: string; audioUrl: string; transcript: string }
+  console.log(`[worker] forced-alignment ${ctx.jobId}`)
+  const result = await forcedAlignment(audioUrl, transcript)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { alignment: result.alignment, text: transcript },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: aligned ${result.alignment.length} words`)
+}
+
 export const audioAIHandlers: Record<string, HandlerFn> = {
   "text-to-speech": handleTextToSpeech,
   "generate-music": handleGenerateMusic,
@@ -206,4 +294,8 @@ export const audioAIHandlers: Record<string, HandlerFn> = {
   "extract-youtube-audio": handleExtractYoutubeAudio,
   "audio-isolation": handleAudioIsolation,
   "text-to-dialogue": handleTextToDialogue,
+  "voice-changer": handleVoiceChanger,
+  "dubbing": handleDubbing,
+  "voice-remix": handleVoiceRemix,
+  "forced-alignment": handleForcedAlignment,
 }

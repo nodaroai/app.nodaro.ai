@@ -35,6 +35,10 @@ import { SunoMusicVideoNode } from "./suno-music-video-node";
 import { TranscribeNode } from "./transcribe-node";
 import { AudioIsolationNode } from "./audio-isolation-node"
 import { TextToDialogueNode } from "./text-to-dialogue-node"
+import { VoiceChangerNode } from "./voice-changer-node"
+import { DubbingNode } from "./dubbing-node"
+import { VoiceRemixNode } from "./voice-remix-node"
+import { ForcedAlignmentNode } from "./forced-alignment-node"
 import { ImageToTextNode } from "./image-to-text-node";
 import { AIWriterNode } from "./ai-writer-node";
 import { CombineVideosNode } from "./combine-videos-node";
@@ -116,6 +120,10 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "image-to-text": ImageToTextNode,
   "audio-isolation": AudioIsolationNode,
   "text-to-dialogue": TextToDialogueNode,
+  "voice-changer": VoiceChangerNode,
+  "dubbing": DubbingNode,
+  "voice-remix": VoiceRemixNode,
+  "forced-alignment": ForcedAlignmentNode,
   "ai-writer": AIWriterNode,
   // Processing
   "combine-videos": CombineVideosNode,

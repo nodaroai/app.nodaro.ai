@@ -52,6 +52,10 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   character: 5,
   object: 5,
   location: 5,
+  "voice-changer": 4,
+  "dubbing": 8,
+  "voice-remix": 4,
+  "forced-alignment": 3,
 };
 
 export const EXECUTABLE_TYPES = new Set([
@@ -105,6 +109,10 @@ export const EXECUTABLE_TYPES = new Set([
   "audio-isolation",
   "text-to-dialogue",
   "image-to-text",
+  "voice-changer",
+  "dubbing",
+  "voice-remix",
+  "forced-alignment",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 5;

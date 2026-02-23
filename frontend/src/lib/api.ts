@@ -1249,6 +1249,71 @@ export async function textToDialogueApi(
   return res.json()
 }
 
+export async function voiceChangerApi(audioUrl: string, voiceId: string, userId?: string, stability?: number, similarityBoost?: number, removeBackgroundNoise?: boolean): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl, voiceId }
+  if (userId) body.userId = userId
+  if (stability != null) body.stability = stability
+  if (similarityBoost != null) body.similarityBoost = similarityBoost
+  if (removeBackgroundNoise != null) body.removeBackgroundNoise = removeBackgroundNoise
+  const res = await fetch(`${API_BASE_URL}/v1/voice-changer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start voice changer")
+  }
+  return res.json()
+}
+
+export async function dubbingApi(audioUrl: string, targetLanguage: string, userId?: string, sourceLanguage?: string, numSpeakers?: number): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl, targetLanguage }
+  if (userId) body.userId = userId
+  if (sourceLanguage) body.sourceLanguage = sourceLanguage
+  if (numSpeakers) body.numSpeakers = numSpeakers
+  const res = await fetch(`${API_BASE_URL}/v1/dubbing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start dubbing")
+  }
+  return res.json()
+}
+
+export async function voiceRemixApi(text: string, voiceDescription: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { text, voiceDescription }
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/voice-remix`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start voice remix")
+  }
+  return res.json()
+}
+
+export async function forcedAlignmentApi(audioUrl: string, transcript: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl, transcript }
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/forced-alignment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start forced alignment")
+  }
+  return res.json()
+}
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string

@@ -77,6 +77,10 @@ import { textToDialogueRoutes } from "./routes/text-to-dialogue.js"
 import { imageToTextRoutes } from "./routes/image-to-text.js"
 import { voicesRoutes } from "./routes/voices.js"
 import { voiceCloneRoutes } from "./routes/voice-clones.js"
+import { voiceChangerRoutes } from "./routes/voice-changer.js"
+import { dubbingRoutes } from "./routes/dubbing.js"
+import { voiceRemixRoutes } from "./routes/voice-remix.js"
+import { forcedAlignmentRoutes } from "./routes/forced-alignment.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -180,6 +184,10 @@ export async function buildApp() {
   await app.register(imageToTextRoutes)
   await app.register(voicesRoutes)
   await app.register(voiceCloneRoutes)
+  await app.register(voiceChangerRoutes)
+  await app.register(dubbingRoutes)
+  await app.register(voiceRemixRoutes)
+  await app.register(forcedAlignmentRoutes)
 
   return app
 }

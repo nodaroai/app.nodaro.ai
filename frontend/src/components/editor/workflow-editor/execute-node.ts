@@ -13,6 +13,10 @@ import {
   sunoMusicVideoApi,
   transcribeApi,
   imageToTextApi,
+  voiceChangerApi,
+  dubbingApi,
+  voiceRemixApi,
+  forcedAlignmentApi,
   downloadYouTubeAudio,
   lipSyncApi,
   motionTransferApi,
@@ -95,6 +99,10 @@ import type {
   SceneNodeDataType,
   CombineTextNodeData,
   SplitTextData,
+  VoiceChangerData,
+  DubbingData,
+  VoiceRemixData,
+  ForcedAlignmentData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -643,6 +651,178 @@ export function executeNode(
       "Text to Dialogue",
       ctx,
     );
+  }
+
+  if (node.type === "voice-changer") {
+    const d = node.data as VoiceChangerData;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    if (!d.voiceId) {
+      toast.error(`Node "${d.label}": no voice selected`);
+      return Promise.reject(new Error("No voice selected"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        voiceChangerApi(
+          audioUrl,
+          d.voiceId!,
+          ctx.userId,
+          d.stability,
+          d.similarityBoost,
+          d.removeBackgroundNoise,
+        ),
+      "generatedAudioUrl",
+      "Voice Changer",
+      ctx,
+    );
+  }
+
+  if (node.type === "dubbing") {
+    const d = node.data as DubbingData;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    if (!d.targetLanguage) {
+      toast.error(`Node "${d.label}": no target language selected`);
+      return Promise.reject(new Error("No target language"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        dubbingApi(
+          audioUrl,
+          d.targetLanguage,
+          ctx.userId,
+          d.sourceLanguage,
+          d.numSpeakers,
+        ),
+      "generatedAudioUrl",
+      "Dubbing",
+      ctx,
+    );
+  }
+
+  if (node.type === "voice-remix") {
+    const d = node.data as VoiceRemixData;
+    if (!d.text?.trim()) {
+      toast.error(`Node "${d.label}": no preview text provided`);
+      return Promise.reject(new Error("No text"));
+    }
+    if (!d.voiceDescription?.trim()) {
+      toast.error(`Node "${d.label}": no voice description provided`);
+      return Promise.reject(new Error("No voice description"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        voiceRemixApi(
+          d.text!,
+          d.voiceDescription!,
+          ctx.userId,
+        ),
+      "generatedAudioUrl",
+      "Voice Remix",
+      ctx,
+    );
+  }
+
+  if (node.type === "forced-alignment") {
+    const d = node.data as ForcedAlignmentData;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    if (!d.transcript?.trim()) {
+      toast.error(`Node "${d.label}": no transcript provided`);
+      return Promise.reject(new Error("No transcript"));
+    }
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      alignmentResults: undefined,
+      errorMessage: undefined,
+      currentJobId: undefined,
+    });
+
+    return new Promise<void>((resolve, reject) => {
+      forcedAlignmentApi(audioUrl, d.transcript!, ctx.userId)
+        .then(({ jobId }) => {
+          toast.info("Forced alignment started", { description: `Job ID: ${jobId}` });
+          updateNodeData(node.id, { currentJobId: jobId });
+
+          let pollFailures = 0;
+          const poll = ctx.trackInterval(
+            setInterval(async () => {
+              if (ctx.isWorkflowStale()) {
+                ctx.untrackInterval(poll);
+                reject(new WorkflowStaleError());
+                return;
+              }
+              try {
+                const job = await getJobStatus(jobId);
+                pollFailures = 0;
+                if (job.progress) updateNodeData(node.id, { currentJobProgress: job.progress });
+
+                if (job.status === "completed") {
+                  ctx.untrackInterval(poll);
+                  const alignment = (job.output_data as Record<string, unknown>)?.alignment as Array<{ word: string; start: number; end: number }> | undefined;
+                  updateNodeData(node.id, {
+                    executionStatus: "completed",
+                    alignmentResults: alignment ?? [],
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  toast.success("Forced alignment complete");
+                  resolve();
+                } else if (job.status === "failed") {
+                  ctx.untrackInterval(poll);
+                  const errMsg = job.error_message ?? "Alignment failed";
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: errMsg,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  toast.error("Forced alignment failed", { description: errMsg });
+                  reject(new Error(errMsg));
+                }
+              } catch (err) {
+                pollFailures++;
+                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                  ctx.untrackInterval(poll);
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  toast.error("Failed to check alignment status");
+                  reject(err);
+                }
+              }
+            }, 3000),
+          );
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          if (!checkStorageError(err, ctx)) {
+            toast.error("Failed to start forced alignment", {
+              description: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+          reject(err);
+        });
+    });
   }
 
   if (node.type === "suno-generate") {

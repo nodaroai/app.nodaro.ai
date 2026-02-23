@@ -177,7 +177,7 @@ backend/src/
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, forced-alignment)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
@@ -220,6 +220,10 @@ backend/src/
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
 | Voice browser | ElevenLabs v2 API → VoiceBrowser dialog | `GET /v1/voices` (public, 6hr cache, stampede-safe), `useVoices()` hook, dialog with search/gender/accent filters + audio preview; `DIALOGUE_VOICE_IDS` restricts dialogue node to 20 supported voices; fallback to static 52-voice list when no API key |
 | Voice cloning | ElevenLabs Instant Clone → direct TTS | `POST /v1/voice-clones` (multipart, 5 credits), `voice_clones` DB table with RLS; custom voices use `directElevenLabsTTS()` bypassing KIE.ai; TTS node `voiceType: "premade" \| "custom"` field; Voice Browser "My Voices" tab with record/upload UI (MediaRecorder API) |
+| Voice Changer | ElevenLabs Speech-to-Speech direct API | `POST /v1/voice-changer` (4 credits), audio input + target voice → audio output preserving emotion/delivery; uses `POST /v1/speech-to-speech/{voice_id}` multipart sync API |
+| Dubbing | ElevenLabs Dubbing direct API | `POST /v1/dubbing` (8 credits), audio + target language → translated audio preserving speaker identity; async with polling (`startDubbing` → `waitForDubbing` → `downloadDubbedAudio`) |
+| Voice Remix | ElevenLabs Text-to-Voice direct API | `POST /v1/voice-remix` (4 credits), natural language voice description + preview text → audio preview; uses `POST /v1/text-to-voice/create-previews` |
+| Forced Alignment | ElevenLabs Forced Alignment direct API | `POST /v1/forced-alignment` (3 credits), audio + transcript → word-level timestamps JSON; output is data (not audio) |
 
 ---
 
@@ -241,4 +245,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-23*
-*Version: 1.40.0*
+*Version: 1.41.0*

@@ -194,6 +194,9 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "generate-music":
         case "text-to-audio":
         case "text-to-dialogue":
+        case "voice-changer":
+        case "dubbing":
+        case "voice-remix":
           // Clear generated audio results, keep settings
           data.generatedResults = []
           data.generatedAudioUrl = undefined
@@ -248,6 +251,12 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.generatedResults = []
           data.activeResultIndex = 0
           data.generatedText = undefined
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          break
+
+        case "forced-alignment":
+          data.alignmentResults = []
           data.executionStatus = undefined
           data.errorMessage = undefined
           break

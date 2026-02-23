@@ -843,6 +843,74 @@ export type TextToDialogueData = {
   currentJobProgress?: number
 }
 
+export interface AlignmentWord {
+  readonly word: string
+  readonly start: number
+  readonly end: number
+}
+
+export type VoiceChangerData = {
+  [key: string]: unknown
+  label: string
+  voiceId: string
+  voiceLabel: string
+  voiceType: "premade" | "custom"
+  stability: number
+  similarityBoost: number
+  removeBackgroundNoise: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type DubbingData = {
+  [key: string]: unknown
+  label: string
+  targetLanguage: string
+  sourceLanguage: string
+  numSpeakers: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type VoiceRemixData = {
+  [key: string]: unknown
+  label: string
+  text: string
+  voiceDescription: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type ForcedAlignmentData = {
+  [key: string]: unknown
+  label: string
+  transcript: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  alignmentResults?: AlignmentWord[]
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
 export type ImageToTextData = {
   [key: string]: unknown
   label: string
@@ -1541,6 +1609,10 @@ export type SceneNodeData =
   | ImageToTextData
   | AudioIsolationData
   | TextToDialogueData
+  | VoiceChangerData
+  | DubbingData
+  | VoiceRemixData
+  | ForcedAlignmentData
   | CombineVideosData
   | MergeVideoAudioData
   | AddCaptionsData
@@ -1617,6 +1689,10 @@ export type SceneNodeType =
   | "image-to-text"
   | "audio-isolation"
   | "text-to-dialogue"
+  | "voice-changer"
+  | "dubbing"
+  | "voice-remix"
+  | "forced-alignment"
   | "combine-videos"
   | "merge-video-audio"
   | "add-captions"
@@ -2026,6 +2102,77 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as TextToDialogueData,
+  },
+  {
+    type: "voice-changer",
+    label: "Voice Changer",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: {
+      label: "Voice Changer",
+      voiceId: "",
+      voiceLabel: "",
+      voiceType: "premade",
+      stability: 0.5,
+      similarityBoost: 0.75,
+      removeBackgroundNoise: false,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VoiceChangerData,
+  },
+  {
+    type: "dubbing",
+    label: "Dubbing",
+    category: "ai",
+    creditCost: 8,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: {
+      label: "Dubbing",
+      targetLanguage: "es",
+      sourceLanguage: "",
+      numSpeakers: 0,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as DubbingData,
+  },
+  {
+    type: "voice-remix",
+    label: "Voice Remix",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: {
+      label: "Voice Remix",
+      text: "",
+      voiceDescription: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VoiceRemixData,
+  },
+  {
+    type: "forced-alignment",
+    label: "Forced Alignment",
+    category: "ai",
+    creditCost: 3,
+    inputs: ["in"],
+    outputs: ["data"],
+    defaultData: {
+      label: "Forced Alignment",
+      transcript: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+      alignmentResults: [],
+    } as ForcedAlignmentData,
   },
   // Processing
   {

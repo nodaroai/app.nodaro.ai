@@ -156,6 +156,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-stt": 4,           // 10 KIE cr, $0.05
   "elevenlabs-dialogue": 4,     // 10 KIE cr, $0.05
   "voice-clone": 5,              // ElevenLabs instant voice clone
+  "elevenlabs-voice-changer": 4,  // ElevenLabs speech-to-speech
+  "elevenlabs-dubbing": 8,        // ElevenLabs dubbing (async)
+  "elevenlabs-voice-remix": 4,    // ElevenLabs voice remix/preview
+  "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
   "infinitalk": 19,              // 60 KIE cr, $0.30
   // ── Processing ──
   "topaz": 0,
@@ -198,6 +202,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "audio-isolation": 1,
   "text-to-dialogue": 4,
   "image-to-text": 5,
+  "voice-changer": 4,
+  "dubbing": 8,
+  "voice-remix": 4,
+  "forced-alignment": 3,
 }
 
 // Tier order for restriction checks
