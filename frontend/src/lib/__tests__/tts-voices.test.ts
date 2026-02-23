@@ -35,11 +35,11 @@ describe("getVoiceName", () => {
   })
 
   it("returns voice name for another known ID", () => {
-    expect(getVoiceName("Roger")).toBe("Roger (Male)")
+    expect(getVoiceName("Roger")).toBe("Roger (Male, American)")
   })
 
   it("returns voice name for non-binary voice", () => {
-    expect(getVoiceName("River")).toBe("River (Non-binary)")
+    expect(getVoiceName("River")).toBe("River (Non-binary, American)")
   })
 
   it("returns the voiceId itself for unknown ID", () => {
