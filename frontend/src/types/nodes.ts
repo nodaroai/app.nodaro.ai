@@ -872,8 +872,8 @@ export type DubbingData = {
   [key: string]: unknown
   label: string
   targetLanguage: string
-  sourceLanguage: string
-  numSpeakers: number
+  sourceLanguage?: string
+  numSpeakers?: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -2134,8 +2134,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Dubbing",
       targetLanguage: "es",
-      sourceLanguage: "",
-      numSpeakers: 0,
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],

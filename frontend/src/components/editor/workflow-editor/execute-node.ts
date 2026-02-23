@@ -768,7 +768,9 @@ export function executeNode(
               try {
                 const job = await getJobStatus(jobId);
                 pollFailures = 0;
-                if (job.progress) updateNodeData(node.id, { currentJobProgress: job.progress });
+                if (job.status === "processing" && job.progress != null) {
+                  updateNodeData(node.id, { currentJobProgress: job.progress });
+                }
 
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
@@ -806,7 +808,7 @@ export function executeNode(
                   reject(err);
                 }
               }
-            }, 3000),
+            }, 2000),
           );
         })
         .catch((err) => {
