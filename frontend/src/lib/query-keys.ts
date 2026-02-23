@@ -93,6 +93,8 @@ export const queryKeys = {
   voices: {
     all: ["voices"] as const,
     list: () => ["voices", "list"] as const,
+    library: (params: Record<string, string | undefined>) => ["voices", "library", params] as const,
+    clones: () => ["voices", "clones"] as const,
   },
 
   // Admin

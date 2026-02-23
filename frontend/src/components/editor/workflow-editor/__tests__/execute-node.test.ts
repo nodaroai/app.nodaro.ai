@@ -648,7 +648,7 @@ describe("text-to-speech", () => {
       expect.anything(),
       undefined,
       undefined,
-      undefined,
+      { voiceType: "premade" },
     )
   })
 })

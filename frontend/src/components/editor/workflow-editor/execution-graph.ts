@@ -189,7 +189,10 @@ export function extractNodeOutput(node: WorkflowNode): string | undefined {
     type === "suno-cover" ||
     type === "suno-extend" ||
     type === "suno-separate" ||
-    type === "text-to-dialogue"
+    type === "text-to-dialogue" ||
+    type === "voice-changer" ||
+    type === "dubbing" ||
+    type === "voice-remix"
   ) {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -318,6 +321,13 @@ export function extractNodeOutput(node: WorkflowNode): string | undefined {
     const { characterDefinitions } = useWorkflowStore.getState();
     return buildScenePrompt(sceneData, characterDefinitions);
   }
+  if (type === "forced-alignment") {
+    const alignment = data.alignmentResults as Array<{ word: string; start: number; end: number }> | undefined;
+    if (alignment && alignment.length > 0) {
+      return JSON.stringify(alignment);
+    }
+    return undefined;
+  }
   if (type === "ai-writer") {
     return data.generatedText as string | undefined;
   }
@@ -425,6 +435,9 @@ const AUDIO_SOURCE_TYPES = new Set([
   "mix-audio",
   "adjust-volume",
   "reference-audio",
+  "voice-changer",
+  "dubbing",
+  "voice-remix",
 ]);
 
 export function collectMediaAssets(

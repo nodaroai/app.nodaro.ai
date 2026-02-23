@@ -5,6 +5,12 @@ import tseslint from "typescript-eslint";
 const eslintConfig = defineConfig([
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    rules: {
+      // ESLint 10 promoted this to recommended — disable for now, enable incrementally
+      "no-useless-assignment": "off",
+    },
+  },
   globalIgnores([
     "dist/**",
     "build/**",

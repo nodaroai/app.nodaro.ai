@@ -1,11 +1,16 @@
 import { supabase } from "../../lib/supabase.js"
-import { uploadToR2 } from "../../lib/storage.js"
+import { uploadToR2, uploadBufferToR2 } from "../../lib/storage.js"
 import { textToSpeech as routedTextToSpeech } from "../../providers/index.js"
+import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
 import { KieAudioProvider } from "../../providers/kie/audio.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../../providers/audio/youtube-extractor.js"
+import { voiceChangerFromUrl } from "../../providers/elevenlabs/voice-changer.js"
+import { startDubbing, waitForDubbing, downloadDubbedAudio } from "../../providers/elevenlabs/dubbing.js"
+import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
+import { forcedAlignment } from "../../providers/elevenlabs/forced-alignment.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
@@ -13,27 +18,49 @@ import {
 } from "../shared.js"
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider, stability, similarityBoost, style, speed, languageCode } = job.data as {
+  const { text, voice, provider, voiceType, stability, similarityBoost, style, speed, languageCode } = job.data as {
     jobId: string
     text: string
     voice?: string
     provider?: string
+    voiceType?: "premade" | "custom"
     stability?: number
     similarityBoost?: number
     style?: number
     speed?: number
     languageCode?: string
   }
-  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider ?? "elevenlabs-turbo"})`)
+  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider ?? "elevenlabs-turbo"}, voiceType: ${voiceType ?? "premade"})`)
 
-  const ttsOptions = {
-    ...(stability != null && { stability }),
-    ...(similarityBoost != null && { similarityBoost }),
-    ...(style != null && { style }),
-    ...(speed != null && { speed }),
-    ...(languageCode && { languageCode }),
+  const ttsOptions = { stability, similarityBoost, style, speed, languageCode }
+  const hasOptions = stability != null || similarityBoost != null || style != null || speed != null || languageCode != null
+
+  if (voiceType === "custom" && voice) {
+    const audioBuffer = await directElevenLabsTTS(text, voice, provider, hasOptions ? ttsOptions : undefined)
+    await job.updateProgress(50)
+
+    const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+    await job.updateProgress(100)
+
+    if (!await shouldSaveJobResult(ctx.jobId)) return
+
+    await supabase
+      .from("jobs")
+      .update({
+        status: "completed",
+        progress: 100,
+        output_data: { audioUrl: r2Url },
+        completed_at: new Date().toISOString(),
+        provider: "elevenlabs-direct",
+      })
+      .eq("id", ctx.jobId)
+
+    await commitJobCredits(ctx.usageLogId, ctx.jobId)
+    console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
+    return
   }
-  const result = await routedTextToSpeech(text, provider ?? "elevenlabs-turbo", voice, Object.keys(ttsOptions).length > 0 ? ttsOptions : undefined)
+
+  const result = await routedTextToSpeech(text, provider ?? "elevenlabs-turbo", voice, hasOptions ? ttsOptions : undefined)
   await job.updateProgress(50)
 
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
@@ -175,6 +202,90 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx) {
+  const { audioUrl, voiceId, stability, similarityBoost, removeBackgroundNoise } = job.data as {
+    jobId: string; audioUrl: string; voiceId: string
+    stability?: number; similarityBoost?: number; removeBackgroundNoise?: boolean
+  }
+  console.log(`[worker] voice-changer ${ctx.jobId}`)
+  const audioBuffer = await voiceChangerFromUrl(audioUrl, voiceId, { stability, similarityBoost, removeBackgroundNoise })
+  await job.updateProgress(50)
+  const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
+  const { audioUrl, targetLanguage, sourceLanguage, numSpeakers } = job.data as {
+    jobId: string; audioUrl: string; targetLanguage: string
+    sourceLanguage?: string; numSpeakers?: number
+  }
+  console.log(`[worker] dubbing ${ctx.jobId} (target: ${targetLanguage})`)
+  const { dubbingId } = await startDubbing(audioUrl, targetLanguage, { sourceLang: sourceLanguage, numSpeakers })
+  await job.updateProgress(20)
+
+  await waitForDubbing(dubbingId, (status) => {
+    if (status === "dubbing") void job.updateProgress(50)
+  })
+  await job.updateProgress(70)
+
+  const audioBuffer = await downloadDubbedAudio(dubbingId, targetLanguage)
+  await job.updateProgress(85)
+  const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {
+  const { text, voiceDescription } = job.data as { jobId: string; text: string; voiceDescription: string }
+  console.log(`[worker] voice-remix ${ctx.jobId}`)
+  const audioBuffer = await remixVoice(text, voiceDescription)
+  await job.updateProgress(50)
+  const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { audioUrl: r2Url },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleForcedAlignment: HandlerFn = async function handleForcedAlignment(job, ctx) {
+  const { audioUrl, transcript } = job.data as { jobId: string; audioUrl: string; transcript: string }
+  console.log(`[worker] forced-alignment ${ctx.jobId}`)
+  const result = await forcedAlignment(audioUrl, transcript)
+  await job.updateProgress(100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  await supabase.from("jobs").update({
+    status: "completed", progress: 100,
+    output_data: { alignment: result.alignment, text: transcript },
+    completed_at: new Date().toISOString(),
+    provider: "elevenlabs-direct",
+  }).eq("id", ctx.jobId)
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: aligned ${result.alignment.length} words`)
+}
+
 export const audioAIHandlers: Record<string, HandlerFn> = {
   "text-to-speech": handleTextToSpeech,
   "generate-music": handleGenerateMusic,
@@ -183,4 +294,8 @@ export const audioAIHandlers: Record<string, HandlerFn> = {
   "extract-youtube-audio": handleExtractYoutubeAudio,
   "audio-isolation": handleAudioIsolation,
   "text-to-dialogue": handleTextToDialogue,
+  "voice-changer": handleVoiceChanger,
+  "dubbing": handleDubbing,
+  "voice-remix": handleVoiceRemix,
+  "forced-alignment": handleForcedAlignment,
 }

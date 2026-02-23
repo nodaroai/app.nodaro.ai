@@ -1,5 +1,5 @@
 # ── Stage 1: Build backend ────────────────────────────────────────────
-FROM node:20-alpine AS backend-builder
+FROM node:22-alpine AS backend-builder
 
 RUN apk add --no-cache libc6-compat python3
 
@@ -12,7 +12,7 @@ COPY backend/ ./
 RUN npm run build
 
 # ── Stage 2: Install Remotion package deps ─────────────────────────────
-FROM node:20-alpine AS remotion-builder
+FROM node:22-alpine AS remotion-builder
 
 RUN apk add --no-cache libc6-compat
 
@@ -22,7 +22,7 @@ RUN npm ci
 COPY packages/remotion/ ./
 
 # ── Stage 3: Build frontend ──────────────────────────────────────────
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 RUN apk add --no-cache libc6-compat
 
@@ -57,7 +57,7 @@ RUN npm run build
 # ── Stage 4: Production runner ───────────────────────────────────────
 # Debian slim (glibc) — required for Remotion's chrome-headless-shell binary.
 # Alpine (musl) is incompatible with Chrome/Chromium glibc binaries.
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg curl ca-certificates \
@@ -70,7 +70,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/bin/caddy \
     && chmod +x /usr/bin/caddy
 
-# Create non-root user (node:20-slim already has uid 1000 node user, || true for safety)
+# Create non-root user (node:22-slim already has uid 1000 node user, || true for safety)
 RUN groupadd --gid 1000 node || true \
     && useradd --uid 1000 --gid node --shell /bin/bash --create-home node || true
 

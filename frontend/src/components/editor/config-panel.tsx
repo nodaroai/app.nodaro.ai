@@ -55,6 +55,10 @@ import {
   TextToAudioConfig,
   AudioIsolationConfig,
   TextToDialogueConfig,
+  VoiceChangerConfig,
+  DubbingConfig,
+  VoiceRemixConfig,
+  ForcedAlignmentConfig,
   SunoGenerateConfig,
   SunoCoverConfig,
   SunoExtendConfig,
@@ -124,6 +128,10 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "text-to-audio": "Text to Audio",
   "audio-isolation": "Voice Extractor",
   "text-to-dialogue": "Text to Dialogue",
+  "voice-changer": "Voice Changer",
+  "dubbing": "Dubbing",
+  "voice-remix": "Voice Remix",
+  "forced-alignment": "Forced Alignment",
   "suno-generate": "Suno Generate",
   "suno-cover": "Suno Cover",
   "suno-extend": "Suno Extend",
@@ -164,7 +172,7 @@ export function getNodeTypeDisplayName(type: string): string {
 export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
-  "text-to-audio", "audio-isolation", "text-to-dialogue", "generate-music", "motion-transfer", "lip-sync",
+  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "forced-alignment", "generate-music", "motion-transfer", "lip-sync",
   "video-upscale", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video", "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
@@ -393,6 +401,10 @@ export function ConfigPanel() {
           {nodeType === "text-to-audio" && <TextToAudioConfig {...configProps} />}
           {nodeType === "audio-isolation" && <AudioIsolationConfig {...configProps} />}
           {nodeType === "text-to-dialogue" && <TextToDialogueConfig {...configProps} />}
+          {nodeType === "voice-changer" && <VoiceChangerConfig {...configProps} />}
+          {nodeType === "dubbing" && <DubbingConfig {...configProps} />}
+          {nodeType === "voice-remix" && <VoiceRemixConfig {...configProps} />}
+          {nodeType === "forced-alignment" && <ForcedAlignmentConfig {...configProps} />}
           {nodeType === "suno-generate" && <SunoGenerateConfig {...configProps} />}
           {nodeType === "suno-cover" && <SunoCoverConfig {...configProps} />}
           {nodeType === "suno-extend" && <SunoExtendConfig {...configProps} />}
@@ -495,7 +507,7 @@ export function ConfigPanel() {
               const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
               if (!activeUrl) return null
               const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync"])
-              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
+              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
               const mediaType: "image" | "video" | "audio" = videoTypes.has(nodeType) ? "video" : audioTypes.has(nodeType) ? "audio" : "image"
               return (
                 <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />

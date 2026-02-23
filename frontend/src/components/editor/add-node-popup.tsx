@@ -54,6 +54,8 @@ import {
   Box,
   AudioWaveform,
   Eye,
+  Languages,
+  AlignLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
@@ -284,6 +286,34 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "text-to-dialogue",
     label: "Text to Dialogue",
     icon: <Users className="h-4 w-4" />,
+    category: "AI",
+    group: "Audio & Speech",
+  },
+  {
+    type: "voice-changer",
+    label: "Voice Changer",
+    icon: <AudioWaveform className="h-4 w-4" />,
+    category: "AI",
+    group: "Audio & Speech",
+  },
+  {
+    type: "dubbing",
+    label: "Dubbing",
+    icon: <Languages className="h-4 w-4" />,
+    category: "AI",
+    group: "Audio & Speech",
+  },
+  {
+    type: "voice-remix",
+    label: "Voice Remix",
+    icon: <Mic className="h-4 w-4" />,
+    category: "AI",
+    group: "Audio & Speech",
+  },
+  {
+    type: "forced-alignment",
+    label: "Forced Alignment",
+    icon: <AlignLeft className="h-4 w-4" />,
     category: "AI",
     group: "Audio & Speech",
   },

@@ -2,17 +2,16 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Mic, Loader2, AlertCircle, X, Volume2 } from "lucide-react"
+import { Languages, Loader2, AlertCircle, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { getVoiceName } from "@/lib/tts-voices"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
-import type { TextToSpeechData } from "@/types/nodes"
+import type { DubbingData } from "@/types/nodes"
 
-function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as TextToSpeechData
+function DubbingNodeComponent({ id, data, selected }: NodeProps) {
+  const nodeData = data as DubbingData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -21,7 +20,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const credits = useModelCredits(nodeData.provider ?? "elevenlabs-turbo", 1)
+  const credits = useModelCredits("elevenlabs-dubbing", 8)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -43,14 +42,14 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
     <BaseNode
       id={id}
       label={nodeData.label}
-      icon={<Mic className="h-4 w-4" />}
+      icon={<Languages className="h-4 w-4" />}
       category="ai"
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "audio", type: "source", position: Position.Right, label: "Audio" },
+        { id: "in", type: "target", position: Position.Left, label: "Audio" },
+        { id: "audio", type: "source", position: Position.Right, label: "Dubbed" },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -62,12 +61,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
 
         {activeUrl && (
           <div className="relative group">
-            <audio
-              src={activeUrl}
-              controls
-              className="w-full h-8"
-              onClick={(e) => e.stopPropagation()}
-            />
+            <audio src={activeUrl} controls className="w-full h-8" onClick={(e) => e.stopPropagation()} />
             {status === "running" && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -76,11 +70,9 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
             {results.length > 0 && (
               <button
                 type="button"
-                aria-label="Remove" className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDeleteConfirm(activeIndex)
-                }}
+                aria-label="Remove"
+                className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
                 title="Delete this result"
               >
                 <X className="w-3 h-3" />
@@ -105,7 +97,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
 
         {status !== "running" && !activeUrl && status !== "failed" && (
           <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
-            <Mic className="w-5 h-5" />
+            <Languages className="w-5 h-5" />
           </div>
         )}
 
@@ -116,24 +108,17 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
                 <button
                   type="button"
                   className={`w-8 h-8 flex items-center justify-center rounded cursor-pointer transition-opacity ${
-                    i === activeIndex
-                      ? "opacity-100 ring-2 ring-primary bg-primary/20"
-                      : "opacity-50 hover:opacity-80 bg-muted"
+                    i === activeIndex ? "opacity-100 ring-2 ring-primary bg-primary/20" : "opacity-50 hover:opacity-80 bg-muted"
                   }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url })
-                  }}
+                  onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) }}
                 >
-                  <Volume2 className="w-4 h-4" />
+                  <Languages className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteConfirm(i)
-                  }}
+                  aria-label="Remove"
+                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}
                 >
                   <X className="w-2.5 h-2.5" />
                 </button>
@@ -143,8 +128,8 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>{nodeData.provider}</span>
-          <span>{nodeData.voiceLabel || getVoiceName(nodeData.voiceId)}</span>
+          <span>Dubbing</span>
+          {nodeData.targetLanguage && <span className="text-xs">{nodeData.targetLanguage}</span>}
         </div>
       </div>
     </BaseNode>
@@ -152,12 +137,10 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}
-      onConfirm={() => {
-        if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
-      }}
+      onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }}
     />
     </div>
   )
 }
 
-export const TextToSpeechNode = memo(TextToSpeechNodeComponent)
+export const DubbingNode = memo(DubbingNodeComponent)

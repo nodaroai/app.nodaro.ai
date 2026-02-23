@@ -794,6 +794,7 @@ export async function textToSpeech(
     style?: number
     speed?: number
     languageCode?: string
+    voiceType?: "premade" | "custom"
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { text, voice, provider }
@@ -803,6 +804,7 @@ export async function textToSpeech(
   if (options?.style != null) body.style = options.style
   if (options?.speed != null) body.speed = options.speed
   if (options?.languageCode) body.languageCode = options.languageCode
+  if (options?.voiceType) body.voiceType = options.voiceType
   const res = await fetch(`${API_BASE_URL}/v1/text-to-speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -1243,6 +1245,71 @@ export async function textToDialogueApi(
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start dialogue generation")
+  }
+  return res.json()
+}
+
+export async function voiceChangerApi(audioUrl: string, voiceId: string, userId?: string, stability?: number, similarityBoost?: number, removeBackgroundNoise?: boolean): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl, voiceId }
+  if (userId) body.userId = userId
+  if (stability != null) body.stability = stability
+  if (similarityBoost != null) body.similarityBoost = similarityBoost
+  if (removeBackgroundNoise != null) body.removeBackgroundNoise = removeBackgroundNoise
+  const res = await fetch(`${API_BASE_URL}/v1/voice-changer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start voice changer")
+  }
+  return res.json()
+}
+
+export async function dubbingApi(audioUrl: string, targetLanguage: string, userId?: string, sourceLanguage?: string, numSpeakers?: number): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl, targetLanguage }
+  if (userId) body.userId = userId
+  if (sourceLanguage) body.sourceLanguage = sourceLanguage
+  if (numSpeakers) body.numSpeakers = numSpeakers
+  const res = await fetch(`${API_BASE_URL}/v1/dubbing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start dubbing")
+  }
+  return res.json()
+}
+
+export async function voiceRemixApi(text: string, voiceDescription: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { text, voiceDescription }
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/voice-remix`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start voice remix")
+  }
+  return res.json()
+}
+
+export async function forcedAlignmentApi(audioUrl: string, transcript: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl, transcript }
+  if (userId) body.userId = userId
+  const res = await fetch(`${API_BASE_URL}/v1/forced-alignment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start forced alignment")
   }
   return res.json()
 }
@@ -2308,4 +2375,111 @@ export async function getVoices(): Promise<ElevenLabsVoice[]> {
   }
   const body = await res.json()
   return body.voices
+}
+
+// Voice Library (shared/community voices)
+
+export interface SharedVoice {
+  voice_id: string
+  name: string
+  preview_url: string
+  gender: string
+  accent: string
+  age: string
+  description: string
+  use_case: string
+  category: string
+}
+
+export interface VoiceLibraryParams {
+  search?: string
+  gender?: string
+  age?: string
+  accent?: string
+  language?: string
+  category?: string
+  page?: number
+  page_size?: number
+}
+
+export interface VoiceLibraryResponse {
+  voices: SharedVoice[]
+  hasMore: boolean
+}
+
+export async function searchVoiceLibrary(params: VoiceLibraryParams): Promise<VoiceLibraryResponse> {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") qs.set(k, String(v))
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/voices/library?${qs.toString()}`)
+  if (!res.ok) {
+    return { voices: [], hasMore: false }
+  }
+  return res.json()
+}
+
+// ─── Voice Clones (custom cloned voices) ───────────────────────────────
+
+export interface VoiceClone {
+  id: string
+  name: string
+  description?: string
+  elevenlabsVoiceId: string
+  sampleAudioUrl?: string
+  previewUrl?: string
+  gender?: string
+  accent?: string
+  createdAt: string
+  updatedAt?: string
+}
+
+export async function getVoiceClones(): Promise<VoiceClone[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones`, {
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    return []
+  }
+  const body = await res.json()
+  return body.voiceClones
+}
+
+export async function createVoiceClone(name: string, file: Blob): Promise<VoiceClone> {
+  const formData = new FormData()
+  formData.append("name", name)
+  formData.append("file", file, "sample.webm")
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to clone voice")
+  }
+  return res.json()
+}
+
+export async function deleteVoiceClone(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to delete voice clone")
+  }
+}
+
+export async function renameVoiceClone(id: string, name: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to rename voice clone")
+  }
 }

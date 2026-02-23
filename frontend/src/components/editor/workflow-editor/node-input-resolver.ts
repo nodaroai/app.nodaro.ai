@@ -390,7 +390,10 @@ export function resolveNodeInputs(
       src.type === "suno-extend" ||
       src.type === "suno-separate" ||
       src.type === "extract-audio" ||
-      src.type === "mix-audio"
+      src.type === "mix-audio" ||
+      src.type === "voice-changer" ||
+      src.type === "dubbing" ||
+      src.type === "voice-remix"
     ) {
       if (node.type === "mix-audio") {
         inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
@@ -419,7 +422,7 @@ export function resolveNodeInputs(
           inputs.sunoTaskId = srcData.sunoTaskId as string;
         }
       }
-    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "image-to-text") {
+    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "image-to-text" || src.type === "forced-alignment") {
       inputs.prompt = output;
     } else if (src.type === "ai-writer") {
       inputs.prompt = output;

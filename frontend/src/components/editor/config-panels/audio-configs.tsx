@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { VoiceBrowser } from "./voice-browser"
-import { DIALOGUE_VOICE_IDS, DEFAULT_DIALOGUE_VOICE } from "@/lib/tts-voices"
+import { DEFAULT_DIALOGUE_VOICE } from "@/lib/tts-voices"
 import type {
   TextToSpeechData,
   TextToAudioData,
@@ -29,6 +29,10 @@ import type {
   LipSyncData,
   TextToDialogueData,
   DialogueLine,
+  VoiceChangerData,
+  DubbingData,
+  VoiceRemixData,
+  ForcedAlignmentData,
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
@@ -83,7 +87,15 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         <Label>Voice</Label>
         <VoiceBrowser
           value={data.voiceId || "Rachel"}
-          onSelect={(v) => onUpdate({ voiceId: v })}
+          valueLabel={data.voiceDisplayName || data.voiceLabel}
+          onSelect={(id, name, voiceType) => {
+            if (voiceType === "custom") {
+              onUpdate({ voiceId: id, voiceType: "custom", voiceDisplayName: name, voiceLabel: name })
+            } else {
+              onUpdate({ voiceId: id, voiceType: "premade", voiceDisplayName: name, voiceLabel: name })
+            }
+          }}
+          showCustomVoices
         />
       </div>
       <div>
@@ -600,8 +612,8 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
               <VoiceBrowser
                 compact
                 value={line.voice}
-                onSelect={(v) => updateLine(i, { voice: v })}
-                allowedVoiceNames={DIALOGUE_VOICE_IDS}
+                valueLabel={line.voiceLabel}
+                onSelect={(id, name) => updateLine(i, { voice: id, voiceLabel: name })}
               />
               {dialogue.length > 1 && (
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeLine(i)}>
@@ -667,6 +679,168 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
 
       <p className="text-xs text-muted-foreground">
         Multi-speaker dialogue using ElevenLabs voices. Each line is spoken by the selected voice. All lines are combined into a single audio output.
+      </p>
+    </div>
+  )
+}
+
+export function VoiceChangerConfig({ data, onUpdate }: ConfigProps<VoiceChangerData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Voice</Label>
+        <VoiceBrowser
+          value={data.voiceId || "Rachel"}
+          valueLabel={data.voiceLabel}
+          onSelect={(id, name, voiceType) => {
+            if (voiceType === "custom") {
+              onUpdate({ voiceId: id, voiceType: "custom", voiceLabel: name })
+            } else {
+              onUpdate({ voiceId: id, voiceType: "premade", voiceLabel: name })
+            }
+          }}
+          showCustomVoices
+        />
+      </div>
+      <div>
+        <Label htmlFor="vc-stability">Stability ({data.stability ?? 0.5})</Label>
+        <Input id="vc-stability" type="range" min={0} max={1} step={0.05} value={data.stability ?? 0.5} onChange={(e) => onUpdate({ stability: parseFloat(e.target.value) })} className="h-2" />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Variable</span><span>Stable</span></div>
+      </div>
+      <div>
+        <Label htmlFor="vc-similarity">Similarity ({data.similarityBoost ?? 0.75})</Label>
+        <Input id="vc-similarity" type="range" min={0} max={1} step={0.05} value={data.similarityBoost ?? 0.75} onChange={(e) => onUpdate({ similarityBoost: parseFloat(e.target.value) })} className="h-2" />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Low</span><span>High</span></div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="vc-remove-bg"
+          checked={data.removeBackgroundNoise ?? false}
+          onCheckedChange={(v: boolean) => onUpdate({ removeBackgroundNoise: v })}
+        />
+        <Label htmlFor="vc-remove-bg">Remove Background Noise</Label>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Changes the voice of audio input to the selected voice while preserving emotion and delivery.
+      </p>
+    </div>
+  )
+}
+
+export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Target Language</Label>
+        <Select
+          value={data.targetLanguage || "es"}
+          onValueChange={(v) => onUpdate({ targetLanguage: v })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="en">English</SelectItem>
+            <SelectItem value="he">Hebrew</SelectItem>
+            <SelectItem value="es">Spanish</SelectItem>
+            <SelectItem value="fr">French</SelectItem>
+            <SelectItem value="de">German</SelectItem>
+            <SelectItem value="it">Italian</SelectItem>
+            <SelectItem value="pt">Portuguese</SelectItem>
+            <SelectItem value="ja">Japanese</SelectItem>
+            <SelectItem value="zh">Chinese</SelectItem>
+            <SelectItem value="ko">Korean</SelectItem>
+            <SelectItem value="ar">Arabic</SelectItem>
+            <SelectItem value="ru">Russian</SelectItem>
+            <SelectItem value="hi">Hindi</SelectItem>
+            <SelectItem value="nl">Dutch</SelectItem>
+            <SelectItem value="tr">Turkish</SelectItem>
+            <SelectItem value="pl">Polish</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Source Language (optional)</Label>
+        <Select
+          value={data.sourceLanguage || "auto"}
+          onValueChange={(v) => onUpdate({ sourceLanguage: v === "auto" ? undefined : v })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto-detect</SelectItem>
+            <SelectItem value="en">English</SelectItem>
+            <SelectItem value="he">Hebrew</SelectItem>
+            <SelectItem value="es">Spanish</SelectItem>
+            <SelectItem value="fr">French</SelectItem>
+            <SelectItem value="de">German</SelectItem>
+            <SelectItem value="it">Italian</SelectItem>
+            <SelectItem value="pt">Portuguese</SelectItem>
+            <SelectItem value="ja">Japanese</SelectItem>
+            <SelectItem value="zh">Chinese</SelectItem>
+            <SelectItem value="ko">Korean</SelectItem>
+            <SelectItem value="ar">Arabic</SelectItem>
+            <SelectItem value="ru">Russian</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Number of Speakers (optional)</Label>
+        <Input
+          type="number"
+          min={1}
+          max={10}
+          value={data.numSpeakers ?? ""}
+          onChange={(e) => onUpdate({ numSpeakers: e.target.value ? parseInt(e.target.value) : undefined })}
+          placeholder="Auto-detect"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Translates speech to the target language while preserving speaker identity. Connect an audio source to the input.
+      </p>
+    </div>
+  )
+}
+
+export function VoiceRemixConfig({ data, onUpdate }: ConfigProps<VoiceRemixData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Voice Description</Label>
+        <Textarea
+          rows={3}
+          value={data.voiceDescription || ""}
+          onChange={(e) => onUpdate({ voiceDescription: e.target.value })}
+          placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
+        />
+      </div>
+      <div>
+        <Label>Preview Text</Label>
+        <Textarea
+          rows={2}
+          value={data.text || ""}
+          onChange={(e) => onUpdate({ text: e.target.value })}
+          placeholder="Text to preview the generated voice with..."
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Generates a new voice from a natural language description and creates an audio preview with the specified text.
+      </p>
+    </div>
+  )
+}
+
+export function ForcedAlignmentConfig({ data, onUpdate }: ConfigProps<ForcedAlignmentData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Transcript</Label>
+        <Textarea
+          rows={5}
+          value={data.transcript || ""}
+          onChange={(e) => onUpdate({ transcript: e.target.value })}
+          placeholder="Enter the transcript to align with the audio..."
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Aligns audio with a transcript to produce word-level timestamps. Connect an audio source to the input.
       </p>
     </div>
   )
