@@ -794,6 +794,7 @@ export async function textToSpeech(
     style?: number
     speed?: number
     languageCode?: string
+    voiceType?: "premade" | "custom"
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { text, voice, provider }
@@ -803,6 +804,7 @@ export async function textToSpeech(
   if (options?.style != null) body.style = options.style
   if (options?.speed != null) body.speed = options.speed
   if (options?.languageCode) body.languageCode = options.languageCode
+  if (options?.voiceType) body.voiceType = options.voiceType
   const res = await fetch(`${API_BASE_URL}/v1/text-to-speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -2350,4 +2352,69 @@ export async function searchVoiceLibrary(params: VoiceLibraryParams): Promise<Vo
     return { voices: [], hasMore: false }
   }
   return res.json()
+}
+
+// ─── Voice Clones (custom cloned voices) ───────────────────────────────
+
+export interface VoiceClone {
+  id: string
+  name: string
+  description?: string
+  elevenlabsVoiceId: string
+  sampleAudioUrl?: string
+  previewUrl?: string
+  gender?: string
+  accent?: string
+  createdAt: string
+  updatedAt?: string
+}
+
+export async function getVoiceClones(): Promise<VoiceClone[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones`, {
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    return []
+  }
+  const body = await res.json()
+  return body.voiceClones
+}
+
+export async function createVoiceClone(name: string, file: Blob): Promise<VoiceClone> {
+  const formData = new FormData()
+  formData.append("name", name)
+  formData.append("file", file, "sample.webm")
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to clone voice")
+  }
+  return res.json()
+}
+
+export async function deleteVoiceClone(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones/${id}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to delete voice clone")
+  }
+}
+
+export async function renameVoiceClone(id: string, name: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clones/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to rename voice clone")
+  }
 }

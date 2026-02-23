@@ -525,6 +525,8 @@ export type TextToSpeechData = {
   provider: "elevenlabs-turbo" | "elevenlabs-multilingual" | "elevenlabs"
   voiceId: string
   voiceLabel?: string
+  voiceType: "premade" | "custom"
+  voiceDisplayName: string
   language: string
   speed: number
   stability: number
@@ -1891,7 +1893,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Text to Speech", provider: "elevenlabs-turbo", voiceId: "Rachel", language: "en", speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
+    defaultData: { label: "Text to Speech", provider: "elevenlabs-turbo", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
   },
   {
     type: "qa-check",

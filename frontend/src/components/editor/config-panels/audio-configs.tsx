@@ -83,8 +83,15 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         <Label>Voice</Label>
         <VoiceBrowser
           value={data.voiceId || "Rachel"}
-          valueLabel={data.voiceLabel}
-          onSelect={(id, name) => onUpdate({ voiceId: id, voiceLabel: name })}
+          valueLabel={data.voiceDisplayName || data.voiceLabel}
+          onSelect={(id, name, voiceType) => {
+            if (voiceType === "custom") {
+              onUpdate({ voiceId: id, voiceType: "custom", voiceDisplayName: name, voiceLabel: name })
+            } else {
+              onUpdate({ voiceId: id, voiceType: "premade", voiceDisplayName: name, voiceLabel: name })
+            }
+          }}
+          showCustomVoices
         />
       </div>
       <div>

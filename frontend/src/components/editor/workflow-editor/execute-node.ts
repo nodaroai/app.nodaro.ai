@@ -529,6 +529,7 @@ export function executeNode(
       ...(ttsData.style != null && { style: ttsData.style }),
       ...(ttsData.speed != null && { speed: ttsData.speed }),
       ...(ttsData.languageCode && { languageCode: ttsData.languageCode }),
+      voiceType: (ttsData.voiceType as "premade" | "custom" | undefined) || "premade",
     };
     return runTextToSpeechGeneration(
       node.id,

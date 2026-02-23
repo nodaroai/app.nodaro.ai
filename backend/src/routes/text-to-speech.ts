@@ -9,6 +9,7 @@ const textToSpeechBody = z.object({
   voice: z.string().optional(),
   provider: z.enum(["elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs"]).optional(),
   userId: z.string().uuid().optional(),
+  voiceType: z.enum(["premade", "custom"]).optional().default("premade"),
   stability: z.number().min(0).max(1).optional(),
   similarityBoost: z.number().min(0).max(1).optional(),
   style: z.number().min(0).max(1).optional(),
@@ -35,7 +36,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    const { text, voice, provider, userId, stability, similarityBoost, style, speed, languageCode } = parsed.data
+    const { text, voice, provider, userId, voiceType, stability, similarityBoost, style, speed, languageCode } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -56,6 +57,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
         input_data: {
           text, voice, provider: resolvedProvider,
           type: "text-to-speech",
+          voiceType,
           stability, similarityBoost, style, speed, languageCode,
         },
       })
@@ -78,6 +80,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       text,
       voice,
       provider: resolvedProvider,
+      voiceType,
       usageLogId,
       stability,
       similarityBoost,

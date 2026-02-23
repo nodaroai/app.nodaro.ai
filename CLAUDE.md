@@ -132,6 +132,7 @@ Full guide: `docs/adding-a-new-node.md`
 | `model_pricing` | model_identifier (PK), credit_cost, is_enabled, tier_restriction | Credit costs |
 | `app_settings` | key (unique), value (JSONB) | ai_provider, cost_markup_percent |
 | `credit_transactions` | id, user_id, amount, credit_type, source, job_id | Audit log |
+| `voice_clones` | id, user_id, name, elevenlabs_voice_id, sample_audio_url | Custom cloned voices |
 | `paddle_customers` | id, user_id, paddle_customer_id | Supabase <> Paddle mapping |
 | `subscriptions` | id, paddle_subscription_id, paddle_price_id, tier, status, current_period_start/end, canceled_at | Synced from Paddle |
 | `transactions` | id, paddle_transaction_id, type, amount_usd, credits_granted | Payment history |
@@ -176,7 +177,7 @@ backend/src/
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
@@ -218,6 +219,7 @@ backend/src/
 | Undo/redo | Zustand snapshot stack (50 max), 300ms debounce | `undo-flags.ts` shared skip flag prevents execution updates (status/progress/results via `EXECUTION_DATA_KEYS`) from creating undo entries; `_isRestoring` flag prevents restore from triggering subscription; `loadGeneration` counter clears history only on workflow load/switch, not on auto-save `markClean()` |
 | Settings cache | 60s TTL, stampede-safe | Reduce DB queries, mutex prevents stampede |
 | Voice browser | ElevenLabs v2 API → VoiceBrowser dialog | `GET /v1/voices` (public, 6hr cache, stampede-safe), `useVoices()` hook, dialog with search/gender/accent filters + audio preview; `DIALOGUE_VOICE_IDS` restricts dialogue node to 20 supported voices; fallback to static 52-voice list when no API key |
+| Voice cloning | ElevenLabs Instant Clone → direct TTS | `POST /v1/voice-clones` (multipart, 5 credits), `voice_clones` DB table with RLS; custom voices use `directElevenLabsTTS()` bypassing KIE.ai; TTS node `voiceType: "premade" \| "custom"` field; Voice Browser "My Voices" tab with record/upload UI (MediaRecorder API) |
 
 ---
 
@@ -231,6 +233,7 @@ backend/src/
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
 - [x] TTS voice browser with categories, search, audio previews
+- [x] Voice cloning (record/upload audio → ElevenLabs instant clone → custom voice for TTS)
 - [ ] Translation: use AI (Gemini/Claude) not Google Translate
 - [ ] Build from Prompt: MVP + Director Mode versions
 - [ ] Scene Node + Shot Node as optional "Director Mode"
@@ -238,4 +241,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-23*
-*Version: 1.39.0*
+*Version: 1.40.0*

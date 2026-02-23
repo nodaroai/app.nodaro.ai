@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase.js"
-import { uploadToR2 } from "../../lib/storage.js"
+import { uploadToR2, uploadBufferToR2 } from "../../lib/storage.js"
 import { textToSpeech as routedTextToSpeech } from "../../providers/index.js"
+import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
 import { KieAudioProvider } from "../../providers/kie/audio.js"
@@ -13,18 +14,19 @@ import {
 } from "../shared.js"
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider, stability, similarityBoost, style, speed, languageCode } = job.data as {
+  const { text, voice, provider, voiceType, stability, similarityBoost, style, speed, languageCode } = job.data as {
     jobId: string
     text: string
     voice?: string
     provider?: string
+    voiceType?: "premade" | "custom"
     stability?: number
     similarityBoost?: number
     style?: number
     speed?: number
     languageCode?: string
   }
-  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider ?? "elevenlabs-turbo"})`)
+  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider ?? "elevenlabs-turbo"}, voiceType: ${voiceType ?? "premade"})`)
 
   const ttsOptions = {
     ...(stability != null && { stability }),
@@ -33,6 +35,34 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     ...(speed != null && { speed }),
     ...(languageCode && { languageCode }),
   }
+
+  // Custom voices call ElevenLabs directly (cloned voices exist only in our EL account)
+  if (voiceType === "custom" && voice) {
+    const audioBuffer = await directElevenLabsTTS(text, voice, provider, ttsOptions)
+    await job.updateProgress(50)
+
+    const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+    await job.updateProgress(100)
+
+    if (!await shouldSaveJobResult(ctx.jobId)) return
+
+    await supabase
+      .from("jobs")
+      .update({
+        status: "completed",
+        progress: 100,
+        output_data: { audioUrl: r2Url },
+        completed_at: new Date().toISOString(),
+        provider: "elevenlabs-direct",
+      })
+      .eq("id", ctx.jobId)
+
+    await commitJobCredits(ctx.usageLogId, ctx.jobId)
+    console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
+    return
+  }
+
+  // Premade voices go through KIE.ai routing
   const result = await routedTextToSpeech(text, provider ?? "elevenlabs-turbo", voice, Object.keys(ttsOptions).length > 0 ? ttsOptions : undefined)
   await job.updateProgress(50)
 

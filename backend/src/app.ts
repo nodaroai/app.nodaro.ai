@@ -76,6 +76,7 @@ import { audioIsolationRoutes } from "./routes/audio-isolation.js"
 import { textToDialogueRoutes } from "./routes/text-to-dialogue.js"
 import { imageToTextRoutes } from "./routes/image-to-text.js"
 import { voicesRoutes } from "./routes/voices.js"
+import { voiceCloneRoutes } from "./routes/voice-clones.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -178,6 +179,7 @@ export async function buildApp() {
   await app.register(textToDialogueRoutes)
   await app.register(imageToTextRoutes)
   await app.register(voicesRoutes)
+  await app.register(voiceCloneRoutes)
 
   return app
 }

@@ -155,6 +155,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-isolation": 1,     // 1 KIE cr, $0.005
   "elevenlabs-stt": 4,           // 10 KIE cr, $0.05
   "elevenlabs-dialogue": 4,     // 10 KIE cr, $0.05
+  "voice-clone": 5,              // ElevenLabs instant voice clone
   "infinitalk": 19,              // 60 KIE cr, $0.30
   // ── Processing ──
   "topaz": 0,

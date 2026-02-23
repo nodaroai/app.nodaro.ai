@@ -769,6 +769,7 @@ export function runTextToSpeechGeneration(
     style?: number;
     speed?: number;
     languageCode?: string;
+    voiceType?: "premade" | "custom";
   },
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
