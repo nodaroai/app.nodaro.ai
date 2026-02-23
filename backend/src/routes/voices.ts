@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { config } from "../lib/config.js"
+import { registerVoiceLookup } from "../providers/kie/audio.js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,6 +111,7 @@ async function fetchVoicesFromApi(): Promise<ElevenLabsVoice[]> {
 async function getVoices(): Promise<ElevenLabsVoice[]> {
   // No API key — return static fallback
   if (!config.ELEVENLABS_API_KEY) {
+    registerVoiceLookup(FALLBACK_VOICES)
     return FALLBACK_VOICES
   }
 
@@ -127,6 +129,8 @@ async function getVoices(): Promise<ElevenLabsVoice[]> {
     .then((voices) => {
       cachedVoices = voices
       cacheTimestamp = Date.now()
+      // Populate KIE voice UUID→name lookup so TTS can resolve IDs
+      registerVoiceLookup(voices)
       return voices
     })
     .catch((err) => {
