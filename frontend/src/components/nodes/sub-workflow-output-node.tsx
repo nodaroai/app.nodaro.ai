@@ -59,8 +59,9 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
       credits={0}
       selected={selected}
       handles={handles}
+      minHeight={Math.max(100, ports.length * 32 + 50)}
     >
-      <div style={{ minHeight: ports.length > 1 ? `${ports.length * 22 + 8}px` : undefined }}>
+      <div style={{ minHeight: `${Math.max(40, ports.length * 26 + 8)}px` }}>
         {ports.length === 0 ? (
           <p className="text-sm text-muted-foreground">Click to add ports...</p>
         ) : (

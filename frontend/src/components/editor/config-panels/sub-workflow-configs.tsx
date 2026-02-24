@@ -1,11 +1,12 @@
 "use client"
 
 import { useCallback, useMemo, useState } from "react"
+import { useNavigate } from "react-router"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2, RefreshCw, AlertCircle } from "lucide-react"
+import { Plus, Trash2, RefreshCw, AlertCircle, ExternalLink } from "lucide-react"
 import type { ConfigProps } from "./types"
 import type {
   SubWorkflowInputData,
@@ -15,6 +16,7 @@ import type {
 } from "@/types/nodes"
 import { useCallableWorkflows, useWorkflowInterface } from "@/hooks/queries/use-callable-workflows"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { discoverRoutes } from "@/lib/sub-workflow-utils"
 
 // ---------- Shared: Ports Editor ----------
 
@@ -252,29 +254,62 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
 
 export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowData>) {
   const nodeData = data as SubWorkflowData
+  const navigate = useNavigate()
   const projectId = useWorkflowStore((s) => s.projectId)
+  const workflowId = useWorkflowStore((s) => s.workflowId)
+  const workflowName = useWorkflowStore((s) => s.workflowName)
+  const localNodes = useWorkflowStore((s) => s.nodes)
+  const localEdges = useWorkflowStore((s) => s.edges)
   const [showAllProjects, setShowAllProjects] = useState(false)
 
   const { data: callableWorkflows, isLoading: isLoadingWorkflows } = useCallableWorkflows(
     showAllProjects ? undefined : (projectId ?? undefined),
   )
 
+  // Merge current workflow from local store (may have unsaved sub-workflow-input/output nodes)
+  const mergedWorkflows = useMemo(() => {
+    const remote = callableWorkflows ?? []
+    if (!workflowId) return remote
+
+    // Discover routes from local (possibly unsaved) state
+    const localRoutes = discoverRoutes(localNodes, localEdges)
+    if (localRoutes.length === 0) return remote
+
+    const localEntry = {
+      id: workflowId,
+      name: workflowName || "Current Workflow",
+      projectId: projectId ?? "",
+      projectName: "",
+      routes: localRoutes.map((r) => ({
+        routeId: r.routeId,
+        inputLabel: r.inputData.label || "Unnamed",
+        inputPorts: r.inputData.ports ?? [],
+        outputPorts: r.outputData.ports ?? [],
+        visibleOutputPortId: r.outputData.visibleOutputPortId ?? "",
+      })),
+    }
+
+    // Replace the remote entry for the current workflow with the local one
+    const filtered = remote.filter((w) => w.id !== workflowId)
+    return [localEntry, ...filtered]
+  }, [callableWorkflows, workflowId, workflowName, projectId, localNodes, localEdges])
+
   const { data: workflowInterface, isLoading: isLoadingInterface, refetch: refetchInterface } = useWorkflowInterface(
     nodeData.referencedWorkflowId || undefined,
   )
 
-  const handleWorkflowSelect = useCallback((workflowId: string) => {
-    const workflow = callableWorkflows?.find((w) => w.id === workflowId)
+  const handleWorkflowSelect = useCallback((selectedId: string) => {
+    const workflow = mergedWorkflows.find((w) => w.id === selectedId)
     if (!workflow) return
 
     const updates: Record<string, unknown> = {
-      referencedWorkflowId: workflowId,
+      referencedWorkflowId: selectedId,
       referencedWorkflowName: workflow.name,
       selectedRouteId: workflow.routes[0]?.routeId ?? "",
       routeSnapshot: workflow.routes[0] ?? null,
     }
     onUpdate(updates)
-  }, [callableWorkflows, onUpdate])
+  }, [mergedWorkflows, onUpdate])
 
   const handleRouteSelect = useCallback((routeId: string) => {
     const route = workflowInterface?.routes.find((r) => r.routeId === routeId)
@@ -328,12 +363,12 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
             <SelectValue placeholder={isLoadingWorkflows ? "Loading..." : "Select a workflow..."} />
           </SelectTrigger>
           <SelectContent>
-            {(callableWorkflows ?? []).map((w) => (
+            {mergedWorkflows.map((w) => (
               <SelectItem key={w.id} value={w.id}>
-                {w.name} ({w.routes.length} route{w.routes.length !== 1 ? "s" : ""})
+                {w.name}{w.id === workflowId ? " (current)" : ""} ({w.routes.length} route{w.routes.length !== 1 ? "s" : ""})
               </SelectItem>
             ))}
-            {!isLoadingWorkflows && (callableWorkflows ?? []).length === 0 && (
+            {!isLoadingWorkflows && mergedWorkflows.length === 0 && (
               <div className="px-3 py-2 text-xs text-muted-foreground">
                 No callable workflows found. Add Sub-Workflow Input/Output nodes to a workflow first.
               </div>
@@ -384,6 +419,26 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               {snapshot.outputPorts.map((p) => `${p.name} (${p.mediaType})`).join(", ")}
             </div>
           </div>
+        </div>
+      )}
+
+      {nodeData.referencedWorkflowId && nodeData.referencedWorkflowId !== workflowId && (
+        <div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full h-8 text-xs"
+            onClick={() => {
+              const wf = mergedWorkflows.find((w) => w.id === nodeData.referencedWorkflowId)
+              const pid = wf?.projectId || projectId
+              if (pid && nodeData.referencedWorkflowId) {
+                navigate(`/projects/${pid}/workflows/${nodeData.referencedWorkflowId}`)
+              }
+            }}
+          >
+            <ExternalLink className="w-3 h-3 mr-1.5" />
+            Open Workflow
+          </Button>
         </div>
       )}
 

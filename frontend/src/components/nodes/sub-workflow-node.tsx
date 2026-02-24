@@ -1,10 +1,12 @@
 "use client"
 
-import { memo, useEffect, useMemo } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Workflow, Loader2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { ImageLightbox } from "@/components/ui/image-lightbox"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SubWorkflowData, SubWorkflowPort, GeneratedResult } from "@/types/nodes"
 
@@ -78,6 +80,10 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const previewUrl = generatedResults[activeIdx]?.url ?? visibleResult
 
   const progress = nodeData.subWorkflowProgress
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+
+  const isImage = typeof previewUrl === "string" && /\.(jpg|jpeg|png|webp|gif)$/i.test(previewUrl)
+  const isVideo = typeof previewUrl === "string" && /\.(mp4|webm|mov)$/i.test(previewUrl)
 
   return (
     <div className="relative group/run">
@@ -90,8 +96,9 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         handles={handles}
+        minHeight={Math.max(120, maxPorts * 32 + 60)}
       >
-        <div style={{ minHeight: maxPorts > 1 ? `${maxPorts * 22 + 8}px` : undefined }}>
+        <div style={{ minHeight: `${Math.max(60, maxPorts * 26 + 8)}px` }}>
           {!nodeData.referencedWorkflowId ? (
             <p className="text-sm text-muted-foreground">Select a workflow...</p>
           ) : (
@@ -125,11 +132,11 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {status === "completed" && previewUrl && (
-            <div className="mt-2">
-              {previewUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
-                <img src={previewUrl} alt="Output" className="w-full h-16 object-cover rounded" />
-              ) : previewUrl.match(/\.(mp4|webm|mov)$/i) ? (
-                <video src={previewUrl} className="w-full h-16 object-cover rounded" muted />
+            <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
+              {isImage ? (
+                <img src={previewUrl} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" />
+              ) : isVideo ? (
+                <video src={previewUrl} className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
               ) : (
                 <p className="text-[10px] text-muted-foreground truncate">{previewUrl}</p>
               )}
@@ -138,6 +145,12 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+      {lightboxOpen && isImage && (
+        <ImageLightbox src={previewUrl as string} onClose={() => setLightboxOpen(false)} />
+      )}
+      {lightboxOpen && isVideo && (
+        <MediaPreviewModal isOpen type="video" url={previewUrl as string} onClose={() => setLightboxOpen(false)} />
+      )}
     </div>
   )
 }
