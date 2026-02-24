@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SubWorkflowData, SubWorkflowPort, GeneratedResult } from "@/types/nodes"
 
@@ -129,9 +130,13 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
           {status === "completed" && previewUrl && (
             <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
               {isImage ? (
-                <img src={previewUrl} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" />
+                <CachedImage src={previewUrl} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail thumbnailWidth={320} />
               ) : isVideo ? (
-                <video src={previewUrl} className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
+                generatedResults[activeIdx]?.thumbnailUrl ? (
+                  <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail thumbnailWidth={320} />
+                ) : (
+                  <video src={previewUrl} className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
+                )
               ) : (
                 <p className="text-[10px] text-muted-foreground truncate">{previewUrl}</p>
               )}

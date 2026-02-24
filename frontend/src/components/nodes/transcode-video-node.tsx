@@ -7,6 +7,7 @@ import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { TranscodeVideoData } from "@/types/nodes"
@@ -23,6 +24,7 @@ function TranscodeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
@@ -49,17 +51,28 @@ function TranscodeVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
         {status !== "running" && activeUrl && !videoError && (
           <div className="relative group">
-            <video
-              src={activeUrl}
-              className="w-full h-28 object-cover rounded-md cursor-pointer bg-black"
-              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-              autoPlay={videoAutoplay}
-              muted
-              loop={videoAutoplay}
-              playsInline
-              onError={() => setVideoError(true)}
-              onLoadedData={() => setVideoError(false)}
-            />
+            {activeThumbnail ? (
+              <CachedImage
+                src={activeThumbnail}
+                alt="Video preview"
+                className="w-full h-28 object-cover rounded-md cursor-pointer"
+                thumbnail
+                thumbnailWidth={320}
+                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+              />
+            ) : (
+              <video
+                src={activeUrl}
+                className="w-full h-28 object-cover rounded-md cursor-pointer bg-black"
+                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+                autoPlay={videoAutoplay}
+                muted
+                loop={videoAutoplay}
+                playsInline
+                onError={() => setVideoError(true)}
+                onLoadedData={() => setVideoError(false)}
+              />
+            )}
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Transcoded</div>
             {results.length > 0 && (
               <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
@@ -99,7 +112,11 @@ function TranscodeVideoNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <video src={r.url} className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
+                {r.thumbnailUrl ? (
+                  <CachedImage src={r.thumbnailUrl} alt="" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} thumbnail thumbnailWidth={80} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} />
+                ) : (
+                  <video src={r.url} className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
+                )}
                 <button type="button" aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
               </div>
             ))}

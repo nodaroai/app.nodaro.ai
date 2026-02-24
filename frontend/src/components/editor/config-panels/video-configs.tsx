@@ -194,7 +194,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           value={data.provider || "minimax"}
           onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_I2V_MODELS.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
@@ -223,7 +223,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             value={String(allowedDurations.includes(data.duration) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Duration (seconds)"><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
                 <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
@@ -260,7 +260,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           value={data.motion}
           onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Motion"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="subtle">Subtle</SelectItem>
             <SelectItem value="moderate">Moderate</SelectItem>
@@ -273,7 +273,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           value={data.cameraMotion}
           onValueChange={(v) => onUpdate({ cameraMotion: v as ImageToVideoData["cameraMotion"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Camera Motion"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="static">Static</SelectItem>
             <SelectItem value="pan-left">Pan Left</SelectItem>
@@ -344,7 +344,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -357,7 +357,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               value={data.grokMode || "normal"}
               onValueChange={(v) => onUpdate({ grokMode: v as "fun" | "normal" | "spicy" })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Mode"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="fun">Fun</SelectItem>
@@ -375,7 +375,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             value={data.videoSize || "standard"}
             onValueChange={(v) => onUpdate({ videoSize: v as "standard" | "high" })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="standard">Standard (720p)</SelectItem>
               <SelectItem value="high">High (1080p)</SelectItem>
@@ -392,7 +392,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               value={data.resolution || "720p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -405,7 +405,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
                 <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
@@ -444,7 +444,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             value={data.resolution || (data.provider === "wan-turbo" ? "480p" : "720p")}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
             <SelectContent>
               {data.provider === "wan-turbo" ? (
                 <>
@@ -469,7 +469,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             value={data.resolution || "768P"}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
             <SelectContent>
               {data.provider === "hailuo-standard" ? (
                 <>
@@ -495,7 +495,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
@@ -533,7 +533,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             value={data.resolution || "720p"}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="720p">720p</SelectItem>
               <SelectItem value="1080p">1080p</SelectItem>
@@ -588,7 +588,7 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
           value={data.characterOrientation || "video"}
           onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Character Orientation"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="image">Image (same as picture, max 10s)</SelectItem>
             <SelectItem value="video">Video (consistent with video, max 30s)</SelectItem>
@@ -600,7 +600,7 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
           value={data.resolution || "720p"}
           onValueChange={(v) => onUpdate({ resolution: v as MotionTransferData["resolution"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="720p">720p</SelectItem>
             <SelectItem value="1080p">1080p</SelectItem>
@@ -622,7 +622,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
           value={data.upscaleFactor || "2"}
           onValueChange={(v) => onUpdate({ upscaleFactor: v as VideoUpscaleData["upscaleFactor"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Upscale Factor"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="1">1x (no upscale, AI enhance only)</SelectItem>
             <SelectItem value="2">2x (recommended)</SelectItem>
@@ -666,7 +666,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             onUpdate({ provider: v, model: firstModel })
           }}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_T2V_MODELS.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
@@ -685,7 +685,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             value={data.model}
             onValueChange={(v) => onUpdate({ model: v })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
             <SelectContent>
               {models.map((m) => (
                 <SelectItem key={m} value={m}>{m}</SelectItem>
@@ -700,7 +700,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             value={String(allowedDurations.includes(data.duration) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Duration (seconds)"><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
                 <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
@@ -757,7 +757,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           value={data.aspectRatio}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
             <SelectItem value="9:16">9:16 (Portrait)</SelectItem>

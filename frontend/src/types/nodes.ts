@@ -10,6 +10,7 @@ export type FieldMappings = Readonly<Record<string, FieldMapping>>
 
 export interface GeneratedResult {
   readonly url: string
+  readonly thumbnailUrl?: string
   readonly timestamp: string
   readonly jobId: string
 }

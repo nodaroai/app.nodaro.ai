@@ -180,6 +180,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
                   <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                     <button
                       type="button"
+                      aria-label={`Result ${i + 1}`}
                       className={`w-8 h-8 flex items-center justify-center rounded cursor-pointer transition-opacity ${
                         i === activeIndex
                           ? "opacity-100 ring-2 ring-primary bg-primary/20"

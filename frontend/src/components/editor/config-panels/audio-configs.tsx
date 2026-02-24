@@ -82,7 +82,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           value={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")}
           onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="elevenlabs-v3">ElevenLabs v3 (recommended)</SelectItem>
             <SelectItem value="elevenlabs-turbo">ElevenLabs Turbo v2.5 (fast)</SelectItem>
@@ -111,7 +111,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           value={data.languageCode || "auto"}
           onValueChange={(v) => onUpdate({ languageCode: v === "auto" ? "" : v })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Language"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto-detect</SelectItem>
             {getLanguagesForModel(data.provider).map((l) => (
@@ -175,7 +175,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
           value={data.provider || "tangoflux"}
           onValueChange={(v) => onUpdate({ provider: v as TextToAudioData["provider"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="tangoflux">TangoFlux (default)</SelectItem>
             <SelectItem value="elevenlabs-sfx">ElevenLabs SFX v2</SelectItem>
@@ -197,7 +197,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-muted-foreground">Loop</label>
             <Select value={data.loop ? "true" : "false"} onValueChange={(v) => onUpdate({ loop: v === "true" })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Loop"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="false">Off</SelectItem>
                 <SelectItem value="true">On (seamless loop)</SelectItem>
@@ -239,7 +239,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="V5">Suno V5 (latest)</SelectItem>
             <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
@@ -284,7 +284,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? undefined : v })}>
-          <SelectTrigger><SelectValue placeholder="Auto" /></SelectTrigger>
+          <SelectTrigger aria-label="Vocal Gender (optional)"><SelectValue placeholder="Auto" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto</SelectItem>
             <SelectItem value="male">Male</SelectItem>
@@ -331,7 +331,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="V5">Suno V5 (latest)</SelectItem>
             <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
@@ -376,7 +376,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? undefined : v })}>
-          <SelectTrigger><SelectValue placeholder="Auto" /></SelectTrigger>
+          <SelectTrigger aria-label="Vocal Gender (optional)"><SelectValue placeholder="Auto" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto</SelectItem>
             <SelectItem value="male">Male</SelectItem>
@@ -414,7 +414,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="V5">Suno V5 (latest)</SelectItem>
             <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
@@ -475,7 +475,7 @@ export function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSepa
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">Separation Type</label>
         <Select value={data.type} onValueChange={(v) => onUpdate({ type: v as SunoSeparateData["type"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Separation Type"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="separate_vocal">Vocal / Instrumental</SelectItem>
             <SelectItem value="split_stem">12 Stems</SelectItem>
@@ -544,7 +544,7 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.provider || "whisper"} onValueChange={(v) => onUpdate({ provider: v as TranscribeData["provider"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="whisper">Whisper (default)</SelectItem>
             <SelectItem value="incredibly-fast-whisper">Incredibly Fast Whisper</SelectItem>
@@ -554,7 +554,7 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
       </MappableField>
       <MappableField field="language" label="Language" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.language || "auto"} onValueChange={(v) => onUpdate({ language: v })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Language"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto Detect</SelectItem>
             <SelectItem value="en">English</SelectItem>
@@ -609,7 +609,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.provider || "kling-avatar"} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="kling-avatar">Kling Avatar (40 credits)</SelectItem>
             <SelectItem value="kling-avatar-pro">Kling Avatar Pro (60 credits)</SelectItem>
@@ -619,7 +619,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       </MappableField>
       <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.resolution || "720p"} onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="480p">480p</SelectItem>
             <SelectItem value="720p">720p (default)</SelectItem>
@@ -722,7 +722,7 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
           value={String(data.stability ?? 0.5)}
           onValueChange={(v) => onUpdate({ stability: parseFloat(v) })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Stability"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="0">Most Variable (0)</SelectItem>
             <SelectItem value="0.5">Balanced (0.5)</SelectItem>
@@ -737,7 +737,7 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
           value={data.languageCode || "auto"}
           onValueChange={(v) => onUpdate({ languageCode: v === "auto" ? "" : v })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Language"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto-detect</SelectItem>
             {ALL_LANGUAGES.map((l) => (
@@ -806,7 +806,7 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           value={data.targetLanguage || "es"}
           onValueChange={(v) => onUpdate({ targetLanguage: v })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Target Language"><SelectValue /></SelectTrigger>
           <SelectContent>
             {ALL_LANGUAGES.map((l) => (
               <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
@@ -820,7 +820,7 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           value={data.sourceLanguage || "auto"}
           onValueChange={(v) => onUpdate({ sourceLanguage: v === "auto" ? undefined : v })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Source Language (optional)"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="auto">Auto-detect</SelectItem>
             {ALL_LANGUAGES.map((l) => (
@@ -911,7 +911,7 @@ export function VoiceDesignConfig({ data, onUpdate }: ConfigProps<VoiceDesignDat
       <div>
         <Label>Model</Label>
         <Select value={data.model || "eleven_ttv_v3"} onValueChange={(v) => onUpdate({ model: v })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="eleven_ttv_v3">ElevenLabs v3 (recommended)</SelectItem>
             <SelectItem value="eleven_multilingual_ttv_v2">ElevenLabs Multilingual v2</SelectItem>

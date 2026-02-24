@@ -145,7 +145,7 @@ export function VideoSettingsAccordion({
           <div>
             <Label>Aspect Ratio</Label>
             <Select value={aspectRatio} onValueChange={(v) => onUpdate({ aspectRatio: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
                 <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
@@ -157,7 +157,7 @@ export function VideoSettingsAccordion({
           <div>
             <Label htmlFor={`${idPrefix}-fps`}>FPS</Label>
             <Select value={String(fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="FPS"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="24">24 fps (Film)</SelectItem>
                 <SelectItem value="30">30 fps (Standard)</SelectItem>

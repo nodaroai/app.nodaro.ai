@@ -126,7 +126,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           value={data.provider || "nano-banana"}
           onValueChange={(v) => onUpdate({ provider: v as GenerateImageData["provider"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {IMAGE_GEN_MODELS.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
@@ -159,7 +159,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
             }
           }}
         >
-          <SelectTrigger><SelectValue placeholder="No style" /></SelectTrigger>
+          <SelectTrigger aria-label="Style"><SelectValue placeholder="No style" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">No style</SelectItem>
             {IMAGE_STYLE_PRESETS.map((p) => (
@@ -295,7 +295,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
               value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
               onValueChange={(v) => onUpdate({ aspectRatio: v })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Aspect Ratio"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {aspectRatioOptions.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -309,7 +309,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
                 value={data.resolution || resolutionOptions[0]?.value || "1K"}
                 onValueChange={(v) => onUpdate({ resolution: v })}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {resolutionOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -324,7 +324,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
                 value={data.quality || qualityOptions[0]?.value}
                 onValueChange={(v) => onUpdate({ quality: v })}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {qualityOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -385,7 +385,7 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
           value={data.provider || "recraft-upscale"}
           onValueChange={(v) => onUpdate({ provider: v as EditImageData["provider"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Operation"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="recraft-upscale">Upscale / Enhance</SelectItem>
             <SelectItem value="recraft-remove-bg">Remove Background</SelectItem>
@@ -423,7 +423,7 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
           value={data.provider || "nano-banana"}
           onValueChange={(v) => onUpdate({ provider: v as ImageToImageData["provider"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {IMAGE_I2I_MODELS.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
