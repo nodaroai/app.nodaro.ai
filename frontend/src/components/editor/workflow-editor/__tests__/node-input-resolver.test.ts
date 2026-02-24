@@ -296,4 +296,77 @@ describe("resolveNodeInputs", () => {
     const inputs = resolveNodeInputs(target, [listNode, target], edges)
     expect(inputs.prompt).toBe("first item")
   })
+
+  // sub-workflow output routing tests
+  it("resolves sub-workflow image output as imageUrl", () => {
+    const swNode = makeNode("sw1", "sub-workflow", {
+      outputResults: { imgPort: "http://result.png" },
+      routeSnapshot: {
+        outputPorts: [{ id: "imgPort", mediaType: "image" }],
+        visibleOutputPortId: "imgPort",
+      },
+    })
+    const target = makeNode("t1", "image-to-video")
+    const edges = [{ id: "sw1->t1", source: "sw1", target: "t1", sourceHandle: "out_imgPort" }]
+
+    const inputs = resolveNodeInputs(target, [swNode, target], edges)
+    expect(inputs.imageUrl).toBe("http://result.png")
+  })
+
+  it("resolves sub-workflow video output as videoUrl", () => {
+    const swNode = makeNode("sw1", "sub-workflow", {
+      outputResults: { vidPort: "http://result.mp4" },
+      routeSnapshot: {
+        outputPorts: [{ id: "vidPort", mediaType: "video" }],
+        visibleOutputPortId: "vidPort",
+      },
+    })
+    const target = makeNode("t1", "merge-video-audio")
+    const edges = [{ id: "sw1->t1", source: "sw1", target: "t1", sourceHandle: "out_vidPort" }]
+
+    const inputs = resolveNodeInputs(target, [swNode, target], edges)
+    expect(inputs.videoUrl).toBe("http://result.mp4")
+  })
+
+  it("resolves sub-workflow audio output as audioUrl", () => {
+    const swNode = makeNode("sw1", "sub-workflow", {
+      outputResults: { audPort: "http://result.mp3" },
+      routeSnapshot: {
+        outputPorts: [{ id: "audPort", mediaType: "audio" }],
+        visibleOutputPortId: "audPort",
+      },
+    })
+    const target = makeNode("t1", "merge-video-audio")
+    const edges = [{ id: "sw1->t1", source: "sw1", target: "t1", sourceHandle: "out_audPort" }]
+
+    const inputs = resolveNodeInputs(target, [swNode, target], edges)
+    expect(inputs.audioUrl).toBe("http://result.mp3")
+  })
+
+  it("resolves sub-workflow text output as prompt", () => {
+    const swNode = makeNode("sw1", "sub-workflow", {
+      outputResults: { txtPort: "generated prompt text" },
+      routeSnapshot: {
+        outputPorts: [{ id: "txtPort", mediaType: "text" }],
+        visibleOutputPortId: "txtPort",
+      },
+    })
+    const target = makeNode("t1", "generate-image")
+    const edges = [{ id: "sw1->t1", source: "sw1", target: "t1", sourceHandle: "out_txtPort" }]
+
+    const inputs = resolveNodeInputs(target, [swNode, target], edges)
+    expect(inputs.prompt).toBe("generated prompt text")
+  })
+
+  it("resolves sub-workflow-input injected value routing by mediaType", () => {
+    const inputNode = makeNode("swi1", "sub-workflow-input", {
+      __injectedPortValues: { p1: "http://injected-image.png" },
+      ports: [{ id: "p1", name: "Image", mediaType: "image" }],
+    })
+    const target = makeNode("t1", "image-to-video")
+    const edges = [{ id: "swi1->t1", source: "swi1", target: "t1", sourceHandle: "p1" }]
+
+    const inputs = resolveNodeInputs(target, [inputNode, target], edges)
+    expect(inputs.imageUrl).toBe("http://injected-image.png")
+  })
 })
