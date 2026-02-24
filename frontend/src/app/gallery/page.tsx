@@ -514,6 +514,7 @@ export default function GalleryPage() {
                   <div
                     key={`${item.id}-${index}`}
                     role="button"
+                    aria-label={`View ${item.type} item`}
                     tabIndex={0}
                     className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
                     onClick={() => setSelectedIndex(index)}

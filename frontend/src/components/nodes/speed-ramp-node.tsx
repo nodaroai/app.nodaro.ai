@@ -83,7 +83,7 @@ function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
         )}
         {status !== "running" && activeUrl && videoError && (
           <div className="relative group">
-            <div role="button" tabIndex={0} className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setPreviewOpen(true) } }}>
+            <div role="button" aria-label="Open video preview" tabIndex={0} className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setPreviewOpen(true) } }}>
               <AlertCircle className="w-5 h-5 text-amber-500" />
               <span className="text-[10px] text-amber-500">Video load failed</span>
               <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>
@@ -119,7 +119,7 @@ function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
                 ) : (
                   <video src={r.url} className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
                 )}
-                <button type="button" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                <button type="button" aria-label="Remove result" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
               </div>
             ))}
           </div>

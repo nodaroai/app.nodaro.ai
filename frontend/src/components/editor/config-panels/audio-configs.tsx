@@ -696,7 +696,7 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
                 onSelect={(id, name) => updateLine(i, { voice: id, voiceLabel: name })}
               />
               {dialogue.length > 1 && (
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeLine(i)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Remove dialogue line" onClick={() => removeLine(i)}>
                   <Trash2 className="h-3 w-3" />
                 </Button>
               )}

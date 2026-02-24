@@ -87,7 +87,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <div role="button" tabIndex={0} className={`w-10 h-10 flex items-center justify-center rounded cursor-pointer transition-opacity bg-muted ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => {
+                <div role="button" aria-label="Play audio result" tabIndex={0} className={`w-10 h-10 flex items-center justify-center rounded cursor-pointer transition-opacity bg-muted ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => {
                   e.stopPropagation()
                   const urlUpdate = isVideoOutput
                     ? { generatedVideoUrl: r.url }

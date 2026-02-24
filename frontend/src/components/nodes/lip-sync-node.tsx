@@ -218,7 +218,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                     value={nodeData.selectedImageNodeId ?? ""}
                     onValueChange={(v) => updateNodeData(id, { selectedImageNodeId: v || undefined })}
                   >
-                    <SelectTrigger className="h-8 text-[11px]">
+                    <SelectTrigger className="h-8 text-[11px]" aria-label="Select portrait image">
                       <SelectValue placeholder="Select image...">
                         {selectedImage && (
                           <div className="flex items-center gap-2">
@@ -274,7 +274,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                     value={nodeData.selectedAudioNodeId ?? ""}
                     onValueChange={(v) => updateNodeData(id, { selectedAudioNodeId: v || undefined })}
                   >
-                    <SelectTrigger className="h-8 text-[11px]">
+                    <SelectTrigger className="h-8 text-[11px]" aria-label="Select audio track">
                       <SelectValue placeholder="Select audio...">
                         {selectedAudio && (
                           <div className="flex items-center gap-2">

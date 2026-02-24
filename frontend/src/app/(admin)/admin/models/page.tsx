@@ -271,7 +271,7 @@ function ModelRow({
           onValueChange={(val) => onFieldChange(model.model_identifier, "tierRestriction", val === "none" ? null : val)}
           disabled={saving}
         >
-          <SelectTrigger className="h-7 w-28 text-xs">
+          <SelectTrigger className="h-7 w-28 text-xs" aria-label="Tier restriction">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -44,19 +44,29 @@ function SelectTrigger({
 }) {
   // Auto-associate with enclosing MappableField label when available
   const mfCtx = React.useContext(MappableFieldCtx)
-  const id = explicitId ?? mfCtx?.triggerId
+  const resolvedId = explicitId ?? mfCtx?.triggerId
   const labelledBy = explicitLabelledBy ?? mfCtx?.labelId
   const title = explicitTitle ?? mfCtx?.title
   const ariaLabel = explicitAriaLabel ?? mfCtx?.title
 
+  // Imperatively set accessible attributes on the DOM node because Radix
+  // Select's internal Slot/Popper composition strips React-level aria props.
+  const setA11y = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (!node) return
+      if (ariaLabel) node.setAttribute("aria-label", ariaLabel)
+      if (title) node.setAttribute("title", title)
+      if (resolvedId) node.setAttribute("id", resolvedId)
+      if (labelledBy) node.setAttribute("aria-labelledby", labelledBy)
+    },
+    [ariaLabel, title, resolvedId, labelledBy],
+  )
+
   return (
     <SelectPrimitive.Trigger
+      ref={setA11y}
       data-slot="select-trigger"
       data-size={size}
-      id={id}
-      {...(labelledBy ? { "aria-labelledby": labelledBy } : {})}
-      aria-label={ariaLabel}
-      title={title}
       className={cn(
         "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className

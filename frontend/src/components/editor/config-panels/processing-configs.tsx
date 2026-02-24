@@ -94,7 +94,7 @@ export function CombineVideosConfig({ data, onUpdate, nodes }: ConfigProps<Combi
           value={data.transition}
           onValueChange={(v) => onUpdate({ transition: v as CombineVideosData["transition"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Transition"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="cut">Cut</SelectItem>
             <SelectItem value="fade">Fade</SelectItem>
@@ -128,7 +128,7 @@ export function CombineVideosConfig({ data, onUpdate, nodes }: ConfigProps<Combi
           value={data.audioMode ?? "crossfade"}
           onValueChange={(v) => onUpdate({ audioMode: v as CombineVideosData["audioMode"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Audio"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="keep">Keep original</SelectItem>
             <SelectItem value="crossfade">Crossfade</SelectItem>
@@ -149,7 +149,7 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
           value={data.style}
           onValueChange={(v) => onUpdate({ style: v as AddCaptionsData["style"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Style"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="subtitle">Subtitle</SelectItem>
             <SelectItem value="word-highlight">Word Highlight</SelectItem>
@@ -163,7 +163,7 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
           value={data.position}
           onValueChange={(v) => onUpdate({ position: v as AddCaptionsData["position"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Position"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="bottom">Bottom</SelectItem>
             <SelectItem value="top">Top</SelectItem>
@@ -204,7 +204,7 @@ export function ResizeVideoConfig({ data, onUpdate }: ConfigProps<ResizeVideoDat
           value={data.targetAspect}
           onValueChange={(v) => onUpdate({ targetAspect: v as ResizeVideoData["targetAspect"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Target aspect ratio"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="1:1">1:1 (Square)</SelectItem>
             <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
@@ -219,7 +219,7 @@ export function ResizeVideoConfig({ data, onUpdate }: ConfigProps<ResizeVideoDat
           value={data.method}
           onValueChange={(v) => onUpdate({ method: v as ResizeVideoData["method"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Method"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="crop">Crop</SelectItem>
             <SelectItem value="pad">Pad</SelectItem>
@@ -249,7 +249,7 @@ export function ExtractAudioConfig({ data, onUpdate }: ConfigProps<ExtractAudioD
           value={data.audioFormat}
           onValueChange={(v) => onUpdate({ audioFormat: v as ExtractAudioData["audioFormat"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Audio format"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mp3">MP3</SelectItem>
             <SelectItem value="wav">WAV</SelectItem>
@@ -441,7 +441,7 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
       <div>
         <Label>Mode</Label>
         <Select value={mode} onValueChange={(v) => onUpdate({ mode: v as LoopVideoData["mode"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Loop mode"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="repeat">Repeat N times</SelectItem>
             <SelectItem value="duration">Loop to duration</SelectItem>
@@ -506,7 +506,7 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
       <div>
         <Label>Fade Color</Label>
         <Select value={data.color ?? "black"} onValueChange={(v) => onUpdate({ color: v as "black" | "white" })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Fade color"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="black">Black</SelectItem>
             <SelectItem value="white">White</SelectItem>
@@ -610,7 +610,7 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
               value={data.codec ?? "h264"}
               onValueChange={(v) => onUpdate({ codec: v as TranscodeVideoData["codec"] })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Codec"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="h264">H.264 (recommended)</SelectItem>
                 <SelectItem value="h265">H.265 (HEVC)</SelectItem>
@@ -643,7 +643,7 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
               value={data.resolution ?? "original"}
               onValueChange={(v) => onUpdate({ resolution: v as TranscodeVideoData["resolution"] })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="original">Original</SelectItem>
                 <SelectItem value="1080p">1080p</SelectItem>
@@ -659,7 +659,7 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
               value={data.audioBitrate ?? "128k"}
               onValueChange={(v) => onUpdate({ audioBitrate: v as TranscodeVideoData["audioBitrate"] })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Audio bitrate"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="128k">128 kbps (default)</SelectItem>
                 <SelectItem value="192k">192 kbps</SelectItem>
