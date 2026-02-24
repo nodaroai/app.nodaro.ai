@@ -296,7 +296,7 @@ describe("SubWorkflowNode", () => {
         },
       },
     })
-    expect(screen.getByText("Process Image")).toBeInTheDocument()
+    expect(screen.getByTestId("base-node")).toHaveAttribute("data-label", "Process Image")
   })
 
   it("shows progress bar when running", () => {
