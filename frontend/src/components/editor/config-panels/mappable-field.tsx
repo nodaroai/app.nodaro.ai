@@ -1,7 +1,9 @@
 "use client"
 
+import { useId } from "react"
 import { Label } from "@/components/ui/label"
 import {
+  MappableFieldCtx,
   Select,
   SelectContent,
   SelectItem,
@@ -29,6 +31,9 @@ export function MappableField({
   readonly providerCategory?: string
   readonly children: React.ReactNode
 }) {
+  const baseId = useId()
+  const labelId = `${baseId}-label`
+  const triggerId = `${baseId}-trigger`
   const compatible = getCompatibleSources(field, sources, providerCategory)
   const mapping = fieldMappings[field]
   const mappedSource = mapping ? compatible.find((s) => s.id === mapping.sourceNodeId) : undefined
@@ -37,7 +42,7 @@ export function MappableField({
   return (
     <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</Label>
+        <Label id={labelId} htmlFor={triggerId} className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</Label>
         {compatible.length > 0 && (
           <Select
             value={mapping?.sourceNodeId ?? "__manual__"}
@@ -62,7 +67,9 @@ export function MappableField({
           {mappedSource.value || "(empty)"}
         </p>
       ) : (
-        children
+        <MappableFieldCtx.Provider value={{ labelId, triggerId }}>
+          {children}
+        </MappableFieldCtx.Provider>
       )}
     </div>
   )
