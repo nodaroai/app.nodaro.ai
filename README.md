@@ -1,4 +1,4 @@
-# SceneNode.ai
+# Nodaro.ai
 
 Visual workflow platform for AI video generation. Build video creation pipelines by connecting nodes, with each node representing an AI operation (image generation, video creation, voiceover, etc.).
 
@@ -89,8 +89,8 @@ Video and audio post-processing via FFmpeg -- all run locally, 0 credits:
 ### Installation
 
 ```bash
-git clone https://github.com/scenenode/scenenode.git
-cd scenenode
+git clone https://github.com/nodaro/nodaro.git
+cd nodaro
 cp .env.example .env
 
 # Frontend
@@ -121,7 +121,7 @@ EDITION=community
 KIE_API_KEY=kie_xxxxx
 
 # CORS (optional, comma-separated extra origins)
-CORS_ORIGIN=https://app.scenenode.ai
+CORS_ORIGIN=https://app.nodaro.ai
 ```
 
 ### Getting API Keys
@@ -132,7 +132,7 @@ CORS_ORIGIN=https://app.scenenode.ai
 ## Project Structure
 
 ```
-scenenode/
+nodaro/
 ├── frontend/                     # Next.js 14
 │   └── src/
 │       ├── app/                  # Pages (auth, dashboard, editor, admin)
@@ -206,4 +206,4 @@ Sustainable Use License - See [LICENSE](./LICENSE)
 
 ## Issues
 
-Report bugs and request features at https://github.com/scenenode/scenenode/issues
+Report bugs and request features at https://github.com/nodaro/nodaro/issues

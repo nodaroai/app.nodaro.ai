@@ -162,7 +162,7 @@ export async function refundJobCredits(usageLogId: string | null | undefined, jo
 /**
  * Upload image to R2, optionally applying a watermark first.
  * When watermark is true, downloads the source image, composites the
- * "SceneNode.ai" text overlay, then uploads the watermarked buffer.
+ * "Nodaro.ai" text overlay, then uploads the watermarked buffer.
  */
 export async function uploadImageMaybeWatermark(
   sourceUrl: string,

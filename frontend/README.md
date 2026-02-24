@@ -1,4 +1,4 @@
-# SceneNode.ai
+# Nodaro.ai
 
 Visual workflow platform for AI video generation. Build video creation pipelines by connecting nodes, with each node representing an AI operation (image generation, video creation, voiceover, etc.).
 
@@ -25,8 +25,8 @@ Visual workflow platform for AI video generation. Build video creation pipelines
 
 ```bash
 # Clone
-git clone https://github.com/asafna2/SceneNode-ai.git
-cd SceneNode-ai/frontend
+git clone https://github.com/nodaro/nodaro.git
+cd nodaro/frontend
 
 # Install dependencies
 npm install

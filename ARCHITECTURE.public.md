@@ -1,4 +1,4 @@
-# SceneNode.ai -- Architecture Reference
+# Nodaro.ai -- Architecture Reference
 
 > Auto-generated on 2026-02-15 10:05:06 UTC at commit `c032ca7`
 > Run `npx tsx scripts/generate-architecture.ts` to regenerate.

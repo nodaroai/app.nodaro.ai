@@ -1,6 +1,6 @@
 # Billing System (Paddle) -- Cloud Edition Only
 
-SceneNode.ai uses [Paddle](https://www.paddle.com/) as its Merchant of Record for the Cloud edition.
+Nodaro.ai uses [Paddle](https://www.paddle.com/) as its Merchant of Record for the Cloud edition.
 Billing is gated behind `BILLING_PROVIDER=paddle` and `EDITION=cloud` environment variables.
 
 ---

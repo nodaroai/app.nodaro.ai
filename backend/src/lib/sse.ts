@@ -4,7 +4,7 @@ import { config } from "./config.js"
 // Build allowed origins set (mirrors CORS config in app.ts)
 const allowedOrigins = new Set([
   "http://localhost:3000",
-  "https://app.scenenode.ai",
+  "https://app.nodaro.ai",
 ])
 if (config.CORS_ORIGIN) {
   for (const o of config.CORS_ORIGIN.split(",")) {
