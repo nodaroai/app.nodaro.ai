@@ -159,13 +159,16 @@ export function SubWorkflowInputConfig({ data, onUpdate }: ConfigProps<SubWorkfl
 export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<SubWorkflowOutputData>) {
   const nodeData = data as SubWorkflowOutputData
 
-  // Find all sub-workflow-input nodes in the current workflow
+  // Find all sub-workflow-input nodes in the current workflow that have a routeId
   const inputNodes = useMemo(() => {
-    return nodes.filter((n) => n.type === "sub-workflow-input").map((n) => ({
-      id: n.id,
-      routeId: (n.data as SubWorkflowInputData).routeId,
-      label: (n.data as SubWorkflowInputData).label,
-    }))
+    return nodes
+      .filter((n) => n.type === "sub-workflow-input")
+      .map((n) => ({
+        id: n.id,
+        routeId: (n.data as SubWorkflowInputData).routeId,
+        label: (n.data as SubWorkflowInputData).label,
+      }))
+      .filter((n) => !!n.routeId)
   }, [nodes])
 
   const handleRouteChange = useCallback((routeId: string) => {
@@ -256,7 +259,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
     showAllProjects ? undefined : (projectId ?? undefined),
   )
 
-  const { data: workflowInterface, isLoading: isLoadingInterface } = useWorkflowInterface(
+  const { data: workflowInterface, isLoading: isLoadingInterface, refetch: refetchInterface } = useWorkflowInterface(
     nodeData.referencedWorkflowId || undefined,
   )
 
@@ -282,13 +285,14 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
     })
   }, [workflowInterface, onUpdate])
 
-  const handleRefreshInterface = useCallback(() => {
-    if (!workflowInterface) return
-    const route = workflowInterface.routes.find((r) => r.routeId === nodeData.selectedRouteId)
+  const handleRefreshInterface = useCallback(async () => {
+    const { data: fresh } = await refetchInterface()
+    const routes = fresh?.routes ?? workflowInterface?.routes ?? []
+    const route = routes.find((r) => r.routeId === nodeData.selectedRouteId)
     if (route) {
       onUpdate({ routeSnapshot: route })
     }
-  }, [workflowInterface, nodeData.selectedRouteId, onUpdate])
+  }, [refetchInterface, workflowInterface, nodeData.selectedRouteId, onUpdate])
 
   const snapshot = nodeData.routeSnapshot
 

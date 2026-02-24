@@ -166,6 +166,8 @@ describe("executeSubWorkflow", () => {
     })
 
     it("allows self-referencing with a different route", async () => {
+      setupDefaultStore([makeNode("sw-1", "sub-workflow", {})], [])
+
       const node = makeNode("sw-1", "sub-workflow", {
         referencedWorkflowId: "wf-123",
         selectedRouteId: "route-B",
@@ -192,6 +194,9 @@ describe("executeSubWorkflow", () => {
         },
         error: null,
       })
+
+      mockBuildExecutionLevels.mockReturnValue([])
+      mockIsExecutableNode.mockReturnValue(false)
 
       await executeSubWorkflow(node, mockCtx, executingKeys)
       expect(mockUpdateNodeData).toHaveBeenCalledWith("sw-1", expect.objectContaining({ executionStatus: "completed" }))

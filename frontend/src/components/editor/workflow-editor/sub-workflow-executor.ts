@@ -11,21 +11,47 @@ import { executeNodeForList } from "./list-execution"
 const MAX_DEPTH = 5
 
 /**
+ * BFS to collect all node IDs reachable from a source in a directed graph.
+ * Used to prune the subgraph to only the route's reachable nodes.
+ */
+function getReachableNodeIds(sourceId: string, edges: WorkflowEdge[]): Set<string> {
+  const adjacency = new Map<string, string[]>()
+  for (const edge of edges) {
+    const list = adjacency.get(edge.source) ?? []
+    list.push(edge.target)
+    adjacency.set(edge.source, list)
+  }
+  const visited = new Set<string>([sourceId])
+  const queue = [sourceId]
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    for (const neighbor of adjacency.get(current) ?? []) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor)
+        queue.push(neighbor)
+      }
+    }
+  }
+  return visited
+}
+
+/**
  * Execute a sub-workflow node.
  *
  * 1. Load the referenced workflow from Supabase
- * 2. Namespace all node IDs to avoid conflicts
- * 3. Inject inputs from parent edges
- * 4. Add namespaced nodes to the store as hidden
- * 5. Execute using the standard engine
- * 6. Extract outputs from the output node
- * 7. Clean up namespaced nodes
+ * 2. Filter to only nodes reachable from the route's input node
+ * 3. Namespace all node IDs to avoid conflicts
+ * 4. Inject inputs from parent edges
+ * 5. Add namespaced nodes to the store as hidden
+ * 6. Execute using the standard engine
+ * 7. Extract outputs from the output node
  * 8. Update the parent node with results
+ * 9. Clean up namespaced nodes
  */
 export async function executeSubWorkflow(
   node: WorkflowNode,
   ctx: ExecutionContext,
-  executingWorkflowIds: Set<string> = new Set(),
+  executingRouteKeys: Set<string> = new Set(),
   depth: number = 0,
 ): Promise<void> {
   const { updateNodeData, nodes: parentNodes, edges: parentEdges } = useWorkflowStore.getState()
@@ -51,8 +77,10 @@ export async function executeSubWorkflow(
     return Promise.reject(new Error("Max nesting depth exceeded"))
   }
 
-  // Cycle detection
-  if (executingWorkflowIds.has(data.referencedWorkflowId)) {
+  // Cycle detection — track workflow+route pairs so the same workflow can be
+  // called with a *different* route (self-referencing is allowed).
+  const routeKey = `${data.referencedWorkflowId}:${data.selectedRouteId}`
+  if (executingRouteKeys.has(routeKey)) {
     toast.error(`Node "${data.label}": Circular reference detected`)
     updateNodeData(node.id, { executionStatus: "failed", errorMessage: "Circular reference detected" })
     return Promise.reject(new Error("Circular reference detected"))
@@ -82,14 +110,14 @@ export async function executeSubWorkflow(
       throw new Error("Referenced workflow not found")
     }
 
-    const subNodes = (wfData.nodes as unknown as WorkflowNode[]) ?? []
-    const subEdges = (wfData.edges as unknown as WorkflowEdge[]) ?? []
+    const allSubNodes = (wfData.nodes as unknown as WorkflowNode[]) ?? []
+    const allSubEdges = (wfData.edges as unknown as WorkflowEdge[]) ?? []
 
     // Find the route's input and output nodes
-    const inputNode = subNodes.find(
+    const inputNode = allSubNodes.find(
       (n) => n.type === "sub-workflow-input" && (n.data as SubWorkflowInputData).routeId === data.selectedRouteId,
     )
-    const outputNode = subNodes.find(
+    const outputNode = allSubNodes.find(
       (n) => n.type === "sub-workflow-output" && (n.data as SubWorkflowOutputData).routeId === data.selectedRouteId,
     )
 
@@ -97,7 +125,14 @@ export async function executeSubWorkflow(
       throw new Error("Route input/output nodes not found in referenced workflow")
     }
 
-    // 2. Namespace all node IDs and edges
+    // 2. Filter to only nodes reachable from the route's input node.
+    //    This prevents unrelated sub-workflow nodes (e.g. in self-referencing
+    //    workflows) from being included in the execution graph.
+    const reachableIds = getReachableNodeIds(inputNode.id, allSubEdges)
+    const subNodes = allSubNodes.filter((n) => reachableIds.has(n.id))
+    const subEdges = allSubEdges.filter((e) => reachableIds.has(e.source) && reachableIds.has(e.target))
+
+    // 3. Namespace all node IDs and edges
     const namespacedNodes: WorkflowNode[] = subNodes.map((n) => {
       let nodeData: Record<string, unknown> = { ...n.data, hidden: true }
 
@@ -133,7 +168,7 @@ export async function executeSubWorkflow(
 
     const namespacedInputId = `${prefix}${inputNode.id}`
 
-    // 3. Add namespaced nodes/edges to the store (using setState like collapseExpandedClones)
+    // 4. Add namespaced nodes/edges to the store (using setState like collapseExpandedClones)
     const storeState = useWorkflowStore.getState()
     useWorkflowStore.setState({
       nodes: [...storeState.nodes, ...namespacedNodes],
@@ -151,9 +186,9 @@ export async function executeSubWorkflow(
       subWorkflowProgress: { currentNode: "", completed: 0, total: totalNodes },
     })
 
-    // Track the current workflow ID in the executing set
-    const childExecutingIds = new Set(executingWorkflowIds)
-    childExecutingIds.add(data.referencedWorkflowId)
+    // Track the current workflow+route in the executing set
+    const childExecutingKeys = new Set(executingRouteKeys)
+    childExecutingKeys.add(routeKey)
 
     let completedCount = 0
 
@@ -170,7 +205,7 @@ export async function executeSubWorkflow(
         toRun.map(async (subNode) => {
           // If this is a nested sub-workflow, pass through the cycle detection
           if (subNode.type === "sub-workflow") {
-            return executeSubWorkflow(subNode, ctx, childExecutingIds, depth + 1)
+            return executeSubWorkflow(subNode, ctx, childExecutingKeys, depth + 1)
           }
 
           const { nodes: latestNodes, edges: latestEdges } = useWorkflowStore.getState()
@@ -216,7 +251,7 @@ export async function executeSubWorkflow(
       const sourceNode = finalState.nodes.find((n) => n.id === incomingEdge.source)
       if (!sourceNode) continue
 
-      const output = extractNodeOutput(sourceNode)
+      const output = extractNodeOutput(sourceNode, incomingEdge.sourceHandle ?? undefined)
       if (output) {
         outputResults[port.id] = output
       }

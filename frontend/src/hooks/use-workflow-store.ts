@@ -36,6 +36,8 @@ const EXECUTION_DATA_KEYS = new Set([
   "__listTotal",
   "__listCompleted",
   "__listResults",
+  "subWorkflowProgress",
+  "outputResults",
 ])
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
