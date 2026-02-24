@@ -29,6 +29,15 @@ interface WorkflowEdge {
   target: string
 }
 
+// Zod schemas
+const callableQuerySchema = z.object({
+  projectId: z.string().uuid().optional(),
+})
+
+const interfaceParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+
 /**
  * Discover valid routes from parsed workflow nodes/edges.
  * A valid route = input + output with same routeId, and a directed path between them.
@@ -97,20 +106,26 @@ function hasPath(sourceId: string, targetId: string, edges: WorkflowEdge[]): boo
 export async function subWorkflowRoutes(app: FastifyInstance) {
   // GET /v1/workflows/callable?projectId= — returns workflows with valid routes
   app.get("/v1/workflows/callable", async (req, reply) => {
-    const userId = (req as unknown as Record<string, unknown>).userId as string | undefined
-    if (!userId) {
+    if (!req.userId) {
       return reply
         .status(401)
         .send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
 
-    const query = req.query as Record<string, string | undefined>
-    const projectId = query.projectId
+    const parsed = callableQuerySchema.safeParse(req.query)
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: { code: "bad_request", message: parsed.error.message } })
+    }
+
+    const { projectId } = parsed.data
 
     let dbQuery = supabase
       .from("workflows")
       .select("id, name, project_id, nodes, edges, projects(name)")
-      .eq("user_id", userId)
+      .eq("user_id", req.userId)
+      .limit(200)
 
     if (projectId) {
       dbQuery = dbQuery.eq("project_id", projectId)
@@ -153,20 +168,24 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
 
   // GET /v1/workflows/:id/interface — returns route interface of a specific workflow
   app.get("/v1/workflows/:id/interface", async (req, reply) => {
-    const userId = (req as unknown as Record<string, unknown>).userId as string | undefined
-    if (!userId) {
+    if (!req.userId) {
       return reply
         .status(401)
         .send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
 
-    const params = req.params as { id: string }
+    const parsed = interfaceParamsSchema.safeParse(req.params)
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: { code: "bad_request", message: parsed.error.message } })
+    }
 
     const { data: wf, error } = await supabase
       .from("workflows")
       .select("id, nodes, edges")
-      .eq("id", params.id)
-      .eq("user_id", userId)
+      .eq("id", parsed.data.id)
+      .eq("user_id", req.userId)
       .single()
 
     if (error || !wf) {

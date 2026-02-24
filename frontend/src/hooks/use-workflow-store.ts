@@ -236,11 +236,26 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     if (!definition) return undefined
 
     const id = generateNodeId()
+    const nodeData = { ...definition.defaultData, ...initialData }
+
+    // Generate fresh UUIDs for sub-workflow port IDs and routeIds
+    if (type === "sub-workflow-input" || type === "sub-workflow-output") {
+      const d = nodeData as Record<string, unknown>
+      if (!d.routeId && type === "sub-workflow-input") d.routeId = crypto.randomUUID()
+      const ports = d.ports as Array<{ id: string; name: string; mediaType: string }> | undefined
+      if (ports) {
+        d.ports = ports.map((p) => ({ ...p, id: p.id || crypto.randomUUID() }))
+        if (type === "sub-workflow-output" && !d.visibleOutputPortId && (d.ports as unknown[]).length > 0) {
+          d.visibleOutputPortId = (d.ports as Array<{ id: string }>)[0].id
+        }
+      }
+    }
+
     const newNode: WorkflowNode = {
       id,
       type,
       position,
-      data: { ...definition.defaultData, ...initialData },
+      data: nodeData,
       // Sticky notes should appear behind other nodes
       ...(type === "sticky-note" ? { zIndex: -1 } : {}),
     }

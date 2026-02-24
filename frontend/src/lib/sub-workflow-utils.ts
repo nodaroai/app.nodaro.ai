@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, SubWorkflowInputData, SubWorkflowOutputData, SubWorkflowRouteSnapshot } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, SubWorkflowInputData, SubWorkflowOutputData } from "@/types/nodes"
 
 export interface DiscoveredRoute {
   readonly routeId: string
@@ -30,7 +30,7 @@ export function discoverRoutes(nodes: ReadonlyArray<WorkflowNode>, edges: Readon
     if (!matchingOutput) continue
 
     // Verify directed path exists via BFS
-    if (hasPath(inputNode.id, matchingOutput.id, nodes, edges)) {
+    if (hasPath(inputNode.id, matchingOutput.id, edges)) {
       routes.push({
         routeId: inputData.routeId,
         inputNode,
@@ -45,32 +45,11 @@ export function discoverRoutes(nodes: ReadonlyArray<WorkflowNode>, edges: Readon
 }
 
 /**
- * Returns true if a workflow has at least one valid route (callable).
- */
-export function isCallableWorkflow(nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): boolean {
-  return discoverRoutes(nodes, edges).length > 0
-}
-
-/**
- * Build a route snapshot from a discovered route.
- */
-export function buildRouteSnapshot(route: DiscoveredRoute): SubWorkflowRouteSnapshot {
-  return {
-    routeId: route.routeId,
-    inputLabel: route.inputData.label,
-    inputPorts: [...route.inputData.ports],
-    outputPorts: [...route.outputData.ports],
-    visibleOutputPortId: route.outputData.visibleOutputPortId,
-  }
-}
-
-/**
  * BFS to check if a directed path exists from sourceId to targetId.
  */
 function hasPath(
   sourceId: string,
   targetId: string,
-  nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
 ): boolean {
   const adjacency = new Map<string, string[]>()

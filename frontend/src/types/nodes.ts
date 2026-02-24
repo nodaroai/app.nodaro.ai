@@ -1610,6 +1610,8 @@ export type SubWorkflowInputData = {
   label: string
   routeId: string
   ports: SubWorkflowPort[]
+  /** Injected at runtime during sub-workflow execution — maps port ID to upstream output value */
+  __injectedPortValues?: Record<string, string>
 }
 
 export type SubWorkflowOutputData = {

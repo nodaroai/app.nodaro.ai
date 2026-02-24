@@ -40,7 +40,9 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals()
 
   const ports = nodeData.ports ?? []
-  const handles = useMemo(() => buildHandles(ports), [ports])
+  const portKey = ports.map(p => `${p.id}:${p.name}`).join(",")
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handles = useMemo(() => buildHandles(ports), [portKey])
 
   useEffect(() => {
     updateNodeInternals(id)

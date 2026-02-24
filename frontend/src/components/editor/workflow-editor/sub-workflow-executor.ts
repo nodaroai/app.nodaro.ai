@@ -98,11 +98,31 @@ export async function executeSubWorkflow(
     }
 
     // 2. Namespace all node IDs and edges
-    const namespacedNodes: WorkflowNode[] = subNodes.map((n) => ({
-      ...n,
-      id: `${prefix}${n.id}`,
-      data: { ...n.data, hidden: true },
-    }))
+    const namespacedNodes: WorkflowNode[] = subNodes.map((n) => {
+      let nodeData: Record<string, unknown> = { ...n.data, hidden: true }
+
+      // Inject port values into the input node at creation time (no mutation)
+      if (n.id === inputNode.id) {
+        const injected: Record<string, string> = {}
+        for (const port of data.routeSnapshot!.inputPorts) {
+          const parentEdge = parentEdges.find(
+            (e) => e.target === node.id && e.targetHandle === `in_${port.id}`,
+          )
+          if (!parentEdge) continue
+          const sourceNode = parentNodes.find((nd) => nd.id === parentEdge.source)
+          if (!sourceNode) continue
+          const output = extractNodeOutput(sourceNode, parentEdge.sourceHandle ?? undefined)
+          if (output) injected[port.id] = output
+        }
+        nodeData = {
+          ...nodeData,
+          __injectedPortValues: injected,
+          executionStatus: "completed",
+        }
+      }
+
+      return { ...n, id: `${prefix}${n.id}`, data: nodeData } as WorkflowNode
+    })
 
     const namespacedEdges: WorkflowEdge[] = subEdges.map((e) => ({
       ...e,
@@ -111,38 +131,9 @@ export async function executeSubWorkflow(
       target: `${prefix}${e.target}`,
     }))
 
-    // 3. Inject inputs — resolve upstream values from parent graph and set them on the input node
     const namespacedInputId = `${prefix}${inputNode.id}`
-    const injectedPortValues: Record<string, string> = {}
 
-    for (const port of data.routeSnapshot.inputPorts) {
-      // Find the parent edge that connects to this sub-workflow node's input port
-      const parentEdge = parentEdges.find(
-        (e) => e.target === node.id && e.targetHandle === `in_${port.id}`,
-      )
-      if (!parentEdge) continue
-
-      // Get the source node and extract its output
-      const sourceNode = parentNodes.find((n) => n.id === parentEdge.source)
-      if (!sourceNode) continue
-
-      const output = extractNodeOutput(sourceNode, parentEdge.sourceHandle ?? undefined)
-      if (output) {
-        injectedPortValues[port.id] = output
-      }
-    }
-
-    // Update the namespaced input node with injected values
-    const injectedInputNode = namespacedNodes.find((n) => n.id === namespacedInputId)
-    if (injectedInputNode) {
-      injectedInputNode.data = {
-        ...injectedInputNode.data,
-        __injectedPortValues: injectedPortValues,
-        executionStatus: "completed",
-      }
-    }
-
-    // 4. Add namespaced nodes/edges to the store (using setState like collapseExpandedClones)
+    // 3. Add namespaced nodes/edges to the store (using setState like collapseExpandedClones)
     const storeState = useWorkflowStore.getState()
     useWorkflowStore.setState({
       nodes: [...storeState.nodes, ...namespacedNodes],
@@ -191,13 +182,11 @@ export async function executeSubWorkflow(
         }),
       )
 
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          completedCount++
-        } else {
-          // On first failure, throw and let the catch block handle cleanup
-          throw result.reason
-        }
+      // Count all fulfilled results before checking for failures
+      completedCount += results.filter((r) => r.status === "fulfilled").length
+      const firstRejection = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined
+      if (firstRejection) {
+        throw firstRejection.reason
       }
 
       updateNodeData(node.id, {
@@ -209,15 +198,15 @@ export async function executeSubWorkflow(
       })
     }
 
-    // 6. Extract outputs from the namespaced output node
+    // 6. Extract outputs from the namespaced output node (read from final store state, not stale original)
     const namespacedOutputId = `${prefix}${outputNode.id}`
-    const outputData = outputNode.data as SubWorkflowOutputData
     const outputResults: Record<string, string> = {}
 
-    // Read the current state of namespaced nodes
     const finalState = useWorkflowStore.getState()
+    const finalOutputNode = finalState.nodes.find((n) => n.id === namespacedOutputId)
+    const finalOutputData = (finalOutputNode?.data ?? outputNode.data) as SubWorkflowOutputData
 
-    for (const port of outputData.ports) {
+    for (const port of finalOutputData.ports) {
       // Find the edge that connects to this output port in the namespaced graph
       const incomingEdge = finalState.edges.find(
         (e) => e.target === namespacedOutputId && e.targetHandle === port.id,
@@ -240,7 +229,7 @@ export async function executeSubWorkflow(
       ? [{ url: visibleOutput, timestamp: new Date().toISOString(), jobId: "" }]
       : []
 
-    // 8. Update the parent node with results
+    // 7. Update the parent node with results
     updateNodeData(node.id, {
       executionStatus: "completed",
       errorMessage: undefined,
@@ -258,7 +247,7 @@ export async function executeSubWorkflow(
     })
     throw err
   } finally {
-    // 7. Clean up — remove all namespaced nodes and edges
+    // 8. Clean up — remove all namespaced nodes and edges
     const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState()
     useWorkflowStore.setState({
       nodes: allNodes.filter((n) => !n.id.startsWith(prefix)),

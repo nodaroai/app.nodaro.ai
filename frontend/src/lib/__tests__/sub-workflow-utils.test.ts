@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import {
   discoverRoutes,
-  isCallableWorkflow,
-  buildRouteSnapshot,
   detectCyclicReference,
 } from "../sub-workflow-utils"
 import type { SubWorkflowInputData, SubWorkflowOutputData } from "@/types/nodes"
@@ -118,69 +116,6 @@ describe("discoverRoutes", () => {
 
     const routes = discoverRoutes([regular, input, output], edges)
     expect(routes).toHaveLength(1)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// isCallableWorkflow
-// ---------------------------------------------------------------------------
-
-describe("isCallableWorkflow", () => {
-  it("returns false for empty workflow", () => {
-    expect(isCallableWorkflow([], [])).toBe(false)
-  })
-
-  it("returns false when no valid routes exist", () => {
-    const input = makeInputNode("in1", "route-1")
-    const output = makeOutputNode("out1", "route-2") // mismatched routeId
-    expect(isCallableWorkflow([input, output], [])).toBe(false)
-  })
-
-  it("returns true when a valid route exists", () => {
-    const input = makeInputNode("in1", "route-1")
-    const output = makeOutputNode("out1", "route-1")
-    const edges = [makeEdge("in1", "out1")]
-    expect(isCallableWorkflow([input, output], edges)).toBe(true)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// buildRouteSnapshot
-// ---------------------------------------------------------------------------
-
-describe("buildRouteSnapshot", () => {
-  it("builds correct shape from a discovered route", () => {
-    const inputPorts = [{ id: "p1", name: "Image In", mediaType: "image" as const }]
-    const outputPorts = [{ id: "p2", name: "Video Out", mediaType: "video" as const }]
-    const input = makeInputNode("in1", "route-1", inputPorts)
-    const output = makeOutputNode("out1", "route-1", outputPorts, "p2")
-    const edges = [makeEdge("in1", "out1")]
-
-    const routes = discoverRoutes([input, output], edges)
-    const snapshot = buildRouteSnapshot(routes[0])
-
-    expect(snapshot.routeId).toBe("route-1")
-    expect(snapshot.inputLabel).toBe("sub-workflow-input")
-    expect(snapshot.inputPorts).toEqual(inputPorts)
-    expect(snapshot.outputPorts).toEqual(outputPorts)
-    expect(snapshot.visibleOutputPortId).toBe("p2")
-  })
-
-  it("creates defensive copies of port arrays (immutability)", () => {
-    const inputPorts = [{ id: "p1", name: "A", mediaType: "text" as const }]
-    const outputPorts = [{ id: "p2", name: "B", mediaType: "image" as const }]
-    const input = makeInputNode("in1", "route-1", inputPorts)
-    const output = makeOutputNode("out1", "route-1", outputPorts, "p2")
-    const edges = [makeEdge("in1", "out1")]
-
-    const routes = discoverRoutes([input, output], edges)
-    const snapshot = buildRouteSnapshot(routes[0])
-
-    // Mutating the snapshot's ports should not affect the original
-    expect(snapshot.inputPorts).not.toBe(inputPorts)
-    expect(snapshot.outputPorts).not.toBe(outputPorts)
-    expect(snapshot.inputPorts).toEqual(inputPorts)
-    expect(snapshot.outputPorts).toEqual(outputPorts)
   })
 })
 

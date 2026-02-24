@@ -130,14 +130,10 @@ describe("GET /v1/workflows/callable", () => {
   })
 
   it("returns empty array when no workflows", async () => {
-    const mockResult = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockEq = vi.fn().mockReturnValue(mockResult())
-    // Promise-like: .from().select().eq() resolves
+    const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
+    const mockEq = vi.fn().mockReturnValue({ limit: mockLimit })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
-
-    // The route chains .eq("user_id", userId) which needs to resolve
-    mockEq.mockResolvedValue({ data: [], error: null })
 
     const res = await app.inject({
       method: "GET",
@@ -159,7 +155,8 @@ describe("GET /v1/workflows/callable", () => {
       projects: { name: "Project 1" },
     }
 
-    const mockEq = vi.fn().mockResolvedValue({ data: [workflow], error: null })
+    const mockLimit = vi.fn().mockResolvedValue({ data: [workflow], error: null })
+    const mockEq = vi.fn().mockReturnValue({ limit: mockLimit })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -183,7 +180,8 @@ describe("GET /v1/workflows/callable", () => {
       projects: { name: "My Project" },
     }
 
-    const mockEq = vi.fn().mockResolvedValue({ data: [workflow], error: null })
+    const mockLimit = vi.fn().mockResolvedValue({ data: [workflow], error: null })
+    const mockEq = vi.fn().mockReturnValue({ limit: mockLimit })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -216,7 +214,8 @@ describe("GET /v1/workflows/callable", () => {
     }
 
     const mockEq2 = vi.fn().mockResolvedValue({ data: [workflow], error: null })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockLimit = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockEq1 = vi.fn().mockReturnValue({ limit: mockLimit })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -249,7 +248,8 @@ describe("GET /v1/workflows/callable", () => {
       projects: { name: "P" },
     }
 
-    const mockEq = vi.fn().mockResolvedValue({ data: [wf1, wf2], error: null })
+    const mockLimit = vi.fn().mockResolvedValue({ data: [wf1, wf2], error: null })
+    const mockEq = vi.fn().mockReturnValue({ limit: mockLimit })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -273,7 +273,8 @@ describe("GET /v1/workflows/callable", () => {
       projects: null,
     }
 
-    const mockEq = vi.fn().mockResolvedValue({ data: [workflow], error: null })
+    const mockLimit = vi.fn().mockResolvedValue({ data: [workflow], error: null })
+    const mockEq = vi.fn().mockReturnValue({ limit: mockLimit })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -290,7 +291,8 @@ describe("GET /v1/workflows/callable", () => {
   })
 
   it("returns 500 on DB error", async () => {
-    const mockEq = vi.fn().mockResolvedValue({ data: null, error: { message: "DB down" } })
+    const mockLimit = vi.fn().mockResolvedValue({ data: null, error: { message: "DB down" } })
+    const mockEq = vi.fn().mockReturnValue({ limit: mockLimit })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 

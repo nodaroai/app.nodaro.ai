@@ -153,15 +153,48 @@ describe("executeSubWorkflow", () => {
       }))
     })
 
-    it("rejects on circular reference (executingWorkflowIds)", async () => {
+    it("rejects on circular reference (executingRouteKeys)", async () => {
       const node = makeNode("sw-1", "sub-workflow", {
         referencedWorkflowId: "wf-123",
-        routeSnapshot: { routeId: "r1", inputLabel: "Test", inputPorts: [], outputPorts: [], visibleOutputPortId: "" },
+        selectedRouteId: "route-1",
+        routeSnapshot: { routeId: "route-1", inputLabel: "Test", inputPorts: [], outputPorts: [], visibleOutputPortId: "" },
       })
 
-      const executingIds = new Set(["wf-123"])
-      await expect(executeSubWorkflow(node, mockCtx, executingIds)).rejects.toThrow("Circular reference detected")
+      const executingKeys = new Set(["wf-123:route-1"])
+      await expect(executeSubWorkflow(node, mockCtx, executingKeys)).rejects.toThrow("Circular reference detected")
       expect(mockToastError).toHaveBeenCalled()
+    })
+
+    it("allows self-referencing with a different route", async () => {
+      const node = makeNode("sw-1", "sub-workflow", {
+        referencedWorkflowId: "wf-123",
+        selectedRouteId: "route-B",
+        routeSnapshot: {
+          routeId: "route-B",
+          inputLabel: "Route B",
+          inputPorts: [],
+          outputPorts: [{ id: "op1", name: "Out", mediaType: "any" }],
+          visibleOutputPortId: "op1",
+        },
+      })
+
+      // Route A is already executing — route B should still be allowed
+      const executingKeys = new Set(["wf-123:route-A"])
+
+      mockSupabaseSingle.mockResolvedValue({
+        data: {
+          id: "wf-123",
+          nodes: [
+            { id: "in-B", type: "sub-workflow-input", data: { label: "In B", routeId: "route-B", ports: [] }, position: { x: 0, y: 0 } },
+            { id: "out-B", type: "sub-workflow-output", data: { label: "Out B", routeId: "route-B", ports: [{ id: "op1", name: "Out", mediaType: "any" }], visibleOutputPortId: "op1" }, position: { x: 200, y: 0 } },
+          ],
+          edges: [{ id: "e1", source: "in-B", target: "out-B" }],
+        },
+        error: null,
+      })
+
+      await executeSubWorkflow(node, mockCtx, executingKeys)
+      expect(mockUpdateNodeData).toHaveBeenCalledWith("sw-1", expect.objectContaining({ executionStatus: "completed" }))
     })
   })
 
@@ -379,8 +412,8 @@ describe("executeSubWorkflow", () => {
       // After execution, getState should return nodes with the prefix
       // The finally block will filter them out
       const namespacedNodes = [
-        { id: "__sub_sw-1_input-1", type: "sub-workflow-input", data: {} },
-        { id: "__sub_sw-1_output-1", type: "sub-workflow-output", data: {} },
+        { id: "__sub_sw-1_input-1", type: "sub-workflow-input", data: { routeId: "route-1", ports: [] } },
+        { id: "__sub_sw-1_output-1", type: "sub-workflow-output", data: { routeId: "route-1", ports: [], visibleOutputPortId: "" } },
         { id: "other-node", type: "generate-image", data: {} },
       ]
       const namespacedEdges = [

@@ -60,7 +60,9 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
 
   const inputPorts = nodeData.routeSnapshot?.inputPorts ?? []
   const outputPorts = nodeData.routeSnapshot?.outputPorts ?? []
-  const handles = useMemo(() => buildHandles(inputPorts, outputPorts), [inputPorts, outputPorts])
+  const handleKey = [...inputPorts, ...outputPorts].map(p => p.id).join(",")
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handles = useMemo(() => buildHandles(inputPorts, outputPorts), [handleKey])
 
   const maxPorts = Math.max(inputPorts.length, outputPorts.length, 1)
 
@@ -124,13 +126,13 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
 
           {status === "completed" && previewUrl && (
             <div className="mt-2">
-              {typeof previewUrl === "string" && (previewUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+              {previewUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
                 <img src={previewUrl} alt="Output" className="w-full h-16 object-cover rounded" />
               ) : previewUrl.match(/\.(mp4|webm|mov)$/i) ? (
                 <video src={previewUrl} className="w-full h-16 object-cover rounded" muted />
               ) : (
                 <p className="text-[10px] text-muted-foreground truncate">{previewUrl}</p>
-              ))}
+              )}
             </div>
           )}
         </div>

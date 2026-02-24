@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase"
+import type { SubWorkflowRouteSnapshot } from "@/types/nodes"
 
 export const API_BASE_URL = ''
 
@@ -2542,14 +2543,6 @@ export async function renameVoiceClone(id: string, name: string): Promise<void> 
 }
 
 // --- Sub-Workflow APIs ---
-
-interface SubWorkflowRouteSnapshot {
-  routeId: string
-  inputLabel: string
-  inputPorts: Array<{ id: string; name: string; mediaType: string }>
-  outputPorts: Array<{ id: string; name: string; mediaType: string }>
-  visibleOutputPortId: string
-}
 
 interface CallableWorkflow {
   id: string
