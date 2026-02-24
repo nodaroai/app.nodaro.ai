@@ -1,4 +1,4 @@
--- SceneNode.ai - Complete Database Schema
+-- Nodaro.ai - Complete Database Schema
 -- Run in Supabase Dashboard > SQL Editor
 
 -- ============================================================

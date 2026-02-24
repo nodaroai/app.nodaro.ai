@@ -471,7 +471,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes("application/scenenode-image")) {
+    if (e.dataTransfer.types.includes("application/nodaro-image")) {
       e.preventDefault()
       e.dataTransfer.dropEffect = "copy"
     }
@@ -479,7 +479,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
-      const imageUrl = e.dataTransfer.getData("application/scenenode-image")
+      const imageUrl = e.dataTransfer.getData("application/nodaro-image")
       if (!imageUrl) return
       e.preventDefault()
 

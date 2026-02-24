@@ -1,7 +1,7 @@
 /**
  * generate-architecture.ts
  *
- * Scans the SceneNode.ai project and generates ARCHITECTURE.md
+ * Scans the Nodaro.ai project and generates ARCHITECTURE.md
  * Run with: npx tsx scripts/generate-architecture.ts
  */
 
@@ -589,7 +589,7 @@ function generateGraphHTML(graphData: FullGraphData, options: GraphHTMLOptions =
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>SceneNode.ai - Architecture Graph</title>
+<title>Nodaro.ai - Architecture Graph</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"><\/script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -614,7 +614,7 @@ function generateGraphHTML(graphData: FullGraphData, options: GraphHTMLOptions =
 </style>
 </head>
 <body>
-<h1>SceneNode.ai &mdash; <span>Architecture Graph</span></h1>
+<h1>Nodaro.ai &mdash; <span>Architecture Graph</span></h1>
 <div class="stats" id="stats"></div>
 <div class="legend">
   <div class="legend-title">Directory Groups</div>
@@ -738,7 +738,7 @@ function generate(edition: "full" | "public" = "full"): string {
 
   const out: string[] = []
 
-  out.push("# SceneNode.ai -- Architecture Reference")
+  out.push("# Nodaro.ai -- Architecture Reference")
   out.push("")
   out.push(`> Auto-generated on ${timestamp} at commit \`${gitHash}\``)
   out.push("> Run `npx tsx scripts/generate-architecture.ts` to regenerate.")

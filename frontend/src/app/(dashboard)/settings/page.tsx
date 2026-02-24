@@ -101,7 +101,7 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "scenenode-prompt-templates.json"
+    a.download = "nodaro-prompt-templates.json"
     a.click()
     URL.revokeObjectURL(url)
   }

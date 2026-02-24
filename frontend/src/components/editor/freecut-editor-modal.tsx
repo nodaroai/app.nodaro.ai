@@ -50,7 +50,7 @@ export function FreeCutEditorModal({ videoUrl, onExportComplete, onClose }: Free
     // Small delay to let FreeCut initialize its listener
     const timer = setTimeout(() => {
       iframe.contentWindow!.postMessage(
-        { type: "SCENENODE_LOAD_VIDEO", payload: { videoUrl } },
+        { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
         FREECUT_ORIGIN,
       )
     }, 500)

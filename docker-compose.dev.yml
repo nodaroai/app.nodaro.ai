@@ -11,9 +11,9 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=scenenode
-      - POSTGRES_USER=scenenode
-      - POSTGRES_PASSWORD=scenenode_dev
+      - POSTGRES_DB=nodaro
+      - POSTGRES_USER=nodaro
+      - POSTGRES_PASSWORD=nodaro_dev
     ports:
       - "5432:5432"
     volumes:

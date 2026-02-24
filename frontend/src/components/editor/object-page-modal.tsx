@@ -43,7 +43,7 @@ interface ObjectPageModalProps {
 }
 
 function startDrag(e: React.DragEvent, imageUrl: string, onDragStart?: () => void) {
-  e.dataTransfer.setData("application/scenenode-image", imageUrl)
+  e.dataTransfer.setData("application/nodaro-image", imageUrl)
   e.dataTransfer.effectAllowed = "copy"
   onDragStart?.()
 }
