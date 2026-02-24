@@ -103,26 +103,26 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute top-1 right-1 flex gap-1">
               <button
                 type="button"
-                aria-label="Extract references" className="w-6 h-6 flex items-center justify-center bg-purple-500/80 hover:bg-purple-500 text-white rounded-full shadow-sm"
+                aria-label="Extract references" className="w-8 h-8 flex items-center justify-center bg-purple-500/80 hover:bg-purple-500 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   setExtractOpen(true)
                 }}
                 title="Extract references"
               >
-                <Scissors className="w-3 h-3" />
+                <Scissors className="w-3.5 h-3.5" />
               </button>
               {results.length > 0 && (
                 <button
                   type="button"
-                  aria-label="Remove" className="w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
+                  aria-label="Remove result" className="w-8 h-8 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)
                   }}
                   title="Delete this result"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>

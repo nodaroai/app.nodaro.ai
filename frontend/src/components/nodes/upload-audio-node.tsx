@@ -141,6 +141,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
                 <button
                   type="button"
+                  aria-label="Remove audio"
                   className="w-5 h-5 flex items-center justify-center hover:bg-red-600/20 text-muted-foreground/40 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all shrink-0"
                   onClick={(e) => {
                     e.stopPropagation()

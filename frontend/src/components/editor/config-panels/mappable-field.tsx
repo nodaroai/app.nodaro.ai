@@ -67,7 +67,7 @@ export function MappableField({
           {mappedSource.value || "(empty)"}
         </p>
       ) : (
-        <MappableFieldCtx.Provider value={{ labelId, triggerId }}>
+        <MappableFieldCtx.Provider value={{ labelId, triggerId, title: label }}>
           {children}
         </MappableFieldCtx.Provider>
       )}
