@@ -1435,6 +1435,7 @@ export type Database = {
         Args: { p_amount: number; p_user_id: string }
         Returns: boolean
       }
+      get_admin_stats: { Args: Record<string, never>; Returns: Json }
       get_my_role: { Args: never; Returns: string }
       get_stats: { Args: { p_user_id?: string }; Returns: Json }
       get_storage_limit_for_tier: { Args: { p_tier: string }; Returns: number }

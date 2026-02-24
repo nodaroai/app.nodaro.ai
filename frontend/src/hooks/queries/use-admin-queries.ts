@@ -59,30 +59,23 @@ export function useAdminStats() {
     queryKey: queryKeys.admin.stats(),
     queryFn: async (): Promise<AdminStats> => {
       const supabase = createClient()
-      const [usersRes, projectsRes, workflowsRes, jobsCountRes, jobsStatusRes, usageRes] =
-        await Promise.all([
-          supabase.from("profiles").select("id", { count: "exact", head: true }),
-          supabase.from("projects").select("id", { count: "exact", head: true }),
-          supabase.from("workflows").select("id", { count: "exact", head: true }),
-          supabase.from("jobs").select("id", { count: "exact", head: true }),
-          supabase.from("jobs").select("status"),
-          supabase.from("usage_logs").select("credits_used"),
-        ])
-      const jobsByStatus: Record<string, number> = {}
-      for (const job of jobsStatusRes.data ?? []) {
-        jobsByStatus[job.status] = (jobsByStatus[job.status] ?? 0) + 1
+      const { data, error } = await supabase.rpc("get_admin_stats")
+      if (error) throw error
+      const stats = data as unknown as {
+        totalUsers: number
+        totalProjects: number
+        totalWorkflows: number
+        totalJobs: number
+        jobsByStatus: Record<string, number>
+        totalCreditsUsed: number
       }
-      const totalCreditsUsed = (usageRes.data ?? []).reduce(
-        (sum: number, log: { credits_used?: number }) => sum + (log.credits_used ?? 0),
-        0,
-      )
       return {
-        totalUsers: usersRes.count ?? 0,
-        totalProjects: projectsRes.count ?? 0,
-        totalWorkflows: workflowsRes.count ?? 0,
-        totalJobs: jobsCountRes.count ?? 0,
-        jobsByStatus,
-        totalCreditsUsed,
+        totalUsers: stats.totalUsers ?? 0,
+        totalProjects: stats.totalProjects ?? 0,
+        totalWorkflows: stats.totalWorkflows ?? 0,
+        totalJobs: stats.totalJobs ?? 0,
+        jobsByStatus: stats.jobsByStatus ?? {},
+        totalCreditsUsed: stats.totalCreditsUsed ?? 0,
       }
     },
     enabled: hasAdmin(),
