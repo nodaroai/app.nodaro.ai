@@ -91,7 +91,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
     <div className="relative group/run" style={{ minHeight: `${nodeMinHeight}px` }}>
       <BaseNode
         id={id}
-        label={nodeData.label}
+        label={nodeData.routeSnapshot?.inputLabel || nodeData.label}
         icon={<Workflow className="h-4 w-4" />}
         category="processing"
         credits={0}
@@ -104,14 +104,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
           {!nodeData.referencedWorkflowId ? (
             <p className="text-sm text-muted-foreground">Select a workflow...</p>
           ) : (
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium truncate">{nodeData.referencedWorkflowName || "Unnamed"}</p>
-              {nodeData.routeSnapshot && (
-                <p className="text-[10px] text-muted-foreground">
-                  {nodeData.routeSnapshot.inputLabel}
-                </p>
-              )}
-            </div>
+            <p className="text-xs font-medium truncate">{nodeData.referencedWorkflowName || "Unnamed"}</p>
           )}
 
           {status === "running" && progress && (

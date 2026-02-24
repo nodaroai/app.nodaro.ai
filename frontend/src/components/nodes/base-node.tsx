@@ -118,7 +118,7 @@ function BaseNodeComponent({
   }
 
   return (
-    <div>
+    <div style={{ minHeight: `${minHeight}px` }}>
       <NodeResizer
         minWidth={minWidth}
         minHeight={minHeight}
