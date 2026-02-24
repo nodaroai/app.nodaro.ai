@@ -6,6 +6,12 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Optional context for auto-associating SelectTrigger with an enclosing label.
+ * Used by MappableField to provide accessible names via htmlFor/aria-labelledby.
+ */
+export const MappableFieldCtx = React.createContext<{ labelId: string; triggerId: string; title: string } | null>(null)
+
 function Select({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
@@ -28,12 +34,37 @@ function SelectTrigger({
   className,
   size = "default",
   children,
+  id: explicitId,
+  "aria-labelledby": explicitLabelledBy,
+  "aria-label": explicitAriaLabel,
+  title: explicitTitle,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   size?: "sm" | "default"
 }) {
+  // Auto-associate with enclosing MappableField label when available
+  const mfCtx = React.useContext(MappableFieldCtx)
+  const resolvedId = explicitId ?? mfCtx?.triggerId
+  const labelledBy = explicitLabelledBy ?? mfCtx?.labelId
+  const title = explicitTitle ?? mfCtx?.title
+  const ariaLabel = explicitAriaLabel ?? mfCtx?.title
+
+  // Imperatively set accessible attributes on the DOM node because Radix
+  // Select's internal Slot/Popper composition strips React-level aria props.
+  const setA11y = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (!node) return
+      if (ariaLabel) node.setAttribute("aria-label", ariaLabel)
+      if (title) node.setAttribute("title", title)
+      if (resolvedId) node.setAttribute("id", resolvedId)
+      if (labelledBy) node.setAttribute("aria-labelledby", labelledBy)
+    },
+    [ariaLabel, title, resolvedId, labelledBy],
+  )
+
   return (
     <SelectPrimitive.Trigger
+      ref={setA11y}
       data-slot="select-trigger"
       data-size={size}
       className={cn(

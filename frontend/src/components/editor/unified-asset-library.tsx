@@ -401,7 +401,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                 value={filterByProject}
                 onValueChange={setFilterByProject}
               >
-                <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]">
+                <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]" aria-label="Filter by project">
                   <SelectValue placeholder="All Projects" />
                 </SelectTrigger>
                 <SelectContent
@@ -931,7 +931,7 @@ export function UnifiedAssetLibraryButton() {
                   value={filterByProject}
                   onValueChange={setFilterByProject}
                 >
-                  <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]">
+                  <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]" aria-label="Filter by project">
                     <SelectValue placeholder="All Projects" />
                   </SelectTrigger>
                   <SelectContent

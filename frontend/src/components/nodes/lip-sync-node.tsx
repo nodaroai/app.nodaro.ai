@@ -72,6 +72,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const credits = useModelCredits(nodeData.provider ?? "kling-avatar", 2)
@@ -217,7 +218,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                     value={nodeData.selectedImageNodeId ?? ""}
                     onValueChange={(v) => updateNodeData(id, { selectedImageNodeId: v || undefined })}
                   >
-                    <SelectTrigger className="h-8 text-[11px]">
+                    <SelectTrigger className="h-8 text-[11px]" aria-label="Select portrait image">
                       <SelectValue placeholder="Select image...">
                         {selectedImage && (
                           <div className="flex items-center gap-2">
@@ -273,7 +274,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                     value={nodeData.selectedAudioNodeId ?? ""}
                     onValueChange={(v) => updateNodeData(id, { selectedAudioNodeId: v || undefined })}
                   >
-                    <SelectTrigger className="h-8 text-[11px]">
+                    <SelectTrigger className="h-8 text-[11px]" aria-label="Select audio track">
                       <SelectValue placeholder="Select audio...">
                         {selectedAudio && (
                           <div className="flex items-center gap-2">
@@ -320,18 +321,32 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && activeUrl && (
             <div className="relative group">
-              <video
-                src={activeUrl}
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewOpen(true)
-                }}
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
-                playsInline
-              />
+              {activeThumbnail ? (
+                <CachedImage
+                  src={activeThumbnail}
+                  alt="Video preview"
+                  className="w-full h-28 object-cover rounded-md cursor-pointer"
+                  thumbnail
+                  thumbnailWidth={320}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPreviewOpen(true)
+                  }}
+                />
+              ) : (
+                <video
+                  src={activeUrl}
+                  className="w-full h-28 object-cover rounded-md cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPreviewOpen(true)
+                  }}
+                  autoPlay={videoAutoplay}
+                  muted
+                  loop={videoAutoplay}
+                  playsInline
+                />
+              )}
               <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
                 Talking Video
               </div>
@@ -376,20 +391,38 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex gap-1 overflow-x-auto">
               {results.slice(0, 5).map((r, i) => (
                 <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                  <video
-                    src={r.url}
-                    className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
-                      i === activeIndex
-                        ? "opacity-100 ring-2 ring-primary"
-                        : "opacity-50 hover:opacity-80"
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
-                    }}
-                    muted
-                    playsInline
-                  />
+                  {r.thumbnailUrl ? (
+                    <CachedImage
+                      src={r.thumbnailUrl}
+                      alt=""
+                      className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
+                        i === activeIndex
+                          ? "opacity-100 ring-2 ring-primary"
+                          : "opacity-50 hover:opacity-80"
+                      }`}
+                      thumbnail
+                      thumbnailWidth={80}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                      }}
+                    />
+                  ) : (
+                    <video
+                      src={r.url}
+                      className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
+                        i === activeIndex
+                          ? "opacity-100 ring-2 ring-primary"
+                          : "opacity-50 hover:opacity-80"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                      }}
+                      muted
+                      playsInline
+                    />
+                  )}
                   <button
                     type="button"
                     aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"

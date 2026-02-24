@@ -538,7 +538,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
               <div>
                 <Label className="mb-1 block text-[10px]">Position</Label>
                 <Select value={layer.position} onValueChange={(v) => updateLayer(layer.id, { position: v as "fullscreen" | "positioned" })}>
-                  <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Position" className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="fullscreen">Fullscreen</SelectItem>
                     <SelectItem value="positioned">Positioned</SelectItem>
@@ -548,7 +548,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
               <div>
                 <Label className="mb-1 block text-[10px]">Blend Mode</Label>
                 <Select value={layer.blendMode} onValueChange={(v) => updateLayer(layer.id, { blendMode: v as CompositeLayerConfig["blendMode"] })}>
-                  <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Blend Mode" className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="normal">Normal</SelectItem>
                     <SelectItem value="multiply">Multiply</SelectItem>

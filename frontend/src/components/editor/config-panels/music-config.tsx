@@ -59,7 +59,7 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
           value={data.provider || "musicgen"}
           onValueChange={(v) => onUpdate({ provider: v as GenerateMusicData["provider"], referenceSource: "none", referenceAudioUrl: "", referenceYouTubeUrl: "" })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="musicgen">MusicGen (Meta) - instrumental (default)</SelectItem>
             <SelectItem value="minimax">MiniMax Music - vocals & lyrics</SelectItem>

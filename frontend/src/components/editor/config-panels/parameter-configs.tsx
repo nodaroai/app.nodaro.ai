@@ -81,7 +81,7 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
             onUpdate({ category: cat, provider: firstProvider, model: firstModel })
           }}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Category"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="image">Image</SelectItem>
             <SelectItem value="video">Video</SelectItem>
@@ -99,7 +99,7 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
             onUpdate({ provider: v, model: firstModel })
           }}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {providers.map((p) => (
               <SelectItem key={p} value={p}>{getProviderLabel(category, p)}</SelectItem>
@@ -113,7 +113,7 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
           value={data.model}
           onValueChange={(v) => onUpdate({ model: v })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             {models.map((m) => (
               <SelectItem key={m} value={m}>{m}</SelectItem>
@@ -170,7 +170,7 @@ export function AspectRatioConfig({ data, onUpdate }: ConfigProps<AspectRatioDat
           value={data.ratio}
           onValueChange={(v) => onUpdate({ ratio: v as AspectRatioData["ratio"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Aspect ratio"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="1:1">1:1 (Square)</SelectItem>
             <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
@@ -193,7 +193,7 @@ export function MotionConfig({ data, onUpdate }: ConfigProps<MotionData>) {
           value={data.motion}
           onValueChange={(v) => onUpdate({ motion: v as MotionData["motion"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Motion"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="subtle">Subtle</SelectItem>
             <SelectItem value="moderate">Moderate</SelectItem>
@@ -214,7 +214,7 @@ export function CameraMotionConfig({ data, onUpdate }: ConfigProps<CameraMotionD
           value={data.cameraMotion}
           onValueChange={(v) => onUpdate({ cameraMotion: v as CameraMotionData["cameraMotion"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Camera motion"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="static">Static</SelectItem>
             <SelectItem value="pan-left">Pan Left</SelectItem>

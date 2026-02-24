@@ -98,7 +98,7 @@ function EffectEditor({
                 value={String(effect.ratio ?? 2.35)}
                 onValueChange={(v) => onChange({ ...effect, ratio: parseFloat(v) })}
               >
-                <SelectTrigger className="h-7 text-xs">
+                <SelectTrigger className="h-7 text-xs" aria-label="Aspect ratio">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

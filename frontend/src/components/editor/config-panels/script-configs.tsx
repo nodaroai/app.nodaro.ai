@@ -63,7 +63,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           value={data.provider || "gemini"}
           onValueChange={(v) => onUpdate({ provider: v as GenerateScriptData["provider"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="gemini">Gemini Flash (default)</SelectItem>
             <SelectItem value="claude">Claude</SelectItem>
@@ -86,7 +86,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           value={data.structure}
           onValueChange={(v) => onUpdate({ structure: v as GenerateScriptData["structure"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Structure"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="freeform">Freeform</SelectItem>
             <SelectItem value="8-step">8-Step Story</SelectItem>
@@ -233,7 +233,7 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
           value={data.provider}
           onValueChange={(v) => onUpdate({ provider: v as QACheckData["provider"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="claude">Claude</SelectItem>
             <SelectItem value="gpt">GPT</SelectItem>
@@ -246,7 +246,7 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
           value={data.checkType}
           onValueChange={(v) => onUpdate({ checkType: v as QACheckData["checkType"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Check Type"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="content">Content</SelectItem>
             <SelectItem value="quality">Quality</SelectItem>
@@ -284,7 +284,7 @@ export function ImageToTextConfig({ data, onUpdate }: ConfigProps<ImageToTextDat
           value={imageToTextData.detailLevel ?? "detailed"}
           onValueChange={(v) => onUpdate({ detailLevel: v as ImageToTextData["detailLevel"] })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Detail Level"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="brief">Brief (1-2 sentences)</SelectItem>
             <SelectItem value="detailed">Detailed (3-6 sentences)</SelectItem>

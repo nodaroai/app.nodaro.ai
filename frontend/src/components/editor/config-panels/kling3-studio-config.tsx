@@ -299,7 +299,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                   value={data.provider || "minimax"}
                   onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {VIDEO_I2V_MODELS.map((m) => (
                       <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
@@ -320,7 +320,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                     value={(data as Record<string, unknown>).kling3Mode as string ?? "pro"}
                     onValueChange={(v) => onUpdate({ kling3Mode: v })}
                   >
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label="Mode" className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pro">Pro</SelectItem>
                       <SelectItem value="std">Standard</SelectItem>
@@ -333,7 +333,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                     value={data.aspectRatio ?? "16:9"}
                     onValueChange={(v) => onUpdate({ aspectRatio: v })}
                   >
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label="Aspect Ratio" className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="16:9">16:9</SelectItem>
                       <SelectItem value="9:16">9:16</SelectItem>
@@ -371,7 +371,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                     value={String(data.duration || 5)}
                     onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
                   >
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label="Duration" className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((d) => (
                         <SelectItem key={d} value={String(d)}>{d}s</SelectItem>
@@ -442,7 +442,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                       value={String(shot.duration)}
                       onValueChange={(v) => handleUpdateShot(i, "duration", parseInt(v, 10))}
                     >
-                      <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={`Shot ${i + 1} duration`} className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Array.from({ length: 12 }, (_, k) => k + 1).map((d) => (
                           <SelectItem key={d} value={String(d)}>{d}s</SelectItem>

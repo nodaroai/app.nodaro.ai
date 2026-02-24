@@ -774,6 +774,7 @@ function MyVoicesTab({
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
+                aria-label="Play recorded audio"
                 onClick={() => {
                   const a = new Audio(recordedPreviewUrl)
                   a.play().catch(() => {})
@@ -835,6 +836,7 @@ function MyVoicesTab({
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 shrink-0 mt-0.5"
+                      aria-label={isPlaying ? "Pause voice preview" : "Play voice preview"}
                       onClick={(e) => {
                         e.stopPropagation()
                         onPlay(clone.sampleAudioUrl!, clone.id)
@@ -863,6 +865,7 @@ function MyVoicesTab({
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 shrink-0 mt-0.5 text-destructive hover:text-destructive"
+                    aria-label="Delete voice clone"
                     disabled={deleteMutation.isPending}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -928,6 +931,7 @@ function VoiceList({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 shrink-0 mt-0.5"
+                  aria-label={isPlaying ? "Pause voice preview" : "Play voice preview"}
                   onClick={(e) => {
                     e.stopPropagation()
                     onPlay(voice.preview_url, voice.id)
@@ -965,6 +969,7 @@ function VoiceList({
                   <TooltipTrigger asChild>
                     <span
                       role="button"
+                      aria-label="Voice description"
                       className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-accent"
                       onClick={(e) => e.stopPropagation()}
                     >

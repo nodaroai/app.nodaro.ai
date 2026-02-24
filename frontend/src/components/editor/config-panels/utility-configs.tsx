@@ -33,7 +33,7 @@ export function CombineTextConfig({ data, onUpdate }: { data: CombineTextNodeDat
       <div>
         <Label>Separator</Label>
         <Select value={data.separator} onValueChange={(v) => onUpdate({ separator: v as CombineTextNodeData["separator"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Separator"><SelectValue /></SelectTrigger>
           <SelectContent>
             {SEPARATOR_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
@@ -69,7 +69,7 @@ export function SaveToStorageConfig({ data, onUpdate }: ConfigProps<SaveToStorag
       <div>
         <Label>Format</Label>
         <Select value={data.format} onValueChange={(v) => onUpdate({ format: v as SaveToStorageData["format"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Format"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mp4">MP4</SelectItem>
             <SelectItem value="webm">WebM</SelectItem>
@@ -80,7 +80,7 @@ export function SaveToStorageConfig({ data, onUpdate }: ConfigProps<SaveToStorag
       <div>
         <Label>Quality</Label>
         <Select value={data.quality} onValueChange={(v) => onUpdate({ quality: v as SaveToStorageData["quality"] })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="draft">Draft</SelectItem>
             <SelectItem value="standard">Standard</SelectItem>

@@ -241,7 +241,7 @@ function UserExpandedRow({
                 onValueChange={handleTierChange}
                 disabled={changingTier}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-label="Change tier">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
@@ -272,7 +272,7 @@ function UserExpandedRow({
                   className="flex-1"
                 />
                 <Select value={adjustType} onValueChange={(v) => setAdjustType(v as "subscription" | "topup")}>
-                  <SelectTrigger className="w-[130px]">
+                  <SelectTrigger className="w-[130px]" aria-label="Credit adjustment type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper" className="z-[9999]">
@@ -344,7 +344,7 @@ function UserExpandedRow({
               {/* Limit selector */}
               <div className="text-sm font-medium pt-1">Set Limit</div>
               <Select value={storagePreset} onValueChange={setStoragePreset}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-label="Storage limit">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent position="popper" className="z-[9999]">
@@ -644,7 +644,7 @@ function UserRow({
               onValueChange={handleRoleChange}
               disabled={changingRole}
             >
-              <SelectTrigger className="h-7 w-[130px] text-xs">
+              <SelectTrigger className="h-7 w-[130px] text-xs" aria-label="Change role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper" className="z-[9999]">

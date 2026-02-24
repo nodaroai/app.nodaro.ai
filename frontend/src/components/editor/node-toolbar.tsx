@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, lazy, Suspense } from "react"
 import {
   Type, List, BookOpen, ImageIcon, Film, Merge, Plus, X,
   Upload, Video, Rss, Palette, PaintBucket, Server,
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
-import { UnifiedAssetLibraryButton } from "./unified-asset-library"
+const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
 import type { SceneNodeType } from "@/types/nodes"
 
 interface NodeOption {
@@ -149,7 +149,7 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
         <span className="font-sans text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#64748B] mb-1">
           Library
         </span>
-        <UnifiedAssetLibraryButton />
+        <Suspense fallback={null}><UnifiedAssetLibraryButton /></Suspense>
       </div>
       {CATEGORIES.map((cat) => {
         const catNodes = NODE_OPTIONS.filter((n) => n.category === cat)

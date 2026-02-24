@@ -623,7 +623,7 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
           value={data.sourceType || "youtube"}
           onValueChange={(v) => onUpdate({ sourceType: v as ReferenceAudioData["sourceType"], extractedAudioUrl: "", extractionStatus: "idle", videoTitle: "", videoThumbnail: "" })}
         >
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Source type"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="youtube">YouTube</SelectItem>
             <SelectItem value="upload">Upload File</SelectItem>

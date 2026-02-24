@@ -1,12 +1,14 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { CachedImage } from "@/components/ui/cached-image"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoMusicVideoData } from "@/types/nodes"
 
 function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -14,7 +16,11 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const videoUrl = nodeData.generatedVideoUrl
+  const results = (nodeData as Record<string, unknown>).generatedResults as readonly import("@/types/nodes").GeneratedResult[] | undefined
+  const activeResult = results?.[0]
+  const thumbnailUrl = activeResult?.thumbnailUrl
   const credits = useModelCredits("suno-music-video", 1)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   return (
     <div className="relative group/run">
@@ -40,12 +46,26 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {videoUrl && (
           <div className="w-full rounded-md bg-muted/30 overflow-hidden">
-            <video
-              src={videoUrl}
-              controls
-              className="w-full rounded-md"
-              preload="none"
-            />
+            {thumbnailUrl ? (
+              <CachedImage
+                src={thumbnailUrl}
+                alt="Video preview"
+                className="w-full h-28 object-cover rounded-md cursor-pointer"
+                thumbnail
+                thumbnailWidth={320}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPreviewOpen(true)
+                }}
+              />
+            ) : (
+              <video
+                src={videoUrl}
+                controls
+                className="w-full rounded-md"
+                preload="none"
+              />
+            )}
             {status === "running" && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -78,6 +98,14 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    {videoUrl && (
+      <MediaPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        type="video"
+        url={videoUrl}
+      />
+    )}
     </div>
   )
 }

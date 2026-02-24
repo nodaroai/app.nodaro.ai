@@ -124,6 +124,7 @@ function DraggableImage({
             type="button"
             className="absolute bottom-1 right-1 w-6 h-6 flex items-center justify-center bg-emerald-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-emerald-600"
             onClick={(e) => { e.stopPropagation(); onAddToCanvas(src) }}
+            aria-label="Add to canvas"
             title="Add to canvas"
           >
             <Plus className="w-4 h-4" />
@@ -134,6 +135,7 @@ function DraggableImage({
           type="button"
           className="absolute bottom-1 left-1 p-1 rounded bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => { e.stopPropagation(); onEnlarge(src) }}
+          aria-label="Enlarge image"
           title="Enlarge"
         >
           <Maximize2 className="w-3 h-3" />
@@ -143,6 +145,7 @@ function DraggableImage({
             type="button"
             className="absolute top-1 right-1 p-1 rounded bg-black/60 hover:bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => { e.stopPropagation(); onRequestDelete() }}
+            aria-label="Delete image"
             title="Delete"
           >
             <Trash2 className="w-3 h-3" />

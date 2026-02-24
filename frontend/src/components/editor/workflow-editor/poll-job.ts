@@ -108,6 +108,11 @@ export function pollJobWithNodeUpdate(
                   return;
                 }
 
+                const thumbnailUrl =
+                  outputKey === "generatedVideoUrl"
+                    ? (job.output_data?.thumbnailUrl as string | undefined)
+                    : undefined;
+
                 const existingResults =
                   ((
                     useWorkflowStore
@@ -121,6 +126,7 @@ export function pollJobWithNodeUpdate(
                     | undefined) ?? [];
                 const newResult: GeneratedResult = {
                   url: url as string,
+                  thumbnailUrl,
                   timestamp: new Date().toISOString(),
                   jobId,
                 };
