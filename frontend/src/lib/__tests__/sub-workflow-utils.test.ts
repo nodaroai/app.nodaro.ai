@@ -35,35 +35,33 @@ function makeOutputNode(id: string, routeId: string, ports: any[] = [], visibleO
 
 describe("discoverRoutes", () => {
   it("returns empty array for empty inputs", () => {
-    expect(discoverRoutes([], [])).toEqual([])
+    expect(discoverRoutes([])).toEqual([])
   })
 
   it("returns empty when input node has no routeId", () => {
     const input = makeNode("in1", "sub-workflow-input", { routeId: "" })
     const output = makeOutputNode("out1", "route-1")
-    const edges = [makeEdge("in1", "out1")]
-    expect(discoverRoutes([input, output], edges)).toEqual([])
+    expect(discoverRoutes([input, output])).toEqual([])
   })
 
   it("returns empty when no matching output node for routeId", () => {
     const input = makeInputNode("in1", "route-1")
     const output = makeOutputNode("out1", "route-2")
-    const edges = [makeEdge("in1", "out1")]
-    expect(discoverRoutes([input, output], edges)).toEqual([])
+    expect(discoverRoutes([input, output])).toEqual([])
   })
 
-  it("returns empty when no directed path exists between matching pair", () => {
+  it("discovers route even without edges (path checked at execution time)", () => {
     const input = makeInputNode("in1", "route-1")
     const output = makeOutputNode("out1", "route-1")
-    // No edges connecting them
-    expect(discoverRoutes([input, output], [])).toEqual([])
+    const routes = discoverRoutes([input, output])
+    expect(routes).toHaveLength(1)
+    expect(routes[0].routeId).toBe("route-1")
   })
 
-  it("returns a single valid route for a direct edge", () => {
+  it("returns a single valid route for matching routeId pair", () => {
     const input = makeInputNode("in1", "route-1", [{ id: "p1", name: "Image", mediaType: "image" }])
     const output = makeOutputNode("out1", "route-1", [{ id: "p2", name: "Video", mediaType: "video" }], "p2")
-    const edges = [makeEdge("in1", "out1")]
-    const routes = discoverRoutes([input, output], edges)
+    const routes = discoverRoutes([input, output])
 
     expect(routes).toHaveLength(1)
     expect(routes[0].routeId).toBe("route-1")
@@ -71,13 +69,12 @@ describe("discoverRoutes", () => {
     expect(routes[0].outputNode.id).toBe("out1")
   })
 
-  it("discovers route through an intermediate node", () => {
+  it("discovers route with intermediate nodes present", () => {
     const input = makeInputNode("in1", "route-1")
     const middle = makeNode("mid", "generate-image")
     const output = makeOutputNode("out1", "route-1")
-    const edges = [makeEdge("in1", "mid"), makeEdge("mid", "out1")]
 
-    const routes = discoverRoutes([input, middle, output], edges)
+    const routes = discoverRoutes([input, middle, output])
     expect(routes).toHaveLength(1)
     expect(routes[0].routeId).toBe("route-1")
   })
@@ -87,9 +84,8 @@ describe("discoverRoutes", () => {
     const out1 = makeOutputNode("out1", "route-a")
     const in2 = makeInputNode("in2", "route-b")
     const out2 = makeOutputNode("out2", "route-b")
-    const edges = [makeEdge("in1", "out1"), makeEdge("in2", "out2")]
 
-    const routes = discoverRoutes([in1, out1, in2, out2], edges)
+    const routes = discoverRoutes([in1, out1, in2, out2])
     expect(routes).toHaveLength(2)
     const routeIds = routes.map((r) => r.routeId).sort()
     expect(routeIds).toEqual(["route-a", "route-b"])
@@ -100,9 +96,8 @@ describe("discoverRoutes", () => {
     const outputPorts = [{ id: "p2", name: "Result", mediaType: "image" as const }]
     const input = makeInputNode("in1", "route-1", inputPorts)
     const output = makeOutputNode("out1", "route-1", outputPorts, "p2")
-    const edges = [makeEdge("in1", "out1")]
 
-    const routes = discoverRoutes([input, output], edges)
+    const routes = discoverRoutes([input, output])
     expect(routes[0].inputData.ports).toEqual(inputPorts)
     expect(routes[0].outputData.ports).toEqual(outputPorts)
     expect(routes[0].outputData.visibleOutputPortId).toBe("p2")
@@ -112,9 +107,8 @@ describe("discoverRoutes", () => {
     const regular = makeNode("reg1", "generate-image")
     const input = makeInputNode("in1", "route-1")
     const output = makeOutputNode("out1", "route-1")
-    const edges = [makeEdge("in1", "output"), makeEdge("in1", "out1")]
 
-    const routes = discoverRoutes([regular, input, output], edges)
+    const routes = discoverRoutes([regular, input, output])
     expect(routes).toHaveLength(1)
   })
 })

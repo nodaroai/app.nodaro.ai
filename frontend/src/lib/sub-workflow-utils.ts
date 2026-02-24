@@ -1,4 +1,4 @@
-import type { WorkflowNode, WorkflowEdge, SubWorkflowInputData, SubWorkflowOutputData } from "@/types/nodes"
+import type { WorkflowNode, SubWorkflowInputData, SubWorkflowOutputData, WorkflowEdge } from "@/types/nodes"
 
 export interface DiscoveredRoute {
   readonly routeId: string
@@ -10,10 +10,11 @@ export interface DiscoveredRoute {
 
 /**
  * Discover all valid routes in a workflow.
- * A valid route = one sub-workflow-input + one sub-workflow-output with the same routeId,
- * and a directed path exists between them.
+ * A valid route = one sub-workflow-input + one sub-workflow-output with the same routeId.
+ * Path connectivity is verified at execution time, not at discovery time,
+ * so partially-wired workflows still appear in the picker.
  */
-export function discoverRoutes(nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): DiscoveredRoute[] {
+export function discoverRoutes(nodes: ReadonlyArray<WorkflowNode>): DiscoveredRoute[] {
   const inputNodes = nodes.filter((n) => n.type === "sub-workflow-input")
   const outputNodes = nodes.filter((n) => n.type === "sub-workflow-output")
 
@@ -29,53 +30,16 @@ export function discoverRoutes(nodes: ReadonlyArray<WorkflowNode>, edges: Readon
     })
     if (!matchingOutput) continue
 
-    // Verify directed path exists via BFS
-    if (hasPath(inputNode.id, matchingOutput.id, edges)) {
-      routes.push({
-        routeId: inputData.routeId,
-        inputNode,
-        outputNode: matchingOutput,
-        inputData,
-        outputData: matchingOutput.data as SubWorkflowOutputData,
-      })
-    }
+    routes.push({
+      routeId: inputData.routeId,
+      inputNode,
+      outputNode: matchingOutput,
+      inputData,
+      outputData: matchingOutput.data as SubWorkflowOutputData,
+    })
   }
 
   return routes
-}
-
-/**
- * BFS to check if a directed path exists from sourceId to targetId.
- */
-function hasPath(
-  sourceId: string,
-  targetId: string,
-  edges: ReadonlyArray<WorkflowEdge>,
-): boolean {
-  const adjacency = new Map<string, string[]>()
-  for (const edge of edges) {
-    const list = adjacency.get(edge.source) ?? []
-    list.push(edge.target)
-    adjacency.set(edge.source, list)
-  }
-
-  const visited = new Set<string>()
-  const queue = [sourceId]
-  visited.add(sourceId)
-
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    if (current === targetId) return true
-
-    for (const neighbor of adjacency.get(current) ?? []) {
-      if (!visited.has(neighbor)) {
-        visited.add(neighbor)
-        queue.push(neighbor)
-      }
-    }
-  }
-
-  return false
 }
 
 /**

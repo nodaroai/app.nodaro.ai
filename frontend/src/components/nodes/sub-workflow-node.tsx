@@ -85,8 +85,10 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const isImage = typeof previewUrl === "string" && /\.(jpg|jpeg|png|webp|gif)$/i.test(previewUrl)
   const isVideo = typeof previewUrl === "string" && /\.(mp4|webm|mov)$/i.test(previewUrl)
 
+  const nodeMinHeight = Math.max(120, maxPorts * 36 + 60)
+
   return (
-    <div className="relative group/run">
+    <div className="relative group/run" style={{ minHeight: `${nodeMinHeight}px` }}>
       <BaseNode
         id={id}
         label={nodeData.label}
@@ -96,9 +98,9 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         handles={handles}
-        minHeight={Math.max(120, maxPorts * 32 + 60)}
+        minHeight={nodeMinHeight}
       >
-        <div style={{ minHeight: `${Math.max(60, maxPorts * 26 + 8)}px` }}>
+        <div style={{ minHeight: `${Math.max(60, maxPorts * 28 + 8)}px` }}>
           {!nodeData.referencedWorkflowId ? (
             <p className="text-sm text-muted-foreground">Select a workflow...</p>
           ) : (

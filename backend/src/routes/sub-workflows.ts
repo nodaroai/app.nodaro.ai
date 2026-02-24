@@ -23,12 +23,6 @@ interface WorkflowNode {
   data: Record<string, unknown>
 }
 
-interface WorkflowEdge {
-  id: string
-  source: string
-  target: string
-}
-
 // Zod schemas
 const callableQuerySchema = z.object({
   projectId: z.string().uuid().optional(),
@@ -40,11 +34,12 @@ const interfaceParamsSchema = z.object({
 
 /**
  * Discover valid routes from parsed workflow nodes/edges.
- * A valid route = input + output with same routeId, and a directed path between them.
+ * A valid route = input + output with same routeId.
+ * Path connectivity is verified at execution time, not at discovery,
+ * so partially-wired workflows still appear in the picker.
  */
 function discoverRoutes(
   nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
 ): SubWorkflowRouteSnapshot[] {
   const inputNodes = nodes.filter((n) => n.type === "sub-workflow-input")
   const outputNodes = nodes.filter((n) => n.type === "sub-workflow-output")
@@ -60,9 +55,6 @@ function discoverRoutes(
     )
     if (!matchingOutput) continue
 
-    // BFS to verify directed path
-    if (!hasPath(inputNode.id, matchingOutput.id, edges)) continue
-
     routes.push({
       routeId,
       inputLabel: (inputNode.data.label as string) || "Unnamed",
@@ -74,33 +66,6 @@ function discoverRoutes(
   }
 
   return routes
-}
-
-function hasPath(sourceId: string, targetId: string, edges: WorkflowEdge[]): boolean {
-  const adjacency = new Map<string, string[]>()
-  for (const edge of edges) {
-    const list = adjacency.get(edge.source) ?? []
-    list.push(edge.target)
-    adjacency.set(edge.source, list)
-  }
-
-  const visited = new Set<string>()
-  const queue = [sourceId]
-  visited.add(sourceId)
-
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    if (current === targetId) return true
-
-    for (const neighbor of adjacency.get(current) ?? []) {
-      if (!visited.has(neighbor)) {
-        visited.add(neighbor)
-        queue.push(neighbor)
-      }
-    }
-  }
-
-  return false
 }
 
 export async function subWorkflowRoutes(app: FastifyInstance) {
@@ -123,7 +88,7 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
 
     let dbQuery = supabase
       .from("workflows")
-      .select("id, name, project_id, nodes, edges, projects(name)")
+      .select("id, name, project_id, nodes, projects(name)")
       .eq("user_id", req.userId)
       .limit(200)
 
@@ -149,8 +114,7 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
 
     for (const wf of workflows ?? []) {
       const nodes = (wf.nodes as WorkflowNode[]) ?? []
-      const edges = (wf.edges as WorkflowEdge[]) ?? []
-      const routes = discoverRoutes(nodes, edges)
+      const routes = discoverRoutes(nodes)
       if (routes.length > 0) {
         const project = wf.projects as unknown as { name: string } | null
         callableWorkflows.push({
@@ -183,7 +147,7 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
 
     const { data: wf, error } = await supabase
       .from("workflows")
-      .select("id, nodes, edges")
+      .select("id, nodes")
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
       .single()
@@ -195,8 +159,7 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
     }
 
     const nodes = (wf.nodes as WorkflowNode[]) ?? []
-    const edges = (wf.edges as WorkflowEdge[]) ?? []
-    const routes = discoverRoutes(nodes, edges)
+    const routes = discoverRoutes(nodes)
 
     return { data: { routes } }
   })

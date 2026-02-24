@@ -11,6 +11,7 @@ import {
   type NodeMouseHandler,
   type IsValidConnection,
 } from "@xyflow/react"
+import { useSearchParams } from "react-router-dom"
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
@@ -136,8 +137,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
-  const { screenToFlowPosition, setNodes, getNode } = useReactFlow()
+  const { screenToFlowPosition, setNodes, getNode, setCenter } = useReactFlow()
   const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null)
   const [canvasContextMenu, setCanvasContextMenu] = useState<CanvasContextMenuState | null>(null)
   const [showMiniMap, setShowMiniMap] = useState(true)
@@ -149,6 +151,28 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
   const isMobile = useIsMobile()
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
+
+  // Focus on a specific node type when navigating via ?focusType= search param
+  const focusType = searchParams.get("focusType")
+  const focusedRef = useRef(false)
+  useEffect(() => {
+    if (!focusType || focusedRef.current || nodes.length === 0) return
+    const target = nodes.find((n) => n.type === focusType)
+    if (!target) return
+    focusedRef.current = true
+    // Small delay to let React Flow finish layout
+    const timer = setTimeout(() => {
+      setCenter(target.position.x + 100, target.position.y + 50, { zoom: 1, duration: 400 })
+      selectNode(target.id)
+      // Clean up the search param
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete("focusType")
+        return next
+      }, { replace: true })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [focusType, nodes, setCenter, selectNode, setSearchParams])
 
   // Prevent composition handles from connecting to non-Render-Video nodes
   const isValidConnection = useCallback<IsValidConnection>(

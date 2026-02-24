@@ -259,7 +259,6 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
   const workflowId = useWorkflowStore((s) => s.workflowId)
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const localNodes = useWorkflowStore((s) => s.nodes)
-  const localEdges = useWorkflowStore((s) => s.edges)
   const [showAllProjects, setShowAllProjects] = useState(false)
 
   const { data: callableWorkflows, isLoading: isLoadingWorkflows } = useCallableWorkflows(
@@ -272,7 +271,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
     if (!workflowId) return remote
 
     // Discover routes from local (possibly unsaved) state
-    const localRoutes = discoverRoutes(localNodes, localEdges)
+    const localRoutes = discoverRoutes(localNodes)
     if (localRoutes.length === 0) return remote
 
     const localEntry = {
@@ -292,7 +291,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
     // Replace the remote entry for the current workflow with the local one
     const filtered = remote.filter((w) => w.id !== workflowId)
     return [localEntry, ...filtered]
-  }, [callableWorkflows, workflowId, workflowName, projectId, localNodes, localEdges])
+  }, [callableWorkflows, workflowId, workflowName, projectId, localNodes])
 
   const { data: workflowInterface, isLoading: isLoadingInterface, refetch: refetchInterface } = useWorkflowInterface(
     nodeData.referencedWorkflowId || undefined,
@@ -432,7 +431,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               const wf = mergedWorkflows.find((w) => w.id === nodeData.referencedWorkflowId)
               const pid = wf?.projectId || projectId
               if (pid && nodeData.referencedWorkflowId) {
-                navigate(`/projects/${pid}/workflows/${nodeData.referencedWorkflowId}`)
+                navigate(`/projects/${pid}/workflows/${nodeData.referencedWorkflowId}?focusType=sub-workflow-input`)
               }
             }}
           >
