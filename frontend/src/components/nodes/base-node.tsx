@@ -118,7 +118,7 @@ function BaseNodeComponent({
   }
 
   return (
-    <div style={{ minHeight: `${minHeight}px` }}>
+    <div className="w-full h-full" style={{ minHeight: `${minHeight}px`, minWidth: `${minWidth}px` }}>
       <NodeResizer
         minWidth={minWidth}
         minHeight={minHeight}
@@ -128,7 +128,7 @@ function BaseNodeComponent({
       />
       <div
         className={cn(
-          "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] max-w-[320px] bg-card text-card-foreground h-full overflow-hidden",
+          "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground w-full h-full overflow-hidden",
           CATEGORY_STYLES[category],
           selected && "ring-2 ring-primary shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",
           selected && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
