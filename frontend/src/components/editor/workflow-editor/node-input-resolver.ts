@@ -133,7 +133,8 @@ export function resolveNodeInputs(
   } = {};
 
   for (const src of sourceNodes) {
-    const output = extractNodeOutput(src);
+    const srcEdge = incomingEdges.find((e) => e.source === src.id);
+    const output = extractNodeOutput(src, srcEdge?.sourceHandle ?? undefined);
     if (!output) continue;
 
     if (src.type === "text-prompt") {
@@ -431,6 +432,41 @@ export function resolveNodeInputs(
       inputs.prompt = output;
     } else if (src.type === "split-text") {
       inputs.prompt = output;
+    } else if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
+      // Route sub-workflow output by the sourceHandle to the correct media type
+      const srcData = src.data as Record<string, unknown>;
+      const routeSnapshot = srcData.routeSnapshot as { outputPorts?: Array<{ id: string; mediaType: string }> } | undefined;
+      const subEdge = incomingEdges.find((e) => e.source === src.id);
+      const sourceHandle = subEdge?.sourceHandle as string | undefined;
+
+      // Determine media type from the output port (sourceHandle = "out_<portId>")
+      let mediaType: string | undefined;
+      if (sourceHandle && routeSnapshot?.outputPorts) {
+        const portId = sourceHandle.replace(/^out_/, "");
+        const port = routeSnapshot.outputPorts.find((p) => p.id === portId);
+        mediaType = port?.mediaType;
+      }
+
+      // For sub-workflow-input, determine type from __injectedPortValues mapping
+      if (src.type === "sub-workflow-input") {
+        const ports = srcData.ports as Array<{ id: string; mediaType: string }> | undefined;
+        if (sourceHandle && ports) {
+          const port = ports.find((p) => p.id === sourceHandle);
+          mediaType = port?.mediaType;
+        }
+      }
+
+      // Route by media type
+      if (mediaType === "image") {
+        inputs.imageUrl = output;
+      } else if (mediaType === "video") {
+        inputs.videoUrl = output;
+      } else if (mediaType === "audio") {
+        inputs.audioUrl = output;
+      } else {
+        // Default to prompt for text or any
+        inputs.prompt = output;
+      }
     }
   }
 

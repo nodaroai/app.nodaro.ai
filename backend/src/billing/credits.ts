@@ -191,6 +191,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "3d-title": 15,                // Claude Sonnet
   "motion-graphics": 10,         // Claude Sonnet
   "composite": 0,
+  "sub-workflow": 0,
   // ── Node types (legacy fallback for workflow estimation) ──
   "generate-script": 10,
   "generate-image": 2,

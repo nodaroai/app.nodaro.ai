@@ -90,7 +90,7 @@ export function getEffectivelySkippedIds(
   return effectivelySkipped;
 }
 
-export function extractNodeOutput(node: WorkflowNode): string | undefined {
+export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): string | undefined {
   const data = node.data as Record<string, unknown>;
   const type = node.type;
 
@@ -363,6 +363,30 @@ export function extractNodeOutput(node: WorkflowNode): string | undefined {
     return (data.compositePlan as Record<string, unknown> | undefined)
       ? "plan-ready"
       : undefined;
+  }
+  // Sub-workflow: return the output for a specific port (via sourceHandle) or visible output
+  if (type === "sub-workflow") {
+    const outputResults = data.outputResults as Record<string, string> | undefined;
+    if (!outputResults) return undefined;
+    // If sourceHandle specifies a port (format: "out_<portId>"), return that port's value
+    if (sourceHandle) {
+      const portId = sourceHandle.replace(/^out_/, "");
+      if (outputResults[portId]) return outputResults[portId];
+    }
+    // Fall back to visible output or first result
+    const visiblePortId = (data.routeSnapshot as Record<string, unknown> | undefined)?.visibleOutputPortId as string | undefined;
+    if (visiblePortId && outputResults[visiblePortId]) return outputResults[visiblePortId];
+    const values = Object.values(outputResults);
+    return values.length > 0 ? values[0] : undefined;
+  }
+  // Sub-workflow-input: return injected port value (used inside namespaced execution)
+  if (type === "sub-workflow-input") {
+    const injected = data.__injectedPortValues as Record<string, string> | undefined;
+    if (!injected) return undefined;
+    // If sourceHandle specifies a port, return that port's value
+    if (sourceHandle && injected[sourceHandle]) return injected[sourceHandle];
+    const values = Object.values(injected);
+    return values.length > 0 ? values[0] : undefined;
   }
   return undefined;
 }

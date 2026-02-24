@@ -6,7 +6,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -118,6 +118,10 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Output
   { type: "save-to-storage", label: "Save to Storage", icon: <HardDrive className="h-4 w-4" />, category: "Output" },
   { type: "webhook-output", label: "Webhook Output", icon: <Webhook className="h-4 w-4" />, category: "Output" },
+  // Workflow
+  { type: "sub-workflow-input", label: "Sub-Workflow Input", icon: <LogIn className="h-4 w-4" />, category: "Workflow" },
+  { type: "sub-workflow-output", label: "Sub-Workflow Output", icon: <LogOut className="h-4 w-4" />, category: "Workflow" },
+  { type: "sub-workflow", label: "Sub-Workflow", icon: <Workflow className="h-4 w-4" />, category: "Workflow" },
 ]
 
 const CATEGORIES = Array.from(new Set(NODE_OPTIONS.map((n) => n.category)))
@@ -134,6 +138,7 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
   Location: "group-hover:text-[#06B6D4]",
   Scene: "group-hover:text-[#8B5CF6]",
   Output: "group-hover:text-[#22C55E]",
+  Workflow: "group-hover:text-[#F59E0B]",
 }
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {

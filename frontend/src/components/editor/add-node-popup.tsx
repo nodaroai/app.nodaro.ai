@@ -56,6 +56,9 @@ import {
   Eye,
   Languages,
   AlignLeft,
+  Workflow,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
@@ -591,6 +594,25 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Webhook className="h-4 w-4" />,
     category: "Output",
   },
+  // Sub-Workflow
+  {
+    type: "sub-workflow-input",
+    label: "Sub-Workflow Input",
+    icon: <LogIn className="h-4 w-4" />,
+    category: "Workflow",
+  },
+  {
+    type: "sub-workflow-output",
+    label: "Sub-Workflow Output",
+    icon: <LogOut className="h-4 w-4" />,
+    category: "Workflow",
+  },
+  {
+    type: "sub-workflow",
+    label: "Sub-Workflow",
+    icon: <Workflow className="h-4 w-4" />,
+    category: "Workflow",
+  },
 ];
 
 export const CATEGORIES = [
@@ -630,6 +652,12 @@ export const CATEGORIES = [
     icon: <HardDrive className="h-4 w-4" />,
     description: "Save, Webhook",
   },
+  {
+    id: "Workflow",
+    label: "WORKFLOW",
+    icon: <Workflow className="h-4 w-4" />,
+    description: "Sub-Workflows",
+  },
 ];
 
 // Category icon colors
@@ -640,6 +668,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Processing: "text-[#475569]",
   Assets: "text-[#EC4899]",
   Output: "text-[#22C55E]",
+  Workflow: "text-[#F59E0B]",
 };
 
 interface AddNodePopupProps {
