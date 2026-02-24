@@ -36,6 +36,12 @@ const mockRenderVideoWithSceneGraph = vi.fn()
 const mockRenderVideoWithPlan = vi.fn()
 const mockGenerateAIWriterStream = vi.fn()
 const mockImageToTextApi = vi.fn()
+const mockTextToDialogueApi = vi.fn()
+const mockVoiceChangerApi = vi.fn()
+const mockDubbingApi = vi.fn()
+const mockVoiceRemixApi = vi.fn()
+const mockVoiceDesignApi = vi.fn()
+const mockForcedAlignmentApi = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 let mockCharacterDefinitions: any[] = []
@@ -93,6 +99,12 @@ vi.mock("@/lib/api", () => ({
   sunoLyricsApi: vi.fn(),
   sunoSeparateApi: vi.fn(),
   sunoMusicVideoApi: vi.fn(),
+  textToDialogueApi: (...args: unknown[]) => mockTextToDialogueApi(...args),
+  voiceChangerApi: (...args: unknown[]) => mockVoiceChangerApi(...args),
+  dubbingApi: (...args: unknown[]) => mockDubbingApi(...args),
+  voiceRemixApi: (...args: unknown[]) => mockVoiceRemixApi(...args),
+  voiceDesignApi: (...args: unknown[]) => mockVoiceDesignApi(...args),
+  forcedAlignmentApi: (...args: unknown[]) => mockForcedAlignmentApi(...args),
   transcribeApi: vi.fn(),
   downloadYouTubeAudio: vi.fn(),
   lipSyncApi: vi.fn(),
@@ -1121,5 +1133,1157 @@ describe("unknown node type", () => {
     mockResolveNodeInputs.mockReturnValue({})
     await executeNode(makeNode("totally-made-up-node", {}), makeCtx())
     // should resolve without error
+  })
+})
+
+// ---------------------------------------------------------------------------
+// text-to-dialogue
+// ---------------------------------------------------------------------------
+
+describe("text-to-dialogue", () => {
+  it("rejects when no dialogue lines", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("text-to-dialogue", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No dialogue lines")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("text-to-dialogue", {
+        dialogue: [{ voice: "Rachel", text: "Hello" }],
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Text to Dialogue",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// voice-changer
+// ---------------------------------------------------------------------------
+
+describe("voice-changer", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("voice-changer", { voiceId: "abc" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("voice-changer", { voiceId: "abc" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Voice Changer",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// dubbing
+// ---------------------------------------------------------------------------
+
+describe("dubbing", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("dubbing", { targetLanguage: "es" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("dubbing", { targetLanguage: "es" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Dubbing",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// voice-remix
+// ---------------------------------------------------------------------------
+
+describe("voice-remix", () => {
+  it("rejects when no text", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("voice-remix", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No text")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("voice-remix", {
+        text: "Hello world",
+        voiceDescription: "deep male voice",
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Voice Remix",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// voice-design
+// ---------------------------------------------------------------------------
+
+describe("voice-design", () => {
+  it("rejects when no text", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("voice-design", { voiceDescription: "warm female" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow()
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("voice-design", {
+        text: "Hello world",
+        voiceDescription: "warm female",
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Voice Design",
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// forced-alignment
+// ---------------------------------------------------------------------------
+
+describe("forced-alignment", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("forced-alignment", { transcript: "Hello" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls forcedAlignmentApi on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    mockForcedAlignmentApi.mockRejectedValue(new Error("test"))
+    const promise = executeNode(
+      makeNode("forced-alignment", { transcript: "Hello world" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await new Promise((r) => setTimeout(r, 10))
+    expect(mockForcedAlignmentApi).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// lip-sync
+// ---------------------------------------------------------------------------
+
+describe("lip-sync", () => {
+  it("rejects when no portrait image", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://speech.mp3" })
+    const promise = executeNode(
+      makeNode("lip-sync", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No portrait image")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://face.png",
+      audioUrl: "http://speech.mp3",
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("lip-sync", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Lip Sync",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// motion-transfer
+// ---------------------------------------------------------------------------
+
+describe("motion-transfer", () => {
+  it("rejects when no character image", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockReturnValue(undefined)
+    const promise = executeNode(
+      makeNode("motion-transfer", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No character image")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate when edges provide inputs", async () => {
+    const imgNode = {
+      id: "img1",
+      type: "generate-image",
+      data: { label: "Img" },
+    }
+    const vidNode = {
+      id: "vid1",
+      type: "image-to-video",
+      data: { label: "Vid" },
+    }
+    mockNodes = [makeNode("motion-transfer", {}), imgNode, vidNode]
+    mockEdges = [
+      { id: "e1", source: "img1", target: "n1" },
+      { id: "e2", source: "vid1", target: "n1" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.id === "img1") return "http://face.png"
+      if (node.id === "vid1") return "http://motion.mp4"
+      return undefined
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("motion-transfer", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Motion Transfer",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// video-upscale
+// ---------------------------------------------------------------------------
+
+describe("video-upscale", () => {
+  it("rejects when no video input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("video-upscale", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-upscale", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Video Upscale",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// image-to-text
+// ---------------------------------------------------------------------------
+
+describe("image-to-text", () => {
+  it("rejects when no image input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("image-to-text", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No image input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls imageToTextApi on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://img.png" })
+    mockImageToTextApi.mockResolvedValue({ text: "A cat" })
+    await executeNode(makeNode("image-to-text", {}), makeCtx())
+    expect(mockImageToTextApi).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// transcribe
+// ---------------------------------------------------------------------------
+
+describe("transcribe", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("transcribe", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("sets running status on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    const promise = executeNode(makeNode("transcribe", {}), makeCtx())
+    promise.catch(() => {})
+    await new Promise((r) => setTimeout(r, 10))
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ executionStatus: "running" }),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-generate
+// ---------------------------------------------------------------------------
+
+describe("suno-generate", () => {
+  it("rejects when no prompt", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-generate", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No prompt")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "jazz beat" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-generate", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Generate",
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-cover
+// ---------------------------------------------------------------------------
+
+describe("suno-cover", () => {
+  it("rejects when no prompt", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-cover", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No prompt")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "cover this",
+      audioUrl: "http://song.mp3",
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-cover", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Cover",
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-extend
+// ---------------------------------------------------------------------------
+
+describe("suno-extend", () => {
+  it("rejects when no audio ID", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-extend", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio ID")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ sunoTrackId: "track-123" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-extend", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Extend",
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-lyrics
+// ---------------------------------------------------------------------------
+
+describe("suno-lyrics", () => {
+  it("rejects when no prompt", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-lyrics", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No prompt")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("sets running status on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "love song" })
+    const promise = executeNode(makeNode("suno-lyrics", {}), makeCtx())
+    promise.catch(() => {})
+    await new Promise((r) => setTimeout(r, 10))
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ executionStatus: "running" }),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-separate
+// ---------------------------------------------------------------------------
+
+describe("suno-separate", () => {
+  it("rejects when no task ID", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-separate", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No task ID")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      sunoTaskId: "task-123",
+      sunoTrackId: "track-123",
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-separate", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Separate",
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-music-video
+// ---------------------------------------------------------------------------
+
+describe("suno-music-video", () => {
+  it("rejects when no taskId or audioId", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-music-video", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("Missing taskId/audioId")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      sunoTaskId: "task-123",
+      sunoTrackId: "track-123",
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-music-video", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Suno Music Video",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// merge-video-audio
+// ---------------------------------------------------------------------------
+
+describe("merge-video-audio", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("merge-video-audio", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      videoUrl: "http://vid.mp4",
+      audioSources: [{ url: "http://audio.mp3", sourceNodeId: "src1" }],
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("merge-video-audio", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Merge Video & Audio",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// extract-audio
+// ---------------------------------------------------------------------------
+
+describe("extract-audio", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("extract-audio", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("extract-audio", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Extract Audio",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// trim-video
+// ---------------------------------------------------------------------------
+
+describe("trim-video", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("trim-video", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("trim-video", { startTime: 0, endTime: 10 }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Trim Video",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// transcode-video
+// ---------------------------------------------------------------------------
+
+describe("transcode-video", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("transcode-video", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("transcode-video", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Transcode Video",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// speed-ramp
+// ---------------------------------------------------------------------------
+
+describe("speed-ramp", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("speed-ramp", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("speed-ramp", { speed: 2.0 }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Adjust Speed",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// loop-video
+// ---------------------------------------------------------------------------
+
+describe("loop-video", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("loop-video", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("loop-video", { mode: "repeat", repeatCount: 3 }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Loop Video",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// fade-video
+// ---------------------------------------------------------------------------
+
+describe("fade-video", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("fade-video", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("fade-video", {
+        fadeIn: true,
+        fadeInDuration: 1.0,
+        fadeOut: false,
+        fadeOutDuration: 0,
+        color: "black",
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Fade In/Out",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resize-video
+// ---------------------------------------------------------------------------
+
+describe("resize-video", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("resize-video", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("resize-video", { targetAspect: "16:9" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Resize Video",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// adjust-volume
+// ---------------------------------------------------------------------------
+
+describe("adjust-volume", () => {
+  it("rejects when no audio or video input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("adjust-volume", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow()
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("adjust-volume", { volume: 150 }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// add-captions
+// ---------------------------------------------------------------------------
+
+describe("add-captions", () => {
+  it("rejects when no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("add-captions", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No video")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      videoUrl: "http://vid.mp4",
+      prompt: "Hello world",
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("add-captions", {}),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Add Captions",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// mix-audio
+// ---------------------------------------------------------------------------
+
+describe("mix-audio", () => {
+  it("rejects when fewer than 2 audio tracks", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrls: ["http://a1.mp3"] })
+    const promise = executeNode(
+      makeNode("mix-audio", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("Need at least 2 audio tracks")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      audioUrls: ["http://a1.mp3", "http://a2.mp3"],
+      audioUrlsWithSourceIds: [
+        { nodeId: "s1", url: "http://a1.mp3" },
+        { nodeId: "s2", url: "http://a2.mp3" },
+      ],
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("mix-audio", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Mix Audio",
+      expect.anything(),
+      undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// after-effects
+// ---------------------------------------------------------------------------
+
+describe("after-effects", () => {
+  it("rejects when no effect prompt", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("after-effects", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No effect prompt")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls generateAfterEffects on valid input", async () => {
+    const vidNode = {
+      id: "vid1",
+      type: "image-to-video",
+      data: { label: "V" },
+    }
+    mockNodes = [
+      makeNode("after-effects", { effectPrompt: "cinematic look" }),
+      vidNode,
+    ]
+    mockEdges = [{ id: "e1", source: "vid1", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockReturnValue("http://vid.mp4")
+    mockGenerateAfterEffects.mockResolvedValue({
+      effectPlan: { effects: [] },
+    })
+    await executeNode(
+      makeNode("after-effects", { effectPrompt: "cinematic look" }),
+      makeCtx(),
+    )
+    expect(mockGenerateAfterEffects).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// lottie-overlay
+// ---------------------------------------------------------------------------
+
+describe("lottie-overlay", () => {
+  it("rejects when no overlay prompt", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("lottie-overlay", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No overlay prompt")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls generateLottieOverlay on valid input", async () => {
+    const vidNode = {
+      id: "vid1",
+      type: "image-to-video",
+      data: { label: "V" },
+    }
+    mockNodes = [
+      makeNode("lottie-overlay", { overlayPrompt: "add sparkles" }),
+      vidNode,
+    ]
+    mockEdges = [
+      { id: "e1", source: "vid1", target: "n1", targetHandle: "in" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExtractNodeOutput.mockReturnValue("http://vid.mp4")
+    mockGenerateLottieOverlay.mockResolvedValue({
+      overlayPlan: { overlays: [] },
+    })
+    await executeNode(
+      makeNode("lottie-overlay", { overlayPrompt: "add sparkles" }),
+      makeCtx(),
+    )
+    expect(mockGenerateLottieOverlay).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 3d-title
+// ---------------------------------------------------------------------------
+
+describe("3d-title", () => {
+  it("rejects when no title prompt", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("3d-title", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No title prompt")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls generate3DTitle on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockGenerate3DTitle.mockResolvedValue({ titlePlan: { objects: [] } })
+    await executeNode(
+      makeNode("3d-title", { titlePrompt: "epic 3D title" }),
+      makeCtx(),
+    )
+    expect(mockGenerate3DTitle).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// motion-graphics
+// ---------------------------------------------------------------------------
+
+describe("motion-graphics", () => {
+  it("calls generateMotionGraphics and sets running status", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockGenerateMotionGraphics.mockResolvedValue({
+      motionPlan: { elements: [] },
+    })
+    await executeNode(
+      makeNode("motion-graphics", { motionPrompt: "lower third" }),
+      makeCtx(),
+    )
+    expect(mockGenerateMotionGraphics).toHaveBeenCalled()
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ executionStatus: "running" }),
+    )
+  })
+
+  it("calls generateMotionGraphics on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockGenerateMotionGraphics.mockResolvedValue({
+      motionPlan: { elements: [] },
+    })
+    await executeNode(
+      makeNode("motion-graphics", { motionPrompt: "lower third" }),
+      makeCtx(),
+    )
+    expect(mockGenerateMotionGraphics).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// ai-writer
+// ---------------------------------------------------------------------------
+
+describe("ai-writer", () => {
+  it("resolves without error when no systemPrompt (sets failed status)", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    await executeNode(
+      makeNode("ai-writer", {}),
+      makeCtx(),
+    )
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({
+        executionStatus: "failed",
+        errorMessage: "System prompt is required",
+      }),
+    )
+  })
+
+  it("calls generateAIWriterStream on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockGenerateAIWriterStream.mockResolvedValue({
+      jobId: "j1",
+      generatedText: "Hello world",
+    })
+    await executeNode(
+      makeNode("ai-writer", {
+        systemPrompt: "You are a writer",
+        userInput: "Write something",
+      }),
+      makeCtx(),
+    )
+    expect(mockGenerateAIWriterStream).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// text-to-audio
+// ---------------------------------------------------------------------------
+
+describe("text-to-audio", () => {
+  it("rejects when no prompt", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("text-to-audio", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No prompt")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "rain sounds" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("text-to-audio", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Text to Audio",
+      expect.anything(),
+      undefined,
+    )
   })
 })

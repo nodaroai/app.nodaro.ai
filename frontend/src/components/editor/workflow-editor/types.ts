@@ -57,6 +57,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "voice-remix": 4,
   "voice-design": 5,
   "forced-alignment": 3,
+  "sub-workflow": 0,
 };
 
 export const EXECUTABLE_TYPES = new Set([
@@ -115,6 +116,7 @@ export const EXECUTABLE_TYPES = new Set([
   "voice-remix",
   "voice-design",
   "forced-alignment",
+  "sub-workflow",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 5;

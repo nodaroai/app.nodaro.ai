@@ -99,6 +99,9 @@ import {
   SaveToStorageConfig,
   WebhookOutputConfig,
   SplitTextConfig,
+  SubWorkflowInputConfig,
+  SubWorkflowOutputConfig,
+  SubWorkflowConfig,
 } from "./config-panels"
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
@@ -165,6 +168,9 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "object": "Object",
   "location": "Location",
   "scene": "Scene",
+  "sub-workflow-input": "Sub-Workflow Input",
+  "sub-workflow-output": "Sub-Workflow Output",
+  "sub-workflow": "Sub-Workflow",
 }
 
 export function getNodeTypeDisplayName(type: string): string {
@@ -185,6 +191,7 @@ export const RUN_BUTTON_TYPES = new Set([
   "merge-video-audio", "combine-videos", "extract-audio", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "adjust-volume",
   "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
+  "sub-workflow",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
@@ -446,6 +453,10 @@ export function ConfigPanel() {
 
           {nodeType === "save-to-storage" && <SaveToStorageConfig {...configProps} />}
           {nodeType === "webhook-output" && <WebhookOutputConfig {...configProps} />}
+
+          {nodeType === "sub-workflow-input" && <SubWorkflowInputConfig {...configProps} />}
+          {nodeType === "sub-workflow-output" && <SubWorkflowOutputConfig {...configProps} />}
+          {nodeType === "sub-workflow" && <SubWorkflowConfig {...configProps} />}
 
           {nodeType === "character" && <CharacterConfig data={nodeData as any} onUpdate={update} />}
           {nodeType === "face" && <FaceConfig data={nodeData as any} onUpdate={update} />}

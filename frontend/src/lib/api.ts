@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase"
+import type { SubWorkflowRouteSnapshot } from "@/types/nodes"
 
 export const API_BASE_URL = ''
 
@@ -2539,4 +2540,41 @@ export async function renameVoiceClone(id: string, name: string): Promise<void> 
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to rename voice clone")
   }
+}
+
+// --- Sub-Workflow APIs ---
+
+interface CallableWorkflow {
+  id: string
+  name: string
+  projectId: string
+  projectName: string
+  routes: SubWorkflowRouteSnapshot[]
+}
+
+export async function getCallableWorkflows(projectId?: string): Promise<CallableWorkflow[]> {
+  const params = new URLSearchParams()
+  if (projectId) params.set("projectId", projectId)
+  const url = `${API_BASE_URL}/v1/workflows/callable${params.toString() ? `?${params}` : ""}`
+  const res = await fetch(url, {
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to fetch callable workflows")
+  }
+  const json = await res.json()
+  return json.data
+}
+
+export async function getWorkflowInterface(workflowId: string): Promise<{ routes: SubWorkflowRouteSnapshot[] }> {
+  const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}/interface`, {
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to fetch workflow interface")
+  }
+  const json = await res.json()
+  return json.data
 }

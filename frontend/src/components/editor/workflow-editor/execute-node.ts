@@ -105,6 +105,7 @@ import type {
   VoiceRemixData,
   VoiceDesignData,
   ForcedAlignmentData,
+  SubWorkflowData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -2662,6 +2663,13 @@ export function executeNode(
       __listTotal: parts.length,
     });
     return Promise.resolve();
+  }
+
+  // Sub-Workflow — delegates to the sub-workflow executor
+  if (node.type === "sub-workflow") {
+    return import("./sub-workflow-executor").then(({ executeSubWorkflow }) =>
+      executeSubWorkflow(node, ctx),
+    )
   }
 
   return Promise.resolve();

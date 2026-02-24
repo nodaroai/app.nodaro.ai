@@ -272,6 +272,20 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.errorMessage = undefined
           break
 
+        case "sub-workflow-input":
+        case "sub-workflow-output":
+          // No generated content to strip
+          break
+
+        case "sub-workflow":
+          data.executionStatus = "idle"
+          data.errorMessage = undefined
+          data.outputResults = undefined
+          data.generatedResults = []
+          data.activeResultIndex = 0
+          data.subWorkflowProgress = undefined
+          break
+
         default:
           // For any other node type, clear common generated fields
           if ('generatedResults' in data) {

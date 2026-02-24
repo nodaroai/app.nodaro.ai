@@ -375,4 +375,47 @@ describe("extractNodeOutput", () => {
     })
     expect(extractNodeOutput(node)).toBe("line one")
   })
+
+  // sub-workflow tests
+  it("returns specific port output via sourceHandle for sub-workflow", () => {
+    const node = makeNode("1", "sub-workflow", {
+      outputResults: { portA: "http://a.png", portB: "http://b.mp4" },
+      routeSnapshot: { visibleOutputPortId: "portA" },
+    })
+    expect(extractNodeOutput(node, "out_portB")).toBe("http://b.mp4")
+  })
+
+  it("returns visible output when no sourceHandle for sub-workflow", () => {
+    const node = makeNode("1", "sub-workflow", {
+      outputResults: { portA: "http://a.png", portB: "http://b.mp4" },
+      routeSnapshot: { visibleOutputPortId: "portA" },
+    })
+    expect(extractNodeOutput(node)).toBe("http://a.png")
+  })
+
+  it("returns first value when no visibleOutputPortId for sub-workflow", () => {
+    const node = makeNode("1", "sub-workflow", {
+      outputResults: { portX: "http://x.png" },
+      routeSnapshot: { visibleOutputPortId: "" },
+    })
+    expect(extractNodeOutput(node)).toBe("http://x.png")
+  })
+
+  it("returns undefined when no outputResults for sub-workflow", () => {
+    const node = makeNode("1", "sub-workflow", {})
+    expect(extractNodeOutput(node)).toBeUndefined()
+  })
+
+  // sub-workflow-input tests
+  it("returns injected port value via sourceHandle for sub-workflow-input", () => {
+    const node = makeNode("1", "sub-workflow-input", {
+      __injectedPortValues: { p1: "http://injected.png", p2: "hello text" },
+    })
+    expect(extractNodeOutput(node, "p1")).toBe("http://injected.png")
+  })
+
+  it("returns undefined when no injected values for sub-workflow-input", () => {
+    const node = makeNode("1", "sub-workflow-input", {})
+    expect(extractNodeOutput(node)).toBeUndefined()
+  })
 })

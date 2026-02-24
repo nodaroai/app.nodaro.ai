@@ -82,6 +82,7 @@ import { dubbingRoutes } from "./routes/dubbing.js"
 import { voiceRemixRoutes } from "./routes/voice-remix.js"
 import { voiceDesignRoutes } from "./routes/voice-design.js"
 import { forcedAlignmentRoutes } from "./routes/forced-alignment.js"
+import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -190,6 +191,7 @@ export async function buildApp() {
   await app.register(voiceRemixRoutes)
   await app.register(voiceDesignRoutes)
   await app.register(forcedAlignmentRoutes)
+  await app.register(subWorkflowRoutes)
 
   return app
 }

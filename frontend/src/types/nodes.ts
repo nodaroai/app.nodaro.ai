@@ -1597,6 +1597,55 @@ export type SceneNodeDataType = {
   videoExecutionStatus: "idle" | "running" | "completed" | "failed"
 }
 
+// --- Sub-Workflow Types ---
+
+export interface SubWorkflowPort {
+  readonly id: string
+  readonly name: string
+  readonly mediaType: "text" | "image" | "video" | "audio" | "any"
+}
+
+export type SubWorkflowInputData = {
+  [key: string]: unknown
+  label: string
+  routeId: string
+  ports: SubWorkflowPort[]
+  /** Injected at runtime during sub-workflow execution — maps port ID to upstream output value */
+  __injectedPortValues?: Record<string, string>
+}
+
+export type SubWorkflowOutputData = {
+  [key: string]: unknown
+  label: string
+  routeId: string
+  ports: SubWorkflowPort[]
+  visibleOutputPortId: string
+}
+
+export interface SubWorkflowRouteSnapshot {
+  readonly routeId: string
+  readonly inputLabel: string
+  readonly inputPorts: ReadonlyArray<SubWorkflowPort>
+  readonly outputPorts: ReadonlyArray<SubWorkflowPort>
+  readonly visibleOutputPortId: string
+}
+
+export type SubWorkflowData = {
+  [key: string]: unknown
+  label: string
+  referencedWorkflowId: string
+  referencedWorkflowName: string
+  selectedRouteId: string
+  routeSnapshot: SubWorkflowRouteSnapshot | null
+  fieldMappings: Record<string, FieldMapping>
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  outputResults?: Record<string, string>
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  subWorkflowProgress?: { currentNode: string; completed: number; total: number }
+}
+
 // --- Union Types ---
 
 export type SceneNodeData =
@@ -1677,6 +1726,9 @@ export type SceneNodeData =
   | CombineTextNodeData
   | SplitTextData
   | StickyNoteData
+  | SubWorkflowInputData
+  | SubWorkflowOutputData
+  | SubWorkflowData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -1756,6 +1808,9 @@ export type SceneNodeType =
   | "combine-text"
   | "split-text"
   | "sticky-note"
+  | "sub-workflow-input"
+  | "sub-workflow-output"
+  | "sub-workflow"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -2778,5 +2833,50 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       italic: false,
       alignment: "left",
     } as StickyNoteData,
+  },
+  // Sub-Workflow
+  {
+    type: "sub-workflow-input",
+    label: "Sub-Workflow Input",
+    category: "utility",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["out"],
+    defaultData: {
+      label: "Sub-Workflow Input",
+      routeId: "",
+      ports: [{ id: "", name: "Input", mediaType: "any" }],
+    } as SubWorkflowInputData,
+  },
+  {
+    type: "sub-workflow-output",
+    label: "Sub-Workflow Output",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "Sub-Workflow Output",
+      routeId: "",
+      ports: [{ id: "", name: "Output", mediaType: "any" }],
+      visibleOutputPortId: "",
+    } as SubWorkflowOutputData,
+  },
+  {
+    type: "sub-workflow",
+    label: "Sub-Workflow",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Sub-Workflow",
+      referencedWorkflowId: "",
+      referencedWorkflowName: "",
+      selectedRouteId: "",
+      routeSnapshot: null,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as SubWorkflowData,
   },
 ]
