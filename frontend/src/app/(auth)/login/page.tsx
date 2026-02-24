@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 
-const PENDING_PLAN_KEY = "scenenode_pending_plan"
+const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
 export default function LoginPage() {
   const { signInWithGoogle } = useAuth()
@@ -44,7 +44,7 @@ export default function LoginPage() {
         {/* Logo + tagline */}
         <div className="space-y-3">
           <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-[#ff0073] to-purple-500 bg-clip-text text-transparent">
-            SceneNode
+            Nodaro
           </h1>
           <p className="text-base text-muted-foreground animate-in fade-in duration-700">
             Visual workflows for AI video generation
@@ -75,15 +75,15 @@ export default function LoginPage() {
 
       {/* Legal footer */}
       <div className="absolute bottom-6 flex items-center justify-center gap-4 text-xs text-muted-foreground/60">
-        <a href="https://scenenode.ai/terms" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+        <a href="https://nodaro.ai/terms" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
           Terms of Service
         </a>
         <span>&middot;</span>
-        <a href="https://scenenode.ai/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+        <a href="https://nodaro.ai/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
           Privacy Policy
         </a>
         <span>&middot;</span>
-        <a href="https://scenenode.ai/refund" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
+        <a href="https://nodaro.ai/refund" target="_blank" rel="noopener noreferrer" className="hover:text-muted-foreground transition-colors">
           Refund Policy
         </a>
       </div>

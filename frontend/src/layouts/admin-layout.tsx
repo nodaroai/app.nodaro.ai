@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { isFeatureEnabled } from "@/lib/edition"
 
-const STORAGE_KEY = "scenenode-admin-sidebar-collapsed"
+const STORAGE_KEY = "nodaro-admin-sidebar-collapsed"
 
 const ADMIN_NAV = [
   { href: "/admin", label: "Dashboard", icon: BarChart3 },

@@ -1,7 +1,7 @@
 /**
  * KIE.ai Model Mapping
  *
- * Maps SceneNode provider names to KIE.ai model identifiers and costs.
+ * Maps Nodaro provider names to KIE.ai model identifiers and costs.
  * Used only in cloud edition when ai_provider=kie.
  *
  * Cost source: KIE.ai pricing page (https://kie.ai/pricing)

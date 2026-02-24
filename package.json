@@ -1,5 +1,5 @@
 {
-  "name": "scenenode-ai",
+  "name": "nodaro-ai",
   "private": true,
   "scripts": {
     "dev": "cd frontend && npm run dev",

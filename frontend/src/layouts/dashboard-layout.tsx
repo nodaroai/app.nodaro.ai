@@ -27,9 +27,9 @@ export default function DashboardLayout() {
 
   // After OAuth login, check for a pending plan selection and redirect to pricing
   useEffect(() => {
-    const pendingPlan = localStorage.getItem("scenenode_pending_plan")
+    const pendingPlan = localStorage.getItem("nodaro_pending_plan")
     if (pendingPlan) {
-      localStorage.removeItem("scenenode_pending_plan")
+      localStorage.removeItem("nodaro_pending_plan")
       navigate(`/_pricing?plan=${encodeURIComponent(pendingPlan)}`, { replace: true })
     }
   }, [])

@@ -29,7 +29,7 @@ import { isFeatureEnabled } from "@/lib/edition"
 import { APP_VERSION } from "@/lib/version"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
 
-const STORAGE_KEY = "scenenode-sidebar-collapsed"
+const STORAGE_KEY = "nodaro-sidebar-collapsed"
 
 interface NavItem {
   readonly href: string
@@ -144,9 +144,9 @@ export function AppSidebar({
             )}
           >
             {isCollapsed ? (
-              <span className="text-lg">S</span>
+              <span className="text-lg">N</span>
             ) : (
-              <span className="text-lg">SceneNode</span>
+              <span className="text-lg">Nodaro</span>
             )}
           </Link>
           {/* Mobile close button */}
@@ -368,7 +368,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
       >
         <Menu className="h-5 w-5" />
       </Button>
-      <span className="text-sm font-bold text-[#ff0073]">SceneNode</span>
+      <span className="text-sm font-bold text-[#ff0073]">Nodaro</span>
       <div className="ml-auto">
         <ThemeToggle />
       </div>

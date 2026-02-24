@@ -10,7 +10,7 @@
 - `backend/CLAUDE.md` — Backend patterns (providers, credits, billing, worker)
 - `backend/src/providers/kie/CLAUDE.md` — KIE.ai API docs, model key → doc map, param gotchas
 
-# SceneNode.ai — Claude Code Reference
+# Nodaro.ai — Claude Code Reference
 
 ## Development Conventions
 
@@ -250,5 +250,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-02-23*
-*Version: 1.45.0*
+*Last updated: 2026-02-24*
+*Version: 1.46.0*

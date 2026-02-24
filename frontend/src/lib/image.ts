@@ -4,7 +4,7 @@ export function optimizedImageUrl(
   url: string,
   opts: { width?: number; quality?: number } = {},
 ): string {
-  if (!url || !url.includes("cdn.scenenode.ai")) return url
+  if (!url || !url.includes("cdn.nodaro.ai")) return url
   // Already transformed — don't double-wrap
   if (url.includes(CF_TRANSFORM_PREFIX)) return url
 

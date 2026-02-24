@@ -1,6 +1,6 @@
-# How to Add a New Node to SceneNode.ai
+# How to Add a New Node to Nodaro.ai
 
-Step-by-step guide for adding a new node type to the SceneNode.ai workflow editor.
+Step-by-step guide for adding a new node type to the Nodaro.ai workflow editor.
 
 ---
 

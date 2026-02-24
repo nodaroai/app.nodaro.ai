@@ -423,7 +423,7 @@ export default function GalleryPage() {
               Back to app
             </Link>
             <Link to="/" className="text-lg font-bold text-[#ff0073]">
-              SceneNode
+              Nodaro
             </Link>
             <ThemeToggle />
           </div>
@@ -436,7 +436,7 @@ export default function GalleryPage() {
           Community Gallery
         </h1>
         <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
-          Explore what people are creating with SceneNode
+          Explore what people are creating with Nodaro
         </p>
       </section>
 

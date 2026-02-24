@@ -1,4 +1,4 @@
-# SceneNode.ai — Node Catalog
+# Nodaro.ai — Node Catalog
 
 **73 nodes across 11 categories**
 

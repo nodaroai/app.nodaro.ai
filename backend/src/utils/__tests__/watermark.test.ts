@@ -53,11 +53,11 @@ describe("applyImageWatermark", () => {
     expect(svg).toContain('font-size="16"')
   })
 
-  it("includes SceneNode.ai text in SVG", async () => {
+  it("includes Nodaro.ai text in SVG", async () => {
     await applyImageWatermark(Buffer.from("test"))
     const compositeCall = mocks.mockComposite.mock.calls[0][0][0]
     const svg = compositeCall.input.toString()
-    expect(svg).toContain("SceneNode.ai")
+    expect(svg).toContain("Nodaro.ai")
   })
 })
 
@@ -68,7 +68,7 @@ describe("applyVideoWatermark", () => {
       expect.arrayContaining([
         "-y",
         "-i", "/tmp/input.mp4",
-        "-vf", expect.stringContaining("SceneNode.ai"),
+        "-vf", expect.stringContaining("Nodaro.ai"),
         "/tmp/output.mp4",
       ]),
     )

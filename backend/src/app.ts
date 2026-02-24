@@ -92,7 +92,7 @@ export async function buildApp() {
   // any origins from CORS_ORIGIN env var (comma-separated).
   const allowedOrigins = new Set([
     "http://localhost:3000",
-    "https://app.scenenode.ai",
+    "https://app.nodaro.ai",
   ])
   if (config.CORS_ORIGIN) {
     for (const o of config.CORS_ORIGIN.split(",")) {

@@ -1,10 +1,10 @@
 import sharp from "sharp"
 import { runFfmpeg, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 
-const WATERMARK_TEXT = "SceneNode.ai"
+const WATERMARK_TEXT = "Nodaro.ai"
 
 /**
- * Composite a semi-transparent "SceneNode.ai" text watermark
+ * Composite a semi-transparent "Nodaro.ai" text watermark
  * onto the bottom-right corner of an image buffer using sharp.
  */
 export async function applyImageWatermark(buffer: Buffer): Promise<Buffer> {
@@ -30,7 +30,7 @@ export async function applyImageWatermark(buffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Burn a semi-transparent "SceneNode.ai" text watermark
+ * Burn a semi-transparent "Nodaro.ai" text watermark
  * into the bottom-right corner of a video using ffmpeg drawtext.
  */
 export async function applyVideoWatermark(
