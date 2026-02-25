@@ -190,9 +190,13 @@ function routeOutput(
     return
   }
 
-  // --- Entity nodes → reference images ---
+  // --- Entity nodes → reference images (or imageUrl for lip-sync) ---
   if (ENTITY_NODE_TYPES.has(srcType)) {
-    inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+    if (targetType === "lip-sync") {
+      inputs.imageUrl = output
+    } else {
+      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+    }
     return
   }
 

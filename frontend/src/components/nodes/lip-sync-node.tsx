@@ -27,6 +27,7 @@ const IMAGE_OUTPUT_TYPES = [
   "character",
   "object",
   "location",
+  "face",
   "image-to-image",
   "edit-image",
 ]

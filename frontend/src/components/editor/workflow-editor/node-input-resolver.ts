@@ -184,10 +184,14 @@ export function resolveNodeInputs(
       src.type === "object" ||
       src.type === "location"
     ) {
-      inputs.referenceImageUrls = [
-        ...(inputs.referenceImageUrls ?? []),
-        output,
-      ];
+      if (node.type === "lip-sync") {
+        inputs.imageUrl = output;
+      } else {
+        inputs.referenceImageUrls = [
+          ...(inputs.referenceImageUrls ?? []),
+          output,
+        ];
+      }
     } else if (src.type === "upload-video" || src.type === "youtube-video") {
       if (node.type === "suno-cover" && src.type === "youtube-video") {
         const srcData = src.data as Record<string, unknown>;
