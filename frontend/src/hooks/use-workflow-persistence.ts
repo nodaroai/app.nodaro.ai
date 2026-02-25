@@ -235,8 +235,12 @@ export function useWorkflowPersistence(projectId?: string) {
       const resolvedProjectId = pid ?? projectId
       if (!resolvedProjectId) return { success: false, error: "No project ID" }
 
-      const { workflowId, workflowName, nodes, edges, characterDefinitions, flowPromptTemplates } =
+      const { workflowId, workflowName, nodes: allNodes, edges: allEdges, characterDefinitions, flowPromptTemplates } =
         useWorkflowStore.getState()
+
+      // Filter out temporary sub-workflow execution nodes/edges
+      const nodes = allNodes.filter((n) => !n.id.startsWith("__sub_"))
+      const edges = allEdges.filter((e) => !e.id.startsWith("__sub_"))
 
       // Don't save empty workflows
       if (nodes.length === 0) return { success: false, error: "Empty workflow" }

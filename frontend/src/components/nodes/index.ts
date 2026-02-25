@@ -78,6 +78,8 @@ import { StickyNoteNode } from "./sticky-note-node";
 import { SubWorkflowInputNode } from "./sub-workflow-input-node";
 import { SubWorkflowOutputNode } from "./sub-workflow-output-node";
 import { SubWorkflowNode } from "./sub-workflow-node";
+import { WebhookTriggerNode } from "./webhook-trigger-node";
+import { ScheduleTriggerNode } from "./schedule-trigger-node";
 import type { SceneNodeType } from "@/types/nodes";
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -90,6 +92,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "upload-audio": UploadAudioNode,
   "rss-feed": RSSFeedNode,
   "youtube-video": YouTubeVideoNode,
+  "webhook-trigger": WebhookTriggerNode,
+  "schedule-trigger": ScheduleTriggerNode,
   // Parameter
   tone: ToneNode,
   "style-guide": StyleGuideNode,

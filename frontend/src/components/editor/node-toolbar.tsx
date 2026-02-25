@@ -34,6 +34,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "rss-feed", label: "RSS Feed", icon: <Rss className="h-4 w-4" />, category: "Input" },
   { type: "youtube-video", label: "Video URL", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "reference-audio", label: "Reference Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
+  { type: "webhook-trigger" as const, label: "Webhook Trigger", icon: <Webhook className="h-4 w-4" />, category: "Input" },
+  { type: "schedule-trigger" as const, label: "Schedule Trigger", icon: <Clock className="h-4 w-4" />, category: "Input" },
   // Parameter
   { type: "tone", label: "Tone", icon: <Palette className="h-4 w-4" />, category: "Parameter" },
   { type: "style-guide", label: "Style Guide", icon: <PaintBucket className="h-4 w-4" />, category: "Parameter" },

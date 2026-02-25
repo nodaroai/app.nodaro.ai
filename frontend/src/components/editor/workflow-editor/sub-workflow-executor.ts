@@ -156,7 +156,7 @@ export async function executeSubWorkflow(
         }
       }
 
-      return { ...n, id: `${prefix}${n.id}`, data: nodeData } as WorkflowNode
+      return { ...n, id: `${prefix}${n.id}`, data: nodeData, hidden: true } as WorkflowNode
     })
 
     const namespacedEdges: WorkflowEdge[] = subEdges.map((e) => ({

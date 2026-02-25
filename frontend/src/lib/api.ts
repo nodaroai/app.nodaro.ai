@@ -2578,3 +2578,147 @@ export async function getWorkflowInterface(workflowId: string): Promise<{ routes
   const json = await res.json()
   return json.data
 }
+
+// ---------------------------------------------------------------------------
+// Workflow execution API
+// ---------------------------------------------------------------------------
+
+export interface WorkflowExecution {
+  id: string
+  workflowId: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out'
+  triggerType: 'manual' | 'webhook' | 'schedule'
+  triggerData?: Record<string, unknown>
+  nodeStates?: Record<string, unknown>
+  totalNodes: number
+  completedNodes: number
+  failedNodes: number
+  totalCreditsUsed: number
+  errorMessage?: string
+  startedAt?: string
+  completedAt?: string
+  createdAt: string
+}
+
+export interface WorkflowTrigger {
+  id: string
+  workflowId: string
+  type: 'webhook' | 'schedule'
+  config: Record<string, unknown>
+  isActive: boolean
+  webhookToken?: string
+  webhookUrl?: string
+  lastTriggeredAt?: string
+  createdAt: string
+}
+
+/**
+ * Internal helper for simple API requests that follow the standard
+ * fetch -> check ok -> throwApiError -> return json pattern.
+ */
+async function apiRequest<T>(
+  path: string,
+  errorMessage: string,
+  opts?: { method?: string; body?: unknown },
+): Promise<T> {
+  const headers: Record<string, string> = { ...(await getAuthHeaders()) }
+  if (opts?.body !== undefined) headers["Content-Type"] = "application/json"
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: opts?.method ?? "GET",
+    headers,
+    body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, errorMessage)
+  }
+  return res.json() as Promise<T>
+}
+
+/** Run a workflow (creates execution, enqueues orchestrator). */
+export function runWorkflow(workflowId: string): Promise<{ executionId: string }> {
+  return apiRequest(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/run`,
+    "Failed to run workflow",
+    { method: "POST" },
+  )
+}
+
+/** Get execution status + node states. */
+export async function getWorkflowExecution(executionId: string): Promise<WorkflowExecution> {
+  const json = await apiRequest<{ data: WorkflowExecution }>(
+    `/v1/workflow-executions/${encodeURIComponent(executionId)}`,
+    "Failed to fetch execution",
+  )
+  return json.data
+}
+
+/** Cancel an active execution. */
+export function cancelWorkflowExecution(executionId: string): Promise<void> {
+  return apiRequest(
+    `/v1/workflow-executions/${encodeURIComponent(executionId)}/cancel`,
+    "Failed to cancel execution",
+    { method: "POST" },
+  )
+}
+
+/** List executions for a workflow. */
+export function listWorkflowExecutions(
+  workflowId: string,
+  opts?: { limit?: number; cursor?: string },
+): Promise<{ data: WorkflowExecution[]; nextCursor?: string }> {
+  const params = new URLSearchParams()
+  if (opts?.limit) params.set("limit", String(opts.limit))
+  if (opts?.cursor) params.set("cursor", opts.cursor)
+
+  return apiRequest(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/executions?${params}`,
+    "Failed to list executions",
+  )
+}
+
+/** Create a workflow trigger (webhook or schedule). */
+export async function createWorkflowTrigger(
+  workflowId: string,
+  type: "webhook" | "schedule",
+  config?: Record<string, unknown>,
+): Promise<WorkflowTrigger> {
+  const json = await apiRequest<{ data: WorkflowTrigger }>(
+    `/v1/workflow-triggers`,
+    "Failed to create trigger",
+    { method: "POST", body: { workflowId, type, config } },
+  )
+  return json.data
+}
+
+/** List triggers for a workflow. */
+export async function listWorkflowTriggers(workflowId: string): Promise<WorkflowTrigger[]> {
+  const json = await apiRequest<{ data: WorkflowTrigger[] }>(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/triggers`,
+    "Failed to list triggers",
+  )
+  return json.data
+}
+
+/** Update a workflow trigger. */
+export async function updateWorkflowTrigger(
+  triggerId: string,
+  updates: { isActive?: boolean; config?: Record<string, unknown> },
+): Promise<WorkflowTrigger> {
+  const json = await apiRequest<{ data: WorkflowTrigger }>(
+    `/v1/workflow-triggers/${encodeURIComponent(triggerId)}`,
+    "Failed to update trigger",
+    { method: "PATCH", body: updates },
+  )
+  return json.data
+}
+
+/** Delete a workflow trigger. */
+export function deleteWorkflowTrigger(triggerId: string): Promise<void> {
+  return apiRequest(
+    `/v1/workflow-triggers/${encodeURIComponent(triggerId)}`,
+    "Failed to delete trigger",
+    { method: "DELETE" },
+  )
+}

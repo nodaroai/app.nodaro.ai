@@ -1647,6 +1647,24 @@ export type SubWorkflowData = {
   subWorkflowProgress?: { currentNode: string; completed: number; total: number }
 }
 
+// --- Trigger Node Data Types ---
+
+export type WebhookTriggerData = {
+  [key: string]: unknown
+  label: string
+  webhookToken?: string
+  webhookUrl?: string
+}
+
+export type ScheduleTriggerData = {
+  [key: string]: unknown
+  label: string
+  cron?: string
+  timezone?: string
+  interval?: string
+  maxExecutions?: number
+}
+
 // --- Union Types ---
 
 export type SceneNodeData =
@@ -1730,6 +1748,8 @@ export type SceneNodeData =
   | SubWorkflowInputData
   | SubWorkflowOutputData
   | SubWorkflowData
+  | WebhookTriggerData
+  | ScheduleTriggerData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -1812,6 +1832,8 @@ export type SceneNodeType =
   | "sub-workflow-input"
   | "sub-workflow-output"
   | "sub-workflow"
+  | "webhook-trigger"
+  | "schedule-trigger"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -1908,6 +1930,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: [],
     outputs: ["audio"],
     defaultData: { label: "Reference Audio", sourceType: "youtube", youtubeUrl: "", uploadedFileUrl: "", directUrl: "", videoTitle: "", videoThumbnail: "", videoDuration: "", extractedAudioUrl: "", extractionStatus: "idle" },
+  },
+  {
+    type: "webhook-trigger",
+    label: "Webhook Trigger",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["payload"],
+    defaultData: { label: "Webhook Trigger" } as unknown as SceneNodeData,
+  },
+  {
+    type: "schedule-trigger",
+    label: "Schedule Trigger",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["payload"],
+    defaultData: { label: "Schedule Trigger" } as unknown as SceneNodeData,
   },
   // Parameter
   {

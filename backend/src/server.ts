@@ -1,6 +1,7 @@
 import { config, hasCredits } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCleanupCron } from "./billing/cleanup-cron.js"
+import { startScheduleCron } from "./lib/schedule-cron.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -19,6 +20,9 @@ async function main() {
   if (hasCredits()) {
     startCleanupCron()
   }
+
+  // Start schedule cron for workflow triggers
+  startScheduleCron()
 
   // Graceful shutdown
   const shutdown = async () => {

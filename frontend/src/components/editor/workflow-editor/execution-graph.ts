@@ -418,6 +418,8 @@ export function collapseExpandedClones(): {
 
   nodes = nodes.map((n) => {
     if (!n.hidden) return n;
+    // Don't unhide sub-workflow namespaced nodes — they are cleaned up separately
+    if (n.id.startsWith("__sub_")) return n;
     return { ...n, hidden: false };
   });
 

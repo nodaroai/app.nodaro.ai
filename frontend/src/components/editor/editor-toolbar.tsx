@@ -286,6 +286,10 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.subWorkflowProgress = undefined
           break
 
+        case "webhook-trigger":
+        case "schedule-trigger":
+          break
+
         default:
           // For any other node type, clear common generated fields
           if ('generatedResults' in data) {

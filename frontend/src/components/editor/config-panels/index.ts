@@ -12,5 +12,6 @@ export { CharacterConfig, FaceConfig, ObjectConfig, LocationConfig } from "./ent
 export { AIWriterConfig } from "./ai-writer-config"
 export { CombineTextConfig, SaveToStorageConfig, WebhookOutputConfig, SplitTextConfig } from "./utility-configs"
 export { SubWorkflowInputConfig, SubWorkflowOutputConfig, SubWorkflowConfig } from "./sub-workflow-configs"
+export { WebhookTriggerConfig, ScheduleTriggerConfig } from "./trigger-configs"
 export { getConnectedSources, getModelIdentifier, buildCreditModelIdentifier } from "./helpers"
 export type { SourceNodeInfo, ConfigProps } from "./types"

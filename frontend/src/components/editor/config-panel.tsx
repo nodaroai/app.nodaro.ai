@@ -102,6 +102,8 @@ import {
   SubWorkflowInputConfig,
   SubWorkflowOutputConfig,
   SubWorkflowConfig,
+  WebhookTriggerConfig,
+  ScheduleTriggerConfig,
 } from "./config-panels"
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
@@ -171,6 +173,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "sub-workflow-input": "Sub-Workflow Input",
   "sub-workflow-output": "Sub-Workflow Output",
   "sub-workflow": "Sub-Workflow",
+  "webhook-trigger": "Webhook Trigger",
+  "schedule-trigger": "Schedule Trigger",
 }
 
 export function getNodeTypeDisplayName(type: string): string {
@@ -367,6 +371,8 @@ export function ConfigPanel() {
           {nodeType === "rss-feed" && <RSSFeedConfig {...configProps} />}
           {nodeType === "youtube-video" && <YouTubeVideoConfig {...configProps} />}
           {nodeType === "reference-audio" && <ReferenceAudioConfig {...configProps} />}
+          {nodeType === "webhook-trigger" && <WebhookTriggerConfig {...configProps} />}
+          {nodeType === "schedule-trigger" && <ScheduleTriggerConfig {...configProps} />}
 
           {nodeType === "tone" && <ToneConfig {...configProps} />}
           {nodeType === "style-guide" && <StyleGuideConfig {...configProps} />}

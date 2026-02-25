@@ -298,13 +298,6 @@ export async function workflowRoutes(app: FastifyInstance) {
     return { success: true }
   })
 
-  // Run workflow — not yet implemented
-  app.post("/v1/workflows/:id/run", async (_req, reply) => {
-    return reply.status(501).send({
-      error: {
-        code: "not_implemented",
-        message: "Workflow execution is not yet implemented",
-      },
-    })
-  })
+  // Run workflow — handled by workflow-execution.ts route
+  // (POST /v1/workflows/:id/run is registered there)
 }

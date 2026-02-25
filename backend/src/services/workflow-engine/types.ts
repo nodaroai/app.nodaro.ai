@@ -1,0 +1,133 @@
+/**
+ * Shared types for the backend workflow execution engine.
+ */
+
+// ---------------------------------------------------------------------------
+// Node execution state (stored in workflow_executions.node_states JSONB)
+// ---------------------------------------------------------------------------
+
+export interface NodeOutput {
+  imageUrl?: string
+  videoUrl?: string
+  audioUrl?: string
+  text?: string
+  plan?: Record<string, unknown>
+  thumbnailUrl?: string
+  sunoTrackId?: string
+  sunoTaskId?: string
+  generatedVoiceId?: string
+  alignment?: unknown
+  script?: unknown
+  vocalUrl?: string
+  instrumentalUrl?: string
+  splitResults?: string[]
+  combinedText?: string
+}
+
+export type NodeExecutionStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped"
+
+export interface NodeExecutionState {
+  status: NodeExecutionStatus
+  jobId?: string
+  usageLogId?: string
+  creditsUsed?: number
+  output?: NodeOutput
+  error?: string
+  startedAt?: string
+  completedAt?: string
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrator job data (enqueued to BullMQ)
+// ---------------------------------------------------------------------------
+
+export interface WorkflowExecutionJob {
+  executionId: string
+  workflowId: string
+  userId: string
+  triggerType: "manual" | "webhook" | "schedule"
+  triggerData?: Record<string, unknown>
+}
+
+// ---------------------------------------------------------------------------
+// Lightweight node/edge types (no React Flow dependency)
+// ---------------------------------------------------------------------------
+
+export interface WorkflowNodeData {
+  label?: string
+  skipped?: boolean
+  [key: string]: unknown
+}
+
+export interface SimpleNode {
+  id: string
+  type: string
+  data: WorkflowNodeData
+}
+
+export interface SimpleEdge {
+  id: string
+  source: string
+  target: string
+  sourceHandle?: string | null
+  targetHandle?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Resolved inputs (output of input-resolver)
+// ---------------------------------------------------------------------------
+
+export interface ResolvedInputs {
+  prompt?: string
+  imageUrl?: string
+  videoUrl?: string
+  videoUrls?: string[]
+  audioUrl?: string
+  audioUrls?: string[]
+  audioSources?: Array<{
+    url: string
+    sourceNodeId: string
+    sourceType?: "audio" | "video"
+  }>
+  referenceImageUrls?: string[]
+  sunoTrackId?: string
+  sunoTaskId?: string
+  uploadUrl?: string
+  startFrameUrl?: string
+  endFrameUrl?: string
+}
+
+// ---------------------------------------------------------------------------
+// Execution context passed to orchestrator internals
+// ---------------------------------------------------------------------------
+
+export interface OrchestratorContext {
+  executionId: string
+  workflowId: string
+  userId: string
+  triggerType: "manual" | "webhook" | "schedule"
+  triggerData?: Record<string, unknown>
+  /** Abort signal — set when execution is cancelled */
+  cancelled: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Max time for a single node to complete (ms) */
+export const NODE_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
+
+/** Max time for an entire workflow execution (ms) */
+export const WORKFLOW_TIMEOUT_MS = 60 * 60 * 1000 // 60 minutes
+
+/** Polling interval for checking job completion (ms) */
+export const JOB_POLL_INTERVAL_MS = 3_000 // 3 seconds
+
+/** Max depth for sub-workflow nesting */
+export const MAX_SUB_WORKFLOW_DEPTH = 5

@@ -127,6 +127,18 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Music className="h-4 w-4" />,
     category: "Input",
   },
+  {
+    type: "webhook-trigger" as const,
+    label: "Webhook Trigger",
+    icon: <Webhook className="h-4 w-4" />,
+    category: "Input",
+  },
+  {
+    type: "schedule-trigger" as const,
+    label: "Schedule Trigger",
+    icon: <Clock className="h-4 w-4" />,
+    category: "Input",
+  },
   // Parameter
   {
     type: "tone",
