@@ -2,11 +2,12 @@
 
 import { memo, useEffect, useMemo, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Workflow, Loader2 } from "lucide-react"
+import { Workflow, Loader2, Eye } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SubWorkflowData, SubWorkflowPort, GeneratedResult } from "@/types/nodes"
@@ -82,6 +83,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
 
   const progress = nodeData.subWorkflowProgress
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
 
   const isImage = typeof previewUrl === "string" && /\.(jpg|jpeg|png|webp|gif)$/i.test(previewUrl)
   const isVideo = typeof previewUrl === "string" && /\.(mp4|webm|mov)$/i.test(previewUrl)
@@ -152,6 +154,22 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+      {nodeData.referencedWorkflowId && status !== "running" && (
+        <button
+          type="button"
+          aria-label="View referenced workflow"
+          className="absolute top-1.5 right-1.5 opacity-0 group-hover/run:opacity-100 transition-opacity z-10 p-1 rounded bg-[#1E1E1E]/80 hover:bg-[#2D2D2D] text-white/70 hover:text-white"
+          onClick={(e) => { e.stopPropagation(); setViewerOpen(true) }}
+        >
+          <Eye className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {viewerOpen && nodeData.referencedWorkflowId && (
+        <WorkflowViewerModal
+          workflowId={nodeData.referencedWorkflowId}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
       {lightboxOpen && isImage && (
         <ImageLightbox src={previewUrl as string} onClose={() => setLightboxOpen(false)} />
       )}
