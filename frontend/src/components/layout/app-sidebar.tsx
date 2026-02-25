@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { isFeatureEnabled } from "@/lib/edition"
 import { APP_VERSION } from "@/lib/version"
+import { NodaroLogo } from "@/components/nodaro-logo"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
 
 const STORAGE_KEY = "nodaro-sidebar-collapsed"
@@ -139,14 +140,14 @@ export function AppSidebar({
             to="/projects"
             onClick={handleNavClick}
             className={cn(
-              "flex items-center gap-2 font-bold text-[#ff0073] transition-all duration-300",
-              isCollapsed ? "justify-center w-full" : "",
+              "flex items-center gap-2 transition-all duration-300",
+              isCollapsed ? "justify-center w-full" : "ml-1",
             )}
           >
             {isCollapsed ? (
-              <span className="text-lg">N</span>
+              <NodaroLogo variant="icon" size="md" />
             ) : (
-              <span className="text-lg">Nodaro</span>
+              <NodaroLogo size="md" />
             )}
           </Link>
           {/* Mobile close button */}
@@ -368,7 +369,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
       >
         <Menu className="h-5 w-5" />
       </Button>
-      <span className="text-sm font-bold text-[#ff0073]">Nodaro</span>
+      <NodaroLogo size="sm" />
       <div className="ml-auto">
         <ThemeToggle />
       </div>

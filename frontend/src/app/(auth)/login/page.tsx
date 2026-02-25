@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
+import { NodaroLogo } from "@/components/nodaro-logo"
 import { useAuth } from "@/hooks/use-auth"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
@@ -43,8 +44,8 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
         {/* Logo + tagline */}
         <div className="space-y-3">
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-[#ff0073] to-purple-500 bg-clip-text text-transparent">
-            Nodaro
+          <h1>
+            <NodaroLogo size="xl" />
           </h1>
           <p className="text-base text-muted-foreground animate-in fade-in duration-700">
             Visual workflows for AI video generation

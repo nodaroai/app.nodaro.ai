@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2 } from "lucide-react"
+import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { optimizedImageUrl } from "@/lib/image"
@@ -422,8 +423,8 @@ export default function GalleryPage() {
               <ArrowLeft className="h-4 w-4" />
               Back to app
             </Link>
-            <Link to="/" className="text-lg font-bold text-[#ff0073]">
-              Nodaro
+            <Link to="/" className="flex items-center">
+              <NodaroLogo size="md" />
             </Link>
             <ThemeToggle />
           </div>

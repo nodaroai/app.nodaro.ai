@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import { Check, ArrowLeft, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { openCheckout } from "@/lib/paddle"
@@ -113,8 +114,8 @@ export default function PricingPage() {
               <ArrowLeft className="h-4 w-4" />
               Back to app
             </Link>
-            <Link to="/" className="text-lg font-bold text-[#ff0073]">
-              Nodaro
+            <Link to="/" className="flex items-center">
+              <NodaroLogo size="md" />
             </Link>
             <div className="flex items-center gap-3">
               <ThemeToggle />
