@@ -2666,11 +2666,12 @@ export function cancelWorkflowExecution(executionId: string): Promise<void> {
 /** List executions for a workflow. */
 export function listWorkflowExecutions(
   workflowId: string,
-  opts?: { limit?: number; cursor?: string },
+  opts?: { limit?: number; cursor?: string; status?: string },
 ): Promise<{ data: WorkflowExecution[]; nextCursor?: string }> {
   const params = new URLSearchParams()
   if (opts?.limit) params.set("limit", String(opts.limit))
   if (opts?.cursor) params.set("cursor", opts.cursor)
+  if (opts?.status) params.set("status", opts.status)
 
   return apiRequest(
     `/v1/workflows/${encodeURIComponent(workflowId)}/executions?${params}`,

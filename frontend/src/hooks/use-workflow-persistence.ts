@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { getBatchJobStatus, type BatchJobStatus } from "@/lib/api"
+import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus, type WorkflowExecution } from "@/lib/api"
 import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
@@ -12,10 +12,34 @@ interface StillRunningJob {
   readonly nodeType: string
 }
 
+interface ActiveBackendExecution {
+  readonly executionId: string
+  readonly nodeStates: Record<string, NodeExecutionState>
+}
+
+interface NodeExecutionState {
+  status: "pending" | "running" | "completed" | "failed" | "skipped"
+  output?: {
+    imageUrl?: string
+    videoUrl?: string
+    audioUrl?: string
+    text?: string
+    script?: unknown
+    generatedVoiceId?: string
+    alignment?: unknown
+    vocalUrl?: string
+    instrumentalUrl?: string
+    splitResults?: string[]
+    combinedText?: string
+  }
+  error?: string
+}
+
 interface SaveResult {
   readonly success: boolean
   readonly error?: string
   readonly stillRunningJobs?: StillRunningJob[]
+  readonly activeBackendExecution?: ActiveBackendExecution
 }
 
 const SAVED_DISPLAY_DURATION = 2000
@@ -220,6 +244,70 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
   return { nodes: updatedNodes as WorkflowNode[], stillRunningJobs }
 }
 
+/**
+ * Apply backend execution node states to frontend nodes.
+ * Maps orchestrator nodeStates → node.data.executionStatus + output URLs.
+ */
+function applyBackendExecutionState(
+  nodes: WorkflowNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): WorkflowNode[] {
+  return nodes.map(node => {
+    const state = nodeStates[node.id]
+    if (!state) return node
+
+    const data = { ...(node.data as Record<string, unknown>) }
+
+    // Map backend status → frontend executionStatus
+    if (state.status === "completed") {
+      data.executionStatus = "completed"
+      if (state.output) {
+        const nodeType = node.type ?? ""
+        if (state.output.imageUrl) {
+          if (["character", "face", "object", "location"].includes(nodeType)) {
+            data.sourceImageUrl = state.output.imageUrl
+          } else {
+            data.generatedImageUrl = state.output.imageUrl
+          }
+        }
+        if (state.output.videoUrl) data.generatedVideoUrl = state.output.videoUrl
+        if (state.output.audioUrl) data.generatedAudioUrl = state.output.audioUrl
+        if (state.output.script) data.generatedScript = state.output.script
+        if (state.output.generatedVoiceId) data.generatedVoiceId = state.output.generatedVoiceId
+        if (state.output.vocalUrl) data.generatedVocalUrl = state.output.vocalUrl
+        if (state.output.instrumentalUrl) data.generatedInstrumentalUrl = state.output.instrumentalUrl
+        if (state.output.alignment) data.generatedAlignment = state.output.alignment
+        if (state.output.combinedText) data.generatedText = state.output.combinedText
+        if (state.output.splitResults) data.generatedSplitResults = state.output.splitResults
+
+        // Build a generated result entry from the output
+        const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
+        if (outputUrl) {
+          const results = (data.generatedResults ?? []) as GeneratedResult[]
+          const alreadyHas = results.some(r => r.url === outputUrl)
+          if (!alreadyHas) {
+            data.generatedResults = [
+              { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}` },
+              ...results,
+            ]
+            data.activeResultIndex = 0
+          }
+        }
+      }
+    } else if (state.status === "running") {
+      data.executionStatus = "running"
+    } else if (state.status === "pending") {
+      data.executionStatus = "pending"
+    } else if (state.status === "failed") {
+      data.executionStatus = "failed"
+      if (state.error) data.errorMessage = state.error
+    }
+    // "skipped" → leave as-is (idle)
+
+    return { ...node, data: data as SceneNodeData }
+  })
+}
+
 export function useWorkflowPersistence(projectId?: string) {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -348,8 +436,28 @@ export function useWorkflowPersistence(projectId?: string) {
         // Sync node results from jobs table via backend API
         // This handles the case where user left while jobs were running
         const syncResult = await syncNodeResultsFromDB(nodes)
-        const nodesChanged = JSON.stringify(syncResult.nodes) !== JSON.stringify(nodes)
+        let nodesChanged = JSON.stringify(syncResult.nodes) !== JSON.stringify(nodes)
         nodes = syncResult.nodes
+
+        // Check for active backend orchestrator execution
+        let activeBackendExecution: ActiveBackendExecution | undefined
+        try {
+          const { data: executions } = await listWorkflowExecutions(id, {
+            limit: 1,
+            status: "pending,running",
+          })
+          if (executions.length > 0) {
+            const exec = executions[0]
+            const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
+            if (Object.keys(nodeStates).length > 0) {
+              nodes = applyBackendExecutionState(nodes, nodeStates)
+              nodesChanged = true
+            }
+            activeBackendExecution = { executionId: exec.id, nodeStates }
+          }
+        } catch {
+          // Non-critical — just skip backend execution detection
+        }
 
         loadWorkflow(
           data.id,
@@ -382,7 +490,11 @@ export function useWorkflowPersistence(projectId?: string) {
           }
         }
 
-        return { success: true, stillRunningJobs: syncResult.stillRunningJobs }
+        return {
+          success: true,
+          stillRunningJobs: syncResult.stillRunningJobs,
+          activeBackendExecution,
+        }
       } catch (err) {
         return {
           success: false,

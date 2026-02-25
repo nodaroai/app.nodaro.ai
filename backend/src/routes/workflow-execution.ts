@@ -23,6 +23,7 @@ const executionIdParams = z.object({
 const listExecutionsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().uuid().optional(),
+  status: z.string().optional(),
 })
 
 export async function workflowExecutionRoutes(app: FastifyInstance) {
@@ -231,16 +232,26 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    const { limit, cursor } = queryParsed.data
+    const { limit, cursor, status } = queryParsed.data
     const { id: workflowId } = paramsParsed.data
 
     let query = supabase
       .from("workflow_executions")
-      .select("id, status, trigger_type, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
+      .select("id, status, trigger_type, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .order("created_at", { ascending: false })
       .limit(limit + 1) // Fetch one extra for pagination
+
+    // Filter by status (comma-separated for multiple, e.g. "pending,running")
+    if (status) {
+      const statuses = status.split(",").map((s) => s.trim()).filter(Boolean)
+      if (statuses.length === 1) {
+        query = query.eq("status", statuses[0])
+      } else if (statuses.length > 1) {
+        query = query.in("status", statuses)
+      }
+    }
 
     if (cursor) {
       // Cursor is the created_at of the last item
@@ -304,6 +315,7 @@ function toExecutionSummary(row: Record<string, unknown>) {
     id: row.id,
     status: row.status,
     triggerType: row.trigger_type,
+    nodeStates: row.node_states,
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
     failedNodes: row.failed_nodes,
