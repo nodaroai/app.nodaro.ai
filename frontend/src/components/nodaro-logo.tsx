@@ -36,7 +36,7 @@ export function NodaroLogo({
       <img
         src="/logo.svg"
         alt="Nodaro"
-        className={cn(ICON_SIZES[size], "dark:invert", className)}
+        className={cn(ICON_SIZES[size], className)}
       />
     )
   }
@@ -47,7 +47,7 @@ export function NodaroLogo({
         src="/logo.svg"
         alt=""
         aria-hidden
-        className={cn(ICON_SIZES[size], "dark:invert", "-mr-[0.05em]")}
+        className={cn(ICON_SIZES[size], "-mr-[0.05em]")}
       />
       <span
         className={cn(
