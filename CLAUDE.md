@@ -124,7 +124,9 @@ Full guide: `docs/adding-a-new-node.md`
 | `profiles` | id, email, tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, public_outputs | Extends auth.users |
 | `projects` | id, user_id, name, settings | |
 | `workflows` | id, project_id, user_id, nodes (JSONB), edges (JSONB), source_prompt | React Flow data |
-| `jobs` | id, workflow_id, user_id, status, progress, input_data, output_data, provider, provider_cost, is_public, should_watermark | Execution records |
+| `jobs` | id, workflow_id, user_id, status, progress, input_data, output_data, provider, provider_cost, is_public, should_watermark, workflow_execution_id | Execution records |
+| `workflow_executions` | id, workflow_id, user_id, status, trigger_type, trigger_data, node_states (JSONB), total_nodes, completed_nodes, failed_nodes, total_credits_used | Backend execution tracking |
+| `workflow_triggers` | id, workflow_id, user_id, type, config (JSONB), is_active, webhook_token | Webhook + schedule triggers |
 | `assets` | id, user_id, job_id, type, r2_key, r2_url, size_bytes | Generated files |
 | `characters` | id, project_id, name, description, reference_image_url, visual_traits (JSONB) | Per-project |
 | `style_presets` | id, name, settings (JSONB), is_system, user_id | System + user-created |
@@ -152,10 +154,10 @@ frontend/src/
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node, composite-node)
+  components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, webhook-trigger-node, schedule-trigger-node)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
-    config-panels/        — 22 files: per-category node config components (image, video, audio, composition, entity, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags)
+    config-panels/        — 23 files: per-category node config components (image, video, audio, composition, entity, trigger, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags)
     remotion-player-preview.tsx — Generic @remotion/player wrapper (lazy-loaded)
     after-effects-player-preview.tsx — AE composition preview (shows when sourceVideo exists)
     motion-graphics-player-preview.tsx — MG composition preview (always available)
@@ -179,15 +181,20 @@ backend/src/
   app.ts                  — Fastify app + route registration
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment)
+  orchestrator.ts         — BullMQ workflow orchestrator entry point (concurrency:2)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, workflow-execution, webhook-triggers)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction (see Provider System)
   billing/                — Credits, Paddle, cleanup (see Credit System)
+  services/workflow-engine/ — Backend workflow orchestration (8 files: types, execution-graph, input-resolver, output-extractor, payload-builder, node-executor, inline-executor, sub-workflow-handler)
+  workers/orchestrator-worker.ts — Main orchestrator BullMQ worker
   middleware/             — credit-guard.ts, auth.ts (JWT verification + 5-min SHA-256 cache)
   lib/config.ts           — Env config + edition helpers
   lib/admin-check.ts      — Shared cached admin check (30s TTL)
   lib/app-settings.ts     — Settings cache (60s TTL, stampede-safe)
+  lib/orchestration-queue.ts — BullMQ queue for workflow orchestration
+  lib/schedule-cron.ts    — Cron/interval scheduler for workflow triggers (60s check interval)
 ```
 
 ---
@@ -199,7 +206,7 @@ backend/src/
 | Backend language | TypeScript (Node.js) | Same as frontend, BullMQ native |
 | Backend framework | Fastify | Fast, TypeScript-first, plugin system |
 | Job queue | BullMQ | Best for Node.js, excellent dashboard |
-| Execution model | Frontend DAG engine (`workflow-editor/`) | Topological sort, parallel per level |
+| Execution model | Frontend DAG + Backend Orchestrator | Frontend: browser-based DAG engine; Backend: BullMQ orchestrator for autonomous/triggered execution |
 | Realtime updates | Polling (MVP) → SSE (Phase 2) | No extra infra needed |
 | Audio processing | FFmpeg in worker | All audio nodes use FFmpeg, not AI |
 | Credit pricing | 1 credit = $0.02 | Composite model identifiers for variable pricing (e.g., `"gpt-image:high"`, `"flux:2K"`); `VARIABLE_PRICING_MODELS` in `model-options.ts`; `buildCreditModelIdentifier()` in helpers.ts + route handlers |
@@ -230,6 +237,10 @@ backend/src/
 | Voice Design | ElevenLabs Text-to-Voice Design direct API | `POST /v1/voice-design` (5 credits), full controls: model (multilingual v2/english v2/turbo v2.5), loudness, guidance_scale, seed, quality, should_enhance; outputs audio + `generatedVoiceId`; uses `POST /v1/text-to-voice/design`; node has dual output handles (`audio` + `voiceId`) |
 | Forced Alignment | ElevenLabs Forced Alignment direct API | `POST /v1/forced-alignment` (3 credits), audio + transcript → word-level timestamps JSON; output is data (not audio) |
 | Suno metatags | `suno-tags.ts` + `TagTextarea` | Autocomplete for `[Verse]`, `[Chorus]`, genre tags, etc. in lyrics fields; `TagTextarea` component with portal-rendered dropdown, supports both Suno metatags and ElevenLabs audio tags via `customTags` prop |
+| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (7 AI routes via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 15min per-node timeout, 60min per-workflow |
+| Webhook triggers | Token-based auth, no user auth needed | `POST /v1/webhooks/:token` (public route), 32-byte hex token per trigger, rate limited 10/min per token; creates execution + enqueues orchestrator |
+| Schedule triggers | Cron expressions + interval strings | `schedule-cron.ts` checks every 60s, supports 5-field cron + simple intervals ("5m", "1h", "1d"); respects `maxExecutions` limit; skips if workflow already running |
+| Sub-workflow execution | Recursive with depth limit 5 | `sub-workflow-handler.ts`: loads referenced workflow, filters to selected route's reachable nodes (BFS), executes with same orchestrator logic; cycle detection via `workflowId:routeId` set |
 
 ---
 
@@ -247,8 +258,10 @@ backend/src/
 - [ ] Translation: use AI (Gemini/Claude) not Google Translate
 - [ ] Build from Prompt: MVP + Director Mode versions
 - [ ] Scene Node + Shot Node as optional "Director Mode"
+- [x] Backend workflow execution engine (orchestrator, webhook triggers, schedule triggers)
+- [ ] Execution history UI (per-workflow execution list + per-node status)
 
 ---
 
-*Last updated: 2026-02-24*
-*Version: 1.46.0*
+*Last updated: 2026-02-25*
+*Version: 1.47.0*
