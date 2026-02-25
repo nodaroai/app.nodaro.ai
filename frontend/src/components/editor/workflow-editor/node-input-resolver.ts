@@ -456,13 +456,47 @@ export function resolveNodeInputs(
         }
       }
 
-      // Route by media type
+      // Route by media type, respecting target node expectations
       if (mediaType === "image") {
-        inputs.imageUrl = output;
+        if (node.type === "generate-image" || node.type === "edit-image" || node.type === "image-to-image") {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+        } else {
+          inputs.imageUrl = output;
+        }
       } else if (mediaType === "video") {
-        inputs.videoUrl = output;
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
+          inputs.videoUrlsWithSourceIds = [
+            ...(inputs.videoUrlsWithSourceIds ?? []),
+            { nodeId: src.id, url: output },
+          ];
+        } else if (node.type === "merge-video-audio") {
+          if (!inputs.videoUrl) {
+            inputs.videoUrl = output;
+          } else {
+            inputs.audioSources = [
+              ...(inputs.audioSources ?? []),
+              { url: output, sourceNodeId: src.id, sourceType: "video" as const },
+            ];
+          }
+        } else {
+          inputs.videoUrl = output;
+        }
       } else if (mediaType === "audio") {
-        inputs.audioUrl = output;
+        if (node.type === "merge-video-audio") {
+          inputs.audioSources = [
+            ...(inputs.audioSources ?? []),
+            { url: output, sourceNodeId: src.id },
+          ];
+        } else if (node.type === "mix-audio") {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+          inputs.audioUrlsWithSourceIds = [
+            ...(inputs.audioUrlsWithSourceIds ?? []),
+            { nodeId: src.id, url: output },
+          ];
+        } else {
+          inputs.audioUrl = output;
+        }
       } else {
         // Default to prompt for text or any
         inputs.prompt = output;
