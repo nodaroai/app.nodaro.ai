@@ -264,4 +264,4 @@ backend/src/
 ---
 
 *Last updated: 2026-02-25*
-*Version: 1.47.1*
+*Version: 1.47.2*
