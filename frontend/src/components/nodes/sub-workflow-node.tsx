@@ -85,6 +85,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
 
   const isImage = typeof previewUrl === "string" && /\.(jpg|jpeg|png|webp|gif)$/i.test(previewUrl)
   const isVideo = typeof previewUrl === "string" && /\.(mp4|webm|mov)$/i.test(previewUrl)
+  const isAudio = typeof previewUrl === "string" && /\.(mp3|wav|ogg|flac|aac|m4a|webm)$/i.test(previewUrl) && !isVideo
 
   const nodeMinHeight = Math.max(120, maxPorts * 36 + 60)
 
@@ -128,19 +129,25 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {status === "completed" && previewUrl && (
-            <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
-              {isImage ? (
-                <CachedImage src={previewUrl} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail thumbnailWidth={320} />
-              ) : isVideo ? (
-                generatedResults[activeIdx]?.thumbnailUrl ? (
-                  <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail thumbnailWidth={320} />
+            isAudio ? (
+              <div className="mt-2">
+                <audio src={previewUrl} controls className="w-full h-8" />
+              </div>
+            ) : (
+              <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
+                {isImage ? (
+                  <CachedImage src={previewUrl} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail thumbnailWidth={320} />
+                ) : isVideo ? (
+                  generatedResults[activeIdx]?.thumbnailUrl ? (
+                    <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail thumbnailWidth={320} />
+                  ) : (
+                    <video src={previewUrl} className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
+                  )
                 ) : (
-                  <video src={previewUrl} className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
-                )
-              ) : (
-                <p className="text-[10px] text-muted-foreground truncate">{previewUrl}</p>
-              )}
-            </div>
+                  <p className="text-[10px] text-muted-foreground truncate">{previewUrl}</p>
+                )}
+              </div>
+            )
           )}
         </div>
       </BaseNode>
