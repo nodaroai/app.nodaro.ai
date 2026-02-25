@@ -42,9 +42,15 @@ interface TextColumnDef {
 const TEXT_COLUMNS: TextColumnDef[] = [
   { table: "assets", column: "r2_url" },
   { table: "characters", column: "reference_image_url" },
+  { table: "characters", column: "source_image_url" },
   { table: "style_presets", column: "thumbnail_url" },
   { table: "profiles", column: "avatar_url" },
   { table: "voice_clones", column: "sample_audio_url" },
+  { table: "voice_clones", column: "preview_url" },
+  { table: "locations", column: "source_image_url" },
+  { table: "locations", column: "main_image_url" },
+  { table: "objects", column: "source_image_url" },
+  { table: "objects", column: "main_image_url" },
 ]
 
 async function updateTextColumns() {
@@ -93,6 +99,10 @@ const JSONB_COLUMNS: JsonColumnDef[] = [
   { table: "projects", columns: ["settings"] },
   { table: "job_checkpoints", columns: ["data"] },
   { table: "webhook_deliveries", columns: ["payload"] },
+  { table: "characters", columns: ["expressions", "poses", "lighting_variations"] },
+  { table: "faces", columns: ["expressions"] },
+  { table: "locations", columns: ["angles"] },
+  { table: "objects", columns: ["angles", "materials", "variations"] },
 ]
 
 const PAGE_SIZE = 500
