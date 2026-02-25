@@ -77,71 +77,95 @@ export async function galleryRoutes(app: FastifyInstance) {
     const typeFilter = query.type as string | undefined
     const cursor = query.cursor as string | undefined
 
-    // Build query — fetch limit + 1 to detect if there are more items
-    let dbQuery = supabase
-      .from("jobs")
-      .select("id, job_type, input_data, output_data, completed_at, user_id, provider")
-      .eq("is_public", true)
-      .eq("status", "completed")
-      .not("output_data", "is", null)
-      .order("completed_at", { ascending: false })
-      .limit(limit + 1)
+    // We need `limit` valid items after JS-side filtering (blocked prompts,
+    // missing output URLs). Fetch in batches, over-fetching to compensate for
+    // items that get filtered out.
+    const items: Array<{
+      id: string
+      type: "image" | "video" | "audio"
+      jobName: string
+      outputUrl: string
+      thumbnailUrl: string | null
+      createdAt: string
+      prompt: string | null
+      model: string | null
+    }> = []
+    let pageCursor = cursor ?? null
+    let hasMore = true
+    const MAX_ROUNDS = 3 // safety cap to avoid infinite loops
+    const FETCH_MULTIPLIER = 2 // over-fetch to reduce extra round trips
 
-    // Cursor-based pagination: fetch items older than cursor
-    if (cursor) {
-      dbQuery = dbQuery.lt("completed_at", cursor)
-    }
+    for (let round = 0; round < MAX_ROUNDS && items.length < limit && hasMore; round++) {
+      const remaining = limit - items.length
+      const fetchCount = remaining * FETCH_MULTIPLIER + 1 // +1 for hasMore detection
 
-    // Filter by type (restricts to specific job names)
-    if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
-      const jobNames = jobNamesForType(typeFilter)
-      dbQuery = dbQuery.in("job_type", jobNames)
-    } else {
-      // Exclude text-only jobs (scripts, transcriptions) from gallery
-      const allMediaNames = [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS]
-      dbQuery = dbQuery.in("job_type", allMediaNames)
-    }
+      let dbQuery = supabase
+        .from("jobs")
+        .select("id, job_type, input_data, output_data, completed_at, user_id, provider")
+        .eq("is_public", true)
+        .eq("status", "completed")
+        .not("output_data", "is", null)
+        .order("completed_at", { ascending: false })
+        .limit(fetchCount)
 
-    const { data: jobs, error } = await dbQuery
+      if (pageCursor) {
+        dbQuery = dbQuery.lt("completed_at", pageCursor)
+      }
 
-    if (error) {
-      console.error("[gallery] Query failed:", error)
-      return reply.status(500).send({ error: "Failed to fetch gallery" })
-    }
+      // Filter by type (restricts to specific job names)
+      if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
+        const jobNames = jobNamesForType(typeFilter)
+        dbQuery = dbQuery.in("job_type", jobNames)
+      } else {
+        const allMediaNames = [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS]
+        dbQuery = dbQuery.in("job_type", allMediaNames)
+      }
 
-    if (!jobs || jobs.length === 0) {
-      return reply.send({ data: [], nextCursor: null })
-    }
+      const { data: jobs, error } = await dbQuery
 
-    // Determine if there are more items
-    const hasMore = jobs.length > limit
-    const pageJobs = hasMore ? jobs.slice(0, limit) : jobs
+      if (error) {
+        console.error("[gallery] Query failed:", error)
+        return reply.status(500).send({ error: "Failed to fetch gallery" })
+      }
 
-    // Build response items — filter out blocked prompts
-    const items = pageJobs
-      .map((job) => {
+      if (!jobs || jobs.length === 0) {
+        hasMore = false
+        break
+      }
+
+      // If we got fewer rows than requested, there are no more items in DB
+      if (jobs.length < fetchCount) {
+        hasMore = false
+      }
+
+      // Advance cursor to the last fetched row
+      const lastJob = jobs[jobs.length - 1]
+      if (lastJob?.completed_at) {
+        pageCursor = lastJob.completed_at
+      }
+
+      // Process and filter
+      for (const job of jobs) {
+        if (items.length >= limit) break
+
         const outputData = (job.output_data ?? {}) as Record<string, unknown>
         const inputData = (job.input_data ?? {}) as Record<string, unknown>
         const type = getOutputType(job.job_type)
         const outputUrl = getOutputUrl(job.job_type, outputData)
 
-        if (!type || !outputUrl) return null
+        if (!type || !outputUrl) continue
 
-        // Extract prompt from input_data (different field names per job type)
         const prompt = (inputData.prompt as string)
           ?? (inputData.text as string)
           ?? null
 
-        // Filter out items with blocked words in prompt
-        if (isPromptBlocked(prompt)) return null
+        if (isPromptBlocked(prompt)) continue
 
-        // Extract model name from input_data.provider (stores model identifier like "nano-banana")
-        // Falls back to jobs.provider column (which stores provider name like "kie")
         const model = (inputData.provider as string)
           ?? (job.provider as string)
           ?? null
 
-        return {
+        items.push({
           id: job.id,
           type,
           jobName: job.job_type,
@@ -150,13 +174,13 @@ export async function galleryRoutes(app: FastifyInstance) {
           createdAt: job.completed_at,
           prompt,
           model,
-        }
-      })
-      .filter(Boolean)
+        })
+      }
+    }
 
-    // Set nextCursor to the completed_at of the last item in the page
-    const lastItem = pageJobs[pageJobs.length - 1]
-    const nextCursor = hasMore && lastItem?.completed_at ? lastItem.completed_at : null
+    // nextCursor is the createdAt of the last item we're returning
+    const lastItem = items[items.length - 1]
+    const nextCursor = hasMore && lastItem?.createdAt ? lastItem.createdAt : null
 
     reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=60")
     return reply.send({
