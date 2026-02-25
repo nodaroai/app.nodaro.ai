@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2, RefreshCw, AlertCircle, ExternalLink } from "lucide-react"
+import { Plus, Trash2, RefreshCw, AlertCircle, ExternalLink, Eye } from "lucide-react"
+import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
 import type { ConfigProps } from "./types"
 import type {
   SubWorkflowInputData,
@@ -260,6 +261,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const localNodes = useWorkflowStore((s) => s.nodes)
   const [showAllProjects, setShowAllProjects] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
 
   const { data: callableWorkflows, isLoading: isLoadingWorkflows } = useCallableWorkflows(
     showAllProjects ? undefined : (projectId ?? undefined),
@@ -422,11 +424,20 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
       )}
 
       {nodeData.referencedWorkflowId && nodeData.referencedWorkflowId !== workflowId && (
-        <div>
+        <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="w-full h-8 text-xs"
+            className="flex-1 h-8 text-xs"
+            onClick={() => setViewerOpen(true)}
+          >
+            <Eye className="w-3 h-3 mr-1.5" />
+            View Workflow
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 h-8 text-xs"
             onClick={() => {
               const wf = mergedWorkflows.find((w) => w.id === nodeData.referencedWorkflowId)
               const pid = wf?.projectId || projectId
@@ -446,6 +457,13 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           <AlertCircle className="w-3.5 h-3.5" />
           Referenced workflow not found or has no valid routes.
         </div>
+      )}
+
+      {viewerOpen && nodeData.referencedWorkflowId && (
+        <WorkflowViewerModal
+          workflowId={nodeData.referencedWorkflowId}
+          onClose={() => setViewerOpen(false)}
+        />
       )}
     </div>
   )

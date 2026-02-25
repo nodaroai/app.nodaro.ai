@@ -305,6 +305,21 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         (clonedData as Record<string, unknown>).characterDbId = ""
       }
 
+      // Generate fresh UUIDs for sub-workflow port IDs and routeIds
+      if (source.type === "sub-workflow-input" || source.type === "sub-workflow-output") {
+        const d = clonedData as Record<string, unknown>
+        if (source.type === "sub-workflow-input") d.routeId = crypto.randomUUID()
+        const ports = d.ports as Array<{ id: string; name: string; mediaType: string }> | undefined
+        if (ports) {
+          d.ports = ports.map((p) => ({ ...p, id: crypto.randomUUID() }))
+          if (source.type === "sub-workflow-output" && (d.ports as unknown[]).length > 0) {
+            d.visibleOutputPortId = (d.ports as Array<{ id: string }>)[0].id
+          }
+        }
+        // Clear paired routeId on output so user must re-pair
+        if (source.type === "sub-workflow-output") d.routeId = ""
+      }
+
       const newNode: WorkflowNode = {
         id: generateNodeId(),
         type: source.type,
