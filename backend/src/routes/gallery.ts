@@ -16,12 +16,15 @@ const VIDEO_JOBS = new Set([
   "lip-sync", "motion-transfer", "video-upscale",
   "combine-videos", "suno-music-video",
   "merge-video-audio", "resize-video", "trim-video", "add-captions",
+  "fade-video", "loop-video",
 ])
 
 const AUDIO_JOBS = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
   "suno-generate", "suno-cover", "suno-extend", "suno-separate",
   "extract-audio", "mix-audio", "adjust-volume", "extract-youtube-audio",
+  "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing",
+  "voice-remix", "voice-design",
 ])
 
 function getOutputType(jobName: string): "image" | "video" | "audio" | null {
