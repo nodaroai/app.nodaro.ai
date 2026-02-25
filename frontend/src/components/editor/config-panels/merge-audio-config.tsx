@@ -71,11 +71,29 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
     const audios: typeof nodes[number][] = []
 
     for (const src of sourceNodes) {
-      if (!firstVideo && VIDEO_SOURCE_TYPES.has(src.type)) {
+      // Resolve sub-workflow output port media type from the edge's sourceHandle
+      let effectiveType = src.type as string
+      if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
+        const srcEdge = incomingEdges.find((e) => e.source === src.id)
+        const handle = srcEdge?.sourceHandle as string | undefined
+        const srcData = src.data as Record<string, unknown>
+        const snapshot = srcData.routeSnapshot as { outputPorts?: Array<{ id: string; mediaType: string }> } | undefined
+        const ports = (src.type === "sub-workflow-input")
+          ? (srcData.ports as Array<{ id: string; mediaType: string }> | undefined)
+          : snapshot?.outputPorts
+        if (handle && ports) {
+          const portId = handle.replace(/^out_/, "")
+          const port = ports.find((p) => p.id === portId)
+          if (port?.mediaType === "audio") effectiveType = "__audio__"
+          else if (port?.mediaType === "video") effectiveType = "__video__"
+        }
+      }
+
+      if (!firstVideo && (VIDEO_SOURCE_TYPES.has(effectiveType) || effectiveType === "__video__")) {
         firstVideo = src
-      } else if (AUDIO_SOURCE_TYPES.has(src.type)) {
+      } else if (AUDIO_SOURCE_TYPES.has(effectiveType) || effectiveType === "__audio__") {
         audios.push(src)
-      } else if (firstVideo && VIDEO_SOURCE_TYPES.has(src.type)) {
+      } else if (firstVideo && (VIDEO_SOURCE_TYPES.has(effectiveType) || effectiveType === "__video__")) {
         audios.push(src)
       }
     }
