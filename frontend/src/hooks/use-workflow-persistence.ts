@@ -308,6 +308,67 @@ function applyBackendExecutionState(
   })
 }
 
+/**
+ * Apply results from a completed backend execution to nodes that don't
+ * already have outputs. This handles the case where execution ran while
+ * the frontend was closed — the workflow JSON was never updated with results.
+ */
+function applyCompletedExecutionResults(
+  nodes: WorkflowNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): WorkflowNode[] {
+  return nodes.map(node => {
+    const state = nodeStates[node.id]
+    if (!state || state.status !== "completed" || !state.output) return node
+
+    const data = node.data as Record<string, unknown>
+    const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
+
+    // Skip if node already has results (don't overwrite newer manual runs)
+    const existingResults = (data.generatedResults ?? []) as GeneratedResult[]
+    if (outputUrl && existingResults.some(r => r.url === outputUrl)) return node
+
+    // Skip if node already has a generated output URL matching the execution
+    const hasImage = data.generatedImageUrl || data.sourceImageUrl
+    const hasVideo = data.generatedVideoUrl
+    const hasAudio = data.generatedAudioUrl
+    if (hasImage && state.output.imageUrl) return node
+    if (hasVideo && state.output.videoUrl) return node
+    if (hasAudio && state.output.audioUrl) return node
+
+    // Apply the output
+    const newData: Record<string, unknown> = { ...data, executionStatus: "completed" }
+    const nodeType = node.type ?? ""
+
+    if (state.output.imageUrl) {
+      if (["character", "face", "object", "location"].includes(nodeType)) {
+        newData.sourceImageUrl = state.output.imageUrl
+      } else {
+        newData.generatedImageUrl = state.output.imageUrl
+      }
+    }
+    if (state.output.videoUrl) newData.generatedVideoUrl = state.output.videoUrl
+    if (state.output.audioUrl) newData.generatedAudioUrl = state.output.audioUrl
+    if (state.output.script) newData.generatedScript = state.output.script
+    if (state.output.generatedVoiceId) newData.generatedVoiceId = state.output.generatedVoiceId
+    if (state.output.vocalUrl) newData.generatedVocalUrl = state.output.vocalUrl
+    if (state.output.instrumentalUrl) newData.generatedInstrumentalUrl = state.output.instrumentalUrl
+    if (state.output.alignment) newData.generatedAlignment = state.output.alignment
+    if (state.output.combinedText) newData.generatedText = state.output.combinedText
+    if (state.output.splitResults) newData.generatedSplitResults = state.output.splitResults
+
+    if (outputUrl) {
+      newData.generatedResults = [
+        { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}` },
+        ...existingResults,
+      ]
+      newData.activeResultIndex = 0
+    }
+
+    return { ...node, data: newData as SceneNodeData }
+  })
+}
+
 export function useWorkflowPersistence(projectId?: string) {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -439,18 +500,18 @@ export function useWorkflowPersistence(projectId?: string) {
         let nodesChanged = JSON.stringify(syncResult.nodes) !== JSON.stringify(nodes)
         nodes = syncResult.nodes
 
-        // Check for active backend orchestrator execution.
-        // First list to find an active execution, then fetch full details
-        // (which includes nodeStates) via the get endpoint.
+        // Check for backend orchestrator executions:
+        // 1. Active (pending/running) → restore polling + apply current state
+        // 2. Most recent completed → apply results to nodes missing outputs
         let activeBackendExecution: ActiveBackendExecution | undefined
         try {
-          const { data: executions } = await listWorkflowExecutions(id, {
+          // First check for an active execution
+          const { data: activeExecs } = await listWorkflowExecutions(id, {
             limit: 1,
             status: "pending,running",
           })
-          if (executions.length > 0) {
-            const execId = executions[0].id
-            // Fetch full execution details (nodeStates are always in the get response)
+          if (activeExecs.length > 0) {
+            const execId = activeExecs[0].id
             const exec = await getWorkflowExecution(execId)
             const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
             if (Object.keys(nodeStates).length > 0) {
@@ -458,9 +519,29 @@ export function useWorkflowPersistence(projectId?: string) {
               nodesChanged = true
             }
             activeBackendExecution = { executionId: exec.id, nodeStates }
+          } else {
+            // No active execution — check the most recent completed one.
+            // This handles the case where the execution ran while the
+            // frontend was closed, so results were never applied to nodes.
+            const { data: completedExecs } = await listWorkflowExecutions(id, {
+              limit: 1,
+              status: "completed",
+            })
+            if (completedExecs.length > 0) {
+              const exec = await getWorkflowExecution(completedExecs[0].id)
+              const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
+              if (Object.keys(nodeStates).length > 0) {
+                // Only apply outputs to nodes that don't already have results
+                const before = JSON.stringify(nodes)
+                nodes = applyCompletedExecutionResults(nodes, nodeStates)
+                if (JSON.stringify(nodes) !== before) {
+                  nodesChanged = true
+                }
+              }
+            }
           }
         } catch {
-          // Non-critical — no active execution or query failed
+          // Non-critical — no execution found or query failed
         }
 
         loadWorkflow(
