@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus, type WorkflowExecution } from "@/lib/api"
+import { getBatchJobStatus, getWorkflowExecution, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
 import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
@@ -439,7 +439,9 @@ export function useWorkflowPersistence(projectId?: string) {
         let nodesChanged = JSON.stringify(syncResult.nodes) !== JSON.stringify(nodes)
         nodes = syncResult.nodes
 
-        // Check for active backend orchestrator execution
+        // Check for active backend orchestrator execution.
+        // First list to find an active execution, then fetch full details
+        // (which includes nodeStates) via the get endpoint.
         let activeBackendExecution: ActiveBackendExecution | undefined
         try {
           const { data: executions } = await listWorkflowExecutions(id, {
@@ -447,7 +449,9 @@ export function useWorkflowPersistence(projectId?: string) {
             status: "pending,running",
           })
           if (executions.length > 0) {
-            const exec = executions[0]
+            const execId = executions[0].id
+            // Fetch full execution details (nodeStates are always in the get response)
+            const exec = await getWorkflowExecution(execId)
             const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
             if (Object.keys(nodeStates).length > 0) {
               nodes = applyBackendExecutionState(nodes, nodeStates)
@@ -456,7 +460,7 @@ export function useWorkflowPersistence(projectId?: string) {
             activeBackendExecution = { executionId: exec.id, nodeStates }
           }
         } catch {
-          // Non-critical — just skip backend execution detection
+          // Non-critical — no active execution or query failed
         }
 
         loadWorkflow(

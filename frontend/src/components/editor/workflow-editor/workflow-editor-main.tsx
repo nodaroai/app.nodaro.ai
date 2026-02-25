@@ -177,6 +177,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       ownerWorkflowIdRef.current = workflowId;
       load(workflowId).then((result) => {
+        // Check if any loaded nodes are still in running/pending state
+        // and show the "Executing workflow" button immediately.
+        const { nodes: loadedNodes } = useWorkflowStore.getState();
+        const hasRunningNodes = loadedNodes.some((n) => {
+          const s = (n.data as Record<string, unknown>).executionStatus;
+          return s === "running" || s === "pending";
+        });
+        if (hasRunningNodes) {
+          setIsRunning(true);
+        }
+
         if (result.stillRunningJobs && result.stillRunningJobs.length > 0) {
           restorePollingForRunningJobs(
             result.stillRunningJobs,
@@ -191,6 +202,25 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             ctx,
             setIsRunning,
           );
+        }
+
+        // If nodes appeared running but no polling was restored (e.g. no
+        // jobId was persisted, or backend execution already finished),
+        // reset those stale running nodes to idle so they don't stay stuck.
+        if (
+          hasRunningNodes &&
+          (!result.stillRunningJobs || result.stillRunningJobs.length === 0) &&
+          !result.activeBackendExecution
+        ) {
+          const { nodes: currentNodes, updateNodeData: update } =
+            useWorkflowStore.getState();
+          for (const n of currentNodes) {
+            const s = (n.data as Record<string, unknown>).executionStatus;
+            if (s === "running" || s === "pending") {
+              update(n.id, { executionStatus: "idle" });
+            }
+          }
+          setIsRunning(false);
         }
       });
     }
