@@ -595,18 +595,5 @@ describe("DELETE /v1/workflows/:id", () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// POST /v1/workflows/:id/run
-// ---------------------------------------------------------------------------
-
-describe("POST /v1/workflows/:id/run", () => {
-  it("returns 501 not implemented", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
-    })
-
-    expect(res.statusCode).toBe(501)
-    expect(res.json().error.code).toBe("not_implemented")
-  })
-})
+// POST /v1/workflows/:id/run — now handled by workflow-execution routes
+// (tested in workflow-execution.test.ts if present)

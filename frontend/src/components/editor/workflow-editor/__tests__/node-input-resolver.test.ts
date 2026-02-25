@@ -340,7 +340,10 @@ describe("resolveNodeInputs", () => {
     const edges = [{ id: "sw1->t1", source: "sw1", target: "t1", sourceHandle: "out_audPort" }]
 
     const inputs = resolveNodeInputs(target, [swNode, target], edges)
-    expect(inputs.audioUrl).toBe("http://result.mp3")
+    // merge-video-audio routes audio to audioSources, not audioUrl
+    expect(inputs.audioSources).toEqual([
+      { url: "http://result.mp3", sourceNodeId: "sw1" },
+    ])
   })
 
   it("resolves sub-workflow text output as prompt", () => {
