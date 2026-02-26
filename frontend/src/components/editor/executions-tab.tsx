@@ -35,6 +35,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   manual: "Manual",
   webhook: "Webhook",
   schedule: "Schedule",
+  "single-node": "Single Node",
 }
 
 function formatRelativeTime(dateString: string): string {

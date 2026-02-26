@@ -9,6 +9,7 @@ import { validateSceneGraph } from "../lib/scene-graph-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -64,7 +65,7 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
       const { data: job, error: jobError } = await supabase
         .from("jobs")
         .insert({
-          workflow_id: null,
+          workflow_id: extractWorkflowId(req.body),
           user_id: userId,
           status: "pending",
           input_data: {

@@ -64,6 +64,26 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
   throw new Error((errObj?.message as string) ?? fallback)
 }
 
+// ---------------------------------------------------------------------------
+// Workflow context — lets single-node runs tag jobs with a workflowId so they
+// appear in the execution history list for that workflow.
+// ---------------------------------------------------------------------------
+
+let _currentWorkflowId: string | null = null
+
+/** Call from WorkflowEditor on mount/change to set the active workflow. */
+export function setCurrentWorkflowId(id: string | null) {
+  _currentWorkflowId = id
+}
+
+/** Spread workflowId into a body object when inside a workflow editor. */
+function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
+  if (_currentWorkflowId) {
+    return { ...body, workflowId: _currentWorkflowId }
+  }
+  return body
+}
+
 
 // --- Generate Image (E2E spike) ---
 
@@ -96,7 +116,7 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -126,7 +146,7 @@ export async function editImage(
   const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -157,7 +177,7 @@ export async function imageToImage(
   const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -178,7 +198,7 @@ export async function generateCharacter(data: {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -201,7 +221,7 @@ export async function generateCharacterAsset(data: {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -229,7 +249,7 @@ export async function saveCharacter(data: {
   const res = await fetch(`${API_BASE_URL}/v1/characters`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -254,7 +274,7 @@ export async function saveFace(data: {
   const res = await fetch(`${API_BASE_URL}/v1/faces`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -317,7 +337,7 @@ export async function generateFace(data: {
   const res = await fetch(`${API_BASE_URL}/v1/generate-face`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -400,7 +420,7 @@ export async function generateObject(data: {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -422,7 +442,7 @@ export async function generateObjectAsset(data: {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object-asset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -448,7 +468,7 @@ export async function saveObject(data: {
   const res = await fetch(`${API_BASE_URL}/v1/objects`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -530,7 +550,7 @@ export async function generateLocation(data: {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -552,7 +572,7 @@ export async function generateLocationAsset(data: {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location-asset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -578,7 +598,7 @@ export async function saveLocation(data: {
   const res = await fetch(`${API_BASE_URL}/v1/locations`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -657,7 +677,7 @@ export async function splitImage(data: {
   const res = await fetch(`${API_BASE_URL}/v1/split-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(data),
+    body: JSON.stringify(withWorkflowId(data)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -741,7 +761,7 @@ export async function generateVideo(
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -758,7 +778,7 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
   const res = await fetch(`${API_BASE_URL}/v1/video-to-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -785,7 +805,7 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   const res = await fetch(`${API_BASE_URL}/v1/text-to-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -819,7 +839,7 @@ export async function textToSpeech(
   const res = await fetch(`${API_BASE_URL}/v1/text-to-speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -838,7 +858,7 @@ export async function generateScriptApi(prompt: string, sceneCount?: number, ton
   const res = await fetch(`${API_BASE_URL}/v1/generate-script`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -861,7 +881,7 @@ export async function combineVideos(
   const res = await fetch(`${API_BASE_URL}/v1/combine-videos`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -884,7 +904,7 @@ export async function mergeVideoAudioApi(
   const res = await fetch(`${API_BASE_URL}/v1/merge-video-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -901,7 +921,7 @@ export async function extractAudioApi(videoUrl: string, audioFormat?: string, ou
   const res = await fetch(`${API_BASE_URL}/v1/extract-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -918,7 +938,7 @@ export async function trimVideoApi(videoUrl: string, startTime: number, endTime?
   const res = await fetch(`${API_BASE_URL}/v1/trim-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -935,7 +955,7 @@ export async function transcodeVideoApi(videoUrl: string, codec?: string, crf?: 
   const res = await fetch(`${API_BASE_URL}/v1/transcode-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -952,7 +972,7 @@ export async function speedRampApi(videoUrl: string, speed: number, adjustAudio:
   const res = await fetch(`${API_BASE_URL}/v1/speed-ramp`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -969,7 +989,7 @@ export async function loopVideoApi(videoUrl: string, mode: "repeat" | "duration"
   const res = await fetch(`${API_BASE_URL}/v1/loop-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -986,7 +1006,7 @@ export async function fadeVideoApi(videoUrl: string, fadeIn: boolean, fadeInDura
   const res = await fetch(`${API_BASE_URL}/v1/fade-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1003,7 +1023,7 @@ export async function resizeVideoApi(videoUrl: string, targetAspect: string, met
   const res = await fetch(`${API_BASE_URL}/v1/resize-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1025,7 +1045,7 @@ export async function adjustVolumeApi(inputUrl: string, inputType: "audio" | "vi
   const res = await fetch(`${API_BASE_URL}/v1/adjust-volume`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1042,7 +1062,7 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   const res = await fetch(`${API_BASE_URL}/v1/add-captions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1062,7 +1082,7 @@ export async function mixAudioApi(audioUrls: string[], trackVolumes?: number[], 
   const res = await fetch(`${API_BASE_URL}/v1/mix-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1214,7 +1234,7 @@ export async function textToAudioApi(prompt: string, provider?: string, duration
   const res = await fetch(`${API_BASE_URL}/v1/text-to-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1229,7 +1249,7 @@ export async function audioIsolationApi(audioUrl: string, userId?: string): Prom
   const res = await fetch(`${API_BASE_URL}/v1/audio-isolation`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1251,7 +1271,7 @@ export async function textToDialogueApi(
   const res = await fetch(`${API_BASE_URL}/v1/text-to-dialogue`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1269,7 +1289,7 @@ export async function voiceChangerApi(audioUrl: string, voiceId: string, userId?
   const res = await fetch(`${API_BASE_URL}/v1/voice-changer`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1286,7 +1306,7 @@ export async function dubbingApi(audioUrl: string, targetLanguage: string, userI
   const res = await fetch(`${API_BASE_URL}/v1/dubbing`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1301,7 +1321,7 @@ export async function voiceRemixApi(text: string, voiceDescription: string, user
   const res = await fetch(`${API_BASE_URL}/v1/voice-remix`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1328,7 +1348,7 @@ export async function voiceDesignApi(
   const res = await fetch(`${API_BASE_URL}/v1/voice-design`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1343,7 +1363,7 @@ export async function forcedAlignmentApi(audioUrl: string, transcript: string, u
   const res = await fetch(`${API_BASE_URL}/v1/forced-alignment`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1383,7 +1403,7 @@ export async function sunoGenerateApi(params: {
   const res = await fetch(`${API_BASE_URL}/v1/suno/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1418,7 +1438,7 @@ export async function sunoCoverApi(params: {
   const res = await fetch(`${API_BASE_URL}/v1/suno/cover`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1460,7 +1480,7 @@ export async function sunoExtendApi(params: {
   const res = await fetch(`${API_BASE_URL}/v1/suno/extend`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1478,7 +1498,7 @@ export async function sunoLyricsApi(params: {
   const res = await fetch(`${API_BASE_URL}/v1/suno/lyrics`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1499,7 +1519,7 @@ export async function sunoSeparateApi(params: {
   const res = await fetch(`${API_BASE_URL}/v1/suno/separate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1518,7 +1538,7 @@ export async function sunoMusicVideoApi(params: {
   const res = await fetch(`${API_BASE_URL}/v1/suno/music-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1537,7 +1557,7 @@ export async function transcribeApi(audioUrl: string, provider?: string, languag
   const res = await fetch(`${API_BASE_URL}/v1/transcribe`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1559,7 +1579,7 @@ export async function imageToTextApi(
   const res = await fetch(`${API_BASE_URL}/v1/image-to-text/describe`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1584,7 +1604,7 @@ export async function lipSyncApi(
   const res = await fetch(`${API_BASE_URL}/v1/lip-sync`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1606,7 +1626,7 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   const res = await fetch(`${API_BASE_URL}/v1/generate-music`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1623,7 +1643,7 @@ export async function extractYouTubeAudioApi(youtubeUrl: string, userId?: string
   const res = await fetch(`${API_BASE_URL}/v1/extract-youtube-audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1789,7 +1809,7 @@ export async function motionTransferApi(
   const res = await fetch(`${API_BASE_URL}/v1/motion-transfer`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1809,7 +1829,7 @@ export async function videoUpscaleApi(
   const res = await fetch(`${API_BASE_URL}/v1/video-upscale`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1827,7 +1847,7 @@ export async function renderVideoWithSceneGraph(params: {
   const res = await fetch(`${API_BASE_URL}/v1/render-video/scene-graph`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1847,7 +1867,7 @@ export async function generateSceneGraph(params: {
   const res = await fetch(`${API_BASE_URL}/v1/scene-graph/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1870,7 +1890,7 @@ export async function generateAfterEffects(params: {
   const res = await fetch(`${API_BASE_URL}/v1/after-effects/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1887,7 +1907,7 @@ export async function renderVideoWithPlan(params: {
   const res = await fetch(`${API_BASE_URL}/v1/render-video/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1911,7 +1931,7 @@ export async function generateLottieOverlay(params: {
   const res = await fetch(`${API_BASE_URL}/v1/lottie-overlay/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1936,7 +1956,7 @@ export async function generate3DTitle(params: {
   const res = await fetch(`${API_BASE_URL}/v1/3d-title/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1960,7 +1980,7 @@ export async function generateMotionGraphics(params: {
   const res = await fetch(`${API_BASE_URL}/v1/motion-graphics/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -1995,7 +2015,7 @@ export async function generateAIWriterStream(params: {
     const authHeaders = await getAuthHeaders()
 
     for await (const event of streamRequest("/v1/ai-writer/generate-stream", {
-      body,
+      body: withWorkflowId(body),
       signal,
       baseUrl: sseBaseUrl || undefined,
       headers: authHeaders,
@@ -2247,7 +2267,7 @@ export async function saveGeneratedToLibrary(params: {
   const res = await fetch(`${API_BASE_URL}/v1/library/save-generated`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(params),
+    body: JSON.stringify(withWorkflowId(params)),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -2588,7 +2608,7 @@ export interface WorkflowExecution {
   id: string
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping'
-  triggerType: 'manual' | 'webhook' | 'schedule'
+  triggerType: 'manual' | 'webhook' | 'schedule' | 'single-node'
   triggerData?: Record<string, unknown>
   nodeStates?: Record<string, unknown>
   totalNodes: number

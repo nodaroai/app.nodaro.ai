@@ -6,6 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { getAnthropicClient } from "../lib/anthropic.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const aiWriterBody = z.object({
   systemPrompt: z.string().max(10000),
@@ -67,7 +68,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       const { data: job, error: jobError } = await supabase
         .from("jobs")
         .insert({
-          workflow_id: null,
+          workflow_id: extractWorkflowId(req.body),
           user_id: userId,
           status: "pending",
           input_data: {
@@ -216,7 +217,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       const { data: job, error: jobError } = await supabase
         .from("jobs")
         .insert({
-          workflow_id: null,
+          workflow_id: extractWorkflowId(req.body),
           user_id: userId,
           status: "pending",
           input_data: {

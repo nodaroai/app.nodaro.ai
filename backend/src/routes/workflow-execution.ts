@@ -341,52 +341,93 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const { limit, cursor, status } = queryParsed.data
     const { id: workflowId } = paramsParsed.data
 
-    let query = supabase
-      .from("workflow_executions")
-      .select("id, status, trigger_type, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
-      .eq("workflow_id", workflowId)
-      .eq("user_id", req.userId)
-      .order("created_at", { ascending: false })
-      .limit(limit + 1) // Fetch one extra for pagination
-
-    // Filter by status (comma-separated for multiple, e.g. "pending,running")
-    if (status) {
-      const statuses = status.split(",").map((s) => s.trim()).filter(Boolean)
-      if (statuses.length === 1) {
-        query = query.eq("status", statuses[0])
-      } else if (statuses.length > 1) {
-        query = query.in("status", statuses)
-      }
-    }
-
+    // Resolve cursor timestamp (shared across both sources)
+    let cursorTimestamp: string | undefined
     if (cursor) {
-      // Cursor is the created_at of the last item
-      const { data: cursorRow } = await supabase
+      // Try workflow_executions first, then jobs
+      const { data: cursorExec } = await supabase
         .from("workflow_executions")
         .select("created_at")
         .eq("id", cursor)
         .single()
 
-      if (cursorRow) {
-        query = query.lt("created_at", cursorRow.created_at as string)
+      if (cursorExec) {
+        cursorTimestamp = cursorExec.created_at as string
+      } else {
+        const { data: cursorJob } = await supabase
+          .from("jobs")
+          .select("created_at")
+          .eq("id", cursor)
+          .single()
+        if (cursorJob) cursorTimestamp = cursorJob.created_at as string
       }
     }
 
-    const { data, error } = await query
+    // --- Source 1: workflow_executions ---
+    let execQuery = supabase
+      .from("workflow_executions")
+      .select("id, status, trigger_type, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
+      .eq("workflow_id", workflowId)
+      .eq("user_id", req.userId)
+      .order("created_at", { ascending: false })
+      .limit(limit + 1)
 
-    if (error) {
+    // Filter by status (comma-separated for multiple, e.g. "pending,running")
+    const statusFilter = status ? status.split(",").map((s) => s.trim()).filter(Boolean) : []
+    if (statusFilter.length === 1) {
+      execQuery = execQuery.eq("status", statusFilter[0])
+    } else if (statusFilter.length > 1) {
+      execQuery = execQuery.in("status", statusFilter)
+    }
+
+    if (cursorTimestamp) {
+      execQuery = execQuery.lt("created_at", cursorTimestamp)
+    }
+
+    // --- Source 2: standalone jobs (single-node runs with no execution record) ---
+    let jobsQuery = supabase
+      .from("jobs")
+      .select("id, status, input_data, credits_estimated, error_message, started_at, completed_at, created_at")
+      .eq("workflow_id", workflowId)
+      .eq("user_id", req.userId)
+      .is("workflow_execution_id", null)
+      .order("created_at", { ascending: false })
+      .limit(limit + 1)
+
+    // Map execution status filter to job statuses
+    if (statusFilter.length > 0) {
+      const jobStatuses = mapExecStatusesToJobStatuses(statusFilter)
+      if (jobStatuses.length === 1) {
+        jobsQuery = jobsQuery.eq("status", jobStatuses[0])
+      } else if (jobStatuses.length > 1) {
+        jobsQuery = jobsQuery.in("status", jobStatuses)
+      }
+    }
+
+    if (cursorTimestamp) {
+      jobsQuery = jobsQuery.lt("created_at", cursorTimestamp)
+    }
+
+    const [execResult, jobsResult] = await Promise.all([execQuery, jobsQuery])
+
+    if (execResult.error) {
       return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
+        error: { code: "internal_error", message: execResult.error.message },
       })
     }
 
-    const rows = data ?? []
-    const hasMore = rows.length > limit
-    const items = hasMore ? rows.slice(0, limit) : rows
+    // Merge both sources, sort by created_at desc, take limit + 1
+    const execRows = (execResult.data ?? []).map(toExecutionSummary)
+    const jobRows = (jobsResult.data ?? []).map(jobToExecutionSummary)
+    const merged = [...execRows, ...jobRows]
+      .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
+
+    const hasMore = merged.length > limit
+    const items = hasMore ? merged.slice(0, limit) : merged
 
     return {
-      data: items.map(toExecutionSummary),
-      nextCursor: hasMore && items.length > 0 ? items[items.length - 1].id : undefined,
+      data: items,
+      nextCursor: hasMore && items.length > 0 ? items[items.length - 1].id as string : undefined,
     }
   })
 }
@@ -431,4 +472,75 @@ function toExecutionSummary(row: Record<string, unknown>) {
     completedAt: row.completed_at,
     createdAt: row.created_at,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Standalone job → execution summary (for single-node runs)
+// ---------------------------------------------------------------------------
+
+const JOB_STATUS_MAP: Record<string, string> = {
+  processing: "running",
+  pending: "pending",
+  queued: "pending",
+  completed: "completed",
+  failed: "failed",
+  cancelled: "cancelled",
+}
+
+function jobToExecutionSummary(row: Record<string, unknown>) {
+  const inputData = (row.input_data ?? {}) as Record<string, unknown>
+  const jobType = (inputData.type as string) ?? "unknown"
+  const mappedStatus = JOB_STATUS_MAP[row.status as string] ?? (row.status as string)
+
+  return {
+    id: row.id,
+    status: mappedStatus,
+    triggerType: "single-node",
+    nodeStates: {
+      [row.id as string]: {
+        status: mappedStatus,
+        nodeType: jobType,
+        jobId: row.id,
+        creditsUsed: row.credits_estimated ?? 0,
+        error: row.error_message,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+      },
+    },
+    totalNodes: 1,
+    completedNodes: mappedStatus === "completed" ? 1 : 0,
+    failedNodes: mappedStatus === "failed" ? 1 : 0,
+    totalCreditsUsed: mappedStatus === "completed" ? (row.credits_estimated as number ?? 0) : 0,
+    errorMessage: row.error_message,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+  }
+}
+
+function mapExecStatusesToJobStatuses(execStatuses: string[]): string[] {
+  const jobStatuses: string[] = []
+  for (const s of execStatuses) {
+    switch (s) {
+      case "running":
+        jobStatuses.push("processing")
+        break
+      case "pending":
+        jobStatuses.push("pending", "queued")
+        break
+      case "completed":
+        jobStatuses.push("completed")
+        break
+      case "failed":
+        jobStatuses.push("failed")
+        break
+      case "cancelled":
+        jobStatuses.push("cancelled")
+        break
+      default:
+        // No matching job status for stopping, timed_out, etc.
+        break
+    }
+  }
+  return jobStatuses
 }

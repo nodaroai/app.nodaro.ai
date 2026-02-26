@@ -12,6 +12,7 @@ import { LOTTIE_OVERLAY_SYSTEM_PROMPT } from "../prompts/lottie-overlay-system.j
 import { validateLottieOverlayPlan } from "../lib/lottie-overlay-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -71,7 +72,7 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
       const { data: job, error: jobError } = await supabase
         .from("jobs")
         .insert({
-          workflow_id: null,
+          workflow_id: extractWorkflowId(req.body),
           user_id: userId,
           status: "pending",
           input_data: {

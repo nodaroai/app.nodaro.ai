@@ -140,6 +140,7 @@ const renderSceneGraphBody = z.object({
 // ── Generic plan render schema ────────────────────────────────────────
 
 import { PLAN_TYPES, validatePlanByType } from "../lib/plan-schemas.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const renderPlanBody = z.object({
   planType: z.enum(PLAN_TYPES),
@@ -175,7 +176,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
-        workflow_id: null,
+        workflow_id: extractWorkflowId(req.body),
         user_id: userId,
         status: "pending",
         input_data: {
@@ -256,7 +257,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
-        workflow_id: null,
+        workflow_id: extractWorkflowId(req.body),
         user_id: userId,
         status: "pending",
         input_data: {
@@ -323,7 +324,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
-        workflow_id: null,
+        workflow_id: extractWorkflowId(req.body),
         user_id: userId,
         status: "pending",
         input_data: {

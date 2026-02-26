@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const dubbingBody = z.object({
   audioUrl: safeUrlSchema,
@@ -38,7 +39,7 @@ export async function dubbingRoutes(app: FastifyInstance) {
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
-        workflow_id: null,
+        workflow_id: extractWorkflowId(req.body),
         user_id: userId,
         status: "pending",
         input_data: { audioUrl, targetLanguage, sourceLanguage, type: "dubbing" },

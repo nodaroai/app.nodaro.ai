@@ -6,6 +6,7 @@ import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { uploadBufferToR2 } from "../lib/storage.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
 const MAX_AUDIO_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -103,7 +104,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     const { data: job, error: jobError } = await supabase
       .from("jobs")
       .insert({
-        workflow_id: null,
+        workflow_id: extractWorkflowId(req.body),
         user_id: userId,
         status: "pending",
         input_data: { type: "voice-clone", name },

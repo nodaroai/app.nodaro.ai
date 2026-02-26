@@ -18,6 +18,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
@@ -51,7 +52,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
-        workflow_id: null,
+        workflow_id: extractWorkflowId(req.body),
         user_id: userId,
         status: "pending",
         input_data: {

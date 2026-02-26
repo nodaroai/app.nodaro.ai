@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const generateVideoBody = z.object({
   imageUrl: safeUrlSchema,
@@ -64,7 +65,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
-        workflow_id: null,
+        workflow_id: extractWorkflowId(req.body),
         user_id: userId,
         status: "pending",
         input_data: { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, type: "image-to-video" },

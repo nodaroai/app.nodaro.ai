@@ -26,7 +26,7 @@ import { useUndoRedoSubscription } from "@/hooks/use-undo-redo";
 import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase";
-import { StorageExceededError, uploadFile } from "@/lib/api";
+import { StorageExceededError, uploadFile, setCurrentWorkflowId } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
 import { getCachedCredits } from "@/hooks/use-model-credits";
@@ -169,6 +169,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
   // Workflow loading and lifecycle
   // ---------------------------------------------------------------------------
+
+  // Set the active workflow ID so single-node runs tag their jobs with it
+  useEffect(() => {
+    setCurrentWorkflowId(workflowId ?? null);
+    return () => setCurrentWorkflowId(null);
+  }, [workflowId]);
 
   useEffect(() => {
     if (workflowId) {
@@ -465,7 +471,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(
-      (nodeId: string) => handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef),
+      (nodeId: string) => handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef)
+        .finally(() => {
+          // Invalidate execution history so the single-node run appears immediately
+          if (workflowId) {
+            queryClient.invalidateQueries({ queryKey: ["workflow-executions", workflowId] });
+          }
+        }),
     );
     return () => useWorkflowStore.getState().setRunSingleNode(null);
   });
