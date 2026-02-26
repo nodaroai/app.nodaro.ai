@@ -16,6 +16,7 @@ import { EditorToolbar } from "../editor-toolbar";
 import { EditorErrorBoundary } from "../editor-error-boundary";
 import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
 import { ExecutionsTab } from "../executions-tab";
+import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -64,6 +65,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const navigate = useNavigate();
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"editor" | "executions" | "cost">(
     "editor",
   );
@@ -424,8 +426,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   };
 
   // ---------------------------------------------------------------------------
-  // Stop execution
+  // Execution lifecycle
   // ---------------------------------------------------------------------------
+
+  const onExecutionStarted = useCallback((id: string) => {
+    setActiveExecutionId(id);
+  }, []);
+
+  const onExecutionEnded = useCallback(() => {
+    setActiveExecutionId(null);
+  }, []);
 
   function handleStop(): void {
     for (const interval of pollIntervalsRef.current) {
@@ -433,6 +443,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     }
     pollIntervalsRef.current.clear();
     setIsRunning(false);
+    setActiveExecutionId(null);
 
     const { nodes, updateNodeData } = useWorkflowStore.getState();
     for (const node of nodes) {
@@ -458,14 +469,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     useWorkflowStore.getState().setRunFromHere(
-      (nodeId: string) => handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning),
+      (nodeId: string) => handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
     );
     return () => useWorkflowStore.getState().setRunFromHere(null);
   });
 
   useEffect(() => {
     useWorkflowStore.getState().setRunSelected(
-      () => handleRunSelected(ctx, projectId, save, setIsRunning),
+      () => handleRunSelected(ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
     );
     return () => useWorkflowStore.getState().setRunSelected(null);
   });
@@ -677,7 +688,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               </EditorErrorBoundary>
             </ReactFlowProvider>
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
-              {isRunning ? (
+              {isRunning && activeExecutionId ? (
+                <ExecutionStatusBar
+                  executionId={activeExecutionId}
+                  onStopped={handleStop}
+                />
+              ) : isRunning ? (
                 <>
                   <Button
                     size="lg"
@@ -702,7 +718,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               ) : (
                 <Button
                   size="lg"
-                  onClick={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning)}
+                  onClick={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded)}
                   className="rounded-full px-6 text-white hover:opacity-90"
                   style={{ backgroundColor: "#ff0073" }}
                 >
@@ -721,7 +737,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
         {activeTab === "executions" && (
           <div className="absolute inset-0">
-            <ExecutionsTab className="h-full" />
+            <ExecutionsTab className="h-full" workflowId={useWorkflowStore.getState().workflowId} />
           </div>
         )}
 

@@ -1,24 +1,10 @@
-import { useState, lazy, Suspense } from "react"
+import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, Clock, Zap, DollarSign, Coins } from "lucide-react"
+import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getJobs, cancelJob, cancelAllJobs, type Job } from "@/lib/api"
-const ExecutionDetailModal = lazy(() => import("./execution-detail-modal").then(m => ({ default: m.ExecutionDetailModal })))
-import { useAuth } from "@/hooks/use-auth"
-import { isCloud } from "@/lib/edition"
-import { useStats } from "@/hooks/queries/use-stats-queries"
+import { listWorkflowExecutions, cancelWorkflowExecution, stopWorkflowExecution, type WorkflowExecution } from "@/lib/api"
+import { hasCredits } from "@/lib/edition"
 import { toast } from "sonner"
-import { queryKeys } from "@/lib/query-keys"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import {
   Tooltip,
   TooltipContent,
@@ -29,10 +15,25 @@ import {
 const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
   failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
-  processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
+  running: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
   pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
-  queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
   cancelled: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
+  stopping: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
+  timed_out: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
+}
+
+const NODE_STATUS_DOT: Record<string, string> = {
+  completed: "bg-green-500",
+  failed: "bg-red-500",
+  running: "bg-yellow-500 animate-pulse",
+  pending: "bg-blue-400",
+  skipped: "bg-gray-400",
+}
+
+const TRIGGER_LABELS: Record<string, string> = {
+  manual: "Manual",
+  webhook: "Webhook",
+  schedule: "Schedule",
 }
 
 function formatRelativeTime(dateString: string): string {
@@ -45,16 +46,16 @@ function formatRelativeTime(dateString: string): string {
   const diffDays = Math.floor(diffHours / 24)
 
   if (diffSecs < 60) return "just now"
-  if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? "s" : ""} ago`
-  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`
-  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
   return date.toLocaleDateString()
 }
 
 function formatDuration(startedAt: string | undefined, completedAt: string | undefined): string {
-  if (!startedAt || !completedAt) return "-"
+  if (!startedAt) return "-"
   const start = new Date(startedAt).getTime()
-  const end = new Date(completedAt).getTime()
+  const end = completedAt ? new Date(completedAt).getTime() : Date.now()
   const seconds = (end - start) / 1000
   if (seconds < 1) return `${(seconds * 1000).toFixed(0)}ms`
   if (seconds < 60) return `${seconds.toFixed(1)}s`
@@ -63,121 +64,38 @@ function formatDuration(startedAt: string | undefined, completedAt: string | und
   return `${mins}m ${secs.toFixed(0)}s`
 }
 
-function getDollarDisplay(job: Job): string {
-  const cost = job.cost ?? job.display_cost ?? job.provider_cost
-  if (cost == null) return "-"
-  if (cost < 0.01) return `$${cost.toFixed(4)}`
-  return `$${cost.toFixed(3)}`
-}
-
-function getCreditsDisplay(job: Job): string {
-  const credits = job.credits_used ?? job.credits_estimated
-  if (credits == null) return "-"
-  return `${credits} CR`
-}
-
-function getCostDisplay(job: Job, showDollars: boolean): string {
-  return showDollars ? getDollarDisplay(job) : getCreditsDisplay(job)
-}
-
-function getQueueTime(createdAt: string, startedAt: string | undefined): string {
-  if (!startedAt) return "-"
-  const created = new Date(createdAt).getTime()
-  const started = new Date(startedAt).getTime()
-  const queueMs = started - created
-  if (queueMs < 1000) return `${queueMs}ms`
-  return `${(queueMs / 1000).toFixed(1)}s`
-}
-
-const JOB_TYPE_MAP: Record<string, string> = {
-  "generate-image": "Image",
-  "image-to-video": "Video",
-  "video-to-video": "Video",
-  "text-to-video": "Video",
-  "text-to-speech": "TTS",
-  "generate-script": "Script",
-  "combine-videos": "Combine",
-  "merge-video-audio": "Merge",
-  "extract-audio": "Extract",
-  "trim-video": "Trim",
-  "resize-video": "Resize",
-  "adjust-volume": "Volume",
-  "add-captions": "Captions",
-  "mix-audio": "Mix",
-  "generate-music": "Music",
-  "text-to-audio": "Audio",
-  "generate-character": "Character",
-  "generate-character-asset": "Asset",
-  "generate-object": "Object",
-  "generate-object-asset": "Asset",
-  "generate-location": "Location",
-  "generate-location-asset": "Asset",
-  "motion-transfer": "Motion",
-  "video-upscale": "Upscale",
-}
-
-function extractJobType(inputData: Job["input_data"]): string {
-  const type = inputData?.type ?? "unknown"
-  return JOB_TYPE_MAP[type] ?? type
-}
-
-function extractProvider(inputData: Job["input_data"]): string {
-  return inputData?.provider ?? "default"
-}
-
-/**
- * Get display text for the actual API provider used (KIE.ai vs Replicate)
- * This shows which backend service actually processed the job
- */
-function getApiProviderDisplay(job: Job): { text: string; isFallback: boolean } {
-  // job.provider field indicates which API was used: "kie" or "replicate"
-  // If not set, we don't know which provider was used
-  if (!job.provider) {
-    return { text: "-", isFallback: false }
-  }
-
-  if (job.provider === "kie") {
-    return { text: "KIE.ai", isFallback: false }
-  }
-
-  // Check if this was a fallback (in KIE.ai mode but Replicate was used)
-  // We determine this by checking if the job has markup applied
-  // For now, just show "Replicate" with a note if it might be a fallback
-  return { text: "Replicate", isFallback: false }
+interface NodeState {
+  status: string
+  error?: string
+  startedAt?: string
+  completedAt?: string
 }
 
 interface ExecutionsTabProps {
   readonly className?: string
+  readonly workflowId?: string | null
 }
 
-export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
-  const { user, isAdmin } = useAuth()
+export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps) {
   const qc = useQueryClient()
   const [cursor, setCursor] = useState<string | undefined>()
   const [prevCursors, setPrevCursors] = useState<string[]>([])
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
-  const [cancelAllDialogOpen, setCancelAllDialogOpen] = useState(false)
-  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
-  const [showDollars, setShowDollars] = useState(!isCloud())
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
 
-  const userId = user?.id
-
-  const { data: stats } = useStats("user", userId)
-
-  const { data: jobsData, isLoading: loading, error: jobsError } = useQuery({
-    queryKey: queryKeys.jobs.list(userId ?? "", cursor),
-    queryFn: () => getJobs(userId, cursor),
-    enabled: !!userId,
-    staleTime: 15_000,
+  const { data, isLoading: loading, error } = useQuery({
+    queryKey: ["workflow-executions", workflowId, cursor],
+    queryFn: () => listWorkflowExecutions(workflowId!, { limit: 20, cursor }),
+    enabled: !!workflowId,
+    refetchInterval: 10_000,
   })
-  const jobs = jobsData?.data ?? []
-  const nextCursor = jobsData?.next ?? null
+  const executions = data?.data ?? []
+  const nextCursor = data?.nextCursor ?? null
 
   const handleRefresh = () => {
     setCursor(undefined)
     setPrevCursors([])
-    qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
-    qc.invalidateQueries({ queryKey: queryKeys.stats.all })
+    qc.invalidateQueries({ queryKey: ["workflow-executions", workflowId] })
   }
 
   const handleNext = () => {
@@ -189,49 +107,49 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
 
   const handlePrev = () => {
     if (prevCursors.length > 0) {
-      const newPrevCursors = prevCursors.slice(0, -1)
-      const prevCursor = newPrevCursors[newPrevCursors.length - 1]
-      setPrevCursors(newPrevCursors)
-      setCursor(prevCursor ?? undefined)
+      const newPrev = prevCursors.slice(0, -1)
+      setPrevCursors(newPrev)
+      setCursor(newPrev[newPrev.length - 1] || undefined)
     } else {
       setCursor(undefined)
       setPrevCursors([])
     }
   }
 
-  const handleCancelJob = async (jobId: string, e: React.MouseEvent) => {
+  const handleCancel = async (execId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!userId) return
-
-    setCancellingJobId(jobId)
+    setCancellingId(execId)
     try {
-      await cancelJob(jobId, userId)
-      qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
-      qc.invalidateQueries({ queryKey: queryKeys.stats.all })
-    } catch (err) {
-      toast.error("Failed to cancel job")
+      await cancelWorkflowExecution(execId)
+      qc.invalidateQueries({ queryKey: ["workflow-executions", workflowId] })
+      toast.info("Execution cancelled")
+    } catch {
+      toast.error("Failed to cancel execution")
     } finally {
-      setCancellingJobId(null)
+      setCancellingId(null)
     }
   }
 
-  const handleCancelAll = async () => {
-    if (!userId) return
-
+  const handleStopAfterCurrent = async (execId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
     try {
-      const result = await cancelAllJobs(userId)
-      if (result.cancelled > 0) {
-        qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
-        qc.invalidateQueries({ queryKey: queryKeys.stats.all })
-      }
-    } catch (err) {
-      toast.error("Failed to cancel jobs")
-    } finally {
-      setCancelAllDialogOpen(false)
+      await stopWorkflowExecution(execId)
+      qc.invalidateQueries({ queryKey: ["workflow-executions", workflowId] })
+      toast.info("Will stop after current node finishes")
+    } catch {
+      toast.error("Failed to stop execution")
     }
   }
 
-  if (!userId || (loading && jobs.length === 0)) {
+  if (!workflowId) {
+    return (
+      <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
+        <p className="text-sm text-gray-500 dark:text-[#94A3B8]">Save the workflow to see execution history.</p>
+      </div>
+    )
+  }
+
+  if (loading && executions.length === 0) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <Loader2 className="w-8 h-8 animate-spin text-[#ff0073] mb-4" />
@@ -240,12 +158,12 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
     )
   }
 
-  if (jobsError) {
+  if (error) {
     return (
       <div className={`flex-1 flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
         <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
         <h3 className="text-lg font-semibold text-gray-700 dark:text-[#E2E8F0] mb-2">Failed to load executions</h3>
-        <p className="text-sm text-gray-500 dark:text-[#94A3B8] mb-4">{jobsError.message}</p>
+        <p className="text-sm text-gray-500 dark:text-[#94A3B8] mb-4">{error.message}</p>
         <Button onClick={handleRefresh} variant="outline">
           <RefreshCw className="w-4 h-4 mr-2" />
           Retry
@@ -258,68 +176,10 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
     <div className={`flex-1 flex flex-col bg-[#F8FAFC] dark:bg-[#121212] ${className}`}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-        <div className="flex items-center gap-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-[#E2E8F0]">
-            Execution History
-          </h2>
-          {/* Stats badges */}
-          {stats && (
-            <div className="flex items-center gap-2">
-              {(stats.pending > 0) && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
-                  <Clock className="w-3 h-3" />
-                  {stats.pending} pending
-                </span>
-              )}
-              {(stats.processing > 0) && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
-                  <Zap className="w-3 h-3" />
-                  {stats.processing} processing
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-[#E2E8F0]">
+          Execution History
+        </h2>
         <div className="flex items-center gap-2">
-          {/* Admin toggle: credits vs dollars */}
-          {isAdmin && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowDollars(prev => !prev)}
-                    className={`h-8 px-2.5 dark:border-[#2D2D2D] ${showDollars ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30" : ""}`}
-                  >
-                    {showDollars ? (
-                      <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <Coins className="w-4 h-4 text-[#ff0073]" />
-                    )}
-                    <span className="ml-1.5 text-xs font-medium">
-                      {showDollars ? "$" : "CR"}
-                    </span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p>{showDollars ? "Showing dollars -- click for credits" : "Showing credits -- click for dollars"}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {/* Cancel All button */}
-          {stats && (stats.pending + stats.processing > 0) && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setCancelAllDialogOpen(true)}
-              className="bg-red-500 hover:bg-red-600 text-white"
-            >
-              <XCircle className="w-4 h-4 mr-1.5" />
-              Cancel All ({stats.pending + stats.processing})
-            </Button>
-          )}
           <Button
             variant="outline"
             size="sm"
@@ -361,187 +221,261 @@ export function ExecutionsTab({ className = "" }: ExecutionsTabProps) {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 dark:bg-[#121212]">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  ID
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Model
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  API
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-8" />
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  Queued
+                  Trigger
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                  Progress
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Duration
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                  {showDollars ? "Cost" : "Credits"}
-                </th>
+                {hasCredits() && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                    Credits
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-16">
-
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider w-20" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-[#2D2D2D]">
-              {jobs.length === 0 ? (
+              {executions.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
-                    No executions found
+                  <td colSpan={hasCredits() ? 8 : 7} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
+                    No executions yet. Run the workflow to see history here.
                   </td>
                 </tr>
               ) : (
-                jobs.map((job) => (
-                  <tr
-                    key={job.id}
-                    className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors cursor-pointer"
-                    onClick={() => setSelectedJob(job)}
-                  >
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedJob(job)
-                        }}
-                        className="text-sm font-mono text-[#ff0073] hover:underline"
-                      >
-                        {job.id.slice(0, 8)}...
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-700 dark:text-[#E2E8F0] font-mono">
-                        {extractJobType(job.input_data)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
-                        {extractProvider(job.input_data)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const apiProvider = getApiProviderDisplay(job)
-                        return (
-                          <span className={`text-sm font-medium ${
-                            apiProvider.text === "KIE.ai"
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : apiProvider.text === "Replicate"
-                              ? "text-blue-600 dark:text-blue-400"
-                              : "text-gray-500 dark:text-[#94A3B8]"
-                          }`}>
-                            {apiProvider.text}
-                          </span>
-                        )
-                      })()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
-                        {job.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">
-                        {getQueueTime(job.created_at, job.started_at)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">
-                        {formatDuration(job.started_at, job.completed_at)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-[#ff0073] font-mono">
-                        {getCostDisplay(job, showDollars)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
-                        {formatRelativeTime(job.created_at)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {["pending", "queued", "processing"].includes(job.status) && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
-                                onClick={(e) => handleCancelJob(job.id, e)}
-                                disabled={cancellingJobId === job.id}
-                                aria-label="Cancel job"
-                              >
-                                {cancellingJobId === job.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <XCircle className="w-4 h-4" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="left">
-                              <p>Cancel this job</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                executions.map((exec) => {
+                  const isExpanded = expandedId === exec.id
+                  const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeState>
+                  const nodeEntries = Object.entries(nodeStates)
+                  const isActive = exec.status === "pending" || exec.status === "running" || exec.status === "stopping"
+
+                  return (
+                    <ExecutionRow
+                      key={exec.id}
+                      exec={exec}
+                      isExpanded={isExpanded}
+                      nodeEntries={nodeEntries}
+                      isActive={isActive}
+                      cancellingId={cancellingId}
+                      onToggle={() => setExpandedId(isExpanded ? null : exec.id)}
+                      onCancel={handleCancel}
+                      onStopAfterCurrent={handleStopAfterCurrent}
+                    />
+                  )
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
-
-      {/* Detail Modal */}
-      {selectedJob !== null && (
-        <Suspense fallback={null}>
-          <ExecutionDetailModal
-            job={selectedJob}
-            open={selectedJob !== null}
-            onClose={() => setSelectedJob(null)}
-            onDeleted={(jobId) => {
-              qc.invalidateQueries({ queryKey: queryKeys.jobs.all })
-              setSelectedJob(null)
-            }}
-            showDollars={showDollars}
-          />
-        </Suspense>
-      )}
-
-      {/* Cancel All Confirmation Dialog */}
-      <AlertDialog open={cancelAllDialogOpen} onOpenChange={setCancelAllDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel all pending jobs?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will cancel {stats ? stats.pending + stats.processing : 0} job{(stats?.pending ?? 0) + (stats?.processing ?? 0) !== 1 ? "s" : ""} that are currently pending or processing.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep Running</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCancelAll}
-              className="bg-red-500 hover:bg-red-600 text-white"
-            >
-              Cancel All Jobs
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
+  )
+}
+
+function ExecutionRow({
+  exec,
+  isExpanded,
+  nodeEntries,
+  isActive,
+  cancellingId,
+  onToggle,
+  onCancel,
+  onStopAfterCurrent,
+}: {
+  exec: WorkflowExecution
+  isExpanded: boolean
+  nodeEntries: [string, NodeState][]
+  isActive: boolean
+  cancellingId: string | null
+  onToggle: () => void
+  onCancel: (id: string, e: React.MouseEvent) => void
+  onStopAfterCurrent: (id: string, e: React.MouseEvent) => void
+}) {
+  const completed = exec.completedNodes ?? 0
+  const failed = exec.failedNodes ?? 0
+  const total = exec.totalNodes ?? 0
+
+  return (
+    <>
+      <tr
+        className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors cursor-pointer"
+        onClick={onToggle}
+      >
+        <td className="px-4 py-3">
+          {nodeEntries.length > 0 ? (
+            isExpanded ? (
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            ) : (
+              <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+            )
+          ) : null}
+        </td>
+        <td className="px-4 py-3">
+          <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[exec.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+            {exec.status === "stopping" ? "stopping" : exec.status}
+          </span>
+          {exec.errorMessage && exec.status === "failed" && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 ml-1.5 inline" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-xs">{exec.errorMessage}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </td>
+        <td className="px-4 py-3">
+          <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
+            {TRIGGER_LABELS[exec.triggerType] ?? exec.triggerType}
+          </span>
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-700 dark:text-[#E2E8F0] font-mono">
+              {completed}/{total}
+            </span>
+            {failed > 0 && (
+              <span className="text-xs text-red-500 font-medium">
+                ({failed} failed)
+              </span>
+            )}
+            {total > 0 && (
+              <div className="w-16 h-1.5 bg-gray-200 dark:bg-[#2D2D2D] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.round((completed / total) * 100)}%`,
+                    backgroundColor: failed > 0 ? "#ef4444" : "#ff0073",
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-3">
+          <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">
+            {formatDuration(exec.startedAt, exec.completedAt)}
+          </span>
+        </td>
+        {hasCredits() && (
+          <td className="px-4 py-3">
+            <span className="text-sm text-[#ff0073] font-mono">
+              {exec.totalCreditsUsed > 0 ? (
+                <span className="inline-flex items-center gap-1">
+                  <Coins className="w-3 h-3" />
+                  {exec.totalCreditsUsed}
+                </span>
+              ) : "-"}
+            </span>
+          </td>
+        )}
+        <td className="px-4 py-3">
+          <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
+            {formatRelativeTime(exec.createdAt)}
+          </span>
+        </td>
+        <td className="px-4 py-3">
+          {isActive && (
+            <div className="flex items-center gap-1">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                      onClick={(e) => onCancel(exec.id, e)}
+                      disabled={cancellingId === exec.id}
+                      aria-label="Cancel execution"
+                    >
+                      {cancellingId === exec.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">
+                    <p>Cancel now</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {exec.status === "running" && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+                        onClick={(e) => onStopAfterCurrent(exec.id, e)}
+                        aria-label="Stop after current node"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                          <rect x="2" y="3" width="4" height="10" rx="1" />
+                          <rect x="8" y="3" width="4" height="10" rx="1" />
+                        </svg>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      <p>Stop after current node</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          )}
+        </td>
+      </tr>
+      {isExpanded && nodeEntries.length > 0 && (
+        <tr>
+          <td colSpan={hasCredits() ? 8 : 7} className="px-0 py-0">
+            <div className="bg-gray-50/50 dark:bg-[#161616] border-t border-gray-100 dark:border-[#2D2D2D]">
+              <div className="px-8 py-3">
+                <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-2">
+                  Node States
+                </div>
+                <div className="space-y-1">
+                  {nodeEntries.map(([nodeId, state]) => (
+                    <div key={nodeId} className="flex items-center gap-3 py-1">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${NODE_STATUS_DOT[state.status] ?? "bg-gray-400"}`} />
+                      <span className="text-xs font-mono text-gray-600 dark:text-[#94A3B8] truncate max-w-[200px]">
+                        {nodeId.slice(0, 12)}
+                      </span>
+                      <span className={`text-xs font-medium ${
+                        state.status === "completed" ? "text-green-600 dark:text-green-400" :
+                        state.status === "failed" ? "text-red-600 dark:text-red-400" :
+                        state.status === "running" ? "text-yellow-600 dark:text-yellow-400" :
+                        "text-gray-500 dark:text-[#94A3B8]"
+                      }`}>
+                        {state.status}
+                      </span>
+                      {state.error && (
+                        <span className="text-xs text-red-500 truncate max-w-[300px]">
+                          {state.error}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }

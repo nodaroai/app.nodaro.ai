@@ -2586,7 +2586,7 @@ export async function getWorkflowInterface(workflowId: string): Promise<{ routes
 export interface WorkflowExecution {
   id: string
   workflowId: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping'
   triggerType: 'manual' | 'webhook' | 'schedule'
   triggerData?: Record<string, unknown>
   nodeStates?: Record<string, unknown>
@@ -2679,12 +2679,21 @@ export async function getWorkflowExecution(executionId: string): Promise<Workflo
   return json.data
 }
 
-/** Cancel an active execution. */
+/** Cancel an active execution immediately. */
 export function cancelWorkflowExecution(executionId: string): Promise<void> {
   return apiRequest(
     `/v1/workflow-executions/${encodeURIComponent(executionId)}/cancel`,
     "Failed to cancel execution",
     { method: "POST" },
+  )
+}
+
+/** Stop after the current node finishes (sets status to "stopping"). */
+export function stopWorkflowExecution(executionId: string): Promise<void> {
+  return apiRequest(
+    `/v1/workflow-executions/${encodeURIComponent(executionId)}/cancel`,
+    "Failed to stop execution",
+    { method: "POST", body: { mode: "after_current" } },
   )
 }
 

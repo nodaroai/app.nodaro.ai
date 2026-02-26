@@ -199,13 +199,16 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    // Set to cancelled — orchestrator checks this on next level
+    // mode: "after_current" sets status to "stopping" (finish current level, then stop)
+    // mode: undefined/default sets status to "cancelled" (stop ASAP)
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const mode = body.mode === "after_current" ? "stopping" : "cancelled"
+    const updates: Record<string, unknown> = { status: mode }
+    if (mode === "cancelled") updates.completed_at = new Date().toISOString()
+
     await supabase
       .from("workflow_executions")
-      .update({
-        status: "cancelled",
-        completed_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq("id", parsed.data.id)
 
     return { success: true }

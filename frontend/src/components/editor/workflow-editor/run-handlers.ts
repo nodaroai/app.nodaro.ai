@@ -28,6 +28,8 @@ export async function handleRun(
   workflowId: string | null,
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
+  onExecutionStarted?: (id: string) => void,
+  onExecutionEnded?: () => void,
 ): Promise<void> {
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
@@ -105,17 +107,16 @@ export async function handleRun(
 
   try {
     const result = await runWorkflow(workflowId);
-    // Delegate to backend execution polling
-    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning);
+    onExecutionStarted?.(result.executionId);
+    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
-    // 409 = already running — attach to existing execution
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info("Workflow is already running — reattaching...");
-      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning);
+      onExecutionStarted?.(err.executionId);
+      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
-    // Clear pending states
     for (const node of executableNodes) {
       updateNodeData(node.id, { executionStatus: undefined });
     }
@@ -181,6 +182,8 @@ export async function handleRunFromHere(
   projectId: string | undefined,
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
+  onExecutionStarted?: (id: string) => void,
+  onExecutionEnded?: () => void,
 ): Promise<void> {
   rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
@@ -231,11 +234,13 @@ export async function handleRunFromHere(
 
   try {
     const result = await runWorkflow(workflowId, [...downstream]);
-    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning);
+    onExecutionStarted?.(result.executionId);
+    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info("Workflow is already running — reattaching...");
-      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning);
+      onExecutionStarted?.(err.executionId);
+      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
@@ -257,6 +262,8 @@ export async function handleRunSelected(
   projectId: string | undefined,
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
+  onExecutionStarted?: (id: string) => void,
+  onExecutionEnded?: () => void,
 ): Promise<void> {
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
@@ -297,11 +304,13 @@ export async function handleRunSelected(
 
   try {
     const result = await runWorkflow(workflowId, selectedIds);
-    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning);
+    onExecutionStarted?.(result.executionId);
+    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info("Workflow is already running — reattaching...");
-      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning);
+      onExecutionStarted?.(err.executionId);
+      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
@@ -476,6 +485,7 @@ export function restorePollingForBackendExecution(
   executionId: string,
   ctx: ExecutionContext,
   setIsRunning: (v: boolean) => void,
+  onExecutionEnded?: () => void,
 ): void {
   setIsRunning(true);
   let pollFailures = 0;
@@ -593,6 +603,7 @@ export function restorePollingForBackendExecution(
           exec.status === "timed_out"
         ) {
           ctx.untrackInterval(poll);
+          onExecutionEnded?.();
           if (exec.status === "completed") {
             toast.success("Backend execution completed");
           } else if (exec.status === "failed") {
@@ -609,6 +620,7 @@ export function restorePollingForBackendExecution(
         pollFailures++;
         if (pollFailures >= 5) {
           ctx.untrackInterval(poll);
+          onExecutionEnded?.();
           toast.error("Lost connection to backend execution");
         }
       }

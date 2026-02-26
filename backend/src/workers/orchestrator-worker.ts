@@ -168,9 +168,19 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         return
       }
 
-      // Check cancellation
-      const cancelled = await isExecutionCancelled(executionId)
-      if (cancelled) {
+      // Check cancellation / stopping
+      const controlStatus = await checkExecutionControl(executionId)
+      if (controlStatus === "cancelled") {
+        ctx.cancelled = true
+        await updateExecution(executionId, {
+          status: "cancelled",
+          node_states: nodeStates,
+          completed_at: new Date().toISOString(),
+        })
+        return
+      }
+      if (controlStatus === "stopping") {
+        // "Stop after current" — don't start this level, mark as cancelled
         ctx.cancelled = true
         await updateExecution(executionId, {
           status: "cancelled",
@@ -344,12 +354,14 @@ async function updateExecution(
     .eq("id", executionId)
 }
 
-async function isExecutionCancelled(executionId: string): Promise<boolean> {
+async function checkExecutionControl(executionId: string): Promise<"running" | "cancelled" | "stopping"> {
   const { data } = await supabase
     .from("workflow_executions")
     .select("status")
     .eq("id", executionId)
     .single()
 
-  return data?.status === "cancelled"
+  if (data?.status === "cancelled") return "cancelled"
+  if (data?.status === "stopping") return "stopping"
+  return "running"
 }
