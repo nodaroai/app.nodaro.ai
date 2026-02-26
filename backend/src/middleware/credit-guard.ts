@@ -142,9 +142,6 @@ export async function reserveCreditsForJob(
 ): Promise<ReserveResult | undefined> {
   if (!hasCredits()) return undefined
 
-  // FFmpeg operations are free — skip reservation
-  if (modelIdentifier === "ffmpeg") return undefined
-
   const userId = req.userId
   if (!userId) return undefined
 

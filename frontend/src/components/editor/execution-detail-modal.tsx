@@ -25,7 +25,7 @@ function getCostDisplayForModal(job: Job, showDollars: boolean): string {
     if (cost < 0.01) return `$${cost.toFixed(4)}`
     return `$${cost.toFixed(3)}`
   }
-  const credits = job.credits_used ?? job.credits_estimated
+  const credits = job.credits_estimated
   if (credits == null) return "-"
   return `${credits} CR`
 }
