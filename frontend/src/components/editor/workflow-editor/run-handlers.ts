@@ -1,7 +1,7 @@
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatus, getUserCredits, getWorkflowExecution } from "@/lib/api";
+import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, WorkflowAlreadyRunningError } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import { hasCredits } from "@/lib/edition";
 import { queryClient } from "@/lib/query-client";
@@ -9,87 +9,14 @@ import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/hooks/use-model-credits";
 import type { WorkflowNode, GeneratedResult } from "@/types/nodes";
 import {
-  WorkflowStaleError,
   NODE_CREDIT_COSTS,
   isExecutableNode,
   type ExecutionContext,
 } from "./types";
-import { buildExecutionLevels, getEffectivelySkippedIds, collapseExpandedClones } from "./execution-graph";
+import { collapseExpandedClones } from "./execution-graph";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
-import { executeNodeForList, expandLoopResults } from "./list-execution";
-
-/**
- * Shared level-by-level execution loop. Runs each level in parallel via
- * Promise.allSettled, stopping on real errors or stale-workflow detection.
- *
- * Returns true if any real error occurred, false otherwise.
- */
-async function executeLevels(
-  levels: WorkflowNode[][],
-  skippedIds: Set<string>,
-  ctx: ExecutionContext,
-): Promise<boolean> {
-  let failed = false;
-  for (const level of levels) {
-    if (failed) break;
-
-    const toRun = level.filter(
-      (n) => isExecutableNode(n) && !skippedIds.has(n.id),
-    );
-    if (toRun.length === 0) continue;
-
-    const results = await Promise.allSettled(
-      toRun.map((node) => {
-        const { nodes: currentNodes, edges: currentEdges } =
-          useWorkflowStore.getState();
-        const listItems = getListInputForNode(
-          node,
-          currentNodes,
-          currentEdges,
-        );
-        if (!listItems || listItems.length <= 1) {
-          return executeNode(node, ctx);
-        }
-        return executeNodeForList(node, listItems, ctx);
-      }),
-    );
-
-    const hasRealError = results.some(
-      (r) =>
-        r.status === "rejected" && !(r.reason instanceof WorkflowStaleError),
-    );
-    const hasStaleError = results.some(
-      (r) =>
-        r.status === "rejected" && r.reason instanceof WorkflowStaleError,
-    );
-    if (hasStaleError) break;
-    if (hasRealError) {
-      failed = true;
-    }
-  }
-  return failed;
-}
-
-/**
- * Mark skipped nodes and build execution levels from a subgraph.
- * Returns { levels, skippedIds }.
- */
-function prepareExecution(
-  nodes: WorkflowNode[],
-  edges: ReturnType<typeof useWorkflowStore.getState>["edges"],
-): { levels: WorkflowNode[][]; skippedIds: Set<string> } {
-  const levels = buildExecutionLevels(nodes, edges);
-  const skippedIds = getEffectivelySkippedIds(nodes, edges);
-
-  for (const id of skippedIds) {
-    useWorkflowStore
-      .getState()
-      .updateNodeData(id, { executionStatus: "skipped" });
-  }
-
-  return { levels, skippedIds };
-}
+import { executeNodeForList } from "./list-execution";
 
 // ---------------------------------------------------------------------------
 // handleRun
@@ -98,18 +25,23 @@ function prepareExecution(
 export async function handleRun(
   ctx: ExecutionContext,
   projectId: string | undefined,
+  workflowId: string | null,
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
-  pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
 ): Promise<void> {
   rejectAllManualEdits();
-  const { nodes, edges } = collapseExpandedClones();
+  const { nodes } = collapseExpandedClones();
 
   const executableNodes = nodes.filter(isExecutableNode);
   if (executableNodes.length === 0) {
     toast.error(
       "No executable nodes found. Add Generate Image, Image to Video, or Video to Video nodes.",
     );
+    return;
+  }
+
+  if (!workflowId) {
+    toast.error("Save the workflow before running.");
     return;
   }
 
@@ -160,24 +92,36 @@ export async function handleRun(
     }
   }
 
-  const { levels, skippedIds } = prepareExecution(nodes, edges);
+  // Mark all executable nodes as pending immediately for UI feedback
+  const { updateNodeData } = useWorkflowStore.getState();
+  for (const node of executableNodes) {
+    updateNodeData(node.id, { executionStatus: "pending" });
+  }
 
   setIsRunning(true);
   toast.info("Executing workflow...", {
     description: `${executableNodes.length} node(s) to run`,
   });
 
-  const failed = await executeLevels(levels, skippedIds, ctx);
-
-  if (pollIntervalsRef.current.size === 0) {
+  try {
+    const result = await runWorkflow(workflowId);
+    // Delegate to backend execution polling
+    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning);
+  } catch (err: unknown) {
+    // 409 = already running — attach to existing execution
+    if (err instanceof WorkflowAlreadyRunningError) {
+      toast.info("Workflow is already running — reattaching...");
+      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning);
+      return;
+    }
     setIsRunning(false);
-  }
-
-  if (failed) {
-    toast.error("Workflow execution stopped due to errors");
-  } else if (!ctx.isWorkflowStale()) {
-    toast.success("Workflow execution complete");
-    expandLoopResults();
+    // Clear pending states
+    for (const node of executableNodes) {
+      updateNodeData(node.id, { executionStatus: undefined });
+    }
+    toast.error("Failed to start workflow", {
+      description: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 }
 
@@ -237,12 +181,17 @@ export async function handleRunFromHere(
   projectId: string | undefined,
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
-  pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
 ): Promise<void> {
   rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
   const startNode = nodes.find((n) => n.id === nodeId);
   if (!startNode) return;
+
+  const workflowId = useWorkflowStore.getState().workflowId;
+  if (!workflowId) {
+    toast.error("Save the workflow before running.");
+    return;
+  }
 
   if (projectId) {
     await save(projectId);
@@ -261,35 +210,41 @@ export async function handleRunFromHere(
     }
   }
 
-  const subgraphNodes = nodes.filter((n) => downstream.has(n.id));
-  const subgraphEdges = edges.filter(
-    (e) => downstream.has(e.source) && downstream.has(e.target),
+  const executableNodes = nodes.filter(
+    (n) => downstream.has(n.id) && isExecutableNode(n),
   );
-
-  const executableCount = subgraphNodes.filter(isExecutableNode).length;
-  if (executableCount === 0) {
+  if (executableNodes.length === 0) {
     toast.error("No executable nodes found downstream.");
     return;
   }
 
-  const { levels, skippedIds } = prepareExecution(subgraphNodes, subgraphEdges);
+  // Mark nodes as pending for immediate UI feedback
+  const { updateNodeData } = useWorkflowStore.getState();
+  for (const node of executableNodes) {
+    updateNodeData(node.id, { executionStatus: "pending" });
+  }
 
   setIsRunning(true);
   toast.info("Running from here...", {
-    description: `${executableCount} node(s) to run`,
+    description: `${executableNodes.length} node(s) to run`,
   });
 
-  const failed = await executeLevels(levels, skippedIds, ctx);
-
-  if (pollIntervalsRef.current.size === 0) {
+  try {
+    const result = await runWorkflow(workflowId, [...downstream]);
+    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning);
+  } catch (err: unknown) {
+    if (err instanceof WorkflowAlreadyRunningError) {
+      toast.info("Workflow is already running — reattaching...");
+      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning);
+      return;
+    }
     setIsRunning(false);
-  }
-
-  if (failed) {
-    toast.error("Run from here stopped due to errors");
-  } else if (!ctx.isWorkflowStale()) {
-    toast.success("Run from here complete");
-    expandLoopResults();
+    for (const node of executableNodes) {
+      updateNodeData(node.id, { executionStatus: undefined });
+    }
+    toast.error("Failed to start execution", {
+      description: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 }
 
@@ -302,13 +257,18 @@ export async function handleRunSelected(
   projectId: string | undefined,
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
-  pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
 ): Promise<void> {
   rejectAllManualEdits();
-  const { nodes, edges } = collapseExpandedClones();
+  const { nodes } = collapseExpandedClones();
   const selectedNodes = nodes.filter((n) => n.selected);
   if (selectedNodes.length === 0) {
     toast.error("No nodes selected.");
+    return;
+  }
+
+  const workflowId = useWorkflowStore.getState().workflowId;
+  if (!workflowId) {
+    toast.error("Save the workflow before running.");
     return;
   }
 
@@ -316,35 +276,41 @@ export async function handleRunSelected(
     await save(projectId);
   }
 
-  const selectedIds = new Set(selectedNodes.map((n) => n.id));
-  const subgraphEdges = edges.filter(
-    (e) => selectedIds.has(e.source) && selectedIds.has(e.target),
-  );
-
-  const executableCount = selectedNodes.filter(isExecutableNode).length;
-  if (executableCount === 0) {
+  const executableNodes = selectedNodes.filter(isExecutableNode);
+  if (executableNodes.length === 0) {
     toast.error("No executable nodes in selection.");
     return;
   }
 
-  const { levels, skippedIds } = prepareExecution(selectedNodes, subgraphEdges);
+  const selectedIds = selectedNodes.map((n) => n.id);
+
+  // Mark nodes as pending for immediate UI feedback
+  const { updateNodeData } = useWorkflowStore.getState();
+  for (const node of executableNodes) {
+    updateNodeData(node.id, { executionStatus: "pending" });
+  }
 
   setIsRunning(true);
   toast.info("Running selected nodes...", {
-    description: `${executableCount} node(s) to run`,
+    description: `${executableNodes.length} node(s) to run`,
   });
 
-  const failed = await executeLevels(levels, skippedIds, ctx);
-
-  if (pollIntervalsRef.current.size === 0) {
+  try {
+    const result = await runWorkflow(workflowId, selectedIds);
+    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning);
+  } catch (err: unknown) {
+    if (err instanceof WorkflowAlreadyRunningError) {
+      toast.info("Workflow is already running — reattaching...");
+      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning);
+      return;
+    }
     setIsRunning(false);
-  }
-
-  if (failed) {
-    toast.error("Run selected stopped due to errors");
-  } else if (!ctx.isWorkflowStale()) {
-    toast.success("Run selected complete");
-    expandLoopResults();
+    for (const node of executableNodes) {
+      updateNodeData(node.id, { executionStatus: undefined });
+    }
+    toast.error("Failed to start execution", {
+      description: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 }
 

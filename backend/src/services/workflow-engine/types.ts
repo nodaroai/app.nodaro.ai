@@ -52,6 +52,8 @@ export interface WorkflowExecutionJob {
   userId: string
   triggerType: "manual" | "webhook" | "schedule"
   triggerData?: Record<string, unknown>
+  /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
+  nodeIds?: string[]
 }
 
 // ---------------------------------------------------------------------------

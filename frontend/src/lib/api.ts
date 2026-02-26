@@ -2636,13 +2636,38 @@ async function apiRequest<T>(
   return res.json() as Promise<T>
 }
 
-/** Run a workflow (creates execution, enqueues orchestrator). */
-export function runWorkflow(workflowId: string): Promise<{ executionId: string }> {
-  return apiRequest(
-    `/v1/workflows/${encodeURIComponent(workflowId)}/run`,
-    "Failed to run workflow",
-    { method: "POST" },
-  )
+export class WorkflowAlreadyRunningError extends Error {
+  executionId: string
+  constructor(executionId: string) {
+    super("This workflow already has an active execution")
+    this.name = "WorkflowAlreadyRunningError"
+    this.executionId = executionId
+  }
+}
+
+/** Run a workflow (creates execution, enqueues orchestrator). Optionally pass nodeIds for partial execution. */
+export async function runWorkflow(workflowId: string, nodeIds?: string[]): Promise<{ executionId: string }> {
+  const headers: Record<string, string> = { ...(await getAuthHeaders()) }
+  let body: string | undefined
+  if (nodeIds) {
+    headers["Content-Type"] = "application/json"
+    body = JSON.stringify({ nodeIds })
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}/run`, {
+    method: "POST",
+    headers,
+    body,
+  })
+  if (res.status === 409) {
+    const body = await res.json().catch(() => null)
+    const execId = (body as Record<string, unknown>)?.executionId as string | undefined
+    if (execId) throw new WorkflowAlreadyRunningError(execId)
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to run workflow")
+  }
+  return res.json() as Promise<{ executionId: string }>
 }
 
 /** Get execution status + node states. */

@@ -47,6 +47,12 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     const { id: workflowId } = paramsParsed.data
 
+    // Parse optional body (nodeIds for partial execution)
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const nodeIds = Array.isArray(body.nodeIds)
+      ? (body.nodeIds as string[]).filter((id) => typeof id === "string")
+      : undefined
+
     // Verify workflow exists and belongs to user
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
@@ -103,6 +109,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       workflowId,
       userId: req.userId,
       triggerType: "manual",
+      nodeIds,
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

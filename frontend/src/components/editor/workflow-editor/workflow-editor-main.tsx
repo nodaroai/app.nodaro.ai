@@ -458,14 +458,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     useWorkflowStore.getState().setRunFromHere(
-      (nodeId: string) => handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef),
+      (nodeId: string) => handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning),
     );
     return () => useWorkflowStore.getState().setRunFromHere(null);
   });
 
   useEffect(() => {
     useWorkflowStore.getState().setRunSelected(
-      () => handleRunSelected(ctx, projectId, save, setIsRunning, pollIntervalsRef),
+      () => handleRunSelected(ctx, projectId, save, setIsRunning),
     );
     return () => useWorkflowStore.getState().setRunSelected(null);
   });
@@ -702,7 +702,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               ) : (
                 <Button
                   size="lg"
-                  onClick={() => handleRun(ctx, projectId, save, setIsRunning, pollIntervalsRef)}
+                  onClick={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning)}
                   className="rounded-full px-6 text-white hover:opacity-90"
                   style={{ backgroundColor: "#ff0073" }}
                 >
