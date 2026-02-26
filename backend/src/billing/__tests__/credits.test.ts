@@ -117,9 +117,9 @@ describe("CreditsService", () => {
         { type: "generate-image" },   // 2
         { type: "veo3" },             // 125
         { type: "text-to-speech" },   // 4
-        { type: "ffmpeg" },           // 0
+        { type: "ffmpeg" },           // 1
       ]
-      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(131)
+      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(132)
     })
 
     it("returns 0 for all zero-cost nodes", () => {

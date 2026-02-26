@@ -372,7 +372,18 @@ describe("reserveCreditsForJob", () => {
     expect(mockReserveCredits).not.toHaveBeenCalled()
   })
 
-  it("returns undefined for ffmpeg model identifier", async () => {
+  it("reserves credits for ffmpeg model identifier", async () => {
+    mockReserveCredits.mockResolvedValueOnce({
+      usageLogId: "ul-1",
+      creditsReserved: 1,
+      watermark: false,
+    })
+    mockFrom.mockReturnValue({
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    })
+
     const mockReq = {
       userId: "user-1",
       url: "/v1/test-route",
@@ -385,7 +396,11 @@ describe("reserveCreditsForJob", () => {
 
     const result = await reserveCreditsForJob(mockReq, mockReply, "job-1", "ffmpeg")
 
-    expect(result).toBeUndefined()
-    expect(mockReserveCredits).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      usageLogId: "ul-1",
+      creditsReserved: 1,
+      watermark: false,
+    })
+    expect(mockReserveCredits).toHaveBeenCalledWith("user-1", "job-1", "ffmpeg", 0, 0, undefined)
   })
 })
