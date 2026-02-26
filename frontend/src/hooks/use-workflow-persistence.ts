@@ -508,17 +508,26 @@ export function useWorkflowPersistence(projectId?: string) {
           // First check for an active execution
           const { data: activeExecs } = await listWorkflowExecutions(id, {
             limit: 1,
-            status: "pending,running",
+            status: "pending,running,stopping",
           })
           if (activeExecs.length > 0) {
             const execId = activeExecs[0].id
             const exec = await getWorkflowExecution(execId)
             const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
-            if (Object.keys(nodeStates).length > 0) {
+            // Double-check execution is still active — it may have completed
+            // between the list query and the detail fetch. Without this guard
+            // the frontend briefly shows nodes as running + fires a "completed"
+            // toast on every page refresh after an execution finishes.
+            const stillActive = exec.status === "pending" || exec.status === "running" || exec.status === "stopping"
+            if (stillActive && Object.keys(nodeStates).length > 0) {
               nodes = applyBackendExecutionState(nodes, nodeStates)
               nodesChanged = true
+              activeBackendExecution = { executionId: exec.id, nodeStates }
+            } else if (Object.keys(nodeStates).length > 0) {
+              // Execution already finished — apply results like a completed execution
+              nodes = applyCompletedExecutionResults(nodes, nodeStates)
+              nodesChanged = true
             }
-            activeBackendExecution = { executionId: exec.id, nodeStates }
           } else {
             // No active execution — check the most recent completed one.
             // This handles the case where the execution ran while the
