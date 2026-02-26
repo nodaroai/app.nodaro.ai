@@ -237,7 +237,7 @@ backend/src/
 | Voice Design | ElevenLabs Text-to-Voice Design direct API | `POST /v1/voice-design` (5 credits), full controls: model (multilingual v2/english v2/turbo v2.5), loudness, guidance_scale, seed, quality, should_enhance; outputs audio + `generatedVoiceId`; uses `POST /v1/text-to-voice/design`; node has dual output handles (`audio` + `voiceId`) |
 | Forced Alignment | ElevenLabs Forced Alignment direct API | `POST /v1/forced-alignment` (3 credits), audio + transcript → word-level timestamps JSON; output is data (not audio) |
 | Suno metatags | `suno-tags.ts` + `TagTextarea` | Autocomplete for `[Verse]`, `[Chorus]`, genre tags, etc. in lyrics fields; `TagTextarea` component with portal-rendered dropdown, supports both Suno metatags and ElevenLabs audio tags via `customTags` prop |
-| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (7 AI routes via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 15min per-node timeout, 60min per-workflow |
+| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (7 AI routes via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 15min per-node timeout, 60min per-workflow; two stop modes: "cancelled" (immediate) and "stopping" (finish current level then stop) |
 | Webhook triggers | Token-based auth, no user auth needed | `POST /v1/webhooks/:token` (public route), 32-byte hex token per trigger, rate limited 10/min per token; creates execution + enqueues orchestrator |
 | Schedule triggers | Cron expressions + interval strings | `schedule-cron.ts` checks every 60s, supports 5-field cron + simple intervals ("5m", "1h", "1d"); respects `maxExecutions` limit; skips if workflow already running |
 | Sub-workflow execution | Recursive with depth limit 5 | `sub-workflow-handler.ts`: loads referenced workflow, filters to selected route's reachable nodes (BFS), executes with same orchestrator logic; cycle detection via `workflowId:routeId` set |
@@ -259,9 +259,9 @@ backend/src/
 - [ ] Build from Prompt: MVP + Director Mode versions
 - [ ] Scene Node + Shot Node as optional "Director Mode"
 - [x] Backend workflow execution engine (orchestrator, webhook triggers, schedule triggers)
-- [ ] Execution history UI (per-workflow execution list + per-node status)
+- [x] Execution history UI (per-workflow execution list + per-node status)
 
 ---
 
-*Last updated: 2026-02-25*
-*Version: 1.47.2*
+*Last updated: 2026-02-26*
+*Version: 1.48.0*
