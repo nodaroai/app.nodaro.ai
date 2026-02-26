@@ -22,6 +22,7 @@ interface FolderItemProps {
   readonly onDeleteWorkflow: (id: string) => void
   readonly onMoveWorkflow: (workflowId: string, folderId: string | null) => void
   readonly onCreateWorkflow: (folderId: string) => void
+  readonly readOnly?: boolean
 }
 
 export function FolderItem({
@@ -33,6 +34,7 @@ export function FolderItem({
   onDeleteWorkflow,
   onMoveWorkflow,
   onCreateWorkflow,
+  readOnly,
 }: FolderItemProps) {
   const [open, setOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -87,50 +89,54 @@ export function FolderItem({
             ({workflows.length})
           </span>
         </button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation()
-            onCreateWorkflow(folder.id)
-            setOpen(true)
-          }}
-          aria-label={`New workflow in ${folder.name}`}
-          title="New workflow in folder"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        {!readOnly && (
+          <>
             <Button
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-              aria-label={`Folder options for ${folder.name}`}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => {
-                const name = prompt("Rename folder:", folder.name)
-                if (name) onRenameFolder(folder.id, name)
+              onClick={(e) => {
+                e.stopPropagation()
+                onCreateWorkflow(folder.id)
+                setOpen(true)
               }}
+              aria-label={`New workflow in ${folder.name}`}
+              title="New workflow in folder"
             >
-              <Pencil className="h-3.5 w-3.5 mr-2" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => onDeleteFolder(folder.id)}
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                  aria-label={`Folder options for ${folder.name}`}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => {
+                    const name = prompt("Rename folder:", folder.name)
+                    if (name) onRenameFolder(folder.id, name)
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-2" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => onDeleteFolder(folder.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
       </div>
       {open && (
         <div className="ml-6 flex flex-col gap-1 mt-1">
@@ -140,6 +146,7 @@ export function FolderItem({
               workflow={wf}
               onDuplicate={onDuplicateWorkflow}
               onDelete={onDeleteWorkflow}
+              readOnly={readOnly}
             />
           ))}
           {workflows.length === 0 && (

@@ -20,18 +20,30 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useProjectsStore } from "@/hooks/use-projects-store"
-import { useProjects } from "@/hooks/queries/use-projects-queries"
+import { useProjects, useProject } from "@/hooks/queries/use-projects-queries"
+import { useAuth } from "@/hooks/use-auth"
+import { Badge } from "@/components/ui/badge"
 import { WorkflowsTab } from "@/components/dashboard/workflows-tab"
 import { AssetsTab } from "@/components/dashboard/assets-tab"
 import { JobsTab } from "@/components/dashboard/jobs-tab"
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
+  const { isAdmin } = useAuth()
   const { data: projects = [], isLoading: projectsLoading } = useProjects()
-  const project = projects.find((p) => p.id === id)
+  const ownProject = projects.find((p) => p.id === id)
+
+  // Admin fallback: fetch the project directly if not found in own projects
+  const { data: fetchedProject, isLoading: fetchedLoading } = useProject(
+    isAdmin && !ownProject && !projectsLoading ? id : undefined,
+  )
+
+  const project = ownProject ?? fetchedProject ?? undefined
+  const readOnly = !ownProject && !!project
+  const loading = projectsLoading || (isAdmin && !ownProject && fetchedLoading)
+
   const fetchProjectData = useProjectsStore((s) => s.fetchProjectData)
   const updateProject = useProjectsStore((s) => s.updateProject)
-  const loading = projectsLoading
 
   const [renameOpen, setRenameOpen] = useState(false)
   const [newName, setNewName] = useState("")
@@ -88,28 +100,37 @@ export default function ProjectPage() {
           </Button>
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold truncate">{project.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg sm:text-xl font-bold truncate">{project.name}</h1>
+            {readOnly && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-muted-foreground/40 text-muted-foreground flex-shrink-0">
+                View only
+              </Badge>
+            )}
+          </div>
           {project.description && (
             <p className="text-xs sm:text-sm text-muted-foreground truncate sm:whitespace-normal">{project.description}</p>
           )}
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={openRenameDialog}>
-              <Pencil className="h-3.5 w-3.5 mr-2" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled>
-              <Settings className="h-3.5 w-3.5 mr-2" />
-              Settings
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!readOnly && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={openRenameDialog}>
+                <Pencil className="h-3.5 w-3.5 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                <Settings className="h-3.5 w-3.5 mr-2" />
+                Settings
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <Tabs defaultValue="workflows">
@@ -119,7 +140,7 @@ export default function ProjectPage() {
           <TabsTrigger value="jobs">Jobs</TabsTrigger>
         </TabsList>
         <TabsContent value="workflows" className="mt-4">
-          <WorkflowsTab projectId={id!} />
+          <WorkflowsTab projectId={id!} readOnly={readOnly} />
         </TabsContent>
         <TabsContent value="assets" className="mt-4">
           <AssetsTab />

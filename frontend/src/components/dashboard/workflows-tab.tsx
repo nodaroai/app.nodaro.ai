@@ -9,9 +9,10 @@ import { FolderItem } from "./folder-item"
 
 interface WorkflowsTabProps {
   readonly projectId: string
+  readonly readOnly?: boolean
 }
 
-export function WorkflowsTab({ projectId }: WorkflowsTabProps) {
+export function WorkflowsTab({ projectId, readOnly }: WorkflowsTabProps) {
   const allFolders = useProjectsStore((s) => s.folders)
   const allWorkflows = useProjectsStore((s) => s.workflowMetas)
 
@@ -81,16 +82,18 @@ export function WorkflowsTab({ projectId }: WorkflowsTabProps) {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <Button size="sm" onClick={handleNewWorkflow}>
-          <Plus className="h-4 w-4 mr-1" />
-          New Workflow
-        </Button>
-        <Button size="sm" variant="outline" onClick={handleNewFolder}>
-          <FolderPlus className="h-4 w-4 mr-1" />
-          New Folder
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-2 mb-4">
+          <Button size="sm" onClick={handleNewWorkflow}>
+            <Plus className="h-4 w-4 mr-1" />
+            New Workflow
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleNewFolder}>
+            <FolderPlus className="h-4 w-4 mr-1" />
+            New Folder
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         {folders.map((folder) => (
@@ -104,6 +107,7 @@ export function WorkflowsTab({ projectId }: WorkflowsTabProps) {
             onDeleteWorkflow={deleteWorkflow}
             onMoveWorkflow={moveWorkflow}
             onCreateWorkflow={handleNewWorkflowInFolder}
+            readOnly={readOnly}
           />
         ))}
 
@@ -127,6 +131,7 @@ export function WorkflowsTab({ projectId }: WorkflowsTabProps) {
               workflow={wf}
               onDuplicate={duplicateWorkflow}
               onDelete={deleteWorkflow}
+              readOnly={readOnly}
             />
           ))}
         </div>

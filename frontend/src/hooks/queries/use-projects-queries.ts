@@ -106,6 +106,27 @@ export function useAllProjects(enabled: boolean) {
   })
 }
 
+export function useProject(projectId: string | undefined) {
+  return useQuery({
+    queryKey: [...queryKeys.projects.all, "single", projectId ?? ""] as const,
+    queryFn: async (): Promise<Project | null> => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", projectId!)
+        .single()
+      if (error) {
+        if (error.code === "PGRST116") return null
+        throw error
+      }
+      return toProject(data)
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+  })
+}
+
 export function useProjectData(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.projects.detail(projectId ?? ""),
