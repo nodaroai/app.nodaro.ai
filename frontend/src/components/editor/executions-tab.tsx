@@ -11,6 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { ExecutionDetailModal } from "./execution-detail-modal"
 
 const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
@@ -343,8 +344,10 @@ const JOB_STATUS_COLORS: Record<string, string> = {
 }
 
 function RecentActivity() {
+  const qc = useQueryClient()
   const [expanded, setExpanded] = useState(false)
   const [jobCursor, setJobCursor] = useState<string | undefined>()
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
 
   const { data: jobsData, isLoading: jobsLoading } = useQuery({
     queryKey: ["recent-jobs", jobCursor],
@@ -411,7 +414,7 @@ function RecentActivity() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-[#2D2D2D]">
                   {jobs.map((job) => (
-                    <JobRow key={job.id} job={job} />
+                    <JobRow key={job.id} job={job} onClick={() => setSelectedJob(job)} />
                   ))}
                 </tbody>
               </table>
@@ -434,16 +437,25 @@ function RecentActivity() {
           )}
         </div>
       )}
+      <ExecutionDetailModal
+        job={selectedJob}
+        open={!!selectedJob}
+        onClose={() => setSelectedJob(null)}
+        onDeleted={() => {
+          setSelectedJob(null)
+          qc.invalidateQueries({ queryKey: ["recent-jobs"] })
+        }}
+      />
     </div>
   )
 }
 
-function JobRow({ job }: { job: Job }) {
+function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
   const label = job.job_type ? (JOB_TYPE_LABELS[job.job_type] ?? job.job_type) : "Job"
   const credits = job.credits_estimated ?? 0
 
   return (
-    <tr className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors">
+    <tr className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors cursor-pointer" onClick={onClick}>
       <td className="px-4 py-2.5">
         <span className="text-sm text-gray-700 dark:text-[#E2E8F0]">
           {label}
