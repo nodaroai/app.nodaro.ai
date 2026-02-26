@@ -48,26 +48,29 @@ describe("useProjects", () => {
     const mockData = [
       { id: "p1", name: "Project 1", description: "desc", created_at: "2026-01-01", updated_at: "2026-01-02" },
     ]
-    const mockSelect = vi.fn().mockReturnValue({
-      order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
-    })
-    mockCreateClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select: mockSelect }) })
+    const mockEq = vi.fn().mockResolvedValue({ data: mockData, error: null })
+    const mockOrder = vi.fn().mockReturnValue({ eq: mockEq })
+    const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockAuth = { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) }
+    mockCreateClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select: mockSelect }), auth: mockAuth })
     mockUseQuery.mockReturnValue({ data: null })
 
     useProjects()
     const opts = mockUseQuery.mock.calls[0][0]
     const result = await opts.queryFn()
 
+    expect(mockEq).toHaveBeenCalledWith("user_id", "user-1")
     expect(result).toEqual([
-      { id: "p1", name: "Project 1", description: "desc", createdAt: "2026-01-01", updatedAt: "2026-01-02" },
+      { id: "p1", name: "Project 1", description: "desc", createdAt: "2026-01-01", updatedAt: "2026-01-02", userId: undefined, ownerEmail: undefined },
     ])
   })
 
   it("queryFn throws on supabase error", async () => {
-    const mockSelect = vi.fn().mockReturnValue({
-      order: vi.fn().mockResolvedValue({ data: null, error: new Error("db error") }),
-    })
-    mockCreateClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select: mockSelect }) })
+    const mockEq = vi.fn().mockResolvedValue({ data: null, error: new Error("db error") })
+    const mockOrder = vi.fn().mockReturnValue({ eq: mockEq })
+    const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockAuth = { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) }
+    mockCreateClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select: mockSelect }), auth: mockAuth })
     mockUseQuery.mockReturnValue({ data: null })
 
     useProjects()
