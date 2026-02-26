@@ -49,7 +49,6 @@ const sampleJob: JobRecord = {
   provider: "nano-banana",
   provider_cost: 0.02,
   display_cost: 0.025,
-  credits_used: 1,
   credits_estimated: 1,
   job_type: "generate-image",
 }
@@ -97,7 +96,6 @@ describe("sanitizeJobForPublic", () => {
     // Other fields should be preserved
     expect(result.id).toBe("job-1")
     expect(result.status).toBe("completed")
-    expect(result.credits_used).toBe(1)
     expect(result.credits_estimated).toBe(1)
   })
 

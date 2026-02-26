@@ -96,7 +96,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   // ── Image Editing ──
   "recraft-upscale": 2,          // 6 KIE cr, $0.03
-  "recraft-remove-bg": 0,
+  "recraft-remove-bg": 1,            // KIE backend, $0.03
   "nano-banana-edit": 2,         // 6 KIE cr, $0.03
   "topaz-image-upscale": 2,      // 6 KIE cr, $0.03
   "grok-upscale": 2,             // 4 KIE cr, $0.02
@@ -142,9 +142,9 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-master": 22,            // 70 KIE cr, $0.35
   // ── Video-to-Video / Motion ──
   "wan": 25,                     // 80 KIE cr, $0.40 (also used for T2V wan key)
-  "topaz-video": 0,
+  "topaz-video": 2,               // KIE backend, ~$0.03
   "motion-transfer": 32,         // 100 KIE cr, $0.50
-  "kling-motion": 0,
+  "kling-motion": 2,             // KIE backend
   // ── Lip Sync ──
   "kling-avatar": 13,            // 40 KIE cr, $0.20
   "kling-avatar-pro": 19,        // 60 KIE cr, $0.30
@@ -175,13 +175,13 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
   "infinitalk": 19,              // 60 KIE cr, $0.30
   // ── Processing ──
-  "topaz": 0,
-  "ffmpeg": 0,
+  "topaz": 1,                     // processing
+  "ffmpeg": 1,
   "render-video": 15,            // Remotion compute
   // ── Replicate (dynamic per-second) ──
-  "runway": 0,
-  "pika": 0,
-  "sora": 0,
+  "runway": 20,                   // Replicate, ~$0.30 typical
+  "pika": 20,                    // Replicate, ~$0.30 typical
+  "sora": 20,                    // Replicate, ~$0.30 typical
   // ── LLM ──
   "ai-writer": 5,                // Claude Sonnet
   "scene-graph-ai": 10,          // Claude Sonnet

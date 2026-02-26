@@ -78,7 +78,7 @@ export default function AdminJobsPage() {
                 <td className="px-4 py-2">{job.user_email}</td>
                 <td className="px-4 py-2">{job.workflow_name}</td>
                 <td className="px-4 py-2">
-                  {job.credits_used ?? job.credits_estimated ?? "-"}
+                  {job.credits_estimated ?? "-"}
                 </td>
                 <td className="px-4 py-2 text-muted-foreground">
                   {new Date(job.created_at).toLocaleDateString()}

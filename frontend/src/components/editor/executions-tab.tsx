@@ -440,7 +440,7 @@ function RecentActivity() {
 
 function JobRow({ job }: { job: Job }) {
   const label = job.job_type ? (JOB_TYPE_LABELS[job.job_type] ?? job.job_type) : "Job"
-  const credits = job.credits_used ?? job.credits_estimated ?? 0
+  const credits = job.credits_estimated ?? 0
 
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors">

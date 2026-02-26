@@ -59,7 +59,6 @@ export interface Job {
   readonly priority: number
   readonly progress: number
   readonly credits_estimated: number | null
-  readonly credits_used: number | null
   readonly input_data: Record<string, unknown>
   readonly output_data: Record<string, unknown> | null
   readonly error_message: string | null
