@@ -462,7 +462,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(
-      (nodeId: string) => handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef),
+      (nodeId: string) => handleRunSingleNode(nodeId, ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, pollIntervalsRef, onExecutionStarted, onExecutionEnded),
     );
     return () => useWorkflowStore.getState().setRunSingleNode(null);
   });

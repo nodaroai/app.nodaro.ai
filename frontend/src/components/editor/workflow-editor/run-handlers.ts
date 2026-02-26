@@ -7,7 +7,7 @@ import { hasCredits } from "@/lib/edition";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/hooks/use-model-credits";
-import type { WorkflowNode, GeneratedResult } from "@/types/nodes";
+import type { GeneratedResult } from "@/types/nodes";
 import {
   NODE_CREDIT_COSTS,
   isExecutableNode,
@@ -134,11 +134,14 @@ export async function handleRunSingleNode(
   nodeId: string,
   ctx: ExecutionContext,
   projectId: string | undefined,
+  workflowId: string | null,
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
   pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
+  onExecutionStarted?: (id: string) => void,
+  onExecutionEnded?: () => void,
 ): Promise<void> {
-  const { nodes, edges } = useWorkflowStore.getState();
+  const { nodes } = useWorkflowStore.getState();
   const node = nodes.find((n) => n.id === nodeId);
   if (!node) return;
 
@@ -151,6 +154,35 @@ export async function handleRunSingleNode(
     await save(projectId);
   }
 
+  // When we have a saved workflow, route through backend orchestrator
+  // so the execution is tracked in workflow_executions.
+  if (workflowId) {
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(nodeId, { executionStatus: "pending" });
+    setIsRunning(true);
+    toast.info("Running node...");
+
+    try {
+      const result = await runWorkflow(workflowId, [nodeId]);
+      onExecutionStarted?.(result.executionId);
+      restorePollingForBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
+    } catch (err: unknown) {
+      if (err instanceof WorkflowAlreadyRunningError) {
+        toast.info("Workflow is already running — reattaching...");
+        onExecutionStarted?.(err.executionId);
+        restorePollingForBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
+        return;
+      }
+      setIsRunning(false);
+      updateNodeData(nodeId, { executionStatus: undefined });
+      toast.error("Failed to run node", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+    return;
+  }
+
+  // Fallback: unsaved workflow — use frontend executor (no tracking)
   setIsRunning(true);
   const { nodes: currentNodes, edges: currentEdges } =
     useWorkflowStore.getState();

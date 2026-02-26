@@ -19,6 +19,7 @@ export interface JobRecord {
   display_cost: number | null
   credits_used: number | null
   credits_estimated: number | null
+  job_type: string | null
 }
 
 // Public job type (for cloud edition regular users)
@@ -36,6 +37,7 @@ export interface PublicJob {
   cost: number | null
   credits_used: number | null
   credits_estimated: number | null
+  job_type: string | null
 }
 
 /**
@@ -109,7 +111,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits_used, credits_estimated")
+      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits_used, credits_estimated, job_type")
       .order("created_at", { ascending: false })
       .limit(limitNum)
 

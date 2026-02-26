@@ -1680,6 +1680,7 @@ export interface Job {
   cost?: number                  // What user pays (cloud edition regular users)
   credits_used?: number | null   // Credits consumed (all editions)
   credits_estimated?: number | null // Estimated credits before completion
+  job_type?: string | null        // Job type (e.g. "generate-image")
 }
 
 export async function getJobStatus(jobId: string): Promise<Job> {
@@ -1692,7 +1693,7 @@ export async function getJobStatus(jobId: string): Promise<Job> {
   return body.data
 }
 
-export async function getJobs(userId?: string, cursor?: string): Promise<{
+export async function getJobs(userId?: string, cursor?: string, limit?: number): Promise<{
   data: Job[]
   next: string | null
   previous: string | null
@@ -1700,6 +1701,7 @@ export async function getJobs(userId?: string, cursor?: string): Promise<{
   const params = new URLSearchParams()
   if (userId) params.set("userId", userId)
   if (cursor) params.set("cursor", cursor)
+  if (limit) params.set("limit", String(limit))
   const url = params.toString() ? `/v1/jobs?${params.toString()}` : "/v1/jobs"
   const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}${url}`, {

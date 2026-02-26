@@ -51,6 +51,7 @@ const sampleJob: JobRecord = {
   display_cost: 0.025,
   credits_used: 1,
   credits_estimated: 1,
+  job_type: "generate-image",
 }
 
 // ---------------------------------------------------------------------------

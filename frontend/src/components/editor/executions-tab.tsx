@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins } from "lucide-react"
+import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { listWorkflowExecutions, cancelWorkflowExecution, stopWorkflowExecution, type WorkflowExecution } from "@/lib/api"
+import { listWorkflowExecutions, cancelWorkflowExecution, stopWorkflowExecution, getJobs, type WorkflowExecution, type Job } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { toast } from "sonner"
 import {
@@ -215,8 +215,8 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
         </div>
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto p-4">
+      {/* Table + Activity */}
+      <div className="flex-1 overflow-auto p-4 space-y-4">
         <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
           <table className="w-full">
             <thead>
@@ -277,8 +277,206 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
             </tbody>
           </table>
         </div>
+
+        <RecentActivity />
       </div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Recent Activity — shows user's recent jobs (across all workflows)
+// ---------------------------------------------------------------------------
+
+const JOB_TYPE_LABELS: Record<string, string> = {
+  "generate-image": "Image Generation",
+  "image-to-image": "Image to Image",
+  "edit-image": "Image Editing",
+  "image-to-video": "Image to Video",
+  "text-to-video": "Text to Video",
+  "video-to-video": "Video to Video",
+  "text-to-speech": "Text to Speech",
+  "text-to-dialogue": "Dialogue",
+  "generate-music": "Music Generation",
+  "text-to-audio": "Sound Effects",
+  "generate-script": "Script Generation",
+  "ai-writer": "AI Writer",
+  "video-composer": "Video Composer",
+  "after-effects": "After Effects",
+  "lottie-overlay": "Lottie Overlay",
+  "3d-title": "3D Title",
+  "motion-graphics": "Motion Graphics",
+  "render-video": "Video Render",
+  "voice-clone": "Voice Clone",
+  "voice-changer": "Voice Changer",
+  "voice-design": "Voice Design",
+  "voice-remix": "Voice Remix",
+  "dubbing": "Dubbing",
+  "forced-alignment": "Forced Alignment",
+  "audio-isolation": "Audio Isolation",
+  "lip-sync": "Lip Sync",
+  "motion-transfer": "Motion Transfer",
+  "video-upscale": "Video Upscale",
+  "image-to-text": "Image to Text",
+  "qa-check": "QA Check",
+  "combine-videos": "Combine Videos",
+  "merge-video-audio": "Merge Video+Audio",
+  "add-captions": "Add Captions",
+  "resize-video": "Resize Video",
+  "trim-video": "Trim Video",
+  "extract-audio": "Extract Audio",
+  "speed-ramp": "Speed Ramp",
+  "loop-video": "Loop Video",
+  "fade-video": "Fade Video",
+  "mix-audio": "Mix Audio",
+  "adjust-volume": "Adjust Volume",
+  "translate": "Translation",
+}
+
+const JOB_STATUS_COLORS: Record<string, string> = {
+  completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
+  failed: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
+  processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400",
+  pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+  queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
+  cancelled: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
+}
+
+function RecentActivity() {
+  const [expanded, setExpanded] = useState(false)
+  const [jobCursor, setJobCursor] = useState<string | undefined>()
+
+  const { data: jobsData, isLoading: jobsLoading } = useQuery({
+    queryKey: ["recent-jobs", jobCursor],
+    queryFn: () => getJobs(undefined, jobCursor, 20),
+    enabled: expanded,
+  })
+  const jobs = jobsData?.data ?? []
+  const nextJobCursor = jobsData?.next ?? null
+
+  return (
+    <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors"
+      >
+        {expanded ? (
+          <ChevronDown className="w-4 h-4 text-gray-400" />
+        ) : (
+          <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+        )}
+        <Activity className="w-4 h-4 text-gray-400" />
+        <span className="text-sm font-semibold text-gray-700 dark:text-[#E2E8F0]">
+          Recent Activity
+        </span>
+        <span className="text-xs text-gray-400 dark:text-[#64748B]">
+          All jobs across workflows
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-100 dark:border-[#2D2D2D]">
+          {jobsLoading && jobs.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-[#ff0073]" />
+            </div>
+          ) : jobs.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-[#94A3B8]">
+              No recent jobs found.
+            </div>
+          ) : (
+            <>
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-[#121212]">
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                      Status
+                    </th>
+                    {hasCredits() && (
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                        Credits
+                      </th>
+                    )}
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                      Duration
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
+                      Created
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-[#2D2D2D]">
+                  {jobs.map((job) => (
+                    <JobRow key={job.id} job={job} />
+                  ))}
+                </tbody>
+              </table>
+              {nextJobCursor && (
+                <div className="flex justify-center py-3 border-t border-gray-100 dark:border-[#2D2D2D]">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setJobCursor(nextJobCursor)}
+                    disabled={jobsLoading}
+                  >
+                    {jobsLoading ? (
+                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                    ) : null}
+                    Load more
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function JobRow({ job }: { job: Job }) {
+  const label = job.job_type ? (JOB_TYPE_LABELS[job.job_type] ?? job.job_type) : "Job"
+  const credits = job.credits_used ?? 0
+
+  return (
+    <tr className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors">
+      <td className="px-4 py-2.5">
+        <span className="text-sm text-gray-700 dark:text-[#E2E8F0]">
+          {label}
+        </span>
+      </td>
+      <td className="px-4 py-2.5">
+        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${JOB_STATUS_COLORS[job.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+          {job.status}
+        </span>
+      </td>
+      {hasCredits() && (
+        <td className="px-4 py-2.5">
+          <span className="text-sm text-[#ff0073] font-mono">
+            {credits > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <Coins className="w-3 h-3" />
+                {credits}
+              </span>
+            ) : "-"}
+          </span>
+        </td>
+      )}
+      <td className="px-4 py-2.5">
+        <span className="text-sm text-gray-500 dark:text-[#94A3B8] font-mono">
+          {formatDuration(job.started_at, job.completed_at)}
+        </span>
+      </td>
+      <td className="px-4 py-2.5">
+        <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
+          {formatRelativeTime(job.created_at)}
+        </span>
+      </td>
+    </tr>
   )
 }
 
