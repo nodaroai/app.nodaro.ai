@@ -2821,6 +2821,30 @@ export function listWorkflowExecutions(
   )
 }
 
+// --- Global Executions ---
+
+export interface GlobalExecution extends WorkflowExecution {
+  workflowName: string | null
+  projectId: string | null
+  ownerEmail?: string | null
+}
+
+/** List executions across all workflows. */
+export function listAllExecutions(
+  opts?: { limit?: number; cursor?: string; status?: string; viewAll?: boolean },
+): Promise<{ data: GlobalExecution[]; nextCursor?: string }> {
+  const params = new URLSearchParams()
+  if (opts?.limit) params.set("limit", String(opts.limit))
+  if (opts?.cursor) params.set("cursor", opts.cursor)
+  if (opts?.status) params.set("status", opts.status)
+  if (opts?.viewAll) params.set("viewAll", "true")
+
+  return apiRequest(
+    `/v1/executions?${params}`,
+    "Failed to list executions",
+  )
+}
+
 /** Create a workflow trigger (webhook or schedule). */
 export async function createWorkflowTrigger(
   workflowId: string,

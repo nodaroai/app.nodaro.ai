@@ -13,6 +13,7 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -26,6 +27,13 @@ const listExecutionsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().uuid().optional(),
   status: z.string().optional(),
+})
+
+const globalExecutionsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().uuid().optional(),
+  status: z.string().optional(),
+  viewAll: z.enum(["true", "false"]).optional(),
 })
 
 export async function workflowExecutionRoutes(app: FastifyInstance) {
@@ -424,6 +432,132 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     const hasMore = merged.length > limit
     const items = hasMore ? merged.slice(0, limit) : merged
+
+    return {
+      data: items,
+      nextCursor: hasMore && items.length > 0 ? items[items.length - 1].id as string : undefined,
+    }
+  })
+
+  // --- List all executions (global, across all workflows) ---
+  app.get("/v1/executions", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const queryParsed = globalExecutionsQuery.safeParse(req.query)
+    if (!queryParsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: queryParsed.error.issues[0]?.message ?? "Invalid query",
+        },
+      })
+    }
+
+    const { limit, cursor, status, viewAll } = queryParsed.data
+    const isAdminViewAll = viewAll === "true"
+
+    if (isAdminViewAll) {
+      const isAdmin = await checkIsAdmin(req.userId)
+      if (!isAdmin) {
+        return reply.status(403).send({
+          error: { code: "forbidden", message: "Admin access required" },
+        })
+      }
+    }
+
+    // Resolve cursor timestamp
+    let cursorTimestamp: string | undefined
+    if (cursor) {
+      const { data: cursorExec } = await supabase
+        .from("workflow_executions")
+        .select("created_at")
+        .eq("id", cursor)
+        .single()
+      if (cursorExec) {
+        cursorTimestamp = cursorExec.created_at as string
+      }
+    }
+
+    // Build query
+    let execQuery = supabase
+      .from("workflow_executions")
+      .select("id, workflow_id, user_id, status, trigger_type, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit + 1)
+
+    if (!isAdminViewAll) {
+      execQuery = execQuery.eq("user_id", req.userId)
+    }
+
+    // Filter by status
+    const statusFilter = status ? status.split(",").map((s) => s.trim()).filter(Boolean) : []
+    if (statusFilter.length === 1) {
+      execQuery = execQuery.eq("status", statusFilter[0])
+    } else if (statusFilter.length > 1) {
+      execQuery = execQuery.in("status", statusFilter)
+    }
+
+    if (cursorTimestamp) {
+      execQuery = execQuery.lt("created_at", cursorTimestamp)
+    }
+
+    const { data: execData, error: execError } = await execQuery
+
+    if (execError) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: execError.message },
+      })
+    }
+
+    const rows = execData ?? []
+    const hasMore = rows.length > limit
+    const pageRows = hasMore ? rows.slice(0, limit) : rows
+
+    // Enrich with workflow names + project IDs
+    const workflowIds = [...new Set(pageRows.map((r) => r.workflow_id as string))]
+    const workflowMap = new Map<string, { name: string; projectId: string }>()
+    if (workflowIds.length > 0) {
+      const { data: workflows } = await supabase
+        .from("workflows")
+        .select("id, name, project_id")
+        .in("id", workflowIds)
+      for (const w of workflows ?? []) {
+        workflowMap.set(w.id as string, {
+          name: w.name as string,
+          projectId: w.project_id as string,
+        })
+      }
+    }
+
+    // For admin view, fetch owner emails
+    const emailMap = new Map<string, string>()
+    if (isAdminViewAll) {
+      const userIds = [...new Set(pageRows.map((r) => r.user_id as string))]
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, email")
+          .in("id", userIds)
+        for (const p of profiles ?? []) {
+          emailMap.set(p.id as string, p.email as string)
+        }
+      }
+    }
+
+    const items = pageRows.map((row) => {
+      const wf = workflowMap.get(row.workflow_id as string)
+      return {
+        ...toExecutionSummary(row),
+        workflowId: row.workflow_id,
+        workflowName: wf?.name ?? null,
+        projectId: wf?.projectId ?? null,
+        ...(isAdminViewAll ? { ownerEmail: emailMap.get(row.user_id as string) ?? null } : {}),
+      }
+    })
 
     return {
       data: items,

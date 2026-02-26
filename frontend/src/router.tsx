@@ -21,6 +21,7 @@ const WorkflowEditorPage = lazy(() => import("@/routes/workflow-editor-page"))
 const BillingPage = lazy(() => import("@/app/(dashboard)/billing/page"))
 const SettingsPage = lazy(() => import("@/app/(dashboard)/settings/page"))
 const LibraryPage = lazy(() => import("@/app/(dashboard)/library/page"))
+const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
 
@@ -107,6 +108,10 @@ export const router = createBrowserRouter([
       {
         path: "/settings",
         element: <SuspenseWrapper><SettingsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/executions",
+        element: <SuspenseWrapper><ExecutionsPage /></SuspenseWrapper>,
       },
       {
         path: "/library",

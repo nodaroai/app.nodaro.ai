@@ -97,6 +97,13 @@ export const queryKeys = {
     clones: () => ["voices", "clones"] as const,
   },
 
+  // Executions (global)
+  executions: {
+    all: ["executions"] as const,
+    list: (params: { status?: string; viewAll?: boolean; cursor?: string }) =>
+      ["executions", "list", params.status ?? "", String(params.viewAll ?? false), params.cursor ?? ""] as const,
+  },
+
   // Admin
   admin: {
     all: ["admin"] as const,
