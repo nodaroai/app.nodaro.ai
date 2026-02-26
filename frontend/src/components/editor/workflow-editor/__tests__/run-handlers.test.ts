@@ -18,6 +18,8 @@ const mockExpandLoopResults = vi.fn()
 const mockGetListInputForNode = vi.fn()
 const mockHasCredits = vi.fn()
 const mockGetJobStatus = vi.fn()
+const mockRunWorkflow = vi.fn()
+const mockGetWorkflowExecution = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 
@@ -39,6 +41,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
       nodes: mockNodes,
       edges: mockEdges,
       updateNodeData: mockUpdateNodeData,
+      workflowId: "wf-mock-1",
     }),
   },
 }))
@@ -46,6 +49,16 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 vi.mock("@/lib/api", () => ({
   getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
   getUserCredits: vi.fn(),
+  runWorkflow: (...args: unknown[]) => mockRunWorkflow(...args),
+  getWorkflowExecution: (...args: unknown[]) => mockGetWorkflowExecution(...args),
+  WorkflowAlreadyRunningError: class WorkflowAlreadyRunningError extends Error {
+    executionId: string
+    constructor(executionId: string) {
+      super("already running")
+      this.name = "WorkflowAlreadyRunningError"
+      this.executionId = executionId
+    }
+  },
 }))
 
 vi.mock("@/lib/supabase", () => ({
@@ -184,6 +197,7 @@ beforeEach(() => {
   mockExecuteNodeForList.mockResolvedValue(undefined)
   mockGetListInputForNode.mockReturnValue(null)
   mockHasCredits.mockReturnValue(false)
+  mockRunWorkflow.mockResolvedValue({ executionId: "exec-1" })
 })
 
 // ---------------------------------------------------------------------------
@@ -202,14 +216,31 @@ describe("handleRun", () => {
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRun(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
     expect(mockToastError).toHaveBeenCalledWith(
       expect.stringContaining("No executable nodes found"),
     )
     expect(setIsRunning).not.toHaveBeenCalled()
+  })
+
+  it("shows error toast when workflowId is null", async () => {
+    const node = makeNode("n1", "generate-image")
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [node],
+      edges: [],
+    })
+
+    const ctx = makeCtx()
+    const save = vi.fn().mockResolvedValue(undefined)
+    const setIsRunning = vi.fn()
+
+    await handleRun(ctx, "p1", null, save, setIsRunning)
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      "Save the workflow before running.",
+    )
   })
 
   it("calls rejectAllManualEdits and collapseExpandedClones", async () => {
@@ -218,14 +249,13 @@ describe("handleRun", () => {
       nodes: [node],
       edges: [],
     })
-    mockBuildExecutionLevels.mockReturnValue([[node]])
+    mockRunWorkflow.mockResolvedValue({ executionId: "exec-1" })
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRun(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
     expect(mockRejectAllManualEdits).toHaveBeenCalled()
     expect(mockCollapseExpandedClones).toHaveBeenCalled()
@@ -237,76 +267,77 @@ describe("handleRun", () => {
       nodes: [node],
       edges: [],
     })
-    mockBuildExecutionLevels.mockReturnValue([[node]])
+    mockRunWorkflow.mockResolvedValue({ executionId: "exec-1" })
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRun(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
     expect(save).toHaveBeenCalledWith("p1")
   })
 
-  it("sets isRunning to true", async () => {
+  it("calls runWorkflow and sets isRunning", async () => {
     const node = makeNode("n1", "generate-image")
     mockCollapseExpandedClones.mockReturnValue({
       nodes: [node],
       edges: [],
     })
-    mockBuildExecutionLevels.mockReturnValue([[node]])
+    mockRunWorkflow.mockResolvedValue({ executionId: "exec-1" })
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRun(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
+    expect(mockRunWorkflow).toHaveBeenCalledWith("wf-1")
     expect(setIsRunning).toHaveBeenCalledWith(true)
   })
 
-  it("shows success toast on completion", async () => {
+  it("marks nodes as pending before calling backend", async () => {
     const node = makeNode("n1", "generate-image")
     mockCollapseExpandedClones.mockReturnValue({
       nodes: [node],
       edges: [],
     })
-    mockBuildExecutionLevels.mockReturnValue([[node]])
+    mockRunWorkflow.mockResolvedValue({ executionId: "exec-1" })
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRun(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
-    expect(mockToastSuccess).toHaveBeenCalledWith(
-      "Workflow execution complete",
-    )
-    expect(mockExpandLoopResults).toHaveBeenCalled()
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", {
+      executionStatus: "pending",
+    })
   })
 
-  it("shows error toast when execution fails", async () => {
+  it("clears pending states and shows error on backend failure", async () => {
     const node = makeNode("n1", "generate-image")
     mockCollapseExpandedClones.mockReturnValue({
       nodes: [node],
       edges: [],
     })
-    mockBuildExecutionLevels.mockReturnValue([[node]])
-    mockExecuteNode.mockRejectedValue(new Error("Provider timeout"))
+    mockRunWorkflow.mockRejectedValue(new Error("Server error"))
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRun(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
     expect(mockToastError).toHaveBeenCalledWith(
-      "Workflow execution stopped due to errors",
+      "Failed to start workflow",
+      expect.objectContaining({ description: "Server error" }),
     )
+    // Should clear pending states
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", {
+      executionStatus: undefined,
+    })
+    expect(setIsRunning).toHaveBeenCalledWith(false)
   })
 })
 
@@ -426,22 +457,14 @@ describe("handleRunFromHere", () => {
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRunFromHere(
-      "missing",
-      ctx,
-      "p1",
-      save,
-      setIsRunning,
-      pollIntervalsRef,
-    )
+    await handleRunFromHere("missing", ctx, "p1", save, setIsRunning)
 
     expect(setIsRunning).not.toHaveBeenCalled()
-    expect(mockBuildExecutionLevels).not.toHaveBeenCalled()
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
   })
 
-  it("collects downstream nodes via BFS", async () => {
+  it("collects downstream nodes via BFS and passes nodeIds to backend", async () => {
     const nodeA = makeNode("a", "generate-image")
     const nodeB = makeNode("b", "image-to-video")
     const nodeC = makeNode("c", "text-to-speech")
@@ -452,30 +475,16 @@ describe("handleRunFromHere", () => {
       nodes: [nodeA, nodeB, nodeC],
       edges: [edgeAB, edgeBtoC],
     })
-    mockBuildExecutionLevels.mockReturnValue([[nodeA], [nodeB], [nodeC]])
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRunFromHere(
-      "a",
-      ctx,
-      "p1",
-      save,
-      setIsRunning,
-      pollIntervalsRef,
-    )
+    await handleRunFromHere("a", ctx, "p1", save, setIsRunning)
 
-    // buildExecutionLevels should receive all 3 downstream nodes
-    expect(mockBuildExecutionLevels).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "a" }),
-        expect.objectContaining({ id: "b" }),
-        expect.objectContaining({ id: "c" }),
-      ]),
-      expect.any(Array),
+    expect(mockRunWorkflow).toHaveBeenCalledWith(
+      "wf-mock-1",
+      expect.arrayContaining(["a", "b", "c"]),
     )
   })
 
@@ -489,16 +498,8 @@ describe("handleRunFromHere", () => {
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRunFromHere(
-      "n1",
-      ctx,
-      "p1",
-      save,
-      setIsRunning,
-      pollIntervalsRef,
-    )
+    await handleRunFromHere("n1", ctx, "p1", save, setIsRunning)
 
     expect(mockToastError).toHaveBeenCalledWith(
       "No executable nodes found downstream.",
@@ -506,7 +507,7 @@ describe("handleRunFromHere", () => {
     expect(setIsRunning).not.toHaveBeenCalled()
   })
 
-  it("runs downstream nodes and shows success", async () => {
+  it("calls runWorkflow and sets isRunning", async () => {
     const nodeA = makeNode("a", "generate-image")
     const nodeB = makeNode("b", "image-to-video")
     const edgeAB = makeEdge("a", "b")
@@ -515,29 +516,18 @@ describe("handleRunFromHere", () => {
       nodes: [nodeA, nodeB],
       edges: [edgeAB],
     })
-    mockBuildExecutionLevels.mockReturnValue([[nodeA], [nodeB]])
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRunFromHere(
-      "a",
-      ctx,
-      "p1",
-      save,
-      setIsRunning,
-      pollIntervalsRef,
-    )
+    await handleRunFromHere("a", ctx, "p1", save, setIsRunning)
 
     expect(setIsRunning).toHaveBeenCalledWith(true)
     expect(mockToastInfo).toHaveBeenCalledWith(
       "Running from here...",
       expect.objectContaining({ description: "2 node(s) to run" }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Run from here complete")
-    expect(mockExpandLoopResults).toHaveBeenCalled()
     expect(save).toHaveBeenCalledWith("p1")
   })
 })
@@ -557,15 +547,14 @@ describe("handleRunSelected", () => {
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRunSelected(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRunSelected(ctx, "p1", save, setIsRunning)
 
     expect(mockToastError).toHaveBeenCalledWith("No nodes selected.")
     expect(setIsRunning).not.toHaveBeenCalled()
   })
 
-  it("filters to only selected nodes", async () => {
+  it("passes only selected node IDs to backend", async () => {
     const nodeA = makeNode("a", "generate-image", { selected: true })
     const nodeB = makeNode("b", "image-to-video", { selected: false })
     const nodeC = makeNode("c", "text-to-speech", { selected: true })
@@ -574,27 +563,21 @@ describe("handleRunSelected", () => {
       nodes: [nodeA, nodeB, nodeC],
       edges: [],
     })
-    mockBuildExecutionLevels.mockReturnValue([[nodeA, nodeC]])
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRunSelected(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRunSelected(ctx, "p1", save, setIsRunning)
 
-    // buildExecutionLevels should only receive selected nodes
-    expect(mockBuildExecutionLevels).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "a" }),
-        expect.objectContaining({ id: "c" }),
-      ]),
-      expect.any(Array),
+    // runWorkflow should receive only selected node IDs
+    expect(mockRunWorkflow).toHaveBeenCalledWith(
+      "wf-mock-1",
+      expect.arrayContaining(["a", "c"]),
     )
-    // nodeB should not be included
-    const calledNodes = mockBuildExecutionLevels.mock.calls[0][0]
-    expect(calledNodes).toHaveLength(2)
-    expect(calledNodes.find((n: any) => n.id === "b")).toBeUndefined()
+    const calledIds = mockRunWorkflow.mock.calls[0][1]
+    expect(calledIds).toHaveLength(2)
+    expect(calledIds).not.toContain("b")
   })
 
   it("shows error when no executable nodes in selection", async () => {
@@ -607,9 +590,8 @@ describe("handleRunSelected", () => {
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRunSelected(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRunSelected(ctx, "p1", save, setIsRunning)
 
     expect(mockToastError).toHaveBeenCalledWith(
       "No executable nodes in selection.",
@@ -617,7 +599,7 @@ describe("handleRunSelected", () => {
     expect(setIsRunning).not.toHaveBeenCalled()
   })
 
-  it("runs selected nodes and shows success", async () => {
+  it("calls runWorkflow and sets isRunning", async () => {
     const nodeA = makeNode("a", "generate-image", { selected: true })
     const nodeB = makeNode("b", "image-to-video", { selected: true })
 
@@ -625,22 +607,18 @@ describe("handleRunSelected", () => {
       nodes: [nodeA, nodeB],
       edges: [],
     })
-    mockBuildExecutionLevels.mockReturnValue([[nodeA, nodeB]])
 
     const ctx = makeCtx()
     const save = vi.fn().mockResolvedValue(undefined)
     const setIsRunning = vi.fn()
-    const pollIntervalsRef = { current: new Set() } as any
 
-    await handleRunSelected(ctx, "p1", save, setIsRunning, pollIntervalsRef)
+    await handleRunSelected(ctx, "p1", save, setIsRunning)
 
     expect(setIsRunning).toHaveBeenCalledWith(true)
     expect(mockToastInfo).toHaveBeenCalledWith(
       "Running selected nodes...",
       expect.objectContaining({ description: "2 node(s) to run" }),
     )
-    expect(mockToastSuccess).toHaveBeenCalledWith("Run selected complete")
-    expect(mockExpandLoopResults).toHaveBeenCalled()
     expect(save).toHaveBeenCalledWith("p1")
   })
 })

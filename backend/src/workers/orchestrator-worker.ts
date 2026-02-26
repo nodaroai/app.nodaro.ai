@@ -70,7 +70,8 @@ export function createOrchestratorWorker() {
 // ---------------------------------------------------------------------------
 
 async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise<void> {
-  const { executionId, workflowId, userId, triggerType, triggerData } = job.data
+  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds } = job.data
+  const nodeSubset = nodeIds ? new Set(nodeIds) : null
 
   const ctx: OrchestratorContext = {
     executionId,
@@ -115,7 +116,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     // 3. Initialize node states
     const nodeStates: Record<string, NodeExecutionState> = {}
 
-    // 4. Inject source node outputs
+    // 4. Inject source node outputs + pre-complete nodes outside the subset
     for (const node of nodes) {
       if (isSourceNode(node.type)) {
         const output = extractSourceNodeOutput(node, triggerData)
@@ -125,6 +126,15 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             output,
             completedAt: new Date().toISOString(),
           }
+        }
+      } else if (nodeSubset && !nodeSubset.has(node.id)) {
+        // Node is outside the requested subset — treat as pre-completed
+        // so downstream nodes can resolve inputs from its saved data
+        const output = extractSourceNodeOutput(node, triggerData)
+        nodeStates[node.id] = {
+          status: "completed",
+          output: output ?? undefined,
+          completedAt: new Date().toISOString(),
         }
       }
     }
