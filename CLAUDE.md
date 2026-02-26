@@ -166,7 +166,7 @@ frontend/src/
   components/credits/     — CreditBalance, GenerateButton, etc.
   components/ui/          — shadcn/ui
   hooks/                  — useModelCredits, undo-flags (shared skip flag), use-undo-redo, use-workflow-store, etc.
-  lib/api.ts              — API client
+  lib/api.ts              — API client (includes `setCurrentWorkflowId` + `withWorkflowId` for tagging single-node jobs)
   lib/paddle.ts           — Paddle.js singleton
   lib/edition.ts          — Edition helpers
   lib/audio-tags.ts       — Audio tags, SSML breaks, model-aware language lists (getLanguagesForModel, ALL_LANGUAGES)
@@ -191,6 +191,7 @@ backend/src/
   workers/orchestrator-worker.ts — Main orchestrator BullMQ worker
   middleware/             — credit-guard.ts, auth.ts (JWT verification + 5-min SHA-256 cache)
   lib/config.ts           — Env config + edition helpers
+  lib/request-helpers.ts  — `extractWorkflowId(body)` — reads optional workflowId from request body for single-node job tracking
   lib/admin-check.ts      — Shared cached admin check (30s TTL)
   lib/app-settings.ts     — Settings cache (60s TTL, stampede-safe)
   lib/orchestration-queue.ts — BullMQ queue for workflow orchestration
@@ -241,6 +242,7 @@ backend/src/
 | Webhook triggers | Token-based auth, no user auth needed | `POST /v1/webhooks/:token` (public route), 32-byte hex token per trigger, rate limited 10/min per token; creates execution + enqueues orchestrator |
 | Schedule triggers | Cron expressions + interval strings | `schedule-cron.ts` checks every 60s, supports 5-field cron + simple intervals ("5m", "1h", "1d"); respects `maxExecutions` limit; skips if workflow already running |
 | Sub-workflow execution | Recursive with depth limit 5 | `sub-workflow-handler.ts`: loads referenced workflow, filters to selected route's reachable nodes (BFS), executes with same orchestrator logic; cycle detection via `workflowId:routeId` set |
+| Single-node execution history | Jobs tagged with workflowId | Frontend `setCurrentWorkflowId()` + `withWorkflowId()` inject workflowId into all job-creating API calls; backend `extractWorkflowId(req.body)` reads it before Zod strips it; `GET /v1/workflows/:id/executions` merges `workflow_executions` + standalone `jobs` (where `workflow_execution_id IS NULL`); standalone jobs shown as `triggerType: "single-node"` with synthetic nodeStates |
 
 ---
 
@@ -259,9 +261,9 @@ backend/src/
 - [ ] Build from Prompt: MVP + Director Mode versions
 - [ ] Scene Node + Shot Node as optional "Director Mode"
 - [x] Backend workflow execution engine (orchestrator, webhook triggers, schedule triggers)
-- [x] Execution history UI (per-workflow execution list + per-node status)
+- [x] Execution history UI (per-workflow execution list + per-node status + single-node runs)
 
 ---
 
 *Last updated: 2026-02-26*
-*Version: 1.48.0*
+*Version: 1.49.0*
