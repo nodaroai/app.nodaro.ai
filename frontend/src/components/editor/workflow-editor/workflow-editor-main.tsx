@@ -43,7 +43,7 @@ import {
   handleRunFromHere,
   handleRunSelected,
   restorePollingForRunningJobs,
-  restorePollingForBackendExecution,
+  streamBackendExecution,
 } from "./run-handlers";
 import { handleGenerateSceneImage as generateSceneImage, handleExpandStoryboard as expandStoryboard, handleCreateSceneNode as createSceneNode } from "./scene-story-handlers";
 import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerateLocationAsset } from "./asset-executors";
@@ -199,7 +199,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         }
         // Restore polling for active backend orchestrator execution
         if (result.activeBackendExecution) {
-          restorePollingForBackendExecution(
+          streamBackendExecution(
             result.activeBackendExecution.executionId,
             ctx,
             setIsRunning,

@@ -233,6 +233,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   const [copiedId, setCopiedId] = useState(false)
   const [copiedJson, setCopiedJson] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   if (!open || !job) return null
 
@@ -467,7 +468,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                           <video
                             src={outputUrl}
                             controls
-                            className="w-full max-h-[400px] object-contain"
+                            className="w-full max-h-[400px] object-contain cursor-pointer"
+                            onClick={() => setLightboxOpen(true)}
                           />
                         ) : isAudio ? (
                           <div className="p-4 flex items-center justify-center">
@@ -477,7 +479,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                           <CachedImage
                             src={outputUrl}
                             alt="Output"
-                            className="w-full max-h-[400px] object-contain"
+                            className="w-full max-h-[400px] object-contain cursor-pointer"
+                            onClick={() => setLightboxOpen(true)}
                           />
                         )}
                       </div>
@@ -581,6 +584,40 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
           </div>
         </div>
       </div>
+
+      {/* Fullscreen lightbox */}
+      {lightboxOpen && outputUrl && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-sm cursor-pointer"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close fullscreen"
+            className="absolute top-4 right-4 text-white/70 hover:text-white hover:bg-white/10 z-10"
+          >
+            <X className="w-6 h-6" />
+          </Button>
+          {isVideo ? (
+            <video
+              src={outputUrl}
+              controls
+              autoPlay
+              className="max-w-[95vw] max-h-[95vh] object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={outputUrl}
+              alt="Output fullscreen"
+              className="max-w-[95vw] max-h-[95vh] object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }

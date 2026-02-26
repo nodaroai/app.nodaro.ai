@@ -21,6 +21,7 @@ export type StreamEvent =
   | { type: "token"; data: string }
   | { type: "metadata"; data: Record<string, unknown> }
   | { type: "progress"; step: number; total: number; message: string }
+  | { type: "execution"; data: Record<string, unknown> }
   | { type: "done"; data: Record<string, unknown> }
   | { type: "error"; data: { code: string; message: string } }
 

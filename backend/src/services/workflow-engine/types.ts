@@ -33,6 +33,7 @@ export type NodeExecutionStatus =
 
 export interface NodeExecutionState {
   status: NodeExecutionStatus
+  nodeType?: string
   jobId?: string
   usageLogId?: string
   creditsUsed?: number
@@ -116,6 +117,11 @@ export interface OrchestratorContext {
   triggerData?: Record<string, unknown>
   /** Abort signal — set when execution is cancelled */
   cancelled: boolean
+  /** Workflow settings (character definitions, prompt templates) */
+  workflowSettings?: Record<string, unknown>
+  /** Called when a worker-queued node creates its job — allows the orchestrator
+   *  to surface the jobId on nodeStates before execution completes. */
+  onJobCreated?: (nodeId: string, jobId: string) => void
 }
 
 // ---------------------------------------------------------------------------

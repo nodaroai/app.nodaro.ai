@@ -1,7 +1,7 @@
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, WorkflowAlreadyRunningError } from "@/lib/api";
+import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import { hasCredits } from "@/lib/edition";
 import { queryClient } from "@/lib/query-client";
@@ -108,12 +108,12 @@ export async function handleRun(
   try {
     const result = await runWorkflow(workflowId);
     onExecutionStarted?.(result.executionId);
-    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
+    streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info("Workflow is already running — reattaching...");
       onExecutionStarted?.(err.executionId);
-      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
+      streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
@@ -235,12 +235,12 @@ export async function handleRunFromHere(
   try {
     const result = await runWorkflow(workflowId, [...downstream]);
     onExecutionStarted?.(result.executionId);
-    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
+    streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info("Workflow is already running — reattaching...");
       onExecutionStarted?.(err.executionId);
-      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
+      streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
@@ -305,12 +305,12 @@ export async function handleRunSelected(
   try {
     const result = await runWorkflow(workflowId, selectedIds);
     onExecutionStarted?.(result.executionId);
-    restorePollingForBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
+    streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
       toast.info("Workflow is already running — reattaching...");
       onExecutionStarted?.(err.executionId);
-      restorePollingForBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
+      streamBackendExecution(err.executionId, ctx, setIsRunning, onExecutionEnded);
       return;
     }
     setIsRunning(false);
@@ -460,7 +460,74 @@ function applyRestoredJobCompletion(
 }
 
 // ---------------------------------------------------------------------------
+// Stream backend execution updates via SSE (with polling fallback)
+// ---------------------------------------------------------------------------
+
+export function streamBackendExecution(
+  executionId: string,
+  ctx: ExecutionContext,
+  setIsRunning: (v: boolean) => void,
+  onExecutionEnded?: () => void,
+): void {
+  setIsRunning(true);
+  const abortController = new AbortController();
+
+  // Track the abort controller so it gets cleaned up on workflow switch
+  const fakeInterval = ctx.trackInterval(
+    setInterval(() => {
+      // No-op — just used so ctx.untrackInterval can abort on stale workflow
+      if (ctx.isWorkflowStale()) {
+        abortController.abort();
+        ctx.untrackInterval(fakeInterval);
+      }
+    }, 5000),
+  );
+
+  streamWorkflowExecution(
+    executionId,
+    {
+      onNodeStatesChanged: (nodeStates, _meta) => {
+        syncNodeStatesToStore(nodeStates);
+      },
+      onCompleted: () => {
+        cleanup();
+        onExecutionEnded?.();
+        toast.success("Backend execution completed");
+      },
+      onFailed: (data) => {
+        cleanup();
+        onExecutionEnded?.();
+        toast.error("Backend execution failed", {
+          description: (data.errorMessage as string) ?? undefined,
+        });
+      },
+      onCancelled: () => {
+        cleanup();
+        onExecutionEnded?.();
+        toast.info("Backend execution cancelled");
+      },
+    },
+    abortController.signal,
+  ).catch((err) => {
+    // On SSE failure (network error, abort), fall back to polling
+    if (err instanceof DOMException && err.name === "AbortError") {
+      cleanup();
+      return;
+    }
+    console.warn("[SSE] Streaming failed, falling back to polling:", err);
+    cleanup();
+    restorePollingForBackendExecution(executionId, ctx, setIsRunning, onExecutionEnded);
+  });
+
+  function cleanup() {
+    abortController.abort();
+    ctx.untrackInterval(fakeInterval);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Poll an active backend orchestrator execution and sync node states
+// (kept as fallback when SSE is unavailable)
 // ---------------------------------------------------------------------------
 
 interface NodeExecutionState {
@@ -481,6 +548,90 @@ interface NodeExecutionState {
   error?: string;
 }
 
+/** Sync a nodeStates snapshot from the backend into the Zustand store. */
+function syncNodeStatesToStore(
+  nodeStates: Record<string, NodeExecutionState>,
+): void {
+  const { nodes, updateNodeData } = useWorkflowStore.getState();
+
+  for (const node of nodes) {
+    const state = nodeStates[node.id];
+    if (!state) continue;
+
+    const data = node.data as Record<string, unknown>;
+    const currentStatus = data.executionStatus as string | undefined;
+
+    if (state.status === "completed" && currentStatus !== "completed") {
+      const updates: Record<string, unknown> = {
+        executionStatus: "completed",
+      };
+      if (state.output) {
+        const nodeType = node.type ?? "";
+        if (state.output.imageUrl) {
+          if (["character", "face", "object", "location"].includes(nodeType)) {
+            updates.sourceImageUrl = state.output.imageUrl;
+          } else {
+            updates.generatedImageUrl = state.output.imageUrl;
+          }
+        }
+        if (state.output.videoUrl)
+          updates.generatedVideoUrl = state.output.videoUrl;
+        if (state.output.audioUrl)
+          updates.generatedAudioUrl = state.output.audioUrl;
+        if (state.output.script)
+          updates.generatedScript = state.output.script;
+        if (state.output.generatedVoiceId)
+          updates.generatedVoiceId = state.output.generatedVoiceId;
+        if (state.output.vocalUrl)
+          updates.generatedVocalUrl = state.output.vocalUrl;
+        if (state.output.instrumentalUrl)
+          updates.generatedInstrumentalUrl = state.output.instrumentalUrl;
+        if (state.output.alignment)
+          updates.generatedAlignment = state.output.alignment;
+        if (state.output.combinedText)
+          updates.generatedText = state.output.combinedText;
+        if (state.output.splitResults)
+          updates.generatedSplitResults = state.output.splitResults;
+
+        const outputUrl =
+          state.output.imageUrl ??
+          state.output.videoUrl ??
+          state.output.audioUrl;
+        if (outputUrl) {
+          const prev = (data.generatedResults ?? []) as GeneratedResult[];
+          const alreadyHas = prev.some((r) => r.url === outputUrl);
+          if (!alreadyHas) {
+            updates.generatedResults = [
+              {
+                url: outputUrl,
+                timestamp: new Date().toISOString(),
+                jobId: `exec-${node.id}`,
+              },
+              ...prev,
+            ];
+            updates.activeResultIndex = 0;
+          }
+        }
+      }
+      updateNodeData(node.id, updates);
+    } else if (state.status === "running" && currentStatus !== "running") {
+      updateNodeData(node.id, { executionStatus: "running" });
+    } else if (
+      state.status === "pending" &&
+      currentStatus !== "pending" &&
+      currentStatus !== "running" &&
+      currentStatus !== "completed"
+    ) {
+      updateNodeData(node.id, { executionStatus: "pending" });
+    } else if (state.status === "failed" && currentStatus !== "failed") {
+      updateNodeData(node.id, {
+        executionStatus: "failed",
+        errorMessage: state.error ?? "Node failed",
+      });
+    }
+  }
+}
+
 export function restorePollingForBackendExecution(
   executionId: string,
   ctx: ExecutionContext,
@@ -489,141 +640,63 @@ export function restorePollingForBackendExecution(
 ): void {
   setIsRunning(true);
   let pollFailures = 0;
+  let stopped = false;
 
-  const poll = ctx.trackInterval(
-    setInterval(async () => {
-      if (ctx.isWorkflowStale()) {
+  const pollOnce = async () => {
+    if (ctx.isWorkflowStale()) {
+      ctx.untrackInterval(poll);
+      stopped = true;
+      return;
+    }
+
+    try {
+      const exec = await getWorkflowExecution(executionId);
+      pollFailures = 0;
+
+      const nodeStates = (exec.nodeStates ?? {}) as Record<
+        string,
+        NodeExecutionState
+      >;
+      syncNodeStatesToStore(nodeStates);
+
+      // Check if the entire execution is done
+      if (
+        exec.status === "completed" ||
+        exec.status === "failed" ||
+        exec.status === "cancelled" ||
+        exec.status === "timed_out"
+      ) {
         ctx.untrackInterval(poll);
-        return;
-      }
-
-      try {
-        const exec = await getWorkflowExecution(executionId);
-        pollFailures = 0;
-
-        const nodeStates = (exec.nodeStates ?? {}) as Record<
-          string,
-          NodeExecutionState
-        >;
-        const { nodes, updateNodeData } = useWorkflowStore.getState();
-
-        // Sync per-node states
-        for (const node of nodes) {
-          const state = nodeStates[node.id];
-          if (!state) continue;
-
-          const data = node.data as Record<string, unknown>;
-          const currentStatus = data.executionStatus as string | undefined;
-
-          // Only update if status actually changed
-          if (state.status === "completed" && currentStatus !== "completed") {
-            const updates: Record<string, unknown> = {
-              executionStatus: "completed",
-            };
-            if (state.output) {
-              const nodeType = node.type ?? "";
-              if (state.output.imageUrl) {
-                if (
-                  ["character", "face", "object", "location"].includes(nodeType)
-                ) {
-                  updates.sourceImageUrl = state.output.imageUrl;
-                } else {
-                  updates.generatedImageUrl = state.output.imageUrl;
-                }
-              }
-              if (state.output.videoUrl)
-                updates.generatedVideoUrl = state.output.videoUrl;
-              if (state.output.audioUrl)
-                updates.generatedAudioUrl = state.output.audioUrl;
-              if (state.output.script)
-                updates.generatedScript = state.output.script;
-              if (state.output.generatedVoiceId)
-                updates.generatedVoiceId = state.output.generatedVoiceId;
-              if (state.output.vocalUrl)
-                updates.generatedVocalUrl = state.output.vocalUrl;
-              if (state.output.instrumentalUrl)
-                updates.generatedInstrumentalUrl =
-                  state.output.instrumentalUrl;
-              if (state.output.alignment)
-                updates.generatedAlignment = state.output.alignment;
-              if (state.output.combinedText)
-                updates.generatedText = state.output.combinedText;
-              if (state.output.splitResults)
-                updates.generatedSplitResults = state.output.splitResults;
-
-              const outputUrl =
-                state.output.imageUrl ??
-                state.output.videoUrl ??
-                state.output.audioUrl;
-              if (outputUrl) {
-                const prev = (data.generatedResults ?? []) as GeneratedResult[];
-                const alreadyHas = prev.some((r) => r.url === outputUrl);
-                if (!alreadyHas) {
-                  updates.generatedResults = [
-                    {
-                      url: outputUrl,
-                      timestamp: new Date().toISOString(),
-                      jobId: `exec-${node.id}`,
-                    },
-                    ...prev,
-                  ];
-                  updates.activeResultIndex = 0;
-                }
-              }
-            }
-            updateNodeData(node.id, updates);
-          } else if (
-            state.status === "running" &&
-            currentStatus !== "running"
-          ) {
-            updateNodeData(node.id, { executionStatus: "running" });
-          } else if (
-            state.status === "pending" &&
-            currentStatus !== "pending" &&
-            currentStatus !== "running" &&
-            currentStatus !== "completed"
-          ) {
-            updateNodeData(node.id, { executionStatus: "pending" });
-          } else if (
-            state.status === "failed" &&
-            currentStatus !== "failed"
-          ) {
-            updateNodeData(node.id, {
-              executionStatus: "failed",
-              errorMessage: state.error ?? "Node failed",
-            });
-          }
-        }
-
-        // Check if the entire execution is done
-        if (
-          exec.status === "completed" ||
-          exec.status === "failed" ||
-          exec.status === "cancelled" ||
-          exec.status === "timed_out"
-        ) {
-          ctx.untrackInterval(poll);
-          onExecutionEnded?.();
-          if (exec.status === "completed") {
-            toast.success("Backend execution completed");
-          } else if (exec.status === "failed") {
-            toast.error("Backend execution failed", {
-              description: exec.errorMessage,
-            });
-          } else if (exec.status === "cancelled") {
-            toast.info("Backend execution cancelled");
-          } else {
-            toast.error("Backend execution timed out");
-          }
-        }
-      } catch {
-        pollFailures++;
-        if (pollFailures >= 5) {
-          ctx.untrackInterval(poll);
-          onExecutionEnded?.();
-          toast.error("Lost connection to backend execution");
+        stopped = true;
+        onExecutionEnded?.();
+        if (exec.status === "completed") {
+          toast.success("Backend execution completed");
+        } else if (exec.status === "failed") {
+          toast.error("Backend execution failed", {
+            description: exec.errorMessage,
+          });
+        } else if (exec.status === "cancelled") {
+          toast.info("Backend execution cancelled");
+        } else {
+          toast.error("Backend execution timed out");
         }
       }
-    }, 3000),
+    } catch {
+      pollFailures++;
+      if (pollFailures >= 5) {
+        ctx.untrackInterval(poll);
+        stopped = true;
+        onExecutionEnded?.();
+        toast.error("Lost connection to backend execution");
+      }
+    }
+  };
+
+  // Fire immediately, then poll every 2s
+  pollOnce();
+  const poll = ctx.trackInterval(
+    setInterval(() => {
+      if (!stopped) pollOnce();
+    }, 2000),
   );
 }

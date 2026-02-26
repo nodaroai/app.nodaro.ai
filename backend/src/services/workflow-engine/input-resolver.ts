@@ -347,6 +347,16 @@ function routeOutput(
     return
   }
 
+  // --- Trigger nodes — only set prompt if output looks like real content ---
+  if (srcType === "schedule-trigger" || srcType === "webhook-trigger") {
+    // Trigger outputs are typically metadata (timestamps, webhook payloads).
+    // Only use as prompt if it doesn't look like an ISO timestamp.
+    if (output && !/^\d{4}-\d{2}-\d{2}T/.test(output)) {
+      inputs.prompt = output
+    }
+    return
+  }
+
   // Fallback: treat as prompt
   inputs.prompt = output
 }

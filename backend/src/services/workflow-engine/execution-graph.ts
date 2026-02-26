@@ -119,6 +119,7 @@ export function isSourceNode(nodeType: string): boolean {
 /** Node types that should be skipped during backend execution */
 const SKIP_NODE_TYPES = new Set([
   "manual-edit",
+  "sub-workflow-output",
 ])
 
 export function isSkipNode(nodeType: string): boolean {

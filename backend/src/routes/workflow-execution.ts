@@ -10,6 +10,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { createSSEStream } from "../lib/sse.js"
+import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
 const workflowIdParams = z.object({
@@ -156,6 +158,100 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     return {
       data: toExecutionResponse(execution),
     }
+  })
+
+  // --- Stream execution via SSE ---
+  app.get("/v1/workflow-executions/:id/stream", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const parsed = executionIdParams.safeParse(req.params)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsed.error.issues[0]?.message ?? "Invalid execution ID",
+        },
+      })
+    }
+
+    const execId = parsed.data.id
+
+    // Load current state from DB
+    const { data: execution, error } = await supabase
+      .from("workflow_executions")
+      .select("*")
+      .eq("id", execId)
+      .eq("user_id", req.userId)
+      .single()
+
+    if (error || !execution) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Execution not found" },
+      })
+    }
+
+    const sse = createSSEStream(req, reply)
+
+    // Send current DB state as initial metadata so late-connecting clients
+    // never miss state that was written before the SSE connection opened.
+    sse.sendEvent({
+      type: "metadata",
+      data: toExecutionResponse(execution) as unknown as Record<string, unknown>,
+    })
+
+    // If already terminal, send done immediately and close
+    const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out"])
+    if (terminalStatuses.has(execution.status as string)) {
+      sse.sendEvent({
+        type: "done",
+        data: toExecutionResponse(execution) as unknown as Record<string, unknown>,
+      })
+      sse.close()
+      return reply
+    }
+
+    // Subscribe to in-memory events from the orchestrator worker
+    const handler = (event: ExecutionEvent) => {
+      if (sse.isClosed) return
+
+      const isTerminal =
+        event.type === "execution:completed" ||
+        event.type === "execution:failed" ||
+        event.type === "execution:cancelled"
+
+      sse.sendEvent({
+        type: isTerminal ? "done" : "execution",
+        data: {
+          eventType: event.type,
+          nodeStates: event.nodeStates,
+          completedNodes: event.completedNodes,
+          failedNodes: event.failedNodes,
+          totalNodes: event.totalNodes,
+          totalCreditsUsed: event.totalCreditsUsed,
+          errorMessage: event.errorMessage,
+          nodeId: event.nodeId,
+        },
+      })
+
+      if (isTerminal) {
+        executionEvents.off(execId, handler)
+        sse.close()
+      }
+    }
+
+    executionEvents.on(execId, handler)
+
+    // Clean up listener on client disconnect
+    req.raw.on("close", () => {
+      executionEvents.off(execId, handler)
+    })
+
+    // Return reply to prevent Fastify from sending another response
+    return reply
   })
 
   // --- Cancel execution ---

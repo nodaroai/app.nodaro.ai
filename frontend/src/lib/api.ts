@@ -2699,6 +2699,92 @@ export function stopWorkflowExecution(executionId: string): Promise<void> {
   )
 }
 
+/** Node execution state from the backend orchestrator. */
+interface ExecutionNodeState {
+  status: "pending" | "running" | "completed" | "failed" | "skipped"
+  output?: {
+    imageUrl?: string
+    videoUrl?: string
+    audioUrl?: string
+    text?: string
+    script?: unknown
+    generatedVoiceId?: string
+    alignment?: unknown
+    vocalUrl?: string
+    instrumentalUrl?: string
+    splitResults?: string[]
+    combinedText?: string
+  }
+  error?: string
+}
+
+export interface StreamExecutionCallbacks {
+  onNodeStatesChanged: (
+    nodeStates: Record<string, ExecutionNodeState>,
+    meta: { completedNodes?: number; failedNodes?: number; totalNodes?: number; totalCreditsUsed?: number },
+  ) => void
+  onCompleted: (data: Record<string, unknown>) => void
+  onFailed: (data: Record<string, unknown>) => void
+  onCancelled: (data: Record<string, unknown>) => void
+}
+
+/**
+ * Stream workflow execution updates via SSE.
+ * Bypasses Vite proxy (which buffers responses) and calls backend directly.
+ */
+export async function streamWorkflowExecution(
+  executionId: string,
+  callbacks: StreamExecutionCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const sseBaseUrl = import.meta.env.VITE_API_URL || ""
+  const authHeaders = await getAuthHeaders()
+
+  const { streamGet } = await import("@/lib/sse-client")
+
+  for await (const event of streamGet(
+    `/v1/workflow-executions/${encodeURIComponent(executionId)}/stream`,
+    {
+      signal,
+      baseUrl: sseBaseUrl || undefined,
+      headers: authHeaders,
+    },
+  )) {
+    if (event.type === "metadata" || event.type === "execution") {
+      const d = event.data as Record<string, unknown>
+      const nodeStates = (d.nodeStates ?? {}) as Record<string, ExecutionNodeState>
+      callbacks.onNodeStatesChanged(nodeStates, {
+        completedNodes: d.completedNodes as number | undefined,
+        failedNodes: d.failedNodes as number | undefined,
+        totalNodes: d.totalNodes as number | undefined,
+        totalCreditsUsed: d.totalCreditsUsed as number | undefined,
+      })
+    } else if (event.type === "done") {
+      const d = event.data as Record<string, unknown>
+      const nodeStates = (d.nodeStates ?? {}) as Record<string, ExecutionNodeState>
+      const eventType = d.eventType as string | undefined
+      // Always send the final nodeStates update first
+      callbacks.onNodeStatesChanged(nodeStates, {
+        completedNodes: d.completedNodes as number | undefined,
+        failedNodes: d.failedNodes as number | undefined,
+        totalNodes: d.totalNodes as number | undefined,
+        totalCreditsUsed: d.totalCreditsUsed as number | undefined,
+      })
+      if (eventType === "execution:failed") {
+        callbacks.onFailed(d)
+      } else if (eventType === "execution:cancelled") {
+        callbacks.onCancelled(d)
+      } else {
+        callbacks.onCompleted(d)
+      }
+      return
+    } else if (event.type === "error") {
+      const err = event.data as { code: string; message: string }
+      throw new Error(err.message)
+    }
+  }
+}
+
 /** List executions for a workflow. */
 export function listWorkflowExecutions(
   workflowId: string,

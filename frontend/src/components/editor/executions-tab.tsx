@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { listWorkflowExecutions, cancelWorkflowExecution, stopWorkflowExecution, getJobs, type WorkflowExecution, type Job } from "@/lib/api"
+import { listWorkflowExecutions, cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, type WorkflowExecution, type Job } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { toast } from "sonner"
 import {
@@ -67,6 +67,9 @@ function formatDuration(startedAt: string | undefined, completedAt: string | und
 
 interface NodeState {
   status: string
+  nodeType?: string
+  jobId?: string
+  creditsUsed?: number
   error?: string
   startedAt?: string
   completedAt?: string
@@ -83,6 +86,21 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
   const [prevCursors, setPrevCursors] = useState<string[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+
+  // Fetch full job data when a node is clicked (auto-refresh while in-progress)
+  const { data: selectedJob } = useQuery({
+    queryKey: ["job-detail", selectedJobId],
+    queryFn: () => getJobStatus(selectedJobId!),
+    enabled: !!selectedJobId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status as string | undefined
+      if (status && !["completed", "failed", "cancelled"].includes(status)) {
+        return 3_000
+      }
+      return false
+    },
+  })
 
   const { data, isLoading: loading, error } = useQuery({
     queryKey: ["workflow-executions", workflowId, cursor],
@@ -257,7 +275,10 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
                 executions.map((exec) => {
                   const isExpanded = expandedId === exec.id
                   const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeState>
-                  const nodeEntries = Object.entries(nodeStates)
+                  // Only show nodes that actually executed (not source/skipped pre-completed nodes)
+                  const nodeEntries = Object.entries(nodeStates).filter(
+                    ([, s]) => s.status !== "skipped" && !(s.status === "completed" && !s.startedAt),
+                  )
                   const isActive = exec.status === "pending" || exec.status === "running" || exec.status === "stopping"
 
                   return (
@@ -271,6 +292,7 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
                       onToggle={() => setExpandedId(isExpanded ? null : exec.id)}
                       onCancel={handleCancel}
                       onStopAfterCurrent={handleStopAfterCurrent}
+                      onNodeClick={setSelectedJobId}
                     />
                   )
                 })
@@ -281,6 +303,12 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
 
         <RecentActivity />
       </div>
+
+      <ExecutionDetailModal
+        job={selectedJob ?? null}
+        open={!!selectedJobId && !!selectedJob}
+        onClose={() => setSelectedJobId(null)}
+      />
     </div>
   )
 }
@@ -341,6 +369,10 @@ const JOB_STATUS_COLORS: Record<string, string> = {
   pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
   queued: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
   cancelled: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
+}
+
+function formatNodeType(nodeType: string): string {
+  return JOB_TYPE_LABELS[nodeType] ?? nodeType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function RecentActivity() {
@@ -501,6 +533,7 @@ function ExecutionRow({
   onToggle,
   onCancel,
   onStopAfterCurrent,
+  onNodeClick,
 }: {
   exec: WorkflowExecution
   isExpanded: boolean
@@ -510,6 +543,7 @@ function ExecutionRow({
   onToggle: () => void
   onCancel: (id: string, e: React.MouseEvent) => void
   onStopAfterCurrent: (id: string, e: React.MouseEvent) => void
+  onNodeClick: (jobId: string) => void
 }) {
   const completed = exec.completedNodes ?? 0
   const failed = exec.failedNodes ?? 0
@@ -654,34 +688,81 @@ function ExecutionRow({
         <tr>
           <td colSpan={hasCredits() ? 8 : 7} className="px-0 py-0">
             <div className="bg-gray-50/50 dark:bg-[#161616] border-t border-gray-100 dark:border-[#2D2D2D]">
-              <div className="px-8 py-3">
-                <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-2">
-                  Node States
-                </div>
-                <div className="space-y-1">
-                  {nodeEntries.map(([nodeId, state]) => (
-                    <div key={nodeId} className="flex items-center gap-3 py-1">
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${NODE_STATUS_DOT[state.status] ?? "bg-gray-400"}`} />
-                      <span className="text-xs font-mono text-gray-600 dark:text-[#94A3B8] truncate max-w-[200px]">
-                        {nodeId.slice(0, 12)}
-                      </span>
-                      <span className={`text-xs font-medium ${
-                        state.status === "completed" ? "text-green-600 dark:text-green-400" :
-                        state.status === "failed" ? "text-red-600 dark:text-red-400" :
-                        state.status === "running" ? "text-yellow-600 dark:text-yellow-400" :
-                        "text-gray-500 dark:text-[#94A3B8]"
-                      }`}>
-                        {state.status}
-                      </span>
-                      {state.error && (
-                        <span className="text-xs text-red-500 truncate max-w-[300px]">
-                          {state.error}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <table className="w-full">
+                <thead>
+                  <tr>
+                    <th className="px-8 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Node</th>
+                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Status</th>
+                    <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Duration</th>
+                    {hasCredits() && (
+                      <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-400 dark:text-[#64748B] uppercase tracking-wider">Credits</th>
+                    )}
+                    <th className="px-3 py-2 w-8" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100/50 dark:divide-[#2D2D2D]/50">
+                  {nodeEntries.map(([nodeId, state]) => {
+                    const hasJob = !!state.jobId
+                    return (
+                      <tr
+                        key={nodeId}
+                        className={hasJob ? "hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors" : ""}
+                        onClick={hasJob ? () => onNodeClick(state.jobId!) : undefined}
+                      >
+                        <td className="px-8 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${NODE_STATUS_DOT[state.status] ?? "bg-gray-400"}`} />
+                            <span className="text-xs text-gray-600 dark:text-[#94A3B8]">
+                              {state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
+                            STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"
+                          }`}>
+                            {state.status}
+                          </span>
+                          {state.error && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertCircle className="w-3 h-3 text-red-400 ml-1 inline" />
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-xs">
+                                  <p className="text-xs">{state.error}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <span className="text-xs text-gray-500 dark:text-[#94A3B8] font-mono">
+                            {formatDuration(state.startedAt, state.completedAt)}
+                          </span>
+                        </td>
+                        {hasCredits() && (
+                          <td className="px-3 py-1.5">
+                            <span className="text-xs text-[#ff0073] font-mono">
+                              {state.creditsUsed && state.creditsUsed > 0 ? (
+                                <span className="inline-flex items-center gap-0.5">
+                                  <Coins className="w-3 h-3" />
+                                  {state.creditsUsed}
+                                </span>
+                              ) : "-"}
+                            </span>
+                          </td>
+                        )}
+                        <td className="px-3 py-1.5">
+                          {hasJob && (
+                            <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 dark:text-[#64748B]" />
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </td>
         </tr>

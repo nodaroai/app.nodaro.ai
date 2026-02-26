@@ -8,6 +8,7 @@
 import { Worker, type Job } from "bullmq"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
+import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
 import {
   buildExecutionLevels,
@@ -16,7 +17,7 @@ import {
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
 import { resolveNodeInputs } from "../services/workflow-engine/input-resolver.js"
-import { extractSourceNodeOutput } from "../services/workflow-engine/output-extractor.js"
+import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
 import { executeNode } from "../services/workflow-engine/node-executor.js"
 import type {
   WorkflowExecutionJob,
@@ -98,25 +99,34 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     const nodes: SimpleNode[] = (workflow.nodes as SimpleNode[]) ?? []
     const edges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
 
+    // Pass workflow settings (character definitions, prompt templates) to context
+    ctx.workflowSettings = (workflow.settings as Record<string, unknown>) ?? {}
+
     if (nodes.length === 0) {
       await failExecution(executionId, "Workflow has no nodes")
       return
     }
 
-    // 2. Update execution to running
-    await supabase
-      .from("workflow_executions")
-      .update({
-        status: "running",
-        started_at: new Date().toISOString(),
-        total_nodes: nodes.length,
-      })
-      .eq("id", executionId)
-
-    // 3. Initialize node states
+    // 2. Initialize node states
     const nodeStates: Record<string, NodeExecutionState> = {}
 
-    // 4. Inject source node outputs + pre-complete nodes outside the subset
+    // Surface jobId on running nodes as soon as the job is created,
+    // so the execution list can open the job modal before completion.
+    ctx.onJobCreated = (nodeId, jobId) => {
+      if (nodeStates[nodeId]) {
+        nodeStates[nodeId].jobId = jobId
+      }
+      // Persist to DB so polling clients also see the jobId
+      updateExecution(executionId, { node_states: nodeStates }).catch(() => {})
+      emitExecutionEvent({
+        type: "node:updated",
+        executionId,
+        nodeStates: { ...nodeStates },
+        nodeId,
+      })
+    }
+
+    // 3. Inject source node outputs + pre-complete nodes outside the subset
     for (const node of nodes) {
       if (isSourceNode(node.type)) {
         const output = extractSourceNodeOutput(node, triggerData)
@@ -129,8 +139,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         }
       } else if (nodeSubset && !nodeSubset.has(node.id)) {
         // Node is outside the requested subset — treat as pre-completed
-        // so downstream nodes can resolve inputs from its saved data
-        const output = extractSourceNodeOutput(node, triggerData)
+        // so downstream nodes can resolve inputs from its saved data.
+        // Try extracting saved results from node data (e.g. generatedImageUrl)
+        // which the frontend stores after each manual run.
+        const output = extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData)
         nodeStates[node.id] = {
           status: "completed",
           output: output ?? undefined,
@@ -139,10 +151,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       }
     }
 
-    // 5. Build execution levels (topological sort)
+    // 4. Build execution levels (topological sort)
     const levels = buildExecutionLevels(nodes, edges)
 
-    // 6. Compute effectively skipped node IDs
+    // 5. Compute effectively skipped node IDs
     const skippedIds = getEffectivelySkippedIds(nodes, edges)
 
     // Mark skipped nodes
@@ -153,10 +165,46 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       }
     }
 
+    // Initialize all executable nodes as "pending" so they appear in the UI immediately
+    const executableNodes = nodes.filter((n) => {
+      if (isSourceNode(n.type)) return false
+      if (isSkipNode(n.type)) return false
+      if (skippedIds.has(n.id)) return false
+      if (nodeSubset && !nodeSubset.has(n.id)) return false
+      return true
+    })
+
+    for (const node of executableNodes) {
+      if (!nodeStates[node.id]) {
+        nodeStates[node.id] = {
+          status: "pending",
+          nodeType: node.type,
+        }
+      }
+    }
+
+    // 6. Update execution to running with accurate node count
+    await supabase
+      .from("workflow_executions")
+      .update({
+        status: "running",
+        started_at: new Date().toISOString(),
+        total_nodes: executableNodes.length,
+        node_states: nodeStates,
+      })
+      .eq("id", executionId)
+
+    emitExecutionEvent({
+      type: "execution:started",
+      executionId,
+      nodeStates: { ...nodeStates },
+      totalNodes: executableNodes.length,
+      completedNodes: 0,
+      failedNodes: 0,
+    })
+
     // 7. Execute level by level
-    let completedCount = Object.values(nodeStates).filter(
-      (s) => s.status === "completed" || s.status === "skipped",
-    ).length
+    let completedCount = 0
     let failedCount = 0
     let totalCredits = 0
     const startTime = Date.now()
@@ -177,6 +225,14 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           node_states: nodeStates,
           completed_at: new Date().toISOString(),
         })
+        emitExecutionEvent({
+          type: "execution:cancelled",
+          executionId,
+          nodeStates: { ...nodeStates },
+          completedNodes: completedCount,
+          failedNodes: failedCount,
+          totalCreditsUsed: totalCredits,
+        })
         return
       }
       if (controlStatus === "stopping") {
@@ -186,6 +242,14 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           status: "cancelled",
           node_states: nodeStates,
           completed_at: new Date().toISOString(),
+        })
+        emitExecutionEvent({
+          type: "execution:cancelled",
+          executionId,
+          nodeStates: { ...nodeStates },
+          completedNodes: completedCount,
+          failedNodes: failedCount,
+          totalCreditsUsed: totalCredits,
         })
         return
       }
@@ -207,9 +271,18 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           // Mark as running
           nodeStates[node.id] = {
             status: "running",
+            nodeType: node.type,
             startedAt: new Date().toISOString(),
           }
           await updateExecution(executionId, { node_states: nodeStates })
+          emitExecutionEvent({
+            type: "node:updated",
+            executionId,
+            nodeStates: { ...nodeStates },
+            nodeId: node.id,
+            completedNodes: completedCount,
+            failedNodes: failedCount,
+          })
 
           // Resolve inputs from upstream
           const inputs = resolveNodeInputs(
@@ -233,6 +306,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           // Update state
           nodeStates[node.id] = {
             status: "completed",
+            nodeType: node.type,
             output: result.output,
             jobId: result.jobId,
             usageLogId: result.usageLogId,
@@ -243,6 +317,16 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
           completedCount++
           totalCredits += result.creditsUsed ?? 0
+
+          emitExecutionEvent({
+            type: "node:updated",
+            executionId,
+            nodeStates: { ...nodeStates },
+            nodeId: node.id,
+            completedNodes: completedCount,
+            failedNodes: failedCount,
+            totalCreditsUsed: totalCredits,
+          })
 
           return result
         }),
@@ -260,12 +344,21 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
           nodeStates[node.id] = {
             status: "failed",
+            nodeType: node.type,
             error,
             startedAt: nodeStates[node.id]?.startedAt,
             completedAt: new Date().toISOString(),
           }
 
           failedCount++
+          emitExecutionEvent({
+            type: "node:updated",
+            executionId,
+            nodeStates: { ...nodeStates },
+            nodeId: node.id,
+            completedNodes: completedCount,
+            failedNodes: failedCount,
+          })
           console.error(
             `[orchestrator] Node ${node.id} (${node.type}) failed:`,
             error,
@@ -279,6 +372,15 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         completed_nodes: completedCount,
         failed_nodes: failedCount,
         total_credits_used: totalCredits,
+      })
+
+      emitExecutionEvent({
+        type: "level:completed",
+        executionId,
+        nodeStates: { ...nodeStates },
+        completedNodes: completedCount,
+        failedNodes: failedCount,
+        totalCreditsUsed: totalCredits,
       })
 
       // If any node failed, stop execution
@@ -308,6 +410,15 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       failed_nodes: 0,
       total_credits_used: totalCredits,
       completed_at: new Date().toISOString(),
+    })
+
+    emitExecutionEvent({
+      type: "execution:completed",
+      executionId,
+      nodeStates: { ...nodeStates },
+      completedNodes: completedCount,
+      failedNodes: 0,
+      totalCreditsUsed: totalCredits,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -342,6 +453,16 @@ async function failExecution(
     .from("workflow_executions")
     .update(updates)
     .eq("id", executionId)
+
+  emitExecutionEvent({
+    type: "execution:failed",
+    executionId,
+    nodeStates: nodeStates ? { ...nodeStates } : {},
+    completedNodes,
+    failedNodes,
+    totalCreditsUsed: totalCredits,
+    errorMessage,
+  })
 }
 
 async function updateExecution(
@@ -352,6 +473,14 @@ async function updateExecution(
     .from("workflow_executions")
     .update(updates)
     .eq("id", executionId)
+}
+
+function emitExecutionEvent(event: ExecutionEvent): void {
+  try {
+    executionEvents.emit(event.executionId, event)
+  } catch {
+    // Never let event emission break the orchestrator
+  }
 }
 
 async function checkExecutionControl(executionId: string): Promise<"running" | "cancelled" | "stopping"> {

@@ -20,6 +20,7 @@ export type StreamEvent =
   | { type: "token"; data: string }
   | { type: "metadata"; data: Record<string, unknown> }
   | { type: "progress"; step: number; total: number; message: string }
+  | { type: "execution"; data: Record<string, unknown> }
   | { type: "done"; data: Record<string, unknown> }
   | { type: "error"; data: { code: string; message: string } }
 
@@ -93,6 +94,91 @@ export async function* streamRequest<T = StreamEvent>(
     }
 
     // Flush any remaining buffered data
+    const remaining = buffer.trim()
+    if (remaining !== "") {
+      for (const line of remaining.split("\n")) {
+        if (line.startsWith(":")) continue
+        if (line.trim() === "") continue
+        if (line.startsWith("data: ")) {
+          const json = line.slice(6)
+          try {
+            yield JSON.parse(json) as T
+          } catch {
+            // Skip malformed JSON
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+/**
+ * Same as streamRequest but uses GET (no body).
+ * Needed for SSE endpoints that stream state updates on a GET request.
+ */
+export async function* streamGet<T = StreamEvent>(
+  url: string,
+  options: {
+    signal?: AbortSignal
+    /** Optional base URL to call backend directly, bypassing Vite proxy */
+    baseUrl?: string
+    /** Optional extra headers (e.g. Authorization) */
+    headers?: Record<string, string>
+  },
+): AsyncGenerator<T> {
+  const fullUrl = options.baseUrl ? `${options.baseUrl}${url}` : url
+  const response = await fetch(fullUrl, {
+    method: "GET",
+    headers: { ...options.headers },
+    signal: options.signal,
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "")
+    throw new Error(`SSE request failed (${response.status}): ${text}`)
+  }
+
+  const body = response.body
+  if (!body) {
+    throw new Error("Response body is null — streaming not supported")
+  }
+
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      const parts = buffer.split("\n\n")
+      buffer = parts.pop() ?? ""
+
+      for (const part of parts) {
+        const trimmed = part.trim()
+        if (trimmed === "") continue
+
+        for (const line of trimmed.split("\n")) {
+          if (line.startsWith(":")) continue
+          if (line.trim() === "") continue
+
+          if (line.startsWith("data: ")) {
+            const json = line.slice(6)
+            try {
+              yield JSON.parse(json) as T
+            } catch {
+              // Skip malformed JSON
+            }
+          }
+        }
+      }
+    }
+
     const remaining = buffer.trim()
     if (remaining !== "") {
       for (const line of remaining.split("\n")) {

@@ -123,8 +123,11 @@ export function extractSourceNodeOutput(
       return Object.keys(output).length > 0 ? output : { text: JSON.stringify(triggerData) }
     }
 
-    case "schedule-trigger":
-      return { text: new Date().toISOString() }
+    case "schedule-trigger": {
+      // Only produce timestamp output for actual scheduled triggers, not manual runs
+      if (!triggerData) return undefined
+      return { text: (triggerData.timestamp as string) ?? new Date().toISOString() }
+    }
 
     default:
       return undefined
@@ -162,6 +165,226 @@ export function getPrimaryOutput(
 
   // Fallback: return first available URL/text
   return output.imageUrl || output.videoUrl || output.audioUrl || output.text
+}
+
+// ---------------------------------------------------------------------------
+// Helper to read generatedResults from node data (common pattern)
+// ---------------------------------------------------------------------------
+
+interface GeneratedResult {
+  url?: string
+  text?: string
+  [key: string]: unknown
+}
+
+function getActiveResultUrl(data: Record<string, unknown>): string | undefined {
+  const results = (data.generatedResults as GeneratedResult[] | undefined) ?? []
+  const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+  return results[activeIndex]?.url
+}
+
+function getActiveResultText(data: Record<string, unknown>): string | undefined {
+  const results = (data.generatedResults as Array<{ text?: string }> | undefined) ?? []
+  const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+  return results[activeIndex]?.text
+}
+
+// ---------------------------------------------------------------------------
+// Extract saved output from node data (for previously-executed nodes)
+// ---------------------------------------------------------------------------
+
+/** Image-generating node types that store results in generatedImageUrl / generatedResults */
+const IMAGE_RESULT_TYPES = new Set([
+  "generate-image",
+  "edit-image",
+  "image-to-image",
+])
+
+/** Video-generating node types that store results in generatedVideoUrl / generatedResults */
+const VIDEO_RESULT_TYPES = new Set([
+  "image-to-video",
+  "video-to-video",
+  "text-to-video",
+  "lip-sync",
+  "motion-transfer",
+  "video-upscale",
+  "suno-music-video",
+  "render-video",
+  "combine-videos",
+  "merge-video-audio",
+  "add-captions",
+  "resize-video",
+  "trim-video",
+  "speed-ramp",
+  "loop-video",
+  "fade-video",
+  "transcode-video",
+  "manual-edit",
+])
+
+/** Audio-generating node types that store results in generatedAudioUrl / generatedResults */
+const AUDIO_RESULT_TYPES = new Set([
+  "text-to-speech",
+  "generate-music",
+  "text-to-audio",
+  "suno-generate",
+  "suno-cover",
+  "suno-extend",
+  "suno-separate",
+  "text-to-dialogue",
+  "voice-changer",
+  "dubbing",
+  "voice-remix",
+  "voice-design",
+  "extract-audio",
+  "mix-audio",
+])
+
+/** Entity node types that store sourceImageUrl / generatedResults */
+const ENTITY_RESULT_TYPES = new Set([
+  "character",
+  "face",
+  "object",
+  "location",
+])
+
+/**
+ * Extract saved output from a node's data fields (for previously-executed nodes).
+ * Backend port of frontend extractNodeOutput().
+ * Used by the orchestrator to pre-populate out-of-subset nodes for "run from here".
+ */
+export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined {
+  const data = node.data
+  const type = node.type
+
+  // Image-generating nodes → imageUrl from generatedResults or generatedImageUrl
+  if (IMAGE_RESULT_TYPES.has(type)) {
+    const url =
+      getActiveResultUrl(data) ??
+      (data.generatedImageUrl as string | undefined) ??
+      (data.url as string | undefined)
+    return url ? { imageUrl: url } : undefined
+  }
+
+  // Video-generating nodes → videoUrl from generatedResults or generatedVideoUrl
+  if (VIDEO_RESULT_TYPES.has(type)) {
+    const url =
+      getActiveResultUrl(data) ??
+      (data.generatedVideoUrl as string | undefined)
+    return url ? { videoUrl: url } : undefined
+  }
+
+  // Audio-generating nodes → audioUrl from generatedResults or generatedAudioUrl
+  if (AUDIO_RESULT_TYPES.has(type)) {
+    const url =
+      getActiveResultUrl(data) ??
+      (data.generatedAudioUrl as string | undefined)
+    return url ? { audioUrl: url } : undefined
+  }
+
+  // Adjust-volume → could be audio or video
+  if (type === "adjust-volume") {
+    const lastInputType = (data.lastInputType as string | undefined) ?? "audio"
+    const url =
+      getActiveResultUrl(data) ??
+      (lastInputType === "video"
+        ? (data.generatedVideoUrl as string | undefined)
+        : (data.generatedAudioUrl as string | undefined))
+    if (lastInputType === "video") {
+      return url ? { videoUrl: url } : undefined
+    }
+    return url ? { audioUrl: url } : undefined
+  }
+
+  // Entity nodes → imageUrl from generatedResults or sourceImageUrl
+  if (ENTITY_RESULT_TYPES.has(type)) {
+    const url =
+      getActiveResultUrl(data) ??
+      (data.sourceImageUrl as string | undefined)
+    return url ? { imageUrl: url } : undefined
+  }
+
+  // Scene → imageUrl from generatedResults or generatedImageUrl
+  if (type === "scene") {
+    const url =
+      getActiveResultUrl(data) ??
+      (data.generatedImageUrl as string | undefined)
+    return url ? { imageUrl: url } : undefined
+  }
+
+  // Text-generating nodes
+  if (type === "ai-writer" || type === "suno-lyrics") {
+    const text = data.generatedText as string | undefined
+    return text ? { text } : undefined
+  }
+
+  if (type === "combine-text") {
+    const text = data.combinedText as string | undefined
+    return text ? { text } : undefined
+  }
+
+  if (type === "split-text") {
+    const results = (data.splitResults as string[] | undefined) ?? []
+    return results.length > 0 ? { text: results[0], splitResults: results } : undefined
+  }
+
+  if (type === "transcribe" || type === "image-to-text") {
+    const text =
+      getActiveResultText(data) ??
+      (data.generatedText as string | undefined)
+    return text ? { text } : undefined
+  }
+
+  if (type === "forced-alignment") {
+    const alignment = data.alignmentResults as unknown
+    return alignment ? { alignment } : undefined
+  }
+
+  // Plan nodes
+  if (type === "after-effects") {
+    const plan = data.effectPlan as Record<string, unknown> | undefined
+    return plan ? { plan } : undefined
+  }
+  if (type === "lottie-overlay") {
+    const plan = data.overlayPlan as Record<string, unknown> | undefined
+    return plan ? { plan } : undefined
+  }
+  if (type === "3d-title") {
+    const plan = data.titlePlan as Record<string, unknown> | undefined
+    return plan ? { plan } : undefined
+  }
+  if (type === "motion-graphics") {
+    const plan = data.motionPlan as Record<string, unknown> | undefined
+    return plan ? { plan } : undefined
+  }
+  if (type === "composite") {
+    const plan = data.compositePlan as Record<string, unknown> | undefined
+    return plan ? { plan } : undefined
+  }
+  if (type === "video-composer") {
+    const plan = data.plan as Record<string, unknown> | undefined
+    return plan ? { plan } : undefined
+  }
+
+  // Sub-workflow
+  if (type === "sub-workflow") {
+    const outputResults = data.outputResults as Record<string, string> | undefined
+    if (!outputResults) return undefined
+    const firstValue = Object.values(outputResults)[0]
+    return firstValue ? { text: firstValue } : undefined
+  }
+
+  // Audio isolation → vocalUrl + instrumentalUrl
+  if (type === "audio-isolation") {
+    const vocalUrl = data.vocalUrl as string | undefined
+    const instrumentalUrl = data.instrumentalUrl as string | undefined
+    if (vocalUrl || instrumentalUrl) {
+      return { vocalUrl, instrumentalUrl, audioUrl: vocalUrl }
+    }
+    return undefined
+  }
+
+  return undefined
 }
 
 /**

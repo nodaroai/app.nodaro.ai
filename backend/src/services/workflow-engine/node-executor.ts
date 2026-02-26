@@ -13,9 +13,10 @@ import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits } from "../../lib/config.js"
 import { CreditsService } from "../../billing/credits.js"
-import { buildPayload } from "./payload-builder.js"
+import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { executeCombineText, executeSplitText, executeComposite } from "./inline-executor.js"
+import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import type {
   SimpleNode,
   SimpleEdge,
@@ -106,6 +107,12 @@ export async function executeNode(
     return { output: {} }
   }
 
+  // Sub-workflow nodes
+  if (node.type === "sub-workflow") {
+    const output = await executeSubWorkflow(node, resolvedInputs, ctx)
+    return { output }
+  }
+
   // Inline nodes
   if (INLINE_NODES.has(node.type)) {
     return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates)
@@ -117,7 +124,7 @@ export async function executeNode(
   }
 
   // Worker-queued nodes (default)
-  return executeWorkerNode(node, resolvedInputs, ctx)
+  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates)
 }
 
 // ---------------------------------------------------------------------------
@@ -271,8 +278,11 @@ async function executeWorkerNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
+  edges?: SimpleEdge[],
+  allNodes?: SimpleNode[],
+  nodeStates?: Record<string, NodeExecutionState>,
 ): Promise<ExecuteNodeResult> {
-  // 1. Create job record
+  // 1. Create placeholder job record (we need the jobId for payload building)
   const { data: job, error: jobError } = await supabase
     .from("jobs")
     .insert({
@@ -280,13 +290,7 @@ async function executeWorkerNode(
       workflow_execution_id: ctx.executionId,
       user_id: ctx.userId,
       status: "pending",
-      input_data: {
-        type: node.type,
-        prompt: resolvedInputs.prompt,
-        imageUrl: resolvedInputs.imageUrl,
-        videoUrl: resolvedInputs.videoUrl,
-        audioUrl: resolvedInputs.audioUrl,
-      },
+      input_data: { type: node.type },
     })
     .select("id")
     .single()
@@ -297,12 +301,38 @@ async function executeWorkerNode(
 
   const jobId = job.id
 
-  // 2. Build payload
+  // Notify orchestrator so jobId is visible in nodeStates immediately
+  ctx.onJobCreated?.(node.id, jobId)
+
+  // 2. Build payload (needs jobId)
+  const settings = ctx.workflowSettings as WorkflowSettings | undefined
   const { jobName, queueName, payload, modelIdentifier } = buildPayload(
     node,
     jobId,
     resolvedInputs,
+    undefined,
+    {
+      settings,
+      nodes: allNodes,
+      edges,
+      nodeStates,
+    },
   )
+
+  // 2b. Update job with rich input_data from the built payload
+  const inputData: Record<string, unknown> = { type: node.type }
+  if (payload.prompt) inputData.prompt = payload.prompt
+  if (payload.provider) inputData.provider = payload.provider
+  if (payload.referenceImageUrls) inputData.referenceImageUrls = payload.referenceImageUrls
+  if (payload.imageUrl || resolvedInputs.imageUrl) inputData.imageUrl = payload.imageUrl || resolvedInputs.imageUrl
+  if (payload.videoUrl || resolvedInputs.videoUrl) inputData.videoUrl = payload.videoUrl || resolvedInputs.videoUrl
+  if (payload.audioUrl || resolvedInputs.audioUrl) inputData.audioUrl = payload.audioUrl || resolvedInputs.audioUrl
+  if (payload.model) inputData.model = payload.model
+
+  await supabase
+    .from("jobs")
+    .update({ input_data: inputData })
+    .eq("id", jobId)
 
   // 3. Reserve credits (skip for FFmpeg / 0-credit nodes)
   let usageLogId: string | undefined
