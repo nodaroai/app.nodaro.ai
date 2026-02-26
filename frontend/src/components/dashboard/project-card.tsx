@@ -18,15 +18,18 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { Project } from "@/hooks/use-projects-store"
+import type { Project } from "@/hooks/queries/use-projects-queries"
+import { Badge } from "@/components/ui/badge"
 
 interface ProjectCardProps {
   readonly project: Project
   readonly onDelete: (id: string) => void
   readonly onRename: (id: string, newName: string) => Promise<void>
+  readonly isOwn?: boolean
+  readonly showOwner?: boolean
 }
 
-export function ProjectCard({ project, onDelete, onRename }: ProjectCardProps) {
+export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner }: ProjectCardProps) {
   const [renameOpen, setRenameOpen] = useState(false)
   const [newName, setNewName] = useState(project.name)
   const [renaming, setRenaming] = useState(false)
@@ -53,7 +56,19 @@ export function ProjectCard({ project, onDelete, onRename }: ProjectCardProps) {
       >
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <h2 className="font-medium text-sm truncate">{project.name}</h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="font-medium text-sm truncate">{project.name}</h2>
+              {showOwner && isOwn && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+                  Mine
+                </Badge>
+              )}
+            </div>
+            {showOwner && project.ownerEmail && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                {project.ownerEmail}
+              </p>
+            )}
             {project.description && (
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                 {project.description}

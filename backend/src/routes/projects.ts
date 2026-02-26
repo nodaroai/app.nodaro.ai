@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 
 const projectIdParams = z.object({
   id: z.string().uuid(),
@@ -25,7 +26,7 @@ const updateProjectBody = z
 const PROJECT_COLS =
   "id, user_id, name, description, settings, created_at, updated_at"
 
-function toProjectResponse(row: Record<string, unknown>) {
+function toProjectResponse(row: Record<string, unknown>, ownerEmail?: string) {
   return {
     id: row.id,
     userId: row.user_id,
@@ -34,16 +35,62 @@ function toProjectResponse(row: Record<string, unknown>) {
     settings: row.settings,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...(ownerEmail !== undefined && { ownerEmail }),
   }
 }
 
 export async function projectRoutes(app: FastifyInstance) {
-  // List projects for authenticated user
+  // List projects for authenticated user (or all projects for admin with ?viewAll=true)
   app.get("/v1/projects", async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    const query = req.query as Record<string, string>
+    const viewAll = query.viewAll === "true"
+
+    // Admin view: return all projects with owner emails
+    if (viewAll) {
+      const isAdmin = await checkIsAdmin(req.userId)
+      if (!isAdmin) {
+        return reply.status(403).send({
+          error: { code: "forbidden", message: "Admin access required" },
+        })
+      }
+
+      const { data, error } = await supabase
+        .from("projects")
+        .select(PROJECT_COLS)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: error.message },
+        })
+      }
+
+      const rows = data ?? []
+      // Fetch owner emails
+      const userIds = [...new Set(rows.map((r) => r.user_id as string))]
+      const emailMap = new Map<string, string>()
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, email")
+          .in("id", userIds)
+        for (const p of profiles ?? []) {
+          emailMap.set(p.id as string, p.email as string)
+        }
+      }
+
+      return {
+        data: rows.map((row) =>
+          toProjectResponse(row, emailMap.get(row.user_id as string) ?? "Unknown"),
+        ),
+        currentUserId: req.userId,
+      }
     }
 
     const { data, error } = await supabase
@@ -58,7 +105,7 @@ export async function projectRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: (data ?? []).map(toProjectResponse) }
+    return { data: (data ?? []).map((row) => toProjectResponse(row)) }
   })
 
   // Create project

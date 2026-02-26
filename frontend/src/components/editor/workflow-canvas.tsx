@@ -30,6 +30,118 @@ import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
 
+// Source handle → media type label
+const SOURCE_LABELS: Record<string, string> = {
+  image: "Image",
+  video: "Video",
+  "video-out": "Video",
+  audio: "Audio",
+  "audio-out": "Audio",
+  text: "Text",
+  prompt: "Text",
+  list: "List",
+  composition: "Composition",
+  scenes: "Scenes",
+  data: "Data",
+  payload: "Payload",
+  characterRef: "Character",
+  faceRef: "Face",
+  objectRef: "Object",
+  locationRef: "Location",
+  voiceId: "Voice ID",
+  approved: "Approved",
+  rejected: "Rejected",
+  count: "Count",
+  duration: "Duration",
+  ratio: "Ratio",
+  tone: "Tone",
+  provider: "Provider",
+  out: "Output",
+}
+
+// Target handle → role label (only shown for multi-handle targets)
+const TARGET_LABELS: Record<string, string> = {
+  image: "Image",
+  audio: "Audio",
+  startFrame: "Start Frame",
+  endFrame: "End Frame",
+  video1: "Video 1",
+  video2: "Video 2",
+  video3: "Video 3",
+  video4: "Video 4",
+  lottie: "Lottie",
+  background: "Background",
+  "ref-audio": "Ref Audio",
+}
+
+// Entity node types that always represent a reference connection
+const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
+
+// Target node types where an incoming image connection means "Reference"
+const REFERENCE_IMAGE_TARGETS = new Set(["generate-image", "edit-image", "image-to-image"])
+
+// fieldMappings field name → human-readable label
+const FIELD_LABELS: Record<string, string> = {
+  prompt: "Prompt",
+  negativePrompt: "Negative",
+  style: "Style",
+  styleGuide: "Style",
+  tone: "Tone",
+  provider: "Provider",
+  aspectRatio: "Aspect Ratio",
+  duration: "Duration",
+  targetLength: "Duration",
+  motion: "Motion",
+  cameraMotion: "Camera",
+  sceneCount: "Scene Count",
+  resolution: "Resolution",
+}
+
+function getEdgeLabel(
+  edge: WorkflowEdge,
+  sourceNode: { id: string; type?: string } | undefined,
+  targetNode: { type?: string; data?: Record<string, unknown> } | undefined,
+): { label: string } | undefined {
+  const srcHandle = edge.sourceHandle
+  const tgtHandle = edge.targetHandle
+
+  // If target has a named handle (not generic "in"), prefer the target role label
+  if (tgtHandle && tgtHandle !== "in" && TARGET_LABELS[tgtHandle]) {
+    return { label: TARGET_LABELS[tgtHandle] }
+  }
+
+  // Entity nodes always represent a reference
+  const srcType = sourceNode?.type
+  if (srcType && ENTITY_NODE_TYPES.has(srcType)) {
+    return { label: "Reference" }
+  }
+
+  // Image → generate-image/edit-image/image-to-image = "Reference"
+  const tgtType = targetNode?.type
+  if (srcHandle === "image" && tgtType && REFERENCE_IMAGE_TARGETS.has(tgtType)) {
+    return { label: "Reference" }
+  }
+
+  // Check fieldMappings on target node — shows which field this source is mapped to
+  if (sourceNode && targetNode?.data) {
+    const mappings = targetNode.data.fieldMappings as Record<string, { sourceNodeId: string }> | undefined
+    if (mappings) {
+      for (const [field, mapping] of Object.entries(mappings)) {
+        if (mapping?.sourceNodeId === sourceNode.id) {
+          return { label: FIELD_LABELS[field] ?? field }
+        }
+      }
+    }
+  }
+
+  // Otherwise use source handle label
+  if (srcHandle && SOURCE_LABELS[srcHandle]) {
+    return { label: SOURCE_LABELS[srcHandle] }
+  }
+
+  return undefined
+}
+
 // Custom edge types with animated flowing dot
 const edgeTypes = {
   default: AnimatedFlowEdge as any,
@@ -54,6 +166,18 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType.startsWith('text-to-') ||
       nodeType.startsWith('image-to-') ||
       nodeType.startsWith('video-to-') ||
+      nodeType.startsWith('suno-') ||
+      nodeType === 'edit-image' ||
+      nodeType === 'lip-sync' ||
+      nodeType === 'motion-transfer' ||
+      nodeType === 'audio-isolation' ||
+      nodeType === 'voice-changer' ||
+      nodeType === 'voice-remix' ||
+      nodeType === 'voice-design' ||
+      nodeType === 'dubbing' ||
+      nodeType === 'transcribe' ||
+      nodeType === 'forced-alignment' ||
+      nodeType === 'video-upscale' ||
       nodeType === 'qa-check') return '#ff0073'
   // Input nodes - neon cyan
   if (nodeType === 'text-prompt' ||
@@ -198,6 +322,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         .map((node) => node.id)
     )
 
+    // Build a map of nodeId → node for quick lookup
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]))
+
     return edges.map((edge): WorkflowEdge => {
       const isRunning = runningNodeIds.has(edge.source)       // Output: source is running (pink)
       const isInputRunning = runningNodeIds.has(edge.target)  // Input: target is running (blue)
@@ -220,11 +347,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       const shouldHighlight = hasAnimation || isDragging
 
+      // Compute edge label from handle IDs and node types
+      const sourceNode = nodeMap.get(edge.source)
+      const edgeLabelResult = getEdgeLabel(edge, sourceNode, nodeMap.get(edge.target))
+      const edgeLabel = edgeLabelResult?.label
+      const edgeLabelColor = edgeLabel && sourceNode ? getMiniMapNodeColor(sourceNode) : undefined
+
       return {
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor },
         style: shouldHighlight ? {
           ...edge.style,
           stroke: edgeColor,

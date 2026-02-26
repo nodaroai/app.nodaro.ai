@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
+import { getAuthHeaders } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 
 export interface Project {
@@ -8,6 +9,8 @@ export interface Project {
   readonly description: string
   readonly createdAt: string
   readonly updatedAt: string
+  readonly userId?: string
+  readonly ownerEmail?: string
 }
 
 export interface Folder {
@@ -31,8 +34,10 @@ function toProject(row: Record<string, unknown>): Project {
     id: row.id as string,
     name: row.name as string,
     description: (row.description as string) ?? "",
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    createdAt: (row.created_at ?? row.createdAt) as string,
+    updatedAt: (row.updated_at ?? row.updatedAt) as string,
+    userId: (row.user_id ?? row.userId) as string | undefined,
+    ownerEmail: row.ownerEmail as string | undefined,
   }
 }
 
@@ -61,13 +66,42 @@ export function useProjects() {
     queryKey: queryKeys.projects.list(),
     queryFn: async () => {
       const supabase = createClient()
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser()
+      let query = supabase
         .from("projects")
         .select("*")
         .order("created_at", { ascending: false })
+      if (user) {
+        query = query.eq("user_id", user.id)
+      }
+      const { data, error } = await query
       if (error) throw error
       return data.map(toProject)
     },
+    staleTime: 30_000,
+  })
+}
+
+export interface AllProjectsResult {
+  readonly projects: Project[]
+  readonly currentUserId: string
+}
+
+export function useAllProjects(enabled: boolean) {
+  return useQuery({
+    queryKey: [...queryKeys.projects.all, "all-admin"] as const,
+    queryFn: async (): Promise<AllProjectsResult> => {
+      const res = await fetch(`/v1/projects?viewAll=true`, {
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error("Failed to fetch all projects")
+      const json = await res.json()
+      return {
+        projects: (json.data as Record<string, unknown>[]).map(toProject),
+        currentUserId: json.currentUserId as string,
+      }
+    },
+    enabled,
     staleTime: 30_000,
   })
 }

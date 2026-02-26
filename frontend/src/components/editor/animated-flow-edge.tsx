@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react"
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, useStore, type Edge, type EdgeProps } from "@xyflow/react"
 import { X } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { CSSProperties } from "react"
@@ -9,6 +9,8 @@ import type { CSSProperties } from "react"
 type AnimatedFlowEdgeData = {
   isRunning?: boolean       // Output animation: source node is running (pink)
   isInputRunning?: boolean  // Input animation: target node is running (blue)
+  edgeLabel?: string        // Primary label (role or media type)
+  edgeLabelColor?: string   // Source node color for badge background
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
@@ -27,6 +29,7 @@ function AnimatedFlowEdgeComponent({
   selected,
 }: AnimatedFlowEdgeProps) {
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
+  const zoom = useStore((s) => s.transform[2])
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -79,6 +82,33 @@ function AnimatedFlowEdgeComponent({
         <circle r="8" fill="#ff0073" filter={`url(#${pinkGlowFilterId})`}>
           <animateMotion dur="2s" repeatCount="indefinite" path={edgePath} />
         </circle>
+      )}
+
+      {/* Edge label badge — hidden at low zoom or when delete button is shown */}
+      {edgeData?.edgeLabel && !selected && zoom >= 0.5 && (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan absolute pointer-events-none select-none flex flex-col items-center gap-0.5"
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            }}
+          >
+            <span
+              className="text-[9px] font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm leading-none"
+              style={edgeData.edgeLabelColor ? {
+                backgroundColor: `${edgeData.edgeLabelColor}18`,
+                color: edgeData.edgeLabelColor,
+                borderColor: `${edgeData.edgeLabelColor}30`,
+              } : {
+                backgroundColor: 'rgba(255,255,255,0.7)',
+                color: '#6b7280',
+                borderColor: 'rgba(229,231,235,0.5)',
+              }}
+            >
+              {edgeData.edgeLabel}
+            </span>
+          </div>
+        </EdgeLabelRenderer>
       )}
 
       {/* Delete button on selected edge */}
