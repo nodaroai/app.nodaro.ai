@@ -298,16 +298,25 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       const source = state.nodes.find((n) => n.id === nodeId)
       if (!source) return state
 
-      // Clone data, but clear characterDbId for character nodes
-      // so the duplicate is treated as a new, unpersisted character
+      // Clone data, stripping execution process state so the duplicate starts idle
+      // but keeping generated results (images, videos, text, etc.) intact
       const clonedData = { ...source.data } as SceneNodeData
+      const d = clonedData as Record<string, unknown>
+      delete d.executionStatus
+      delete d.currentJobId
+      delete d.currentJobProgress
+      delete d.errorMessage
+      delete d.isStreaming
+      delete d.__listTotal
+      delete d.__listCompleted
+      delete d.__listResults
+      delete d.subWorkflowProgress
       if (source.type === "character" && "characterDbId" in clonedData) {
         (clonedData as Record<string, unknown>).characterDbId = ""
       }
 
       // Generate fresh UUIDs for sub-workflow port IDs and routeIds
       if (source.type === "sub-workflow-input" || source.type === "sub-workflow-output") {
-        const d = clonedData as Record<string, unknown>
         if (source.type === "sub-workflow-input") d.routeId = crypto.randomUUID()
         const ports = d.ports as Array<{ id: string; name: string; mediaType: string }> | undefined
         if (ports) {
