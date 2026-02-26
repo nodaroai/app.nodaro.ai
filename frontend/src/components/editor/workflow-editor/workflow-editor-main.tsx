@@ -27,6 +27,7 @@ import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase";
 import { StorageExceededError, uploadFile } from "@/lib/api";
+import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
 import { getCachedCredits } from "@/hooks/use-model-credits";
 import { useStats } from "@/hooks/queries/use-stats-queries";
@@ -431,10 +432,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   const onExecutionStarted = useCallback((id: string) => {
     setActiveExecutionId(id);
+    queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);
 
   const onExecutionEnded = useCallback(() => {
     setActiveExecutionId(null);
+    queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);
 
   function handleStop(): void {
