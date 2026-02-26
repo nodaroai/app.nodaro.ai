@@ -72,7 +72,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .from("workflow_executions")
       .select("id")
       .eq("workflow_id", workflowId)
-      .in("status", ["pending", "running"])
+      .in("status", ["pending", "running", "stopping"])
       .limit(1)
 
     if (activeExec && activeExec.length > 0) {
@@ -190,7 +190,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    if (execution.status !== "pending" && execution.status !== "running") {
+    if (execution.status !== "pending" && execution.status !== "running" && execution.status !== "stopping") {
       return reply.status(409).send({
         error: {
           code: "not_cancellable",

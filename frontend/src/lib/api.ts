@@ -2662,6 +2662,7 @@ export async function runWorkflow(workflowId: string, nodeIds?: string[]): Promi
     const body = await res.json().catch(() => null)
     const execId = (body as Record<string, unknown>)?.executionId as string | undefined
     if (execId) throw new WorkflowAlreadyRunningError(execId)
+    throwApiError(body as Record<string, unknown> | null, "Failed to run workflow")
   }
   if (!res.ok) {
     const err = await res.json().catch(() => null)
