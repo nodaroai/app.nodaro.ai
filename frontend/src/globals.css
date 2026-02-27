@@ -359,13 +359,18 @@ html, body {
   border-color: #1E1E1E;
 }
 
-/* Connection in progress: pulse source + highlight targets (mobile only) */
+/* Connection in progress: pulse the source, glow valid targets (mobile only).
+   clickconnecting / connectingfrom = the handle you started from.
+   At idle, connectionindicator is on source handles; during click-connection
+   it flips to target handles — so .target.connectionindicator only matches
+   when a connection is actively in progress. */
 @media (max-width: 899px) and (pointer: coarse) {
+  .react-flow__handle.clickconnecting::after,
   .react-flow__handle.connectingfrom::after {
     animation: handle-pulse 1s ease-in-out infinite;
     background: #ff0073;
   }
-  .react-flow__handle.connectionindicator::after {
+  .react-flow__handle.target.connectionindicator::after {
     animation: handle-target-glow 0.8s ease-in-out infinite;
     background: #38BDF8;
     border-color: #38BDF8;
