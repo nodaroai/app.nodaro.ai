@@ -12,6 +12,7 @@ import {
   type IsValidConnection,
 } from "@xyflow/react"
 import { useSearchParams } from "react-router-dom"
+import { cn } from "@/lib/utils"
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
@@ -347,6 +348,15 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     selectNode(nodeId)
     // The useEffect above will handle zoom + setFocusMode(true)
   }, [selectNode])
+
+  // Track which handle type the user is connecting from (for mobile animations)
+  const [connectingFromType, setConnectingFromType] = useState<"source" | "target" | null>(null)
+  const handleConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
+    if (isMobile && params.handleType) setConnectingFromType(params.handleType)
+  }, [isMobile])
+  const handleConnectEnd = useCallback(() => {
+    setConnectingFromType(null)
+  }, [])
 
   // Prevent composition handles from connecting to non-Render-Video nodes
   const isValidConnection = useCallback<IsValidConnection>(
@@ -778,6 +788,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={handleConnectStart}
+          onConnectEnd={handleConnectEnd}
           isValidConnection={isValidConnection}
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
@@ -794,7 +806,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           selectNodesOnDrag={!isMobile}
           fitView
           deleteKeyCode={["Delete", "Backspace"]}
-          className="bg-background touch-manipulation"
+          className={cn(
+            "bg-background touch-manipulation",
+            connectingFromType === "source" && "connecting-from-source",
+            connectingFromType === "target" && "connecting-from-target",
+          )}
           zoomOnPinch
           panOnDrag
           minZoom={0.2}
