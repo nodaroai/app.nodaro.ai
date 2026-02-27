@@ -430,7 +430,7 @@ export function ConfigPanel() {
             </div>
           </div>
         )}
-        {(!isMobile || sheetState === "expanded") && panelHeader}
+        {!isMobile && panelHeader}
 
       {(!isMobile || sheetState === "expanded") && (
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F8FAFC] dark:bg-[#121212]">
