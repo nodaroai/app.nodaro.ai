@@ -2,7 +2,7 @@
 
 import { useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
-import { useMobileCanvas } from "./mobile-canvas-context"
+import { useIsMobile } from "@/hooks/use-is-mobile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -241,7 +241,7 @@ export function ConfigPanel() {
   const [expandSceneOpen, setExpandSceneOpen] = useState(false)
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
-  const { isMobile } = useMobileCanvas()
+  const isMobile = useIsMobile()
 
   // Swipe-to-dismiss for mobile bottom sheet
   const touchStartY = useRef(0)
