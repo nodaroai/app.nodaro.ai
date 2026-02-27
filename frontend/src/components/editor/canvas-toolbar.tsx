@@ -1,7 +1,9 @@
 "use client"
 
-import { Plus, Search, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2 } from "lucide-react"
+import { Plus, Search, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { useIsMobile } from "@/hooks/use-is-mobile"
 import {
   Tooltip,
   TooltipContent,
@@ -128,6 +130,8 @@ export function CanvasToolbar({
   canRedo,
 }: CanvasToolbarProps) {
   const { sidebarWidth } = useSidebar()
+  const isMobile = useIsMobile()
+  const navigate = useNavigate()
   // Position to the right of the sidebar + 12px gap
   const leftPosition = sidebarWidth + 12
 
@@ -144,6 +148,12 @@ export function CanvasToolbar({
           "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-2xl dark:shadow-black/20"
         )}
       >
+        <MobileToolbarButton
+          icon={<ChevronLeft className="w-5 h-5" />}
+          label="Back"
+          onClick={() => navigate(-1)}
+        />
+        <div className="w-px h-5 bg-[#E2E8F0] dark:bg-[#2D2D2D]" />
         <MobileToolbarButton
           icon={<Plus className="w-5 h-5" />}
           label="Add Node"
