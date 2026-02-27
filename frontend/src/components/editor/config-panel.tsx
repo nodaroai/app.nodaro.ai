@@ -403,7 +403,7 @@ export function ConfigPanel() {
         )}
         {panelHeader}
 
-      <div className="flex-1 min-h-0 overflow-y-auto bg-[#F8FAFC] dark:bg-[#121212]">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F8FAFC] dark:bg-[#121212]">
         <div className="flex flex-col gap-5 p-4">
           <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
             <Label htmlFor="node-label" className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Label</Label>

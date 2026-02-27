@@ -170,6 +170,11 @@
   --sidebar-ring: #ff0073;
 }
 
+/* Prevent mobile pull-to-refresh — must be outside @layer to avoid being overridden */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
