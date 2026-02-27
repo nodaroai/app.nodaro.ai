@@ -290,12 +290,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     return () => clearTimeout(timer)
   }, [focusType, nodes, setCenter, selectNode, setSearchParams, isMobile])
 
-  // Mobile focus mode: zoom to selected node, exit on user pan/zoom
+  // Focus mode: zoom to selected node; mobile gets nav arrows + bottom sheet
   const [focusMode, setFocusMode] = useState(false)
   const focusAnimatingRef = useRef(false)
 
+  // Center viewport on selected node (both mobile and desktop)
   useEffect(() => {
-    if (!isMobile || !selectedNodeId) {
+    if (!selectedNodeId) {
       setFocusMode(false)
       return
     }
@@ -304,7 +305,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
     const nodeW = node.measured?.width ?? 200
     const nodeH = node.measured?.height ?? 100
-    const sheetOffset = window.innerHeight * 0.15
+    // On mobile, shift up to keep node visible above the bottom sheet
+    const sheetOffset = isMobile ? window.innerHeight * 0.15 : 0
 
     focusAnimatingRef.current = true
     setCenter(
@@ -312,11 +314,27 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       node.position.y + nodeH / 2 - sheetOffset,
       { zoom: 1, duration: 300 },
     )
-    setFocusMode(true)
+    if (isMobile) setFocusMode(true)
     // Allow the animation to finish before listening for user moves
     const timer = setTimeout(() => { focusAnimatingRef.current = false }, 350)
     return () => clearTimeout(timer)
   }, [isMobile, selectedNodeId, setCenter, getNode])
+
+  // Mobile: auto-focus the first non-sticky node after workflow loads
+  const autoFocusedRef = useRef(false)
+  useEffect(() => {
+    if (!isMobile || autoFocusedRef.current || nodes.length === 0) return
+    // Wait for React Flow fitView to finish, then focus first real node
+    const timer = setTimeout(() => {
+      const firstNode = nodes.find((n) => n.type !== "sticky-note" && !n.data?.hidden)
+      if (firstNode) {
+        autoFocusedRef.current = true
+        selectNode(firstNode.id)
+        // The effect above will handle centering + setFocusMode(true)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [isMobile, nodes, selectNode])
 
   const handleMoveStart = useCallback(() => {
     // User-initiated pan/zoom exits focus mode (ignore our own animation)

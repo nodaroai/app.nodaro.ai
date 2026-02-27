@@ -359,10 +359,17 @@ html, body {
   border-color: #1E1E1E;
 }
 
-/* Connection in progress: pulse the source handle */
-.react-flow__handle.connectingfrom::after {
-  animation: handle-pulse 1s ease-in-out infinite;
-  background: #ff0073;
+/* Connection in progress: pulse source + highlight targets (mobile only) */
+@media (max-width: 899px) and (pointer: coarse) {
+  .react-flow__handle.connectingfrom::after {
+    animation: handle-pulse 1s ease-in-out infinite;
+    background: #ff0073;
+  }
+  .react-flow__handle.connectionindicator::after {
+    animation: handle-target-glow 0.8s ease-in-out infinite;
+    background: #38BDF8;
+    border-color: #38BDF8;
+  }
 }
 
 @keyframes handle-pulse {
@@ -374,13 +381,6 @@ html, body {
     transform: translate(-50%, -50%) scale(1.3);
     box-shadow: 0 0 12px 4px rgba(255, 0, 115, 0.4);
   }
-}
-
-/* Connection in progress: highlight valid target handles */
-.react-flow__handle.connectionindicator::after {
-  animation: handle-target-glow 0.8s ease-in-out infinite;
-  background: #38BDF8;
-  border-color: #38BDF8;
 }
 
 @keyframes handle-target-glow {
