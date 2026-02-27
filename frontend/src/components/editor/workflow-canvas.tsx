@@ -267,25 +267,38 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
   const mobileContextValue = useMemo(() => ({ isMobile }), [isMobile])
 
-  // On mobile, ensure any node without mobilePosition gets one.
-  // Runs on first mobile view AND whenever new nodes are added while on mobile.
+  // On mobile, ensure every node has a mobilePosition.
+  // First mobile view: generate a proper vertical layout via topological sort.
+  // Subsequent additions: copy position → mobilePosition (preserves drop location).
   useEffect(() => {
     if (!isMobile || nodes.length === 0) return
     const hasMissing = nodes.some((n) => !n.mobilePosition)
     if (!hasMissing) return
-    // For nodes added while on mobile, copy position → mobilePosition
-    // (preserves the user's drop/click position rather than re-layouting)
-    useWorkflowStore.setState((state) => {
-      const needsUpdate = state.nodes.some((n) => !n.mobilePosition)
-      if (!needsUpdate) return state
-      return {
-        nodes: state.nodes.map((n) => {
-          if (n.mobilePosition) return n
-          return { ...n, mobilePosition: { ...n.position } }
-        }),
+
+    const allMissing = nodes.every((n) => !n.mobilePosition)
+
+    if (allMissing) {
+      // First mobile view — generate a proper vertical single-column layout
+      const viewportWidth = window.innerWidth
+      const updated = ensureMobilePositions(nodes, edges, viewportWidth)
+      if (updated !== nodes) {
+        useWorkflowStore.setState({ nodes: updated, isDirty: true })
       }
-    })
-  }, [isMobile, nodes])
+    } else {
+      // Some nodes already have mobilePosition — just fill in the missing ones
+      // (e.g. node added while already on mobile)
+      useWorkflowStore.setState((state) => {
+        const needsUpdate = state.nodes.some((n) => !n.mobilePosition)
+        if (!needsUpdate) return state
+        return {
+          nodes: state.nodes.map((n) => {
+            if (n.mobilePosition) return n
+            return { ...n, mobilePosition: { ...n.position } }
+          }),
+        }
+      })
+    }
+  }, [isMobile, nodes, edges])
 
   // Transform nodes for React Flow display: swap in mobilePosition on mobile
   const displayNodes = useMemo(() => {
