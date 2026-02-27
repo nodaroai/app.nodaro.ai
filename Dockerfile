@@ -4,6 +4,7 @@ FROM node:22-alpine AS backend-builder
 RUN apk add --no-cache libc6-compat python3
 
 ENV YOUTUBE_DL_SKIP_PYTHON_CHECK=1
+ENV YOUTUBE_DL_SKIP_DOWNLOAD=1
 
 WORKDIR /app/backend
 COPY backend/package*.json ./
@@ -60,14 +61,15 @@ RUN npm run build
 FROM node:22-slim AS runner
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg curl ca-certificates \
+    ffmpeg curl ca-certificates yt-dlp \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 \
     libatspi2.0-0 \
-    fonts-dejavu-core fonts-liberation2 fontconfig \
+    fonts-dejavu-core fonts-liberation fontconfig \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/bin/caddy \
+    && ARCH=$(dpkg --print-architecture) \
+    && curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=${ARCH}" -o /usr/bin/caddy \
     && chmod +x /usr/bin/caddy
 
 # Create non-root user (node:22-slim already has uid 1000 node user, || true for safety)
