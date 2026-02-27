@@ -337,12 +337,6 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
           y: source.position.y + 50,
         },
         data: clonedData,
-        ...(source.mobilePosition ? {
-          mobilePosition: {
-            x: source.mobilePosition.x + 50,
-            y: source.mobilePosition.y + 50,
-          },
-        } : {}),
       }
 
       return {

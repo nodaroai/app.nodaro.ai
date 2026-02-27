@@ -10,7 +10,6 @@ import {
   useReactFlow,
   type NodeMouseHandler,
   type IsValidConnection,
-  type NodeChange,
 } from "@xyflow/react"
 import { useSearchParams } from "react-router-dom"
 import "@xyflow/react/dist/style.css"
@@ -30,8 +29,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { MobileCanvasContext } from "./mobile-canvas-context"
-import { generateMobilePositions } from "@/lib/mobile-layout"
-import type { WorkflowNode, WorkflowEdge, SceneNodeType } from "@/types/nodes"
+import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
 
 // Source handle → media type label
@@ -266,104 +264,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const isMobile = useIsMobile()
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
   const mobileContextValue = useMemo(() => ({ isMobile }), [isMobile])
-  const mobileLayoutGenerated = useRef(false)
-
-  // Generate vertical mobile layout on first mobile view per session.
-  // Depends on nodes.length so it re-runs when the workflow finishes loading.
-  const nodesLoaded = nodes.length > 0
-  useEffect(() => {
-    if (!isMobile || !nodesLoaded || mobileLayoutGenerated.current) return
-    mobileLayoutGenerated.current = true
-    const viewportWidth = window.innerWidth
-    const generated = generateMobilePositions(nodes, edges, viewportWidth)
-    useWorkflowStore.setState((state) => ({
-      nodes: state.nodes.map((n) => {
-        const pos = generated.get(n.id)
-        return pos ? { ...n, mobilePosition: pos } : n
-      }),
-      isDirty: true,
-    }))
-  // Re-run when isMobile becomes true OR when nodes finish loading
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile, nodesLoaded])
-
-  // When new nodes are added while already on mobile, give them a mobilePosition
-  useEffect(() => {
-    if (!isMobile || !mobileLayoutGenerated.current) return
-    const hasMissing = nodes.some((n) => !n.mobilePosition)
-    if (!hasMissing) return
-    useWorkflowStore.setState((state) => {
-      const needsUpdate = state.nodes.some((n) => !n.mobilePosition)
-      if (!needsUpdate) return state
-      return {
-        nodes: state.nodes.map((n) => {
-          if (n.mobilePosition) return n
-          return { ...n, mobilePosition: { ...n.position } }
-        }),
-      }
-    })
-  }, [isMobile, nodes])
-
-  // Transform nodes for React Flow display: swap in mobilePosition on mobile
-  const displayNodes = useMemo(() => {
-    if (!isMobile) return nodes
-    return nodes.map((node) =>
-      node.mobilePosition
-        ? { ...node, position: node.mobilePosition }
-        : node,
-    )
-  }, [nodes, isMobile])
-
-  // Mobile-aware onNodesChange: position changes update mobilePosition instead of position
-  const handleNodesChange = useCallback(
-    (changes: NodeChange<WorkflowNode>[]) => {
-      if (!isMobile) {
-        onNodesChange(changes)
-        return
-      }
-
-      // Separate position changes from everything else
-      const positionChanges: NodeChange<WorkflowNode>[] = []
-      const otherChanges: NodeChange<WorkflowNode>[] = []
-      for (const change of changes) {
-        if (change.type === "position") {
-          positionChanges.push(change)
-        } else {
-          otherChanges.push(change)
-        }
-      }
-
-      // Apply non-position changes normally
-      if (otherChanges.length > 0) {
-        onNodesChange(otherChanges)
-      }
-
-      // Apply position changes to mobilePosition instead
-      if (positionChanges.length > 0) {
-        useWorkflowStore.setState((state) => {
-          const changeMap = new Map<string, { x: number; y: number }>()
-          for (const change of positionChanges) {
-            if (change.type === "position" && change.position) {
-              changeMap.set(change.id, change.position)
-            }
-          }
-          if (changeMap.size === 0) return state
-          // Only mark dirty when drag ends (dragging=false), not during drag
-          const dragEnded = positionChanges.some(
-            (c) => c.type === "position" && !c.dragging,
-          )
-          return {
-            nodes: state.nodes.map((node) => {
-              const newPos = changeMap.get(node.id)
-              return newPos ? { ...node, mobilePosition: newPos } : node
-            }),
-            ...(dragEnded ? { isDirty: true } : {}),
-          }
-        })
-      }
-    },
-    [isMobile, onNodesChange],
-  )
+  // Same positions used on both mobile and desktop — no separate layout
 
   // Focus on a specific node type when navigating via ?focusType= search param
   const focusType = searchParams.get("focusType")
@@ -375,7 +276,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     focusedRef.current = true
     // Small delay to let React Flow finish layout
     const timer = setTimeout(() => {
-      const pos = (isMobile && target.mobilePosition) ? target.mobilePosition : target.position
+      const pos = target.position
       setCenter(pos.x + 100, pos.y + 50, { zoom: 1, duration: 400 })
       selectNode(target.id)
       // Clean up the search param
@@ -549,43 +450,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
     const arranged: typeof nodes = []
     let y = 100
-    const xSpacing = isMobile ? 0 : 300
-    const ySpacing = isMobile ? 160 : 200
-    const startX = isMobile ? Math.max(20, (window.innerWidth - 260) / 2) : 100
-
     Object.values(nodesByType).forEach((typeNodes) => {
-      let x = startX
+      let x = 100
       typeNodes.forEach((node) => {
-        const pos = { x, y }
-        arranged.push({
-          ...node,
-          // On mobile, update mobilePosition; on desktop, update position
-          ...(isMobile
-            ? { mobilePosition: pos }
-            : { position: pos }),
-        })
-        x += xSpacing
+        arranged.push({ ...node, position: { x, y } })
+        x += 300
       })
-      y += ySpacing
+      y += 200
     })
 
-    if (isMobile) {
-      // Write directly to store to preserve desktop positions
-      useWorkflowStore.setState((state) => {
-        const posMap = new Map(arranged.map((n) => [n.id, n.mobilePosition!]))
-        return {
-          nodes: state.nodes.map((n) => {
-            const mp = posMap.get(n.id)
-            return mp ? { ...n, mobilePosition: mp } : n
-          }),
-          isDirty: true,
-        }
-      })
-    } else {
-      setNodes(arranged)
-    }
+    setNodes(arranged)
     setCanvasContextMenu(null)
-  }, [nodes, setNodes, isMobile])
+  }, [nodes, setNodes])
 
   const handleSelectAll = useCallback(() => {
     setNodes(nodes.map((n) => ({ ...n, selected: true })))
@@ -838,9 +714,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       <MobileCanvasContext.Provider value={mobileContextValue}>
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
         <ReactFlow
-          nodes={displayNodes}
+          nodes={nodes}
           edges={animatedEdges}
-          onNodesChange={handleNodesChange}
+          onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           isValidConnection={isValidConnection}
