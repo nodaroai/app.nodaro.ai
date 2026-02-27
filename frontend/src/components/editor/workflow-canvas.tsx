@@ -269,8 +269,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const mobileLayoutGenerated = useRef(false)
 
   // Generate vertical mobile layout on first mobile view per session.
+  // Depends on nodes.length so it re-runs when the workflow finishes loading.
+  const nodesLoaded = nodes.length > 0
   useEffect(() => {
-    if (!isMobile || nodes.length === 0 || mobileLayoutGenerated.current) return
+    if (!isMobile || !nodesLoaded || mobileLayoutGenerated.current) return
     mobileLayoutGenerated.current = true
     const viewportWidth = window.innerWidth
     const generated = generateMobilePositions(nodes, edges, viewportWidth)
@@ -281,9 +283,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }),
       isDirty: true,
     }))
-  // Only run once when isMobile first becomes true
+  // Re-run when isMobile becomes true OR when nodes finish loading
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile])
+  }, [isMobile, nodesLoaded])
 
   // When new nodes are added while already on mobile, give them a mobilePosition
   useEffect(() => {
