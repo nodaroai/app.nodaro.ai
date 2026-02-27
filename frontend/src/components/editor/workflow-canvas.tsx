@@ -794,11 +794,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         isMobile={isMobile}
       />
 
-      {/* DEBUG: temporary mobile detection indicator — remove after confirming */}
-      <div className="absolute top-2 right-2 z-50 px-3 py-1 rounded-full text-xs font-bold shadow-lg" style={{ background: isMobile ? '#22c55e' : '#ef4444', color: 'white' }}>
-        {isMobile ? `MOBILE (${typeof window !== 'undefined' ? window.innerWidth : '?'}px)` : `DESKTOP (${typeof window !== 'undefined' ? window.innerWidth : '?'}px)`}
-      </div>
-
       {/* Add Node Popup */}
       <AddNodePopup
         open={addNodePopupOpen}
