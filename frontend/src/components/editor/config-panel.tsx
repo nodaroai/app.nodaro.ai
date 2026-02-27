@@ -1,7 +1,8 @@
 "use client"
 
-import { useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense } from "react"
+import { useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
+import { useMobileCanvas } from "./mobile-canvas-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -240,6 +241,39 @@ export function ConfigPanel() {
   const [expandSceneOpen, setExpandSceneOpen] = useState(false)
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const { isMobile } = useMobileCanvas()
+
+  // Swipe-to-dismiss for mobile bottom sheet
+  const touchStartY = useRef(0)
+  const sheetTranslateY = useRef(0)
+  const sheetRef = useRef<HTMLDivElement>(null)
+
+  const handleSheetTouchStart = useCallback((e: ReactTouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+    sheetTranslateY.current = 0
+  }, [])
+
+  const handleSheetTouchMove = useCallback((e: ReactTouchEvent) => {
+    const dy = e.touches[0].clientY - touchStartY.current
+    if (dy > 0) { // only allow downward drag
+      sheetTranslateY.current = dy
+      if (sheetRef.current) {
+        sheetRef.current.style.transform = `translateY(${dy}px)`
+      }
+    }
+  }, [])
+
+  const handleSheetTouchEnd = useCallback(() => {
+    if (sheetTranslateY.current > 80) {
+      // Dismiss
+      selectNode(null)
+    }
+    // Reset position
+    if (sheetRef.current) {
+      sheetRef.current.style.transform = ""
+    }
+    sheetTranslateY.current = 0
+  }, [selectNode])
 
   const isVisible = !!foundNode && foundNode.type !== "sticky-note"
   const lastNodeRef = useRef(foundNode)
@@ -296,6 +330,8 @@ export function ConfigPanel() {
   )
 
   if (!displayNode) {
+    // On mobile, render nothing when no node selected (bottom sheet simply gone)
+    if (isMobile) return null
     return (
       <div className="absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out translate-x-full pointer-events-none" />
     )
@@ -305,39 +341,67 @@ export function ConfigPanel() {
   const nodeType = selectedNode.type as string
   const nodeData = selectedNode.data as Record<string, unknown>
 
+  // --- Shared content for both desktop and mobile ---
+  const panelHeader = (
+    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
+        {getNodeTypeDisplayName(nodeType)} Node Settings
+      </h3>
+      <div className="flex items-center gap-1">
+        {!isMobile && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
+            onClick={() => setIsExpanded((v) => !v)}
+            title={isExpanded ? "Collapse to side panel" : "Expand to full screen"}
+            aria-label={isExpanded ? "Collapse panel" : "Expand panel"}
+          >
+            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
+        )}
+        <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setIsExpanded(false); selectNode(null) }} aria-label="Close panel">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  )
+
+  // --- Desktop: side panel (unchanged) ---
   const panelContent = (
     <div className={isExpanded
       ? "fixed inset-0 z-50 flex items-center justify-center"
-      : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
+      : isMobile
+        ? `fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
+        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
     }>
+      {/* Mobile backdrop */}
+      {isMobile && isVisible && (
+        <div className="fixed inset-0 -z-10 bg-black/40" onClick={() => selectNode(null)} />
+      )}
       {isExpanded && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsExpanded(false)} />
       )}
       <div className={isExpanded
         ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
-        : "flex flex-col h-full min-h-0"
-      }>
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
-            {getNodeTypeDisplayName(nodeType)} Node Settings
-          </h3>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
-              onClick={() => setIsExpanded((v) => !v)}
-              title={isExpanded ? "Collapse to side panel" : "Expand to full screen"}
-              aria-label={isExpanded ? "Collapse panel" : "Expand panel"}
-            >
-              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
-            <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setIsExpanded(false); selectNode(null) }} aria-label="Close panel">
-              <X className="h-4 w-4" />
-            </Button>
+        : isMobile
+          ? "bg-white dark:bg-[#1E1E1E] rounded-t-2xl shadow-2xl flex flex-col max-h-[70vh] min-h-0"
+          : "flex flex-col h-full min-h-0"
+      }
+        ref={isMobile ? sheetRef : undefined}
+      >
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div
+            className="flex justify-center pt-2 pb-1 cursor-grab shrink-0"
+            onTouchStart={handleSheetTouchStart}
+            onTouchMove={handleSheetTouchMove}
+            onTouchEnd={handleSheetTouchEnd}
+          >
+            <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
           </div>
-        </div>
+        )}
+        {panelHeader}
 
       <div className="flex-1 min-h-0 overflow-y-auto bg-[#F8FAFC] dark:bg-[#121212]">
         <div className="flex flex-col gap-5 p-4">
@@ -553,6 +617,8 @@ export function ConfigPanel() {
               Delete Node
             </Button>
           </div>
+          {/* Safe area padding for mobile bottom sheet */}
+          {isMobile && <div className="h-[env(safe-area-inset-bottom)]" />}
         </div>
       </div>
       {nodeType === "scene" && expandSceneOpen && (

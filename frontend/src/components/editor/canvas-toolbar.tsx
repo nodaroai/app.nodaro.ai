@@ -87,6 +87,26 @@ function ToolbarButton({ icon, label, shortcut, onClick, active, disabled }: Too
   )
 }
 
+function MobileToolbarButton({ icon, label, onClick, active, disabled }: Omit<ToolbarButtonProps, "shortcut">) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={disabled ? undefined : onClick}
+      className={cn(
+        "w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200 touch-manipulation",
+        "text-[#64748B] dark:text-[#94A3B8]",
+        "active:bg-[#F1F5F9] active:text-[#0F172A]",
+        "dark:active:bg-[#2D2D2D] dark:active:text-white",
+        active && "bg-[#ff0073]/10 text-[#ff0073] dark:bg-[#ff0073]/20 dark:text-[#ff0073]",
+        disabled && "opacity-40 cursor-not-allowed"
+      )}
+    >
+      {icon}
+    </button>
+  )
+}
+
 function ToolbarDivider() {
   return <div className="w-6 h-px bg-[#E2E8F0] dark:bg-[#2D2D2D] mx-auto my-1" />
 }
@@ -112,98 +132,146 @@ export function CanvasToolbar({
   const leftPosition = sidebarWidth + 12
 
   return (
-    <div
-      className={cn(
-        "fixed top-1/2 -translate-y-1/2 z-50",
-        "p-2 rounded-2xl",
-        "flex flex-col gap-1",
-        "backdrop-blur-md",
-        "transition-all duration-300 ease-in-out",
-        // Light mode: frosted white glass with subtle shadow
-        "bg-white/80 border border-[#E2E8F0] shadow-xl shadow-slate-200/50",
-        // Dark mode: dark glass with deeper shadow
-        "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-2xl dark:shadow-black/20"
-      )}
-      style={{ left: `${leftPosition}px` }}
-    >
-      {/* Primary actions */}
-      <ToolbarButton
-        icon={<Plus className="w-5 h-5" />}
-        label="Add Node"
-        shortcut="Tab"
-        onClick={(e) => {
-          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-          onAddNode({ x: rect.right + 8, y: rect.top }, true)
-        }}
-      />
+    <>
+      {/* Mobile: horizontal top bar */}
+      <div
+        className={cn(
+          "absolute top-2 left-2 right-2 z-10 md:hidden",
+          "p-1.5 rounded-xl",
+          "flex items-center gap-1",
+          "backdrop-blur-md",
+          "bg-white/80 border border-[#E2E8F0] shadow-lg",
+          "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-2xl dark:shadow-black/20"
+        )}
+      >
+        <MobileToolbarButton
+          icon={<Plus className="w-5 h-5" />}
+          label="Add Node"
+          onClick={(e) => {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+            onAddNode({ x: rect.right + 8, y: rect.bottom + 8 }, true)
+          }}
+        />
+        <MobileToolbarButton
+          icon={<Undo2 className="w-5 h-5" />}
+          label="Undo"
+          onClick={onUndo}
+          disabled={!canUndo}
+        />
+        <MobileToolbarButton
+          icon={<Redo2 className="w-5 h-5" />}
+          label="Redo"
+          onClick={onRedo}
+          disabled={!canRedo}
+        />
+        <MobileToolbarButton
+          icon={<Wand2 className="w-5 h-5" />}
+          label="Tidy Up"
+          onClick={onTidyUp}
+        />
+        <MobileToolbarButton
+          icon={<PanelLeft className="w-5 h-5" />}
+          label="Toggle Sidebar"
+          onClick={onToggleSidebar}
+          active={sidebarVisible}
+        />
+      </div>
 
-      <ToolbarButton
-        icon={<Search className="w-5 h-5" />}
-        label="Search"
-        shortcut="Ctrl+K"
-        onClick={onSearch}
-      />
+      {/* Desktop: vertical left bar */}
+      <div
+        className={cn(
+          "fixed top-1/2 -translate-y-1/2 z-50",
+          "hidden md:flex",
+          "p-2 rounded-2xl",
+          "flex-col gap-1",
+          "backdrop-blur-md",
+          "transition-all duration-300 ease-in-out",
+          // Light mode: frosted white glass with subtle shadow
+          "bg-white/80 border border-[#E2E8F0] shadow-xl shadow-slate-200/50",
+          // Dark mode: dark glass with deeper shadow
+          "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-2xl dark:shadow-black/20"
+        )}
+        style={{ left: `${leftPosition}px` }}
+      >
+        {/* Primary actions */}
+        <ToolbarButton
+          icon={<Plus className="w-5 h-5" />}
+          label="Add Node"
+          shortcut="Tab"
+          onClick={(e) => {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+            onAddNode({ x: rect.right + 8, y: rect.top }, true)
+          }}
+        />
 
-      <ToolbarButton
-        icon={<Package className="w-5 h-5" />}
-        label="My Library"
-        shortcut="Ctrl+L"
-        onClick={onAssetLibrary}
-      />
+        <ToolbarButton
+          icon={<Search className="w-5 h-5" />}
+          label="Search"
+          shortcut="Ctrl+K"
+          onClick={onSearch}
+        />
 
-      <ToolbarButton
-        icon={<Film className="w-5 h-5" />}
-        label="Media Library"
-        shortcut="Ctrl+M"
-        onClick={onMediaLibrary}
-      />
+        <ToolbarButton
+          icon={<Package className="w-5 h-5" />}
+          label="My Library"
+          shortcut="Ctrl+L"
+          onClick={onAssetLibrary}
+        />
 
-      <ToolbarDivider />
+        <ToolbarButton
+          icon={<Film className="w-5 h-5" />}
+          label="Media Library"
+          shortcut="Ctrl+M"
+          onClick={onMediaLibrary}
+        />
 
-      {/* Canvas tools */}
-      <ToolbarButton
-        icon={<StickyNote className="w-5 h-5" />}
-        label="Add Sticky Note"
-        shortcut="Shift+S"
-        onClick={onAddStickyNote}
-      />
+        <ToolbarDivider />
 
-      <ToolbarButton
-        icon={<Wand2 className="w-5 h-5" />}
-        label="Tidy Up"
-        shortcut="Alt+T"
-        onClick={onTidyUp}
-      />
+        {/* Canvas tools */}
+        <ToolbarButton
+          icon={<StickyNote className="w-5 h-5" />}
+          label="Add Sticky Note"
+          shortcut="Shift+S"
+          onClick={onAddStickyNote}
+        />
 
-      <ToolbarDivider />
+        <ToolbarButton
+          icon={<Wand2 className="w-5 h-5" />}
+          label="Tidy Up"
+          shortcut="Alt+T"
+          onClick={onTidyUp}
+        />
 
-      {/* Undo / Redo */}
-      <ToolbarButton
-        icon={<Undo2 className="w-5 h-5" />}
-        label="Undo"
-        shortcut={isMac ? "\u2318Z" : "Ctrl+Z"}
-        onClick={onUndo}
-        disabled={!canUndo}
-      />
+        <ToolbarDivider />
 
-      <ToolbarButton
-        icon={<Redo2 className="w-5 h-5" />}
-        label="Redo"
-        shortcut={isMac ? "\u2318\u21e7Z" : "Ctrl+Y"}
-        onClick={onRedo}
-        disabled={!canRedo}
-      />
+        {/* Undo / Redo */}
+        <ToolbarButton
+          icon={<Undo2 className="w-5 h-5" />}
+          label="Undo"
+          shortcut={isMac ? "\u2318Z" : "Ctrl+Z"}
+          onClick={onUndo}
+          disabled={!canUndo}
+        />
 
-      <ToolbarDivider />
+        <ToolbarButton
+          icon={<Redo2 className="w-5 h-5" />}
+          label="Redo"
+          shortcut={isMac ? "\u2318\u21e7Z" : "Ctrl+Y"}
+          onClick={onRedo}
+          disabled={!canRedo}
+        />
 
-      {/* View controls */}
-      <ToolbarButton
-        icon={<PanelLeft className="w-5 h-5" />}
-        label="Toggle Sidebar"
-        shortcut="Ctrl+B"
-        onClick={onToggleSidebar}
-        active={sidebarVisible}
-      />
-    </div>
+        <ToolbarDivider />
+
+        {/* View controls */}
+        <ToolbarButton
+          icon={<PanelLeft className="w-5 h-5" />}
+          label="Toggle Sidebar"
+          shortcut="Ctrl+B"
+          onClick={onToggleSidebar}
+          active={sidebarVisible}
+        />
+      </div>
+    </>
   )
 }

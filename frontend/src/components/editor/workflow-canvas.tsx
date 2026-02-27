@@ -846,14 +846,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           isValidConnection={isValidConnection}
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
-          onNodeContextMenu={handleNodeContextMenu}
-          onPaneContextMenu={handlePaneContextMenu}
+          onNodeContextMenu={isMobile ? undefined : handleNodeContextMenu}
+          onPaneContextMenu={isMobile ? undefined : handlePaneContextMenu}
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: 'default' }}
           connectionMode={ConnectionMode.Loose}
+          connectOnClick={isMobile}
+          selectNodesOnDrag={!isMobile}
           fitView
           deleteKeyCode={["Delete", "Backspace"]}
           className="bg-background touch-manipulation"

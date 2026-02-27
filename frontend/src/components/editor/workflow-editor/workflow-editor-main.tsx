@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useUndoRedoSubscription } from "@/hooks/use-undo-redo";
 import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
@@ -71,6 +72,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "editor",
   );
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const isMobile = useIsMobile();
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const pendingNavRef = useRef<string | null>(null);
   const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(
     new Set(),
@@ -702,7 +705,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 <ConfigPanel />
               </EditorErrorBoundary>
             </ReactFlowProvider>
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+            <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2${isMobile && selectedNodeId ? " hidden" : ""}`}>
               {isRunning && activeExecutionId ? (
                 <ExecutionStatusBar
                   executionId={activeExecutionId}
