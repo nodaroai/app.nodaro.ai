@@ -351,10 +351,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   // Track which handle type the user is connecting from (for mobile animations)
   const [connectingFromType, setConnectingFromType] = useState<"source" | "target" | null>(null)
+  // Drag-initiated connections
   const handleConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
     if (isMobile && params.handleType) setConnectingFromType(params.handleType)
   }, [isMobile])
   const handleConnectEnd = useCallback(() => {
+    setConnectingFromType(null)
+  }, [])
+  // Click-to-connect (mobile connectOnClick mode)
+  const handleClickConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
+    if (isMobile && params.handleType) setConnectingFromType(params.handleType)
+  }, [isMobile])
+  const handleClickConnectEnd = useCallback(() => {
     setConnectingFromType(null)
   }, [])
 
@@ -439,6 +447,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setNodeContextMenu(null)
     setCanvasContextMenu(null)
     setAddNodePopupOpen(false)
+    setConnectingFromType(null)
   }, [selectNode])
 
   const handlePaneContextMenu = useCallback(
@@ -790,6 +799,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onConnect={onConnect}
           onConnectStart={handleConnectStart}
           onConnectEnd={handleConnectEnd}
+          onClickConnectStart={handleClickConnectStart}
+          onClickConnectEnd={handleClickConnectEnd}
           isValidConnection={isValidConnection}
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
