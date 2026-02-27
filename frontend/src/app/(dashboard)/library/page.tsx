@@ -24,6 +24,7 @@ import {
 import { useStorageProfile } from "@/hooks/queries/use-billing-queries"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { useBackToClose } from "@/hooks/use-back-to-close"
 import type { LibraryAsset } from "@/lib/api"
 
 function formatBytes(bytes: number): string {
@@ -47,6 +48,8 @@ export default function LibraryPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [previewAsset, setPreviewAsset] = useState<LibraryAsset | null>(null)
+  const closePreview = useCallback(() => setPreviewAsset(null), [])
+  useBackToClose(previewAsset !== null, closePreview)
 
   // Storage profile (auto-refreshes after delete via query invalidation)
   const { data: storageData } = useStorageProfile(user?.id)

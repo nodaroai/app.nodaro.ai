@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useGalleryInfinite, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
+import { useBackToClose } from "@/hooks/use-back-to-close"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
 
 type FilterType = "all" | "image" | "video" | "audio"
@@ -286,6 +287,10 @@ export default function GalleryPage() {
   const items: readonly GalleryItem[] = data?.pages.flatMap((p) => p.data) ?? []
 
   const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
+
+  // Mobile back button closes modal instead of navigating away
+  const closeModal = useCallback(() => setSelectedIndex(null), [])
+  useBackToClose(selectedIndex !== null, closeModal)
 
   // Report dialog state
   const [reportItem, setReportItem] = useState<GalleryItem | null>(null)
