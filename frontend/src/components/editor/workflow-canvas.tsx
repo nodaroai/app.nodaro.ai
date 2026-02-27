@@ -30,7 +30,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { MobileCanvasContext } from "./mobile-canvas-context"
-import { ensureMobilePositions } from "@/lib/mobile-layout"
+import { generateMobilePositions } from "@/lib/mobile-layout"
 import type { WorkflowNode, WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
 
@@ -266,39 +266,41 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const isMobile = useIsMobile()
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
   const mobileContextValue = useMemo(() => ({ isMobile }), [isMobile])
+  const mobileLayoutGenerated = useRef(false)
 
-  // On mobile, ensure every node has a mobilePosition.
-  // First mobile view: generate a proper vertical layout via topological sort.
-  // Subsequent additions: copy position → mobilePosition (preserves drop location).
+  // Generate vertical mobile layout on first mobile view per session.
   useEffect(() => {
-    if (!isMobile || nodes.length === 0) return
+    if (!isMobile || nodes.length === 0 || mobileLayoutGenerated.current) return
+    mobileLayoutGenerated.current = true
+    const viewportWidth = window.innerWidth
+    const generated = generateMobilePositions(nodes, edges, viewportWidth)
+    useWorkflowStore.setState((state) => ({
+      nodes: state.nodes.map((n) => {
+        const pos = generated.get(n.id)
+        return pos ? { ...n, mobilePosition: pos } : n
+      }),
+      isDirty: true,
+    }))
+  // Only run once when isMobile first becomes true
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile])
+
+  // When new nodes are added while already on mobile, give them a mobilePosition
+  useEffect(() => {
+    if (!isMobile || !mobileLayoutGenerated.current) return
     const hasMissing = nodes.some((n) => !n.mobilePosition)
     if (!hasMissing) return
-
-    const allMissing = nodes.every((n) => !n.mobilePosition)
-
-    if (allMissing) {
-      // First mobile view — generate a proper vertical single-column layout
-      const viewportWidth = window.innerWidth
-      const updated = ensureMobilePositions(nodes, edges, viewportWidth)
-      if (updated !== nodes) {
-        useWorkflowStore.setState({ nodes: updated, isDirty: true })
+    useWorkflowStore.setState((state) => {
+      const needsUpdate = state.nodes.some((n) => !n.mobilePosition)
+      if (!needsUpdate) return state
+      return {
+        nodes: state.nodes.map((n) => {
+          if (n.mobilePosition) return n
+          return { ...n, mobilePosition: { ...n.position } }
+        }),
       }
-    } else {
-      // Some nodes already have mobilePosition — just fill in the missing ones
-      // (e.g. node added while already on mobile)
-      useWorkflowStore.setState((state) => {
-        const needsUpdate = state.nodes.some((n) => !n.mobilePosition)
-        if (!needsUpdate) return state
-        return {
-          nodes: state.nodes.map((n) => {
-            if (n.mobilePosition) return n
-            return { ...n, mobilePosition: { ...n.position } }
-          }),
-        }
-      })
-    }
-  }, [isMobile, nodes, edges])
+    })
+  }, [isMobile, nodes])
 
   // Transform nodes for React Flow display: swap in mobilePosition on mobile
   const displayNodes = useMemo(() => {
