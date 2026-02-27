@@ -1835,7 +1835,9 @@ export type SceneNodeType =
   | "webhook-trigger"
   | "schedule-trigger"
 
-export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
+export type WorkflowNode = Node<SceneNodeData, SceneNodeType> & {
+  mobilePosition?: { x: number; y: number }
+}
 export type WorkflowEdge = Edge
 
 export interface NodeTypeDefinition {

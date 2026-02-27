@@ -227,6 +227,12 @@ export function expandLoopResults(): void {
           ...node,
           id: `${node.id}_iter_${i}`,
           position: { x: node.position.x, y: node.position.y + i * 220 },
+          ...(node.mobilePosition ? {
+            mobilePosition: {
+              x: node.mobilePosition.x,
+              y: node.mobilePosition.y + i * 220,
+            },
+          } : {}),
           data: cloneData as SceneNodeDataType,
         });
       }

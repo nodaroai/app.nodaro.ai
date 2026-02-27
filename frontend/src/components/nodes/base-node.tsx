@@ -5,6 +5,7 @@ import { Handle, Position, NodeResizer } from "@xyflow/react"
 import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 
 interface HandleConfig {
   readonly id: string
@@ -96,6 +97,7 @@ function BaseNodeComponent({
   listProgress,
   listProgressPercent,
 }: BaseNodeProps) {
+  const { isMobile } = useMobileCanvas()
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
@@ -119,13 +121,15 @@ function BaseNodeComponent({
 
   return (
     <div style={{ minWidth: '100%', minHeight: '100%' }}>
-      <NodeResizer
-        minWidth={minWidth}
-        minHeight={minHeight}
-        isVisible={selected}
-        lineClassName="!border-blue-400"
-        handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
-      />
+      {!isMobile && (
+        <NodeResizer
+          minWidth={minWidth}
+          minHeight={minHeight}
+          isVisible={selected}
+          lineClassName="!border-blue-400"
+          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
+        />
+      )}
       <div
         className={cn(
           "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground min-h-full overflow-hidden",

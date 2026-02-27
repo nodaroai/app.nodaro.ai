@@ -53,6 +53,7 @@ function hasSnapshotChange(
     if (p.id !== c.id) return true
     if (p.type !== c.type) return true
     if (p.position !== c.position) return true
+    if (p.mobilePosition !== c.mobilePosition) return true
     if (p.data !== c.data) return true
   }
   return false

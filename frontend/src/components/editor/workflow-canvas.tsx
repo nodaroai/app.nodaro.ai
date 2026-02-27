@@ -10,6 +10,7 @@ import {
   useReactFlow,
   type NodeMouseHandler,
   type IsValidConnection,
+  type NodeChange,
 } from "@xyflow/react"
 import { useSearchParams } from "react-router-dom"
 import "@xyflow/react/dist/style.css"
@@ -27,7 +28,10 @@ const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => (
 import { SelectionActionBar } from "./selection-action-bar"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
-import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
+import { useIsMobile } from "@/hooks/use-is-mobile"
+import { MobileCanvasContext } from "./mobile-canvas-context"
+import { ensureMobilePositions } from "@/lib/mobile-layout"
+import type { WorkflowNode, WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
 
 // Source handle → media type label
@@ -231,20 +235,6 @@ interface CanvasContextMenuState {
   readonly flowY: number
 }
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const mql = window.matchMedia("(max-width: 767px)")
-    setIsMobile(mql.matches)
-    function onChange(e: MediaQueryListEvent) {
-      setIsMobile(e.matches)
-    }
-    mql.addEventListener("change", onChange)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
-  return isMobile
-}
-
 interface WorkflowCanvasProps {
   readonly sidebarVisible: boolean
   readonly onToggleSidebar: () => void
@@ -275,6 +265,88 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
   const isMobile = useIsMobile()
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
+  const mobileContextValue = useMemo(() => ({ isMobile }), [isMobile])
+
+  // On mobile, ensure any node without mobilePosition gets one.
+  // Runs on first mobile view AND whenever new nodes are added while on mobile.
+  useEffect(() => {
+    if (!isMobile || nodes.length === 0) return
+    const hasMissing = nodes.some((n) => !n.mobilePosition)
+    if (!hasMissing) return
+    // For nodes added while on mobile, copy position → mobilePosition
+    // (preserves the user's drop/click position rather than re-layouting)
+    useWorkflowStore.setState((state) => {
+      const needsUpdate = state.nodes.some((n) => !n.mobilePosition)
+      if (!needsUpdate) return state
+      return {
+        nodes: state.nodes.map((n) => {
+          if (n.mobilePosition) return n
+          return { ...n, mobilePosition: { ...n.position } }
+        }),
+      }
+    })
+  }, [isMobile, nodes])
+
+  // Transform nodes for React Flow display: swap in mobilePosition on mobile
+  const displayNodes = useMemo(() => {
+    if (!isMobile) return nodes
+    return nodes.map((node) =>
+      node.mobilePosition
+        ? { ...node, position: node.mobilePosition }
+        : node,
+    )
+  }, [nodes, isMobile])
+
+  // Mobile-aware onNodesChange: position changes update mobilePosition instead of position
+  const handleNodesChange = useCallback(
+    (changes: NodeChange<WorkflowNode>[]) => {
+      if (!isMobile) {
+        onNodesChange(changes)
+        return
+      }
+
+      // Separate position changes from everything else
+      const positionChanges: NodeChange<WorkflowNode>[] = []
+      const otherChanges: NodeChange<WorkflowNode>[] = []
+      for (const change of changes) {
+        if (change.type === "position") {
+          positionChanges.push(change)
+        } else {
+          otherChanges.push(change)
+        }
+      }
+
+      // Apply non-position changes normally
+      if (otherChanges.length > 0) {
+        onNodesChange(otherChanges)
+      }
+
+      // Apply position changes to mobilePosition instead
+      if (positionChanges.length > 0) {
+        useWorkflowStore.setState((state) => {
+          const changeMap = new Map<string, { x: number; y: number }>()
+          for (const change of positionChanges) {
+            if (change.type === "position" && change.position) {
+              changeMap.set(change.id, change.position)
+            }
+          }
+          if (changeMap.size === 0) return state
+          // Only mark dirty when drag ends (dragging=false), not during drag
+          const dragEnded = positionChanges.some(
+            (c) => c.type === "position" && !c.dragging,
+          )
+          return {
+            nodes: state.nodes.map((node) => {
+              const newPos = changeMap.get(node.id)
+              return newPos ? { ...node, mobilePosition: newPos } : node
+            }),
+            ...(dragEnded ? { isDirty: true } : {}),
+          }
+        })
+      }
+    },
+    [isMobile, onNodesChange],
+  )
 
   // Focus on a specific node type when navigating via ?focusType= search param
   const focusType = searchParams.get("focusType")
@@ -286,7 +358,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     focusedRef.current = true
     // Small delay to let React Flow finish layout
     const timer = setTimeout(() => {
-      setCenter(target.position.x + 100, target.position.y + 50, { zoom: 1, duration: 400 })
+      const pos = (isMobile && target.mobilePosition) ? target.mobilePosition : target.position
+      setCenter(pos.x + 100, pos.y + 50, { zoom: 1, duration: 400 })
       selectNode(target.id)
       // Clean up the search param
       setSearchParams((prev) => {
@@ -296,7 +369,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }, { replace: true })
     }, 300)
     return () => clearTimeout(timer)
-  }, [focusType, nodes, setCenter, selectNode, setSearchParams])
+  }, [focusType, nodes, setCenter, selectNode, setSearchParams, isMobile])
 
   // Prevent composition handles from connecting to non-Render-Video nodes
   const isValidConnection = useCallback<IsValidConnection>(
@@ -459,24 +532,43 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
     const arranged: typeof nodes = []
     let y = 100
-    const xSpacing = 300
-    const ySpacing = 200
+    const xSpacing = isMobile ? 0 : 300
+    const ySpacing = isMobile ? 160 : 200
+    const startX = isMobile ? Math.max(20, (window.innerWidth - 260) / 2) : 100
 
     Object.values(nodesByType).forEach((typeNodes) => {
-      let x = 100
+      let x = startX
       typeNodes.forEach((node) => {
+        const pos = { x, y }
         arranged.push({
           ...node,
-          position: { x, y },
+          // On mobile, update mobilePosition; on desktop, update position
+          ...(isMobile
+            ? { mobilePosition: pos }
+            : { position: pos }),
         })
         x += xSpacing
       })
       y += ySpacing
     })
 
-    setNodes(arranged)
+    if (isMobile) {
+      // Write directly to store to preserve desktop positions
+      useWorkflowStore.setState((state) => {
+        const posMap = new Map(arranged.map((n) => [n.id, n.mobilePosition!]))
+        return {
+          nodes: state.nodes.map((n) => {
+            const mp = posMap.get(n.id)
+            return mp ? { ...n, mobilePosition: mp } : n
+          }),
+          isDirty: true,
+        }
+      })
+    } else {
+      setNodes(arranged)
+    }
     setCanvasContextMenu(null)
-  }, [nodes, setNodes])
+  }, [nodes, setNodes, isMobile])
 
   const handleSelectAll = useCallback(() => {
     setNodes(nodes.map((n) => ({ ...n, selected: true })))
@@ -681,12 +773,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       />
 
       {/* Canvas Controls (zoom, fit, minimap toggle - bottom left) */}
-      {!isMobile && (
-        <CanvasControls
-          showMiniMap={showMiniMap}
-          onToggleMiniMap={handleToggleMiniMap}
-        />
-      )}
+      <CanvasControls
+        showMiniMap={showMiniMap}
+        onToggleMiniMap={handleToggleMiniMap}
+        isMobile={isMobile}
+      />
 
       {/* Add Node Popup */}
       <AddNodePopup
@@ -727,11 +818,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         </Suspense>
       )}
 
+      <MobileCanvasContext.Provider value={mobileContextValue}>
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
         <ReactFlow
-          nodes={nodes}
+          nodes={displayNodes}
           edges={animatedEdges}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           isValidConnection={isValidConnection}
@@ -769,6 +861,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           />
         </ReactFlow>
       </div>
+      </MobileCanvasContext.Provider>
 
       <SelectionActionBar />
 

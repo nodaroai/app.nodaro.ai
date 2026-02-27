@@ -14,6 +14,7 @@ import { useSidebar } from "@/components/layout/sidebar-context"
 interface CanvasControlsProps {
   readonly showMiniMap: boolean
   readonly onToggleMiniMap: () => void
+  readonly isMobile?: boolean
 }
 
 interface ControlButtonProps {
@@ -65,11 +66,11 @@ function ControlButton({ icon, label, onClick, active }: ControlButtonProps) {
   )
 }
 
-export function CanvasControls({ showMiniMap, onToggleMiniMap }: CanvasControlsProps) {
+export function CanvasControls({ showMiniMap, onToggleMiniMap, isMobile }: CanvasControlsProps) {
   const { fitView, zoomIn, zoomOut } = useReactFlow()
   const { sidebarWidth } = useSidebar()
-  // Position to the right of the sidebar + 12px gap
-  const leftPosition = sidebarWidth + 12
+  // Position to the right of the sidebar + 12px gap (desktop), or bottom-right (mobile)
+  const leftPosition = isMobile ? undefined : sidebarWidth + 12
 
   return (
     <div
@@ -81,9 +82,11 @@ export function CanvasControls({ showMiniMap, onToggleMiniMap }: CanvasControlsP
         // Light mode
         "bg-white/80 border border-[#E2E8F0] shadow-sm",
         // Dark mode
-        "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-xl"
+        "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-xl",
+        // Mobile: bottom-right
+        isMobile && "right-4",
       )}
-      style={{ left: `${leftPosition}px` }}
+      style={leftPosition != null ? { left: `${leftPosition}px` } : undefined}
     >
       <ControlButton
         icon={<Maximize2 className="w-4 h-4" />}
@@ -100,13 +103,17 @@ export function CanvasControls({ showMiniMap, onToggleMiniMap }: CanvasControlsP
         label="Zoom Out"
         onClick={() => zoomOut()}
       />
-      <div className="w-px h-5 bg-[#E2E8F0] dark:bg-[#2D2D2D] mx-0.5" />
-      <ControlButton
-        icon={<Map className="w-4 h-4" />}
-        label="Toggle MiniMap"
-        onClick={onToggleMiniMap}
-        active={showMiniMap}
-      />
+      {!isMobile && (
+        <>
+          <div className="w-px h-5 bg-[#E2E8F0] dark:bg-[#2D2D2D] mx-0.5" />
+          <ControlButton
+            icon={<Map className="w-4 h-4" />}
+            label="Toggle MiniMap"
+            onClick={onToggleMiniMap}
+            active={showMiniMap}
+          />
+        </>
+      )}
     </div>
   )
 }
