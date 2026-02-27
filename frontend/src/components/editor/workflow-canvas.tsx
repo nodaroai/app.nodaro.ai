@@ -25,6 +25,7 @@ import { AnimatedFlowEdge } from "./animated-flow-edge"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 import { SelectionActionBar } from "./selection-action-bar"
+import { FocusModeNav } from "./focus-mode-nav"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
@@ -288,6 +289,46 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }, 300)
     return () => clearTimeout(timer)
   }, [focusType, nodes, setCenter, selectNode, setSearchParams, isMobile])
+
+  // Mobile focus mode: zoom to selected node, exit on user pan/zoom
+  const [focusMode, setFocusMode] = useState(false)
+  const focusAnimatingRef = useRef(false)
+
+  useEffect(() => {
+    if (!isMobile || !selectedNodeId) {
+      setFocusMode(false)
+      return
+    }
+    const node = getNode(selectedNodeId)
+    if (!node) return
+
+    const nodeW = node.measured?.width ?? 200
+    const nodeH = node.measured?.height ?? 100
+    const sheetOffset = window.innerHeight * 0.15
+
+    focusAnimatingRef.current = true
+    setCenter(
+      node.position.x + nodeW / 2,
+      node.position.y + nodeH / 2 - sheetOffset,
+      { zoom: 1, duration: 300 },
+    )
+    setFocusMode(true)
+    // Allow the animation to finish before listening for user moves
+    const timer = setTimeout(() => { focusAnimatingRef.current = false }, 350)
+    return () => clearTimeout(timer)
+  }, [isMobile, selectedNodeId, setCenter, getNode])
+
+  const handleMoveStart = useCallback(() => {
+    // User-initiated pan/zoom exits focus mode (ignore our own animation)
+    if (isMobile && focusMode && !focusAnimatingRef.current) {
+      setFocusMode(false)
+    }
+  }, [isMobile, focusMode])
+
+  const handleFocusNavigate = useCallback((nodeId: string) => {
+    selectNode(nodeId)
+    // The useEffect above will handle zoom + setFocusMode(true)
+  }, [selectNode])
 
   // Prevent composition handles from connecting to non-Render-Video nodes
   const isValidConnection = useCallback<IsValidConnection>(
@@ -724,6 +765,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onPaneClick={handlePaneClick}
           onNodeContextMenu={isMobile ? undefined : handleNodeContextMenu}
           onPaneContextMenu={isMobile ? undefined : handlePaneContextMenu}
+          onMoveStart={handleMoveStart}
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           nodeTypes={nodeTypes}
@@ -759,6 +801,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       </MobileCanvasContext.Provider>
 
       <SelectionActionBar />
+
+      {/* Mobile focus mode: directional navigation arrows */}
+      {isMobile && focusMode && selectedNodeId && (
+        <FocusModeNav selectedNodeId={selectedNodeId} onNavigate={handleFocusNavigate} />
+      )}
 
       {nodeContextMenu && (
         <NodeContextMenu

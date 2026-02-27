@@ -243,36 +243,54 @@ export function ConfigPanel() {
   const [isExpanded, setIsExpanded] = useState(false)
   const isMobile = useIsMobile()
 
-  // Swipe-to-dismiss for mobile bottom sheet
-  const touchStartY = useRef(0)
-  const sheetTranslateY = useRef(0)
+  // Mobile bottom sheet: peek (collapsed) / expanded states with bidirectional drag
+  const [sheetState, setSheetState] = useState<"peek" | "expanded">("peek")
+  const dragStartY = useRef(0)
+  const dragDelta = useRef(0)
+  const dragStartState = useRef<"peek" | "expanded">("peek")
   const sheetRef = useRef<HTMLDivElement>(null)
 
+  // Reset to peek when node changes
+  useEffect(() => {
+    if (isMobile && selectedNodeId) setSheetState("peek")
+  }, [isMobile, selectedNodeId])
+
   const handleSheetTouchStart = useCallback((e: ReactTouchEvent) => {
-    touchStartY.current = e.touches[0].clientY
-    sheetTranslateY.current = 0
-  }, [])
+    dragStartY.current = e.touches[0].clientY
+    dragDelta.current = 0
+    dragStartState.current = sheetState
+  }, [sheetState])
 
   const handleSheetTouchMove = useCallback((e: ReactTouchEvent) => {
-    const dy = e.touches[0].clientY - touchStartY.current
-    if (dy > 0) { // only allow downward drag
-      sheetTranslateY.current = dy
-      if (sheetRef.current) {
+    const dy = e.touches[0].clientY - dragStartY.current
+    dragDelta.current = dy
+    if (sheetRef.current) {
+      if (dragStartState.current === "expanded" && dy > 0) {
+        // Expanded: allow downward drag to collapse
+        sheetRef.current.style.transform = `translateY(${dy}px)`
+      } else if (dragStartState.current === "peek") {
+        // Peek: allow upward drag (expand) or downward drag (dismiss)
         sheetRef.current.style.transform = `translateY(${dy}px)`
       }
     }
   }, [])
 
   const handleSheetTouchEnd = useCallback(() => {
-    if (sheetTranslateY.current > 80) {
-      // Dismiss
-      selectNode(null)
+    const dy = dragDelta.current
+    const fromState = dragStartState.current
+
+    if (fromState === "expanded") {
+      if (dy > 60) setSheetState("peek")
+    } else if (fromState === "peek") {
+      if (dy < -60) {
+        setSheetState("expanded")
+      } else if (dy > 80) {
+        selectNode(null)
+      }
     }
-    // Reset position
-    if (sheetRef.current) {
-      sheetRef.current.style.transform = ""
-    }
-    sheetTranslateY.current = 0
+
+    if (sheetRef.current) sheetRef.current.style.transform = ""
+    dragDelta.current = 0
   }, [selectNode])
 
   const isVisible = !!foundNode && foundNode.type !== "sticky-note"
@@ -375,34 +393,46 @@ export function ConfigPanel() {
         ? `fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
         : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
     }>
-      {/* Mobile backdrop */}
-      {isMobile && isVisible && (
-        <div className="fixed inset-0 -z-10 bg-black/40" onClick={() => selectNode(null)} />
-      )}
       {isExpanded && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsExpanded(false)} />
       )}
       <div className={isExpanded
         ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
         : isMobile
-          ? "bg-white dark:bg-[#1E1E1E] rounded-t-2xl shadow-2xl flex flex-col max-h-[70vh] min-h-0"
+          ? `bg-white dark:bg-[#1E1E1E] rounded-t-2xl shadow-2xl flex flex-col transition-[max-height] duration-300 ease-in-out ${sheetState === "expanded" ? "max-h-[70vh]" : "max-h-[15vh]"} min-h-0`
           : "flex flex-col h-full min-h-0"
       }
         ref={isMobile ? sheetRef : undefined}
       >
-        {/* Mobile drag handle */}
+        {/* Mobile drag handle + peek header */}
         {isMobile && (
           <div
-            className="flex justify-center pt-2 pb-1 cursor-grab shrink-0"
+            className="shrink-0 cursor-grab touch-manipulation"
             onTouchStart={handleSheetTouchStart}
             onTouchMove={handleSheetTouchMove}
             onTouchEnd={handleSheetTouchEnd}
           >
-            <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+            <div className="flex justify-center pt-2 pb-1">
+              <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+            </div>
+            <div className="flex items-center justify-between px-4 pb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-[#64748B]">
+                  {getNodeTypeDisplayName(nodeType)}
+                </span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {(selectedNode.data as { label: string }).label}
+                </span>
+              </div>
+              <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-gray-400 dark:text-[#64748B]" onClick={() => selectNode(null)} aria-label="Close panel">
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         )}
-        {panelHeader}
+        {(!isMobile || sheetState === "expanded") && panelHeader}
 
+      {(!isMobile || sheetState === "expanded") && (
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F8FAFC] dark:bg-[#121212]">
         <div className="flex flex-col gap-5 p-4">
           <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
@@ -621,6 +651,7 @@ export function ConfigPanel() {
           {isMobile && <div className="h-[env(safe-area-inset-bottom)]" />}
         </div>
       </div>
+      )}
       {nodeType === "scene" && expandSceneOpen && (
         <Suspense fallback={null}>
           <SceneEditorModal
