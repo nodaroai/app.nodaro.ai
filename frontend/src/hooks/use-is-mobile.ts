@@ -2,19 +2,33 @@ import { useState, useEffect } from "react"
 
 const MOBILE_BREAKPOINT = "(max-width: 767px)"
 
+function detectMobile(): boolean {
+  if (typeof window === "undefined") return false
+  // Primary: viewport width check
+  if (window.matchMedia(MOBILE_BREAKPOINT).matches) return true
+  // Fallback: touch-primary device with narrow-ish screen (tablets excluded)
+  if (window.matchMedia("(pointer: coarse)").matches && window.innerWidth < 1024) return true
+  return false
+}
+
 export function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(MOBILE_BREAKPOINT).matches,
-  )
+  const [isMobile, setIsMobile] = useState(detectMobile)
 
   useEffect(() => {
     const mql = window.matchMedia(MOBILE_BREAKPOINT)
-    setIsMobile(mql.matches)
-    function onChange(e: MediaQueryListEvent): void {
-      setIsMobile(e.matches)
+    const coarseMql = window.matchMedia("(pointer: coarse)")
+
+    function update(): void {
+      setIsMobile(detectMobile())
     }
-    mql.addEventListener("change", onChange)
-    return () => mql.removeEventListener("change", onChange)
+
+    update()
+    mql.addEventListener("change", update)
+    coarseMql.addEventListener("change", update)
+    return () => {
+      mql.removeEventListener("change", update)
+      coarseMql.removeEventListener("change", update)
+    }
   }, [])
 
   return isMobile
