@@ -8,6 +8,7 @@ import {
   BackgroundVariant,
   ConnectionMode,
   useReactFlow,
+  useStore,
   type NodeMouseHandler,
   type IsValidConnection,
 } from "@xyflow/react"
@@ -30,6 +31,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { MobileCanvasContext } from "./mobile-canvas-context"
+import { CanvasZoomContext } from "./canvas-zoom-context"
 import type { WorkflowEdge, SceneNodeType } from "@/types/nodes"
 import type { LibraryAsset } from "@/lib/api"
 
@@ -263,6 +265,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
   const isMobile = useIsMobile()
+  const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
   const mobileContextValue = useMemo(() => ({ isMobile }), [isMobile])
   // Same positions used on both mobile and desktop — no separate layout
@@ -753,6 +756,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       )}
 
       <MobileCanvasContext.Provider value={mobileContextValue}>
+      <CanvasZoomContext.Provider value={{ zoom }}>
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
         <ReactFlow
           nodes={nodes}
@@ -798,6 +802,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           />
         </ReactFlow>
       </div>
+      </CanvasZoomContext.Provider>
       </MobileCanvasContext.Provider>
 
       <SelectionActionBar />

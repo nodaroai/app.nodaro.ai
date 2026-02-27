@@ -27,13 +27,13 @@ export function MediaPreviewModal({ isOpen, onClose, type, url }: MediaPreviewMo
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center"
+      className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className="relative w-[60vw] max-h-[80vh] flex items-center justify-center"
+        className="relative w-[90vw] max-h-[90vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -49,7 +49,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url }: MediaPreviewMo
           <CachedImage
             src={url}
             alt="Preview"
-            className="max-w-full max-h-[80vh] rounded-lg object-contain"
+            className="max-w-full max-h-[90vh] rounded-lg object-contain"
           />
         ) : type === "video" ? (
           <video
