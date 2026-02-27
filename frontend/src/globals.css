@@ -359,31 +359,29 @@ html, body {
   border-color: #1E1E1E;
 }
 
-/* Connection in progress (mobile only): pulse selected handle,
+/* Connection in progress: pulse selected handle,
    glow opposite-type handles. Wrapper class set via JS onConnectStart/End. */
-@media (max-width: 899px) and (pointer: coarse) {
-  /* Tapped an output → pulse it, glow all inputs */
-  .connecting-from-source .react-flow__handle.source.connectingfrom::after,
-  .connecting-from-source .react-flow__handle.source.clickconnecting::after {
-    animation: handle-pulse 1s ease-in-out infinite;
-    background: #ff0073;
-  }
-  .connecting-from-source .react-flow__handle.target::after {
-    animation: handle-target-glow 0.8s ease-in-out infinite;
-    background: #38BDF8;
-    border-color: #38BDF8;
-  }
-  /* Tapped an input → pulse it, glow all outputs */
-  .connecting-from-target .react-flow__handle.target.connectingfrom::after,
-  .connecting-from-target .react-flow__handle.target.clickconnecting::after {
-    animation: handle-pulse 1s ease-in-out infinite;
-    background: #ff0073;
-  }
-  .connecting-from-target .react-flow__handle.source::after {
-    animation: handle-target-glow 0.8s ease-in-out infinite;
-    background: #38BDF8;
-    border-color: #38BDF8;
-  }
+/* Dragged/tapped an output → pulse it, glow all inputs */
+.connecting-from-source .react-flow__handle.source.connectingfrom::after,
+.connecting-from-source .react-flow__handle.source.clickconnecting::after {
+  animation: handle-pulse 1s ease-in-out infinite;
+  background: #ff0073;
+}
+.connecting-from-source .react-flow__handle.target::after {
+  animation: handle-target-glow 0.8s ease-in-out infinite;
+  background: #38BDF8;
+  border-color: #38BDF8;
+}
+/* Dragged/tapped an input → pulse it, glow all outputs */
+.connecting-from-target .react-flow__handle.target.connectingfrom::after,
+.connecting-from-target .react-flow__handle.target.clickconnecting::after {
+  animation: handle-pulse 1s ease-in-out infinite;
+  background: #ff0073;
+}
+.connecting-from-target .react-flow__handle.source::after {
+  animation: handle-target-glow 0.8s ease-in-out infinite;
+  background: #38BDF8;
+  border-color: #38BDF8;
 }
 
 @keyframes handle-pulse {

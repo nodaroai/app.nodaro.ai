@@ -349,19 +349,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // The useEffect above will handle zoom + setFocusMode(true)
   }, [selectNode])
 
-  // Track which handle type the user is connecting from (for mobile animations)
+  // Track which handle type the user is connecting from (for handle animations)
   const [connectingFromType, setConnectingFromType] = useState<"source" | "target" | null>(null)
   // Drag-initiated connections
   const handleConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
-    if (isMobile && params.handleType) setConnectingFromType(params.handleType)
-  }, [isMobile])
+    if (params.handleType) setConnectingFromType(params.handleType)
+  }, [])
   const handleConnectEnd = useCallback(() => {
     setConnectingFromType(null)
   }, [])
   // Click-to-connect (mobile connectOnClick mode)
   const handleClickConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
-    if (isMobile && params.handleType) setConnectingFromType(params.handleType)
-  }, [isMobile])
+    if (params.handleType) setConnectingFromType(params.handleType)
+  }, [])
   const handleClickConnectEnd = useCallback(() => {
     setConnectingFromType(null)
   }, [])
