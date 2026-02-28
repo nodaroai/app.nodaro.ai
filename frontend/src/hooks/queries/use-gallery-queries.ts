@@ -24,7 +24,7 @@ export function useGalleryInfinite(filter: string) {
       if (pageParam) params.set("cursor", pageParam)
       const res = await fetch(`/v1/gallery?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch gallery")
-      return res.json() as Promise<{ data: GalleryItem[]; nextCursor: string | null }>
+      return res.json() as Promise<{ data: GalleryItem[]; nextCursor: string | null; totalCount?: number }>
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,

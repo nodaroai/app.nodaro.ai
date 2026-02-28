@@ -285,6 +285,7 @@ export default function GalleryPage() {
 
   // Derive flat items list from infinite query pages
   const items: readonly GalleryItem[] = data?.pages.flatMap((p) => p.data) ?? []
+  const totalCount = data?.pages[0]?.totalCount ?? items.length
 
   const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
 
@@ -345,14 +346,41 @@ export default function GalleryPage() {
     }
   }
 
+  // Track when user tried to advance past loaded items
+  const wantsNextRef = useRef(false)
+
+  // Auto-fetch next page when previewing near the end of loaded items
+  useEffect(() => {
+    if (selectedIndex !== null && selectedIndex >= items.length - 3 && hasMore && !loadingMore) {
+      fetchNextPage()
+    }
+  }, [selectedIndex, items.length, hasMore, loadingMore, fetchNextPage])
+
+  // Auto-advance once new items load after user tried to go next at boundary
+  useEffect(() => {
+    if (wantsNextRef.current && selectedIndex !== null && selectedIndex < items.length - 1) {
+      wantsNextRef.current = false
+      setSelectedIndex((i) => (i !== null ? i + 1 : i))
+    }
+  }, [items.length, selectedIndex])
+
   // Lightbox navigation
   const goToPrev = useCallback(() => {
     setSelectedIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : prev))
   }, [])
 
   const goToNext = useCallback(() => {
-    setSelectedIndex((prev) => (prev !== null && prev < items.length - 1 ? prev + 1 : prev))
-  }, [items.length])
+    setSelectedIndex((prev) => {
+      if (prev === null) return prev
+      if (prev < items.length - 1) return prev + 1
+      // At the end of loaded items but more exist — trigger fetch
+      if (hasMore) {
+        wantsNextRef.current = true
+        fetchNextPage()
+      }
+      return prev
+    })
+  }, [items.length, hasMore, fetchNextPage])
 
   // Download handler (backend proxy streams with Content-Disposition: attachment)
   const handleDownload = useCallback(() => {
@@ -589,7 +617,7 @@ export default function GalleryPage() {
                   <ChevronLeft className="h-6 w-6 text-white" />
                 </button>
               )}
-              {selectedIndex < items.length - 1 && (
+              {selectedIndex < totalCount - 1 && (
                 <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Next">
                   <ChevronRight className="h-6 w-6 text-white" />
                 </button>
@@ -626,7 +654,7 @@ export default function GalleryPage() {
 
                 {/* Position indicator */}
                 <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 font-medium z-10">
-                  {selectedIndex + 1} / {items.length}
+                  {selectedIndex + 1} / {totalCount}
                 </span>
               </div>
 
@@ -708,7 +736,7 @@ export default function GalleryPage() {
           )}
 
           {/* Right arrow */}
-          {selectedIndex < items.length - 1 && (
+          {selectedIndex < totalCount - 1 && (
             <button onClick={goToNext} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-3 transition-colors" aria-label="Next">
               <ChevronRight className="h-7 w-7 text-white" />
             </button>
@@ -729,7 +757,7 @@ export default function GalleryPage() {
 
           {/* Position indicator */}
           <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 font-medium">
-            {selectedIndex + 1} / {items.length}
+            {selectedIndex + 1} / {totalCount}
           </span>
         </div>
       )}

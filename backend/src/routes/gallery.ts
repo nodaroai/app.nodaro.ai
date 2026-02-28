@@ -80,6 +80,26 @@ export async function galleryRoutes(app: FastifyInstance) {
     const typeFilter = query.type as string | undefined
     const cursor = query.cursor as string | undefined
 
+    // Count query (only on first page — when no cursor)
+    let totalCount: number | null = null
+    if (!cursor) {
+      let countQuery = supabase
+        .from("jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("is_public", true)
+        .eq("status", "completed")
+        .not("output_data", "is", null)
+
+      if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
+        countQuery = countQuery.in("job_type", jobNamesForType(typeFilter))
+      } else {
+        countQuery = countQuery.in("job_type", [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS])
+      }
+
+      const { count } = await countQuery
+      totalCount = count
+    }
+
     // We need `limit` valid items after JS-side filtering (blocked prompts,
     // missing output URLs). Fetch in batches, over-fetching to compensate for
     // items that get filtered out.
@@ -189,6 +209,7 @@ export async function galleryRoutes(app: FastifyInstance) {
     return reply.send({
       data: items,
       nextCursor,
+      ...(totalCount !== null && { totalCount }),
     })
   })
 
