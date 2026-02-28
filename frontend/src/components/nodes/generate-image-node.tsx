@@ -11,8 +11,6 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
-
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
@@ -37,8 +35,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [extractOpen, setExtractOpen] = useState(false)
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
-  const { zoom } = useCanvasZoom()
-  const useFull = zoom >= 0.6
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? "nano-banana",
     nodeData as unknown as Record<string, unknown>,
@@ -106,8 +102,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               alt="Generated"
               className="w-full object-cover rounded-xl cursor-pointer"
               style={{ minHeight: 180 }}
-              thumbnail={!useFull}
-              thumbnailWidth={320}
+              thumbnail={false}
               onClick={(e) => { e.stopPropagation(); console.log('click image', previewOpen); setPreviewOpen(true); console.log('after set', previewOpen) }}
             />
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
