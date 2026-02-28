@@ -73,12 +73,14 @@ export async function galleryRoutes(app: FastifyInstance) {
    *   cursor - ISO timestamp cursor for pagination (completed_at of last item)
    *   limit  - items per page (default 20, max 50)
    *   type   - optional filter: "image" | "video" | "audio"
+   *   userId - optional: filter to only this user's items
    */
   app.get("/v1/gallery", async (req, reply) => {
     const query = req.query as Record<string, string | undefined>
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? "20", 10) || 20))
     const typeFilter = query.type as string | undefined
     const cursor = query.cursor as string | undefined
+    const userIdFilter = query.userId as string | undefined
 
     // Count query (only on first page — when no cursor)
     let totalCount: number | null = null
@@ -89,6 +91,10 @@ export async function galleryRoutes(app: FastifyInstance) {
         .eq("is_public", true)
         .eq("status", "completed")
         .not("output_data", "is", null)
+
+      if (userIdFilter) {
+        countQuery = countQuery.eq("user_id", userIdFilter)
+      }
 
       if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
         countQuery = countQuery.in("job_type", jobNamesForType(typeFilter))
@@ -130,6 +136,10 @@ export async function galleryRoutes(app: FastifyInstance) {
         .not("output_data", "is", null)
         .order("completed_at", { ascending: false })
         .limit(fetchCount)
+
+      if (userIdFilter) {
+        dbQuery = dbQuery.eq("user_id", userIdFilter)
+      }
 
       if (pageCursor) {
         dbQuery = dbQuery.lt("completed_at", pageCursor)

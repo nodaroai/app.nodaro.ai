@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog"
 import { useGalleryInfinite, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
 import { useBackToClose } from "@/hooks/use-back-to-close"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
 
 type FilterType = "all" | "image" | "video" | "audio"
@@ -275,11 +277,19 @@ export default function GalleryPage() {
   const location = useLocation()
   const isEmbedded = location.pathname.startsWith("/_")
   const [filter, setFilter] = useState<FilterType>("all")
+  const [myItemsOnly, setMyItemsOnly] = useState(() => {
+    try { return localStorage.getItem("gallery:myItemsOnly") === "true" } catch { return false }
+  })
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
+  const toggleMyItems = useCallback((checked: boolean) => {
+    setMyItemsOnly(checked)
+    try { localStorage.setItem("gallery:myItemsOnly", String(checked)) } catch { /* noop */ }
+  }, [])
+
   // React Query hooks
-  const { data, isLoading: loading, isFetchingNextPage: loadingMore, hasNextPage: hasMore, fetchNextPage } = useGalleryInfinite(filter)
+  const { data, isLoading: loading, isFetchingNextPage: loadingMore, hasNextPage: hasMore, fetchNextPage } = useGalleryInfinite(filter, myItemsOnly && user?.id ? user.id : undefined)
   const reportMutation = useReportGalleryItemMutation()
   const deleteMutation = useDeleteGalleryItemMutation()
 
@@ -475,8 +485,8 @@ export default function GalleryPage() {
       </section>
 
       {/* Filter Tabs */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800 p-1 bg-card w-fit mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800 p-1 bg-card w-fit">
           {FILTERS.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
@@ -493,6 +503,14 @@ export default function GalleryPage() {
             </button>
           ))}
         </div>
+        {user && (
+          <div className="flex items-center gap-2">
+            <Switch id="my-items" checked={myItemsOnly} onCheckedChange={toggleMyItems} />
+            <Label htmlFor="my-items" className="text-sm text-muted-foreground cursor-pointer select-none">
+              My items
+            </Label>
+          </div>
+        )}
       </div>
 
       {/* Gallery Grid */}

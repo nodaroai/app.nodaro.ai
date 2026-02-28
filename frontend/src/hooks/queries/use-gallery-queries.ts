@@ -15,12 +15,13 @@ export interface GalleryItem {
   readonly model: string | null
 }
 
-export function useGalleryInfinite(filter: string) {
+export function useGalleryInfinite(filter: string, userId?: string) {
   return useInfiniteQuery({
-    queryKey: queryKeys.gallery.list(filter),
+    queryKey: queryKeys.gallery.list(userId ? `${filter}:user:${userId}` : filter),
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams({ limit: "20" })
       if (filter && filter !== "all") params.set("type", filter)
+      if (userId) params.set("userId", userId)
       if (pageParam) params.set("cursor", pageParam)
       const res = await fetch(`/v1/gallery?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch gallery")
