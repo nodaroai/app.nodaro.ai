@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo, lazy, Suspense } from "react"
+import { useState, useMemo, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Sparkles, Trash2, Info } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

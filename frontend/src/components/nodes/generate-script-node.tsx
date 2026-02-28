@@ -1,6 +1,7 @@
 "use client"
 
-import { memo, useState, lazy, Suspense } from "react"
+import { memo, useState, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2 } from "lucide-react"
 import { BaseNode } from "./base-node"

@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense, type TouchEvent as ReactTouchEvent } from "react"
+import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { Button } from "@/components/ui/button"

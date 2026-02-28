@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useState, useMemo, useRef, lazy, Suspense } from "react"
+import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import {
   ReactFlow,
   MiniMap,

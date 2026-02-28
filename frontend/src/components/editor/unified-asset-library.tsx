@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo, lazy, Suspense } from "react"
+import { useState, useCallback, useMemo, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { createPortal } from "react-dom"
 import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, SmilePlus, FolderOpen } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"

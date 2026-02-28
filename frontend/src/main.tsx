@@ -8,7 +8,8 @@ if (window.history.length <= 2 && window.location.pathname !== "/projects") {
   window.history.pushState(null, "", window.location.pathname + window.location.search + window.location.hash)
 }
 
-import { StrictMode, lazy, Suspense } from "react"
+import { StrictMode, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { createRoot } from "react-dom/client"
 import { RouterProvider } from "react-router-dom"
 import { QueryClientProvider } from "@tanstack/react-query"
