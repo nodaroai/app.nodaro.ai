@@ -30,20 +30,6 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution"> =
   "flux-pro-i2i": "resolution",
 }
 
-// For resolution-based variable pricing, only these values trigger a different cost.
-export const VARIABLE_PRICING_RESOLUTION_TRIGGERS: Record<string, string[]> = {
-  "nano-banana-pro": ["4K"],
-  "flux": ["2K"],
-  "flux-flex": ["2K"],
-  "flux-i2i": ["2K"],
-  "flux-pro-i2i": ["2K"],
-}
-
-// For quality-based variable pricing, only these values trigger a different cost.
-export const VARIABLE_PRICING_QUALITY_TRIGGERS: Record<string, string[]> = {
-  "gpt-image": ["high"],
-  "gpt-image-i2i": ["high"],
-}
 
 // Models where quality=high triggers composite credit identifier
 export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream"])

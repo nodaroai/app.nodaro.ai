@@ -8,9 +8,8 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs"
 import { buildImagePrompt } from "@nodaro-shared/prompt-builder"
-import type { CharacterDef } from "@nodaro-shared/types"
 import { buildCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
-export { buildCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
+import type { CharacterDef } from "@nodaro-shared/types"
 
 // ---------------------------------------------------------------------------
 // Character definitions + prompt template types (from workflow settings)
@@ -281,7 +280,7 @@ export function buildPayload(
       const v2vProvider = (data.provider as string) ?? "wan"
       return {
         jobName: "video-to-video",
-        queueName: "video-generation" as const,
+        queueName: "video-generation",
         modelIdentifier: v2vProvider,
         payload: {
           jobId,

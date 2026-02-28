@@ -255,18 +255,6 @@ export const IMAGE_QUALITY_OPTIONS: Record<string, { value: string; label: strin
   ],
 }
 
-// =============================================================================
-// VARIABLE PRICING — which setting affects credit cost per model
-// Used by getModelIdentifier() to build composite credit identifiers like "gpt-image:high"
-// =============================================================================
-
-// Variable pricing constants — re-exported from shared package (single source of truth)
-export {
-  VARIABLE_PRICING_MODELS,
-  VARIABLE_PRICING_RESOLUTION_TRIGGERS,
-  VARIABLE_PRICING_QUALITY_TRIGGERS,
-} from "@nodaro-shared/model-constants"
-
 // Kling 3.0 supports continuous durations from 3s to 15s
 export const KLING3_DURATIONS = Array.from({ length: 13 }, (_, i) => i + 3)
 

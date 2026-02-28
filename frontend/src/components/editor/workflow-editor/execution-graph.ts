@@ -1,5 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildScenePrompt } from "@/lib/prompt-builder";
+import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -615,8 +616,6 @@ export function buildAutoComposition(
   };
 }
 
-import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs";
-
 export function collectAncestorRefs(
   nodeId: string,
   nodes: WorkflowNode[],
@@ -625,9 +624,9 @@ export function collectAncestorRefs(
 ): string[] {
   return sharedCollectAncestorRefs(
     nodeId,
-    nodes as Array<{ id: string; type: string; data: Record<string, unknown> }>,
+    nodes,
     edges,
-    (src) => extractNodeOutput(nodes.find((n) => n.id === src.id)!),
+    (src) => extractNodeOutput(src),
     visited,
   );
 }

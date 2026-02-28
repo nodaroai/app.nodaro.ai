@@ -1,10 +1,5 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import {
-  VARIABLE_PRICING_MODELS,
-  VARIABLE_PRICING_RESOLUTION_TRIGGERS,
-  VARIABLE_PRICING_QUALITY_TRIGGERS,
-} from "./model-options"
 import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
@@ -128,32 +123,12 @@ export function getModelIdentifier(node: WorkflowNode): string {
 
 /**
  * Build composite credit model identifier from provider + node data.
- * Thin wrapper over shared buildCreditModelIdentifier — extracts quality/resolution from data.
+ * Extracts quality/resolution from data and delegates to the shared function.
  */
 export function buildCreditModelIdentifier(provider: string, data: Record<string, unknown>): string {
-  const pricingType = VARIABLE_PRICING_MODELS[provider]
-  if (!pricingType) return provider
-
-  const quality = data.quality as string | undefined
-  const resolution = data.resolution as string | undefined
-
-  // Use shared function for the core logic, but still check triggers here
-  // because the frontend uses a table-driven approach (triggers arrays)
-  // while the shared function uses hardcoded sets (backend approach).
-  // Delegate to shared for the actual identifier construction.
-  if (pricingType === "quality") {
-    const triggers = VARIABLE_PRICING_QUALITY_TRIGGERS[provider]
-    if (quality && triggers?.includes(quality)) {
-      return sharedBuildCreditModelIdentifier(provider, quality, resolution)
-    }
-  }
-
-  if (pricingType === "resolution") {
-    const triggers = VARIABLE_PRICING_RESOLUTION_TRIGGERS[provider]
-    if (resolution && triggers?.includes(resolution)) {
-      return sharedBuildCreditModelIdentifier(provider, quality, resolution)
-    }
-  }
-
-  return provider
+  return sharedBuildCreditModelIdentifier(
+    provider,
+    data.quality as string | undefined,
+    data.resolution as string | undefined,
+  )
 }

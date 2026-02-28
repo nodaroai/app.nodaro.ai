@@ -59,11 +59,13 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
   const charDescs = characterDefs
     .filter((c) => c.type === "description" && c.description)
     .map((c) => {
-      const templateKey =
-        c.category === "face" ? "face-description"
-          : c.category === "location" ? "location-description"
-            : c.category === "object" ? "object-description"
-              : "character-description"
+      let templateKey: string
+      switch (c.category) {
+        case "face": templateKey = "face-description"; break
+        case "location": templateKey = "location-description"; break
+        case "object": templateKey = "object-description"; break
+        default: templateKey = "character-description"; break
+      }
       const template = resolveTemplate(templateKey, userTemplates, flowTemplates)
       return applyTemplate(template, {
         name: c.name,
