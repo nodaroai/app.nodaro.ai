@@ -175,6 +175,16 @@ export function CanvasToolbar({
           disabled={!canRedo}
         />
         <MobileToolbarButton
+          icon={<Package className="w-5 h-5" />}
+          label="My Library"
+          onClick={onAssetLibrary}
+        />
+        <MobileToolbarButton
+          icon={<Film className="w-5 h-5" />}
+          label="Media Library"
+          onClick={onMediaLibrary}
+        />
+        <MobileToolbarButton
           icon={<Wand2 className="w-5 h-5" />}
           label="Tidy Up"
           onClick={onTidyUp}
