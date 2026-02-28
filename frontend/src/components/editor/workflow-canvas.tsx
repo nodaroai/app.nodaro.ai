@@ -784,7 +784,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           zoomOnPinch
           panOnDrag
           minZoom={0.2}
-          maxZoom={2}
+          maxZoom={8}
           proOptions={{ hideAttribution: true }}
         >
           {!isMobile && showMiniMap && (

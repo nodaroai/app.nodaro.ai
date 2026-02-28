@@ -258,6 +258,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       type,
       position,
       data: nodeData,
+      ...(definition.width ? { width: definition.width } : {}),
+      ...(definition.height ? { height: definition.height } : {}),
       // Sticky notes should appear behind other nodes
       ...(type === "sticky-note" ? { zIndex: -1 } : {}),
     }

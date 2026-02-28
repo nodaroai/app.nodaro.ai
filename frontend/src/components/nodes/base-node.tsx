@@ -32,7 +32,6 @@ interface BaseNodeProps {
   readonly listProgressPercent?: number
   readonly toolbarActions?: ReactNode
   readonly hideHeader?: boolean
-  readonly bottomToolbar?: ReactNode
 }
 
 // Light mode: white bg with colored top accent line, Dark mode: category-colored borders
@@ -101,7 +100,6 @@ function BaseNodeComponent({
   listProgressPercent,
   toolbarActions,
   hideHeader = false,
-  bottomToolbar,
 }: BaseNodeProps) {
   const [isHovered, setIsHovered] = useState(false)
   const { isMobile } = useMobileCanvas()
@@ -127,7 +125,7 @@ function BaseNodeComponent({
   }
 
   return (
-    <div style={{ minWidth: '100%', minHeight: '100%', padding: '12px', margin: '-12px' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div style={{ minWidth: '100%', minHeight: '100%', padding: '5px', margin: '-5px' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <NodeToolbar isVisible={isHovered} position={Position.Top} offset={4} className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1">
         <button
           className="hover:bg-white/10 rounded px-2 py-1 text-white/70 hover:text-white"
@@ -138,11 +136,6 @@ function BaseNodeComponent({
         </button>
         {toolbarActions}
       </NodeToolbar>
-      {bottomToolbar && (
-        <NodeToolbar position={Position.Bottom} isVisible={isHovered} offset={8} align="center" className="flex gap-1">
-          {bottomToolbar}
-        </NodeToolbar>
-      )}
       {!isMobile && (
         <NodeResizer
           minWidth={minWidth}
