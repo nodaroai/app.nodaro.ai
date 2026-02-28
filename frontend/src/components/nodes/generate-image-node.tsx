@@ -127,8 +127,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, top: "75%" },
-        { id: "image", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-14px' }, hideHandle: true },
+        { id: "in", type: "target", position: Position.Left, top: "calc(75% + 33px)", customStyle: { top: 'calc(75% + 33px)', left: '-3px' } },
+        { id: "image", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="relative w-full group" style={{ minHeight: 180 }}>
@@ -254,7 +254,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     {/* Image output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(25% - 14px)', right: '-14px' }}
+      style={{ top: 'calc(25% - 47px)', right: '-29px' }}
     >
       <ImageIcon className="w-3.5 h-3.5 text-white" />
     </div>
