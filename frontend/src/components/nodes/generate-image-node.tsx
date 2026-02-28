@@ -2,7 +2,7 @@
 
 import { memo, useState, lazy, Suspense } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, X, Scissors } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, X, Scissors, Settings, LayoutGrid, Expand } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -21,6 +21,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -36,6 +37,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [extractOpen, setExtractOpen] = useState(false)
+  const [showThumbnails, setShowThumbnails] = useState(false)
   const [extractedRefs, setExtractedRefs] = useState<readonly ExtractedReference[]>([])
   const { zoom } = useCanvasZoom()
   const useFull = zoom >= 0.8
@@ -68,6 +70,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <>
+    {/* Floating label above node */}
+    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
+      <ImageIcon className="w-3.5 h-3.5" />
+      <span className="truncate">{nodeData.label}</span>
+    </div>
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -81,7 +88,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       hideHeader
       bottomToolbarContent={
-        results.length > 1 ? (
+        results.length > 1 && showThumbnails ? (
           <div className="flex gap-1 bg-black/70 backdrop-blur-sm rounded-lg px-1.5 py-1">
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
@@ -135,6 +142,17 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         {/* Image state */}
         {status !== "running" && activeUrl && (
           <>
+            {results.length > 1 && (
+              <button
+                type="button"
+                className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-md z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+                title="Show versions"
+              >
+                <LayoutGrid className="w-3 h-3" />
+                <span className="text-[11px] font-medium">{results.length}</span>
+              </button>
+            )}
             <CachedImage
               src={activeUrl}
               alt="Generated"
@@ -142,13 +160,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               style={{ minHeight: 180 }}
               thumbnail={!useFull}
               thumbnailWidth={320}
-              onClick={(e) => { e.stopPropagation(); console.log('click image', previewOpen); setPreviewOpen(true); console.log('after set', previewOpen) }}
+              onClick={(e) => { e.stopPropagation(); selectNode(id) }}
             />
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 type="button"
                 aria-label="Extract references"
-                className="w-7 h-7 flex items-center justify-center bg-purple-500/80 hover:bg-purple-500 text-white rounded-full shadow-sm"
+                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   setExtractOpen(true)
@@ -161,7 +179,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 <button
                   type="button"
                   aria-label="Remove result"
-                  className="w-7 h-7 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
+                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)
@@ -172,8 +190,26 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 </button>
               )}
             </div>
+            <button
+              type="button"
+              className="absolute bottom-2 left-2 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+              title="Fullscreen"
+            >
+              <Expand className="w-3.5 h-3.5" />
+            </button>
+            <div className="absolute bottom-2 left-11 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); selectNode(id) }}
+                title="Settings"
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <div className="absolute bottom-8 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <SaveToLibraryButton url={activeUrl} type="image" />
+              <SaveToLibraryButton url={activeUrl} type="image" className="bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" />
             </div>
           </>
         )}
@@ -199,20 +235,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <ImageIcon className="w-10 h-10" />
           </div>
         )}
-
-
-        {/* Bottom metadata overlay */}
-        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 flex items-center justify-between bg-black/50 backdrop-blur-sm rounded-b-xl opacity-0 group-hover:opacity-100 transition-none">
-          <span className="text-[11px] text-white/80 truncate">{nodeData.label}</span>
-          <div className="flex items-center gap-1.5">
-            {attachedCount > 0 && (
-              <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400">
-                {attachedCount} ref{attachedCount !== 1 ? "s" : ""}
-              </span>
-            )}
-            <span className="text-[11px] text-white/60">{nodeData.aspectRatio}</span>
-          </div>
-        </div>
       </div>
     </BaseNode>
     {activeUrl && (
