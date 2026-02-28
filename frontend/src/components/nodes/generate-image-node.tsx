@@ -2,7 +2,7 @@
 
 import { memo, useState, lazy, Suspense } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, X, Scissors, Settings, LayoutGrid, Expand } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, X, Scissors, Settings, LayoutGrid, Expand, Download } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -208,6 +208,20 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 <Settings className="w-3.5 h-3.5" />
               </button>
             </div>
+            <button
+              type="button"
+              className="absolute bottom-2 left-20 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation()
+                const a = document.createElement('a')
+                a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`
+                a.download = `${nodeData.label || 'image'}.png`
+                a.click()
+              }}
+              title="Download"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
             <div className="absolute bottom-8 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <SaveToLibraryButton url={activeUrl} type="image" className="bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" />
             </div>

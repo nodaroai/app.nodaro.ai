@@ -6,6 +6,7 @@ import { config } from "../lib/config.js"
 
 const proxyQuery = z.object({
   url: safeUrlSchema,
+  download: z.string().optional(),
 })
 
 export async function imageProxyRoutes(app: FastifyInstance) {
@@ -47,6 +48,7 @@ export async function imageProxyRoutes(app: FastifyInstance) {
       "Cache-Control": "public, max-age=31536000, immutable",
       "Access-Control-Allow-Origin": "*",
       ...(contentLength ? { "Content-Length": contentLength } : {}),
+      ...(parsed.data.download === '1' ? { "Content-Disposition": 'attachment; filename="image.png"' } : {}),
     })
     const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
     nodeStream.pipe(reply.raw)
