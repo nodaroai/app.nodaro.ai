@@ -11,8 +11,10 @@ interface HandleConfig {
   readonly id: string
   readonly type: "source" | "target"
   readonly position: Position
-  readonly label: string
+  readonly label?: string
   readonly top?: string
+  readonly hideHandle?: boolean
+  readonly customStyle?: React.CSSProperties
 }
 
 interface BaseNodeProps {
@@ -39,7 +41,7 @@ interface BaseNodeProps {
 const CATEGORY_STYLES: Record<string, string> = {
   input: "bg-white border-[#E2E8F0] dark:border-[#38BDF8] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   parameter: "bg-white border-[#E2E8F0] dark:border-[#818CF8] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  ai: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  ai: "bg-white border-[#E2E8F0] dark:border-[#333333] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   processing: "bg-white border-[#E2E8F0] dark:border-[#475569] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   output: "bg-white border-[#E2E8F0] dark:border-green-500 dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   scene: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
@@ -155,6 +157,7 @@ function BaseNodeComponent({
       <div
         className={cn(
           "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground min-h-full overflow-hidden",
+          "dark:hover:border-[#ff0073] transition-colors duration-200",
           CATEGORY_STYLES[category],
           selected && "ring-2 ring-primary shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",
           selected && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
@@ -278,7 +281,10 @@ function BaseNodeComponent({
             type={h.type}
             position={h.position}
             className="!w-9 !h-9 !bg-transparent !border-0 touch-manipulation"
-            style={h.top ? { top: h.top } : undefined}
+            style={{
+              ...(h.customStyle ?? (h.top ? { top: h.top } : undefined)),
+              ...(h.hideHandle ? { background: 'transparent', opacity: 0 } : undefined),
+            }}
           />
           {h.label && h.top && (
             <span

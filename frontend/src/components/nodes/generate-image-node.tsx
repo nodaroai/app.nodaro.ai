@@ -69,7 +69,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <>
+    <div className="relative">
     {/* Floating label above node */}
     <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
       <ImageIcon className="w-3.5 h-3.5" />
@@ -127,8 +127,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "image", type: "source", position: Position.Right, label: "Image" },
+        { id: "in", type: "target", position: Position.Left, top: "75%" },
+        { id: "image", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-14px' }, hideHandle: true },
       ]}
     >
       <div className="relative w-full group" style={{ minHeight: 180 }}>
@@ -237,6 +237,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
+    {/* Image output handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
+      style={{ top: 'calc(25% - 14px)', right: '-14px' }}
+    >
+      <ImageIcon className="w-3.5 h-3.5 text-white" />
+    </div>
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}
@@ -277,7 +284,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         />
       </Suspense>
     )}
-    </>
+    </div>
   )
 }
 
