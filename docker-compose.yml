@@ -36,7 +36,7 @@ services:
 
   worker:
     build: ./backend
-    command: node dist/worker.js
+    command: node dist/backend/src/worker.js
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}

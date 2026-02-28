@@ -6,10 +6,10 @@
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "./types.js"
 
 // Shared logic from packages/shared — single source of truth
-import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs"
-import { buildImagePrompt } from "@nodaro-shared/prompt-builder"
-import { buildCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
-import type { CharacterDef } from "@nodaro-shared/types"
+import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
+import { buildImagePrompt } from "../../../../packages/shared/src/prompt-builder.js"
+import { buildCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
+import type { CharacterDef } from "../../../../packages/shared/src/types.js"
 
 // ---------------------------------------------------------------------------
 // Character definitions + prompt template types (from workflow settings)

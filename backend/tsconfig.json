@@ -15,8 +15,7 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@nodaro-shared/*": ["../packages/shared/src/*"]
+      "@/*": ["src/*"]
     }
   },
   "include": ["src/**/*", "../packages/shared/src/**/*"],
