@@ -610,19 +610,7 @@ export default function GalleryPage() {
         >
           <DialogTitle className="sr-only">Preview</DialogTitle>
           {selectedItem && selectedIndex !== null && (
-            <div className="relative flex flex-col h-full sm:h-auto">
-              {/* Left/Right arrows — centered on screen (mobile) or media (desktop) */}
-              {selectedIndex > 0 && (
-                <button onClick={goToPrev} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Previous">
-                  <ChevronLeft className="h-6 w-6 text-white" />
-                </button>
-              )}
-              {selectedIndex < totalCount - 1 && (
-                <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Next">
-                  <ChevronRight className="h-6 w-6 text-white" />
-                </button>
-              )}
-
+            <div className="flex flex-col h-full sm:h-auto">
               {/* Media section with swipe support */}
               <div
                 className="relative bg-black flex items-center justify-center flex-1 min-h-0 sm:flex-none sm:min-h-[300px] sm:max-h-[70vh]"
@@ -637,6 +625,18 @@ export default function GalleryPage() {
                   <div className="p-8 w-full">
                     <audio key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="w-full" />
                   </div>
+                )}
+
+                {/* Left/Right arrows — fixed to viewport center on mobile, absolute to media center on desktop */}
+                {selectedIndex > 0 && (
+                  <button onClick={goToPrev} className="fixed sm:absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Previous">
+                    <ChevronLeft className="h-6 w-6 text-white" />
+                  </button>
+                )}
+                {selectedIndex < totalCount - 1 && (
+                  <button onClick={goToNext} className="fixed sm:absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Next">
+                    <ChevronRight className="h-6 w-6 text-white" />
+                  </button>
                 )}
 
                 {/* Top-right buttons: download, fullscreen, close */}
