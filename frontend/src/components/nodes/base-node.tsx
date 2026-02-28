@@ -32,6 +32,7 @@ interface BaseNodeProps {
   readonly listProgressPercent?: number
   readonly toolbarActions?: ReactNode
   readonly hideHeader?: boolean
+  readonly bottomToolbar?: ReactNode
 }
 
 // Light mode: white bg with colored top accent line, Dark mode: category-colored borders
@@ -100,6 +101,7 @@ function BaseNodeComponent({
   listProgressPercent,
   toolbarActions,
   hideHeader = false,
+  bottomToolbar,
 }: BaseNodeProps) {
   const [isHovered, setIsHovered] = useState(false)
   const { isMobile } = useMobileCanvas()
@@ -136,6 +138,11 @@ function BaseNodeComponent({
         </button>
         {toolbarActions}
       </NodeToolbar>
+      {bottomToolbar && (
+        <NodeToolbar position={Position.Bottom} isVisible={isHovered} offset={8} align="center" className="flex gap-1">
+          {bottomToolbar}
+        </NodeToolbar>
+      )}
       {!isMobile && (
         <NodeResizer
           minWidth={minWidth}

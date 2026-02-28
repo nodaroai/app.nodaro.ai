@@ -76,6 +76,27 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       hideHeader
+      bottomToolbar={results.length > 1 ? (
+        <div className="flex gap-1 p-1 bg-black/60 backdrop-blur-sm rounded-lg">
+          {results.slice(0, 5).map((r, i) => (
+            <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
+              <CachedImage
+                src={r.url}
+                alt={`Result ${i + 1}`}
+                className={`w-8 h-8 object-cover rounded cursor-pointer border border-white/20 ${
+                  i === activeIndex ? "opacity-100 ring-2 ring-white" : "opacity-60 hover:opacity-90"
+                }`}
+                thumbnail
+                thumbnailWidth={80}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      ) : undefined}
       toolbarActions={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
@@ -103,7 +124,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               className="w-full object-cover rounded-xl cursor-pointer"
               style={{ minHeight: 180 }}
               thumbnail={false}
-              onClick={(e) => { e.stopPropagation(); console.log('click image', previewOpen); setPreviewOpen(true); console.log('after set', previewOpen) }}
+              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
             />
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
@@ -161,41 +182,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Multiple results thumbnails */}
-        {results.length > 1 && (
-          <div className="absolute bottom-8 left-2 flex gap-1">
-            {results.slice(0, 5).map((r, i) => (
-              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <CachedImage
-                  src={r.url}
-                  alt={`Result ${i + 1}`}
-                  className={`w-8 h-8 object-cover rounded cursor-pointer border border-white/20 ${
-                    i === activeIndex
-                      ? "opacity-100 ring-2 ring-white"
-                      : "opacity-60 hover:opacity-90"
-                  }`}
-                  thumbnail
-                  thumbnailWidth={80}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
-                  }}
-                />
-                <button
-                  type="button"
-                  aria-label="Remove"
-                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteConfirm(i)
-                  }}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Bottom metadata overlay */}
         <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 flex items-center justify-between bg-black/50 backdrop-blur-sm rounded-b-xl opacity-0 group-hover:opacity-100 transition-none">
