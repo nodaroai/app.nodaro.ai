@@ -5,19 +5,12 @@
 
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "./types.js"
 
-// Models that support native negative_prompt parameter (not appended to prompt)
-const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
-  "imagen4", "imagen4-fast", "imagen4-ultra",
-  "ideogram", "ideogram-remix",
-  "qwen", "qwen-edit",
-])
-
-// Models that support reference image uploads
-const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
-  "nano-banana",
-  "nano-banana-pro",
-  "ideogram",
-])
+// Shared logic from packages/shared — single source of truth
+import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs"
+import { buildImagePrompt } from "@nodaro-shared/prompt-builder"
+import type { CharacterDef } from "@nodaro-shared/types"
+import { buildCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
+export { buildCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
 
 // ---------------------------------------------------------------------------
 // Character definitions + prompt template types (from workflow settings)
@@ -46,45 +39,8 @@ export interface PayloadBuildContext {
 }
 
 // ---------------------------------------------------------------------------
-// Default prompt templates (matching frontend SYSTEM_PROMPT_TEMPLATES)
+// Ancestor reference image collection — delegates to shared implementation
 // ---------------------------------------------------------------------------
-
-const DEFAULT_TEMPLATES: Record<string, string> = {
-  "character-description": "Include character '{name}': {description}.",
-  "object-description": "Include object '{name}': {description}.",
-  "location-description": "Include location '{name}': {description}.",
-  "face-description":
-    "Include the exact face and facial features of '{name}' from the reference image. Maintain perfect likeness and facial identity.",
-  "generate-image-wrapper": "{userPrompt}\n{assetDescriptions}",
-}
-
-function resolveTemplate(
-  key: string,
-  userTemplates?: Record<string, string>,
-  flowTemplates?: Record<string, string>,
-): string {
-  return flowTemplates?.[key] ?? userTemplates?.[key] ?? DEFAULT_TEMPLATES[key] ?? ""
-}
-
-function applyTemplate(template: string, vars: Record<string, string>): string {
-  return Object.entries(vars).reduce(
-    (result, [key, value]) => result.replaceAll(`{${key}}`, value || ""),
-    template,
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Ancestor reference image collection (matching frontend collectAncestorRefs)
-// ---------------------------------------------------------------------------
-
-const IMAGE_REF_TYPES = new Set([
-  "upload-image", "face", "character", "object", "location",
-  "generate-image", "edit-image", "image-to-image",
-])
-
-const PASSTHROUGH_TYPES = new Set([
-  "ai-writer", "split-text", "combine-text", "text-prompt", "loop", "list",
-])
 
 function collectAncestorRefs(
   nodeId: string,
@@ -93,22 +49,13 @@ function collectAncestorRefs(
   nodeStates: Record<string, NodeExecutionState>,
   visited = new Set<string>(),
 ): string[] {
-  if (visited.has(nodeId)) return []
-  visited.add(nodeId)
-  const refs: string[] = []
-  const incoming = edges.filter((e) => e.target === nodeId)
-  for (const edge of incoming) {
-    const src = nodes.find((n) => n.id === edge.source)
-    if (!src) continue
-    if (IMAGE_REF_TYPES.has(src.type)) {
-      const url = nodeStates[src.id]?.output?.imageUrl
-      if (url?.trim()) refs.push(url.trim())
-    }
-    if (PASSTHROUGH_TYPES.has(src.type)) {
-      refs.push(...collectAncestorRefs(src.id, nodes, edges, nodeStates, visited))
-    }
-  }
-  return refs
+  return sharedCollectAncestorRefs(
+    nodeId,
+    nodes,
+    edges,
+    (src) => nodeStates[src.id]?.output?.imageUrl,
+    visited,
+  )
 }
 
 interface PayloadResult {
@@ -120,34 +67,6 @@ interface PayloadResult {
   payload: Record<string, unknown>
   /** Model identifier for credit reservation */
   modelIdentifier: string
-}
-
-/**
- * Compute composite model identifier for variable credit pricing.
- */
-const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream"])
-const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux-flex", "flux-i2i"])
-const IDEOGRAM_PROVIDERS = new Set(["ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe"])
-
-export function buildCreditModelIdentifier(
-  provider: string,
-  quality?: string,
-  resolution?: string,
-): string {
-  if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
-    return `${provider}:high`
-  }
-  if (TWO_K_RESOLUTION_PROVIDERS.has(provider) && resolution === "2K") {
-    return `${provider}:2K`
-  }
-  if (provider === "nano-banana-pro" && resolution === "4K") {
-    return `${provider}:4K`
-  }
-  if (IDEOGRAM_PROVIDERS.has(provider)) {
-    if (quality === "TURBO") return `${provider}:TURBO`
-    if (quality === "QUALITY") return `${provider}:QUALITY`
-  }
-  return provider
 }
 
 /** Shorthand for FFmpeg nodes that all share queueName + modelIdentifier. */
@@ -193,13 +112,12 @@ export function buildPayload(
       const provider = (data.provider as string) ?? "nano-banana"
       const settings = buildCtx?.settings
 
-      // Collect reference images from all sources (matching frontend behavior)
+      // Collect reference images from all sources
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
       const extractedRefs = data.extractedReferenceUrls as string[] | undefined
       const nodeRefUrl = data.referenceImageUrl as string | undefined
 
-      // Character definition refs + descriptions
       const charIds = (data.characterDefinitionIds as string[]) ?? []
       const charDefs = (settings?.characterDefinitions ?? []).filter(
         (c) => charIds.includes(c.id),
@@ -207,63 +125,33 @@ export function buildPayload(
       const charRefUrls = charDefs
         .filter((c) => c.type === "reference" && c.referenceImageUrl)
         .map((c) => c.referenceImageUrl as string)
-      const flowTemplates = settings?.flowPromptTemplates
-      const charDescs = charDefs
-        .filter((c) => c.type === "description" && c.description)
-        .map((c) => {
-          const templateKey =
-            c.category === "face" ? "face-description"
-              : c.category === "location" ? "location-description"
-                : c.category === "object" ? "object-description"
-                  : "character-description"
-          const template = resolveTemplate(templateKey, undefined, flowTemplates)
-          return applyTemplate(template, {
-            name: c.name,
-            description: c.description || "",
-          })
-        })
 
-      const refImages = [
+      const directRefs = [
         ...(nodeRefUrl ? [nodeRefUrl] : []),
         ...(chainRefs ?? []),
         ...(extractedRefs ?? []),
         ...charRefUrls,
       ]
 
-      // Ancestor refs fallback (traverse upstream for image-producing nodes)
-      if (refImages.length === 0 && buildCtx?.nodes && buildCtx?.edges && buildCtx?.nodeStates) {
-        refImages.push(
-          ...collectAncestorRefs(node.id, buildCtx.nodes, buildCtx.edges, buildCtx.nodeStates),
-        )
-      }
+      // Ancestor refs fallback
+      const ancestorRefs = directRefs.length === 0 && buildCtx?.nodes && buildCtx?.edges && buildCtx?.nodeStates
+        ? collectAncestorRefs(node.id, buildCtx.nodes, buildCtx.edges, buildCtx.nodeStates)
+        : []
 
-      // Build prompt
-      let prompt = (resolvedInputs.prompt || (data.prompt as string) || "") as string
-      // Wrap with character descriptions
-      if (charDescs.length > 0) {
-        const wrapperTemplate = resolveTemplate("generate-image-wrapper", undefined, flowTemplates)
-        prompt = applyTemplate(wrapperTemplate, {
-          userPrompt: prompt,
-          assetDescriptions: charDescs.join(" "),
-        })
-      }
-      // Append style to prompt (matching frontend behavior)
-      const styleText = typeof data.style === "string" ? data.style.trim() : ""
-      if (styleText) prompt += `\nStyle: ${styleText}`
-      // Handle negative prompt: native support vs prompt-appended
-      const negPrompt = typeof data.negativePrompt === "string" ? data.negativePrompt.trim() : ""
-      let nativeNegativePrompt: string | undefined
-      if (negPrompt) {
-        if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
-          nativeNegativePrompt = negPrompt
-        } else {
-          prompt += `\nAvoid: ${negPrompt}`
-        }
-      }
-      if (prompt.length > 2000) prompt = prompt.slice(0, 1997) + "..."
-      // Only send reference images for models that support them
-      const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
-      const refsToSend = supportsRefs && refImages.length > 0 ? refImages : undefined
+      const rawPrompt = (resolvedInputs.prompt || (data.prompt as string) || "") as string
+
+      // Use shared prompt builder (single source of truth with frontend)
+      const result = buildImagePrompt({
+        prompt: rawPrompt,
+        provider,
+        style: typeof data.style === "string" ? data.style : undefined,
+        negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+        characterDefs: charDefs as CharacterDef[],
+        flowTemplates: settings?.flowPromptTemplates,
+        referenceImageUrls: directRefs,
+        ancestorRefs,
+      })
+
       return {
         jobName: "generate-image",
         queueName: "video-generation",
@@ -274,13 +162,13 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          prompt,
-          referenceImageUrls: refsToSend,
+          prompt: result.prompt,
+          referenceImageUrls: result.referenceImageUrls,
           provider,
           aspectRatio: data.aspectRatio,
           resolution: data.resolution,
           quality: data.quality,
-          negativePrompt: nativeNegativePrompt,
+          negativePrompt: result.nativeNegativePrompt,
           usageLogId,
         },
       }
