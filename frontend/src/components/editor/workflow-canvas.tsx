@@ -518,28 +518,89 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleNodeDragStop = useCallback(() => setDraggingNodeId(null), [])
 
   const handleTidyUp = useCallback(() => {
-    // Simple auto-arrange: sort nodes by type and arrange in a grid
-    const nodesByType: Record<string, typeof nodes> = {}
-    nodes.forEach((node) => {
-      const type = node.type || "unknown"
-      if (!nodesByType[type]) nodesByType[type] = []
-      nodesByType[type].push(node)
-    })
+    const NODE_W = 250 // horizontal spacing between columns
+    const NODE_H = 160 // vertical spacing between rows within a column
+    const START_X = 100
+    const START_Y = 100
+
+    // Separate sticky notes — don't rearrange them
+    const stickyNodes = nodes.filter((n) => n.type === "sticky-note")
+    const graphNodes = nodes.filter((n) => n.type !== "sticky-note")
+
+    if (graphNodes.length === 0) return
+
+    // Build adjacency from edges
+    const children = new Map<string, string[]>()
+    const parents = new Map<string, string[]>()
+    const nodeIds = new Set(graphNodes.map((n) => n.id))
+
+    for (const n of graphNodes) {
+      children.set(n.id, [])
+      parents.set(n.id, [])
+    }
+    for (const e of edges) {
+      if (!nodeIds.has(e.source) || !nodeIds.has(e.target)) continue
+      children.get(e.source)!.push(e.target)
+      parents.get(e.target)!.push(e.source)
+    }
+
+    // Assign columns via longest-path from roots (ensures downstream nodes are always further right)
+    const column = new Map<string, number>()
+    const visited = new Set<string>()
+
+    function assignColumn(id: string): number {
+      if (column.has(id)) return column.get(id)!
+      if (visited.has(id)) return 0 // cycle guard
+      visited.add(id)
+      const parentCols = (parents.get(id) ?? []).map(assignColumn)
+      const col = parentCols.length > 0 ? Math.max(...parentCols) + 1 : 0
+      column.set(id, col)
+      return col
+    }
+
+    for (const n of graphNodes) assignColumn(n.id)
+
+    // Group nodes by column, preserve relative vertical order from original positions
+    const columns = new Map<number, typeof graphNodes>()
+    for (const n of graphNodes) {
+      const col = column.get(n.id) ?? 0
+      if (!columns.has(col)) columns.set(col, [])
+      columns.get(col)!.push(n)
+    }
+
+    // Sort each column by original Y position for stability
+    for (const col of columns.values()) {
+      col.sort((a, b) => a.position.y - b.position.y)
+    }
+
+    // Position nodes: center each column vertically relative to the tallest column
+    const maxRows = Math.max(...[...columns.values()].map((c) => c.length))
+    const sortedCols = [...columns.keys()].sort((a, b) => a - b)
 
     const arranged: typeof nodes = []
-    let y = 100
-    Object.values(nodesByType).forEach((typeNodes) => {
-      let x = 100
-      typeNodes.forEach((node) => {
-        arranged.push({ ...node, position: { x, y } })
-        x += 300
+    for (const colIdx of sortedCols) {
+      const col = columns.get(colIdx)!
+      const totalHeight = (col.length - 1) * NODE_H
+      const maxTotalHeight = (maxRows - 1) * NODE_H
+      const offsetY = (maxTotalHeight - totalHeight) / 2
+
+      col.forEach((node, rowIdx) => {
+        arranged.push({
+          ...node,
+          position: {
+            x: START_X + colIdx * NODE_W,
+            y: START_Y + offsetY + rowIdx * NODE_H,
+          },
+        })
       })
-      y += 200
-    })
+    }
+
+    // Re-add sticky notes untouched
+    arranged.push(...stickyNodes)
 
     setNodes(arranged)
     setCanvasContextMenu(null)
-  }, [nodes, setNodes])
+  }, [nodes, edges, setNodes])
 
   const handleSelectAll = useCallback(() => {
     setNodes(nodes.map((n) => ({ ...n, selected: true })))
