@@ -22,6 +22,13 @@ export type TextPromptData = {
   label: string
   text: string
   variables: Record<string, string>
+  color?: string
+  textStyle?: string
+  bold?: boolean
+  italic?: boolean
+  alignment?: string
+  width?: number
+  height?: number
 }
 
 export type ListNodeData = {
