@@ -40,14 +40,17 @@ const videoUpscaleBody = z.object({
   }
 )
 
+function upscaleCreditModel(provider: string): string {
+  if (provider === "veo-1080p") return "veo-1080p"
+  if (provider === "veo-4k") return "veo-4k"
+  return "topaz-video"
+}
+
 export async function videoUpscaleRoutes(app: FastifyInstance) {
   app.post("/v1/video-upscale", {
     preHandler: creditGuard((req) => {
       const body = req.body as Record<string, unknown>
-      const provider = (body?.provider as string) ?? "topaz"
-      if (provider === "veo-1080p") return "veo-1080p"
-      if (provider === "veo-4k") return "veo-4k"
-      return "topaz-video"
+      return upscaleCreditModel((body?.provider as string) ?? "topaz")
     }),
   }, async (req, reply) => {
     const parsed = videoUpscaleBody.safeParse(req.body)
@@ -69,9 +72,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       })
     }
 
-    const creditModel = provider === "veo-1080p" ? "veo-1080p"
-      : provider === "veo-4k" ? "veo-4k"
-      : "topaz-video"
+    const creditModel = upscaleCreditModel(provider)
 
     const { data: job, error } = await supabase
       .from("jobs")

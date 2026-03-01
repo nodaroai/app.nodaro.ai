@@ -1818,19 +1818,19 @@ export async function motionTransferApi(
   return res.json()
 }
 
-export async function videoUpscaleApi(
-  videoUrl?: string,
-  upscaleFactor?: "1" | "2" | "4",
-  userId?: string,
-  provider?: "topaz" | "veo-1080p" | "veo-4k",
-  kieTaskId?: string,
-): Promise<{ jobId: string }> {
+export async function videoUpscaleApi(opts: {
+  videoUrl?: string
+  upscaleFactor?: "1" | "2" | "4"
+  userId?: string
+  provider?: "topaz" | "veo-1080p" | "veo-4k"
+  kieTaskId?: string
+}): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = {}
-  if (videoUrl) body.videoUrl = videoUrl
-  if (upscaleFactor) body.upscaleFactor = upscaleFactor
-  if (userId) body.userId = userId
-  if (provider) body.provider = provider
-  if (kieTaskId) body.kieTaskId = kieTaskId
+  if (opts.videoUrl) body.videoUrl = opts.videoUrl
+  if (opts.upscaleFactor) body.upscaleFactor = opts.upscaleFactor
+  if (opts.userId) body.userId = opts.userId
+  if (opts.provider) body.provider = opts.provider
+  if (opts.kieTaskId) body.kieTaskId = opts.kieTaskId
   const res = await fetch(`${API_BASE_URL}/v1/video-upscale`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

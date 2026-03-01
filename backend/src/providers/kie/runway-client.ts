@@ -98,8 +98,20 @@ export async function runRunwayTask(
   const taskId = createData.data.taskId
   console.log(`[KIE.ai Runway] Task created: ${taskId}`)
 
-  // Step 2: Poll for completion using Runway-specific endpoint
-  // State field: wait → queueing → generating → success / fail
+  const videoUrl = await pollRunwayRecordDetail(taskId, "Runway", apiKey)
+  return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
+}
+
+/**
+ * Shared Runway record-detail polling loop.
+ * Polls GET /api/v1/runway/record-detail?taskId= until state=success or fail.
+ * Returns videoUrl on success; throws on failure or timeout.
+ */
+async function pollRunwayRecordDetail(
+  taskId: string,
+  label: string,
+  apiKey: string,
+): Promise<string> {
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
     attempts++
@@ -113,22 +125,20 @@ export async function runRunwayTask(
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
-        if (DEBUG) console.log(`[KIE.ai Runway] Poll attempt ${attempts} timeout, retrying...`)
+        if (DEBUG) console.log(`[KIE.ai ${label}] Poll attempt ${attempts} timeout, retrying...`)
         continue
       }
       throw err
     }
 
     if (!detailResponse.ok) {
-      console.warn(
-        `[KIE.ai Runway] Poll attempt ${attempts} failed: ${detailResponse.status}`
-      )
+      if (DEBUG) console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} failed: ${detailResponse.status}`)
       continue
     }
 
     const detailText = await detailResponse.text()
     if (DEBUG) {
-      console.log(`[KIE.ai Runway] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`)
+      console.log(`[KIE.ai ${label}] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`)
     }
 
     let detailData: {
@@ -143,58 +153,37 @@ export async function runRunwayTask(
     try {
       detailData = JSON.parse(detailText)
     } catch {
-      console.warn(
-        `[KIE.ai Runway] Poll attempt ${attempts} invalid JSON`
-      )
+      if (DEBUG) console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} invalid JSON`)
       continue
     }
 
     const state = detailData.data?.state
     if (!state) {
-      console.warn(
-        `[KIE.ai Runway] Poll attempt ${attempts} missing state`
-      )
+      if (DEBUG) console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} missing state`)
       continue
     }
 
     if (DEBUG) {
-      console.log(`[KIE.ai Runway] Task ${taskId} state: ${state} (attempt ${attempts})`)
+      console.log(`[KIE.ai ${label}] Task ${taskId} state: ${state} (attempt ${attempts})`)
     }
 
     if (state === "success") {
       const videoUrl = detailData.data?.videoInfo?.videoUrl
       if (!videoUrl) {
-        throw createSanitizedError(
-          "Runway task succeeded but no videoUrl found",
-          "Video generation"
-        )
+        throw createSanitizedError(`${label} succeeded but no videoUrl found`, "Video generation")
       }
-
-      console.log(`[KIE.ai Runway] Video complete! URL: ${videoUrl}`)
-
-      return {
-        resultJson: { resultUrls: [videoUrl], videoUrl },
-        taskId,
-      }
+      console.log(`[KIE.ai ${label}] Complete! URL: ${videoUrl}`)
+      return videoUrl
     }
 
     if (state === "fail") {
       const failMsg = detailData.data?.failMsg ?? "Unknown error"
       const failCode = detailData.data?.failCode ?? "no_code"
-      console.error(`[KIE.ai Runway] Task ${taskId} FAILED: [${failCode}] ${failMsg}`)
-      throw createSanitizedError(
-        `Runway task failed: [${failCode}] ${failMsg}`,
-        "Video generation"
-      )
+      throw createSanitizedError(`${label} failed: [${failCode}] ${failMsg}`, "Video generation")
     }
-
-    // States "wait", "queueing", "generating" are all in-progress — continue polling
   }
 
-  throw createSanitizedError(
-    `Runway task timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`,
-    "Video generation"
-  )
+  throw createSanitizedError(`${label} timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`, "Video generation")
 }
 
 /**
@@ -260,56 +249,6 @@ export async function runRunwayExtendTask(
 
   console.log(`[KIE.ai Runway Extend] Task created: ${extendTaskId}`)
 
-  // Poll using Runway record-detail endpoint (same as runRunwayTask)
-  let attempts = 0
-  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
-    attempts++
-    await sleep(pollDelay(attempts))
-
-    let detailResponse: Response
-    try {
-      detailResponse = await fetch(
-        `${KIE_API_BASE}/api/v1/runway/record-detail?taskId=${extendTaskId}`,
-        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
-      )
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "TimeoutError") continue
-      throw err
-    }
-
-    if (!detailResponse.ok) continue
-
-    let detailData: {
-      code?: number
-      data?: {
-        state?: string
-        videoInfo?: { videoUrl?: string }
-        failCode?: string
-        failMsg?: string
-      }
-    }
-    try {
-      detailData = JSON.parse(await detailResponse.text())
-    } catch { continue }
-
-    const state = detailData.data?.state
-    if (!state) continue
-
-    if (state === "success") {
-      const videoUrl = detailData.data?.videoInfo?.videoUrl
-      if (!videoUrl) {
-        throw createSanitizedError("Runway extend succeeded but no videoUrl found", "Video extend")
-      }
-      console.log(`[KIE.ai Runway Extend] Complete! URL: ${videoUrl}`)
-      return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId: extendTaskId }
-    }
-
-    if (state === "fail") {
-      const failMsg = detailData.data?.failMsg ?? "Unknown error"
-      const failCode = detailData.data?.failCode ?? "no_code"
-      throw createSanitizedError(`Runway extend failed: [${failCode}] ${failMsg}`, "Video extend")
-    }
-  }
-
-  throw createSanitizedError(`Runway extend timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`, "Video extend")
+  const videoUrl = await pollRunwayRecordDetail(extendTaskId, "Runway Extend", apiKey)
+  return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId: extendTaskId }
 }

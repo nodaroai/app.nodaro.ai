@@ -161,6 +161,24 @@ export function rejectAllManualEdits(): void {
 }
 
 /**
+ * Resolve kieTaskId from node data or by walking upstream edges.
+ * Used by extend-video and video-upscale (VEO) nodes.
+ */
+function resolveUpstreamKieTaskId(nodeId: string, nodeData: Record<string, unknown>): string | undefined {
+  if (nodeData.kieTaskId) return nodeData.kieTaskId as string;
+  const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
+  const incomingEdges = allEdges.filter((e) => e.target === nodeId);
+  for (const edge of incomingEdges) {
+    const srcNode = allNodes.find((n) => n.id === edge.source);
+    if (srcNode) {
+      const srcData = srcNode.data as Record<string, unknown>;
+      if (srcData.kieTaskId) return srcData.kieTaskId as string;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Alias for pollJobWithNodeUpdate to match original codebase naming.
  * Used for node types that follow the standard poll-to-completion pattern.
  */
@@ -1572,22 +1590,7 @@ export function executeNode(
     const provider = vuData.provider || "topaz";
 
     if (provider === "veo-1080p" || provider === "veo-4k") {
-      // VEO upscale needs kieTaskId, not videoUrl
-      let kieTaskId = vuData.kieTaskId;
-      if (!kieTaskId) {
-        const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
-        const incomingEdges = allEdges.filter((e) => e.target === node.id);
-        for (const edge of incomingEdges) {
-          const srcNode = allNodes.find((n) => n.id === edge.source);
-          if (srcNode) {
-            const srcData = srcNode.data as Record<string, unknown>;
-            if (srcData.kieTaskId) {
-              kieTaskId = srcData.kieTaskId as string;
-              break;
-            }
-          }
-        }
-      }
+      const kieTaskId = resolveUpstreamKieTaskId(node.id, vuData as unknown as Record<string, unknown>);
       if (!kieTaskId) {
         toast.error(`Node "${vuData.label}": no upstream kieTaskId found. Connect a VEO video node.`);
         return Promise.reject(new Error("No kieTaskId"));
@@ -1595,14 +1598,7 @@ export function executeNode(
 
       return runProcessingNode(
         node.id,
-        () =>
-          videoUpscaleApi(
-            undefined,
-            undefined,
-            ctx.userId,
-            provider,
-            kieTaskId,
-          ),
+        () => videoUpscaleApi({ userId: ctx.userId, provider, kieTaskId }),
         "generatedVideoUrl",
         "Video Upscale",
         ctx,
@@ -1618,13 +1614,7 @@ export function executeNode(
 
     return runProcessingNode(
       node.id,
-      () =>
-        videoUpscaleApi(
-          videoUrl,
-          vuData.upscaleFactor || undefined,
-          ctx.userId,
-          "topaz",
-        ),
+      () => videoUpscaleApi({ videoUrl, upscaleFactor: vuData.upscaleFactor || undefined, userId: ctx.userId, provider: "topaz" }),
       "generatedVideoUrl",
       "Video Upscale",
       ctx,
@@ -1635,22 +1625,7 @@ export function executeNode(
     const evData = node.data as unknown as ExtendVideoData;
     const prompt = overridePrompt ?? inputs.prompt ?? evData.prompt;
 
-    // Resolve kieTaskId from upstream node data or from own data
-    let kieTaskId = evData.kieTaskId;
-    if (!kieTaskId) {
-      const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
-      const incomingEdges = allEdges.filter((e) => e.target === node.id);
-      for (const edge of incomingEdges) {
-        const srcNode = allNodes.find((n) => n.id === edge.source);
-        if (srcNode) {
-          const srcData = srcNode.data as Record<string, unknown>;
-          if (srcData.kieTaskId) {
-            kieTaskId = srcData.kieTaskId as string;
-            break;
-          }
-        }
-      }
-    }
+    const kieTaskId = resolveUpstreamKieTaskId(node.id, evData as unknown as Record<string, unknown>);
 
     if (!kieTaskId) {
       toast.error(`Node "${evData.label}": no upstream kieTaskId found. Connect a VEO or Runway video node.`);

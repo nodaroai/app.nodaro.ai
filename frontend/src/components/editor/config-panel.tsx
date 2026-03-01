@@ -109,6 +109,9 @@ import {
   ScheduleTriggerConfig,
 } from "./config-panels"
 
+const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync"])
+const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
+
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "text-prompt": "Text Prompt",
   "upload-image": "Upload Image",
@@ -624,9 +627,7 @@ export function ConfigPanel() {
               const activeIdx = (d.activeResultIndex as number) ?? 0
               const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
               if (!activeUrl) return null
-              const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync"])
-              const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
-              const mediaType: "image" | "video" | "audio" = videoTypes.has(nodeType) ? "video" : audioTypes.has(nodeType) ? "audio" : "image"
+              const mediaType: "image" | "video" | "audio" = LIBRARY_VIDEO_TYPES.has(nodeType) ? "video" : LIBRARY_AUDIO_TYPES.has(nodeType) ? "audio" : "image"
               return (
                 <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />
               )
