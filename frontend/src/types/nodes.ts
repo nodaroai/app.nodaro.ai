@@ -2066,6 +2066,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Image to Video",
     category: "ai",
     creditCost: 20,
+    width: 320,
+    height: 420,
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
     defaultData: { label: "Image to Video", provider: "veo3", model: "veo-3", duration: 5, motion: "moderate", cameraMotion: "static", fieldMappings: {} },
