@@ -49,6 +49,17 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
+  // Nano Banana 2 (latest version, uses native aspect_ratio, supports resolution + google_search)
+  // See: docs.kie.ai/market/google/nano-banana-2.md
+  "nano-banana-2": {
+    model: "nano-banana-2",
+    credits: 4,
+    ***REDACTED-OSS-SCRUB*** (1K default)
+    // NOTE: 2K costs more, 4K costs even more — handled via composite identifiers
+    // Uses native aspect_ratio (NOT image_size like v1), supports resolution (1K/2K/4K)
+    extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "jpg" },
+  },
+
   "nano-banana-edit": {
     model: "google/nano-banana-edit",
     credits: 6,
@@ -218,6 +229,23 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_urls",  // Array of URLs
+    extraParams: { aspect_ratio: "16:9", quality: "basic" },
+  },
+  // Seedream 5 Lite (latest Bytedance model)
+  // See: docs.kie.ai/market/seedream/5-lite-text-to-image.md
+  "seedream-5-lite": {
+    model: "seedream/5-lite-text-to-image",
+    credits: 6.5,
+    ***REDACTED-OSS-SCRUB*** (basic quality, same as 4.5)
+    // NOTE: High quality (4K) may cost more — handled via composite identifier "seedream-5-lite:high"
+    extraParams: { aspect_ratio: "16:9", quality: "basic" },
+  },
+  "seedream-5-lite-i2i": {
+    model: "seedream/5-lite-image-to-image",
+    credits: 6.5,
+    cost: 0.032,
+    inputType: "image-to-image",
+    imageParam: "image",  // Single URL string
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
   },
 

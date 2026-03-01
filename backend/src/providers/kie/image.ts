@@ -13,6 +13,12 @@ import type {
 import { createSanitizedError, runKieTask } from "./client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
 
+// Models that need output_format forced to "png" (legacy Nano Banana family).
+// Nano Banana 2 uses its own output_format from extraParams (jpg default), so it is NOT included.
+const FORCE_PNG_OUTPUT_PROVIDERS = new Set([
+  "nano-banana", "nano-banana-pro", "nano-banana-edit",
+])
+
 // Models that use named image_size values instead of ratio strings (e.g. "landscape_16_9")
 const NAMED_IMAGE_SIZE_PROVIDERS = new Set([
   "ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe",
@@ -74,8 +80,8 @@ export class KieImageProvider
       ...extraParams,
     }
 
-    // Only Nano Banana family supports output_format parameter
-    if (provider.startsWith("nano-banana")) {
+    // Legacy Nano Banana family needs forced png output_format
+    if (FORCE_PNG_OUTPUT_PROVIDERS.has(provider)) {
       input.output_format = "png"
     }
 
@@ -193,8 +199,8 @@ export class KieImageProvider
       ...modelConfig.extraParams,
     }
 
-    // Only Nano Banana family supports output_format parameter
-    if (provider.startsWith("nano-banana")) {
+    // Nano Banana family supports output_format parameter
+    if (provider.startsWith("nano-banana") && provider !== "nano-banana-2") {
       input.output_format = "png"
     }
 
@@ -218,7 +224,8 @@ export class KieImageProvider
       provider === "ideogram-remix" ||
       provider === "qwen-i2i" ||
       provider === "qwen-edit" ||
-      provider === "seedream-edit"
+      provider === "seedream-edit" ||
+      provider === "seedream-5-lite-i2i"
     )) {
       input.prompt = prompt
     }

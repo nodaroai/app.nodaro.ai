@@ -16,6 +16,7 @@ const generateImageBody = z.object({
     "flux",
     // KIE.ai text-to-image providers
     "nano-banana-pro",
+    "nano-banana-2",
     "grok",
     "gpt-image",
     "imagen4",
@@ -24,6 +25,7 @@ const generateImageBody = z.object({
     "ideogram",
     "qwen",
     "seedream",
+    "seedream-5-lite",
     "flux-flex",
     "z-image",
     // KIE.ai image-to-image providers
@@ -37,6 +39,7 @@ const generateImageBody = z.object({
     "qwen-i2i",
     "qwen-edit",
     "seedream-edit",
+    "seedream-5-lite-i2i",
   ]).optional(),
   aspectRatio: z.enum([
     "1:1", "16:9", "9:16", "4:3", "3:4",
@@ -71,6 +74,14 @@ function buildCreditModelIdentifier(provider: string, quality?: string, resoluti
   // Nano Banana Pro: resolution affects cost (1K/2K=default/cheap, 4K=expensive)
   if (provider === "nano-banana-pro" && resolution === "4K") {
     return `${provider}:4K`
+  }
+  // Nano Banana 2: resolution affects cost (1K=default, 2K/4K=expensive)
+  if (provider === "nano-banana-2" && (resolution === "2K" || resolution === "4K")) {
+    return `${provider}:${resolution}`
+  }
+  // Seedream 5 Lite: quality affects cost (basic=default, high=4K expensive)
+  if ((provider === "seedream-5-lite" || provider === "seedream-5-lite-i2i") && quality === "high") {
+    return `${provider}:high`
   }
   return provider
 }

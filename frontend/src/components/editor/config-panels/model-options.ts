@@ -11,6 +11,8 @@ export const IMAGE_GEN_MODELS = [
   { value: "ideogram", label: "Ideogram", desc: "Excellent text rendering, character consistency" },
   { value: "qwen", label: "Qwen", desc: "Versatile, good at diverse styles" },
   { value: "seedream", label: "Seedream", desc: "Photorealistic, high detail" },
+  { value: "seedream-5-lite", label: "Seedream 5 Lite", desc: "Latest Seedream, fast and sharp" },
+  { value: "nano-banana-2", label: "Nano Banana 2", desc: "Updated Nano Banana with web grounding" },
   { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
 ] as const
 
@@ -26,6 +28,7 @@ export const IMAGE_I2I_MODELS = [
   { value: "qwen-i2i", label: "Qwen", desc: "Versatile image transformation" },
   { value: "qwen-edit", label: "Qwen Edit", desc: "Targeted image editing" },
   { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
+  { value: "seedream-5-lite-i2i", label: "Seedream 5 Lite", desc: "Latest Seedream image-to-image" },
 ] as const
 
 export const VIDEO_I2V_MODELS = [
@@ -92,6 +95,9 @@ export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> =
   "ideogram-edit": { min: 4, max: 8 },
   "ideogram-remix": { min: 4, max: 8 },
   "ideogram-reframe": { min: 4, max: 8 },
+  "nano-banana-2": { min: 2, max: 5 },
+  "seedream-5-lite": { min: 3, max: 5 },
+  "seedream-5-lite-i2i": { min: 3, max: 5 },
 }
 
 // =============================================================================
@@ -202,6 +208,9 @@ export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label
   "qwen-edit": IDEOGRAM_RATIOS,
   "seedream": SEEDREAM_RATIOS,
   "seedream-edit": SEEDREAM_RATIOS,
+  "seedream-5-lite": SEEDREAM_RATIOS,
+  "seedream-5-lite-i2i": SEEDREAM_RATIOS,
+  "nano-banana-2": NANO_BANANA_RATIOS,
   "z-image": Z_IMAGE_RATIOS,
 }
 
@@ -210,49 +219,45 @@ export function getAspectRatiosForModel(provider: string): readonly { value: str
 }
 
 // Models that support resolution selection
-// Note: Base Nano Banana does NOT support resolution. Nano Banana Pro DOES (1K/2K/4K).
-export const IMAGE_RESOLUTION_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  "nano-banana-pro": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-    { value: "4K", label: "4K (Ultra)" },
-  ],
-  "flux": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-  ],
-  "flux-flex": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-  ],
-  "flux-i2i": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-  ],
-  "flux-pro-i2i": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-  ],
+// Note: Base Nano Banana does NOT support resolution. Nano Banana Pro and v2 DO (1K/2K/4K).
+const NANO_BANANA_RESOLUTIONS = [
+  { value: "1K", label: "1K (Standard)" },
+  { value: "2K", label: "2K (High)" },
+  { value: "4K", label: "4K (Ultra)" },
+] as const
+
+const FLUX_RESOLUTIONS = [
+  { value: "1K", label: "1K (Standard)" },
+  { value: "2K", label: "2K (High)" },
+] as const
+
+export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {
+  "nano-banana-pro": NANO_BANANA_RESOLUTIONS,
+  "nano-banana-2": NANO_BANANA_RESOLUTIONS,
+  "flux": FLUX_RESOLUTIONS,
+  "flux-flex": FLUX_RESOLUTIONS,
+  "flux-i2i": FLUX_RESOLUTIONS,
+  "flux-pro-i2i": FLUX_RESOLUTIONS,
 }
 
 // Models that support quality selection
-export const IMAGE_QUALITY_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  "gpt-image": [
-    { value: "medium", label: "Medium (Balanced)" },
-    { value: "high", label: "High (Detailed)" },
-  ],
-  "gpt-image-i2i": [
-    { value: "medium", label: "Medium (Balanced)" },
-    { value: "high", label: "High (Detailed)" },
-  ],
-  "seedream": [
-    { value: "basic", label: "Basic (2K)" },
-    { value: "high", label: "High (4K)" },
-  ],
-  "seedream-edit": [
-    { value: "basic", label: "Basic (2K)" },
-    { value: "high", label: "High (4K)" },
-  ],
+const GPT_IMAGE_QUALITY = [
+  { value: "medium", label: "Medium (Balanced)" },
+  { value: "high", label: "High (Detailed)" },
+] as const
+
+const SEEDREAM_QUALITY = [
+  { value: "basic", label: "Basic (2K)" },
+  { value: "high", label: "High (4K)" },
+] as const
+
+export const IMAGE_QUALITY_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {
+  "gpt-image": GPT_IMAGE_QUALITY,
+  "gpt-image-i2i": GPT_IMAGE_QUALITY,
+  "seedream": SEEDREAM_QUALITY,
+  "seedream-edit": SEEDREAM_QUALITY,
+  "seedream-5-lite": SEEDREAM_QUALITY,
+  "seedream-5-lite-i2i": SEEDREAM_QUALITY,
 }
 
 // Kling 3.0 supports continuous durations from 3s to 15s

@@ -432,14 +432,14 @@ export type ReplicateImageProvider = "nano-banana" | "flux" | "dalle"
 
 // Additional image providers available only on KIE.ai
 export type KieImageProvider =
-  | "nano-banana" | "nano-banana-pro"
+  | "nano-banana" | "nano-banana-pro" | "nano-banana-2"
   | "flux" | "flux-flex" | "flux-i2i" | "flux-pro-i2i"
   | "grok" | "grok-i2i"
   | "gpt-image" | "gpt-image-i2i"
   | "imagen4" | "imagen4-fast" | "imagen4-ultra"
   | "ideogram" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe"
   | "qwen" | "qwen-i2i" | "qwen-edit"
-  | "seedream" | "seedream-edit"
+  | "seedream" | "seedream-edit" | "seedream-5-lite" | "seedream-5-lite-i2i"
   | "z-image"
 
 // All image providers (union of both)
@@ -483,7 +483,7 @@ export type EditImageData = {
 }
 
 // Image-to-Image providers (transform source image with prompt)
-export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit"
+export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit" | "seedream-5-lite-i2i"
 
 export type ImageToImageData = {
   [key: string]: unknown

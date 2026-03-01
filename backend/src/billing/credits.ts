@@ -76,6 +76,9 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   //
   // ── Image Generation ──
   "nano-banana": 2,              // 4 KIE cr, $0.02
+  "nano-banana-2": 2,             // 4 KIE cr, $0.02 (1K default)
+  "nano-banana-2:2K": 3,          // ~6 KIE cr, $0.03
+  "nano-banana-2:4K": 5,          // ~10 KIE cr, $0.05
   "nano-banana-pro": 6,          // 18 KIE cr, $0.09 (1K/2K default)
   "nano-banana-pro:4K": 8,       // 24 KIE cr, $0.12
   ***REDACTED-OSS-SCRUB***
@@ -91,6 +94,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ideogram:QUALITY": 8,         // 24 KIE cr, $0.12
   "qwen": 2,                     // 4 KIE cr, $0.02
   "seedream": 3,                 // 6.5 KIE cr, $0.032
+  "seedream-5-lite": 3,          // 6.5 KIE cr, $0.032 (basic default)
+  "seedream-5-lite:high": 5,     // ~10 KIE cr, $0.05 estimated (4K)
   "flux-flex": 5,                // 14 KIE cr, $0.07 (1K default)
   "flux-flex:2K": 8,             // 24 KIE cr, $0.12
   ***REDACTED-OSS-SCRUB***
@@ -120,6 +125,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "qwen-i2i": 2,                 // 4 KIE cr, $0.02
   "qwen-edit": 2,                // 4 KIE cr, $0.02
   "seedream-edit": 3,            // 6.5 KIE cr, $0.032
+  "seedream-5-lite-i2i": 3,      // 6.5 KIE cr, $0.032 (basic default)
+  "seedream-5-lite-i2i:high": 5, // ~10 KIE cr, $0.05 estimated (4K)
   // ── Video Generation (I2V / T2V) ──
   "minimax": 25,                 // 80 KIE cr, $0.40
   "veo3": 125,                   // 400 KIE cr, $2.00
