@@ -8,6 +8,7 @@ import { deleteJob } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
 import { toast } from "sonner"
 import { CachedImage } from "@/components/ui/cached-image"
+import { type NodeState, formatNodeType } from "./execution-utils"
 
 const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
@@ -36,6 +37,7 @@ interface ExecutionDetailModalProps {
   readonly onClose: () => void
   readonly onDeleted?: (jobId: string) => void
   readonly showDollars?: boolean
+  readonly nodeInfo?: { nodeId: string; state: NodeState }
 }
 
 type InputTabType = "form" | "json"
@@ -227,7 +229,7 @@ function InputField({ name, value }: InputFieldProps) {
   )
 }
 
-export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollars = !isCloud() }: ExecutionDetailModalProps) {
+export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollars = !isCloud(), nodeInfo }: ExecutionDetailModalProps) {
   const [inputTab, setInputTab] = useState<InputTabType>("form")
   const [outputTab, setOutputTab] = useState<OutputTabType>("preview")
   const [copiedId, setCopiedId] = useState(false)
@@ -235,7 +237,74 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   const [isDeleting, setIsDeleting] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
 
-  if (!open || !job) return null
+  if (!open) return null
+
+  // Node-only view (no job record yet — pending, cancelled, or failed without job)
+  if (!job && nodeInfo) {
+    const { nodeId, state } = nodeInfo
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/50 dark:bg-black/80 backdrop-blur-sm" onClick={onClose} />
+        <div role="dialog" aria-modal="true" className="relative w-full max-w-lg bg-white dark:bg-[#121212] rounded-xl border border-gray-200 dark:border-[#2D2D2D] shadow-2xl overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#1E1E1E]">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)}
+              </h2>
+              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
+                {state.status}
+              </span>
+            </div>
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white">
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+          <div className="p-6 space-y-4">
+            {state.error && (
+              <div className="rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 p-4">
+                <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">Error</p>
+                <p className="text-sm text-red-500 dark:text-red-300/70">{state.error}</p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {state.startedAt && (
+                <div>
+                  <span className="text-gray-400 dark:text-[#64748B]">Started</span>
+                  <p className="text-gray-700 dark:text-[#E2E8F0] font-mono">{formatRelativeTime(state.startedAt)}</p>
+                </div>
+              )}
+              {state.completedAt && (
+                <div>
+                  <span className="text-gray-400 dark:text-[#64748B]">Completed</span>
+                  <p className="text-gray-700 dark:text-[#E2E8F0] font-mono">{formatRelativeTime(state.completedAt)}</p>
+                </div>
+              )}
+              {state.startedAt && state.completedAt && (
+                <div>
+                  <span className="text-gray-400 dark:text-[#64748B]">Duration</span>
+                  <p className="text-gray-700 dark:text-[#E2E8F0] font-mono">{formatDuration(state.startedAt, state.completedAt)}</p>
+                </div>
+              )}
+              {state.creditsUsed != null && state.creditsUsed > 0 && (
+                <div>
+                  <span className="text-gray-400 dark:text-[#64748B]">Credits</span>
+                  <p className="text-gray-700 dark:text-[#E2E8F0] font-mono">{state.creditsUsed} CR</p>
+                </div>
+              )}
+            </div>
+            {!state.error && state.status === "pending" && (
+              <p className="text-sm text-gray-400 dark:text-[#64748B]">This node has not started executing yet.</p>
+            )}
+            {!state.error && state.status === "cancelled" && (
+              <p className="text-sm text-gray-400 dark:text-[#64748B]">This node was cancelled before execution.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!job) return null
 
   const outputUrl = getOutputUrl(job.output_data)
   const isVideo = outputUrl ? isVideoUrl(outputUrl) : false

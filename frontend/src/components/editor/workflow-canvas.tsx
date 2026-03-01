@@ -129,14 +129,18 @@ function getEdgeLabel(
     return { label: "Reference" }
   }
 
-  // Check fieldMappings on target node — shows which field this source is mapped to
+  // Check fieldMappings on target node — shows which field(s) this source is mapped to
   if (sourceNode && targetNode?.data) {
     const mappings = targetNode.data.fieldMappings as Record<string, { sourceNodeId: string }> | undefined
     if (mappings) {
+      const matchedLabels: string[] = []
       for (const [field, mapping] of Object.entries(mappings)) {
         if (mapping?.sourceNodeId === sourceNode.id) {
-          return { label: FIELD_LABELS[field] ?? field }
+          matchedLabels.push(FIELD_LABELS[field] ?? field)
         }
+      }
+      if (matchedLabels.length > 0) {
+        return { label: matchedLabels.join(", ") }
       }
     }
   }

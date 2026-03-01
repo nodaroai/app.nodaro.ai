@@ -35,6 +35,7 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const [selectedNodeInfo, setSelectedNodeInfo] = useState<{ nodeId: string; state: NodeState } | null>(null)
 
   // Fetch full job data when a node is clicked (auto-refresh while in-progress)
   const { data: selectedJob } = useQuery({
@@ -49,6 +50,16 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
       return false
     },
   })
+
+  function handleNodeClick(nodeId: string, state: NodeState) {
+    if (state.jobId) {
+      setSelectedJobId(state.jobId)
+      setSelectedNodeInfo(null)
+    } else {
+      setSelectedNodeInfo({ nodeId, state })
+      setSelectedJobId(null)
+    }
+  }
 
   const { data, isLoading: loading, error } = useQuery({
     queryKey: ["workflow-executions", workflowId, cursor],
@@ -240,7 +251,7 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
                       onToggle={() => setExpandedId(isExpanded ? null : exec.id)}
                       onCancel={handleCancel}
                       onStopAfterCurrent={handleStopAfterCurrent}
-                      onNodeClick={setSelectedJobId}
+                      onNodeClick={handleNodeClick}
                     />
                   )
                 })
@@ -256,6 +267,12 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
         job={selectedJob ?? null}
         open={!!selectedJobId && !!selectedJob}
         onClose={() => setSelectedJobId(null)}
+      />
+      <ExecutionDetailModal
+        job={null}
+        open={!!selectedNodeInfo}
+        onClose={() => setSelectedNodeInfo(null)}
+        nodeInfo={selectedNodeInfo ?? undefined}
       />
     </div>
   )
@@ -442,7 +459,7 @@ function ExecutionRow({
   onToggle: () => void
   onCancel: (id: string, e: React.MouseEvent) => void
   onStopAfterCurrent: (id: string, e: React.MouseEvent) => void
-  onNodeClick: (jobId: string) => void
+  onNodeClick: (nodeId: string, state: NodeState) => void
 }) {
   const completed = exec.completedNodes ?? 0
   const failed = exec.failedNodes ?? 0
@@ -601,12 +618,11 @@ function ExecutionRow({
                 </thead>
                 <tbody className="divide-y divide-gray-100/50 dark:divide-[#2D2D2D]/50">
                   {nodeEntries.map(([nodeId, state]) => {
-                    const hasJob = !!state.jobId
                     return (
                       <tr
                         key={nodeId}
-                        className={hasJob ? "hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors" : ""}
-                        onClick={hasJob ? () => onNodeClick(state.jobId!) : undefined}
+                        className="hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors"
+                        onClick={() => onNodeClick(nodeId, state)}
                       >
                         <td className="px-8 py-1.5">
                           <div className="flex items-center gap-2">
@@ -653,9 +669,7 @@ function ExecutionRow({
                           </td>
                         )}
                         <td className="px-3 py-1.5">
-                          {hasJob && (
-                            <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 dark:text-[#64748B]" />
-                          )}
+                          <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 dark:text-[#64748B]" />
                         </td>
                       </tr>
                     )
