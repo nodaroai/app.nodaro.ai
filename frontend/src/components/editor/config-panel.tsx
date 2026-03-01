@@ -52,6 +52,7 @@ import {
   VideoToVideoConfig,
   MotionTransferConfig,
   VideoUpscaleConfig,
+  ExtendVideoConfig,
   TextToVideoConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
@@ -163,6 +164,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "fade-video": "Fade In/Out",
   "transcode-video": "Transcode Video",
   "manual-edit": "Manual Edit",
+  "extend-video": "Extend Video",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
   "loop": "Loop",
@@ -187,7 +189,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync",
-  "video-upscale", "suno-generate", "suno-cover", "suno-extend",
+  "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video", "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text",
@@ -529,6 +531,7 @@ export function ConfigPanel() {
           {nodeType === "ai-writer" && <AIWriterConfig {...configProps} />}
 
           {nodeType === "video-upscale" && <VideoUpscaleConfig {...configProps} />}
+          {nodeType === "extend-video" && <ExtendVideoConfig {...configProps} />}
           {nodeType === "combine-videos" && <CombineVideosConfig {...configProps} />}
           {nodeType === "merge-video-audio" && <MergeVideoAudioConfig {...configProps} />}
           {nodeType === "add-captions" && <AddCaptionsConfig {...configProps} />}
@@ -621,7 +624,7 @@ export function ConfigPanel() {
               const activeIdx = (d.activeResultIndex as number) ?? 0
               const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
               if (!activeUrl) return null
-              const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync"])
+              const videoTypes = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync"])
               const audioTypes = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
               const mediaType: "image" | "video" | "audio" = videoTypes.has(nodeType) ? "video" : audioTypes.has(nodeType) ? "audio" : "image"
               return (

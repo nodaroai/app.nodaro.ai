@@ -22,6 +22,7 @@ export interface NodeOutput {
   instrumentalUrl?: string
   splitResults?: string[]
   combinedText?: string
+  kieTaskId?: string
 }
 
 export type NodeExecutionStatus =
@@ -103,6 +104,7 @@ export interface ResolvedInputs {
   uploadUrl?: string
   startFrameUrl?: string
   endFrameUrl?: string
+  kieTaskId?: string
 }
 
 // ---------------------------------------------------------------------------

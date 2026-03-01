@@ -25,7 +25,7 @@ const DEBUG = config.NODE_ENV === "development"
 
 export async function runRunwayTask(
   input: Record<string, unknown>,
-): Promise<{ resultJson: KieResultJson }> {
+): Promise<{ resultJson: KieResultJson; taskId: string }> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -174,6 +174,7 @@ export async function runRunwayTask(
 
       return {
         resultJson: { resultUrls: [videoUrl], videoUrl },
+        taskId,
       }
     }
 
@@ -194,4 +195,121 @@ export async function runRunwayTask(
     `Runway task timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`,
     "Video generation"
   )
+}
+
+/**
+ * Runway Extend — continue a Runway video with a new prompt.
+ * API: POST /api/v1/runway/extend
+ * Poll: GET /api/v1/runway/record-detail (same as runRunwayTask)
+ */
+export async function runRunwayExtendTask(
+  taskId: string,
+  prompt: string,
+  quality: "720p" | "1080p" = "720p"
+): Promise<{ resultJson: KieResultJson; taskId: string }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video extend")
+  }
+
+  const requestBody = { taskId, prompt, quality }
+
+  if (DEBUG) {
+    console.log(`[KIE.ai Runway Extend] Request body:`, JSON.stringify(requestBody, null, 2))
+  }
+
+  const createResponse = await fetch(
+    `${KIE_API_BASE}/api/v1/runway/extend`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await createResponse.text()
+  if (!createResponse.ok) {
+    throw createSanitizedError(
+      `Runway extend failed: ${createResponse.status} - ${responseText}`,
+      "Video extend"
+    )
+  }
+
+  let createData: { code?: number; message?: string; msg?: string; data?: { taskId?: string } }
+  try {
+    createData = JSON.parse(responseText)
+  } catch {
+    throw createSanitizedError(`Runway extend response is not valid JSON: ${responseText}`, "Video extend")
+  }
+
+  if (createData.code !== 0 && createData.code !== 200 && createData.code !== undefined) {
+    throw createSanitizedError(
+      `Runway extend error (code ${createData.code}): ${createData.message ?? createData.msg ?? JSON.stringify(createData)}`,
+      "Video extend"
+    )
+  }
+
+  const extendTaskId = createData.data?.taskId
+  if (!extendTaskId) {
+    throw createSanitizedError(`Runway extend response missing taskId: ${JSON.stringify(createData)}`, "Video extend")
+  }
+
+  console.log(`[KIE.ai Runway Extend] Task created: ${extendTaskId}`)
+
+  // Poll using Runway record-detail endpoint (same as runRunwayTask)
+  let attempts = 0
+  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    attempts++
+    await sleep(pollDelay(attempts))
+
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/runway/record-detail?taskId=${extendTaskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") continue
+      throw err
+    }
+
+    if (!detailResponse.ok) continue
+
+    let detailData: {
+      code?: number
+      data?: {
+        state?: string
+        videoInfo?: { videoUrl?: string }
+        failCode?: string
+        failMsg?: string
+      }
+    }
+    try {
+      detailData = JSON.parse(await detailResponse.text())
+    } catch { continue }
+
+    const state = detailData.data?.state
+    if (!state) continue
+
+    if (state === "success") {
+      const videoUrl = detailData.data?.videoInfo?.videoUrl
+      if (!videoUrl) {
+        throw createSanitizedError("Runway extend succeeded but no videoUrl found", "Video extend")
+      }
+      console.log(`[KIE.ai Runway Extend] Complete! URL: ${videoUrl}`)
+      return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId: extendTaskId }
+    }
+
+    if (state === "fail") {
+      const failMsg = detailData.data?.failMsg ?? "Unknown error"
+      const failCode = detailData.data?.failCode ?? "no_code"
+      throw createSanitizedError(`Runway extend failed: [${failCode}] ${failMsg}`, "Video extend")
+    }
+  }
+
+  throw createSanitizedError(`Runway extend timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`, "Video extend")
 }

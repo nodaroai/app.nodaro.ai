@@ -411,7 +411,7 @@ export async function runVeoTask(
   model: string,
   prompt: string,
   imageUrls?: string[]
-): Promise<{ resultJson: KieResultJson; costTime?: number }> {
+): Promise<{ resultJson: KieResultJson; costTime?: number; taskId: string }> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -564,6 +564,7 @@ export async function runVeoTask(
       return {
         resultJson: { resultUrls },
         costTime: undefined,
+        taskId,
       }
     }
 
@@ -585,4 +586,268 @@ export async function runVeoTask(
     `VEO task timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`,
     "Video generation"
   )
+}
+
+/**
+ * VEO 3.1 Extend — continue a VEO video with a new prompt.
+ * API: POST /api/v1/veo/extend
+ * Polls: GET /api/v1/veo/record-info (same as runVeoTask)
+ */
+export async function runVeoExtendTask(
+  taskId: string,
+  prompt: string,
+  model?: "fast" | "quality",
+  seeds?: number
+): Promise<{ resultJson: KieResultJson; taskId: string }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video extend")
+  }
+
+  const requestBody: Record<string, unknown> = {
+    taskId,
+    prompt,
+    model: model ?? "fast",
+  }
+  if (seeds !== undefined) requestBody.seeds = seeds
+
+  if (DEBUG) {
+    console.log(`[KIE.ai VEO Extend] Request body:`, JSON.stringify(requestBody, null, 2))
+  }
+
+  const createResponse = await fetch(
+    `${KIE_API_BASE}/api/v1/veo/extend`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await createResponse.text()
+  if (!createResponse.ok) {
+    throw createSanitizedError(
+      `VEO extend failed: ${createResponse.status} - ${responseText}`,
+      "Video extend"
+    )
+  }
+
+  let createData: { code?: number; msg?: string; data?: { taskId?: string } }
+  try {
+    createData = JSON.parse(responseText)
+  } catch {
+    throw createSanitizedError(`VEO extend response is not valid JSON: ${responseText}`, "Video extend")
+  }
+
+  if (createData.code !== 200 && createData.code !== 0 && createData.code !== undefined) {
+    throw createSanitizedError(
+      `VEO extend error (code ${createData.code}): ${createData.msg ?? JSON.stringify(createData)}`,
+      "Video extend"
+    )
+  }
+
+  const extendTaskId = createData.data?.taskId
+  if (!extendTaskId) {
+    throw createSanitizedError(`VEO extend response missing taskId: ${JSON.stringify(createData)}`, "Video extend")
+  }
+
+  console.log(`[KIE.ai VEO Extend] Task created: ${extendTaskId}`)
+
+  // Poll using VEO record-info endpoint (same as runVeoTask)
+  let attempts = 0
+  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    attempts++
+    await sleep(pollDelay(attempts))
+
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/veo/record-info?taskId=${extendTaskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") continue
+      throw err
+    }
+
+    if (!detailResponse.ok) continue
+
+    let detailData: VeoRecordInfoResponse
+    try {
+      detailData = JSON.parse(await detailResponse.text()) as VeoRecordInfoResponse
+    } catch { continue }
+
+    const successFlag = detailData.data?.successFlag
+    if (successFlag === 1) {
+      const resultUrls = detailData.data.response?.resultUrls
+      if (!resultUrls?.length) {
+        throw createSanitizedError("VEO extend succeeded but no resultUrls found", "Video extend")
+      }
+      console.log(`[KIE.ai VEO Extend] Complete! URLs: ${resultUrls.join(", ")}`)
+      return { resultJson: { resultUrls }, taskId: extendTaskId }
+    }
+
+    if (successFlag === 2 || successFlag === 3) {
+      const errorMsg = detailData.data.errorMessage ?? `Error code: ${detailData.data.errorCode ?? "unknown"}`
+      throw createSanitizedError(`VEO extend failed: ${errorMsg}`, "Video extend")
+    }
+  }
+
+  throw createSanitizedError(`VEO extend timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`, "Video extend")
+}
+
+/**
+ * VEO 3.1 1080p — get 1080p version of a completed VEO video.
+ * API: GET /api/v1/veo/get-1080p-video?taskId=&index=0
+ * Quasi-synchronous: may need retries while processing (~1-3 min).
+ */
+export async function runVeo1080pTask(
+  taskId: string,
+  index: number = 0
+): Promise<{ url: string }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video upscale")
+  }
+
+  console.log(`[KIE.ai VEO 1080p] Requesting 1080p for task ${taskId}, index ${index}`)
+
+  // Retry loop — 1080p takes 1-3 min to process
+  let attempts = 0
+  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    attempts++
+    if (attempts > 1) await sleep(pollDelay(attempts))
+
+    let response: Response
+    try {
+      response = await fetch(
+        `${KIE_API_BASE}/api/v1/veo/get-1080p-video?taskId=${taskId}&index=${index}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(30_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") continue
+      throw err
+    }
+
+    let data: { code?: number; msg?: string; data?: { resultUrl?: string } }
+    try {
+      data = JSON.parse(await response.text())
+    } catch { continue }
+
+    if (data.code === 200 && data.data?.resultUrl) {
+      console.log(`[KIE.ai VEO 1080p] Complete! URL: ${data.data.resultUrl}`)
+      return { url: data.data.resultUrl }
+    }
+
+    // Non-200 means still processing — keep polling
+    if (DEBUG) {
+      console.log(`[KIE.ai VEO 1080p] Not ready yet (code: ${data.code}), attempt ${attempts}`)
+    }
+  }
+
+  throw createSanitizedError(`VEO 1080p timed out after ${MAX_POLL_ATTEMPTS_VIDEO} attempts`, "Video upscale")
+}
+
+/**
+ * VEO 3.1 4K — upscale a VEO video to 4K resolution.
+ * API: POST /api/v1/veo/get-4k-video
+ * Async: polls record-info for completion (~5-10 min).
+ */
+export async function runVeo4kTask(
+  taskId: string,
+  index: number = 0
+): Promise<{ resultJson: KieResultJson; taskId: string }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video upscale")
+  }
+
+  const requestBody = { taskId, index }
+
+  if (DEBUG) {
+    console.log(`[KIE.ai VEO 4K] Request body:`, JSON.stringify(requestBody, null, 2))
+  }
+
+  const createResponse = await fetch(
+    `${KIE_API_BASE}/api/v1/veo/get-4k-video`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await createResponse.text()
+  if (!createResponse.ok) {
+    throw createSanitizedError(
+      `VEO 4K failed: ${createResponse.status} - ${responseText}`,
+      "Video upscale"
+    )
+  }
+
+  let createData: { code?: number; msg?: string; data?: { taskId?: string; resultUrls?: string[] } }
+  try {
+    createData = JSON.parse(responseText)
+  } catch {
+    throw createSanitizedError(`VEO 4K response is not valid JSON: ${responseText}`, "Video upscale")
+  }
+
+  // If already available (code 200 with resultUrls)
+  if (createData.code === 200 && createData.data?.resultUrls?.length) {
+    console.log(`[KIE.ai VEO 4K] Immediately available: ${createData.data.resultUrls.join(", ")}`)
+    return { resultJson: { resultUrls: createData.data.resultUrls }, taskId: createData.data.taskId ?? taskId }
+  }
+
+  // Otherwise poll (code 422 = still processing)
+  const fourKTaskId = createData.data?.taskId ?? taskId
+  console.log(`[KIE.ai VEO 4K] Task processing: ${fourKTaskId}`)
+
+  let attempts = 0
+  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    attempts++
+    await sleep(pollDelay(attempts))
+
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/veo/record-info?taskId=${fourKTaskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") continue
+      throw err
+    }
+
+    if (!detailResponse.ok) continue
+
+    let detailData: VeoRecordInfoResponse
+    try {
+      detailData = JSON.parse(await detailResponse.text()) as VeoRecordInfoResponse
+    } catch { continue }
+
+    const successFlag = detailData.data?.successFlag
+    if (successFlag === 1) {
+      const resultUrls = detailData.data.response?.resultUrls
+      if (!resultUrls?.length) {
+        throw createSanitizedError("VEO 4K succeeded but no resultUrls found", "Video upscale")
+      }
+      console.log(`[KIE.ai VEO 4K] Complete! URLs: ${resultUrls.join(", ")}`)
+      return { resultJson: { resultUrls }, taskId: fourKTaskId }
+    }
+
+    if (successFlag === 2 || successFlag === 3) {
+      const errorMsg = detailData.data.errorMessage ?? `Error code: ${detailData.data.errorCode ?? "unknown"}`
+      throw createSanitizedError(`VEO 4K failed: ${errorMsg}`, "Video upscale")
+    }
+  }
+
+  throw createSanitizedError(`VEO 4K timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`, "Video upscale")
 }

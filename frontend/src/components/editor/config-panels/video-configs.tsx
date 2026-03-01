@@ -26,6 +26,7 @@ import type {
   TextToVideoData,
   MotionTransferData,
   VideoUpscaleData,
+  ExtendVideoData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
@@ -616,23 +617,43 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
 }
 
 export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<VideoUpscaleData>) {
+  const provider = data.provider || "topaz"
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="upscaleFactor" label="Upscale Factor" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
-          value={data.upscaleFactor || "2"}
-          onValueChange={(v) => onUpdate({ upscaleFactor: v as VideoUpscaleData["upscaleFactor"] })}
+          value={provider}
+          onValueChange={(v) => onUpdate({ provider: v as VideoUpscaleData["provider"] })}
         >
-          <SelectTrigger aria-label="Upscale Factor"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="1">1x (no upscale, AI enhance only)</SelectItem>
-            <SelectItem value="2">2x (recommended)</SelectItem>
-            <SelectItem value="4">4x (maximum)</SelectItem>
+            <SelectItem value="topaz">Topaz (factor-based)</SelectItem>
+            <SelectItem value="veo-1080p">VEO 1080p (25 CR)</SelectItem>
+            <SelectItem value="veo-4k">VEO 4K (79 CR)</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
+
+      {provider === "topaz" && (
+        <MappableField field="upscaleFactor" label="Upscale Factor" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select
+            value={data.upscaleFactor || "2"}
+            onValueChange={(v) => onUpdate({ upscaleFactor: v as VideoUpscaleData["upscaleFactor"] })}
+          >
+            <SelectTrigger aria-label="Upscale Factor"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1x (no upscale, AI enhance only)</SelectItem>
+              <SelectItem value="2">2x (recommended)</SelectItem>
+              <SelectItem value="4">4x (maximum)</SelectItem>
+            </SelectContent>
+          </Select>
+        </MappableField>
+      )}
+
       <p className="text-xs text-muted-foreground px-1">
-        Uses Topaz Video Upscaler via KIE.ai. Max 50MB input video.
+        {provider === "topaz"
+          ? "Uses Topaz Video Upscaler via KIE.ai. Max 50MB input video."
+          : "Upscales a VEO video to higher resolution. Connect an upstream VEO video node."}
       </p>
     </div>
   )
@@ -774,6 +795,70 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           placeholder="Things to avoid..."
         />
       </MappableField>
+    </div>
+  )
+}
+
+export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ExtendVideoData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+        <Select
+          value={data.provider || "veo-extend"}
+          onValueChange={(v) => onUpdate({ provider: v as ExtendVideoData["provider"] })}
+        >
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="veo-extend">VEO Extend</SelectItem>
+            <SelectItem value="runway-extend">Runway Extend</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          value={data.prompt || ""}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe how the video should continue..."
+          rows={3}
+        />
+      </MappableField>
+
+      {data.provider === "veo-extend" && (
+        <div>
+          <Label className="text-xs">Model</Label>
+          <Select
+            value={data.model || "fast"}
+            onValueChange={(v) => onUpdate({ model: v as "fast" | "quality" })}
+          >
+            <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fast">Fast</SelectItem>
+              <SelectItem value="quality">Quality</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {data.provider === "runway-extend" && (
+        <div>
+          <Label className="text-xs">Quality</Label>
+          <Select
+            value={data.quality || "720p"}
+            onValueChange={(v) => onUpdate({ quality: v as "720p" | "1080p" })}
+          >
+            <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="720p">720p</SelectItem>
+              <SelectItem value="1080p">1080p</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground px-1">
+        Extends a VEO or Runway video with a new prompt. Connect an upstream Image to Video or Text to Video node that produces a kieTaskId.
+      </p>
     </div>
   )
 }

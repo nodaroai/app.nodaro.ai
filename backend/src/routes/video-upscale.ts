@@ -1,11 +1,16 @@
 /**
  * Video Upscale Route
  *
- * Upscales a video using Topaz Video Upscaler via KIE.ai.
+ * Upscales a video using:
+ * - Topaz Video Upscaler via KIE.ai (factor-based)
+ * - VEO 1080p (taskId-based, from completed VEO generation)
+ * - VEO 4K (taskId-based, from completed VEO generation)
  *
  * Input:
- * - videoUrl: Source video to upscale (max 50MB)
- * - upscaleFactor: "1", "2", or "4"
+ * - videoUrl: Source video to upscale (max 50MB) — required for Topaz
+ * - upscaleFactor: "1", "2", or "4" — Topaz only
+ * - provider: "topaz" (default), "veo-1080p", or "veo-4k"
+ * - kieTaskId: Required for VEO providers (original VEO task ID)
  */
 
 import type { FastifyInstance } from "fastify"
@@ -17,12 +22,34 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId } from "../lib/request-helpers.js"
 
 const videoUpscaleBody = z.object({
-  videoUrl: safeUrlSchema,
+  videoUrl: safeUrlSchema.optional(),
   upscaleFactor: z.enum(["1", "2", "4"]).default("2"),
-})
+  provider: z.enum(["topaz", "veo-1080p", "veo-4k"]).default("topaz"),
+  kieTaskId: z.string().optional(),
+}).refine(
+  (data) => {
+    // VEO providers require kieTaskId
+    if (data.provider === "veo-1080p" || data.provider === "veo-4k") {
+      return !!data.kieTaskId
+    }
+    // Topaz requires videoUrl
+    return !!data.videoUrl
+  },
+  {
+    message: "VEO upscale requires kieTaskId; Topaz requires videoUrl",
+  }
+)
 
 export async function videoUpscaleRoutes(app: FastifyInstance) {
-  app.post("/v1/video-upscale", { preHandler: creditGuard(() => "topaz-video") }, async (req, reply) => {
+  app.post("/v1/video-upscale", {
+    preHandler: creditGuard((req) => {
+      const body = req.body as Record<string, unknown>
+      const provider = (body?.provider as string) ?? "topaz"
+      if (provider === "veo-1080p") return "veo-1080p"
+      if (provider === "veo-4k") return "veo-4k"
+      return "topaz-video"
+    }),
+  }, async (req, reply) => {
     const parsed = videoUpscaleBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -33,7 +60,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, upscaleFactor } = parsed.data
+    const { videoUrl, upscaleFactor, provider, kieTaskId } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -41,6 +68,10 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+
+    const creditModel = provider === "veo-1080p" ? "veo-1080p"
+      : provider === "veo-4k" ? "veo-4k"
+      : "topaz-video"
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -51,8 +82,9 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
         input_data: {
           videoUrl,
           upscaleFactor,
+          provider,
+          kieTaskId,
           type: "video-upscale",
-          provider: "topaz/video-upscale",  // Actual KIE.ai model used
         },
       })
       .select("id")
@@ -64,7 +96,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       })
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, "topaz-video")
+    const reservation = await reserveCreditsForJob(req, reply, job.id, creditModel)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
@@ -72,6 +104,8 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       jobId: job.id,
       videoUrl,
       upscaleFactor,
+      provider,
+      kieTaskId,
       usageLogId,
     })
 

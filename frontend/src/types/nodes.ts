@@ -531,6 +531,7 @@ export type ImageToVideoData = {
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
+  kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
 }
 
 export type TextToSpeechData = {
@@ -575,6 +576,7 @@ export type TextToVideoData = {
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
+  kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
 }
 
 export type VideoToVideoData = {
@@ -629,11 +631,11 @@ export type MotionTransferData = {
   currentJobProgress?: number
 }
 
-// Video Upscale: Upscale video resolution using Topaz
-// KIE.ai model: topaz/video-upscale
+// Video Upscale: Upscale video resolution using Topaz or VEO
 export type VideoUpscaleData = {
   [key: string]: unknown
   label: string
+  provider: "topaz" | "veo-1080p" | "veo-4k"
   upscaleFactor: "1" | "2" | "4"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -643,6 +645,27 @@ export type VideoUpscaleData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  kieTaskId?: string              // KIE task ID from upstream VEO node (for VEO upscale providers)
+}
+
+// Extend Video: Continue a VEO or Runway video with a new prompt
+export type ExtendVideoData = {
+  [key: string]: unknown
+  label: string
+  provider: "veo-extend" | "runway-extend"
+  prompt: string
+  model?: "fast" | "quality"      // VEO only
+  seeds?: number                   // VEO only
+  quality?: "720p" | "1080p"      // Runway only
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  kieTaskId?: string              // KIE task ID from upstream video node (required)
 }
 
 export type QACheckData = {
@@ -1739,6 +1762,7 @@ export type SceneNodeData =
   | LipSyncData
   | MotionTransferData
   | VideoUpscaleData
+  | ExtendVideoData
   | SaveToStorageData
   | WebhookOutputData
   | SceneNodeDataType
@@ -1825,6 +1849,7 @@ export type SceneNodeType =
   | "lip-sync"
   | "motion-transfer"
   | "video-upscale"
+  | "extend-video"
   | "save-to-storage"
   | "webhook-output"
   | "scene"
@@ -2615,12 +2640,30 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["video"],
     defaultData: {
       label: "Video Upscale",
+      provider: "topaz",
       upscaleFactor: "2",
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],
       activeResultIndex: 0,
     } as VideoUpscaleData,
+  },
+  {
+    type: "extend-video",
+    label: "Extend Video",
+    category: "ai",
+    creditCost: 40,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Extend Video",
+      provider: "veo-extend",
+      prompt: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as ExtendVideoData,
   },
   // Output
   {

@@ -150,6 +150,12 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30
   "kling-master": 22,            // 70 KIE cr, $0.35
   "runway-kie": 32,              // 100 KIE cr, $0.50
+  // ── Video Extend ──
+  "veo-extend": 40,              // ~125 KIE cr, $0.63 (VEO 3.1 extend)
+  ***REDACTED-OSS-SCRUB***
+  // ── VEO Upscale ──
+  "veo-1080p": 25,               // ~80 KIE cr, $0.40 (VEO 3.1 1080p)
+  "veo-4k": 79,                  // ~250 KIE cr, $1.25 (VEO 3.1 4K)
   // ── Video-to-Video / Motion ──
   "wan": 25,                     // 80 KIE cr, $0.40 (also used for T2V wan key)
   "luma-modify": 32,             // ~100 KIE cr, $0.50

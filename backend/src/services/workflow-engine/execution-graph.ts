@@ -152,6 +152,7 @@ export const VIDEO_SOURCE_TYPES = new Set([
   "lip-sync",
   "motion-transfer",
   "video-upscale",
+  "extend-video",
   "suno-music-video",
   "merge-video-audio",
   "add-captions",

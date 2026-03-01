@@ -22,6 +22,7 @@ import {
   lipSyncApi,
   motionTransferApi,
   videoUpscaleApi,
+  extendVideo,
   generateSceneGraph,
   renderVideoWithSceneGraph,
   renderVideoWithPlan,
@@ -73,6 +74,7 @@ import type {
   LipSyncData,
   MotionTransferData,
   VideoUpscaleData,
+  ExtendVideoData,
   VideoComposerData,
   AfterEffectsData,
   LottieOverlayData,
@@ -1567,6 +1569,47 @@ export function executeNode(
 
   if (node.type === "video-upscale") {
     const vuData = node.data as unknown as VideoUpscaleData;
+    const provider = vuData.provider || "topaz";
+
+    if (provider === "veo-1080p" || provider === "veo-4k") {
+      // VEO upscale needs kieTaskId, not videoUrl
+      let kieTaskId = vuData.kieTaskId;
+      if (!kieTaskId) {
+        const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
+        const incomingEdges = allEdges.filter((e) => e.target === node.id);
+        for (const edge of incomingEdges) {
+          const srcNode = allNodes.find((n) => n.id === edge.source);
+          if (srcNode) {
+            const srcData = srcNode.data as Record<string, unknown>;
+            if (srcData.kieTaskId) {
+              kieTaskId = srcData.kieTaskId as string;
+              break;
+            }
+          }
+        }
+      }
+      if (!kieTaskId) {
+        toast.error(`Node "${vuData.label}": no upstream kieTaskId found. Connect a VEO video node.`);
+        return Promise.reject(new Error("No kieTaskId"));
+      }
+
+      return runProcessingNode(
+        node.id,
+        () =>
+          videoUpscaleApi(
+            undefined,
+            undefined,
+            ctx.userId,
+            provider,
+            kieTaskId,
+          ),
+        "generatedVideoUrl",
+        "Video Upscale",
+        ctx,
+      );
+    }
+
+    // Topaz provider - requires videoUrl
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
       toast.error(`Node "${vuData.label}": no video input found`);
@@ -1580,9 +1623,53 @@ export function executeNode(
           videoUrl,
           vuData.upscaleFactor || undefined,
           ctx.userId,
+          "topaz",
         ),
       "generatedVideoUrl",
       "Video Upscale",
+      ctx,
+    );
+  }
+
+  if (node.type === "extend-video") {
+    const evData = node.data as unknown as ExtendVideoData;
+    const prompt = overridePrompt ?? inputs.prompt ?? evData.prompt;
+
+    // Resolve kieTaskId from upstream node data or from own data
+    let kieTaskId = evData.kieTaskId;
+    if (!kieTaskId) {
+      const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
+      const incomingEdges = allEdges.filter((e) => e.target === node.id);
+      for (const edge of incomingEdges) {
+        const srcNode = allNodes.find((n) => n.id === edge.source);
+        if (srcNode) {
+          const srcData = srcNode.data as Record<string, unknown>;
+          if (srcData.kieTaskId) {
+            kieTaskId = srcData.kieTaskId as string;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!kieTaskId) {
+      toast.error(`Node "${evData.label}": no upstream kieTaskId found. Connect a VEO or Runway video node.`);
+      return Promise.reject(new Error("No kieTaskId"));
+    }
+
+    return runProcessingNode(
+      node.id,
+      () =>
+        extendVideo({
+          kieTaskId,
+          prompt: prompt || "",
+          provider: evData.provider || "veo-extend",
+          model: evData.provider === "veo-extend" ? evData.model : undefined,
+          quality: evData.provider === "runway-extend" ? evData.quality : undefined,
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Extend Video",
       ctx,
     );
   }

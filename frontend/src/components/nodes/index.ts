@@ -65,6 +65,7 @@ import { ManualEditNode } from "./manual-edit-node";
 import { LipSyncNode } from "./lip-sync-node";
 import { MotionTransferNode } from "./motion-transfer-node";
 import { VideoUpscaleNode } from "./video-upscale-node";
+import { ExtendVideoNode } from "./extend-video-node";
 import { SaveToStorageNode } from "./save-to-storage-node";
 import { WebhookOutputNode } from "./webhook-output-node";
 import { SceneNode } from "./scene-node";
@@ -156,6 +157,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "transcode-video": TranscodeVideoNode,
   "manual-edit": ManualEditNode,
   "video-upscale": VideoUpscaleNode,
+  "extend-video": ExtendVideoNode,
   // Output
   "save-to-storage": SaveToStorageNode,
   "webhook-output": WebhookOutputNode,

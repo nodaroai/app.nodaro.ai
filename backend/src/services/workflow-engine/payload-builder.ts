@@ -317,12 +317,43 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "video-upscale":
-      return simpleResult("video-upscale", "topaz-video", {
-        jobId,
-        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        usageLogId,
-      })
+    case "video-upscale": {
+      const vuProvider = (data.provider as string) ?? "topaz"
+      const vuModel = vuProvider === "veo-1080p" ? "veo-1080p"
+        : vuProvider === "veo-4k" ? "veo-4k"
+        : "topaz-video"
+      return {
+        jobName: "video-upscale",
+        queueName: "video-generation",
+        modelIdentifier: vuModel,
+        payload: {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          upscaleFactor: data.upscaleFactor,
+          provider: vuProvider,
+          kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,
+          usageLogId,
+        },
+      }
+    }
+
+    case "extend-video": {
+      const evProvider = (data.provider as string) ?? "veo-extend"
+      return {
+        jobName: "extend-video",
+        queueName: "video-generation",
+        modelIdentifier: evProvider,
+        payload: {
+          jobId,
+          kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,
+          prompt: resolvedInputs.prompt || data.prompt,
+          provider: evProvider,
+          model: evProvider === "veo-extend" ? (data.model ?? "fast") : undefined,
+          quality: evProvider === "runway-extend" ? (data.quality ?? "720p") : undefined,
+          usageLogId,
+        },
+      }
+    }
 
     // --- Audio ---
     case "text-to-speech": {

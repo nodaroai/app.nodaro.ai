@@ -151,7 +151,7 @@ export class KieVideoProvider
       const imageUrls = endFrameUrl
         ? [imageUrl, endFrameUrl]
         : [imageUrl]
-      const { resultJson } = await runVeoTask(
+      const { resultJson, taskId: veoTaskId } = await runVeoTask(
         modelConfig.model,
         prompt ?? "smooth cinematic motion",
         imageUrls
@@ -169,7 +169,7 @@ export class KieVideoProvider
       console.log(
         `[KIE.ai] VEO Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
-      return { url: videoUrl, cost: modelConfig.cost }
+      return { url: videoUrl, cost: modelConfig.cost, kieTaskId: veoTaskId }
     }
 
     // Runway KIE uses a special API endpoint
@@ -183,7 +183,7 @@ export class KieVideoProvider
         duration: snapped,
         imageUrl,
       }
-      const { resultJson } = await runRunwayTask(runwayInput)
+      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput)
       const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
@@ -194,7 +194,7 @@ export class KieVideoProvider
       console.log(
         `[KIE.ai] Runway Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
-      return { url: videoUrl, cost: modelConfig.cost }
+      return { url: videoUrl, cost: modelConfig.cost, kieTaskId: runwayTaskId }
     }
 
     // Standard createTask endpoint for other providers
@@ -375,7 +375,7 @@ export class KieVideoProvider
 
     // VEO3 uses a special API endpoint
     if (provider === "veo3") {
-      const { resultJson } = await runVeoTask(
+      const { resultJson, taskId: veoTaskId } = await runVeoTask(
         modelConfig.model,
         prompt
       )
@@ -392,7 +392,7 @@ export class KieVideoProvider
       console.log(
         `[KIE.ai] VEO Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
-      return { url: videoUrl, cost: modelConfig.cost }
+      return { url: videoUrl, cost: modelConfig.cost, kieTaskId: veoTaskId }
     }
 
     // Runway KIE uses a special API endpoint
@@ -406,7 +406,7 @@ export class KieVideoProvider
         duration: snapped,
         ...(aspectRatio && { aspectRatio }),
       }
-      const { resultJson } = await runRunwayTask(runwayInput)
+      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput)
       const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
@@ -417,7 +417,7 @@ export class KieVideoProvider
       console.log(
         `[KIE.ai] Runway Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
-      return { url: videoUrl, cost: modelConfig.cost }
+      return { url: videoUrl, cost: modelConfig.cost, kieTaskId: runwayTaskId }
     }
 
     // Standard createTask endpoint for other providers

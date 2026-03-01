@@ -275,6 +275,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "AI",
     group: "Video",
   },
+  {
+    type: "extend-video",
+    label: "Extend Video",
+    icon: <FastForward className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+  },
   // AI — Audio & Speech
   {
     type: "text-to-speech",

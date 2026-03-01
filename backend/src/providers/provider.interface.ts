@@ -2,6 +2,7 @@
 export interface ProviderResult {
   url: string
   cost: number | null // null if cost unknown
+  kieTaskId?: string  // KIE task ID for extend/upscale operations (VEO, Runway)
 }
 
 // Capabilities a provider can support
