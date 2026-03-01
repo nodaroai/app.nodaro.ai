@@ -72,7 +72,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ maxWidth: '220px' }}>
     {/* Floating label above node */}
     <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
       <ImageIcon className="w-3.5 h-3.5" />
@@ -134,10 +134,10 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         { id: "image", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="relative w-full group" style={{ minHeight: 180 }}>
+      <div className="relative w-full group">
         {/* Running state */}
         {status === "running" && (
-          <div className="flex items-center justify-center bg-muted/30 rounded-xl" style={{ minHeight: 180 }}>
+          <div className="flex items-center justify-center bg-muted/30 rounded-xl h-[180px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         )}
@@ -160,7 +160,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               src={activeUrl}
               alt="Generated"
               className="w-full object-cover rounded-xl cursor-pointer"
-              style={{ minHeight: 180 }}
               thumbnail={!useFull}
               thumbnailWidth={320}
               onClick={(e) => { e.stopPropagation(); selectNode(id) }}
@@ -233,7 +232,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2" style={{ minHeight: 180 }}>
+          <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2 h-[180px]">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="font-medium">Failed</span>
@@ -248,7 +247,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Idle/empty state */}
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40" style={{ minHeight: 180 }}>
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
             <ImageIcon className="w-10 h-10" />
           </div>
         )}
