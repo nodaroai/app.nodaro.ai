@@ -221,7 +221,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         id="prompt"
         type="source"
         position={Position.Right}
-        style={{ opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "calc(25% - 33px)", right: 0 }}
+        style={{ opacity: 0, width: 28, height: 28, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "calc(25% - 47px)", right: "-43px", transform: "none" }}
       />
 
       {/* Output handle icon */}
