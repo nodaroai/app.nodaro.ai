@@ -440,6 +440,7 @@ export type KieImageProvider =
   | "ideogram" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe"
   | "qwen" | "qwen-i2i" | "qwen-edit"
   | "seedream" | "seedream-edit" | "seedream-5-lite" | "seedream-5-lite-i2i"
+  | "flux-kontext" | "flux-kontext-max"
   | "z-image"
 
 // All image providers (union of both)
@@ -501,7 +502,7 @@ export type ImageToImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro" | "seedance" | "wan-i2v" | "wan-turbo" | "hailuo-2.3-pro" | "hailuo-2.3" | "hailuo-standard" | "sora2" | "bytedance-lite" | "bytedance-pro" | "bytedance-pro-fast" | "kling-master"
+  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro" | "seedance" | "wan-i2v" | "wan-turbo" | "hailuo-2.3-pro" | "hailuo-2.3" | "hailuo-standard" | "sora2" | "bytedance-lite" | "bytedance-pro" | "bytedance-pro-fast" | "kling-master" | "runway-kie"
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
@@ -560,7 +561,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "kling-3.0" | "grok" | "sora2-pro" | "seedance" | "wan" | "sora2" | "hailuo-standard" | "bytedance-lite" | "bytedance-pro" | "wan-turbo"
+  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "kling-3.0" | "grok" | "sora2-pro" | "seedance" | "wan" | "sora2" | "hailuo-standard" | "bytedance-lite" | "bytedance-pro" | "wan-turbo" | "runway-kie"
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"
@@ -580,8 +581,7 @@ export type VideoToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  // V2V uses Wan 2.6 only via KIE.ai (Replicate doesn't support video input)
-  // No provider selection - single provider (wan)
+  provider: "wan" | "luma-modify"
   duration: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"

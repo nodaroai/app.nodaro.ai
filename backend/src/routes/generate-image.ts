@@ -27,6 +27,8 @@ const generateImageBody = z.object({
     "seedream",
     "seedream-5-lite",
     "flux-flex",
+    "flux-kontext",
+    "flux-kontext-max",
     "z-image",
     // KIE.ai image-to-image providers
     "flux-i2i",

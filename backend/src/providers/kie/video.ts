@@ -23,6 +23,8 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
 import { kling3Generate } from "./kling3-client.js"
+import { runRunwayTask } from "./runway-client.js"
+import { runLumaModifyTask } from "./luma-client.js"
 import {
   KIE_VIDEO_MODELS,
   KIE_TEXT_TO_VIDEO_MODELS,
@@ -166,6 +168,31 @@ export class KieVideoProvider
 
       console.log(
         `[KIE.ai] VEO Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+      return { url: videoUrl, cost: modelConfig.cost }
+    }
+
+    // Runway KIE uses a special API endpoint
+    if (provider === "runway-kie") {
+      const snapped = duration
+        ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+        : 5
+      const runwayInput: Record<string, unknown> = {
+        ...(modelConfig.extraParams ?? {}),
+        prompt: prompt ?? "smooth cinematic motion",
+        duration: snapped,
+        imageUrl,
+      }
+      const { resultJson } = await runRunwayTask(runwayInput)
+      const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (!videoUrl) {
+        throw createSanitizedError(
+          "Runway video task succeeded but no URL found",
+          "Video generation"
+        )
+      }
+      console.log(
+        `[KIE.ai] Runway Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
       return { url: videoUrl, cost: modelConfig.cost }
     }
@@ -368,6 +395,31 @@ export class KieVideoProvider
       return { url: videoUrl, cost: modelConfig.cost }
     }
 
+    // Runway KIE uses a special API endpoint
+    if (provider === "runway-kie") {
+      const snapped = duration
+        ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+        : 5
+      const runwayInput: Record<string, unknown> = {
+        ...(modelConfig.extraParams ?? {}),
+        prompt,
+        duration: snapped,
+        ...(aspectRatio && { aspectRatio }),
+      }
+      const { resultJson } = await runRunwayTask(runwayInput)
+      const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (!videoUrl) {
+        throw createSanitizedError(
+          "Runway text-to-video task succeeded but no URL found",
+          "Video generation"
+        )
+      }
+      console.log(
+        `[KIE.ai] Runway Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+      return { url: videoUrl, cost: modelConfig.cost }
+    }
+
     // Standard createTask endpoint for other providers
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
@@ -466,11 +518,30 @@ export class KieVideoProvider
     const finalPrompt =
       prompt ?? "continue this video with smooth cinematic motion"
 
-    // Standard createTask endpoint for all V2V providers (Wan 2.6, Kling 2.6)
+    // Luma Modify uses a special API endpoint
+    if (provider === "luma-modify") {
+      const { resultJson } = await runLumaModifyTask({
+        prompt: finalPrompt,
+        videoUrl,
+      })
+      const outputUrl = resultJson.resultUrls?.[0]
+      if (!outputUrl) {
+        throw createSanitizedError(
+          "Luma Modify task succeeded but no URL found",
+          "Video generation"
+        )
+      }
+      console.log(
+        `[KIE.ai] Luma Modify completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+      return { url: outputUrl, cost: modelConfig.cost }
+    }
+
+    // Standard createTask endpoint for other V2V providers (Wan 2.6)
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
       prompt: finalPrompt,
-      video_urls: [videoUrl], // All V2V models use video_urls array
+      video_urls: [videoUrl], // Standard V2V models use video_urls array
     }
 
     console.log(

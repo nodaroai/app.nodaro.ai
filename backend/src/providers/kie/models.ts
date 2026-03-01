@@ -303,6 +303,22 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     inputType: "image-to-image",
     extraParams: {},
   },
+
+  // Flux Kontext (special endpoint: /api/v1/flux/kontext/generate)
+  // See: docs.kie.ai/flux-kontext-api/generate-or-edit-image.md
+  // Uses inputImage param for I2I editing mode, pure T2I without it
+  "flux-kontext": {
+    model: "flux-kontext-pro",
+    credits: 10,
+    cost: 0.05,
+    extraParams: { aspectRatio: "16:9", outputFormat: "jpeg" },
+  },
+  "flux-kontext-max": {
+    model: "flux-kontext-max",
+    credits: 20,
+    cost: 0.10,
+    extraParams: { aspectRatio: "16:9", outputFormat: "jpeg" },
+  },
 }
 
 // =============================================================================
@@ -529,6 +545,18 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [5, 10],
     supportsEndFrame: false,
   },
+
+  // Runway (KIE) - special endpoint: /api/v1/runway/generate
+  // See: docs.kie.ai/runway-api/generate-ai-video.md
+  "runway-kie": {
+    model: "runway",
+    credits: 100,
+    cost: 0.50,
+    imageParam: "imageUrl",  // Single URL string (top-level body param)
+    extraParams: { duration: 5, quality: "720p" },
+    allowedDurations: [5, 10],
+    supportsEndFrame: false,
+  },
 }
 
 // =============================================================================
@@ -662,11 +690,19 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "16:9", resolution: "720p" },
     allowedDurations: [5],
   },
+
+  // Runway (KIE) T2V - special endpoint: /api/v1/runway/generate
+  "runway-kie": {
+    model: "runway",
+    credits: 100,
+    cost: 0.50,
+    extraParams: { duration: 5, quality: "720p", aspectRatio: "16:9" },
+    allowedDurations: [5, 10],
+  },
 }
 
 // =============================================================================
 // VIDEO-TO-VIDEO MODELS (Video input -> Video output)
-// Only Wan 2.6 supports V2V - Replicate models don't support video input!
 // =============================================================================
 export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 - Standard createTask endpoint, input: video_urls array
@@ -675,6 +711,16 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 80,
     cost: 0.40,
     imageParam: "video_urls",  // Array format: ["video_url"]
+    extraParams: {},
+  },
+
+  // Luma Modify - special endpoint: /api/v1/modify/generate
+  // See: docs.kie.ai/luma-api/generate-luma-modify-video.md
+  // English prompts only, input video max 500MB/10s
+  "luma-modify": {
+    model: "luma-modify",
+    credits: 100,
+    cost: 0.50,
     extraParams: {},
   },
 }

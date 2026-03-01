@@ -11,6 +11,7 @@ import type {
   ProviderResult,
 } from "../provider.interface.js"
 import { createSanitizedError, runKieTask } from "./client.js"
+import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
@@ -156,7 +157,11 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(modelConfig.model, input)
+    // Flux Kontext uses a special endpoint (not standard createTask)
+    const isKontext = provider === "flux-kontext" || provider === "flux-kontext-max"
+    const { resultJson } = isKontext
+      ? await runFluxKontextTask(modelConfig.model, input)
+      : await runKieTask(modelConfig.model, input)
 
     const imageUrl = resultJson.resultUrls?.[0]
     if (!imageUrl) {

@@ -27,23 +27,13 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, KIE_VIDEO_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { getConnectedProviderModel } from "./helpers"
 import type { ConfigProps } from "./types"
 
-// KIE.ai allowed durations per text-to-video provider
-const KIE_T2V_DURATIONS: Record<string, number[]> = {
-  "minimax": [5],
-  "veo3": [8],
-  "kling": [5, 10],
-  "kling-turbo": [5, 10],
-  "grok": [6, 10],
-  "sora2-pro": [5, 10],
-  "kling-3.0": KLING3_DURATIONS,
-}
 
 export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode }: ConfigProps<ImageToVideoData>) {
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
@@ -556,6 +546,20 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<VideoToVideoData>) {
   return (
     <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+        <Select
+          value={data.provider || "wan"}
+          onValueChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
+        >
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {VIDEO_V2V_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
+          </SelectContent>
+        </Select>
+      </MappableField>
+
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           value={data.prompt}
@@ -564,9 +568,6 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           rows={3}
         />
       </MappableField>
-      <p className="text-xs text-muted-foreground px-1">
-        Uses Wan 2.6 via KIE.ai (only provider that supports video-to-video)
-      </p>
     </div>
   )
 }

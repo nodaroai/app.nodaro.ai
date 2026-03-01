@@ -99,6 +99,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "flux-flex": 5,                // 14 KIE cr, $0.07 (1K default)
   "flux-flex:2K": 8,             // 24 KIE cr, $0.12
   ***REDACTED-OSS-SCRUB***
+  "flux-kontext": 4,             // ~10 KIE cr, $0.05
+  "flux-kontext-max": 7,         // ~20 KIE cr, $0.10
   // ── Image Editing ──
   "recraft-upscale": 2,          // 6 KIE cr, $0.03
   "recraft-remove-bg": 1,            // KIE backend, $0.03
@@ -147,8 +149,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "bytedance-pro": 22,           // 70 KIE cr, $0.35
   "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30
   "kling-master": 22,            // 70 KIE cr, $0.35
+  "runway-kie": 32,              // 100 KIE cr, $0.50
   // ── Video-to-Video / Motion ──
   "wan": 25,                     // 80 KIE cr, $0.40 (also used for T2V wan key)
+  "luma-modify": 32,             // ~100 KIE cr, $0.50
   "topaz-video": 2,               // KIE backend, ~$0.03
   "motion-transfer": 32,         // 100 KIE cr, $0.50
   "kling-motion": 2,             // KIE backend

@@ -9,11 +9,11 @@ import { extractWorkflowId } from "../lib/request-helpers.js"
 const videoToVideoBody = z.object({
   videoUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
-  // V2V uses Wan 2.6 only via KIE.ai (no provider selection)
+  provider: z.enum(["wan", "luma-modify"]).optional(),
 })
 
 export async function videoToVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/video-to-video", { preHandler: creditGuard(() => "wan") }, async (req, reply) => {
+  app.post("/v1/video-to-video", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "wan" }) }, async (req, reply) => {
     const parsed = videoToVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -24,7 +24,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, prompt } = parsed.data
+    const { videoUrl, prompt, provider } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -43,7 +43,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
           videoUrl,
           prompt,
           type: "video-to-video",
-          provider: "wan/2-6-video-to-video",  // Actual KIE.ai model used
+          provider: provider ?? "wan",
         },
       })
       .select("id")
@@ -55,7 +55,8 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, "wan")
+    const modelIdentifier = provider ?? "wan"
+    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
@@ -63,6 +64,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       jobId: job.id,
       videoUrl,
       prompt,
+      provider: modelIdentifier,
       usageLogId,
     })
 

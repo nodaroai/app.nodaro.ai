@@ -20,6 +20,7 @@ const generateVideoBody = z.object({
     "hailuo-2.3-pro", "hailuo-2.3", "hailuo-standard",
     "sora2", "bytedance-lite", "bytedance-pro", "bytedance-pro-fast",
     "kling-master",
+    "runway-kie",
   ]).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
