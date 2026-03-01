@@ -27,6 +27,9 @@ export function buildCreditModelIdentifier(
   if (provider === "nano-banana-pro" && resolution === "4K") {
     return `${provider}:4K`
   }
+  if (provider === "nano-banana-2" && (resolution === "2K" || resolution === "4K")) {
+    return `${provider}:${resolution}`
+  }
   if (IDEOGRAM_PROVIDERS.has(provider)) {
     if (quality === "TURBO") return `${provider}:TURBO`
     if (quality === "QUALITY") return `${provider}:QUALITY`

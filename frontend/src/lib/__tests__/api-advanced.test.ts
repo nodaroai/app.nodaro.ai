@@ -382,7 +382,7 @@ describe("videoUpscaleApi", () => {
     const fetch = mockFetchJson({ jobId: "j-vu-1" })
     vi.stubGlobal("fetch", fetch)
 
-    const res = await videoUpscaleApi("https://r2/vid.mp4", "2", "u7")
+    const res = await videoUpscaleApi({ videoUrl: "https://r2/vid.mp4", upscaleFactor: "2", userId: "u7" })
 
     expect(res).toEqual({ jobId: "j-vu-1" })
     const body = JSON.parse(fetch.mock.calls[0][1].body)
@@ -395,7 +395,7 @@ describe("videoUpscaleApi", () => {
     const fetch = mockFetchJson({ jobId: "j-vu-2" })
     vi.stubGlobal("fetch", fetch)
 
-    const res = await videoUpscaleApi("https://r2/vid2.mp4")
+    const res = await videoUpscaleApi({ videoUrl: "https://r2/vid2.mp4" })
 
     expect(res).toEqual({ jobId: "j-vu-2" })
     const body = JSON.parse(fetch.mock.calls[0][1].body)
@@ -756,7 +756,7 @@ describe("request method and content-type", () => {
     const fetch = mockFetchJson({ jobId: "j-method" })
     vi.stubGlobal("fetch", fetch)
 
-    await videoUpscaleApi("https://r2/vid.mp4")
+    await videoUpscaleApi({ videoUrl: "https://r2/vid.mp4" })
 
     const opts = fetch.mock.calls[0][1]
     expect(opts.method).toBe("POST")

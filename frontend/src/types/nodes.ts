@@ -432,14 +432,15 @@ export type ReplicateImageProvider = "nano-banana" | "flux" | "dalle"
 
 // Additional image providers available only on KIE.ai
 export type KieImageProvider =
-  | "nano-banana" | "nano-banana-pro"
+  | "nano-banana" | "nano-banana-pro" | "nano-banana-2"
   | "flux" | "flux-flex" | "flux-i2i" | "flux-pro-i2i"
   | "grok" | "grok-i2i"
   | "gpt-image" | "gpt-image-i2i"
   | "imagen4" | "imagen4-fast" | "imagen4-ultra"
   | "ideogram" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe"
   | "qwen" | "qwen-i2i" | "qwen-edit"
-  | "seedream" | "seedream-edit"
+  | "seedream" | "seedream-edit" | "seedream-5-lite" | "seedream-5-lite-i2i"
+  | "flux-kontext" | "flux-kontext-max"
   | "z-image"
 
 // All image providers (union of both)
@@ -483,7 +484,7 @@ export type EditImageData = {
 }
 
 // Image-to-Image providers (transform source image with prompt)
-export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit"
+export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit" | "seedream-5-lite-i2i"
 
 export type ImageToImageData = {
   [key: string]: unknown
@@ -501,7 +502,7 @@ export type ImageToImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro" | "seedance" | "wan-i2v" | "wan-turbo" | "hailuo-2.3-pro" | "hailuo-2.3" | "hailuo-standard" | "sora2" | "bytedance-lite" | "bytedance-pro" | "bytedance-pro-fast" | "kling-master"
+  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro" | "seedance" | "wan-i2v" | "wan-turbo" | "hailuo-2.3-pro" | "hailuo-2.3" | "hailuo-standard" | "sora2" | "bytedance-lite" | "bytedance-pro" | "bytedance-pro-fast" | "kling-master" | "runway-kie"
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
@@ -530,6 +531,7 @@ export type ImageToVideoData = {
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
+  kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
 }
 
 export type TextToSpeechData = {
@@ -560,7 +562,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "kling-3.0" | "grok" | "sora2-pro" | "seedance" | "wan" | "sora2" | "hailuo-standard" | "bytedance-lite" | "bytedance-pro" | "wan-turbo"
+  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "kling-3.0" | "grok" | "sora2-pro" | "seedance" | "wan" | "sora2" | "hailuo-standard" | "bytedance-lite" | "bytedance-pro" | "wan-turbo" | "runway-kie"
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"
@@ -574,14 +576,14 @@ export type TextToVideoData = {
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
+  kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
 }
 
 export type VideoToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  // V2V uses Wan 2.6 only via KIE.ai (Replicate doesn't support video input)
-  // No provider selection - single provider (wan)
+  provider: "wan" | "luma-modify"
   duration: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -629,11 +631,11 @@ export type MotionTransferData = {
   currentJobProgress?: number
 }
 
-// Video Upscale: Upscale video resolution using Topaz
-// KIE.ai model: topaz/video-upscale
+// Video Upscale: Upscale video resolution using Topaz or VEO
 export type VideoUpscaleData = {
   [key: string]: unknown
   label: string
+  provider: "topaz" | "veo-1080p" | "veo-4k"
   upscaleFactor: "1" | "2" | "4"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -643,6 +645,27 @@ export type VideoUpscaleData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  kieTaskId?: string              // KIE task ID from upstream VEO node (for VEO upscale providers)
+}
+
+// Extend Video: Continue a VEO or Runway video with a new prompt
+export type ExtendVideoData = {
+  [key: string]: unknown
+  label: string
+  provider: "veo-extend" | "runway-extend"
+  prompt: string
+  model?: "fast" | "quality"      // VEO only
+  seeds?: number                   // VEO only
+  quality?: "720p" | "1080p"      // Runway only
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  kieTaskId?: string              // KIE task ID from upstream video node (required)
 }
 
 export type QACheckData = {
@@ -1739,6 +1762,7 @@ export type SceneNodeData =
   | LipSyncData
   | MotionTransferData
   | VideoUpscaleData
+  | ExtendVideoData
   | SaveToStorageData
   | WebhookOutputData
   | SceneNodeDataType
@@ -1825,6 +1849,7 @@ export type SceneNodeType =
   | "lip-sync"
   | "motion-transfer"
   | "video-upscale"
+  | "extend-video"
   | "save-to-storage"
   | "webhook-output"
   | "scene"
@@ -2615,12 +2640,30 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["video"],
     defaultData: {
       label: "Video Upscale",
+      provider: "topaz",
       upscaleFactor: "2",
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],
       activeResultIndex: 0,
     } as VideoUpscaleData,
+  },
+  {
+    type: "extend-video",
+    label: "Extend Video",
+    category: "ai",
+    creditCost: 40,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Extend Video",
+      provider: "veo-extend",
+      prompt: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as ExtendVideoData,
   },
   // Output
   {

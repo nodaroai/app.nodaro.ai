@@ -11,6 +11,10 @@ export const IMAGE_GEN_MODELS = [
   { value: "ideogram", label: "Ideogram", desc: "Excellent text rendering, character consistency" },
   { value: "qwen", label: "Qwen", desc: "Versatile, good at diverse styles" },
   { value: "seedream", label: "Seedream", desc: "Photorealistic, high detail" },
+  { value: "seedream-5-lite", label: "Seedream 5 Lite", desc: "Latest Seedream, fast and sharp" },
+  { value: "nano-banana-2", label: "Nano Banana 2", desc: "Updated Nano Banana with web grounding" },
+  { value: "flux-kontext", label: "Flux Kontext", desc: "Context-aware generation and editing" },
+  { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext generation" },
   { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
 ] as const
 
@@ -26,6 +30,9 @@ export const IMAGE_I2I_MODELS = [
   { value: "qwen-i2i", label: "Qwen", desc: "Versatile image transformation" },
   { value: "qwen-edit", label: "Qwen Edit", desc: "Targeted image editing" },
   { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
+  { value: "seedream-5-lite-i2i", label: "Seedream 5 Lite", desc: "Latest Seedream image-to-image" },
+  { value: "flux-kontext", label: "Flux Kontext", desc: "Context-aware editing via Kontext" },
+  { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext editing" },
 ] as const
 
 export const VIDEO_I2V_MODELS = [
@@ -49,6 +56,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "bytedance-pro-fast", label: "Bytedance Pro Fast", desc: "Fast pro generation" },
   { value: "grok-i2v", label: "Grok", desc: "Creative, stylized motion" },
   { value: "veo", label: "VEO 2", desc: "Previous gen VEO" },
+  { value: "runway-kie", label: "Runway (KIE)", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
   { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
   { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
   { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
@@ -70,9 +78,15 @@ export const VIDEO_T2V_MODELS = [
   { value: "bytedance-lite", label: "Bytedance Lite", desc: "Fast, 5-10s" },
   { value: "bytedance-pro", label: "Bytedance Pro", desc: "High quality, 5-10s" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast generation, 5s clips" },
+  { value: "runway-kie", label: "Runway (KIE)", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
   { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
   { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
   { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
+] as const
+
+export const VIDEO_V2V_MODELS = [
+  { value: "wan", label: "Wan 2.6", desc: "High quality video-to-video" },
+  { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },
 ] as const
 
 // =============================================================================
@@ -92,6 +106,9 @@ export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> =
   "ideogram-edit": { min: 4, max: 8 },
   "ideogram-remix": { min: 4, max: 8 },
   "ideogram-reframe": { min: 4, max: 8 },
+  "nano-banana-2": { min: 2, max: 5 },
+  "seedream-5-lite": { min: 3, max: 5 },
+  "seedream-5-lite-i2i": { min: 3, max: 5 },
 }
 
 // =============================================================================
@@ -181,6 +198,16 @@ const Z_IMAGE_RATIOS = [
   { value: "3:4", label: "3:4" },
 ] as const
 
+// Flux Kontext: 21:9, 16:9, 4:3, 1:1, 3:4, 9:16
+const KONTEXT_RATIOS = [
+  { value: "1:1", label: "1:1 (Square)" },
+  { value: "16:9", label: "16:9 (Landscape)" },
+  { value: "9:16", label: "9:16 (Portrait)" },
+  { value: "4:3", label: "4:3" },
+  { value: "3:4", label: "3:4" },
+  { value: "21:9", label: "21:9 (Ultra-wide)" },
+] as const
+
 export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label: string }[]> = {
   "nano-banana": NANO_BANANA_RATIOS,
   "nano-banana-pro": NANO_BANANA_RATIOS,
@@ -188,6 +215,8 @@ export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label
   "flux-flex": FLUX_RATIOS,
   "flux-i2i": FLUX_RATIOS,
   "flux-pro-i2i": FLUX_RATIOS,
+  "flux-kontext": KONTEXT_RATIOS,
+  "flux-kontext-max": KONTEXT_RATIOS,
   "grok": GROK_RATIOS,
   "gpt-image": GPT_IMAGE_RATIOS,
   "gpt-image-i2i": GPT_IMAGE_RATIOS,
@@ -202,6 +231,9 @@ export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label
   "qwen-edit": IDEOGRAM_RATIOS,
   "seedream": SEEDREAM_RATIOS,
   "seedream-edit": SEEDREAM_RATIOS,
+  "seedream-5-lite": SEEDREAM_RATIOS,
+  "seedream-5-lite-i2i": SEEDREAM_RATIOS,
+  "nano-banana-2": NANO_BANANA_RATIOS,
   "z-image": Z_IMAGE_RATIOS,
 }
 
@@ -210,49 +242,45 @@ export function getAspectRatiosForModel(provider: string): readonly { value: str
 }
 
 // Models that support resolution selection
-// Note: Base Nano Banana does NOT support resolution. Nano Banana Pro DOES (1K/2K/4K).
-export const IMAGE_RESOLUTION_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  "nano-banana-pro": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-    { value: "4K", label: "4K (Ultra)" },
-  ],
-  "flux": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-  ],
-  "flux-flex": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-  ],
-  "flux-i2i": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-  ],
-  "flux-pro-i2i": [
-    { value: "1K", label: "1K (Standard)" },
-    { value: "2K", label: "2K (High)" },
-  ],
+// Note: Base Nano Banana does NOT support resolution. Nano Banana Pro and v2 DO (1K/2K/4K).
+const NANO_BANANA_RESOLUTIONS = [
+  { value: "1K", label: "1K (Standard)" },
+  { value: "2K", label: "2K (High)" },
+  { value: "4K", label: "4K (Ultra)" },
+] as const
+
+const FLUX_RESOLUTIONS = [
+  { value: "1K", label: "1K (Standard)" },
+  { value: "2K", label: "2K (High)" },
+] as const
+
+export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {
+  "nano-banana-pro": NANO_BANANA_RESOLUTIONS,
+  "nano-banana-2": NANO_BANANA_RESOLUTIONS,
+  "flux": FLUX_RESOLUTIONS,
+  "flux-flex": FLUX_RESOLUTIONS,
+  "flux-i2i": FLUX_RESOLUTIONS,
+  "flux-pro-i2i": FLUX_RESOLUTIONS,
 }
 
 // Models that support quality selection
-export const IMAGE_QUALITY_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  "gpt-image": [
-    { value: "medium", label: "Medium (Balanced)" },
-    { value: "high", label: "High (Detailed)" },
-  ],
-  "gpt-image-i2i": [
-    { value: "medium", label: "Medium (Balanced)" },
-    { value: "high", label: "High (Detailed)" },
-  ],
-  "seedream": [
-    { value: "basic", label: "Basic (2K)" },
-    { value: "high", label: "High (4K)" },
-  ],
-  "seedream-edit": [
-    { value: "basic", label: "Basic (2K)" },
-    { value: "high", label: "High (4K)" },
-  ],
+const GPT_IMAGE_QUALITY = [
+  { value: "medium", label: "Medium (Balanced)" },
+  { value: "high", label: "High (Detailed)" },
+] as const
+
+const SEEDREAM_QUALITY = [
+  { value: "basic", label: "Basic (2K)" },
+  { value: "high", label: "High (4K)" },
+] as const
+
+export const IMAGE_QUALITY_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {
+  "gpt-image": GPT_IMAGE_QUALITY,
+  "gpt-image-i2i": GPT_IMAGE_QUALITY,
+  "seedream": SEEDREAM_QUALITY,
+  "seedream-edit": SEEDREAM_QUALITY,
+  "seedream-5-lite": SEEDREAM_QUALITY,
+  "seedream-5-lite-i2i": SEEDREAM_QUALITY,
 }
 
 // Kling 3.0 supports continuous durations from 3s to 15s
@@ -279,6 +307,7 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "bytedance-lite": [5, 10],
   "bytedance-pro": [5, 10],
   "bytedance-pro-fast": [5, 10],
+  "runway-kie": [5, 10],
 }
 
 // Model capability constants — re-exported from shared package (single source of truth)
@@ -336,4 +365,5 @@ export const KIE_T2V_DURATIONS: Record<string, number[]> = {
   "bytedance-lite": [5, 10],
   "bytedance-pro": [5, 10],
   "wan-turbo": [5],
+  "runway-kie": [5, 10],
 }

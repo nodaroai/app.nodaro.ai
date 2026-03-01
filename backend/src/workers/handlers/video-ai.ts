@@ -10,6 +10,8 @@ import {
   videoUpscale,
 } from "../../providers/index.js"
 import type { ProgressCallback } from "../../providers/provider.interface.js"
+import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask } from "../../providers/kie/client.js"
+import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import {
@@ -99,7 +101,11 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     .update({
       status: "completed",
       progress: 100,
-      output_data: { videoUrl: finalVideoUrl, thumbnailUrl: thumbUrl },
+      output_data: {
+        videoUrl: finalVideoUrl,
+        thumbnailUrl: thumbUrl,
+        ...(result.kieTaskId && { kieTaskId: result.kieTaskId }),
+      },
       completed_at: new Date().toISOString(),
       provider: result.providerUsed,
       provider_cost: result.cost,
@@ -187,7 +193,11 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     .update({
       status: "completed",
       progress: 100,
-      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+      output_data: {
+        videoUrl: r2Url,
+        thumbnailUrl: thumbUrl,
+        ...(result.kieTaskId && { kieTaskId: result.kieTaskId }),
+      },
       completed_at: new Date().toISOString(),
       provider: result.providerUsed,
       provider_cost: result.cost,
@@ -288,27 +298,39 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
 }
 
 const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx) {
-  const { videoUrl, upscaleFactor } = job.data as {
+  const { videoUrl, upscaleFactor, provider, kieTaskId } = job.data as {
     jobId: string
-    videoUrl: string
+    videoUrl?: string
     upscaleFactor?: "1" | "2" | "4"
+    provider?: "topaz" | "veo-1080p" | "veo-4k"
+    kieTaskId?: string
   }
-  console.log(`[worker] video-upscale ${ctx.jobId} (factor: ${upscaleFactor ?? "2"}x)`)
+  const upscaleProvider = provider ?? "topaz"
+  console.log(`[worker] video-upscale ${ctx.jobId} (provider: ${upscaleProvider})`)
 
-  const onProgress: ProgressCallback = async (progress: number) => {
-    console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
-    await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+  let outputUrl: string
+
+  if (upscaleProvider === "veo-1080p" && kieTaskId) {
+    const result = await runVeo1080pTask(kieTaskId)
+    outputUrl = result.url
+  } else if (upscaleProvider === "veo-4k" && kieTaskId) {
+    const { resultJson } = await runVeo4kTask(kieTaskId)
+    const url = resultJson.resultUrls?.[0]
+    if (!url) throw new Error("VEO 4K succeeded but no URL found")
+    outputUrl = url
+  } else {
+    // Topaz upscale (original path)
+    if (!videoUrl) throw new Error("videoUrl is required for Topaz upscale")
+    const onProgress: ProgressCallback = async (progress: number) => {
+      console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
+      await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+    }
+    const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress })
+    outputUrl = result.url
   }
-
-  const result = await videoUpscale(
-    videoUrl,
-    "topaz",
-    upscaleFactor ?? "2",
-    { onProgress }
-  )
   await job.updateProgress(50)
 
-  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await job.updateProgress(100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -320,13 +342,67 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     progress: 100,
     output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
     completed_at: new Date().toISOString(),
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+    provider: upscaleProvider,
+    provider_cost: null,
   }).eq("id", ctx.jobId)
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${upscaleProvider})`)
+}
+
+const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) {
+  const { kieTaskId, prompt, provider, model, seeds, quality } = job.data as {
+    jobId: string
+    kieTaskId: string
+    prompt: string
+    provider: "veo-extend" | "runway-extend"
+    model?: "fast" | "quality"
+    seeds?: number
+    quality?: "720p" | "1080p"
+  }
+  console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider})`)
+
+  let videoUrl: string
+  let newTaskId: string | undefined
+
+  if (provider === "veo-extend") {
+    const { resultJson, taskId } = await runVeoExtendTask(kieTaskId, prompt, model, seeds)
+    const url = resultJson.resultUrls?.[0]
+    if (!url) throw new Error("VEO extend succeeded but no URL found")
+    videoUrl = url
+    newTaskId = taskId
+  } else {
+    // runway-extend
+    const { resultJson, taskId } = await runRunwayExtendTask(kieTaskId, prompt, quality ?? "720p")
+    const url = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    if (!url) throw new Error("Runway extend succeeded but no URL found")
+    videoUrl = url
+    newTaskId = taskId
+  }
+  await job.updateProgress(50)
+
+  const r2Url = await uploadVideoMaybeWatermark(videoUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: {
+      videoUrl: r2Url,
+      thumbnailUrl: thumbUrl,
+      ...(newTaskId && { kieTaskId: newTaskId }),
+    },
+    completed_at: new Date().toISOString(),
+    provider,
+    provider_cost: null,
+  }).eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
 }
 
 export const videoAIHandlers: Record<string, HandlerFn> = {
@@ -336,4 +412,5 @@ export const videoAIHandlers: Record<string, HandlerFn> = {
   "lip-sync": handleLipSync,
   "motion-transfer": handleMotionTransfer,
   "video-upscale": handleVideoUpscale,
+  "extend-video": handleExtendVideo,
 }

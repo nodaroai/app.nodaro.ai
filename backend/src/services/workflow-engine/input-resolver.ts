@@ -124,6 +124,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "lip-sync",
   "motion-transfer",
   "video-upscale",
+  "extend-video",
   "suno-music-video",
   "combine-videos",
   "merge-video-audio",
@@ -240,6 +241,14 @@ function routeOutput(
   // --- Video output nodes ---
   if (VIDEO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeVideoOutput(inputs, output, targetType, src.id)
+
+    // Pass through kieTaskId for VEO/Runway extend and upscale nodes
+    if (targetType === "extend-video" || targetType === "video-upscale") {
+      const state = nodeStates[src.id]
+      if (state?.output?.kieTaskId) {
+        inputs.kieTaskId = state.output.kieTaskId
+      }
+    }
     return
   }
 

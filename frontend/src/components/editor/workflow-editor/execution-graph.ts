@@ -171,6 +171,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "lip-sync" ||
     type === "motion-transfer" ||
     type === "video-upscale" ||
+    type === "extend-video" ||
     type === "suno-music-video" ||
     type === "render-video"
   ) {
@@ -444,6 +445,7 @@ const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "lip-sync",
   "motion-transfer",
   "video-upscale",
+  "extend-video",
   "suno-music-video",
   "merge-video-audio",
   "add-captions",

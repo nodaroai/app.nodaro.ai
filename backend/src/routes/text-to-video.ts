@@ -14,6 +14,7 @@ const textToVideoBody = z.object({
     "kling-turbo", "kling-3.0", "grok", "sora2-pro",
     "seedance", "wan", "sora2", "hailuo-standard",
     "bytedance-lite", "bytedance-pro", "wan-turbo",
+    "runway-kie",
   ]).optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std"]).optional(),

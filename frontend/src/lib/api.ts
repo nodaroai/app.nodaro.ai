@@ -1818,14 +1818,19 @@ export async function motionTransferApi(
   return res.json()
 }
 
-export async function videoUpscaleApi(
-  videoUrl: string,
-  upscaleFactor?: "1" | "2" | "4",
+export async function videoUpscaleApi(opts: {
+  videoUrl?: string
+  upscaleFactor?: "1" | "2" | "4"
   userId?: string
-): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl }
-  if (upscaleFactor) body.upscaleFactor = upscaleFactor
-  if (userId) body.userId = userId
+  provider?: "topaz" | "veo-1080p" | "veo-4k"
+  kieTaskId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {}
+  if (opts.videoUrl) body.videoUrl = opts.videoUrl
+  if (opts.upscaleFactor) body.upscaleFactor = opts.upscaleFactor
+  if (opts.userId) body.userId = opts.userId
+  if (opts.provider) body.provider = opts.provider
+  if (opts.kieTaskId) body.kieTaskId = opts.kieTaskId
   const res = await fetch(`${API_BASE_URL}/v1/video-upscale`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -1834,6 +1839,29 @@ export async function videoUpscaleApi(
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start video upscale")
+  }
+  return res.json()
+}
+
+// --- Extend Video ---
+
+export async function extendVideo(params: {
+  kieTaskId: string
+  prompt: string
+  provider: string
+  model?: string
+  seeds?: number
+  quality?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/extend-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start extend video")
   }
   return res.json()
 }
