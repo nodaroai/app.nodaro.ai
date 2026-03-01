@@ -19,6 +19,8 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const edges = useWorkflowStore((s) => s.edges)
+  const inConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "in").length
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -234,12 +236,18 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Input handle icon */}
+    {/* Input handle icon (TYPE 1) */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: 'calc(75% - 14px)', left: '-29px' }}
     >
       <Type className="w-3.5 h-3.5 text-white" />
+      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
+      {inConnectionCount >= 2 && (
+        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
+          {inConnectionCount}
+        </div>
+      )}
     </div>
 
     {/* Video output handle icon */}

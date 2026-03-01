@@ -66,6 +66,7 @@ interface WorkflowState {
   readonly onEdgesChange: (changes: EdgeChange<WorkflowEdge>[]) => void
   readonly onConnect: (connection: Connection) => void
   readonly addNode: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
+  readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   readonly deleteNode: (nodeId: string) => void
   readonly deleteEdge: (edgeId: string) => void
@@ -272,6 +273,13 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
     return id
   },
+
+  updateNode: (nodeId, updates) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === nodeId ? { ...node, ...updates } : node,
+      ),
+    })),
 
   updateNodeData: (nodeId, data) => {
     // If every key in the update is execution-related, tell the undo system

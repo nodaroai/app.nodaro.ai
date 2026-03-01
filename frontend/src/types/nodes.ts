@@ -22,6 +22,13 @@ export type TextPromptData = {
   label: string
   text: string
   variables: Record<string, string>
+  color?: string
+  textStyle?: string
+  bold?: boolean
+  italic?: boolean
+  alignment?: string
+  width?: number
+  height?: number
 }
 
 export type ListNodeData = {
@@ -2041,6 +2048,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 5,
     inputs: ["in"],
     outputs: ["image"],
+    width: 400,
+    height: 500,
     defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana-pro", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
   },
   {
@@ -2066,6 +2075,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Image to Video",
     category: "ai",
     creditCost: 20,
+    width: 320,
+    height: 420,
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
     defaultData: { label: "Image to Video", provider: "veo3", model: "veo-3", duration: 5, motion: "moderate", cameraMotion: "static", fieldMappings: {} },

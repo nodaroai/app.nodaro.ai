@@ -2,13 +2,15 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Waypoints, Loader2, AlertCircle, X } from "lucide-react"
+import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, Download } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { MotionTransferData } from "@/types/nodes"
 
 function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
@@ -16,6 +18,9 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const edges = useWorkflowStore((s) => s.edges)
+  const inConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "in").length
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -23,6 +28,8 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [showThumbnails, setShowThumbnails] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const credits = useModelCredits("kling-motion", 5)
 
   function handleDeleteResult(indexToDelete: number) {
@@ -43,7 +50,12 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const maxDuration = nodeData.characterOrientation === "image" ? 10 : 30
 
   return (
-    <div className="relative group/run">
+    <div className="relative">
+    {/* Floating label above node */}
+    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
+      <Waypoints className="w-3.5 h-3.5" />
+      <span className="truncate">{nodeData.label}</span>
+    </div>
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -52,113 +64,19 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "out", type: "source", position: Position.Right, label: "Output" },
-      ]}
-    >
-      <div className="flex flex-col gap-1">
-        {status === "running" && (
-          <div className="flex flex-col items-center justify-center h-28 rounded-md bg-muted/30 gap-2">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            {nodeData.currentJobProgress != null && nodeData.currentJobProgress > 0 && (
-              <div className="flex flex-col items-center gap-1 w-full px-4">
-                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-300 ease-out"
-                    style={{ width: `${nodeData.currentJobProgress}%` }}
-                  />
-                </div>
-                <span className="text-[11px] text-muted-foreground font-medium">
-                  {nodeData.currentJobProgress}%
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {status !== "running" && activeUrl && (
-          <div className="relative group">
-            {activeThumbnail ? (
-              <CachedImage
-                src={activeThumbnail}
-                alt="Video preview"
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
-                thumbnail
-                thumbnailWidth={320}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewOpen(true)
-                }}
-              />
-            ) : (
-              <video
-                src={activeUrl}
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewOpen(true)
-                }}
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
-                playsInline
-              />
-            )}
-            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
-              Video
-            </div>
-            {results.length > 0 && (
-              <button
-                type="button"
-                aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeleteResult(activeIndex)
-                }}
-                title="Delete this result"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        )}
-
-        {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 h-28 rounded-md bg-red-500/5 text-red-500 p-2">
-            <div className="flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
-            </div>
-            {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
-                {nodeData.errorMessage}
-              </p>
-            )}
-          </div>
-        )}
-
-        {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
-            <Waypoints className="w-6 h-6" />
-          </div>
-        )}
-
-        {results.length > 1 && (
-          <div className="flex gap-1 overflow-x-auto">
-            {results.slice(0, 5).map((r, i) => (
-              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
+      hideHeader
+      bottomToolbarContent={
+        showThumbnails && results.length > 1 ? (
+          <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
+            {results.slice(0, 8).map((r, i) => (
+              <div key={`${r.jobId}-${i}`} className="relative shrink-0">
                 {r.thumbnailUrl ? (
                   <CachedImage
                     src={r.thumbnailUrl}
-                    alt=""
-                    className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
-                      i === activeIndex
-                        ? "opacity-100 ring-2 ring-primary"
-                        : "opacity-50 hover:opacity-80"
+                    alt={`Result ${i + 1}`}
+                    className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
+                      i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
-                    thumbnail
-                    thumbnailWidth={80}
                     onClick={(e) => {
                       e.stopPropagation()
                       updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
@@ -167,10 +85,8 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
                 ) : (
                   <video
                     src={r.url}
-                    className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
-                      i === activeIndex
-                        ? "opacity-100 ring-2 ring-primary"
-                        : "opacity-50 hover:opacity-80"
+                    className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
+                      i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -180,28 +96,174 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
                     playsInline
                   />
                 )}
-                <button
-                  type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleDeleteResult(i)
-                  }}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
               </div>
             ))}
           </div>
+        ) : undefined
+      }
+      toolbarActions={
+        status !== "running" ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
+      handles={[
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '75%', left: '-29px' }, hideHandle: true },
+        { id: "out", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
+      ]}
+    >
+      <div className="relative w-full group/video" style={{ minHeight: 180 }}>
+        {/* Video / thumbnail */}
+        {activeUrl && status !== "running" && (
+          <>
+            {activeThumbnail ? (
+              <CachedImage
+                src={activeThumbnail}
+                alt="Video preview"
+                className="w-full h-full object-cover rounded-xl cursor-pointer"
+                style={{ minHeight: 180 }}
+                onClick={() => selectNode(id)}
+              />
+            ) : (
+              <video
+                src={activeUrl}
+                className="w-full object-cover rounded-xl cursor-pointer"
+                style={{ minHeight: 180 }}
+                onClick={() => selectNode(id)}
+                autoPlay={videoAutoplay}
+                muted
+                loop={videoAutoplay}
+                playsInline
+              />
+            )}
+          </>
         )}
 
-        <div className="flex justify-between text-muted-foreground text-xs">
-          <span>{nodeData.characterOrientation === "image" ? "Image Orient" : "Video Orient"}</span>
-          <span>{nodeData.resolution} (max {maxDuration}s)</span>
-        </div>
+        {/* Empty state */}
+        {!activeUrl && status !== "running" && status !== "failed" && (
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40" style={{ minHeight: 180 }}>
+            <Waypoints className="w-10 h-10" />
+          </div>
+        )}
+
+        {/* Running state */}
+        {status === "running" && (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10" style={{ minHeight: 180 }}>
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
+            {nodeData.currentJobProgress != null && nodeData.currentJobProgress > 0 && (
+              <div className="flex flex-col items-center gap-1 w-full px-8">
+                <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#ff0073] transition-all duration-300 ease-out"
+                    style={{ width: `${nodeData.currentJobProgress}%` }}
+                  />
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  {nodeData.currentJobProgress}%
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Failed state */}
+        {status === "failed" && !activeUrl && (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500" style={{ minHeight: 180 }}>
+            <AlertCircle className="w-6 h-6" />
+            {nodeData.errorMessage && (
+              <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
+            )}
+          </div>
+        )}
+
+        {/* Version badge - top left */}
+        {results.length > 0 && (
+          <button
+            type="button"
+            className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
+            onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+          >
+            <LayoutGrid className="w-3 h-3" />
+            <span>{results.length}</span>
+          </button>
+        )}
+
+        {/* Delete - top right */}
+        {activeUrl && results.length > 0 && (
+          <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+            <button
+              type="button"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Bottom left: fullscreen + download */}
+        {activeUrl && (
+          <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
+            <button
+              type="button"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+            >
+              <Expand className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Bottom right: save to library */}
+        {activeUrl && (
+          <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+            <SaveToLibraryButton url={activeUrl} type="video" />
+          </div>
+        )}
+      </div>
+
+      {/* Bottom info bar */}
+      <div className="flex justify-between text-[10px] text-muted-foreground px-2">
+        <span>{nodeData.characterOrientation === "image" ? "Image Orient" : "Video Orient"}</span>
+        <span>{nodeData.resolution} (max {maxDuration}s)</span>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+
+    {/* Video input handle icon (TYPE 1) */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+      style={{ top: 'calc(75% - 14px)', left: '-29px' }}
+    >
+      <Clapperboard className="w-3.5 h-3.5 text-white" />
+      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
+      {inConnectionCount >= 2 && (
+        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
+          {inConnectionCount}
+        </div>
+      )}
+    </div>
+
+    {/* Video output handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+      style={{ top: 'calc(25% - 47px)', right: '-29px' }}
+    >
+      <Clapperboard className="w-3.5 h-3.5 text-white" />
+    </div>
+
+    <DeleteConfirmationDialog
+      isOpen={deleteConfirm !== null}
+      onClose={() => setDeleteConfirm(null)}
+      onConfirm={() => {
+        if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
+      }}
+    />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}

@@ -3,7 +3,7 @@
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, X, Scissors, Settings, LayoutGrid, Expand, Download } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, X, Scissors, Settings, LayoutGrid, Expand, Download, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -16,6 +16,7 @@ import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { EditableNodeLabel } from "./editable-node-label"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -23,6 +24,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const edges = useWorkflowStore((s) => s.edges)
+  const inConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "in").length
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -70,12 +73,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ width: 280 }}>
+    <div className="relative" style={{ maxWidth: '220px' }}>
     {/* Floating label above node */}
-    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
-      <ImageIcon className="w-3.5 h-3.5" />
-      <span className="truncate">{nodeData.label}</span>
-    </div>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<ImageIcon className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -84,58 +88,26 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={220}
+      minHeight={260}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       hideHeader
-      bottomToolbarContent={
-        results.length > 1 && showThumbnails ? (
-          <div className="flex gap-1 bg-black/70 backdrop-blur-sm rounded-lg px-1.5 py-1">
-            {results.slice(0, 5).map((r, i) => (
-              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <CachedImage
-                  src={r.url}
-                  alt={`Result ${i + 1}`}
-                  className={`w-16 h-16 object-cover rounded cursor-pointer border border-white/20 ${
-                    i === activeIndex
-                      ? "opacity-100 ring-2 ring-white"
-                      : "opacity-60 hover:opacity-90"
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
-                  }}
-                />
-                <button
-                  type="button"
-                  aria-label="Remove"
-                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteConfirm(i)
-                  }}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : undefined
-      }
-      toolbarActions={
+      topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, top: "calc(75% + 33px)", customStyle: { top: 'calc(75% + 33px)', left: '-3px' } },
+        { id: "in", type: "target", position: Position.Left, top: "calc(75% + 33px)", customStyle: { top: 'calc(75% + 33px)', left: '-29px' }, hideHandle: true },
         { id: "image", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="relative w-full group" style={{ minHeight: 180 }}>
+      <div className="relative w-full group">
         {/* Running state */}
         {status === "running" && (
-          <div className="flex items-center justify-center bg-muted/30 rounded-xl" style={{ minHeight: 180 }}>
+          <div className="flex items-center justify-center bg-muted/30 rounded-xl h-[180px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         )}
@@ -158,7 +130,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               src={activeUrl}
               alt="Generated"
               className="w-full object-cover rounded-xl cursor-pointer"
-              style={{ minHeight: 180 }}
               thumbnail={!useFull}
               thumbnailWidth={320}
               onClick={(e) => { e.stopPropagation(); selectNode(id) }}
@@ -231,7 +202,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2" style={{ minHeight: 180 }}>
+          <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2 h-[180px]">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="font-medium">Failed</span>
@@ -246,12 +217,25 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Idle/empty state */}
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40" style={{ minHeight: 180 }}>
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
             <ImageIcon className="w-10 h-10" />
           </div>
         )}
       </div>
     </BaseNode>
+    {/* Input handle icon (TYPE 1) */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+      style={{ top: 'calc(75% + 19px)', left: '-29px' }}
+    >
+      <Type className="w-3.5 h-3.5 text-white" />
+      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
+      {inConnectionCount >= 2 && (
+        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
+          {inConnectionCount}
+        </div>
+      )}
+    </div>
     {/* Image output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
