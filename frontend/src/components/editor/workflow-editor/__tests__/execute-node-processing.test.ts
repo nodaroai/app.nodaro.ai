@@ -448,11 +448,12 @@ describe("video-upscale", () => {
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
-    expect(mockVideoUpscaleApi).toHaveBeenCalledWith(
-      "http://low-res.mp4",
-      2,
-      "u1",
-    )
+    expect(mockVideoUpscaleApi).toHaveBeenCalledWith({
+      videoUrl: "http://low-res.mp4",
+      upscaleFactor: 2,
+      userId: "u1",
+      provider: "topaz",
+    })
   })
 
   it("passes undefined upscaleFactor when not set", async () => {
@@ -464,11 +465,12 @@ describe("video-upscale", () => {
     await executeNode(makeNode("video-upscale", {}), makeCtx())
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
-    expect(mockVideoUpscaleApi).toHaveBeenCalledWith(
-      "http://video.mp4",
-      undefined,
-      "u1",
-    )
+    expect(mockVideoUpscaleApi).toHaveBeenCalledWith({
+      videoUrl: "http://video.mp4",
+      upscaleFactor: undefined,
+      userId: "u1",
+      provider: "topaz",
+    })
   })
 })
 

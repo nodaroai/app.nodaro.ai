@@ -31,7 +31,7 @@ describe("cross-array model sync", () => {
     // If there are any unexpected overlaps beyond the ones that share the same
     // base model identifier (e.g. nano-banana), fail explicitly.
     const unexpected = overlapping.filter(
-      (v) => !["nano-banana", "nano-banana-pro"].includes(v),
+      (v) => !["nano-banana", "nano-banana-pro", "flux-kontext", "flux-kontext-max"].includes(v),
     )
     expect(unexpected).toEqual([])
   })
