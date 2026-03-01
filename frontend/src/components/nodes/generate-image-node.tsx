@@ -16,6 +16,7 @@ import { useCanvasZoom } from "@/components/editor/canvas-zoom-context"
 
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { EditableNodeLabel } from "./editable-node-label"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -74,10 +75,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
     {/* Floating label above node */}
-    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
-      <ImageIcon className="w-3.5 h-3.5" />
-      <span className="truncate">{nodeData.label}</span>
-    </div>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<ImageIcon className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}

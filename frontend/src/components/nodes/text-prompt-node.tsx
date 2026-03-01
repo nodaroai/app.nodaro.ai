@@ -4,6 +4,7 @@ import { memo, useCallback, useRef, useState } from "react"
 import { Position, type NodeProps, NodeResizer, Handle, NodeToolbar } from "@xyflow/react"
 import { Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ChevronDown } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { EditableNodeLabel } from "./editable-node-label"
 import type { TextPromptData } from "@/types/nodes"
 
 const COLORS = ["#0f172a", "#1e3a5f", "#1a2e1a", "#2d1a1a", "#2d1a2d", "#1a2d2d"]
@@ -55,10 +56,11 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       <div className="absolute -inset-5 z-0" />
 
       {/* Floating label above node */}
-      <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
-        <Type className="w-3.5 h-3.5" />
-        <span className="truncate">{nodeData.label}</span>
-      </div>
+      <EditableNodeLabel
+        label={nodeData.label}
+        icon={<Type className="w-3.5 h-3.5" />}
+        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+      />
 
       {/* Node resizer */}
       <NodeResizer
