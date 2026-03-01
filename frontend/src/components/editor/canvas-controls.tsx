@@ -1,6 +1,6 @@
 "use client"
 
-import { Maximize2, ZoomIn, ZoomOut, Map } from "lucide-react"
+import { Maximize2, ZoomIn, ZoomOut, Map, Magnet, Ruler } from "lucide-react"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 import {
@@ -14,6 +14,10 @@ import { useSidebar } from "@/components/layout/sidebar-context"
 interface CanvasControlsProps {
   readonly showMiniMap: boolean
   readonly onToggleMiniMap: () => void
+  readonly snapEnabled: boolean
+  readonly onToggleSnap: () => void
+  readonly alignmentEnabled: boolean
+  readonly onToggleAlignment: () => void
   readonly isMobile?: boolean
 }
 
@@ -66,7 +70,7 @@ function ControlButton({ icon, label, onClick, active }: ControlButtonProps) {
   )
 }
 
-export function CanvasControls({ showMiniMap, onToggleMiniMap, isMobile }: CanvasControlsProps) {
+export function CanvasControls({ showMiniMap, onToggleMiniMap, snapEnabled, onToggleSnap, alignmentEnabled, onToggleAlignment, isMobile }: CanvasControlsProps) {
   const { fitView, zoomIn, zoomOut } = useReactFlow()
   const { sidebarWidth } = useSidebar()
   // Position to the right of the sidebar + 12px gap (desktop), or bottom-right (mobile)
@@ -111,6 +115,18 @@ export function CanvasControls({ showMiniMap, onToggleMiniMap, isMobile }: Canva
             label="Toggle MiniMap"
             onClick={onToggleMiniMap}
             active={showMiniMap}
+          />
+          <ControlButton
+            icon={<Magnet className="w-4 h-4" />}
+            label="Snap to Grid (Ctrl+Shift+G)"
+            onClick={onToggleSnap}
+            active={snapEnabled}
+          />
+          <ControlButton
+            icon={<Ruler className="w-4 h-4" />}
+            label="Alignment Guides (Ctrl+Shift+A)"
+            onClick={onToggleAlignment}
+            active={alignmentEnabled}
           />
         </>
       )}

@@ -1853,6 +1853,8 @@ export interface NodeTypeDefinition {
   readonly inputs: ReadonlyArray<string>
   readonly outputs: ReadonlyArray<string>
   readonly defaultData: SceneNodeData
+  readonly width?: number
+  readonly height?: number
 }
 
 export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [

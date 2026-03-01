@@ -25,6 +25,8 @@ import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
+import { AlignmentGuideLines } from "./alignment-guide-lines"
+import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 import { SelectionActionBar } from "./selection-action-bar"
@@ -129,14 +131,18 @@ function getEdgeLabel(
     return { label: "Reference" }
   }
 
-  // Check fieldMappings on target node — shows which field this source is mapped to
+  // Check fieldMappings on target node — shows which field(s) this source is mapped to
   if (sourceNode && targetNode?.data) {
     const mappings = targetNode.data.fieldMappings as Record<string, { sourceNodeId: string }> | undefined
     if (mappings) {
+      const matchedLabels: string[] = []
       for (const [field, mapping] of Object.entries(mappings)) {
         if (mapping?.sourceNodeId === sourceNode.id) {
-          return { label: FIELD_LABELS[field] ?? field }
+          matchedLabels.push(FIELD_LABELS[field] ?? field)
         }
+      }
+      if (matchedLabels.length > 0) {
+        return { label: matchedLabels.join(", ") }
       }
     }
   }
@@ -266,9 +272,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
+  const [snapEnabled, setSnapEnabled] = useState(() => localStorage.getItem("nodaro:snapToGrid") === "true")
+  const [alignmentEnabled, setAlignmentEnabled] = useState(() => localStorage.getItem("nodaro:alignmentGuides") !== "false")
+  const [guideLines, setGuideLines] = useState<GuideLine[]>([])
+  const computeGuides = useAlignmentGuides()
   const isMobile = useIsMobile()
   const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
+  const arrowGuideClearRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const mobileContextValue = useMemo(() => ({ isMobile }), [isMobile])
   // Same positions used on both mobile and desktop — no separate layout
 
@@ -518,89 +529,175 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setAddNodePopupOpen(false)
     setAddNodePopupPosition(undefined)
   }, [])
+  const handleToggleSnap = useCallback(() => {
+    setSnapEnabled((prev) => {
+      const next = !prev
+      localStorage.setItem("nodaro:snapToGrid", String(next))
+      return next
+    })
+  }, [])
+
+  const handleToggleAlignment = useCallback(() => {
+    setAlignmentEnabled((prev) => {
+      const next = !prev
+      localStorage.setItem("nodaro:alignmentGuides", String(next))
+      return next
+    })
+  }, [])
+
   const handleNodeDragStart = useCallback((_event: React.MouseEvent, node: { id: string }) => setDraggingNodeId(node.id), [])
-  const handleNodeDragStop = useCallback(() => setDraggingNodeId(null), [])
+  const handleNodeDrag = useCallback((_event: React.MouseEvent, node: { id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }) => {
+    if (!alignmentEnabled) return
+    const rect: DraggedNodeRect = {
+      id: node.id,
+      x: node.position.x,
+      y: node.position.y,
+      width: node.measured?.width ?? 200,
+      height: node.measured?.height ?? 100,
+    }
+    setGuideLines(computeGuides(rect))
+  }, [alignmentEnabled, computeGuides])
+  const handleNodeDragStop = useCallback(() => {
+    setDraggingNodeId(null)
+    setGuideLines([])
+  }, [])
 
   const handleTidyUp = useCallback(() => {
     const NODE_W = 250 // horizontal spacing between columns
     const NODE_H = 160 // vertical spacing between rows within a column
+    const COMPONENT_GAP = 80 // vertical gap between disconnected flows
     const START_X = 100
     const START_Y = 100
 
-    // Separate sticky notes — don't rearrange them
-    const stickyNodes = nodes.filter((n) => n.type === "sticky-note")
-    const graphNodes = nodes.filter((n) => n.type !== "sticky-note")
+    // If nodes are selected, only tidy those; otherwise tidy all
+    const selectedNodes = nodes.filter((n) => n.selected && n.type !== "sticky-note")
+    const isSelectionMode = selectedNodes.length >= 2
+    const targetNodes = isSelectionMode ? selectedNodes : nodes.filter((n) => n.type !== "sticky-note")
+    const untouchedNodes = isSelectionMode
+      ? nodes.filter((n) => !n.selected || n.type === "sticky-note")
+      : nodes.filter((n) => n.type === "sticky-note")
 
-    if (graphNodes.length === 0) return
+    if (targetNodes.length === 0) return
 
-    // Build adjacency from edges
+    const targetIds = new Set(targetNodes.map((n) => n.id))
+
+    // Build adjacency from edges (only between target nodes)
     const children = new Map<string, string[]>()
     const parents = new Map<string, string[]>()
-    const nodeIds = new Set(graphNodes.map((n) => n.id))
-
-    for (const n of graphNodes) {
+    for (const n of targetNodes) {
       children.set(n.id, [])
       parents.set(n.id, [])
     }
     for (const e of edges) {
-      if (!nodeIds.has(e.source) || !nodeIds.has(e.target)) continue
+      if (!targetIds.has(e.source) || !targetIds.has(e.target)) continue
       children.get(e.source)!.push(e.target)
       parents.get(e.target)!.push(e.source)
     }
 
-    // Assign columns via longest-path from roots (ensures downstream nodes are always further right)
-    const column = new Map<string, number>()
-    const visited = new Set<string>()
-
-    function assignColumn(id: string): number {
-      if (column.has(id)) return column.get(id)!
-      if (visited.has(id)) return 0 // cycle guard
-      visited.add(id)
-      const parentCols = (parents.get(id) ?? []).map(assignColumn)
-      const col = parentCols.length > 0 ? Math.max(...parentCols) + 1 : 0
-      column.set(id, col)
-      return col
+    // Find connected components via BFS
+    const componentOf = new Map<string, number>()
+    let componentIdx = 0
+    for (const n of targetNodes) {
+      if (componentOf.has(n.id)) continue
+      const queue = [n.id]
+      componentOf.set(n.id, componentIdx)
+      while (queue.length > 0) {
+        const cur = queue.shift()!
+        for (const neighbor of [...(children.get(cur) ?? []), ...(parents.get(cur) ?? [])]) {
+          if (!componentOf.has(neighbor)) {
+            componentOf.set(neighbor, componentIdx)
+            queue.push(neighbor)
+          }
+        }
+      }
+      componentIdx++
     }
 
-    for (const n of graphNodes) assignColumn(n.id)
-
-    // Group nodes by column, preserve relative vertical order from original positions
-    const columns = new Map<number, typeof graphNodes>()
-    for (const n of graphNodes) {
-      const col = column.get(n.id) ?? 0
-      if (!columns.has(col)) columns.set(col, [])
-      columns.get(col)!.push(n)
+    // Group nodes by component
+    const components = new Map<number, typeof targetNodes>()
+    for (const n of targetNodes) {
+      const ci = componentOf.get(n.id) ?? 0
+      if (!components.has(ci)) components.set(ci, [])
+      components.get(ci)!.push(n)
     }
 
-    // Sort each column by original Y position for stability
-    for (const col of columns.values()) {
-      col.sort((a, b) => a.position.y - b.position.y)
-    }
+    // Sort components by the min original Y of their nodes (top-most first)
+    const sortedComponentKeys = [...components.keys()].sort((a, b) => {
+      const minYA = Math.min(...components.get(a)!.map((n) => n.position.y))
+      const minYB = Math.min(...components.get(b)!.map((n) => n.position.y))
+      return minYA - minYB
+    })
 
-    // Position nodes: center each column vertically relative to the tallest column
-    const maxRows = Math.max(...[...columns.values()].map((c) => c.length))
-    const sortedCols = [...columns.keys()].sort((a, b) => a - b)
+    // For selection mode, start at the top-left of the selection bounding box
+    const startX = isSelectionMode
+      ? Math.min(...targetNodes.map((n) => n.position.x))
+      : START_X
+    const startY = isSelectionMode
+      ? Math.min(...targetNodes.map((n) => n.position.y))
+      : START_Y
 
+    // Layout each component independently, stacking them vertically
     const arranged: typeof nodes = []
-    for (const colIdx of sortedCols) {
-      const col = columns.get(colIdx)!
-      const totalHeight = (col.length - 1) * NODE_H
-      const maxTotalHeight = (maxRows - 1) * NODE_H
-      const offsetY = (maxTotalHeight - totalHeight) / 2
+    let currentY = startY
 
-      col.forEach((node, rowIdx) => {
-        arranged.push({
-          ...node,
-          position: {
-            x: START_X + colIdx * NODE_W,
-            y: START_Y + offsetY + rowIdx * NODE_H,
-          },
+    for (const ci of sortedComponentKeys) {
+      const compNodes = components.get(ci)!
+
+      // Assign columns via longest-path from roots
+      const column = new Map<string, number>()
+      const visited = new Set<string>()
+
+      function assignColumn(id: string): number {
+        if (column.has(id)) return column.get(id)!
+        if (visited.has(id)) return 0 // cycle guard
+        visited.add(id)
+        const parentCols = (parents.get(id) ?? []).filter((p) => componentOf.get(p) === ci).map(assignColumn)
+        const col = parentCols.length > 0 ? Math.max(...parentCols) + 1 : 0
+        column.set(id, col)
+        return col
+      }
+
+      for (const n of compNodes) assignColumn(n.id)
+
+      // Group by column, preserve relative vertical order
+      const columns = new Map<number, typeof compNodes>()
+      for (const n of compNodes) {
+        const col = column.get(n.id) ?? 0
+        if (!columns.has(col)) columns.set(col, [])
+        columns.get(col)!.push(n)
+      }
+
+      for (const col of columns.values()) {
+        col.sort((a, b) => a.position.y - b.position.y)
+      }
+
+      // Position nodes within this component
+      const maxRows = Math.max(...[...columns.values()].map((c) => c.length))
+      const sortedCols = [...columns.keys()].sort((a, b) => a - b)
+
+      for (const colIdx of sortedCols) {
+        const col = columns.get(colIdx)!
+        const totalHeight = (col.length - 1) * NODE_H
+        const maxTotalHeight = (maxRows - 1) * NODE_H
+        const offsetY = (maxTotalHeight - totalHeight) / 2
+
+        col.forEach((node, rowIdx) => {
+          arranged.push({
+            ...node,
+            position: {
+              x: startX + colIdx * NODE_W,
+              y: currentY + offsetY + rowIdx * NODE_H,
+            },
+          })
         })
-      })
+      }
+
+      // Advance Y for the next component
+      currentY += maxRows * NODE_H + COMPONENT_GAP
     }
 
-    // Re-add sticky notes untouched
-    arranged.push(...stickyNodes)
+    // Re-add untouched nodes (sticky notes + unselected nodes)
+    arranged.push(...untouchedNodes)
 
     setNodes(arranged)
     setCanvasContextMenu(null)
@@ -646,6 +743,20 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault()
         undo()
+        return
+      }
+
+      // Ctrl/Cmd+Shift+G — Toggle grid snap
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "g") {
+        e.preventDefault()
+        handleToggleSnap()
+        return
+      }
+
+      // Ctrl/Cmd+Shift+A — Toggle alignment guides
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault()
+        handleToggleAlignment()
         return
       }
 
@@ -719,6 +830,24 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Arrow keys — show alignment guides after React Flow moves the node
+      if (alignmentEnabled && selectedNodeId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        clearTimeout(arrowGuideClearRef.current)
+        requestAnimationFrame(() => {
+          const n = getNode(selectedNodeId)
+          if (!n) return
+          setGuideLines(computeGuides({
+            id: n.id,
+            x: n.position.x,
+            y: n.position.y,
+            width: n.measured?.width ?? 200,
+            height: n.measured?.height ?? 100,
+          }))
+          arrowGuideClearRef.current = setTimeout(() => setGuideLines([]), 500)
+        })
+        return
+      }
+
       // Escape - Close popups
       if (e.key === "Escape") {
         setAddNodePopupOpen(false)
@@ -729,7 +858,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo])
+  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes("application/nodaro-image")) {
@@ -812,6 +941,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       <CanvasControls
         showMiniMap={showMiniMap}
         onToggleMiniMap={handleToggleMiniMap}
+        snapEnabled={snapEnabled}
+        onToggleSnap={handleToggleSnap}
+        alignmentEnabled={alignmentEnabled}
+        onToggleAlignment={handleToggleAlignment}
         isMobile={isMobile}
       />
 
@@ -874,7 +1007,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onPaneContextMenu={isMobile ? undefined : handlePaneContextMenu}
           onMoveStart={handleMoveStart}
           onNodeDragStart={handleNodeDragStart}
+          onNodeDrag={handleNodeDrag}
           onNodeDragStop={handleNodeDragStop}
+          snapToGrid={snapEnabled}
+          snapGrid={[16, 16]}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: 'default' }}
@@ -902,11 +1038,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             />
           )}
           <Background
-            variant={BackgroundVariant.Dots}
+            variant={snapEnabled ? BackgroundVariant.Lines : BackgroundVariant.Dots}
             gap={16}
-            size={1}
+            size={snapEnabled ? 0.5 : 1}
+            color={snapEnabled ? "var(--grid-line-color)" : undefined}
             className="!bg-background"
           />
+          {guideLines.length > 0 && <AlignmentGuideLines guides={guideLines} />}
         </ReactFlow>
       </div>
       </CanvasZoomContext.Provider>

@@ -71,6 +71,54 @@ CREATE TABLE IF NOT EXISTS model_pricing (
 );
 
 -- ============================================================
+-- 2b. SEED model_pricing (from 007/008/009 which skip on fresh DBs)
+-- ============================================================
+
+INSERT INTO model_pricing (model_identifier, credit_cost, is_enabled, category)
+VALUES
+  ('nano-banana',       1, true, 'image'),
+  ('nano-banana-pro',   2, true, 'image'),
+  ('flux',              1, true, 'image'),
+  ('grok',              1, true, 'image'),
+  ('gpt-image',         1, true, 'image'),
+  ('recraft-upscale',   1, true, 'image'),
+  ('recraft-remove-bg', 0, true, 'image'),
+  ('nano-banana-edit',  1, true, 'image'),
+  ('flux-i2i',          1, true, 'image'),
+  ('flux-pro-i2i',      1, true, 'image'),
+  ('grok-i2i',          1, true, 'image'),
+  ('gpt-image-i2i',     1, true, 'image'),
+  ('minimax',           1, true, 'video'),
+  ('veo3',             25, true, 'video'),
+  ('veo3.1',           16, true, 'video'),
+  ('kling',             4, true, 'video'),
+  ('kling-turbo',       3, true, 'video'),
+  ('grok-i2v',          1, true, 'video'),
+  ('sora2-pro',        10, true, 'video'),
+  ('runway',            0, true, 'video'),
+  ('pika',              0, true, 'video'),
+  ('sora',              0, true, 'video'),
+  ('wan',               5, true, 'video'),
+  ('topaz-video',       0, true, 'video'),
+  ('motion-transfer',   7, true, 'video'),
+  ('kling-motion',      0, true, 'video'),
+  ('kling-avatar',      0, true, 'video'),
+  ('kling-avatar-pro',  0, true, 'video'),
+  ('hailuo-avatar',     5, true, 'video'),
+  ('elevenlabs',        1, true, 'audio'),
+  ('elevenlabs-turbo',  1, true, 'audio'),
+  ('elevenlabs-multilingual', 1, true, 'audio'),
+  ('elevenlabs-sfx',    1, true, 'audio'),
+  ('suno',              1, true, 'audio'),
+  ('suno-v5',           1, true, 'audio'),
+  ('infinitalk',        0, true, 'audio'),
+  ('topaz',             0, true, 'processing'),
+  ('ffmpeg',            0, true, 'processing')
+ON CONFLICT (model_identifier) DO UPDATE SET
+  credit_cost = EXCLUDED.credit_cost,
+  category = EXCLUDED.category;
+
+-- ============================================================
 -- 3. INDEXES
 -- ============================================================
 
@@ -83,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_paddle_customers_user ON paddle_customers(user_id
 CREATE INDEX IF NOT EXISTS idx_paddle_customers_paddle ON paddle_customers(paddle_customer_id);
 CREATE INDEX IF NOT EXISTS idx_credit_transactions_user ON credit_transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_credit_transactions_created ON credit_transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id_created_at ON credit_transactions(user_id, created_at DESC);
 
 -- ============================================================
 -- 4. RLS
