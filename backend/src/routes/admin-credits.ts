@@ -176,16 +176,12 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // PUT /v1/admin/users/:id/storage - Admin change user storage limit
   app.put("/v1/admin/users/:id/storage", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const { storageLimitBytes, adminUserId } = request.body as {
+    const { storageLimitBytes } = request.body as {
       storageLimitBytes: number
-      adminUserId: string
     }
 
     if (!storageLimitBytes || storageLimitBytes <= 0) {
       return reply.code(400).send({ error: "storageLimitBytes must be a positive number" })
-    }
-    if (!adminUserId) {
-      return reply.code(400).send({ error: "Missing required field: adminUserId" })
     }
 
     // Fetch current limit
