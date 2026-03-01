@@ -422,6 +422,11 @@ html, body {
   fill: #2D2D2D;
 }
 
+/* Grid lines in dark mode (snap-to-grid variant) */
+.dark .react-flow__background pattern line {
+  stroke: #2D2D2D;
+}
+
 /* ── Tag textarea highlight backdrop ────────────────────────── */
 .tag-textarea-container {
   position: relative;
