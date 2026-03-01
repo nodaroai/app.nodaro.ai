@@ -11,31 +11,36 @@ export interface GuideLine {
   readonly to: number
 }
 
-const SNAP_THRESHOLD = 5 // px in flow coordinates
+export interface DraggedNodeRect {
+  readonly id: string
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
+const THRESHOLD = 5 // px in flow coordinates
 
 /**
- * Returns a callback that computes alignment guide lines between the
- * dragged node and all other (non-sticky, non-hidden, non-selected) nodes.
+ * Returns a callback that computes alignment guide lines.
+ *
+ * Accepts the dragged node's live rect (from onNodeDrag callback) so
+ * positions are always up-to-date, even with snap-to-grid enabled.
  */
 export function useAlignmentGuides() {
   const { getNodes } = useReactFlow()
 
   const computeGuides = useCallback(
-    (draggedNodeId: string): GuideLine[] => {
+    (dragged: DraggedNodeRect): GuideLine[] => {
       const allNodes = getNodes()
-      const dragged = allNodes.find((n) => n.id === draggedNodeId)
-      if (!dragged) return []
 
-      const dW = dragged.measured?.width ?? 200
-      const dH = dragged.measured?.height ?? 100
-      const dLeft = dragged.position.x
-      const dRight = dLeft + dW
-      const dCenterX = dLeft + dW / 2
-      const dTop = dragged.position.y
-      const dBottom = dTop + dH
-      const dCenterY = dTop + dH / 2
+      const dLeft = dragged.x
+      const dTop = dragged.y
+      const dRight = dLeft + dragged.width
+      const dCenterX = dLeft + dragged.width / 2
+      const dBottom = dTop + dragged.height
+      const dCenterY = dTop + dragged.height / 2
 
-      // Candidate edges of the dragged node
       const dragXEdges = [dLeft, dRight, dCenterX]
       const dragYEdges = [dTop, dBottom, dCenterY]
 
@@ -44,7 +49,7 @@ export function useAlignmentGuides() {
       const seenH = new Set<number>()
 
       for (const node of allNodes) {
-        if (node.id === draggedNodeId) continue
+        if (node.id === dragged.id) continue
         if (node.type === "sticky-note") continue
         if ((node.data as Record<string, unknown>)?.hidden) continue
         if (node.selected) continue
@@ -64,7 +69,7 @@ export function useAlignmentGuides() {
         // Vertical guides (aligned on X axis)
         for (const dx of dragXEdges) {
           for (const ox of otherXEdges) {
-            if (Math.abs(dx - ox) <= SNAP_THRESHOLD) {
+            if (Math.abs(dx - ox) <= THRESHOLD) {
               const pos = Math.round(ox)
               if (!seenV.has(pos)) {
                 seenV.add(pos)
@@ -79,7 +84,7 @@ export function useAlignmentGuides() {
         // Horizontal guides (aligned on Y axis)
         for (const dy of dragYEdges) {
           for (const oy of otherYEdges) {
-            if (Math.abs(dy - oy) <= SNAP_THRESHOLD) {
+            if (Math.abs(dy - oy) <= THRESHOLD) {
               const pos = Math.round(oy)
               if (!seenH.has(pos)) {
                 seenH.add(pos)

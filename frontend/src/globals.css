@@ -134,6 +134,7 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --grid-line-color: #dcdcdc;
 }
 
 .dark {
@@ -168,6 +169,7 @@
   --sidebar-accent-foreground: #E2E8F0;
   --sidebar-border: #2D2D2D;
   --sidebar-ring: #ff0073;
+  --grid-line-color: #1a1a1a;
 }
 
 /* Prevent mobile pull-to-refresh — must be outside @layer to avoid being overridden */
@@ -422,10 +424,6 @@ html, body {
   fill: #2D2D2D;
 }
 
-/* Grid lines in dark mode (snap-to-grid variant) */
-.dark .react-flow__background pattern line {
-  stroke: #2D2D2D;
-}
 
 /* ── Tag textarea highlight backdrop ────────────────────────── */
 .tag-textarea-container {
