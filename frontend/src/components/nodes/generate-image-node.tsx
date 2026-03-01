@@ -70,7 +70,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ width: 280 }}>
     {/* Floating label above node */}
     <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
       <ImageIcon className="w-3.5 h-3.5" />
