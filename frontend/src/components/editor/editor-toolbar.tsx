@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect, lazy, Suspense } from "react"
+import { useState, useRef, useCallback, useEffect, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText } from "lucide-react"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"

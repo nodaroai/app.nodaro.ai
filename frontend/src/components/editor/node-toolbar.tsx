@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback, lazy, Suspense } from "react"
+import { useState, useEffect, useCallback, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import {
   Type, List, BookOpen, ImageIcon, Film, Merge, Plus, X,
   Upload, Video, Rss, Palette, PaintBucket, Server,

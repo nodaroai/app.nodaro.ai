@@ -1,6 +1,15 @@
 import "./globals.css"
 
-import { StrictMode, lazy, Suspense } from "react"
+// Backstop: prevent browser back from exiting the app on mobile.
+// Push a /projects entry at the bottom of the history stack so back
+// always has somewhere to go within the app.
+if (window.history.length <= 2 && window.location.pathname !== "/projects") {
+  window.history.replaceState(null, "", "/projects")
+  window.history.pushState(null, "", window.location.pathname + window.location.search + window.location.hash)
+}
+
+import { StrictMode, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { createRoot } from "react-dom/client"
 import { RouterProvider } from "react-router-dom"
 import { QueryClientProvider } from "@tanstack/react-query"

@@ -2167,7 +2167,7 @@ export async function getLibraryAssets(params: {
   limit?: number
   cursor?: string
   owned?: boolean
-}): Promise<{ data: LibraryAsset[]; nextCursor: string | null }> {
+}): Promise<{ data: LibraryAsset[]; nextCursor: string | null; totalCount?: number }> {
   const qs = new URLSearchParams({ userId: params.userId })
   if (params.type && params.type !== "all") qs.set("type", params.type)
   if (params.search) qs.set("search", params.search)

@@ -95,7 +95,7 @@ export function FocusModeNav({ selectedNodeId, onNavigate }: FocusModeNavProps) 
         <button
           type="button"
           onClick={() => onNavigate(neighbors.up!.id)}
-          className="absolute top-3 left-1/2 -translate-x-1/2 z-40 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 dark:bg-white/15 backdrop-blur-sm text-white active:bg-black/50 dark:active:bg-white/30 transition-colors touch-manipulation"
+          className="absolute top-[28%] left-1/2 -translate-x-1/2 z-40 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 dark:bg-white/15 backdrop-blur-sm text-white active:bg-black/50 dark:active:bg-white/30 transition-colors touch-manipulation"
           aria-label={`Navigate up to ${neighbors.up.label}`}
         >
           <ChevronUp className="w-5 h-5" />

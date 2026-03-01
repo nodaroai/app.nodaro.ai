@@ -133,7 +133,8 @@ import {
   runObjectGeneration,
   runLocationGeneration,
 } from "./asset-executors";
-import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "@/components/editor/config-panels/model-options";
+import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
+import type { CharacterDef } from "@nodaro-shared/types";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -209,107 +210,61 @@ export function executeNode(
 
   if (node.type === "generate-image") {
     const imgData = node.data as GenerateImageData;
+    const providerKey = imgData.provider || "nano-banana";
+
+    // Collect reference images from all sources
     const chainRefs =
       inputs.referenceImageUrls ??
       (inputs.imageUrl ? [inputs.imageUrl] : undefined);
     const extractedRefs = (node.data as Record<string, unknown>)
       .extractedReferenceUrls as string[] | undefined;
-
     const charIds = imgData.characterDefinitionIds ?? [];
     const allCharDefs = useWorkflowStore.getState().characterDefinitions;
     const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
     const charRefUrls = charDefs
       .filter((c) => c.type === "reference" && c.referenceImageUrl)
       .map((c) => c.referenceImageUrl as string);
-    const userTemplates = useWorkflowStore.getState().userPromptTemplates;
-    const flowTemplates = useWorkflowStore.getState().flowPromptTemplates;
-    const charDescs = charDefs
-      .filter((c) => c.type === "description" && c.description)
-      .map((c) => {
-        const templateKey =
-          c.category === "face"
-            ? "face-description"
-            : c.category === "location"
-              ? "location-description"
-              : c.category === "object"
-                ? "object-description"
-                : "character-description";
-        const template = resolveTemplate(
-          templateKey,
-          userTemplates,
-          flowTemplates,
-        );
-        return applyTemplate(template, {
-          name: c.name,
-          description: c.description || "",
-        });
-      });
 
     const nodeRefUrl = imgData.referenceImageUrl;
-    const refImages = [
+    const directRefs = [
       ...(nodeRefUrl ? [nodeRefUrl] : []),
       ...(chainRefs ?? []),
       ...(extractedRefs ?? []),
       ...charRefUrls,
     ];
 
-    if (refImages.length === 0) {
-      const ancestorRefs = collectAncestorRefs(node.id, nodes, edges);
-      refImages.push(...ancestorRefs);
-    }
+    const ancestorRefs = directRefs.length === 0
+      ? collectAncestorRefs(node.id, nodes, edges)
+      : [];
 
     const prompt = overridePrompt || inputs.prompt || imgData.prompt?.trim();
     if (!prompt) {
       toast.error(`Node "${imgData.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
     }
-    let finalPrompt: string;
-    if (charDescs.length > 0) {
-      const wrapperTemplate = resolveTemplate(
-        "generate-image-wrapper",
-        userTemplates,
-        flowTemplates,
-      );
-      finalPrompt = applyTemplate(wrapperTemplate, {
-        userPrompt: prompt,
-        assetDescriptions: charDescs.join(" "),
-      });
-    } else {
-      finalPrompt = prompt;
-    }
-    // Append style to the generation prompt
-    const styleText = imgData.style?.trim();
-    if (styleText) {
-      finalPrompt += `\nStyle: ${styleText}`;
-    }
-    // Models with native negative_prompt support get it as a separate API param.
-    // All other models get it appended to the prompt as "Avoid: ...".
-    const negPrompt = imgData.negativePrompt?.trim();
-    const providerKey = imgData.provider || "nano-banana";
-    let nativeNegativePrompt: string | undefined;
-    if (negPrompt) {
-      if (NATIVE_NEGATIVE_PROMPT_MODELS.has(providerKey)) {
-        nativeNegativePrompt = negPrompt;
-      } else {
-        finalPrompt += `\nAvoid: ${negPrompt}`;
-      }
-    }
-    if (finalPrompt.length > 2000) {
-      finalPrompt = finalPrompt.slice(0, 1997) + "...";
-    }
-    // Only send reference images for models that support them
-    const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(providerKey);
-    const refsToSend = supportsRefs && refImages.length > 0 ? refImages : undefined;
+
+    const result = buildImagePrompt({
+      prompt,
+      provider: providerKey,
+      style: imgData.style,
+      negativePrompt: imgData.negativePrompt,
+      characterDefs: charDefs as CharacterDef[],
+      userTemplates: useWorkflowStore.getState().userPromptTemplates,
+      flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
+      referenceImageUrls: directRefs,
+      ancestorRefs,
+    });
+
     return runImageGeneration(
       node.id,
-      finalPrompt,
+      result.prompt,
       ctx,
-      refsToSend,
+      result.referenceImageUrls,
       imgData.provider || undefined,
       imgData.aspectRatio || undefined,
       imgData.resolution || undefined,
       imgData.quality || undefined,
-      nativeNegativePrompt,
+      result.nativeNegativePrompt,
     );
   }
 

@@ -10,6 +10,10 @@ WORKDIR /app/backend
 COPY backend/package*.json ./
 RUN npm ci
 COPY backend/ ./
+
+# Shared package needed by backend (relative imports from payload-builder.ts)
+COPY packages/shared/ /app/packages/shared/
+
 RUN npm run build
 
 # ── Stage 2: Install Remotion package deps ─────────────────────────────
@@ -35,6 +39,9 @@ COPY frontend/ ./
 # Remotion package source + deps needed for @remotion-pkg TypeScript path alias
 COPY --from=remotion-builder /app/packages/remotion/src /app/packages/remotion/src
 COPY --from=remotion-builder /app/packages/remotion/node_modules /app/packages/remotion/node_modules
+
+# Shared package source needed for @nodaro-shared Vite alias
+COPY packages/shared/src /app/packages/shared/src
 
 # Railway passes service variables as Docker build args.
 # Vite inlines VITE_* env vars at build time.
@@ -100,13 +107,13 @@ echo "Starting with PORT=${PORT:-3000}"
 
 # Start backend API server on fixed internal port
 cd /app/backend
-PORT=9000 node dist/server.js &
+PORT=9000 node dist/backend/src/server.js &
 
 # Start BullMQ worker (job processor)
-node dist/worker.js &
+node dist/backend/src/worker.js &
 
 # Start BullMQ render worker (Remotion video rendering)
-node dist/render-worker.js &
+node dist/backend/src/render-worker.js &
 
 # Wait for backend to be ready before accepting traffic
 echo "Waiting for backend on port 9000..."

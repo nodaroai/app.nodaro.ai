@@ -1,3 +1,7 @@
+// Core template functions — re-exported from shared package (single source of truth)
+export { applyTemplate } from "@nodaro-shared/prompt-templates"
+import { resolveTemplate as sharedResolveTemplate } from "@nodaro-shared/prompt-templates"
+
 export interface PromptTemplateInfo {
   readonly label: string
   readonly template: string
@@ -90,25 +94,18 @@ export const TEMPLATE_GROUPS: readonly TemplateGroup[] = [
 
 export const WRAPPER_TEMPLATE_KEY = "generate-image-wrapper"
 
-export function applyTemplate(
-  template: string,
-  vars: Record<string, string>,
-): string {
-  return Object.entries(vars).reduce(
-    (result, [key, value]) => result.replaceAll(`{${key}}`, value || ""),
-    template,
-  )
-}
-
+/**
+ * Resolve a template by key. Falls back through: flowTemplates → userTemplates →
+ * SYSTEM_PROMPT_TEMPLATES (includes frontend-only generation templates).
+ */
 export function resolveTemplate(
   key: string,
   userTemplates?: Record<string, string>,
   flowTemplates?: Record<string, string>,
 ): string {
-  return (
-    flowTemplates?.[key] ??
-    userTemplates?.[key] ??
-    SYSTEM_PROMPT_TEMPLATES[key]?.template ??
-    ""
-  )
+  // Try shared defaults first (covers the common description + wrapper templates)
+  const shared = sharedResolveTemplate(key, userTemplates, flowTemplates)
+  if (shared) return shared
+  // Fall back to frontend-only templates (generation templates)
+  return SYSTEM_PROMPT_TEMPLATES[key]?.template ?? ""
 }

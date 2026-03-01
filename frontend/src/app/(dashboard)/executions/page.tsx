@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -41,6 +41,7 @@ import {
   type NodeState,
 } from "@/components/editor/execution-utils"
 import { ExecutionDetailModal } from "@/components/editor/execution-detail-modal"
+import { useBackToClose } from "@/hooks/use-back-to-close"
 import { getJobStatus, type GlobalExecution } from "@/lib/api"
 
 const STATUS_OPTIONS = [
@@ -65,6 +66,8 @@ export default function ExecutionsPage() {
   const [prevCursors, setPrevCursors] = useState<string[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const closeJobModal = useCallback(() => setSelectedJobId(null), [])
+  useBackToClose(selectedJobId !== null, closeJobModal)
 
   const { data: selectedJob } = useQuery({
     queryKey: ["job-detail", selectedJobId],

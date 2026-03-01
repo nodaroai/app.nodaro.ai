@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { useNavigate } from "react-router-dom";
 import { ReactFlowProvider } from "@xyflow/react";
 import {

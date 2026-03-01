@@ -15,6 +15,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useGalleryInfinite, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
+import { useBackToClose } from "@/hooks/use-back-to-close"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
 
 type FilterType = "all" | "image" | "video" | "audio"
@@ -274,18 +277,31 @@ export default function GalleryPage() {
   const location = useLocation()
   const isEmbedded = location.pathname.startsWith("/_")
   const [filter, setFilter] = useState<FilterType>("all")
+  const [myItemsOnly, setMyItemsOnly] = useState(() => {
+    try { return localStorage.getItem("gallery:myItemsOnly") === "true" } catch { return false }
+  })
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
+  const toggleMyItems = useCallback((checked: boolean) => {
+    setMyItemsOnly(checked)
+    try { localStorage.setItem("gallery:myItemsOnly", String(checked)) } catch { /* noop */ }
+  }, [])
+
   // React Query hooks
-  const { data, isLoading: loading, isFetchingNextPage: loadingMore, hasNextPage: hasMore, fetchNextPage } = useGalleryInfinite(filter)
+  const { data, isLoading: loading, isFetchingNextPage: loadingMore, hasNextPage: hasMore, fetchNextPage } = useGalleryInfinite(filter, myItemsOnly && user?.id ? user.id : undefined)
   const reportMutation = useReportGalleryItemMutation()
   const deleteMutation = useDeleteGalleryItemMutation()
 
   // Derive flat items list from infinite query pages
   const items: readonly GalleryItem[] = data?.pages.flatMap((p) => p.data) ?? []
+  const totalCount = data?.pages[0]?.totalCount ?? items.length
 
   const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
+
+  // Mobile back button closes modal instead of navigating away
+  const closeModal = useCallback(() => setSelectedIndex(null), [])
+  useBackToClose(selectedIndex !== null, closeModal)
 
   // Report dialog state
   const [reportItem, setReportItem] = useState<GalleryItem | null>(null)
@@ -340,14 +356,41 @@ export default function GalleryPage() {
     }
   }
 
+  // Track when user tried to advance past loaded items
+  const wantsNextRef = useRef(false)
+
+  // Auto-fetch next page when previewing near the end of loaded items
+  useEffect(() => {
+    if (selectedIndex !== null && selectedIndex >= items.length - 3 && hasMore && !loadingMore) {
+      fetchNextPage()
+    }
+  }, [selectedIndex, items.length, hasMore, loadingMore, fetchNextPage])
+
+  // Auto-advance once new items load after user tried to go next at boundary
+  useEffect(() => {
+    if (wantsNextRef.current && selectedIndex !== null && selectedIndex < items.length - 1) {
+      wantsNextRef.current = false
+      setSelectedIndex((i) => (i !== null ? i + 1 : i))
+    }
+  }, [items.length, selectedIndex])
+
   // Lightbox navigation
   const goToPrev = useCallback(() => {
     setSelectedIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : prev))
   }, [])
 
   const goToNext = useCallback(() => {
-    setSelectedIndex((prev) => (prev !== null && prev < items.length - 1 ? prev + 1 : prev))
-  }, [items.length])
+    setSelectedIndex((prev) => {
+      if (prev === null) return prev
+      if (prev < items.length - 1) return prev + 1
+      // At the end of loaded items but more exist — trigger fetch
+      if (hasMore) {
+        wantsNextRef.current = true
+        fetchNextPage()
+      }
+      return prev
+    })
+  }, [items.length, hasMore, fetchNextPage])
 
   // Download handler (backend proxy streams with Content-Disposition: attachment)
   const handleDownload = useCallback(() => {
@@ -442,8 +485,8 @@ export default function GalleryPage() {
       </section>
 
       {/* Filter Tabs */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800 p-1 bg-card w-fit mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="flex items-center gap-1 rounded-full border border-zinc-200 dark:border-zinc-800 p-1 bg-card w-fit">
           {FILTERS.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
@@ -460,6 +503,14 @@ export default function GalleryPage() {
             </button>
           ))}
         </div>
+        {user && (
+          <div className="flex items-center gap-2">
+            <Switch id="my-items" checked={myItemsOnly} onCheckedChange={toggleMyItems} />
+            <Label htmlFor="my-items" className="text-sm text-muted-foreground cursor-pointer select-none">
+              My items
+            </Label>
+          </div>
+        )}
       </div>
 
       {/* Gallery Grid */}
@@ -594,16 +645,14 @@ export default function GalleryPage() {
                   </div>
                 )}
 
-                {/* Left arrow */}
+                {/* Left/Right arrows — fixed to viewport center on mobile, absolute to media center on desktop */}
                 {selectedIndex > 0 && (
-                  <button onClick={goToPrev} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-10" aria-label="Previous">
+                  <button onClick={goToPrev} className="fixed sm:absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Previous">
                     <ChevronLeft className="h-6 w-6 text-white" />
                   </button>
                 )}
-
-                {/* Right arrow */}
-                {selectedIndex < items.length - 1 && (
-                  <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-10" aria-label="Next">
+                {selectedIndex < totalCount - 1 && (
+                  <button onClick={goToNext} className="fixed sm:absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 p-2.5 transition-colors z-20 sm:z-10" aria-label="Next">
                     <ChevronRight className="h-6 w-6 text-white" />
                   </button>
                 )}
@@ -623,7 +672,7 @@ export default function GalleryPage() {
 
                 {/* Position indicator */}
                 <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 font-medium z-10">
-                  {selectedIndex + 1} / {items.length}
+                  {selectedIndex + 1} / {totalCount}
                 </span>
               </div>
 
@@ -705,7 +754,7 @@ export default function GalleryPage() {
           )}
 
           {/* Right arrow */}
-          {selectedIndex < items.length - 1 && (
+          {selectedIndex < totalCount - 1 && (
             <button onClick={goToNext} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-3 transition-colors" aria-label="Next">
               <ChevronRight className="h-7 w-7 text-white" />
             </button>
@@ -726,7 +775,7 @@ export default function GalleryPage() {
 
           {/* Position indicator */}
           <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 font-medium">
-            {selectedIndex + 1} / {items.length}
+            {selectedIndex + 1} / {totalCount}
           </span>
         </div>
       )}

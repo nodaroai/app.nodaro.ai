@@ -1,6 +1,7 @@
 "use client"
 
-import { memo, useState, useEffect, lazy, Suspense } from "react"
+import { memo, useState, useEffect, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Maximize2, Scissors, Play } from "lucide-react"
 import { BaseNode } from "./base-node"

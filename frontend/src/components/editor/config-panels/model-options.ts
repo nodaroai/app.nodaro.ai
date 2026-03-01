@@ -255,45 +255,6 @@ export const IMAGE_QUALITY_OPTIONS: Record<string, { value: string; label: strin
   ],
 }
 
-// =============================================================================
-// VARIABLE PRICING — which setting affects credit cost per model
-// Used by getModelIdentifier() to build composite credit identifiers like "gpt-image:high"
-// =============================================================================
-
-/**
- * Maps model providers to the setting that affects their credit cost.
- * Models NOT in this map have flat pricing regardless of settings.
- */
-export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution"> = {
-  "gpt-image": "quality",
-  "gpt-image-i2i": "quality",
-  "nano-banana-pro": "resolution",
-  "flux": "resolution",
-  "flux-flex": "resolution",
-  "flux-i2i": "resolution",
-  "flux-pro-i2i": "resolution",
-}
-
-/**
- * For resolution-based variable pricing, only these values trigger a different cost.
- * The default (cheapest) resolution is NOT included — only the more expensive ones.
- */
-export const VARIABLE_PRICING_RESOLUTION_TRIGGERS: Record<string, string[]> = {
-  "nano-banana-pro": ["4K"],       // 1K/2K = default, 4K = more expensive
-  "flux": ["2K"],                  // 1K = default, 2K = more expensive
-  "flux-flex": ["2K"],
-  "flux-i2i": ["2K"],
-  "flux-pro-i2i": ["2K"],
-}
-
-/**
- * For quality-based variable pricing, only these values trigger a different cost.
- */
-export const VARIABLE_PRICING_QUALITY_TRIGGERS: Record<string, string[]> = {
-  "gpt-image": ["high"],          // medium = default, high = more expensive
-  "gpt-image-i2i": ["high"],
-}
-
 // Kling 3.0 supports continuous durations from 3s to 15s
 export const KLING3_DURATIONS = Array.from({ length: 13 }, (_, i) => i + 3)
 
@@ -320,24 +281,11 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
   "bytedance-pro-fast": [5, 10],
 }
 
-// Text-to-image models that accept reference images via their API.
-// All other T2I models silently ignore reference images.
-// I2I models always require a source image (handled separately).
-// Keep in sync with backend/src/providers/kie/image.ts reference image handling.
-export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
-  "nano-banana",      // uses image_input (maps to nano-banana-pro model)
-  "nano-banana-pro",  // uses image_input
-  "ideogram",         // uses reference_image_urls
-])
-
-// Models that accept negative_prompt as a native API parameter.
-// All other models get negative prompt appended to the prompt text as "Avoid: ...".
-// Keep in sync with backend/src/providers/kie/image.ts NATIVE_NEGATIVE_PROMPT_MODELS.
-export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
-  "imagen4", "imagen4-fast", "imagen4-ultra",  // up to 5000 chars
-  "ideogram", "ideogram-remix",                 // up to 500 chars
-  "qwen", "qwen-edit",                          // up to 500 chars
-])
+// Model capability constants — re-exported from shared package (single source of truth)
+export {
+  MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
+  NATIVE_NEGATIVE_PROMPT_MODELS,
+} from "@nodaro-shared/model-constants"
 
 // Predefined style presets for image generation
 export const IMAGE_STYLE_PRESETS = [

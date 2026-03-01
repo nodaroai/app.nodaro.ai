@@ -1,10 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import {
-  VARIABLE_PRICING_MODELS,
-  VARIABLE_PRICING_RESOLUTION_TRIGGERS,
-  VARIABLE_PRICING_QUALITY_TRIGGERS,
-} from "./model-options"
+import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
   prompt: ["text-prompt"],
@@ -127,27 +123,12 @@ export function getModelIdentifier(node: WorkflowNode): string {
 
 /**
  * Build composite credit model identifier from provider + node data.
- * Shared by getModelIdentifier (for node objects) and direct calls (for loose data).
+ * Extracts quality/resolution from data and delegates to the shared function.
  */
 export function buildCreditModelIdentifier(provider: string, data: Record<string, unknown>): string {
-  const pricingType = VARIABLE_PRICING_MODELS[provider]
-  if (!pricingType) return provider
-
-  if (pricingType === "quality") {
-    const quality = data.quality as string | undefined
-    const triggers = VARIABLE_PRICING_QUALITY_TRIGGERS[provider]
-    if (quality && triggers?.includes(quality)) {
-      return `${provider}:${quality}`
-    }
-  }
-
-  if (pricingType === "resolution") {
-    const resolution = data.resolution as string | undefined
-    const triggers = VARIABLE_PRICING_RESOLUTION_TRIGGERS[provider]
-    if (resolution && triggers?.includes(resolution)) {
-      return `${provider}:${resolution}`
-    }
-  }
-
-  return provider
+  return sharedBuildCreditModelIdentifier(
+    provider,
+    data.quality as string | undefined,
+    data.resolution as string | undefined,
+  )
 }

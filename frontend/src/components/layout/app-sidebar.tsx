@@ -360,8 +360,20 @@ interface MobileHeaderProps {
 }
 
 export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
+  const location = useLocation()
+  const isDashboard = location.pathname === "/projects"
+
   return (
     <header className="flex items-center gap-3 px-4 py-3 border-b bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 md:hidden">
+      {!isDashboard && (
+        <Link
+          to="/projects"
+          className="h-8 w-8 p-0 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800 touch-manipulation"
+          aria-label="Back to projects"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </Link>
+      )}
       <Button
         variant="ghost"
         size="sm"

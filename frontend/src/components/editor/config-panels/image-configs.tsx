@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useRef, useEffect, lazy, Suspense, useMemo } from "react"
+import { useState, useRef, useEffect, Suspense, useMemo } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { X, FileText, Plus, UserPlus, Loader2, Upload, UserCircle, Package, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

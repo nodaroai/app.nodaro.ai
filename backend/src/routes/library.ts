@@ -57,6 +57,31 @@ export async function libraryRoutes(app: FastifyInstance) {
 
     const { type, search, limit, cursor, owned } = parsed.data
 
+    // Count query (only on first page — when no cursor)
+    let totalCount: number | null = null
+    if (!cursor) {
+      let countQuery = supabase
+        .from("assets")
+        .select("id", { count: "exact", head: true })
+
+      if (owned) {
+        countQuery = countQuery.eq("user_id", userId)
+      } else {
+        countQuery = countQuery.or(`and(user_id.eq.${userId},in_library.eq.true),is_library_item.eq.true`)
+      }
+
+      if (type !== "all") {
+        countQuery = countQuery.eq("type", type)
+      }
+
+      if (search) {
+        countQuery = countQuery.ilike("filename", `%${search}%`)
+      }
+
+      const { count } = await countQuery
+      totalCount = count
+    }
+
     let query = supabase
       .from("assets")
       .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, created_at")
@@ -122,7 +147,7 @@ export async function libraryRoutes(app: FastifyInstance) {
       createdAt: a.created_at,
     }))
 
-    return { data: assets, nextCursor }
+    return { data: assets, nextCursor, ...(totalCount !== null && { totalCount }) }
   })
 
   // POST /v1/library/:id/promote - Promote asset to shared library (admin only)

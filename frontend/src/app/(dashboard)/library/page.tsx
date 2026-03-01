@@ -24,6 +24,7 @@ import {
 import { useStorageProfile } from "@/hooks/queries/use-billing-queries"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { useBackToClose } from "@/hooks/use-back-to-close"
 import type { LibraryAsset } from "@/lib/api"
 
 function formatBytes(bytes: number): string {
@@ -46,7 +47,9 @@ export default function LibraryPage() {
   const [filter, setFilter] = useState<TypeFilter>("all")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
-  const [previewAsset, setPreviewAsset] = useState<LibraryAsset | null>(null)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const closePreview = useCallback(() => setPreviewIndex(null), [])
+  useBackToClose(previewIndex !== null, closePreview)
 
   // Storage profile (auto-refreshes after delete via query invalidation)
   const { data: storageData } = useStorageProfile(user?.id)
@@ -68,6 +71,27 @@ export default function LibraryPage() {
   })
 
   const assets: LibraryAsset[] = data?.pages.flatMap((p) => p.data) ?? []
+  const totalCount = data?.pages[0]?.totalCount ?? assets.length
+  const previewAsset = previewIndex !== null ? assets[previewIndex] ?? null : null
+
+  // Auto-fetch next page when previewing near the end of loaded items
+  useEffect(() => {
+    if (previewIndex !== null && previewIndex >= assets.length - 3 && hasNextPage && !loadingMore) {
+      fetchNextPage()
+    }
+  }, [previewIndex, assets.length, hasNextPage, loadingMore, fetchNextPage])
+
+  const handlePreviewPrev = useCallback(() => {
+    setPreviewIndex((i) => (i !== null && i > 0 ? i - 1 : i))
+  }, [])
+
+  const handlePreviewNext = useCallback(() => {
+    setPreviewIndex((i) => {
+      if (i === null) return i
+      // Allow navigating up to the last loaded item; auto-fetch effect handles loading more
+      return i < assets.length - 1 ? i + 1 : i
+    })
+  }, [assets.length])
 
   // Reset selection when filter changes
   useEffect(() => {
@@ -253,7 +277,7 @@ export default function LibraryPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {assets.map((asset) => {
+          {assets.map((asset, assetIndex) => {
             const isSelected = selected.has(asset.id)
             return (
               <div
@@ -267,7 +291,7 @@ export default function LibraryPage() {
                 {/* Thumbnail / Preview */}
                 <div
                   className="h-32 bg-muted/30 flex items-center justify-center cursor-pointer relative"
-                  onClick={() => asset.url && setPreviewAsset(asset)}
+                  onClick={() => asset.url && setPreviewIndex(assetIndex)}
                 >
                   {asset.type === "image" && asset.url ? (
                     <CachedImage
@@ -385,9 +409,13 @@ export default function LibraryPage() {
 
       <MediaPreviewModal
         isOpen={previewAsset !== null}
-        onClose={() => setPreviewAsset(null)}
+        onClose={closePreview}
         type={previewAsset?.type ?? "image"}
         url={previewAsset?.url ?? ""}
+        currentIndex={previewIndex ?? 0}
+        totalCount={totalCount}
+        onPrev={previewIndex !== null && previewIndex > 0 ? handlePreviewPrev : undefined}
+        onNext={previewIndex !== null && previewIndex < totalCount - 1 ? handlePreviewNext : undefined}
       />
     </div>
   )

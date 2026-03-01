@@ -1,4 +1,5 @@
-import { useState, useCallback, lazy, Suspense } from "react"
+import { useState, useCallback, Suspense } from "react"
+import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Package, X, Loader2, AlertCircle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CachedImage } from "@/components/ui/cached-image"

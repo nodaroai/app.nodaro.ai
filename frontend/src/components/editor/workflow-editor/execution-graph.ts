@@ -1,5 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildScenePrompt } from "@/lib/prompt-builder";
+import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -615,45 +616,17 @@ export function buildAutoComposition(
   };
 }
 
-const IMAGE_REF_TYPES = new Set([
-  "upload-image",
-  "face",
-  "character",
-  "object",
-  "location",
-  "generate-image",
-  "edit-image",
-  "image-to-image",
-]);
-const PASSTHROUGH_TYPES = new Set([
-  "ai-writer",
-  "split-text",
-  "combine-text",
-  "text-prompt",
-  "loop",
-  "list",
-]);
-
 export function collectAncestorRefs(
   nodeId: string,
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
   visited = new Set<string>(),
 ): string[] {
-  if (visited.has(nodeId)) return [];
-  visited.add(nodeId);
-  const refs: string[] = [];
-  const incoming = edges.filter((e) => e.target === nodeId);
-  for (const edge of incoming) {
-    const src = nodes.find((n) => n.id === edge.source);
-    if (!src) continue;
-    if (IMAGE_REF_TYPES.has(src.type ?? "")) {
-      const url = extractNodeOutput(src);
-      if (url?.trim()) refs.push(url.trim());
-    }
-    if (PASSTHROUGH_TYPES.has(src.type ?? "")) {
-      refs.push(...collectAncestorRefs(src.id, nodes, edges, visited));
-    }
-  }
-  return refs;
+  return sharedCollectAncestorRefs(
+    nodeId,
+    nodes,
+    edges,
+    (src) => extractNodeOutput(src),
+    visited,
+  );
 }
