@@ -18,7 +18,7 @@
 - **Branching model**: `dev` (staging) → `main` (production)
   - Feature branches: branch from `dev`, PR back to `dev`
   - Railway auto-deploys `dev` to staging: `next.nodaro.ai`
-  - After 1-2 days testing on staging, PR from `dev` to `main`
+  - After 1-2 days testing on staging, **always use a PR from `dev` to `main`** (never direct merge — Supabase requires PR events to apply migrations to production)
   - Railway auto-deploys `main` to production: `app.nodaro.ai`
 - **Branch naming**: `feat/`, `fix/`, `refactor/`, `docs/` prefixes
 - **Commit style**: Conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`)

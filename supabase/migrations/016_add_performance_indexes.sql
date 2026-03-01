@@ -24,9 +24,8 @@ CREATE INDEX IF NOT EXISTS idx_assets_cleanup
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id_status
   ON subscriptions (user_id, status, created_at DESC);
 
--- 7. Credit transactions: admin audit queries
-CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id_created_at
-  ON credit_transactions (user_id, created_at DESC);
+-- 7. Credit transactions: skipped — table created in 017_billing_schema.sql
+-- Index idx_credit_transactions_user_id_created_at is created there instead.
 
 -- 8. Usage logs: admin usage history (supersedes separate single-column indexes)
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_id_created_at
