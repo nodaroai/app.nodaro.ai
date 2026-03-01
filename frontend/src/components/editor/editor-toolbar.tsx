@@ -169,6 +169,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "image-to-video":
         case "video-to-video":
         case "text-to-video":
+        case "extend-video":
           // Clear generated video results, keep settings
           data.generatedResults = []
           data.generatedVideoUrl = undefined

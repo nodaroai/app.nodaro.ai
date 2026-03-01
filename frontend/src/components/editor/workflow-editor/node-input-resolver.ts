@@ -268,6 +268,7 @@ export function resolveNodeInputs(
       src.type === "lip-sync" ||
       src.type === "motion-transfer" ||
       src.type === "video-upscale" ||
+      src.type === "extend-video" ||
       src.type === "suno-music-video" ||
       src.type === "combine-videos" ||
       src.type === "merge-video-audio" ||

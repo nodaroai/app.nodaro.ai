@@ -11,7 +11,14 @@ import type {
   ProviderResult,
 } from "../provider.interface.js"
 import { createSanitizedError, runKieTask } from "./client.js"
+import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
+
+// Models that need output_format forced to "png" (legacy Nano Banana family).
+// Nano Banana 2 uses its own output_format from extraParams (jpg default), so it is NOT included.
+const FORCE_PNG_OUTPUT_PROVIDERS = new Set([
+  "nano-banana", "nano-banana-pro", "nano-banana-edit",
+])
 
 // Models that use named image_size values instead of ratio strings (e.g. "landscape_16_9")
 const NAMED_IMAGE_SIZE_PROVIDERS = new Set([
@@ -74,8 +81,8 @@ export class KieImageProvider
       ...extraParams,
     }
 
-    // Only Nano Banana family supports output_format parameter
-    if (provider.startsWith("nano-banana")) {
+    // Legacy Nano Banana family needs forced png output_format
+    if (FORCE_PNG_OUTPUT_PROVIDERS.has(provider)) {
       input.output_format = "png"
     }
 
@@ -150,7 +157,11 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(modelConfig.model, input)
+    // Flux Kontext uses a special endpoint (not standard createTask)
+    const isKontext = provider === "flux-kontext" || provider === "flux-kontext-max"
+    const { resultJson } = isKontext
+      ? await runFluxKontextTask(modelConfig.model, input)
+      : await runKieTask(modelConfig.model, input)
 
     const imageUrl = resultJson.resultUrls?.[0]
     if (!imageUrl) {
@@ -193,8 +204,8 @@ export class KieImageProvider
       ...modelConfig.extraParams,
     }
 
-    // Only Nano Banana family supports output_format parameter
-    if (provider.startsWith("nano-banana")) {
+    // Nano Banana family supports output_format parameter
+    if (provider.startsWith("nano-banana") && provider !== "nano-banana-2") {
       input.output_format = "png"
     }
 
@@ -218,7 +229,8 @@ export class KieImageProvider
       provider === "ideogram-remix" ||
       provider === "qwen-i2i" ||
       provider === "qwen-edit" ||
-      provider === "seedream-edit"
+      provider === "seedream-edit" ||
+      provider === "seedream-5-lite-i2i"
     )) {
       input.prompt = prompt
     }

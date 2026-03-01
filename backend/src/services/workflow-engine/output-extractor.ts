@@ -41,6 +41,7 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "instrumentalUrl",
   "splitResults",
   "combinedText",
+  "kieTaskId",
 ]
 
 // Job output_data keys that all map to NodeOutput.plan

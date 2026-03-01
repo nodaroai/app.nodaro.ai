@@ -45,6 +45,7 @@ export interface RouteResult {
   cost: number | null
   displayCost: number | null
   providerUsed: ProviderUsed
+  kieTaskId?: string  // KIE task ID for extend/upscale operations (VEO, Runway)
 }
 
 // ─── Core routing engine ──────────────────────────────────────────
@@ -109,6 +110,7 @@ async function routeAndExecute(
       cost: result.cost,
       displayCost,
       providerUsed,
+      kieTaskId: result.kieTaskId,
     }
   }
 

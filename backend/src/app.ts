@@ -85,6 +85,7 @@ import { forcedAlignmentRoutes } from "./routes/forced-alignment.js"
 import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
+import { extendVideoRoutes } from "./routes/extend-video.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -196,6 +197,7 @@ export async function buildApp() {
   await app.register(subWorkflowRoutes)
   await app.register(workflowExecutionRoutes)
   await app.register(webhookTriggerRoutes)
+  await app.register(extendVideoRoutes)
 
   return app
 }

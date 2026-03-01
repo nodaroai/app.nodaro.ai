@@ -411,7 +411,7 @@ export async function runVeoTask(
   model: string,
   prompt: string,
   imageUrls?: string[]
-): Promise<{ resultJson: KieResultJson; costTime?: number }> {
+): Promise<{ resultJson: KieResultJson; costTime?: number; taskId: string }> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -497,9 +497,20 @@ export async function runVeoTask(
   const taskId = createData.data.taskId
   console.log(`[KIE.ai VEO] Task created: ${taskId}`)
 
-  // Step 2: Poll for completion using VEO-specific endpoint with exponential backoff
-  // VEO endpoint: /api/v1/veo/record-info (with hyphen)
-  // Status field: successFlag (0=generating, 1=success, 2=failed, 3=generation failed)
+  const resultUrls = await pollVeoRecordInfo(taskId, "VEO", apiKey)
+  return { resultJson: { resultUrls }, costTime: undefined, taskId }
+}
+
+/**
+ * Shared VEO record-info polling loop.
+ * Polls GET /api/v1/veo/record-info?taskId= until successFlag=1 (success) or 2/3 (failure).
+ * Returns resultUrls on success; throws on failure or timeout.
+ */
+async function pollVeoRecordInfo(
+  taskId: string,
+  label: string,
+  apiKey: string,
+): Promise<string[]> {
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
     attempts++
@@ -513,76 +524,236 @@ export async function runVeoTask(
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
-        if (DEBUG) console.log(`[KIE.ai VEO] Poll attempt ${attempts} timeout, retrying...`)
+        if (DEBUG) console.log(`[KIE.ai ${label}] Poll attempt ${attempts} timeout, retrying...`)
         continue
       }
       throw err
     }
 
     if (!detailResponse.ok) {
-      console.warn(
-        `[KIE.ai VEO] Poll attempt ${attempts} failed: ${detailResponse.status}`
-      )
+      if (DEBUG) console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} failed: ${detailResponse.status}`)
       continue
     }
 
     const detailText = await detailResponse.text()
     if (DEBUG) {
-      console.log(`[KIE.ai VEO] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`)
+      console.log(`[KIE.ai ${label}] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`)
     }
 
     let detailData: VeoRecordInfoResponse
     try {
       detailData = JSON.parse(detailText) as VeoRecordInfoResponse
     } catch {
-      console.warn(
-        `[KIE.ai VEO] Poll attempt ${attempts} invalid JSON`
-      )
+      if (DEBUG) console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} invalid JSON`)
       continue
     }
 
     const successFlag = detailData.data?.successFlag
     if (DEBUG) {
-      console.log(`[KIE.ai VEO] Task ${taskId} successFlag: ${successFlag} (attempt ${attempts})`)
+      console.log(`[KIE.ai ${label}] Task ${taskId} successFlag: ${successFlag} (attempt ${attempts})`)
     }
 
-    // successFlag: 0=generating, 1=success, 2=failed, 3=generation failed
     if (successFlag === 1) {
-      // Success - get result URLs from data.response.resultUrls
       const resultUrls = detailData.data.response?.resultUrls
       if (!resultUrls?.length) {
-        throw createSanitizedError(
-          "VEO task succeeded but no resultUrls found",
-          "Video generation"
-        )
+        throw createSanitizedError(`${label} succeeded but no resultUrls found`, "Video generation")
       }
-
-      console.log(
-        `[KIE.ai VEO] Video complete! URLs: ${resultUrls.join(", ")}`
-      )
-
-      return {
-        resultJson: { resultUrls },
-        costTime: undefined,
-      }
+      console.log(`[KIE.ai ${label}] Complete! URLs: ${resultUrls.join(", ")}`)
+      return resultUrls
     }
 
     if (successFlag === 2 || successFlag === 3) {
-      // Failed
-      const errorMsg =
-        detailData.data.errorMessage ??
-        `Error code: ${detailData.data.errorCode ?? "unknown"}`
-      throw createSanitizedError(
-        `VEO task failed: ${errorMsg}`,
-        "Video generation"
-      )
+      const errorMsg = detailData.data.errorMessage ?? `Error code: ${detailData.data.errorCode ?? "unknown"}`
+      throw createSanitizedError(`${label} failed: ${errorMsg}`, "Video generation")
     }
-
-    // successFlag === 0 means still generating, continue polling
   }
 
-  throw createSanitizedError(
-    `VEO task timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`,
-    "Video generation"
+  throw createSanitizedError(`${label} timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`, "Video generation")
+}
+
+/**
+ * VEO 3.1 Extend — continue a VEO video with a new prompt.
+ * API: POST /api/v1/veo/extend
+ * Polls: GET /api/v1/veo/record-info (same as runVeoTask)
+ */
+export async function runVeoExtendTask(
+  taskId: string,
+  prompt: string,
+  model?: "fast" | "quality",
+  seeds?: number
+): Promise<{ resultJson: KieResultJson; taskId: string }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video extend")
+  }
+
+  const requestBody: Record<string, unknown> = {
+    taskId,
+    prompt,
+    model: model ?? "fast",
+  }
+  if (seeds !== undefined) requestBody.seeds = seeds
+
+  if (DEBUG) {
+    console.log(`[KIE.ai VEO Extend] Request body:`, JSON.stringify(requestBody, null, 2))
+  }
+
+  const createResponse = await fetch(
+    `${KIE_API_BASE}/api/v1/veo/extend`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30_000),
+    }
   )
+
+  const responseText = await createResponse.text()
+  if (!createResponse.ok) {
+    throw createSanitizedError(
+      `VEO extend failed: ${createResponse.status} - ${responseText}`,
+      "Video extend"
+    )
+  }
+
+  let createData: { code?: number; msg?: string; data?: { taskId?: string } }
+  try {
+    createData = JSON.parse(responseText)
+  } catch {
+    throw createSanitizedError(`VEO extend response is not valid JSON: ${responseText}`, "Video extend")
+  }
+
+  if (createData.code !== 200 && createData.code !== 0 && createData.code !== undefined) {
+    throw createSanitizedError(
+      `VEO extend error (code ${createData.code}): ${createData.msg ?? JSON.stringify(createData)}`,
+      "Video extend"
+    )
+  }
+
+  const extendTaskId = createData.data?.taskId
+  if (!extendTaskId) {
+    throw createSanitizedError(`VEO extend response missing taskId: ${JSON.stringify(createData)}`, "Video extend")
+  }
+
+  console.log(`[KIE.ai VEO Extend] Task created: ${extendTaskId}`)
+
+  const resultUrls = await pollVeoRecordInfo(extendTaskId, "VEO Extend", apiKey)
+  return { resultJson: { resultUrls }, taskId: extendTaskId }
+}
+
+/**
+ * VEO 3.1 1080p — get 1080p version of a completed VEO video.
+ * API: GET /api/v1/veo/get-1080p-video?taskId=&index=0
+ * Quasi-synchronous: may need retries while processing (~1-3 min).
+ */
+export async function runVeo1080pTask(
+  taskId: string,
+  index: number = 0
+): Promise<{ url: string }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video upscale")
+  }
+
+  console.log(`[KIE.ai VEO 1080p] Requesting 1080p for task ${taskId}, index ${index}`)
+
+  // Retry loop — 1080p takes 1-3 min to process
+  let attempts = 0
+  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    attempts++
+    if (attempts > 1) await sleep(pollDelay(attempts))
+
+    let response: Response
+    try {
+      response = await fetch(
+        `${KIE_API_BASE}/api/v1/veo/get-1080p-video?taskId=${taskId}&index=${index}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(30_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") continue
+      throw err
+    }
+
+    let data: { code?: number; msg?: string; data?: { resultUrl?: string } }
+    try {
+      data = JSON.parse(await response.text())
+    } catch { continue }
+
+    if (data.code === 200 && data.data?.resultUrl) {
+      console.log(`[KIE.ai VEO 1080p] Complete! URL: ${data.data.resultUrl}`)
+      return { url: data.data.resultUrl }
+    }
+
+    // Non-200 means still processing — keep polling
+    if (DEBUG) {
+      console.log(`[KIE.ai VEO 1080p] Not ready yet (code: ${data.code}), attempt ${attempts}`)
+    }
+  }
+
+  throw createSanitizedError(`VEO 1080p timed out after ${MAX_POLL_ATTEMPTS_VIDEO} attempts`, "Video upscale")
+}
+
+/**
+ * VEO 3.1 4K — upscale a VEO video to 4K resolution.
+ * API: POST /api/v1/veo/get-4k-video
+ * Async: polls record-info for completion (~5-10 min).
+ */
+export async function runVeo4kTask(
+  taskId: string,
+  index: number = 0
+): Promise<{ resultJson: KieResultJson; taskId: string }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video upscale")
+  }
+
+  const requestBody = { taskId, index }
+
+  if (DEBUG) {
+    console.log(`[KIE.ai VEO 4K] Request body:`, JSON.stringify(requestBody, null, 2))
+  }
+
+  const createResponse = await fetch(
+    `${KIE_API_BASE}/api/v1/veo/get-4k-video`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await createResponse.text()
+  if (!createResponse.ok) {
+    throw createSanitizedError(
+      `VEO 4K failed: ${createResponse.status} - ${responseText}`,
+      "Video upscale"
+    )
+  }
+
+  let createData: { code?: number; msg?: string; data?: { taskId?: string; resultUrls?: string[] } }
+  try {
+    createData = JSON.parse(responseText)
+  } catch {
+    throw createSanitizedError(`VEO 4K response is not valid JSON: ${responseText}`, "Video upscale")
+  }
+
+  // If already available (code 200 with resultUrls)
+  if (createData.code === 200 && createData.data?.resultUrls?.length) {
+    console.log(`[KIE.ai VEO 4K] Immediately available: ${createData.data.resultUrls.join(", ")}`)
+    return { resultJson: { resultUrls: createData.data.resultUrls }, taskId: createData.data.taskId ?? taskId }
+  }
+
+  // Otherwise poll (code 422 = still processing)
+  const fourKTaskId = createData.data?.taskId ?? taskId
+  console.log(`[KIE.ai VEO 4K] Task processing: ${fourKTaskId}`)
+
+  const resultUrls = await pollVeoRecordInfo(fourKTaskId, "VEO 4K", apiKey)
+  return { resultJson: { resultUrls }, taskId: fourKTaskId }
 }

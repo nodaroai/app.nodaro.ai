@@ -459,6 +459,7 @@ export function runVideoGeneration(
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 const videoUrl = job.output_data?.videoUrl;
+                const kieTaskId = job.output_data?.kieTaskId as string | undefined;
                 const existingResults =
                   (
                     useWorkflowStore
@@ -479,6 +480,7 @@ export function runVideoGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
+                  ...(kieTaskId && { kieTaskId }),
                 });
                 toast.success("Video generated");
                 resolve();
@@ -696,6 +698,7 @@ export function runTextToVideoGeneration(
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 const videoUrl = job.output_data?.videoUrl;
+                const kieTaskId = job.output_data?.kieTaskId as string | undefined;
                 const existingResults =
                   (
                     useWorkflowStore
@@ -716,6 +719,7 @@ export function runTextToVideoGeneration(
                   activeResultIndex: 0,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
+                  ...(kieTaskId && { kieTaskId }),
                 });
                 toast.success("Text-to-video generated");
                 resolve();

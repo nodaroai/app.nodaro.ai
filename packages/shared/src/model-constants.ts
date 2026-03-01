@@ -16,6 +16,7 @@ export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
 export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "nano-banana",
   "nano-banana-pro",
+  "nano-banana-2",
   "ideogram",
 ])
 
@@ -24,15 +25,18 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution"> =
   "gpt-image": "quality",
   "gpt-image-i2i": "quality",
   "nano-banana-pro": "resolution",
+  "nano-banana-2": "resolution",
   "flux": "resolution",
   "flux-flex": "resolution",
   "flux-i2i": "resolution",
   "flux-pro-i2i": "resolution",
+  "seedream-5-lite": "quality",
+  "seedream-5-lite-i2i": "quality",
 }
 
 
 // Models where quality=high triggers composite credit identifier
-export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream"])
+export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream", "seedream-5-lite", "seedream-5-lite-i2i"])
 
 // Models where resolution=2K triggers composite credit identifier
 export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux-flex", "flux-i2i"])
