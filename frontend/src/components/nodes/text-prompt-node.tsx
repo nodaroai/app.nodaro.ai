@@ -52,9 +52,6 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Invisible hover extension */}
-      <div className="absolute -inset-5 z-0" />
-
       {/* Floating label above node */}
       <EditableNodeLabel
         label={nodeData.label}
@@ -201,7 +198,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         {/* Textarea */}
         <textarea
           ref={textareaRef}
-          className="w-full flex-1 bg-transparent text-white/80 placeholder:text-white/25 resize-none outline-none border-none p-3 leading-relaxed"
+          className="nopan w-full flex-1 bg-transparent text-white/80 placeholder:text-white/25 resize-none outline-none border-none p-3 leading-relaxed"
           style={{
             fontSize,
             fontWeight,
