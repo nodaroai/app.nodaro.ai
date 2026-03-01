@@ -26,7 +26,7 @@ import { AddNodePopup } from "./add-node-popup"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { AlignmentGuideLines } from "./alignment-guide-lines"
-import { useAlignmentGuides, type GuideLine } from "@/hooks/use-alignment-guides"
+import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 import { SelectionActionBar } from "./selection-action-bar"
@@ -279,6 +279,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const isMobile = useIsMobile()
   const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
+  const arrowGuideClearRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const mobileContextValue = useMemo(() => ({ isMobile }), [isMobile])
   // Same positions used on both mobile and desktop — no separate layout
 
@@ -545,9 +546,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [])
 
   const handleNodeDragStart = useCallback((_event: React.MouseEvent, node: { id: string }) => setDraggingNodeId(node.id), [])
-  const handleNodeDrag = useCallback((_event: React.MouseEvent, node: { id: string }) => {
+  const handleNodeDrag = useCallback((_event: React.MouseEvent, node: { id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }) => {
     if (!alignmentEnabled) return
-    setGuideLines(computeGuides(node.id))
+    const rect: DraggedNodeRect = {
+      id: node.id,
+      x: node.position.x,
+      y: node.position.y,
+      width: node.measured?.width ?? 200,
+      height: node.measured?.height ?? 100,
+    }
+    setGuideLines(computeGuides(rect))
   }, [alignmentEnabled, computeGuides])
   const handleNodeDragStop = useCallback(() => {
     setDraggingNodeId(null)
@@ -822,6 +830,24 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Arrow keys — show alignment guides after React Flow moves the node
+      if (alignmentEnabled && selectedNodeId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        clearTimeout(arrowGuideClearRef.current)
+        requestAnimationFrame(() => {
+          const n = getNode(selectedNodeId)
+          if (!n) return
+          setGuideLines(computeGuides({
+            id: n.id,
+            x: n.position.x,
+            y: n.position.y,
+            width: n.measured?.width ?? 200,
+            height: n.measured?.height ?? 100,
+          }))
+          arrowGuideClearRef.current = setTimeout(() => setGuideLines([]), 500)
+        })
+        return
+      }
+
       // Escape - Close popups
       if (e.key === "Escape") {
         setAddNodePopupOpen(false)
@@ -832,7 +858,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment])
+  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes("application/nodaro-image")) {
@@ -1015,6 +1041,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             variant={snapEnabled ? BackgroundVariant.Lines : BackgroundVariant.Dots}
             gap={16}
             size={snapEnabled ? 0.5 : 1}
+            color={snapEnabled ? "var(--grid-line-color)" : undefined}
             className="!bg-background"
           />
           {guideLines.length > 0 && <AlignmentGuideLines guides={guideLines} />}

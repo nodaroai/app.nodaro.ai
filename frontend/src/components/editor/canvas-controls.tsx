@@ -1,6 +1,6 @@
 "use client"
 
-import { Maximize2, ZoomIn, ZoomOut, Map, Grid3x3, Magnet } from "lucide-react"
+import { Maximize2, ZoomIn, ZoomOut, Map, Magnet, Ruler } from "lucide-react"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 import {
@@ -117,13 +117,13 @@ export function CanvasControls({ showMiniMap, onToggleMiniMap, snapEnabled, onTo
             active={showMiniMap}
           />
           <ControlButton
-            icon={<Grid3x3 className="w-4 h-4" />}
+            icon={<Magnet className="w-4 h-4" />}
             label="Snap to Grid (Ctrl+Shift+G)"
             onClick={onToggleSnap}
             active={snapEnabled}
           />
           <ControlButton
-            icon={<Magnet className="w-4 h-4" />}
+            icon={<Ruler className="w-4 h-4" />}
             label="Alignment Guides (Ctrl+Shift+A)"
             onClick={onToggleAlignment}
             active={alignmentEnabled}
