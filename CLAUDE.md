@@ -15,9 +15,15 @@
 ## Development Conventions
 
 ### Git Workflow
+- **Branching model**: `dev` (staging) → `main` (production)
+  - Feature branches: branch from `dev`, PR back to `dev`
+  - Railway auto-deploys `dev` to staging: `next.nodaro.ai`
+  - After 1-2 days testing on staging, PR from `dev` to `main`
+  - Railway auto-deploys `main` to production: `app.nodaro.ai`
 - **Branch naming**: `feat/`, `fix/`, `refactor/`, `docs/` prefixes
 - **Commit style**: Conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`)
-- **Never commit to main directly** -- always use feature branches + PR review
+- **Never commit to main or dev directly** -- always use feature branches + PR review
+- **Never branch from main** -- always branch from `dev`
 - Run `npx tsc --noEmit` in both frontend and backend before every commit
 
 ### Edition Architecture (Three-Tier)
@@ -174,6 +180,7 @@ frontend/src/
   lib/pricing-data.ts     — Tier/model pricing constants
   types/nodes.ts          — Node data types
 
+packages/shared/          — Shared pure logic between frontend & backend (model-constants, prompt-templates, ancestor-refs, credit-identifiers, prompt-builder, types)
 packages/remotion/        — Remotion compositions (slideshow, explainer, social-reel, documentary, scene-graph, after-effects, lottie-overlay, 3d-title, motion-graphics, composite)
 
 backend/src/
@@ -243,6 +250,8 @@ backend/src/
 | Schedule triggers | Cron expressions + interval strings | `schedule-cron.ts` checks every 60s, supports 5-field cron + simple intervals ("5m", "1h", "1d"); respects `maxExecutions` limit; skips if workflow already running |
 | Sub-workflow execution | Recursive with depth limit 5 | `sub-workflow-handler.ts`: loads referenced workflow, filters to selected route's reachable nodes (BFS), executes with same orchestrator logic; cycle detection via `workflowId:routeId` set |
 | Single-node execution history | Jobs tagged with workflowId | Frontend `setCurrentWorkflowId()` + `withWorkflowId()` inject workflowId into all job-creating API calls; backend `extractWorkflowId(req.body)` reads it before Zod strips it; `GET /v1/workflows/:id/executions` merges `workflow_executions` + standalone `jobs` (where `workflow_execution_id IS NULL`); standalone jobs shown as `triggerType: "single-node"` with synthetic nodeStates |
+| Shared package | `packages/shared/` with relative imports | Deduplicates ~500 lines of pure logic (prompt building, model constants, templates, ancestor refs, credit identifiers) between frontend DAG executor and backend orchestrator. Frontend resolves via Vite alias; backend uses relative imports (NOT path aliases — `tsc` doesn't rewrite them). Backend `rootDir: ".."` so dist output is `dist/backend/src/`. Dockerfile copies `packages/shared/` into build stages. |
+| Deployment | Railway + single Dockerfile | `dev` branch → staging (`next.nodaro.ai`); `main` branch → production (`app.nodaro.ai`). Single multi-stage Dockerfile at repo root builds backend, frontend, and Remotion. Caddy reverse proxy in front. |
 
 ---
 
@@ -265,5 +274,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-02-26*
-*Version: 1.49.0*
+*Last updated: 2026-03-01*
+*Version: 1.50.0*
