@@ -35,6 +35,7 @@ interface BaseNodeProps {
   readonly toolbarActions?: ReactNode
   readonly hideHeader?: boolean
   readonly bottomToolbarContent?: ReactNode
+  readonly topToolbarContent?: ReactNode
 }
 
 // Light mode: white bg with colored top accent line, Dark mode: category-colored borders
@@ -104,6 +105,7 @@ function BaseNodeComponent({
   toolbarActions,
   hideHeader = false,
   bottomToolbarContent,
+  topToolbarContent,
 }: BaseNodeProps) {
   const [isHovered, setIsHovered] = useState(false)
   const { isMobile } = useMobileCanvas()
@@ -130,7 +132,7 @@ function BaseNodeComponent({
 
   return (
     <div style={{ minWidth: '100%', minHeight: '100%', padding: '5px', margin: '-5px', position: 'relative' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-      <NodeToolbar isVisible={isHovered} position={Position.Top} offset={4} className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1">
+      <NodeToolbar align="center" isVisible={isHovered} position={Position.Top} offset={4} className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1">
         <button
           className="hover:bg-white/10 rounded px-2 py-1 text-white/70 hover:text-white"
           onClick={handleDuplicate}
@@ -140,6 +142,11 @@ function BaseNodeComponent({
         </button>
         {toolbarActions}
       </NodeToolbar>
+      {topToolbarContent && isHovered && (
+        <div className="absolute left-0 right-0 top-0 -translate-y-full z-50 pb-1 flex justify-center">
+          {topToolbarContent}
+        </div>
+      )}
       {bottomToolbarContent && isHovered && (
         <div className="absolute left-0 right-0 bottom-0 translate-y-full z-50 pt-2 flex justify-center">
           {bottomToolbarContent}

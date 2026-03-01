@@ -3,7 +3,7 @@
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, X, Scissors, Settings, LayoutGrid, Expand, Download } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, X, Scissors, Settings, LayoutGrid, Expand, Download, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -88,45 +88,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={220}
+      minHeight={260}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       hideHeader
-      bottomToolbarContent={
-        results.length > 1 && showThumbnails ? (
-          <div className="flex gap-1 bg-black/70 backdrop-blur-sm rounded-lg px-1.5 py-1">
-            {results.slice(0, 5).map((r, i) => (
-              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <CachedImage
-                  src={r.url}
-                  alt={`Result ${i + 1}`}
-                  className={`w-16 h-16 object-cover rounded cursor-pointer border border-white/20 ${
-                    i === activeIndex
-                      ? "opacity-100 ring-2 ring-white"
-                      : "opacity-60 hover:opacity-90"
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
-                  }}
-                />
-                <button
-                  type="button"
-                  aria-label="Remove"
-                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteConfirm(i)
-                  }}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : undefined
-      }
-      toolbarActions={
+      topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
@@ -260,7 +228,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: 'calc(75% + 19px)', left: '-29px' }}
     >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
+      <Type className="w-3.5 h-3.5 text-white" />
       <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
       {inConnectionCount >= 2 && (
         <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
