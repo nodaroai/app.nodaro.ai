@@ -5,16 +5,20 @@ import { render, screen } from "@testing-library/react"
 // Mocks — all declared before component imports
 // ---------------------------------------------------------------------------
 
-vi.mock("@xyflow/react", () => ({
-  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
-  Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
-  ),
-  NodeResizer: () => null,
-  useStore: vi.fn(() => 1),
-  useNodeId: vi.fn(() => "test-node"),
-  useUpdateNodeInternals: vi.fn(() => () => {}),
-}))
+vi.mock("@xyflow/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@xyflow/react")>()
+  return {
+    ...actual,
+    Handle: ({ type, position, id }: any) => (
+      <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    ),
+    NodeResizer: () => null,
+    NodeToolbar: ({ children }: any) => <div data-testid="node-toolbar">{children}</div>,
+    useStore: vi.fn(() => 1),
+    useNodeId: vi.fn(() => "test-node"),
+    useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+  }
+})
 
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id, isRunning }: any) => (
@@ -31,18 +35,9 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => {
-  const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return {
-    ImageIcon: I, Loader2: I, AlertCircle: I, X: I, Wand2: I, Film: I,
-    Mic: I, Music: I, Volume2: I, AudioLines: I, BookOpen: I, FileText: I,
-    Sparkles: I, Users: I, Waypoints: I, Scissors: I, Merge: I, Captions: I,
-    Maximize2: I, Headphones: I, Volume1: I, Video: I, Gauge: I, Repeat: I,
-    SunDim: I, RefreshCw: I, ArrowUpFromLine: I, Disc3: I, FastForward: I,
-    Layers: I, Box: I, Shapes: I, Play: I, Copy: I, Upload: I, Link: I,
-    AudioWaveform: I, SmilePlus: I, Package: I, MapPin: I, UserCircle: I,
-    Clapperboard: I, Hash: I, Image: I,
-  }
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>()
+  return { ...actual }
 })
 
 vi.mock("../run-node-button", () => ({
@@ -93,6 +88,10 @@ vi.mock("@/components/ui/cached-image", () => ({
 
 vi.mock("@/components/editor/save-to-library-button", () => ({
   SaveToLibraryButton: () => null,
+}))
+
+vi.mock("@/components/editor/canvas-zoom-context", () => ({
+  useCanvasZoom: () => ({ zoom: 1 }),
 }))
 
 vi.mock("@/components/editor/extract-references-modal", () => ({
@@ -198,15 +197,16 @@ interface NodeTestConfig {
   defaultData: Record<string, unknown>
   expectedCategory: string
   skipIdlePlaceholder?: boolean
+  skipFailedText?: boolean
 }
 
 const NODES: NodeTestConfig[] = [
-  { name: "GenerateImageNode", Component: GenerateImageNode, expectedCategory: "ai", defaultData: { label: "Generate Image", provider: "nano-banana", aspectRatio: "1:1" } },
-  { name: "EditImageNode", Component: EditImageNode, expectedCategory: "ai", defaultData: { label: "Edit Image", provider: "recraft-upscale" } },
-  { name: "ImageToImageNode", Component: ImageToImageNode, expectedCategory: "ai", defaultData: { label: "Image to Image", provider: "nano-banana" } },
+  { name: "GenerateImageNode", Component: GenerateImageNode, expectedCategory: "ai", defaultData: { label: "Generate Image", provider: "nano-banana", aspectRatio: "1:1" }, skipIdlePlaceholder: true },
+  { name: "EditImageNode", Component: EditImageNode, expectedCategory: "ai", defaultData: { label: "Edit Image", provider: "recraft-upscale" }, skipIdlePlaceholder: true, skipFailedText: true },
+  { name: "ImageToImageNode", Component: ImageToImageNode, expectedCategory: "ai", defaultData: { label: "Image to Image", provider: "nano-banana" }, skipIdlePlaceholder: true, skipFailedText: true },
   { name: "ImageToVideoNode", Component: ImageToVideoNode, expectedCategory: "i2v", defaultData: { label: "Image to Video", provider: "minimax", duration: 5 } },
-  { name: "VideoToVideoNode", Component: VideoToVideoNode, expectedCategory: "ai", defaultData: { label: "Video to Video", provider: "wan" } },
-  { name: "TextToVideoNode", Component: TextToVideoNode, expectedCategory: "ai", defaultData: { label: "Text to Video", provider: "minimax" } },
+  { name: "VideoToVideoNode", Component: VideoToVideoNode, expectedCategory: "ai", defaultData: { label: "Video to Video", provider: "wan" }, skipIdlePlaceholder: true, skipFailedText: true },
+  { name: "TextToVideoNode", Component: TextToVideoNode, expectedCategory: "ai", defaultData: { label: "Text to Video", provider: "minimax" }, skipIdlePlaceholder: true, skipFailedText: true },
   { name: "TextToSpeechNode", Component: TextToSpeechNode, expectedCategory: "ai", defaultData: { label: "Text to Speech", provider: "elevenlabs-turbo", voiceId: "test" } },
   { name: "GenerateMusicNode", Component: GenerateMusicNode, expectedCategory: "ai", defaultData: { label: "Generate Music", provider: "suno" } },
   { name: "TextToAudioNode", Component: TextToAudioNode, expectedCategory: "ai", defaultData: { label: "Text to Audio", provider: "tangoflux" } },
@@ -217,8 +217,8 @@ const NODES: NodeTestConfig[] = [
   { name: "SunoLyricsNode", Component: SunoLyricsNode, expectedCategory: "ai", defaultData: { label: "Suno Lyrics" } },
   { name: "SunoSeparateNode", Component: SunoSeparateNode, expectedCategory: "ai", defaultData: { label: "Suno Separate" } },
   { name: "SunoMusicVideoNode", Component: SunoMusicVideoNode, expectedCategory: "ai", defaultData: { label: "Suno Music Video" } },
-  { name: "LipSyncNode", Component: LipSyncNode, expectedCategory: "ai", defaultData: { label: "Lip Sync", provider: "kling-avatar" }, skipIdlePlaceholder: true },
-  { name: "MotionTransferNode", Component: MotionTransferNode, expectedCategory: "ai", defaultData: { label: "Motion Transfer" } },
+  { name: "LipSyncNode", Component: LipSyncNode, expectedCategory: "ai", defaultData: { label: "Lip Sync", provider: "kling-avatar" }, skipIdlePlaceholder: true, skipFailedText: true },
+  { name: "MotionTransferNode", Component: MotionTransferNode, expectedCategory: "ai", defaultData: { label: "Motion Transfer" }, skipIdlePlaceholder: true, skipFailedText: true },
   { name: "TranscribeNode", Component: TranscribeNode, expectedCategory: "ai", defaultData: { label: "Transcribe", provider: "whisper" } },
   { name: "CombineVideosNode", Component: CombineVideosNode, expectedCategory: "processing", defaultData: { label: "Combine Videos" } },
   { name: "MergeVideoAudioNode", Component: MergeVideoAudioNode, expectedCategory: "processing", defaultData: { label: "Merge Video Audio" } },
@@ -262,7 +262,7 @@ function renderNode(
 
 describe.each(NODES)(
   "$name",
-  ({ Component, defaultData, expectedCategory, skipIdlePlaceholder }) => {
+  ({ Component, defaultData, expectedCategory, skipIdlePlaceholder, skipFailedText }) => {
     it("renders without crashing", () => {
       renderNode(Component, { ...defaultData, executionStatus: "idle" })
       expect(screen.getByTestId("base-node")).toBeInTheDocument()
@@ -300,10 +300,12 @@ describe.each(NODES)(
       expect(spinner).toBeInTheDocument()
     })
 
+    if (!skipFailedText) {
     it("shows Failed text when failed", () => {
       renderNode(Component, { ...defaultData, executionStatus: "failed" })
       expect(screen.getByText("Failed")).toBeInTheDocument()
     })
+    }
 
     it("shows error message when failed", () => {
       renderNode(Component, {

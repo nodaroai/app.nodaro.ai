@@ -5,16 +5,21 @@ import { render, screen } from "@testing-library/react"
 // Mocks — all declared before component imports
 // ---------------------------------------------------------------------------
 
-vi.mock("@xyflow/react", () => ({
-  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
-  Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
-  ),
-  NodeResizer: () => null,
-  useStore: vi.fn(() => 1),
-  useNodeId: vi.fn(() => "test-node"),
-  useUpdateNodeInternals: vi.fn(() => vi.fn()),
-}))
+vi.mock("@xyflow/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@xyflow/react")>()
+  return {
+    ...actual,
+    Handle: ({ type, position, id }: any) => (
+      <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    ),
+    NodeResizer: () => null,
+    NodeToolbar: ({ children }: any) => <div data-testid="node-toolbar">{children}</div>,
+    useStore: vi.fn(() => 1),
+    useNodeId: vi.fn(() => "test-node"),
+    useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+    useUpdateNodeInternals: vi.fn(() => vi.fn()),
+  }
+})
 
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id, isRunning, handles }: any) => (
@@ -46,9 +51,9 @@ vi.mock("../run-node-button", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => {
-  const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Workflow: I, LogIn: I, LogOut: I, Loader2: I, Eye: I }
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>()
+  return { ...actual }
 })
 
 vi.mock("@/hooks/use-workflow-store", () => ({

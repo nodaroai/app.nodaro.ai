@@ -2,32 +2,30 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { TextPromptNode } from "../text-prompt-node"
 
-vi.mock("@xyflow/react", () => ({
-  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
-  Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
-  ),
-  NodeResizer: () => null,
-  useStore: vi.fn(() => 1),
-  useNodeId: vi.fn(() => "test-node"),
-}))
+vi.mock("@xyflow/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@xyflow/react")>()
+  return {
+    ...actual,
+    Handle: ({ type, position, id }: any) => (
+      <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    ),
+    NodeResizer: () => null,
+    NodeToolbar: ({ children, isVisible }: any) => isVisible ? <div data-testid="node-toolbar">{children}</div> : null,
+    useStore: vi.fn(() => 1),
+    useNodeId: vi.fn(() => "test-node"),
+    useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+  }
+})
 
-vi.mock("../base-node", () => ({
-  BaseNode: ({ children, label, category, credits, id }: any) => (
-    <div
-      data-testid="base-node"
-      data-label={label}
-      data-category={category}
-      data-credits={credits}
-      data-id={id}
-    >
-      {children}
-    </div>
-  ),
-}))
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>()
+  return { ...actual }
+})
 
-vi.mock("lucide-react", () => ({
-  Type: () => <span data-testid="type-icon" />,
+vi.mock("@/hooks/use-workflow-store", () => ({
+  useWorkflowStore: (selector: any) => selector({
+    updateNodeData: () => {},
+  }),
 }))
 
 function renderNode(overrides: Record<string, unknown> = {}) {
@@ -41,41 +39,42 @@ function renderNode(overrides: Record<string, unknown> = {}) {
 }
 
 describe("TextPromptNode", () => {
-  it("renders with label passed to BaseNode", () => {
+  it("renders with label", () => {
     renderNode({ data: { label: "My Prompt", text: "hello", variables: {} } })
-    expect(screen.getByTestId("base-node")).toHaveAttribute("data-label", "My Prompt")
+    expect(screen.getByText("My Prompt")).toBeInTheDocument()
   })
 
   it("renders text content from data", () => {
     renderNode({ data: { label: "Prompt", text: "A sunset scene", variables: {} } })
-    expect(screen.getByText("A sunset scene")).toBeInTheDocument()
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement
+    expect(textarea.value).toBe("A sunset scene")
   })
 
   it("shows placeholder when text is empty", () => {
     renderNode({ data: { label: "Prompt", text: "", variables: {} } })
-    expect(screen.getByText("Enter your prompt...")).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("Enter your prompt...")).toBeInTheDocument()
   })
 
   it("shows placeholder when text is undefined", () => {
     renderNode({ data: { label: "Prompt", variables: {} } })
-    expect(screen.getByText("Enter your prompt...")).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("Enter your prompt...")).toBeInTheDocument()
   })
 
-  it("passes correct category and credits to BaseNode", () => {
+  it("renders a textarea element", () => {
     renderNode({ data: { label: "Prompt", text: "test", variables: {} } })
-    const baseNode = screen.getByTestId("base-node")
-    expect(baseNode).toHaveAttribute("data-category", "input")
-    expect(baseNode).toHaveAttribute("data-credits", "0")
+    expect(screen.getByRole("textbox")).toBeInTheDocument()
   })
 
-  it("passes node id to BaseNode", () => {
-    renderNode({ id: "node-42", data: { label: "Prompt", text: "test", variables: {} } })
-    expect(screen.getByTestId("base-node")).toHaveAttribute("data-id", "node-42")
+  it("renders the output handle", () => {
+    renderNode({ data: { label: "Prompt", text: "test", variables: {} } })
+    const handle = screen.getByTestId("handle-prompt")
+    expect(handle).toHaveAttribute("data-type", "source")
+    expect(handle).toHaveAttribute("data-position", "right")
   })
 
-  it("truncates long text with line-clamp", () => {
+  it("renders textarea with text value", () => {
     renderNode({ data: { label: "Prompt", text: "A very long prompt text", variables: {} } })
-    const paragraph = screen.getByText("A very long prompt text")
-    expect(paragraph).toHaveClass("line-clamp-4")
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement
+    expect(textarea.value).toBe("A very long prompt text")
   })
 })

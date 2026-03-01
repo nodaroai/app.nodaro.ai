@@ -2,16 +2,20 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { StickyNoteNode } from "../sticky-note-node"
 
-vi.mock("@xyflow/react", () => ({
-  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
-  Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
-  ),
-  NodeResizer: () => null,
-  useStore: vi.fn(() => 1),
-  useNodeId: vi.fn(() => "test-node"),
-  useUpdateNodeInternals: vi.fn(() => () => {}),
-}))
+vi.mock("@xyflow/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@xyflow/react")>()
+  return {
+    ...actual,
+    Handle: ({ type, position, id }: any) => (
+      <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    ),
+    NodeResizer: () => null,
+    NodeToolbar: ({ children, isVisible }: any) => isVisible ? <div data-testid="node-toolbar">{children}</div> : null,
+    useStore: vi.fn(() => 1),
+    useNodeId: vi.fn(() => "test-node"),
+    useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+  }
+})
 
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id, isRunning }: any) => (
@@ -21,17 +25,15 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => {
-  const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return {
-    Bold: I, Italic: I, AlignLeft: I, AlignCenter: I, AlignRight: I,
-    Link: I, Image: I, Table: I, List: I,
-  }
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>()
+  return { ...actual }
 })
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({
     updateNodeData: () => {},
+    updateNode: () => {},
   }),
 }))
 
@@ -53,24 +55,28 @@ describe("StickyNoteNode", () => {
 
   it("renders textarea with placeholder", () => {
     renderNode()
-    const textarea = screen.getByPlaceholderText("Write notes here...")
+    const textarea = screen.getByPlaceholderText("Write a note...")
     expect(textarea).toBeInTheDocument()
   })
 
   it("applies background color", () => {
     renderNode({ data: { label: "Note", text: "", color: "#ff6633" } })
-    const container = screen.getByRole("textbox").closest(".w-full.h-full")
+    const textarea = screen.getByRole("textbox")
+    // The background color is on the parent container div
+    const container = textarea.parentElement
     expect(container).toHaveStyle({ backgroundColor: "#ff6633" })
   })
 
   it("shows toolbar when selected", () => {
     renderNode({ selected: true })
-    expect(screen.getByTitle("Bold")).toBeInTheDocument()
+    // NodeToolbar renders when selected; Heading/Paragraph toggle is visible
+    expect(screen.getByText("Paragraph")).toBeInTheDocument()
   })
 
   it("hides toolbar when not selected", () => {
     renderNode({ selected: false })
-    expect(screen.queryByTitle("Bold")).not.toBeInTheDocument()
+    // NodeToolbar is not rendered when not selected and not hovered
+    expect(screen.queryByText("Paragraph")).not.toBeInTheDocument()
   })
 
   it("renders text content", () => {
@@ -82,12 +88,12 @@ describe("StickyNoteNode", () => {
   it("applies font size", () => {
     renderNode({ data: { label: "Note", text: "", color: "#2d2d44", fontSize: "lg" } })
     const textarea = screen.getByRole("textbox")
-    expect(textarea).toHaveStyle({ fontSize: "90px" })
+    expect(textarea).toHaveStyle({ fontSize: "18px" })
   })
 
   it("applies bold style", () => {
     renderNode({ data: { label: "Note", text: "", color: "#2d2d44", bold: true } })
     const textarea = screen.getByRole("textbox")
-    expect(textarea).toHaveStyle({ fontWeight: "bold" })
+    expect(textarea).toHaveStyle({ fontWeight: 700 })
   })
 })
