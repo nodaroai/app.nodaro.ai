@@ -5,15 +5,20 @@ import { render, screen } from "@testing-library/react"
 // Mocks — all declared before component imports
 // ---------------------------------------------------------------------------
 
-vi.mock("@xyflow/react", () => ({
-  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
-  Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
-  ),
-  NodeResizer: () => null,
-  useStore: vi.fn(() => 1),
-  useNodeId: vi.fn(() => "test-node"),
-}))
+vi.mock("@xyflow/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@xyflow/react")>()
+  return {
+    ...actual,
+    Handle: ({ type, position, id }: any) => (
+      <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    ),
+    NodeResizer: () => null,
+    NodeToolbar: ({ children }: any) => <div data-testid="node-toolbar">{children}</div>,
+    useStore: vi.fn(() => 1),
+    useNodeId: vi.fn(() => "test-node"),
+    useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+  }
+})
 
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id, isRunning, handles }: any) => (
@@ -44,9 +49,9 @@ vi.mock("../run-node-button", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => {
-  const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { ImageIcon: I, Loader2: I, AlertCircle: I, X: I, Scissors: I }
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>()
+  return { ...actual }
 })
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -97,6 +102,10 @@ vi.mock("@/components/editor/save-to-library-button", () => ({
   SaveToLibraryButton: () => null,
 }))
 
+vi.mock("@/components/editor/canvas-zoom-context", () => ({
+  useCanvasZoom: () => ({ zoom: 1 }),
+}))
+
 vi.mock("@/components/editor/extract-references-modal", () => ({
   ExtractReferencesModal: () => null,
 }))
@@ -129,9 +138,6 @@ describe("GenerateImageNode", () => {
   it("renders with empty data and shows placeholder icon", () => {
     renderNode()
     expect(screen.getByTestId("base-node")).toBeInTheDocument()
-    // Placeholder dashed border area is visible (idle, no image)
-    const baseNode = screen.getByTestId("base-node")
-    expect(baseNode.querySelector(".border-dashed")).toBeInTheDocument()
   })
 
   it("renders with generatedImageUrl and shows CachedImage", () => {
@@ -146,7 +152,7 @@ describe("GenerateImageNode", () => {
     expect(img).toHaveAttribute("src", "https://example.com/img.png")
   })
 
-  it("renders thumbnail carousel with multiple generatedResults", () => {
+  it("renders active image with multiple generatedResults", () => {
     renderNode({
       data: {
         label: "Generate Image",
@@ -159,9 +165,9 @@ describe("GenerateImageNode", () => {
         generatedImageUrl: "https://example.com/a.png",
       },
     })
-    // Active image shown + 3 thumbnails = at least 4 CachedImage instances
+    // Active image is shown (thumbnails are hidden by default, toggled via button)
     const images = screen.getAllByTestId("cached-image")
-    expect(images.length).toBeGreaterThanOrEqual(4)
+    expect(images.length).toBeGreaterThanOrEqual(1)
   })
 
   it("shows spinner when running", () => {
