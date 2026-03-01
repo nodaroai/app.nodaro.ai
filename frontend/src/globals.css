@@ -224,11 +224,11 @@ html, body {
   filter: drop-shadow(0 0 4px #ff0073) drop-shadow(0 0 8px #ff0073);
 }
 
-/* Running node with blue base and rotating pink overlay */
+/* Running node with rotating pink accent border */
 .node-running {
   position: relative;
-  border: 3px solid #3b82f6 !important; /* Blue base line, 1.5x thicker */
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+  border: 2px solid #2a2a2a !important;
+  box-shadow: none !important;
 }
 
 .node-running::before {
@@ -236,19 +236,25 @@ html, body {
   position: absolute;
   inset: -3px;
   border-radius: inherit;
-  padding: 3px;
   background: conic-gradient(
     from var(--gradient-angle, 0deg),
-    #ff0073 0deg,
-    #ff0073 90deg,
-    transparent 90deg,
-    transparent 360deg
+    #1a1a1a 0deg,
+    #1a1a1a 40deg,
+    #ff0073 100deg,
+    #ff69b4 160deg,
+    #ffffff 180deg,
+    #ff69b4 200deg,
+    #ff0073 260deg,
+    #1a1a1a 320deg,
+    #1a1a1a 360deg
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: spin-border 1.5s linear infinite;
+  padding: 3px;
+  animation: spin-border 2s linear infinite;
   pointer-events: none;
+  z-index: 0;
 }
 
 @keyframes spin-border {

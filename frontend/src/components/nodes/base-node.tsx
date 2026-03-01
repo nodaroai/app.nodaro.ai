@@ -1,7 +1,7 @@
 "use client"
 
-import { memo, useEffect, type ReactNode, type MouseEvent } from "react"
-import { Handle, Position, NodeResizer } from "@xyflow/react"
+import { memo, useState, useEffect, type ReactNode, type MouseEvent } from "react"
+import { Handle, Position, NodeResizer, NodeToolbar } from "@xyflow/react"
 import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -11,8 +11,10 @@ interface HandleConfig {
   readonly id: string
   readonly type: "source" | "target"
   readonly position: Position
-  readonly label: string
+  readonly label?: string
   readonly top?: string
+  readonly hideHandle?: boolean
+  readonly customStyle?: React.CSSProperties
 }
 
 interface BaseNodeProps {
@@ -30,13 +32,16 @@ interface BaseNodeProps {
   readonly listCount?: number
   readonly listProgress?: string
   readonly listProgressPercent?: number
+  readonly toolbarActions?: ReactNode
+  readonly hideHeader?: boolean
+  readonly bottomToolbarContent?: ReactNode
 }
 
 // Light mode: white bg with colored top accent line, Dark mode: category-colored borders
 const CATEGORY_STYLES: Record<string, string> = {
   input: "bg-white border-[#E2E8F0] dark:border-[#38BDF8] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   parameter: "bg-white border-[#E2E8F0] dark:border-[#818CF8] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
-  ai: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
+  ai: "bg-white border-[#E2E8F0] dark:border-[#333333] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   processing: "bg-white border-[#E2E8F0] dark:border-[#475569] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   output: "bg-white border-[#E2E8F0] dark:border-green-500 dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
   scene: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#1E1E1E]/90 dark:backdrop-blur-sm",
@@ -96,7 +101,11 @@ function BaseNodeComponent({
   listCount,
   listProgress,
   listProgressPercent,
+  toolbarActions,
+  hideHeader = false,
+  bottomToolbarContent,
 }: BaseNodeProps) {
+  const [isHovered, setIsHovered] = useState(false)
   const { isMobile } = useMobileCanvas()
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
@@ -120,7 +129,22 @@ function BaseNodeComponent({
   }
 
   return (
-    <div style={{ minWidth: '100%', minHeight: '100%' }}>
+    <div style={{ minWidth: '100%', minHeight: '100%', padding: '5px', margin: '-5px', position: 'relative' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+      <NodeToolbar isVisible={isHovered} position={Position.Top} offset={4} className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1">
+        <button
+          className="hover:bg-white/10 rounded px-2 py-1 text-white/70 hover:text-white"
+          onClick={handleDuplicate}
+          aria-label="Duplicate node"
+        >
+          <Copy className="h-3 w-3" />
+        </button>
+        {toolbarActions}
+      </NodeToolbar>
+      {bottomToolbarContent && isHovered && (
+        <div className="absolute left-0 right-0 bottom-0 translate-y-full z-50 pt-2 flex justify-center">
+          {bottomToolbarContent}
+        </div>
+      )}
       {!isMobile && (
         <NodeResizer
           minWidth={minWidth}
@@ -133,6 +157,7 @@ function BaseNodeComponent({
       <div
         className={cn(
           "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground min-h-full overflow-hidden",
+          "dark:hover:border-[#ff0073] transition-colors duration-200",
           CATEGORY_STYLES[category],
           selected && "ring-2 ring-primary shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",
           selected && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
@@ -147,83 +172,78 @@ function BaseNodeComponent({
           isNew && !isRunning && "node-new-pulse",
           isSkipped && "opacity-40 border-dashed",
         )}
-        onClick={() => selectNode(id)}
+        onClick={(e) => { e.stopPropagation(); selectNode(id) }}
       >
-      <button
-        className="absolute -top-3 -right-3 z-10 hidden group-hover:flex items-center justify-center w-6 h-6 rounded-full bg-white dark:bg-card border border-[#E2E8F0] dark:border-border shadow-sm hover:bg-[#F1F5F9] dark:hover:bg-accent text-[#64748B] dark:text-muted-foreground"
-        onClick={handleDuplicate}
-        aria-label="Duplicate node"
-      >
-        <Copy className="h-3 w-3" />
-      </button>
-      <div
-        className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-t-md font-sans text-[11px] font-semibold uppercase tracking-[0.05em]",
-          CATEGORY_HEADER[category],
-        )}
-      >
-        {category === "input" ? (
-          <span className="w-6 h-6 rounded-md bg-[#007AFF]/10 dark:bg-white/20 flex items-center justify-center text-[#007AFF] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-            {icon}
-          </span>
-        ) : category === "parameter" ? (
-          <span className="w-6 h-6 rounded-md bg-[#6366F1]/10 dark:bg-white/20 flex items-center justify-center text-[#6366F1] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-            {icon}
-          </span>
-        ) : category === "processing" ? (
-          <span className="w-6 h-6 rounded-md bg-[#475569]/10 dark:bg-white/20 flex items-center justify-center text-[#475569] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-            {icon}
-          </span>
-        ) : category === "output" ? (
-          <span className="w-6 h-6 rounded-md bg-[#22C55E]/10 dark:bg-white/20 flex items-center justify-center text-[#22C55E] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-            {icon}
-          </span>
-        ) : category === "character" ? (
-          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-            {icon}
-          </span>
-        ) : category === "location" ? (
-          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-            {icon}
-          </span>
-        ) : category === "object" ? (
-          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-            {icon}
-          </span>
-        ) : (category === "ai" || category === "scene" || category === "script" || category === "i2v") ? (
-          <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-            {icon}
-          </span>
-        ) : (
-          <span className={cn("w-6 h-6 rounded-md flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5", CATEGORY_ICON_COLOR[category])}>{icon}</span>
-        )}
-        <span className="flex-1 truncate">{label}</span>
-        {listProgress && (
-          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">
-            {listProgress}
-          </span>
-        )}
-        {!listProgress && listCount !== undefined && listCount > 1 && (
-          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-            ×{listCount}
-          </span>
-        )}
-        {credits !== undefined && credits > 0 && (
-          <span className={cn(
-            "font-mono text-[10px]",
-            (category === "ai" || category === "scene" || category === "script" || category === "i2v")
-              ? "text-white/70 dark:text-[#ff0073]"
-              : "text-[#64748B] dark:text-[#ff0073]"
-          )}>{credits}cr</span>
-        )}
-        {isSkipped && (
-          <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
-            SKIP
-          </span>
-        )}
-      </div>
+      {!hideHeader && (
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-1.5 rounded-t-md font-sans text-[11px] font-semibold uppercase tracking-[0.05em]",
+            CATEGORY_HEADER[category],
+          )}
+        >
+          {category === "input" ? (
+            <span className="w-6 h-6 rounded-md bg-[#007AFF]/10 dark:bg-white/20 flex items-center justify-center text-[#007AFF] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : category === "parameter" ? (
+            <span className="w-6 h-6 rounded-md bg-[#6366F1]/10 dark:bg-white/20 flex items-center justify-center text-[#6366F1] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : category === "processing" ? (
+            <span className="w-6 h-6 rounded-md bg-[#475569]/10 dark:bg-white/20 flex items-center justify-center text-[#475569] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : category === "output" ? (
+            <span className="w-6 h-6 rounded-md bg-[#22C55E]/10 dark:bg-white/20 flex items-center justify-center text-[#22C55E] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : category === "character" ? (
+            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : category === "location" ? (
+            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : category === "object" ? (
+            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : (category === "ai" || category === "scene" || category === "script" || category === "i2v") ? (
+            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
+              {icon}
+            </span>
+          ) : (
+            <span className={cn("w-6 h-6 rounded-md flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5", CATEGORY_ICON_COLOR[category])}>{icon}</span>
+          )}
+          <span className="flex-1 truncate">{label}</span>
+          {listProgress && (
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">
+              {listProgress}
+            </span>
+          )}
+          {!listProgress && listCount !== undefined && listCount > 1 && (
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              x{listCount}
+            </span>
+          )}
+          {credits !== undefined && credits > 0 && (
+            <span className={cn(
+              "font-mono text-[10px]",
+              (category === "ai" || category === "scene" || category === "script" || category === "i2v")
+                ? "text-white/70 dark:text-[#ff0073]"
+                : "text-[#64748B] dark:text-[#ff0073]"
+            )}>{credits}cr</span>
+          )}
+          {isSkipped && (
+            <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
+              SKIP
+            </span>
+          )}
+        </div>
+      )}
 
-      {listProgressPercent !== undefined && listProgressPercent > 0 && (
+      {!hideHeader && listProgressPercent !== undefined && listProgressPercent > 0 && (
         <div className="w-full px-3 py-1.5">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-mono text-cyan-300">
@@ -247,7 +267,11 @@ function BaseNodeComponent({
         </div>
       )}
 
-      {children && <div className="px-3 py-2 text-xs overflow-hidden bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>}
+      {children && (
+        hideHeader
+          ? <div className="text-xs overflow-hidden">{children}</div>
+          : <div className="px-3 py-2 text-xs overflow-hidden bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>
+      )}
     </div>
 
       {handles.map((h) => (
@@ -257,7 +281,10 @@ function BaseNodeComponent({
             type={h.type}
             position={h.position}
             className="!w-9 !h-9 !bg-transparent !border-0 touch-manipulation"
-            style={h.top ? { top: h.top } : undefined}
+            style={{
+              ...(h.customStyle ?? (h.top ? { top: h.top } : undefined)),
+              ...(h.hideHandle ? { background: 'transparent', opacity: 0 } : undefined),
+            }}
           />
           {h.label && h.top && (
             <span

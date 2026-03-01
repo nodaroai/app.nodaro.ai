@@ -3,7 +3,7 @@
 import { memo, useState, useMemo, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2 } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -58,6 +58,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
 
@@ -70,6 +71,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [directorOpen, setDirectorOpen] = useState(false)
+  const [showThumbnails, setShowThumbnails] = useState(false)
   const credits = useModelCredits(nodeData.provider ?? "minimax", nodeData.provider === "kling-3.0" ? 10 : 4)
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
@@ -155,24 +157,26 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   // Build dynamic handles
-  const handles = useMemo(() => {
-    const h = [
-      { id: "startFrame", type: "target" as const, position: Position.Left, label: "Start Frame", top: "25%" },
-      { id: "endFrame", type: "target" as const, position: Position.Left, label: "End Frame", top: "50%" },
-      { id: "audio", type: "target" as const, position: Position.Left, label: "Audio", top: "75%" },
-      { id: "video", type: "source" as const, position: Position.Right, label: "Video" },
-    ]
-    return h
-  }, [])
+  const handles = useMemo(() => [
+    { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: '16%', left: '-29px' }, hideHandle: true },
+    { id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: '34%', left: '-29px' }, hideHandle: true },
+    { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: '52%', left: '-29px' }, hideHandle: true },
+    { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '8%', right: '-29px' }, hideHandle: true },
+  ], [])
 
   const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo
 
   return (
-    <div className="relative group/run">
+    <div className="relative">
+    {/* Floating label above node */}
+    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
+      <Clapperboard className="w-3.5 h-3.5" />
+      <span className="truncate">{isKling3 ? "Kling 3.0 Studio" : nodeData.label}</span>
+    </div>
     <BaseNode
       id={id}
       label={isKling3 ? "Kling 3.0 Studio" : nodeData.label}
-      icon={<Film className="h-4 w-4" />}
+      icon={<Clapperboard className="h-4 w-4" />}
       category="i2v"
       credits={credits}
       selected={selected}
@@ -180,6 +184,48 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
+      hideHeader
+      bottomToolbarContent={
+        showThumbnails && results.length > 1 ? (
+          <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
+            {results.slice(0, 8).map((r, i) => (
+              <div key={`${r.jobId}-${i}`} className="relative shrink-0">
+                {r.thumbnailUrl ? (
+                  <CachedImage
+                    src={r.thumbnailUrl}
+                    alt={`Result ${i + 1}`}
+                    className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
+                      i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                    }}
+                  />
+                ) : (
+                  <video
+                    src={r.url}
+                    className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
+                      i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                    }}
+                    muted
+                    playsInline
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        ) : undefined
+      }
+      toolbarActions={
+        status !== "running" ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={handles}
     >
       <div
@@ -285,121 +331,59 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </>
         ) : (
           <>
-        {/* Frame Previews - side by side label + image per row */}
+        {/* Frame Previews */}
         <div className="flex flex-col gap-2">
           {/* Start Frame */}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground font-medium w-[52px] shrink-0 leading-tight">Start Frame</span>
+          <div className="flex flex-col items-center gap-1 px-3 mt-2">
+            <span className="text-[10px] text-muted-foreground/60">Start Frame</span>
             {startFrameInfo?.thumbnailUrl ? (
-              <div className="relative flex-1 h-[52px] rounded-md overflow-hidden bg-muted/30 border border-muted">
-                <CachedImage
-                  src={startFrameInfo.thumbnailUrl}
-                  alt={startFrameInfo.label}
-                  className="w-full h-full object-cover"
-                  thumbnail
-                  thumbnailWidth={320}
-                />
-                <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/60 text-white px-1 rounded truncate max-w-[90%]">
-                  {startFrameInfo.label}
-                </span>
-              </div>
-            ) : startFrameInfo ? (
-              <div className="flex-1 h-[52px] rounded-md bg-muted/30 border border-muted flex items-center justify-center">
-                <ImageIcon className="w-4 h-4 text-muted-foreground/40" />
+              <div className="w-full h-[70px] rounded-md overflow-hidden bg-muted/30 border border-muted/50">
+                <CachedImage src={startFrameInfo.thumbnailUrl} alt={startFrameInfo.label}
+                  className="w-full h-full object-cover" thumbnail thumbnailWidth={320} />
               </div>
             ) : (
-              <div className="flex-1 h-[52px] rounded-md border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
-                <ImageIcon className="w-4 h-4 text-muted-foreground/20" />
+              <div className="w-full h-[70px] rounded-md border border-dashed border-muted-foreground/20 flex items-center justify-center">
+                <ImageIcon className="w-5 h-5 text-muted-foreground/20" />
               </div>
             )}
           </div>
 
           {/* End Frame */}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground font-medium w-[52px] shrink-0 leading-tight">
-              End Frame
-              {!supportsEndFrame && (
-                <span className="text-[8px] text-amber-500/80 ml-0.5 block" title={`${nodeData.provider} doesn't support end frame`}>N/A</span>
-              )}
-            </span>
+          <div className="flex flex-col items-center gap-1 px-3">
+            <span className="text-[10px] text-muted-foreground/60">End Frame</span>
             {endFrameInfo?.thumbnailUrl ? (
-              <div className="relative flex-1 h-[52px] rounded-md overflow-hidden bg-muted/30 border border-muted">
-                <CachedImage
-                  src={endFrameInfo.thumbnailUrl}
-                  alt={endFrameInfo.label}
-                  className="w-full h-full object-cover"
-                  thumbnail
-                  thumbnailWidth={320}
-                />
-                <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/60 text-white px-1 rounded truncate max-w-[90%]">
-                  {endFrameInfo.label}
-                </span>
-              </div>
-            ) : endFrameInfo ? (
-              <div className="flex-1 h-[52px] rounded-md bg-muted/30 border border-muted flex items-center justify-center">
-                <ImageIcon className="w-4 h-4 text-muted-foreground/40" />
+              <div className="w-full h-[70px] rounded-md overflow-hidden bg-muted/30 border border-muted/50">
+                <CachedImage src={endFrameInfo.thumbnailUrl} alt={endFrameInfo.label}
+                  className="w-full h-full object-cover" thumbnail thumbnailWidth={320} />
               </div>
             ) : (
-              <div className={`flex-1 h-[52px] rounded-md border-2 border-dashed flex items-center justify-center ${
-                supportsEndFrame ? "border-muted-foreground/20" : "border-muted-foreground/10 opacity-50"
-              }`}>
-                <ImageIcon className="w-4 h-4 text-muted-foreground/20" />
+              <div className={`w-full h-[70px] rounded-md border border-dashed flex items-center justify-center ${supportsEndFrame ? "border-muted-foreground/20" : "border-muted-foreground/10 opacity-40"}`}>
+                <ImageIcon className="w-5 h-5 text-muted-foreground/20" />
               </div>
             )}
           </div>
-        </div>
 
-        {/* Audio Track indicator */}
-        {audioInfo && (
-          <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-muted/30 border border-muted">
-            <Volume2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-            <span className="text-[10px] text-muted-foreground truncate">{audioInfo.label}</span>
-          </div>
-        )}
-
-        {/* Motion Prompt */}
-        <div className="flex flex-col gap-1 px-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground font-medium">
-              Motion Prompt <span className="text-muted-foreground/60">(optional)</span>
-            </span>
-            {connectedTextPrompt && !nodeData.motionPrompt && (
-              <span className="text-[9px] text-primary/70 italic flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
-                From: {connectedTextPrompt.nodeLabel}
-              </span>
+          {/* Audio */}
+          <div className="flex flex-col items-center gap-1 px-3">
+            <span className="text-[10px] text-muted-foreground/60">Audio</span>
+            {audioInfo ? (
+              <div className="w-full h-[28px] rounded-md bg-muted/30 border border-muted/50 flex items-center px-2">
+                <Volume2 className="w-3 h-3 text-green-500 shrink-0 mr-1.5" />
+                <span className="text-[10px] text-muted-foreground truncate">{audioInfo.label}</span>
+              </div>
+            ) : (
+              <div className="w-full h-[28px] rounded-md border border-dashed border-muted-foreground/20 flex items-center justify-center gap-1.5">
+                <Volume2 className="w-3 h-3 text-muted-foreground/20" />
+                <span className="text-[10px] text-muted-foreground/20">Connect audio</span>
+              </div>
             )}
           </div>
-          {connectedTextPrompt && !nodeData.motionPrompt && (
-            <div
-              className="w-full min-h-[40px] p-2 text-[11px] bg-primary/5 border border-primary/20 rounded-md text-muted-foreground italic overflow-hidden"
-              style={{ wordBreak: "break-word" }}
-            >
-              {connectedTextPrompt.text.length > 120
-                ? `${connectedTextPrompt.text.slice(0, 120)}...`
-                : connectedTextPrompt.text}
-            </div>
-          )}
-          <textarea
-            value={nodeData.motionPrompt ?? ""}
-            onChange={(e) => updateNodeData(id, { motionPrompt: e.target.value })}
-            placeholder={connectedTextPrompt && !nodeData.motionPrompt
-              ? "Type to override connected prompt..."
-              : "Describe the motion, e.g. 'camera slowly zooms in while subject walks forward'"
-            }
-            className={`w-full min-h-[60px] p-2 text-[11px] border rounded-md resize-none placeholder:text-muted-foreground/50 ${
-              connectedTextPrompt && !nodeData.motionPrompt
-                ? "bg-muted/20 border-dashed h-[36px] min-h-[36px]"
-                : "bg-background"
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          />
         </div>
 
         {/* Empty state when nothing connected */}
-        {!hasAnyConnection && !connectedTextPrompt && status !== "running" && !activeUrl && (
+        {!hasAnyConnection && status !== "running" && !activeUrl && (
           <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
-            <Film className="w-8 h-8" />
+            <Clapperboard className="w-8 h-8" />
             <span className="text-[10px]">Connect image/audio nodes</span>
           </div>
         )}
@@ -427,53 +411,61 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && activeUrl && (
-          <div className="relative group">
-            {activeThumbnail ? (
-              <CachedImage
-                src={activeThumbnail}
-                alt="Video preview"
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
-                thumbnail
-                thumbnailWidth={320}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewOpen(true)
-                }}
-              />
-            ) : (
-              <video
-                src={activeUrl}
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewOpen(true)
-                }}
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
-                playsInline
-              />
-            )}
-            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
-              Video
-            </div>
-            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="px-3">
+            <div className="relative group/video">
+              {/* Version badge */}
               {results.length > 0 && (
-                <button
-                  type="button"
-                  aria-label="Remove" className="w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full shadow-sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteConfirm(activeIndex)
-                  }}
-                  title="Delete this result"
-                >
-                  <X className="w-3 h-3" />
+                <button type="button"
+                  className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}>
+                  <LayoutGrid className="w-3 h-3" />
+                  <span>{results.length}</span>
                 </button>
               )}
-            </div>
-            <div className="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <SaveToLibraryButton url={activeUrl} type="video" />
+
+              {activeThumbnail ? (
+                <CachedImage src={activeThumbnail} alt="Video preview"
+                  className="w-full h-[70px] object-cover rounded-xl cursor-pointer"
+                  thumbnail thumbnailWidth={320}
+                  onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+                />
+              ) : (
+                <video src={activeUrl}
+                  className="w-full h-[70px] object-cover rounded-xl cursor-pointer"
+                  onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+                  autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline
+                />
+              )}
+
+              {/* Top-right: delete */}
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
+                {results.length > 0 && (
+                  <button type="button"
+                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                    onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}>
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Bottom-left: fullscreen + download */}
+              <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
+                <button type="button"
+                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}>
+                  <Expand className="w-3.5 h-3.5" />
+                </button>
+                <button type="button"
+                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}>
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Bottom-right: save to library */}
+              <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+                <SaveToLibraryButton url={activeUrl} type="video" />
+              </div>
             </div>
           </div>
         )}
@@ -493,67 +485,18 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && status !== "failed" && startFrameInfo && (
-          <div className="flex items-center justify-center h-20 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
-            <Film className="w-6 h-6" />
-          </div>
-        )}
-
-        {/* Version History */}
-        {results.length > 1 && (
-          <div className="flex gap-1 overflow-x-auto">
-            {results.slice(0, 5).map((r, i) => (
-              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                {r.thumbnailUrl ? (
-                  <CachedImage
-                    src={r.thumbnailUrl}
-                    alt=""
-                    className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
-                      i === activeIndex
-                        ? "opacity-100 ring-2 ring-primary"
-                        : "opacity-50 hover:opacity-80"
-                    }`}
-                    thumbnail
-                    thumbnailWidth={80}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
-                    }}
-                  />
-                ) : (
-                  <video
-                    src={r.url}
-                    className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
-                      i === activeIndex
-                        ? "opacity-100 ring-2 ring-primary"
-                        : "opacity-50 hover:opacity-80"
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
-                    }}
-                    muted
-                    playsInline
-                  />
-                )}
-                <button
-                  type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteConfirm(i)
-                  }}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            ))}
+          <div className="flex flex-col items-center gap-1 px-3">
+            <span className="text-[10px] text-muted-foreground/60">Video</span>
+            <div className="w-full h-[70px] rounded-md border border-dashed border-muted-foreground/20 flex items-center justify-center">
+              <Clapperboard className="w-5 h-5 text-muted-foreground/20" />
+            </div>
           </div>
         )}
 
         {/* Provider & Duration Info */}
-        <div className="flex justify-between text-[10px] text-muted-foreground">
-          <span>{nodeData.provider}</span>
-          <span>
+        <div className="flex justify-between text-[10px] text-muted-foreground px-2">
+          <span className="pl-2">{nodeData.provider}</span>
+          <span className="pr-2">
             {isKling3 && nodeData.multiShot && nodeData.shots
               ? `${nodeData.shots.reduce((sum, s) => sum + s.duration, 0)}s total`
               : `${nodeData.duration ?? 5}s`}
@@ -562,8 +505,29 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Run Button */}
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    {/* startFrame handle icon */}
+    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+      style={{ top: 'calc(16% - 14px)', left: '-29px' }}>
+      <ImageIcon className="w-3.5 h-3.5 text-white" />
+    </div>
+
+    {/* endFrame handle icon */}
+    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+      style={{ top: 'calc(34% - 14px)', left: '-29px' }}>
+      <ImageIcon className="w-3.5 h-3.5 text-white" />
+    </div>
+
+    {/* audio handle icon */}
+    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+      style={{ top: 'calc(52% - 14px)', left: '-29px' }}>
+      <Volume2 className="w-3.5 h-3.5 text-white" />
+    </div>
+
+    {/* video output handle icon */}
+    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
+      style={{ top: 'calc(8% - 14px)', right: '-29px' }}>
+      <Clapperboard className="w-3.5 h-3.5 text-white" />
+    </div>
 
     {/* Preview Modal */}
     {activeUrl && (

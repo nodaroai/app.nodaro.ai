@@ -54,7 +54,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, currentIndex, to
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center"
+      className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center"
       onClick={onClose}
       onTouchStart={hasNav ? handleTouchStart : undefined}
       onTouchEnd={hasNav ? handleTouchEnd : undefined}
@@ -110,7 +110,7 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, currentIndex, to
           <CachedImage
             src={url}
             alt="Preview"
-            className="max-w-full max-h-[80vh] rounded-lg object-contain"
+            className="max-w-full max-h-[90vh] rounded-lg object-contain"
           />
         ) : type === "video" ? (
           <video

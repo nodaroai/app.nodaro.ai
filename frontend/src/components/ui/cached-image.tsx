@@ -54,7 +54,7 @@ export function CachedImage({
       draggable={draggable}
       onLoad={() => setLoaded(true)}
       onError={onError}
-      style={{ opacity: loaded ? 1 : 0, transition: "opacity 0.15s ease-in", ...props.style }}
+      style={{ opacity: loaded ? 1 : 0, transition: "opacity 0s", ...props.style }}
       {...props}
     />
   )
