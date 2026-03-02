@@ -123,12 +123,13 @@ export function getModelIdentifier(node: WorkflowNode): string {
 
 /**
  * Build composite credit model identifier from provider + node data.
- * Extracts quality/resolution from data and delegates to the shared function.
+ * Extracts quality/resolution/renderingSpeed from data and delegates to the shared function.
  */
 export function buildCreditModelIdentifier(provider: string, data: Record<string, unknown>): string {
   return sharedBuildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
     data.resolution as string | undefined,
+    data.renderingSpeed as string | undefined,
   )
 }

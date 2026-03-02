@@ -285,6 +285,8 @@ export function executeNode(
       imgData.resolution || undefined,
       imgData.quality || undefined,
       result.nativeNegativePrompt,
+      imgData.seed,
+      imgData.renderingSpeed || undefined,
     );
   }
 
@@ -300,7 +302,7 @@ export function executeNode(
     const editData = node.data as EditImageData;
     const provider = editData.provider || "recraft-upscale";
     const prompt = editData.prompt || undefined;
-    return runEditImage(node.id, imageUrl, ctx, prompt, provider);
+    return runEditImage(node.id, imageUrl, ctx, prompt, provider, editData.upscaleFactor);
   }
 
   if (node.type === "image-to-image") {
@@ -313,23 +315,61 @@ export function executeNode(
       return Promise.reject(new Error("No input image"));
     }
     const i2iData = node.data as ImageToImageData;
-    const prompt = i2iData.prompt;
-    if (!prompt) {
+    const rawPrompt = i2iData.prompt;
+    if (!rawPrompt) {
       toast.error(
         `Node "${i2iData.label}": transformation prompt is required`,
       );
       return Promise.reject(new Error("Transformation prompt is required"));
     }
     const provider = i2iData.provider || "nano-banana";
-    const refUrls =
+
+    // Collect reference images from connected nodes + character assets
+    const chainRefs =
       inputs.referenceImageUrls?.filter((url) => url !== imageUrl) ?? [];
+    const charIds = i2iData.characterDefinitionIds ?? [];
+    const allCharDefs = useWorkflowStore.getState().characterDefinitions;
+    const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
+    const charRefUrls = charDefs
+      .filter((c) => c.type === "reference" && c.referenceImageUrl)
+      .map((c) => c.referenceImageUrl as string);
+    const nodeRefUrl = i2iData.referenceImageUrl;
+    const directRefs = [
+      ...(nodeRefUrl ? [nodeRefUrl] : []),
+      ...chainRefs,
+      ...charRefUrls,
+    ];
+
+    // Build prompt with style + character descriptions (same as generate-image)
+    const result = buildImagePrompt({
+      prompt: rawPrompt,
+      provider,
+      style: i2iData.style,
+      negativePrompt: i2iData.negativePrompt,
+      characterDefs: charDefs as CharacterDef[],
+      userTemplates: useWorkflowStore.getState().userPromptTemplates,
+      flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
+      referenceImageUrls: directRefs,
+      ancestorRefs: [],
+    });
+
     return runImageToImage(
       node.id,
       imageUrl,
-      prompt,
+      result.prompt,
       ctx,
       provider,
-      refUrls.length > 0 ? refUrls : undefined,
+      result.referenceImageUrls?.length ? result.referenceImageUrls : undefined,
+      {
+        strength: i2iData.strength,
+        aspectRatio: i2iData.aspectRatio,
+        resolution: i2iData.resolution,
+        quality: i2iData.quality,
+        negativePrompt: result.nativeNegativePrompt,
+        seed: i2iData.seed,
+        renderingSpeed: i2iData.renderingSpeed,
+        guidanceScale: i2iData.guidanceScale,
+      },
     );
   }
 

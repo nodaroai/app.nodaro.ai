@@ -314,6 +314,10 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
 export {
   MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
   NATIVE_NEGATIVE_PROMPT_MODELS,
+  I2I_STRENGTH_SUPPORT,
+  SEED_SUPPORT,
+  RENDERING_SPEED_SUPPORT,
+  GUIDANCE_SCALE_SUPPORT,
 } from "@nodaro-shared/model-constants"
 
 // Predefined style presets for image generation

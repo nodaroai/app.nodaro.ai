@@ -43,3 +43,78 @@ export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux
 
 // Ideogram family models with TURBO/QUALITY pricing variants
 export const IDEOGRAM_PROVIDERS = new Set(["ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe"])
+
+// =====================================================================
+// Provider arrays (single source of truth for route Zod validation)
+// =====================================================================
+
+/** Text-to-image providers (no input image required) */
+export const IMAGE_GEN_PROVIDERS = [
+  "nano-banana",
+  "flux",
+  "nano-banana-pro",
+  "nano-banana-2",
+  "grok",
+  "gpt-image",
+  "imagen4",
+  "imagen4-fast",
+  "imagen4-ultra",
+  "ideogram",
+  "qwen",
+  "seedream",
+  "seedream-5-lite",
+  "flux-flex",
+  "flux-kontext",
+  "flux-kontext-max",
+  "z-image",
+] as const
+
+/** Image-to-image providers (require input image) */
+export const IMAGE_I2I_PROVIDERS = [
+  "nano-banana",
+  "nano-banana-pro",
+  "grok-i2i",
+  "flux-i2i",
+  "flux-pro-i2i",
+  "gpt-image-i2i",
+  "ideogram-remix",
+  "ideogram-reframe",
+  "qwen-i2i",
+  "qwen-edit",
+  "seedream-edit",
+  "seedream-5-lite-i2i",
+  "flux-kontext",
+  "flux-kontext-max",
+] as const
+
+/** Image editing providers (upscale, remove bg, etc.) */
+export const IMAGE_EDIT_PROVIDERS = [
+  "recraft-upscale",
+  "recraft-remove-bg",
+  "nano-banana-edit",
+  "topaz-image-upscale",
+] as const
+
+/** I2I providers that support a strength/denoising parameter */
+export const I2I_STRENGTH_SUPPORT: Record<string, { min: number; max: number; step: number; default: number }> = {
+  "ideogram-remix": { min: 0.01, max: 1, step: 0.01, default: 0.8 },
+  "qwen-i2i": { min: 0, max: 1, step: 0.01, default: 0.8 },
+}
+
+/** Models that accept a seed parameter for reproducible generation */
+export const SEED_SUPPORT = new Set([
+  "ideogram", "ideogram-remix", "ideogram-reframe",
+  "qwen", "qwen-i2i", "qwen-edit",
+  "flux", "flux-flex", "flux-i2i", "flux-pro-i2i", "flux-kontext", "flux-kontext-max",
+])
+
+/** Ideogram models that support rendering_speed selection (TURBO/BALANCED/QUALITY) */
+export const RENDERING_SPEED_SUPPORT = new Set([
+  "ideogram", "ideogram-remix", "ideogram-reframe",
+])
+
+/** Models that accept guidance_scale for controlling prompt adherence */
+export const GUIDANCE_SCALE_SUPPORT: Record<string, { min: number; max: number; step: number; default: number }> = {
+  "qwen-i2i": { min: 1, max: 20, step: 0.5, default: 7 },
+  "qwen-edit": { min: 1, max: 20, step: 0.5, default: 7 },
+}

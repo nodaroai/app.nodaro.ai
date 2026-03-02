@@ -5,27 +5,26 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { IMAGE_I2I_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
   prompt: z.string().min(1).max(2000),
-  provider: z.enum(["nano-banana", "nano-banana-pro", "flux-i2i", "flux-pro-i2i", "grok-i2i", "gpt-image-i2i"]).optional(),
+  provider: z.enum(IMAGE_I2I_PROVIDERS).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
-  quality: z.enum(["medium", "high"]).optional(),
+  quality: z.enum(["medium", "high", "basic"]).optional(),
+  strength: z.number().min(0).max(1).optional(),
+  aspectRatio: z.enum([
+    "1:1", "16:9", "9:16", "4:3", "3:4",
+    "3:2", "2:3", "5:4", "4:5", "21:9",
+  ]).optional(),
+  negativePrompt: z.string().max(5000).optional(),
+  seed: z.number().int().min(0).optional(),
+  renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
+  guidanceScale: z.number().min(0).max(30).optional(),
 })
-
-/**
- * Build composite model identifier for variable credit pricing.
- * See generate-image.ts for the full version with all models.
- */
-function buildCreditModelIdentifier(provider: string, quality?: string, resolution?: string): string {
-  if (provider === "gpt-image-i2i" && quality === "high") return `${provider}:high`
-  if ((provider === "flux-pro-i2i") && resolution === "2K") return `${provider}:2K`
-  if (provider === "flux-i2i" && resolution === "2K") return `${provider}:2K`
-  if (provider === "nano-banana-pro" && resolution === "4K") return `${provider}:4K`
-  return provider
-}
 
 export async function imageToImageRoutes(app: FastifyInstance) {
   app.post("/v1/image-to-image", { preHandler: creditGuard((req) => {
@@ -33,7 +32,8 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     const provider = (body?.provider as string) ?? "nano-banana"
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
-    return buildCreditModelIdentifier(provider, quality, resolution)
+    const renderingSpeed = body?.renderingSpeed as string | undefined
+    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed)
   }) }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {
@@ -45,7 +45,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, referenceImageUrls, resolution, quality } = parsed.data
+    const { imageUrl, prompt, provider, referenceImageUrls, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -54,7 +54,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution)
+    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -82,7 +82,15 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       imageUrl,
       referenceImageUrls,
       prompt,
-      provider: modelIdentifier,
+      provider,
+      resolution,
+      quality,
+      strength,
+      aspectRatio,
+      negativePrompt,
+      seed,
+      renderingSpeed,
+      guidanceScale,
       usageLogId,
     })
 

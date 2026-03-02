@@ -45,6 +45,8 @@ export function runImageGeneration(
   resolution?: string,
   quality?: string,
   negativePrompt?: string,
+  seed?: number,
+  renderingSpeed?: string,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -63,6 +65,8 @@ export function runImageGeneration(
       resolution,
       quality,
       negativePrompt,
+      seed,
+      renderingSpeed,
     )
       .then(({ jobId }) => {
         toast.info("Image generation started", {
@@ -164,6 +168,7 @@ export function runEditImage(
   ctx: ExecutionContext,
   prompt?: string,
   provider?: EditImageData["provider"],
+  upscaleFactor?: string,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -172,7 +177,7 @@ export function runEditImage(
   });
 
   return new Promise((resolve, reject) => {
-    editImage(imageUrl, prompt, provider, ctx.userId)
+    editImage(imageUrl, prompt, provider, ctx.userId, upscaleFactor)
       .then(({ jobId }) => {
         toast.info("Image editing started", {
           description: `Job ID: ${jobId}`,
@@ -272,6 +277,16 @@ export function runImageToImage(
   ctx: ExecutionContext,
   provider?: ImageToImageData["provider"],
   referenceImageUrls?: string[],
+  options?: {
+    strength?: number
+    aspectRatio?: string
+    resolution?: string
+    quality?: string
+    negativePrompt?: string
+    seed?: number
+    renderingSpeed?: string
+    guidanceScale?: number
+  },
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -280,7 +295,7 @@ export function runImageToImage(
   });
 
   return new Promise((resolve, reject) => {
-    imageToImage(imageUrl, prompt, provider, ctx.userId, referenceImageUrls)
+    imageToImage(imageUrl, prompt, provider, ctx.userId, referenceImageUrls, options)
       .then(({ jobId }) => {
         toast.info("Image transformation started", {
           description: `Job ID: ${jobId}`,

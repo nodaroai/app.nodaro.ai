@@ -5,11 +5,13 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { IMAGE_EDIT_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const editImageBody = z.object({
   imageUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
-  provider: z.enum(["recraft-upscale", "recraft-remove-bg", "nano-banana-edit"]).optional(),
+  provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
+  upscaleFactor: z.enum(["1", "2", "4", "8"]).optional(),
 })
 
 export async function editImageRoutes(app: FastifyInstance) {
@@ -24,7 +26,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider } = parsed.data
+    const { imageUrl, prompt, provider, upscaleFactor } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -71,6 +73,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       imageUrl,
       prompt,
       provider,
+      upscaleFactor,
       usageLogId,
     })
 

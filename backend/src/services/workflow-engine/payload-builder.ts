@@ -158,6 +158,7 @@ export function buildPayload(
           provider,
           data.quality as string | undefined,
           data.resolution as string | undefined,
+          data.renderingSpeed as string | undefined,
         ),
         payload: {
           jobId,
@@ -168,6 +169,8 @@ export function buildPayload(
           resolution: data.resolution,
           quality: data.quality,
           negativePrompt: result.nativeNegativePrompt,
+          seed: data.seed,
+          renderingSpeed: data.renderingSpeed,
           usageLogId,
         },
       }
@@ -184,6 +187,7 @@ export function buildPayload(
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
           prompt: resolvedInputs.prompt || data.prompt,
           provider,
+          upscaleFactor: data.upscaleFactor,
           usageLogId,
         },
       }
@@ -191,6 +195,38 @@ export function buildPayload(
 
     case "image-to-image": {
       const provider = (data.provider as string) ?? "flux-i2i"
+      const settings = buildCtx?.settings
+
+      // Collect reference images from character assets
+      const charIds = (data.characterDefinitionIds as string[]) ?? []
+      const charDefs = (settings?.characterDefinitions ?? []).filter(
+        (c) => charIds.includes(c.id),
+      )
+      const charRefUrls = charDefs
+        .filter((c) => c.type === "reference" && c.referenceImageUrl)
+        .map((c) => c.referenceImageUrl as string)
+      const nodeRefUrl = data.referenceImageUrl as string | undefined
+      const chainRefs = resolvedInputs.referenceImageUrls ?? []
+      const directRefs = [
+        ...(nodeRefUrl ? [nodeRefUrl] : []),
+        ...chainRefs,
+        ...charRefUrls,
+      ]
+
+      const rawPrompt = (resolvedInputs.prompt || (data.prompt as string) || "") as string
+
+      // Build prompt with style + character descriptions (same as generate-image)
+      const i2iResult = buildImagePrompt({
+        prompt: rawPrompt,
+        provider,
+        style: typeof data.style === "string" ? data.style : undefined,
+        negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+        characterDefs: charDefs as CharacterDef[],
+        flowTemplates: settings?.flowPromptTemplates,
+        referenceImageUrls: directRefs,
+        ancestorRefs: [],
+      })
+
       return {
         jobName: "image-to-image",
         queueName: "video-generation",
@@ -198,18 +234,22 @@ export function buildPayload(
           provider,
           data.quality as string | undefined,
           data.resolution as string | undefined,
+          data.renderingSpeed as string | undefined,
         ),
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-          prompt: resolvedInputs.prompt || data.prompt,
-          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          prompt: i2iResult.prompt,
+          referenceImageUrls: i2iResult.referenceImageUrls,
           provider,
           strength: data.strength,
           aspectRatio: data.aspectRatio,
           resolution: data.resolution,
           quality: data.quality,
-          negativePrompt: data.negativePrompt,
+          negativePrompt: i2iResult.nativeNegativePrompt,
+          seed: data.seed,
+          renderingSpeed: data.renderingSpeed,
+          guidanceScale: data.guidanceScale,
           usageLogId,
         },
       }

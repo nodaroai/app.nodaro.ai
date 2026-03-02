@@ -181,7 +181,8 @@ export class KieImageProvider
   async editImage(
     imageUrl: string,
     prompt?: string,
-    model?: string
+    model?: string,
+    extraParams?: Record<string, unknown>
   ): Promise<ProviderResult> {
     const provider = model ?? "recraft-upscale"
     const modelConfig = KIE_IMAGE_MODELS[provider]
@@ -200,8 +201,9 @@ export class KieImageProvider
     )
 
     const input: Record<string, unknown> = {
-      // Apply model-specific extra params
+      // Apply model-specific extra params (runtime extraParams override defaults)
       ...modelConfig.extraParams,
+      ...extraParams,
     }
 
     // Nano Banana family supports output_format parameter

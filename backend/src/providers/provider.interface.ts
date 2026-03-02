@@ -63,7 +63,8 @@ export interface ImageEditingProvider {
   editImage(
     imageUrl: string,
     prompt?: string,
-    model?: string
+    model?: string,
+    extraParams?: Record<string, unknown>
   ): Promise<ProviderResult>
 }
 

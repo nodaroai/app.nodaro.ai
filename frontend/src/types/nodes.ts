@@ -457,6 +457,8 @@ export type GenerateImageData = {
   negativePrompt: string
   resolution?: string
   quality?: string
+  seed?: number
+  renderingSpeed?: string
   referenceImageUrl?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -468,13 +470,14 @@ export type GenerateImageData = {
 }
 
 // Edit Image providers (KIE.ai only)
-export type EditImageProvider = "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit" | "topaz-image-upscale" | "grok-upscale"
+export type EditImageProvider = "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit" | "topaz-image-upscale"
 
 export type EditImageData = {
   [key: string]: unknown
   label: string
   prompt: string  // Used for nano-banana-edit (edit instructions)
   provider: EditImageProvider
+  upscaleFactor?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -484,13 +487,24 @@ export type EditImageData = {
 }
 
 // Image-to-Image providers (transform source image with prompt)
-export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit" | "seedream-5-lite-i2i"
+export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit" | "seedream-5-lite-i2i" | "flux-kontext" | "flux-kontext-max"
 
 export type ImageToImageData = {
   [key: string]: unknown
   label: string
   prompt: string  // Transformation prompt
   provider: ImageToImageProvider
+  style?: string
+  strength?: number
+  aspectRatio?: string
+  resolution?: string
+  quality?: string
+  negativePrompt?: string
+  seed?: number
+  renderingSpeed?: string
+  guidanceScale?: number
+  referenceImageUrl?: string
+  characterDefinitionIds?: readonly string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

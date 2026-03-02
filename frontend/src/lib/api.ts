@@ -87,7 +87,19 @@ function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
 
 // --- Generate Image (E2E spike) ---
 
-export async function generateImage(prompt: string, referenceImageUrls?: string[], provider?: string, characterDescriptions?: string[], aspectRatio?: string, userId?: string, resolution?: string, quality?: string, negativePrompt?: string): Promise<{ jobId: string }> {
+export async function generateImage(
+  prompt: string,
+  referenceImageUrls?: string[],
+  provider?: string,
+  characterDescriptions?: string[],
+  aspectRatio?: string,
+  userId?: string,
+  resolution?: string,
+  quality?: string,
+  negativePrompt?: string,
+  seed?: number,
+  renderingSpeed?: string,
+): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     body.referenceImageUrls = referenceImageUrls
@@ -110,6 +122,12 @@ export async function generateImage(prompt: string, referenceImageUrls?: string[
   if (negativePrompt) {
     body.negativePrompt = negativePrompt
   }
+  if (seed != null) {
+    body.seed = seed
+  }
+  if (renderingSpeed) {
+    body.renderingSpeed = renderingSpeed
+  }
   if (userId) {
     body.userId = userId
   }
@@ -131,7 +149,8 @@ export async function editImage(
   imageUrl: string,
   prompt?: string,
   provider?: string,
-  userId?: string
+  userId?: string,
+  upscaleFactor?: string
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl }
   if (prompt) {
@@ -142,6 +161,9 @@ export async function editImage(
   }
   if (userId) {
     body.userId = userId
+  }
+  if (upscaleFactor) {
+    body.upscaleFactor = upscaleFactor
   }
   const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
     method: "POST",
@@ -162,7 +184,17 @@ export async function imageToImage(
   prompt: string,
   provider?: string,
   userId?: string,
-  referenceImageUrls?: string[]
+  referenceImageUrls?: string[],
+  options?: {
+    strength?: number
+    aspectRatio?: string
+    resolution?: string
+    quality?: string
+    negativePrompt?: string
+    seed?: number
+    renderingSpeed?: string
+    guidanceScale?: number
+  }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, prompt }
   if (provider) {
@@ -174,6 +206,14 @@ export async function imageToImage(
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     body.referenceImageUrls = referenceImageUrls
   }
+  if (options?.strength != null) body.strength = options.strength
+  if (options?.aspectRatio) body.aspectRatio = options.aspectRatio
+  if (options?.resolution) body.resolution = options.resolution
+  if (options?.quality) body.quality = options.quality
+  if (options?.negativePrompt) body.negativePrompt = options.negativePrompt
+  if (options?.seed != null) body.seed = options.seed
+  if (options?.renderingSpeed) body.renderingSpeed = options.renderingSpeed
+  if (options?.guidanceScale != null) body.guidanceScale = options.guidanceScale
   const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
