@@ -150,7 +150,13 @@ export async function editImage(
   prompt?: string,
   provider?: string,
   userId?: string,
-  upscaleFactor?: string
+  options?: {
+    upscaleFactor?: string
+    aspectRatio?: string
+    negativePrompt?: string
+    style?: string
+    seed?: number
+  }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl }
   if (prompt) {
@@ -162,8 +168,20 @@ export async function editImage(
   if (userId) {
     body.userId = userId
   }
-  if (upscaleFactor) {
-    body.upscaleFactor = upscaleFactor
+  if (options?.upscaleFactor) {
+    body.upscaleFactor = options.upscaleFactor
+  }
+  if (options?.aspectRatio) {
+    body.aspectRatio = options.aspectRatio
+  }
+  if (options?.negativePrompt) {
+    body.negativePrompt = options.negativePrompt
+  }
+  if (options?.style) {
+    body.style = options.style
+  }
+  if (options?.seed != null) {
+    body.seed = options.seed
   }
   const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
     method: "POST",

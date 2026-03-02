@@ -168,7 +168,13 @@ export function runEditImage(
   ctx: ExecutionContext,
   prompt?: string,
   provider?: EditImageData["provider"],
-  upscaleFactor?: string,
+  options?: {
+    upscaleFactor?: string
+    aspectRatio?: string
+    negativePrompt?: string
+    style?: string
+    seed?: number
+  },
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -177,7 +183,7 @@ export function runEditImage(
   });
 
   return new Promise((resolve, reject) => {
-    editImage(imageUrl, prompt, provider, ctx.userId, upscaleFactor)
+    editImage(imageUrl, prompt, provider, ctx.userId, options)
       .then(({ jobId }) => {
         toast.info("Image editing started", {
           description: `Job ID: ${jobId}`,

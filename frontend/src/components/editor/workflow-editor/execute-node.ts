@@ -301,8 +301,28 @@ export function executeNode(
     }
     const editData = node.data as EditImageData;
     const provider = editData.provider || "recraft-upscale";
-    const prompt = editData.prompt || undefined;
-    return runEditImage(node.id, imageUrl, ctx, prompt, provider, editData.upscaleFactor);
+
+    // For nano-banana-edit: enrich prompt with character/asset descriptions
+    let prompt = editData.prompt || undefined;
+    if (provider === "nano-banana-edit" && prompt) {
+      const charIds = editData.characterDefinitionIds ?? [];
+      const allCharDefs = useWorkflowStore.getState().characterDefinitions;
+      const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
+      if (charDefs.length > 0) {
+        const descriptions = charDefs
+          .map((c) => c.description ? `${c.name}: ${c.description}` : c.name)
+          .join("; ");
+        prompt = `${prompt}\n\nContext: ${descriptions}`;
+      }
+    }
+
+    return runEditImage(node.id, imageUrl, ctx, prompt, provider, {
+      upscaleFactor: editData.upscaleFactor,
+      aspectRatio: editData.aspectRatio,
+      negativePrompt: editData.negativePrompt,
+      style: editData.style,
+      seed: editData.seed,
+    });
   }
 
   if (node.type === "image-to-image") {

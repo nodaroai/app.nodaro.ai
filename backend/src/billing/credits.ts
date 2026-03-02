@@ -103,7 +103,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "flux-kontext-max": 7,         // ~20 KIE cr, $0.10
   // ── Image Editing ──
   "recraft-upscale": 2,          // 6 KIE cr, $0.03
-  "recraft-remove-bg": 1,            // KIE backend, $0.03
+  "recraft-remove-bg": 2,            // KIE backend, $0.03
   "nano-banana-edit": 2,         // 6 KIE cr, $0.03
   "topaz-image-upscale": 2,      // 6 KIE cr, $0.03
   "grok-upscale": 2,             // 4 KIE cr, $0.02

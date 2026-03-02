@@ -178,6 +178,24 @@ export function buildPayload(
 
     case "edit-image": {
       const provider = (data.provider as string) ?? "recraft-remove-bg"
+
+      // Enrich prompt with character/asset descriptions for nano-banana-edit
+      let editPrompt = (resolvedInputs.prompt || data.prompt) as string | undefined
+      if (provider === "nano-banana-edit" && editPrompt) {
+        const charIds = (data.characterDefinitionIds as string[]) ?? []
+        const charDefs = (buildCtx?.settings?.characterDefinitions ?? []).filter(
+          (c: { id: string }) => charIds.includes(c.id),
+        )
+        if (charDefs.length > 0) {
+          const descriptions = charDefs
+            .map((c: { name: string; description?: string }) =>
+              c.description ? `${c.name}: ${c.description}` : c.name,
+            )
+            .join("; ")
+          editPrompt = `${editPrompt}\n\nContext: ${descriptions}`
+        }
+      }
+
       return {
         jobName: "edit-image",
         queueName: "video-generation",
@@ -185,9 +203,13 @@ export function buildPayload(
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-          prompt: resolvedInputs.prompt || data.prompt,
+          prompt: editPrompt,
           provider,
           upscaleFactor: data.upscaleFactor,
+          aspectRatio: data.aspectRatio,
+          negativePrompt: data.negativePrompt,
+          style: data.style,
+          seed: data.seed,
           usageLogId,
         },
       }

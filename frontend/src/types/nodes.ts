@@ -478,6 +478,11 @@ export type EditImageData = {
   prompt: string  // Used for nano-banana-edit (edit instructions)
   provider: EditImageProvider
   upscaleFactor?: string
+  aspectRatio?: string
+  negativePrompt?: string
+  style?: string
+  seed?: number
+  characterDefinitionIds?: readonly string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

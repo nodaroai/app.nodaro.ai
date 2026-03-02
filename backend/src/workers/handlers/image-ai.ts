@@ -60,20 +60,31 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
 }
 
 const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
-  const { imageUrl, prompt, provider, upscaleFactor } = job.data as {
+  const { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed } = job.data as {
     jobId: string
     imageUrl: string
     prompt?: string
     provider?: string
     upscaleFactor?: string
+    aspectRatio?: string
+    negativePrompt?: string
+    style?: string
+    seed?: number
   }
   const resolvedProvider = provider ?? "recraft-upscale"
-  console.log(`[worker] edit-image ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt ?? "(no prompt)"}"`)
+  // Append style to prompt if present (same pattern as generate-image)
+  const effectivePrompt = style && prompt ? `${prompt}. Style: ${style}` : prompt
+  console.log(`[worker] edit-image ${ctx.jobId} (provider: ${resolvedProvider}): "${effectivePrompt ?? "(no prompt)"}"`)
 
-  const extraParams: Record<string, unknown> | undefined =
-    upscaleFactor ? { upscale_factor: upscaleFactor } : undefined
+  const extraParams: Record<string, unknown> = {
+    ...(upscaleFactor && { upscale_factor: upscaleFactor }),
+    ...(aspectRatio && { image_size: aspectRatio }),
+    ...(negativePrompt && { negative_prompt: negativePrompt }),
+    ...(seed != null && { seed }),
+  }
+  const hasExtraParams = Object.keys(extraParams).length > 0
 
-  const result = await editImage(imageUrl, resolvedProvider, prompt, extraParams)
+  const result = await editImage(imageUrl, resolvedProvider, effectivePrompt, hasExtraParams ? extraParams : undefined)
   await job.updateProgress(50)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
