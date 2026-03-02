@@ -4,11 +4,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { VOICE_DESIGN_MODELS } from "../../../packages/shared/src/model-constants.js"
 
 const voiceDesignBody = z.object({
   text: z.string().min(100).max(1000),
   voiceDescription: z.string().min(1).max(1000),
-  model: z.enum(["eleven_ttv_v3", "eleven_multilingual_ttv_v2"]).optional(),
+  model: z.enum(VOICE_DESIGN_MODELS).optional(),
   loudness: z.number().min(-1).max(1).optional(),
   guidanceScale: z.number().min(0).max(100).optional(),
   seed: z.number().int().optional(),

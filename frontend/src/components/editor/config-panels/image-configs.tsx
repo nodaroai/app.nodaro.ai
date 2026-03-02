@@ -391,6 +391,8 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
             <SelectItem value="recraft-upscale">Upscale / Enhance</SelectItem>
             <SelectItem value="recraft-remove-bg">Remove Background</SelectItem>
             <SelectItem value="nano-banana-edit">Edit with Prompt</SelectItem>
+            <SelectItem value="topaz-image-upscale">Topaz Image Upscale</SelectItem>
+            <SelectItem value="grok-upscale">Grok Upscale</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -406,9 +408,10 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
       )}
       {!showPrompt && (
         <p className="text-xs text-muted-foreground px-1">
-          {data.provider === "recraft-upscale"
-            ? "Upscale and enhance the input image to higher resolution."
-            : "Remove the background from the input image, leaving a transparent PNG."}
+          {data.provider === "recraft-upscale" && "Upscale and enhance the input image to higher resolution."}
+          {data.provider === "recraft-remove-bg" && "Remove the background from the input image, leaving a transparent PNG."}
+          {data.provider === "topaz-image-upscale" && "Topaz AI upscale for maximum detail and sharpness."}
+          {data.provider === "grok-upscale" && "Grok-powered image upscale and enhancement."}
         </p>
       )}
     </div>

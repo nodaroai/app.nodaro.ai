@@ -5,11 +5,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { VIDEO_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const videoToVideoBody = z.object({
   videoUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
-  provider: z.enum(["wan", "luma-modify"]).optional(),
+  provider: z.enum(VIDEO_TO_VIDEO_PROVIDERS).optional(),
 })
 
 export async function videoToVideoRoutes(app: FastifyInstance) {

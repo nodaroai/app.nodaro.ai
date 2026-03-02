@@ -5,12 +5,13 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { LIP_SYNC_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const lipSyncBody = z.object({
   imageUrl: safeUrlSchema,       // Portrait/face image
   audioUrl: safeUrlSchema,       // Audio to sync (speech)
   prompt: z.string().max(500).optional(),  // Optional prompt for infinitalk
-  provider: z.enum(["kling-avatar", "kling-avatar-pro", "infinitalk"]).optional(),
+  provider: z.enum(LIP_SYNC_PROVIDERS).optional(),
   resolution: z.enum(["480p", "720p"]).optional(),  // For infinitalk
   userId: z.string().uuid().optional(),
 })

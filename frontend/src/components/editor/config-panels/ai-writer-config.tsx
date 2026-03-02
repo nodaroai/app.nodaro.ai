@@ -143,9 +143,7 @@ export function AIWriterConfig({ data, onUpdate }: ConfigProps<AIWriterNodeData>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gemini">Gemini</SelectItem>
                   <SelectItem value="claude">Claude</SelectItem>
-                  <SelectItem value="gpt">GPT</SelectItem>
                 </SelectContent>
               </Select>
             </div>

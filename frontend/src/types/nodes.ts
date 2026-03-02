@@ -1,4 +1,12 @@
 import type { Node, Edge } from "@xyflow/react"
+import type {
+  ImageI2IProvider, ImageGenProvider, ImageEditProvider,
+  ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider,
+  VideoUpscaleProvider, ExtendVideoProvider, TtsProvider,
+  TextToAudioProvider, MusicProvider, TranscribeProvider,
+  LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
+  SunoModel, VoiceDesignModel,
+} from "@nodaro-shared/model-constants"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "utility"
 
@@ -412,7 +420,7 @@ export interface GeneratedScriptResult {
 export type GenerateScriptData = {
   [key: string]: unknown
   label: string
-  provider: "gemini" | "claude" | "gpt"
+  provider: ScriptProvider
   model: string
   sceneCount: number
   styleGuide: string
@@ -427,24 +435,8 @@ export type GenerateScriptData = {
   activeResultIndex?: number
 }
 
-// Image providers available on Replicate
-export type ReplicateImageProvider = "nano-banana" | "flux" | "dalle"
-
-// Additional image providers available only on KIE.ai
-export type KieImageProvider =
-  | "nano-banana" | "nano-banana-pro" | "nano-banana-2"
-  | "flux" | "flux-flex" | "flux-i2i" | "flux-pro-i2i"
-  | "grok" | "grok-i2i"
-  | "gpt-image" | "gpt-image-i2i"
-  | "imagen4" | "imagen4-fast" | "imagen4-ultra"
-  | "ideogram" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe"
-  | "qwen" | "qwen-i2i" | "qwen-edit"
-  | "seedream" | "seedream-edit" | "seedream-5-lite" | "seedream-5-lite-i2i"
-  | "flux-kontext" | "flux-kontext-max"
-  | "z-image"
-
-// All image providers (union of both)
-export type ImageProvider = ReplicateImageProvider | KieImageProvider
+// All image providers (gen + i2i) — derived from shared single source of truth
+export type ImageProvider = ImageGenProvider | ImageI2IProvider
 
 export type GenerateImageData = {
   [key: string]: unknown
@@ -467,8 +459,8 @@ export type GenerateImageData = {
   characterDefinitionIds?: readonly string[]
 }
 
-// Edit Image providers (KIE.ai only)
-export type EditImageProvider = "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit" | "topaz-image-upscale" | "grok-upscale"
+// Edit Image providers — derived from shared single source of truth
+export type EditImageProvider = ImageEditProvider
 
 export type EditImageData = {
   [key: string]: unknown
@@ -483,8 +475,8 @@ export type EditImageData = {
   activeResultIndex?: number
 }
 
-// Image-to-Image providers (transform source image with prompt)
-export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-edit" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit" | "seedream-5-lite-i2i"
+// Image-to-Image providers — derived from shared single source of truth
+export type ImageToImageProvider = ImageI2IProvider
 
 export type ImageToImageData = {
   [key: string]: unknown
@@ -502,7 +494,7 @@ export type ImageToImageData = {
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
-  provider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika" | "kling-turbo" | "grok-i2v" | "sora2-pro" | "seedance" | "wan-i2v" | "wan-turbo" | "hailuo-2.3-pro" | "hailuo-2.3" | "hailuo-standard" | "sora2" | "bytedance-lite" | "bytedance-pro" | "bytedance-pro-fast" | "kling-master" | "runway-kie"
+  provider: ImageToVideoProvider
   model: string
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
@@ -537,7 +529,7 @@ export type ImageToVideoData = {
 export type TextToSpeechData = {
   [key: string]: unknown
   label: string
-  provider: "elevenlabs-v3" | "elevenlabs-turbo" | "elevenlabs-multilingual" | "elevenlabs"
+  provider: TtsProvider
   voiceId: string
   voiceLabel?: string
   voiceType: "premade" | "custom" | "library"
@@ -562,7 +554,7 @@ export type TextToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "minimax" | "runway" | "pika" | "sora" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-turbo" | "kling-3.0" | "grok" | "sora2-pro" | "seedance" | "wan" | "sora2" | "hailuo-standard" | "bytedance-lite" | "bytedance-pro" | "wan-turbo" | "runway-kie"
+  provider: TextToVideoProvider
   model: string
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1"
@@ -583,7 +575,7 @@ export type VideoToVideoData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "wan" | "luma-modify"
+  provider: VideoToVideoProvider
   duration: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -599,7 +591,7 @@ export type VideoToVideoData = {
 export type LipSyncData = {
   [key: string]: unknown
   label: string
-  provider: "kling-avatar" | "kling-avatar-pro" | "infinitalk"
+  provider: LipSyncProvider
   resolution: "480p" | "720p"
   prompt: string
   fieldMappings: FieldMappings
@@ -635,7 +627,7 @@ export type MotionTransferData = {
 export type VideoUpscaleData = {
   [key: string]: unknown
   label: string
-  provider: "topaz" | "veo-1080p" | "veo-4k"
+  provider: VideoUpscaleProvider
   upscaleFactor: "1" | "2" | "4"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -652,7 +644,7 @@ export type VideoUpscaleData = {
 export type ExtendVideoData = {
   [key: string]: unknown
   label: string
-  provider: "veo-extend" | "runway-extend"
+  provider: ExtendVideoProvider
   prompt: string
   model?: "fast" | "quality"      // VEO only
   seeds?: number                   // VEO only
@@ -671,7 +663,7 @@ export type ExtendVideoData = {
 export type QACheckData = {
   [key: string]: unknown
   label: string
-  provider: "claude" | "gpt"
+  provider: QaCheckProvider
   checkType: "content" | "quality" | "consistency" | "safety"
   threshold: number
   fieldMappings: FieldMappings
@@ -681,7 +673,7 @@ export type GenerateMusicData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "musicgen" | "minimax" | "lyria" | "bark"
+  provider: MusicProvider
   duration: number
   genre: string
   mood: string
@@ -703,7 +695,7 @@ export type TextToAudioData = {
   [key: string]: unknown
   label: string
   prompt: string
-  provider: "tangoflux" | "elevenlabs-sfx"
+  provider: TextToAudioProvider
   duration: number
   loop?: boolean
   promptInfluence?: number
@@ -719,7 +711,7 @@ export type SunoGenerateData = {
   [key: string]: unknown
   label: string
   prompt: string
-  model: "V4" | "V4_5" | "V4_5PLUS" | "V4_5ALL" | "V5"
+  model: SunoModel
   lyrics?: string
   style?: string
   title?: string
@@ -742,7 +734,7 @@ export type SunoCoverData = {
   [key: string]: unknown
   label: string
   prompt: string
-  model: "V4" | "V4_5" | "V4_5PLUS" | "V4_5ALL" | "V5"
+  model: SunoModel
   uploadUrl?: string
   lyrics?: string
   style?: string
@@ -765,7 +757,7 @@ export type SunoExtendData = {
   audioId: string
   defaultParamFlag: boolean
   prompt: string
-  model: "V4" | "V4_5" | "V4_5PLUS" | "V4_5ALL" | "V5"
+  model: SunoModel
   style?: string
   title?: string
   continueAt?: number
@@ -844,7 +836,7 @@ export type AudioIsolationData = {
 export type TranscribeData = {
   [key: string]: unknown
   label: string
-  provider: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
+  provider: TranscribeProvider
   language: string
   diarize?: boolean
   tagAudioEvents?: boolean
@@ -940,7 +932,7 @@ export type VoiceDesignData = {
   label: string
   text: string
   voiceDescription: string
-  model?: string
+  model?: VoiceDesignModel
   loudness?: number
   guidanceScale?: number
   seed?: number
@@ -1478,7 +1470,7 @@ export type AIWriterNodeData = {
   templateId: string
   systemPrompt: string
   userInput: string
-  provider: "gemini" | "claude" | "gpt"
+  provider: AiWriterProvider
   model: string
   temperature: number
   maxTokens: number

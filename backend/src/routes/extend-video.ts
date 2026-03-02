@@ -15,11 +15,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { EXTEND_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const extendVideoBody = z.object({
   kieTaskId: z.string().min(1, "kieTaskId is required"),
   prompt: z.string().min(1, "prompt is required"),
-  provider: z.enum(["veo-extend", "runway-extend"]),
+  provider: z.enum(EXTEND_VIDEO_PROVIDERS),
   model: z.enum(["fast", "quality"]).optional(), // VEO only
   seeds: z.number().int().min(10000).max(99999).optional(), // VEO only
   quality: z.enum(["720p", "1080p"]).optional(), // Runway only
