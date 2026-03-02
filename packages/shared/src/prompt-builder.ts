@@ -110,5 +110,20 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
   const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
   const refsToSend = supportsRefs && allRefs.length > 0 ? allRefs : undefined
 
+  // Expand {image:N} position references in prompt
+  prompt = expandImagePositionRefs(prompt, allRefs.length)
+
   return { prompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
+}
+
+/**
+ * Replace {image:N} tokens with descriptive text.
+ * e.g. {image:1} -> [reference image 1]
+ */
+export function expandImagePositionRefs(prompt: string, imageCount: number): string {
+  return prompt.replace(/\{image:(\d+)\}/gi, (match, num) => {
+    const n = parseInt(num, 10)
+    if (n < 1 || n > imageCount) return match
+    return `[reference image ${n}]`
+  })
 }

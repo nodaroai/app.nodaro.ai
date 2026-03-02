@@ -232,28 +232,66 @@ export function executeNode(
     const imgData = node.data as GenerateImageData;
     const providerKey = imgData.provider || "nano-banana";
 
-    // Collect reference images from all sources
+    // Build a map of all available reference images by ID
+    const refUrlMap = new Map<string, string>();
+
+    // Manual uploads (new multi-image format)
+    for (const img of imgData.referenceImageUrls ?? []) {
+      refUrlMap.set(img.id, img.url);
+    }
+    // Legacy single referenceImageUrl
+    if (imgData.referenceImageUrl && refUrlMap.size === 0) {
+      refUrlMap.set("__legacy__", imgData.referenceImageUrl);
+    }
+    // Wired upstream images
     const chainRefs =
       inputs.referenceImageUrls ??
       (inputs.imageUrl ? [inputs.imageUrl] : undefined);
+    if (chainRefs) {
+      const incomingEdges = edges.filter((e) => e.target === node.id);
+      const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image"]);
+      const wiredSourceIds = incomingEdges
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .filter((n) => n && imageSourceTypes.has(n.type!))
+        .map((n) => n!.id);
+      for (let i = 0; i < chainRefs.length; i++) {
+        const key = wiredSourceIds[i] ?? `wired_${i}`;
+        refUrlMap.set(key, chainRefs[i]);
+      }
+    }
     const extractedRefs = (node.data as Record<string, unknown>)
       .extractedReferenceUrls as string[] | undefined;
+    if (extractedRefs) {
+      for (let i = 0; i < extractedRefs.length; i++) {
+        refUrlMap.set(`extracted_${i}`, extractedRefs[i]);
+      }
+    }
+    // Character reference images
     const charIds = imgData.characterDefinitionIds ?? [];
     const allCharDefs = useWorkflowStore.getState().characterDefinitions;
     const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
-    const charRefUrls = charDefs
-      .filter((c) => c.type === "reference" && c.referenceImageUrl)
-      .map((c) => c.referenceImageUrl as string);
+    for (const c of charDefs) {
+      if (c.type === "reference" && c.referenceImageUrl) {
+        refUrlMap.set(`char_${c.id}`, c.referenceImageUrl);
+      }
+    }
 
-    const nodeRefUrl = imgData.referenceImageUrl;
-    const directRefs = [
-      ...(nodeRefUrl ? [nodeRefUrl] : []),
-      ...(chainRefs ?? []),
-      ...(extractedRefs ?? []),
-      ...charRefUrls,
-    ];
+    // Apply ordering: use referenceImageOrder if set, otherwise default map order
+    const orderIds = imgData.referenceImageOrder ?? [];
+    const orderedUrls: string[] = [];
+    const seen = new Set<string>();
+    for (const id of orderIds) {
+      const url = refUrlMap.get(id);
+      if (url) {
+        orderedUrls.push(url);
+        seen.add(id);
+      }
+    }
+    for (const [id, url] of refUrlMap) {
+      if (!seen.has(id)) orderedUrls.push(url);
+    }
 
-    const ancestorRefs = directRefs.length === 0
+    const ancestorRefs = orderedUrls.length === 0
       ? collectAncestorRefs(node.id, nodes, edges)
       : [];
 
@@ -271,7 +309,7 @@ export function executeNode(
       characterDefs: charDefs as CharacterDef[],
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
       flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
-      referenceImageUrls: directRefs,
+      referenceImageUrls: orderedUrls,
       ancestorRefs,
     });
 

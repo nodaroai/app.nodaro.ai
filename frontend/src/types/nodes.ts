@@ -15,6 +15,11 @@ export interface GeneratedResult {
   readonly jobId: string
 }
 
+export interface ManualReferenceImage {
+  readonly id: string   // crypto.randomUUID()
+  readonly url: string  // R2 URL
+}
+
 // --- Input Node Data ---
 
 export type TextPromptData = {
@@ -460,6 +465,8 @@ export type GenerateImageData = {
   seed?: number
   renderingSpeed?: string
   referenceImageUrl?: string
+  referenceImageUrls?: readonly ManualReferenceImage[]
+  referenceImageOrder?: readonly string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

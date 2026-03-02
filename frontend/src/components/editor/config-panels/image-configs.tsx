@@ -24,14 +24,25 @@ import type {
   EditImageData,
   ImageToImageData,
   CharacterDefinition,
+  ManualReferenceImage,
 } from "@/types/nodes"
 import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
+import { ReferenceImageList } from "./reference-image-list"
 import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
 
 const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m => ({ default: m.AssetSelectionModal })))
+
+const IMAGE_SOURCE_TYPES = new Set(["upload-image", "generate-image", "edit-image", "image-to-image"])
+
+const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
+  "nano-banana-pro": 8,
+  "nano-banana-2": 4,
+  "ideogram": 5,
+}
+const DEFAULT_REF_IMAGE_MAX = 4
 
 export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateImageData>) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
@@ -42,6 +53,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
   const qualityOptions = useMemo(() => IMAGE_QUALITY_OPTIONS[currentProvider], [currentProvider])
   const supportsSeed = SEED_SUPPORT.has(currentProvider)
   const supportsRenderingSpeed = RENDERING_SPEED_SUPPORT.has(currentProvider)
+  const maxRefImages = REF_IMAGE_MAX_LIMITS[currentProvider] ?? DEFAULT_REF_IMAGE_MAX
 
   // When provider changes, reset aspect ratio if current value isn't valid for new provider,
   // and clear reference image if new provider doesn't support it
@@ -54,10 +66,22 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined
     }
+    if (!supportsRefImage && data.referenceImageUrls?.length) {
+      updates.referenceImageUrls = undefined
+      updates.referenceImageOrder = undefined
+    }
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
   }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Migrate legacy single referenceImageUrl to new multi-image format
+  useEffect(() => {
+    if (data.referenceImageUrl && !data.referenceImageUrls?.length) {
+      const migrated: ManualReferenceImage = { id: crypto.randomUUID(), url: data.referenceImageUrl }
+      onUpdate({ referenceImageUrls: [migrated], referenceImageUrl: undefined })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [isCustomStyle, setIsCustomStyle] = useState(
     () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)
@@ -106,13 +130,37 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     }
   }
 
+  // Resolve wired images from upstream image-producing nodes
+  const wiredImages = useMemo(() => {
+    return sources
+      .filter((s) => IMAGE_SOURCE_TYPES.has(s.type))
+      .map((s) => {
+        const nd = s.nodeData ?? {}
+        const url = (nd.generatedImageUrl as string) || (nd.url as string) || ""
+        return { id: s.id, url, label: s.label || s.type }
+      })
+      .filter((w) => w.url)
+  }, [sources])
+
+  // Resolve character reference images
+  const charRefImages = useMemo(() => {
+    return attachedChars
+      .filter((c) => c.referenceImageUrl)
+      .map((c) => ({ id: `char_${c.id}`, url: c.referenceImageUrl!, label: c.name }))
+  }, [attachedChars])
+
   async function handleRefImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = e.target.files
+    if (!files || files.length === 0) return
     setUploadingRefImage(true)
     try {
-      const { url } = await uploadImage(file)
-      onUpdate({ referenceImageUrl: url })
+      const currentManual = [...(data.referenceImageUrls ?? [])]
+      for (const file of Array.from(files)) {
+        const { url } = await uploadImage(file)
+        const newImg: ManualReferenceImage = { id: crypto.randomUUID(), url }
+        currentManual.push(newImg)
+      }
+      onUpdate({ referenceImageUrls: currentManual })
     } catch {
       // error already thrown by uploadImage
     } finally {
@@ -338,26 +386,18 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           )}
           {supportsRefImage && (
             <>
-              <div>
-                <Label className="text-xs">Reference Image</Label>
-                {data.referenceImageUrl ? (
-                  <div className="flex items-center gap-2 mt-1">
-                    <CachedImage src={data.referenceImageUrl} alt="Reference" className="w-16 h-16 rounded object-cover" thumbnail thumbnailWidth={128} />
-                    <Button variant="ghost" size="sm" onClick={() => onUpdate({ referenceImageUrl: undefined })}>
-                      <X className="w-3 h-3 mr-1" /> Remove
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="mt-1">
-                    <input ref={refImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleRefImageUpload} />
-                    <Button variant="outline" size="sm" onClick={() => refImageInputRef.current?.click()} disabled={uploadingRefImage}>
-                      {uploadingRefImage ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Upload className="w-3 h-3 mr-1" />}
-                      Upload Reference
-                    </Button>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Optional image to guide generation style</p>
-                  </div>
-                )}
-              </div>
+              <input ref={refImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleRefImageUpload} />
+              <ReferenceImageList
+                manualImages={data.referenceImageUrls ?? []}
+                imageOrder={data.referenceImageOrder ?? []}
+                wiredImages={wiredImages}
+                charRefImages={charRefImages}
+                maxImages={maxRefImages}
+                onUpdateManualImages={(imgs) => onUpdate({ referenceImageUrls: imgs })}
+                onUpdateOrder={(order) => onUpdate({ referenceImageOrder: order })}
+                onUpload={() => refImageInputRef.current?.click()}
+                uploadingRef={uploadingRefImage}
+              />
             </>
           )}
           {supportsRenderingSpeed && (

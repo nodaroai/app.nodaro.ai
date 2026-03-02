@@ -111,26 +111,60 @@ export function buildPayload(
       const provider = (data.provider as string) ?? "nano-banana"
       const settings = buildCtx?.settings
 
-      // Collect reference images from all sources
+      // Build a map of all available reference images by ID
+      const refUrlMap = new Map<string, string>()
+
+      // Manual uploads (new multi-image format: ManualReferenceImage[])
+      const manualRefs = data.referenceImageUrls as Array<{ id: string; url: string }> | undefined
+      if (manualRefs?.length) {
+        for (const img of manualRefs) {
+          refUrlMap.set(img.id, img.url)
+        }
+      }
+      // Legacy single referenceImageUrl
+      const nodeRefUrl = data.referenceImageUrl as string | undefined
+      if (nodeRefUrl && refUrlMap.size === 0) {
+        refUrlMap.set("__legacy__", nodeRefUrl)
+      }
+      // Wired upstream images
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
+      if (chainRefs) {
+        for (let i = 0; i < chainRefs.length; i++) {
+          refUrlMap.set(`wired_${i}`, chainRefs[i])
+        }
+      }
       const extractedRefs = data.extractedReferenceUrls as string[] | undefined
-      const nodeRefUrl = data.referenceImageUrl as string | undefined
-
+      if (extractedRefs) {
+        for (let i = 0; i < extractedRefs.length; i++) {
+          refUrlMap.set(`extracted_${i}`, extractedRefs[i])
+        }
+      }
+      // Character reference images
       const charIds = (data.characterDefinitionIds as string[]) ?? []
       const charDefs = (settings?.characterDefinitions ?? []).filter(
         (c) => charIds.includes(c.id),
       )
-      const charRefUrls = charDefs
-        .filter((c) => c.type === "reference" && c.referenceImageUrl)
-        .map((c) => c.referenceImageUrl as string)
+      for (const c of charDefs) {
+        if (c.type === "reference" && c.referenceImageUrl) {
+          refUrlMap.set(`char_${c.id}`, c.referenceImageUrl)
+        }
+      }
 
-      const directRefs = [
-        ...(nodeRefUrl ? [nodeRefUrl] : []),
-        ...(chainRefs ?? []),
-        ...(extractedRefs ?? []),
-        ...charRefUrls,
-      ]
+      // Apply ordering: use referenceImageOrder if set, otherwise default map order
+      const orderIds = (data.referenceImageOrder as string[]) ?? []
+      const directRefs: string[] = []
+      const seen = new Set<string>()
+      for (const id of orderIds) {
+        const url = refUrlMap.get(id)
+        if (url) {
+          directRefs.push(url)
+          seen.add(id)
+        }
+      }
+      for (const [id, url] of refUrlMap) {
+        if (!seen.has(id)) directRefs.push(url)
+      }
 
       // Ancestor refs fallback
       const ancestorRefs = directRefs.length === 0 && buildCtx?.nodes && buildCtx?.edges && buildCtx?.nodeStates
