@@ -5,10 +5,11 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { TRANSCRIBE_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const transcribeBody = z.object({
   audioUrl: safeUrlSchema,
-  provider: z.enum(["whisper", "incredibly-fast-whisper", "elevenlabs-stt"]).optional(),
+  provider: z.enum(TRANSCRIBE_PROVIDERS).optional(),
   language: z.string().max(10).optional(),
   diarize: z.boolean().optional(),
   tagAudioEvents: z.boolean().optional(),

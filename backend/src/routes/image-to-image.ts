@@ -5,27 +5,17 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { IMAGE_I2I_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
   prompt: z.string().min(1).max(2000),
-  provider: z.enum(["nano-banana", "nano-banana-pro", "flux-i2i", "flux-pro-i2i", "grok-i2i", "gpt-image-i2i"]).optional(),
+  provider: z.enum(IMAGE_I2I_PROVIDERS).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
-  quality: z.enum(["medium", "high"]).optional(),
+  quality: z.enum(["medium", "high", "basic"]).optional(),
 })
-
-/**
- * Build composite model identifier for variable credit pricing.
- * See generate-image.ts for the full version with all models.
- */
-function buildCreditModelIdentifier(provider: string, quality?: string, resolution?: string): string {
-  if (provider === "gpt-image-i2i" && quality === "high") return `${provider}:high`
-  if ((provider === "flux-pro-i2i") && resolution === "2K") return `${provider}:2K`
-  if (provider === "flux-i2i" && resolution === "2K") return `${provider}:2K`
-  if (provider === "nano-banana-pro" && resolution === "4K") return `${provider}:4K`
-  return provider
-}
 
 export async function imageToImageRoutes(app: FastifyInstance) {
   app.post("/v1/image-to-image", { preHandler: creditGuard((req) => {

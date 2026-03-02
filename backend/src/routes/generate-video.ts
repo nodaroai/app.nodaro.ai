@@ -6,22 +6,14 @@ import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { IMAGE_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const generateVideoBody = z.object({
   imageUrl: safeUrlSchema,
   endFrameUrl: safeUrlSchema.optional(),
   audioUrl: safeUrlSchema.optional(),
   prompt: z.string().max(2500).optional(),
-  provider: z.enum([
-    "veo3", "veo3.1", "kling", "minimax",
-    "veo", "runway", "pika", "sora",
-    "kling-turbo", "kling-3.0", "grok-i2v", "sora2-pro",
-    "seedance", "wan-i2v", "wan-turbo",
-    "hailuo-2.3-pro", "hailuo-2.3", "hailuo-standard",
-    "sora2", "bytedance-lite", "bytedance-pro", "bytedance-pro-fast",
-    "kling-master",
-    "runway-kie",
-  ]).optional(),
+  provider: z.enum(IMAGE_TO_VIDEO_PROVIDERS).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std"]).optional(),

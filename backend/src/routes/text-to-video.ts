@@ -5,17 +5,11 @@ import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { TEXT_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const textToVideoBody = z.object({
   prompt: z.string().min(1).max(2500),
-  provider: z.enum([
-    "veo3", "kling", "minimax",
-    "veo", "runway", "pika", "sora",
-    "kling-turbo", "kling-3.0", "grok", "sora2-pro",
-    "seedance", "wan", "sora2", "hailuo-standard",
-    "bytedance-lite", "bytedance-pro", "wan-turbo",
-    "runway-kie",
-  ]).optional(),
+  provider: z.enum(TEXT_TO_VIDEO_PROVIDERS).optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std"]).optional(),
   sound: z.boolean().optional(),

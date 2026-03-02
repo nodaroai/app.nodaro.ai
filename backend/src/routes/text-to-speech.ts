@@ -4,11 +4,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { TTS_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const textToSpeechBody = z.object({
   text: z.string().min(1).max(5000),
   voice: z.string().optional(),
-  provider: z.enum(["elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs"]).optional(),
+  provider: z.enum(TTS_PROVIDERS).optional(),
   userId: z.string().uuid().optional(),
   voiceType: z.enum(["premade", "custom", "library"]).optional().default("premade"),
   stability: z.number().min(0).max(1).optional(),

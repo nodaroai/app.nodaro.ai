@@ -20,11 +20,12 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { VIDEO_UPSCALE_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const videoUpscaleBody = z.object({
   videoUrl: safeUrlSchema.optional(),
   upscaleFactor: z.enum(["1", "2", "4"]).default("2"),
-  provider: z.enum(["topaz", "veo-1080p", "veo-4k"]).default("topaz"),
+  provider: z.enum(VIDEO_UPSCALE_PROVIDERS).default("topaz"),
   kieTaskId: z.string().optional(),
 }).refine(
   (data) => {
