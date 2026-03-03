@@ -25,6 +25,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
   const updateNode = useWorkflowStore((s) => s.updateNode)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isHovered, setIsHovered] = useState(false)
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     updateNode(id, { zIndex: selected ? 10 : -1 })
@@ -54,8 +55,13 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
     <div
       className="relative"
       style={{ width, height, overflow: 'visible' }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => {
+        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+        setIsHovered(true)
+      }}
+      onMouseLeave={() => {
+        hoverTimeoutRef.current = setTimeout(() => setIsHovered(false), 800)
+      }}
     >
       {/* Floating label above node */}
       <EditableNodeLabel
@@ -75,11 +81,18 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
       />
 
       {/* Floating toolbar above node */}
-      <NodeToolbar isVisible={!!selected || isHovered} position={Position.Top} offset={8}>
+      <NodeToolbar isVisible={selected || isHovered} position={Position.Top} offset={0}>
         <div
           className="flex items-center gap-1 px-2 py-1.5 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl backdrop-blur-sm flex-wrap"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
+          onMouseEnter={() => {
+            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+            setIsHovered(true)
+          }}
+          onMouseLeave={() => {
+            hoverTimeoutRef.current = setTimeout(() => setIsHovered(false), 300)
+          }}
         >
           {/* Color swatches */}
           {COLORS.map((c) => (

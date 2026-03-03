@@ -1,10 +1,11 @@
 "use client"
 
 import { memo, useState } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
-import { Volume2, Loader2, AlertCircle, X } from "lucide-react"
+import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
+import { Volume2, Loader2, AlertCircle, X, Type, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
@@ -20,6 +21,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [showThumbnails, setShowThumbnails] = useState(false)
   const credits = useModelCredits(nodeData.provider ?? "tangoflux", 1)
 
   function handleDeleteResult(indexToDelete: number) {
@@ -38,7 +40,20 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>
+    <NodeResizer
+      isVisible={!!selected}
+      minWidth={180}
+      minHeight={180}
+      lineClassName="!border-[#ff0073]"
+      handleClassName="!w-2.5 !h-2.5 !bg-[#ff0073] !border-none !rounded-sm"
+    />
+    {/* Floating label above node */}
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Volume2 className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -47,12 +62,39 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "audio", type: "source", position: Position.Right, label: "Audio" },
-      ]}
+      hideHeader
+      toolbarActions={
+        status !== "running" ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
+      bottomToolbarContent={
+        showThumbnails && results.length > 1 ? (
+          <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
+            {results.slice(0, 8).map((r, i) => (
+              <button
+                key={`${r.jobId}-${i}`}
+                type="button"
+                aria-label={`Result ${i + 1}`}
+                className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
+                  i === activeIndex
+                    ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"
+                    : "opacity-50 hover:opacity-80 bg-white/10"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url })
+                }}
+              >
+                <Volume2 className="w-4 h-4 text-white" />
+              </button>
+            ))}
+          </div>
+        ) : undefined
+      }
+      handles={[]}
     >
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
         {status === "running" && !activeUrl && (
           <div className="flex items-center justify-center h-12 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -60,27 +102,29 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {activeUrl && (
-          <div className="relative group">
+          <div className="relative group/audio px-3 py-2">
             <audio
               src={activeUrl}
               controls
               className="w-full h-8"
               onClick={(e) => e.stopPropagation()}
             />
-            {status === "running" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              </div>
+            {results.length > 0 && (
+              <button
+                type="button"
+                className="absolute -top-1 left-3 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/audio:opacity-100 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+              >
+                <LayoutGrid className="w-3 h-3" />
+                <span>{results.length}</span>
+              </button>
             )}
             {results.length > 0 && (
               <button
                 type="button"
-                aria-label="Remove" className="absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDeleteConfirm(activeIndex)
-                }}
-                title="Delete this result"
+                aria-label="Remove"
+                className="absolute -top-1 right-3 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover/audio:opacity-100 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -103,42 +147,8 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
             <Volume2 className="w-5 h-5" />
-          </div>
-        )}
-
-        {results.length > 1 && (
-          <div className="flex gap-1 overflow-x-auto">
-            {results.slice(0, 5).map((r, i) => (
-              <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <button
-                  type="button"
-                  aria-label={`Result ${i + 1}`}
-                  className={`w-8 h-8 flex items-center justify-center rounded cursor-pointer transition-opacity ${
-                    i === activeIndex
-                      ? "opacity-100 ring-2 ring-primary bg-primary/20"
-                      : "opacity-50 hover:opacity-80 bg-muted"
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url })
-                  }}
-                >
-                  <Volume2 className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteConfirm(i)
-                  }}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            ))}
           </div>
         )}
 
@@ -148,7 +158,36 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    {/* Invisible input handle */}
+    <Handle
+      id="in"
+      type="target"
+      position={Position.Left}
+      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
+      style={{ top: '141px', left: '-29px', transform: 'none' }}
+    />
+    {/* Invisible output handle */}
+    <Handle
+      id="audio"
+      type="source"
+      position={Position.Right}
+      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
+      style={{ top: '36px', right: '-29px', transform: 'none', left: 'auto' }}
+    />
+    {/* Input handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
+      style={{ top: '141px', left: '-29px' }}
+    >
+      <Type className="w-3.5 h-3.5 text-white" />
+    </div>
+    {/* Output handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
+      style={{ top: '36px', right: '-29px' }}
+    >
+      <Volume2 className="w-3.5 h-3.5 text-white" />
+    </div>
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}
