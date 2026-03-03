@@ -5,8 +5,9 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { SUNO_MODELS } from "../../../packages/shared/src/model-constants.js"
 
-const sunoModelEnum = z.enum(["V4", "V4_5", "V4_5PLUS", "V4_5ALL", "V5"]).optional().default("V5")
+const sunoModelEnum = z.enum(SUNO_MODELS).optional().default("V5")
 
 const sunoGenerateBody = z.object({
   prompt: z.string().min(1).max(3000),

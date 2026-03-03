@@ -4,13 +4,14 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { SCRIPT_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const generateScriptBody = z.object({
   prompt: z.string().min(1).max(10000),
   sceneCount: z.number().int().min(1).max(20).optional(),
   tone: z.string().max(200).optional(),
   targetDuration: z.number().int().min(5).max(600).optional(),
-  provider: z.enum(["gemini", "claude", "gpt"]).optional(),
+  provider: z.enum(SCRIPT_PROVIDERS).optional(),
   userId: z.string().uuid().optional(),
 })
 

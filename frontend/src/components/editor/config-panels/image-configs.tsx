@@ -720,9 +720,10 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
       )}
       {!isNanoBananaEdit && !showUpscaleFactor && (
         <p className="text-xs text-muted-foreground px-1">
-          {data.provider === "recraft-upscale"
-            ? "Upscale and enhance the input image to higher resolution."
-            : "Remove the background from the input image, leaving a transparent PNG."}
+          {data.provider === "recraft-upscale" && "Upscale and enhance the input image to higher resolution."}
+          {data.provider === "recraft-remove-bg" && "Remove the background from the input image, leaving a transparent PNG."}
+          {data.provider === "topaz-image-upscale" && "Topaz AI upscale for maximum detail and sharpness."}
+          {data.provider === "grok-upscale" && "Grok-powered image upscale and enhancement."}
         </p>
       )}
       {showUpscaleFactor && (

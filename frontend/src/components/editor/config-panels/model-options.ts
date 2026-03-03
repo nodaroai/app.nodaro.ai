@@ -1,4 +1,6 @@
-export const IMAGE_GEN_MODELS = [
+import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider } from "@nodaro-shared/model-constants"
+
+export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string; desc: string }[] = [
   { value: "nano-banana", label: "Nano Banana", desc: "Fast drafts, iteration, storyboards" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },
   { value: "grok", label: "Grok", desc: "Creative and stylized imagery" },
@@ -16,15 +18,16 @@ export const IMAGE_GEN_MODELS = [
   { value: "flux-kontext", label: "Flux Kontext", desc: "Context-aware generation and editing" },
   { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext generation" },
   { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
-] as const
+]
 
-export const IMAGE_I2I_MODELS = [
+export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string; desc: string }[] = [
   { value: "nano-banana", label: "Nano Banana", desc: "Fast iteration, quick transforms" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production images" },
   { value: "grok-i2i", label: "Grok", desc: "Creative and stylized imagery" },
   { value: "flux-i2i", label: "Flux-2", desc: "Style-faithful transformations" },
   { value: "flux-pro-i2i", label: "Flux-2 Pro", desc: "Premium quality image transforms" },
   { value: "gpt-image-i2i", label: "GPT Image", desc: "Text rendering, complex compositions" },
+  { value: "ideogram-edit", label: "Ideogram Edit", desc: "AI-guided image editing" },
   { value: "ideogram-remix", label: "Ideogram Remix", desc: "Restyle with character consistency" },
   { value: "ideogram-reframe", label: "Ideogram Reframe", desc: "Change aspect ratio intelligently" },
   { value: "qwen-i2i", label: "Qwen", desc: "Versatile image transformation" },
@@ -33,7 +36,7 @@ export const IMAGE_I2I_MODELS = [
   { value: "seedream-5-lite-i2i", label: "Seedream 5 Lite", desc: "Latest Seedream image-to-image" },
   { value: "flux-kontext", label: "Flux Kontext", desc: "Context-aware editing via Kontext" },
   { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext editing" },
-] as const
+]
 
 export const IMAGE_EDIT_MODELS = [
   { value: "recraft-upscale", label: "Recraft Upscale", desc: "AI-powered upscaling and enhancement" },
@@ -67,9 +70,9 @@ export const VIDEO_I2V_MODELS = [
   { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
   { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
   { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
-] as const
+]
 
-export const VIDEO_T2V_MODELS = [
+export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
   { value: "minimax", label: "MiniMax", desc: "Fast, reliable 5s clips" },
   { value: "veo3", label: "VEO 3", desc: "Top quality, 8s with audio" },
   { value: "kling", label: "Kling", desc: "Versatile, 5-10s clips" },
@@ -89,12 +92,12 @@ export const VIDEO_T2V_MODELS = [
   { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
   { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
   { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
-] as const
+]
 
-export const VIDEO_V2V_MODELS = [
+export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: string; desc: string }[] = [
   { value: "wan", label: "Wan 2.6", desc: "High quality video-to-video" },
   { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },
-] as const
+]
 
 // =============================================================================
 // VARIABLE CREDIT RANGES — for displaying price ranges in model dropdowns

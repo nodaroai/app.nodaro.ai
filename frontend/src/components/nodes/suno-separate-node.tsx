@@ -1,23 +1,38 @@
 "use client"
 
 import { memo } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
-import { Scissors, Loader2, AlertCircle } from "lucide-react"
+import { Position, type NodeProps, NodeResizer, Handle } from "@xyflow/react"
+import { Scissors, Loader2, AlertCircle, Volume2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { SunoSeparateData } from "@/types/nodes"
 
 function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoSeparateData
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const audioUrl = nodeData.generatedAudioUrl ?? nodeData.vocalUrl
   const credits = useModelCredits("suno-separate", 2)
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>
+    <NodeResizer
+      isVisible={!!selected}
+      minWidth={180}
+      minHeight={180}
+      lineClassName="!border-[#ff0073]"
+      handleClassName="!w-2.5 !h-2.5 !bg-[#ff0073] !border-none !rounded-sm"
+    />
+    {/* Floating label above node */}
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Scissors className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -26,12 +41,15 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      handles={[
-        { id: "audio", type: "target", position: Position.Left, label: "Audio" },
-        { id: "audio-out", type: "source", position: Position.Right, label: "Audio" },
-      ]}
+      hideHeader
+      toolbarActions={
+        status !== "running" ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
+      handles={[]}
     >
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
         {status === "running" && !audioUrl && (
           <div className="flex items-center justify-center h-12 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -39,18 +57,14 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {audioUrl && (
-          <div className="w-full rounded-md bg-muted/30 p-2">
+          <div className="relative group/audio px-3 py-2">
             <audio
               src={audioUrl}
               controls
               className="w-full h-8"
               preload="none"
+              onClick={(e) => e.stopPropagation()}
             />
-            {status === "running" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              </div>
-            )}
           </div>
         )}
 
@@ -69,7 +83,7 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status !== "running" && !audioUrl && status !== "failed" && (
-          <div className="flex items-center justify-center h-12 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
             <Scissors className="w-5 h-5" />
           </div>
         )}
@@ -79,7 +93,36 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         </span>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    {/* Invisible input handle */}
+    <Handle
+      id="audio"
+      type="target"
+      position={Position.Left}
+      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
+      style={{ top: '155px', left: '-29px', transform: 'none' }}
+    />
+    {/* Invisible output handle */}
+    <Handle
+      id="audio-out"
+      type="source"
+      position={Position.Right}
+      className="!w-7 !h-7 !bg-transparent !border-0 !opacity-0 touch-manipulation"
+      style={{ top: '50px', right: '-29px', transform: 'none', left: 'auto' }}
+    />
+    {/* Input handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
+      style={{ top: '155px', left: '-29px' }}
+    >
+      <Volume2 className="w-3.5 h-3.5 text-white" />
+    </div>
+    {/* Output handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
+      style={{ top: '50px', right: '-29px' }}
+    >
+      <Scissors className="w-3.5 h-3.5 text-white" />
+    </div>
     </div>
   )
 }
