@@ -197,14 +197,13 @@ describe("POST /v1/image-to-image", () => {
       })
     )
 
-    // Verify job was enqueued with default provider (nano-banana)
+    // Verify job was enqueued (provider is undefined when not explicitly set — worker defaults to nano-banana)
     expect(videoQueue.add).toHaveBeenCalledWith(
       "image-to-image",
       expect.objectContaining({
         jobId: "job-1",
         imageUrl: "https://example.com/image.png",
         prompt: "make it look vintage",
-        provider: "nano-banana",
       })
     )
   })
@@ -279,7 +278,8 @@ describe("POST /v1/image-to-image", () => {
       expect(videoQueue.add).toHaveBeenCalledWith(
         "image-to-image",
         expect.objectContaining({
-          provider: "gpt-image-i2i:high",
+          provider: "gpt-image-i2i",
+          quality: "high",
         })
       )
     })
@@ -303,7 +303,8 @@ describe("POST /v1/image-to-image", () => {
       expect(videoQueue.add).toHaveBeenCalledWith(
         "image-to-image",
         expect.objectContaining({
-          provider: "flux-pro-i2i:2K",
+          provider: "flux-pro-i2i",
+          resolution: "2K",
         })
       )
     })
@@ -327,7 +328,8 @@ describe("POST /v1/image-to-image", () => {
       expect(videoQueue.add).toHaveBeenCalledWith(
         "image-to-image",
         expect.objectContaining({
-          provider: "nano-banana-pro:4K",
+          provider: "nano-banana-pro",
+          resolution: "4K",
         })
       )
     })
