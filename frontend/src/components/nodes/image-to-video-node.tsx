@@ -67,6 +67,8 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeHeight = (nodeInternals?.measured?.height ?? nodeInternals?.height ?? 400)
 
   const startFrameTop = nodeHeight * 0.157
+  const endFrameTop = nodeHeight * 0.36
+  const audioTop = nodeHeight * 0.53
   const videoTop = 20
 
   const status = nodeData.executionStatus ?? "idle"
@@ -165,11 +167,11 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   // Build dynamic handles
   const handles = useMemo(() => [
-    { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop}px`, left: '-29px' }, hideHandle: true },
-    { id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: '36%', left: '-29px' }, hideHandle: true },
-    { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: '53%', left: '-29px' }, hideHandle: true },
-    { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
-  ], [startFrameTop, videoTop])
+    { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop + 5}px`, left: '-29px' }, hideHandle: true },
+    { id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop + 5}px`, left: '-29px' }, hideHandle: true },
+    { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop + 5}px`, left: '-29px' }, hideHandle: true },
+    { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop + 5}px`, right: '-29px' }, hideHandle: true },
+  ], [startFrameTop, endFrameTop, audioTop, videoTop])
 
   const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo
 

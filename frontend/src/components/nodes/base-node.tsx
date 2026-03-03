@@ -131,7 +131,7 @@ function BaseNodeComponent({
   }
 
   return (
-    <div style={{ minWidth: '100%', minHeight: '100%', padding: '5px', margin: '-5px', position: 'relative' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div style={{ minWidth: '100%', minHeight: '100%', position: 'relative' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <NodeToolbar align="center" isVisible={isHovered} position={Position.Top} offset={4} className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1">
         <button
           className="hover:bg-white/10 rounded px-2 py-1 text-white/70 hover:text-white"
@@ -287,10 +287,11 @@ function BaseNodeComponent({
             id={h.id}
             type={h.type}
             position={h.position}
-            className="!w-9 !h-9 !bg-transparent !border-0 touch-manipulation"
+            className="!w-7 !h-7 !bg-transparent !border-0 touch-manipulation"
             style={{
               ...(h.customStyle ?? (h.top ? { top: h.top } : undefined)),
               ...(h.hideHandle ? { background: 'transparent', opacity: 0 } : undefined),
+              transform: 'translateY(-60%)',
             }}
           />
           {h.label && h.top && (
