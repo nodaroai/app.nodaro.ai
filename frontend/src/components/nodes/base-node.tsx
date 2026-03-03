@@ -36,6 +36,7 @@ interface BaseNodeProps {
   readonly hideHeader?: boolean
   readonly bottomToolbarContent?: ReactNode
   readonly topToolbarContent?: ReactNode
+  readonly className?: string
 }
 
 // Light mode: white bg with colored top accent line, Dark mode: category-colored borders
@@ -106,6 +107,7 @@ function BaseNodeComponent({
   hideHeader = false,
   bottomToolbarContent,
   topToolbarContent,
+  className,
 }: BaseNodeProps) {
   const [isHovered, setIsHovered] = useState(false)
   const { isMobile } = useMobileCanvas()
@@ -178,6 +180,7 @@ function BaseNodeComponent({
           isRunning && "node-running",
           isNew && !isRunning && "node-new-pulse",
           isSkipped && "opacity-40 border-dashed",
+          className,
         )}
         onClick={(e) => { e.stopPropagation(); selectNode(id) }}
       >

@@ -194,6 +194,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      className={activeUrl && !showConfig ? "!border-0 !shadow-none !bg-transparent" : undefined}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
