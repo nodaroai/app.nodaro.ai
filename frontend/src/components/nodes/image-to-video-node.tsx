@@ -49,7 +49,8 @@ function getNodeThumbnail(srcData: Record<string, unknown>, nodeType: string): s
     (srcData.generatedImageUrl as string | undefined) ??
     (srcData.url as string | undefined) ??
     (srcData.portraitUrl as string | undefined) ??
-    (srcData.mainImageUrl as string | undefined)
+    (srcData.mainImageUrl as string | undefined) ??
+    (srcData.sourceImageUrl as string | undefined)
   )
 }
 
