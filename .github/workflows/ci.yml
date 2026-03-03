@@ -24,10 +24,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: frontend
-      - name: Run tests
-        run: npm test
-        working-directory: frontend
-      - name: Run coverage
+      - name: Run tests with coverage
         run: npm run test:coverage
         working-directory: frontend
       - name: Upload coverage artifact
@@ -38,10 +35,11 @@ jobs:
           path: frontend/coverage/
       - name: Coverage report
         uses: davelosert/vitest-coverage-report-action@v2
-        if: always() && github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request'
         with:
           name: Frontend
           json-summary-path: frontend/coverage/coverage-summary.json
+          vite-config-path: frontend/vitest.config.ts
 
   backend-tests:
     name: Backend Tests
@@ -61,10 +59,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
         working-directory: backend
-      - name: Run tests
-        run: npm test
-        working-directory: backend
-      - name: Run coverage
+      - name: Run tests with coverage
         run: npm run test:coverage
         working-directory: backend
       - name: Upload coverage artifact
@@ -75,10 +70,11 @@ jobs:
           path: backend/coverage/
       - name: Coverage report
         uses: davelosert/vitest-coverage-report-action@v2
-        if: always() && github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request'
         with:
           name: Backend
           json-summary-path: backend/coverage/coverage-summary.json
+          vite-config-path: backend/vitest.config.ts
 
   typecheck:
     name: Type Check
