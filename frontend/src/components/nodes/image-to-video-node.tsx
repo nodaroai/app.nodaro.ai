@@ -187,6 +187,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       <span className="truncate">{isKling3 ? "Kling 3.0 Studio" : nodeData.label}</span>
     </div>
     <BaseNode
+      key={`${id}-${activeUrl && !showConfig ? 'result' : 'config'}`}
       id={id}
       label={isKling3 ? "Kling 3.0 Studio" : nodeData.label}
       icon={<Clapperboard className="h-4 w-4" />}
@@ -564,12 +565,26 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {/* Edit button */}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setShowConfig(true) }}
+          onClick={(e) => { e.stopPropagation(); setShowConfig(true); selectNode(null) }}
           className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 hover:bg-black/80 text-white text-[10px]"
         >
           <Settings className="w-3 h-3" />
           Edit
         </button>
+        {/* Thumbnails toolbar */}
+        {showThumbnails && results.length > 1 && (
+          <div className="absolute bottom-0 left-0 right-0 z-20 bg-black/70 p-2 flex gap-1 overflow-x-auto rounded-b-xl">
+            {results.slice(0, 8).map((r, i) => (
+              <div
+                key={i}
+                onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }}
+                className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 cursor-pointer border-2 transition-all ${i === activeIndex ? 'border-[#ff0073]' : 'border-transparent'}`}
+              >
+                <video src={r.url} className="w-full h-full object-cover" muted />
+              </div>
+            ))}
+          </div>
+        )}
         {/* Version badge */}
         {results.length > 0 && (
           <button type="button"

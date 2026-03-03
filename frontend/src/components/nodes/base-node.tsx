@@ -182,7 +182,7 @@ function BaseNodeComponent({
           isSkipped && "opacity-40 border-dashed",
           className,
         )}
-        onClick={(e) => { e.stopPropagation(); selectNode(id) }}
+        onClick={(e) => { selectNode(id) }}
       >
       {!hideHeader && (
         <div
