@@ -17,6 +17,7 @@ export function buildCreditModelIdentifier(
   provider: string,
   quality?: string,
   resolution?: string,
+  renderingSpeed?: string,
 ): string {
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`
@@ -31,8 +32,8 @@ export function buildCreditModelIdentifier(
     return `${provider}:${resolution}`
   }
   if (IDEOGRAM_PROVIDERS.has(provider)) {
-    if (quality === "TURBO") return `${provider}:TURBO`
-    if (quality === "QUALITY") return `${provider}:QUALITY`
+    if (renderingSpeed === "TURBO") return `${provider}:TURBO`
+    if (renderingSpeed === "QUALITY") return `${provider}:QUALITY`
   }
   return provider
 }

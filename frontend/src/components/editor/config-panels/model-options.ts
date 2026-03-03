@@ -35,6 +35,13 @@ export const IMAGE_I2I_MODELS = [
   { value: "flux-kontext-max", label: "Flux Kontext Max", desc: "Highest quality Kontext editing" },
 ] as const
 
+export const IMAGE_EDIT_MODELS = [
+  { value: "recraft-upscale", label: "Recraft Upscale", desc: "AI-powered upscaling and enhancement" },
+  { value: "topaz-image-upscale", label: "Topaz Upscale", desc: "Advanced upscaling with configurable factor" },
+  { value: "recraft-remove-bg", label: "Recraft Remove BG", desc: "Remove background, transparent PNG output" },
+  { value: "nano-banana-edit", label: "Nano Banana Edit", desc: "Context-aware image editing with prompt" },
+] as const
+
 export const VIDEO_I2V_MODELS = [
   { value: "minimax", label: "MiniMax", desc: "Fast, reliable 5s clips" },
   { value: "veo3", label: "VEO 3", desc: "Top quality, 8s with audio" },
@@ -234,6 +241,7 @@ export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label
   "seedream-5-lite": SEEDREAM_RATIOS,
   "seedream-5-lite-i2i": SEEDREAM_RATIOS,
   "nano-banana-2": NANO_BANANA_RATIOS,
+  "nano-banana-edit": NANO_BANANA_RATIOS,
   "z-image": Z_IMAGE_RATIOS,
 }
 
@@ -314,6 +322,10 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = {
 export {
   MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
   NATIVE_NEGATIVE_PROMPT_MODELS,
+  I2I_STRENGTH_SUPPORT,
+  SEED_SUPPORT,
+  RENDERING_SPEED_SUPPORT,
+  GUIDANCE_SCALE_SUPPORT,
 } from "@nodaro-shared/model-constants"
 
 // Predefined style presets for image generation

@@ -164,6 +164,8 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.generatedImageUrl = undefined
           data.activeResultIndex = 0
           data.executionStatus = undefined
+          data.referenceImageUrls = undefined
+          data.referenceImageOrder = undefined
           break
 
         case "image-to-video":

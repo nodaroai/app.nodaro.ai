@@ -5,44 +5,14 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { IMAGE_GEN_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const generateImageBody = z.object({
   prompt: z.string().min(1).max(2000),
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
-  provider: z.enum([
-    // Replicate providers
-    "nano-banana",
-    "flux",
-    // KIE.ai text-to-image providers
-    "nano-banana-pro",
-    "nano-banana-2",
-    "grok",
-    "gpt-image",
-    "imagen4",
-    "imagen4-fast",
-    "imagen4-ultra",
-    "ideogram",
-    "qwen",
-    "seedream",
-    "seedream-5-lite",
-    "flux-flex",
-    "flux-kontext",
-    "flux-kontext-max",
-    "z-image",
-    // KIE.ai image-to-image providers
-    "flux-i2i",
-    "flux-pro-i2i",
-    "grok-i2i",
-    "gpt-image-i2i",
-    "ideogram-edit",
-    "ideogram-remix",
-    "ideogram-reframe",
-    "qwen-i2i",
-    "qwen-edit",
-    "seedream-edit",
-    "seedream-5-lite-i2i",
-  ]).optional(),
+  provider: z.enum(IMAGE_GEN_PROVIDERS).optional(),
   aspectRatio: z.enum([
     "1:1", "16:9", "9:16", "4:3", "3:4",
     "3:2", "2:3", "5:4", "4:5", "21:9",
@@ -50,43 +20,10 @@ const generateImageBody = z.object({
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   negativePrompt: z.string().max(5000).optional(),
+  seed: z.number().int().min(0).optional(),
+  renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
   userId: z.string().uuid().optional(),
 })
-
-/**
- * Build composite model identifier for variable credit pricing.
- * Appends the setting that affects pricing (quality or resolution) to the provider name.
- * Only appends for models/settings that differ from the cheapest default.
- *
- * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K", "flux-flex:2K"
- */
-function buildCreditModelIdentifier(provider: string, quality?: string, resolution?: string): string {
-  // GPT Image: quality affects cost (medium=default/cheap, high=expensive)
-  if ((provider === "gpt-image" || provider === "gpt-image-i2i") && quality === "high") {
-    return `${provider}:high`
-  }
-  // Flux Pro: resolution affects cost (1K=default/cheap, 2K=expensive)
-  if ((provider === "flux" || provider === "flux-pro-i2i") && resolution === "2K") {
-    return `${provider}:2K`
-  }
-  // Flux Flex: resolution affects cost (1K=default/cheap, 2K=expensive)
-  if ((provider === "flux-flex" || provider === "flux-i2i") && resolution === "2K") {
-    return `${provider}:2K`
-  }
-  // Nano Banana Pro: resolution affects cost (1K/2K=default/cheap, 4K=expensive)
-  if (provider === "nano-banana-pro" && resolution === "4K") {
-    return `${provider}:4K`
-  }
-  // Nano Banana 2: resolution affects cost (1K=default, 2K/4K=expensive)
-  if (provider === "nano-banana-2" && (resolution === "2K" || resolution === "4K")) {
-    return `${provider}:${resolution}`
-  }
-  // Seedream 5 Lite: quality affects cost (basic=default, high=4K expensive)
-  if ((provider === "seedream-5-lite" || provider === "seedream-5-lite-i2i") && quality === "high") {
-    return `${provider}:high`
-  }
-  return provider
-}
 
 export async function generateImageRoutes(app: FastifyInstance) {
   app.post("/v1/generate-image", { preHandler: creditGuard((req) => {
@@ -94,7 +31,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
     const provider = (body?.provider as string) ?? "nano-banana"
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
-    return buildCreditModelIdentifier(provider, quality, resolution)
+    const renderingSpeed = body?.renderingSpeed as string | undefined
+    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed)
   }) }, async (req, reply) => {
     const parsed = generateImageBody.safeParse(req.body)
     if (!parsed.success) {
@@ -106,7 +44,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, userId } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -115,7 +53,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
     }
 
     // Determine model identifier for credit reservation (composite for variable pricing)
-    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution)
+    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     // Append character descriptions to prompt
     const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")
@@ -152,6 +90,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
       resolution,
       quality,
       negativePrompt,
+      seed,
+      renderingSpeed,
       usageLogId,
     })
 
