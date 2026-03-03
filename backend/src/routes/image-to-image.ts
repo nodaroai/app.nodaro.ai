@@ -15,6 +15,15 @@ const imageToImageBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
+  strength: z.number().min(0).max(1).optional(),
+  aspectRatio: z.enum([
+    "1:1", "16:9", "9:16", "4:3", "3:4",
+    "3:2", "2:3", "5:4", "4:5", "21:9",
+  ]).optional(),
+  negativePrompt: z.string().max(5000).optional(),
+  seed: z.number().int().min(0).optional(),
+  renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
+  guidanceScale: z.number().min(0).max(30).optional(),
 })
 
 export async function imageToImageRoutes(app: FastifyInstance) {
@@ -23,7 +32,8 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     const provider = (body?.provider as string) ?? "nano-banana"
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
-    return buildCreditModelIdentifier(provider, quality, resolution)
+    const renderingSpeed = body?.renderingSpeed as string | undefined
+    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed)
   }) }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {
@@ -35,7 +45,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, referenceImageUrls, resolution, quality } = parsed.data
+    const { imageUrl, prompt, provider, referenceImageUrls, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -44,7 +54,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution)
+    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -72,7 +82,15 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       imageUrl,
       referenceImageUrls,
       prompt,
-      provider: modelIdentifier,
+      provider,
+      resolution,
+      quality,
+      strength,
+      aspectRatio,
+      negativePrompt,
+      seed,
+      renderingSpeed,
+      guidanceScale,
       usageLogId,
     })
 

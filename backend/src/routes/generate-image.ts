@@ -5,14 +5,14 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
-import { IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { IMAGE_GEN_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const generateImageBody = z.object({
   prompt: z.string().min(1).max(2000),
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
-  provider: z.enum([...IMAGE_GEN_PROVIDERS, ...IMAGE_I2I_PROVIDERS]).optional(),
+  provider: z.enum(IMAGE_GEN_PROVIDERS).optional(),
   aspectRatio: z.enum([
     "1:1", "16:9", "9:16", "4:3", "3:4",
     "3:2", "2:3", "5:4", "4:5", "21:9",
@@ -20,6 +20,8 @@ const generateImageBody = z.object({
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   negativePrompt: z.string().max(5000).optional(),
+  seed: z.number().int().min(0).optional(),
+  renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -29,7 +31,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
     const provider = (body?.provider as string) ?? "nano-banana"
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
-    return buildCreditModelIdentifier(provider, quality, resolution)
+    const renderingSpeed = body?.renderingSpeed as string | undefined
+    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed)
   }) }, async (req, reply) => {
     const parsed = generateImageBody.safeParse(req.body)
     if (!parsed.success) {
@@ -41,7 +44,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, userId } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
@@ -50,7 +53,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
     }
 
     // Determine model identifier for credit reservation (composite for variable pricing)
-    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution)
+    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     // Append character descriptions to prompt
     const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")
@@ -87,6 +90,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
       resolution,
       quality,
       negativePrompt,
+      seed,
+      renderingSpeed,
       usageLogId,
     })
 

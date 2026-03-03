@@ -144,7 +144,8 @@ export async function generateImage(
 export async function editImage(
   imageUrl: string,
   model: string,
-  prompt?: string
+  prompt?: string,
+  extraParams?: Record<string, unknown>
 ): Promise<RouteResult> {
   return routeAndExecute(
     "image-editing",
@@ -152,7 +153,7 @@ export async function editImage(
     "editImage",
     async (instance) => {
       const p = resolveModule<ImageGenerationProvider & { editImage: ImageGenerationProvider["generateImage"] }>(instance, "image") as unknown as import("./provider.interface.js").ImageEditingProvider
-      return p.editImage(imageUrl, prompt, model)
+      return p.editImage(imageUrl, prompt, model, extraParams)
     }
   )
 }

@@ -232,28 +232,66 @@ export function executeNode(
     const imgData = node.data as GenerateImageData;
     const providerKey = imgData.provider || "nano-banana";
 
-    // Collect reference images from all sources
+    // Build a map of all available reference images by ID
+    const refUrlMap = new Map<string, string>();
+
+    // Manual uploads (new multi-image format)
+    for (const img of imgData.referenceImageUrls ?? []) {
+      refUrlMap.set(img.id, img.url);
+    }
+    // Legacy single referenceImageUrl
+    if (imgData.referenceImageUrl && refUrlMap.size === 0) {
+      refUrlMap.set("__legacy__", imgData.referenceImageUrl);
+    }
+    // Wired upstream images
     const chainRefs =
       inputs.referenceImageUrls ??
       (inputs.imageUrl ? [inputs.imageUrl] : undefined);
+    if (chainRefs) {
+      const incomingEdges = edges.filter((e) => e.target === node.id);
+      const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image"]);
+      const wiredSourceIds = incomingEdges
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .filter((n) => n && imageSourceTypes.has(n.type!))
+        .map((n) => n!.id);
+      for (let i = 0; i < chainRefs.length; i++) {
+        const key = wiredSourceIds[i] ?? `wired_${i}`;
+        refUrlMap.set(key, chainRefs[i]);
+      }
+    }
     const extractedRefs = (node.data as Record<string, unknown>)
       .extractedReferenceUrls as string[] | undefined;
+    if (extractedRefs) {
+      for (let i = 0; i < extractedRefs.length; i++) {
+        refUrlMap.set(`extracted_${i}`, extractedRefs[i]);
+      }
+    }
+    // Character reference images
     const charIds = imgData.characterDefinitionIds ?? [];
     const allCharDefs = useWorkflowStore.getState().characterDefinitions;
     const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
-    const charRefUrls = charDefs
-      .filter((c) => c.type === "reference" && c.referenceImageUrl)
-      .map((c) => c.referenceImageUrl as string);
+    for (const c of charDefs) {
+      if (c.type === "reference" && c.referenceImageUrl) {
+        refUrlMap.set(`char_${c.id}`, c.referenceImageUrl);
+      }
+    }
 
-    const nodeRefUrl = imgData.referenceImageUrl;
-    const directRefs = [
-      ...(nodeRefUrl ? [nodeRefUrl] : []),
-      ...(chainRefs ?? []),
-      ...(extractedRefs ?? []),
-      ...charRefUrls,
-    ];
+    // Apply ordering: use referenceImageOrder if set, otherwise default map order
+    const orderIds = imgData.referenceImageOrder ?? [];
+    const orderedUrls: string[] = [];
+    const seen = new Set<string>();
+    for (const id of orderIds) {
+      const url = refUrlMap.get(id);
+      if (url) {
+        orderedUrls.push(url);
+        seen.add(id);
+      }
+    }
+    for (const [id, url] of refUrlMap) {
+      if (!seen.has(id)) orderedUrls.push(url);
+    }
 
-    const ancestorRefs = directRefs.length === 0
+    const ancestorRefs = orderedUrls.length === 0
       ? collectAncestorRefs(node.id, nodes, edges)
       : [];
 
@@ -271,7 +309,7 @@ export function executeNode(
       characterDefs: charDefs as CharacterDef[],
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
       flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
-      referenceImageUrls: directRefs,
+      referenceImageUrls: orderedUrls,
       ancestorRefs,
     });
 
@@ -285,6 +323,8 @@ export function executeNode(
       imgData.resolution || undefined,
       imgData.quality || undefined,
       result.nativeNegativePrompt,
+      imgData.seed,
+      imgData.renderingSpeed || undefined,
     );
   }
 
@@ -299,8 +339,28 @@ export function executeNode(
     }
     const editData = node.data as EditImageData;
     const provider = editData.provider || "recraft-upscale";
-    const prompt = editData.prompt || undefined;
-    return runEditImage(node.id, imageUrl, ctx, prompt, provider);
+
+    // For nano-banana-edit: enrich prompt with character/asset descriptions
+    let prompt = editData.prompt || undefined;
+    if (provider === "nano-banana-edit" && prompt) {
+      const charIds = editData.characterDefinitionIds ?? [];
+      const allCharDefs = useWorkflowStore.getState().characterDefinitions;
+      const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
+      if (charDefs.length > 0) {
+        const descriptions = charDefs
+          .map((c) => c.description ? `${c.name}: ${c.description}` : c.name)
+          .join("; ");
+        prompt = `${prompt}\n\nContext: ${descriptions}`;
+      }
+    }
+
+    return runEditImage(node.id, imageUrl, ctx, prompt, provider, {
+      upscaleFactor: editData.upscaleFactor,
+      aspectRatio: editData.aspectRatio,
+      negativePrompt: editData.negativePrompt,
+      style: editData.style,
+      seed: editData.seed,
+    });
   }
 
   if (node.type === "image-to-image") {
@@ -313,23 +373,61 @@ export function executeNode(
       return Promise.reject(new Error("No input image"));
     }
     const i2iData = node.data as ImageToImageData;
-    const prompt = i2iData.prompt;
-    if (!prompt) {
+    const rawPrompt = i2iData.prompt;
+    if (!rawPrompt) {
       toast.error(
         `Node "${i2iData.label}": transformation prompt is required`,
       );
       return Promise.reject(new Error("Transformation prompt is required"));
     }
     const provider = i2iData.provider || "nano-banana";
-    const refUrls =
+
+    // Collect reference images from connected nodes + character assets
+    const chainRefs =
       inputs.referenceImageUrls?.filter((url) => url !== imageUrl) ?? [];
+    const charIds = i2iData.characterDefinitionIds ?? [];
+    const allCharDefs = useWorkflowStore.getState().characterDefinitions;
+    const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
+    const charRefUrls = charDefs
+      .filter((c) => c.type === "reference" && c.referenceImageUrl)
+      .map((c) => c.referenceImageUrl as string);
+    const nodeRefUrl = i2iData.referenceImageUrl;
+    const directRefs = [
+      ...(nodeRefUrl ? [nodeRefUrl] : []),
+      ...chainRefs,
+      ...charRefUrls,
+    ];
+
+    // Build prompt with style + character descriptions (same as generate-image)
+    const result = buildImagePrompt({
+      prompt: rawPrompt,
+      provider,
+      style: i2iData.style,
+      negativePrompt: i2iData.negativePrompt,
+      characterDefs: charDefs as CharacterDef[],
+      userTemplates: useWorkflowStore.getState().userPromptTemplates,
+      flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
+      referenceImageUrls: directRefs,
+      ancestorRefs: [],
+    });
+
     return runImageToImage(
       node.id,
       imageUrl,
-      prompt,
+      result.prompt,
       ctx,
       provider,
-      refUrls.length > 0 ? refUrls : undefined,
+      result.referenceImageUrls?.length ? result.referenceImageUrls : undefined,
+      {
+        strength: i2iData.strength,
+        aspectRatio: i2iData.aspectRatio,
+        resolution: i2iData.resolution,
+        quality: i2iData.quality,
+        negativePrompt: result.nativeNegativePrompt,
+        seed: i2iData.seed,
+        renderingSpeed: i2iData.renderingSpeed,
+        guidanceScale: i2iData.guidanceScale,
+      },
     );
   }
 

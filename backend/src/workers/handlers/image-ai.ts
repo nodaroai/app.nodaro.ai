@@ -8,7 +8,7 @@ import {
 } from "../shared.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
-  const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality, negativePrompt } = job.data as {
+  const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed } = job.data as {
     jobId: string
     prompt: string
     referenceImageUrls?: string[]
@@ -17,6 +17,8 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     resolution?: string
     quality?: string
     negativePrompt?: string
+    seed?: number
+    renderingSpeed?: string
   }
   console.log(`[worker] generate-image ${ctx.jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
   if (referenceImageUrls?.length) {
@@ -28,6 +30,8 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     ...(resolution && { resolution }),
     ...(quality && { quality }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
+    ...(seed != null && { seed }),
+    ...(renderingSpeed && { rendering_speed: renderingSpeed }),
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
   const result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, hasExtraParams ? extraParams : undefined)
@@ -56,16 +60,31 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
 }
 
 const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
-  const { imageUrl, prompt, provider } = job.data as {
+  const { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed } = job.data as {
     jobId: string
     imageUrl: string
     prompt?: string
-    provider?: "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit"
+    provider?: string
+    upscaleFactor?: string
+    aspectRatio?: string
+    negativePrompt?: string
+    style?: string
+    seed?: number
   }
   const resolvedProvider = provider ?? "recraft-upscale"
-  console.log(`[worker] edit-image ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt ?? "(no prompt)"}"`)
+  // Append style to prompt if present (same pattern as generate-image)
+  const effectivePrompt = style && prompt ? `${prompt}. Style: ${style}` : prompt
+  console.log(`[worker] edit-image ${ctx.jobId} (provider: ${resolvedProvider}): "${effectivePrompt ?? "(no prompt)"}"`)
 
-  const result = await editImage(imageUrl, resolvedProvider, prompt)
+  const extraParams: Record<string, unknown> = {
+    ...(upscaleFactor && { upscale_factor: upscaleFactor }),
+    ...(aspectRatio && { image_size: aspectRatio }),
+    ...(negativePrompt && { negative_prompt: negativePrompt }),
+    ...(seed != null && { seed }),
+  }
+  const hasExtraParams = Object.keys(extraParams).length > 0
+
+  const result = await editImage(imageUrl, resolvedProvider, effectivePrompt, hasExtraParams ? extraParams : undefined)
   await job.updateProgress(50)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
@@ -91,19 +110,38 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
 }
 
 const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx) {
-  const { imageUrl, referenceImageUrls, prompt, provider } = job.data as {
+  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale } = job.data as {
     jobId: string
     imageUrl: string
     referenceImageUrls?: string[]
     prompt: string
-    provider?: "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i"
+    provider?: string
+    resolution?: string
+    quality?: string
+    strength?: number
+    aspectRatio?: string
+    negativePrompt?: string
+    seed?: number
+    renderingSpeed?: string
+    guidanceScale?: number
   }
   const resolvedProvider = provider ?? "nano-banana"
   // Combine main image with additional reference images (e.g., from Location/Character nodes)
   const allImages = [imageUrl, ...(referenceImageUrls ?? [])]
   console.log(`[worker] image-to-image ${ctx.jobId} (provider: ${resolvedProvider}, images: ${allImages.length}): "${prompt}"`)
 
-  const result = await generateImage(prompt, resolvedProvider, allImages)
+  const extraParams: Record<string, unknown> = {
+    ...(aspectRatio && { aspect_ratio: aspectRatio }),
+    ...(resolution && { resolution }),
+    ...(quality && { quality }),
+    ...(strength != null && { strength }),
+    ...(negativePrompt && { negative_prompt: negativePrompt }),
+    ...(seed != null && { seed }),
+    ...(renderingSpeed && { rendering_speed: renderingSpeed }),
+    ...(guidanceScale != null && { guidance_scale: guidanceScale }),
+  }
+  const hasExtraParams = Object.keys(extraParams).length > 0
+  const result = await generateImage(prompt, resolvedProvider, allImages, hasExtraParams ? extraParams : undefined)
   await job.updateProgress(50)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)

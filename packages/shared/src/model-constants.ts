@@ -44,158 +44,77 @@ export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux
 // Ideogram family models with TURBO/QUALITY pricing variants
 export const IDEOGRAM_PROVIDERS = new Set(["ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe"])
 
-// ─── Provider arrays (single source of truth for Zod enums + TS types) ───
+// =====================================================================
+// Provider arrays (single source of truth for route Zod validation)
+// =====================================================================
 
-/** Image-to-image providers accepted by POST /v1/image-to-image */
-export const IMAGE_I2I_PROVIDERS = [
-  "nano-banana", "nano-banana-pro",
-  "grok-i2i", "flux-i2i", "flux-pro-i2i", "gpt-image-i2i",
-  "ideogram-edit", "ideogram-remix", "ideogram-reframe",
-  "qwen-i2i", "qwen-edit",
-  "seedream-edit", "seedream-5-lite-i2i",
-  "flux-kontext", "flux-kontext-max",
-] as const
-
-export type ImageI2IProvider = typeof IMAGE_I2I_PROVIDERS[number]
-
-/** Text-to-image providers (generate-image route, T2I mode) */
+/** Text-to-image providers (no input image required) */
 export const IMAGE_GEN_PROVIDERS = [
-  "nano-banana", "nano-banana-pro", "nano-banana-2",
-  "grok", "flux", "flux-flex",
+  "nano-banana",
+  "flux",
+  "nano-banana-pro",
+  "nano-banana-2",
+  "grok",
   "gpt-image",
-  "imagen4", "imagen4-fast", "imagen4-ultra",
-  "ideogram", "qwen",
-  "seedream", "seedream-5-lite",
-  "flux-kontext", "flux-kontext-max",
+  "imagen4",
+  "imagen4-fast",
+  "imagen4-ultra",
+  "ideogram",
+  "qwen",
+  "seedream",
+  "seedream-5-lite",
+  "flux-flex",
+  "flux-kontext",
+  "flux-kontext-max",
   "z-image",
 ] as const
 
-export type ImageGenProvider = typeof IMAGE_GEN_PROVIDERS[number]
+/** Image-to-image providers (require input image) */
+export const IMAGE_I2I_PROVIDERS = [
+  "nano-banana",
+  "nano-banana-pro",
+  "grok-i2i",
+  "flux-i2i",
+  "flux-pro-i2i",
+  "gpt-image-i2i",
+  "ideogram-remix",
+  "ideogram-reframe",
+  "qwen-i2i",
+  "qwen-edit",
+  "seedream-edit",
+  "seedream-5-lite-i2i",
+  "flux-kontext",
+  "flux-kontext-max",
+] as const
 
-/** Edit-image providers (upscale, remove-bg, edit) */
+/** Image editing providers (upscale, remove bg, etc.) */
 export const IMAGE_EDIT_PROVIDERS = [
-  "recraft-upscale", "recraft-remove-bg", "nano-banana-edit",
-  "topaz-image-upscale", "grok-upscale",
+  "recraft-upscale",
+  "recraft-remove-bg",
+  "nano-banana-edit",
+  "topaz-image-upscale",
 ] as const
 
-export type ImageEditProvider = typeof IMAGE_EDIT_PROVIDERS[number]
+/** I2I providers that support a strength/denoising parameter */
+export const I2I_STRENGTH_SUPPORT: Record<string, { min: number; max: number; step: number; default: number }> = {
+  "ideogram-remix": { min: 0.01, max: 1, step: 0.01, default: 0.8 },
+  "qwen-i2i": { min: 0, max: 1, step: 0.01, default: 0.8 },
+}
 
-/** Image-to-video providers (generate-video route) */
-export const IMAGE_TO_VIDEO_PROVIDERS = [
-  "minimax", "veo3", "veo3.1",
-  "kling", "kling-turbo", "kling-3.0", "kling-master",
-  "seedance",
-  "hailuo-2.3-pro", "hailuo-2.3", "hailuo-standard",
-  "sora2-pro", "sora2",
-  "wan-i2v", "wan-turbo",
-  "bytedance-lite", "bytedance-pro", "bytedance-pro-fast",
-  "grok-i2v",
-  "veo", "runway-kie", "runway", "pika", "sora",
-] as const
+/** Models that accept a seed parameter for reproducible generation */
+export const SEED_SUPPORT = new Set([
+  "ideogram", "ideogram-remix", "ideogram-reframe",
+  "qwen", "qwen-i2i", "qwen-edit",
+  "flux", "flux-flex", "flux-i2i", "flux-pro-i2i", "flux-kontext", "flux-kontext-max",
+])
 
-export type ImageToVideoProvider = typeof IMAGE_TO_VIDEO_PROVIDERS[number]
+/** Ideogram models that support rendering_speed selection (TURBO/BALANCED/QUALITY) */
+export const RENDERING_SPEED_SUPPORT = new Set([
+  "ideogram", "ideogram-remix", "ideogram-reframe",
+])
 
-/** Text-to-video providers (text-to-video route — NO veo3.1) */
-export const TEXT_TO_VIDEO_PROVIDERS = [
-  "minimax", "veo3",
-  "kling", "kling-turbo", "kling-3.0",
-  "veo", "grok",
-  "sora2-pro", "sora2",
-  "seedance", "wan", "wan-turbo",
-  "hailuo-standard",
-  "bytedance-lite", "bytedance-pro",
-  "runway-kie", "runway", "pika", "sora",
-] as const
-
-export type TextToVideoProvider = typeof TEXT_TO_VIDEO_PROVIDERS[number]
-
-/** Video-to-video providers */
-export const VIDEO_TO_VIDEO_PROVIDERS = [
-  "wan", "luma-modify",
-] as const
-
-export type VideoToVideoProvider = typeof VIDEO_TO_VIDEO_PROVIDERS[number]
-
-/** Video upscale providers */
-export const VIDEO_UPSCALE_PROVIDERS = [
-  "topaz", "veo-1080p", "veo-4k",
-] as const
-
-export type VideoUpscaleProvider = typeof VIDEO_UPSCALE_PROVIDERS[number]
-
-/** Extend video providers */
-export const EXTEND_VIDEO_PROVIDERS = [
-  "veo-extend", "runway-extend",
-] as const
-
-export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
-
-/** TTS providers (text-to-speech route) */
-export const TTS_PROVIDERS = [
-  "elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs",
-] as const
-
-export type TtsProvider = typeof TTS_PROVIDERS[number]
-
-/** Text-to-audio (SFX) providers */
-export const TEXT_TO_AUDIO_PROVIDERS = [
-  "tangoflux", "elevenlabs-sfx",
-] as const
-
-export type TextToAudioProvider = typeof TEXT_TO_AUDIO_PROVIDERS[number]
-
-/** Music generation providers */
-export const MUSIC_PROVIDERS = [
-  "musicgen", "minimax", "lyria", "bark",
-] as const
-
-export type MusicProvider = typeof MUSIC_PROVIDERS[number]
-
-/** Transcription providers */
-export const TRANSCRIBE_PROVIDERS = [
-  "whisper", "incredibly-fast-whisper", "elevenlabs-stt",
-] as const
-
-export type TranscribeProvider = typeof TRANSCRIBE_PROVIDERS[number]
-
-/** Lip-sync providers */
-export const LIP_SYNC_PROVIDERS = [
-  "kling-avatar", "kling-avatar-pro", "infinitalk",
-] as const
-
-export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
-
-/** Script generation providers */
-export const SCRIPT_PROVIDERS = [
-  "gemini", "claude", "gpt",
-] as const
-
-export type ScriptProvider = typeof SCRIPT_PROVIDERS[number]
-
-/** AI Writer providers (Claude only) */
-export const AI_WRITER_PROVIDERS = [
-  "claude",
-] as const
-
-export type AiWriterProvider = typeof AI_WRITER_PROVIDERS[number]
-
-/** QA Check providers */
-export const QA_CHECK_PROVIDERS = [
-  "claude", "gpt",
-] as const
-
-export type QaCheckProvider = typeof QA_CHECK_PROVIDERS[number]
-
-/** Suno music generation models */
-export const SUNO_MODELS = [
-  "V4", "V4_5", "V4_5PLUS", "V4_5ALL", "V5",
-] as const
-
-export type SunoModel = typeof SUNO_MODELS[number]
-
-/** Voice design model variants */
-export const VOICE_DESIGN_MODELS = [
-  "eleven_ttv_v3", "eleven_multilingual_ttv_v2",
-] as const
-
-export type VoiceDesignModel = typeof VOICE_DESIGN_MODELS[number]
+/** Models that accept guidance_scale for controlling prompt adherence */
+export const GUIDANCE_SCALE_SUPPORT: Record<string, { min: number; max: number; step: number; default: number }> = {
+  "qwen-i2i": { min: 1, max: 20, step: 0.5, default: 7 },
+  "qwen-edit": { min: 1, max: 20, step: 0.5, default: 7 },
+}

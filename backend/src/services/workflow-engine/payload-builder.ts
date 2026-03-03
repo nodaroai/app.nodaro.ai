@@ -111,26 +111,60 @@ export function buildPayload(
       const provider = (data.provider as string) ?? "nano-banana"
       const settings = buildCtx?.settings
 
-      // Collect reference images from all sources
+      // Build a map of all available reference images by ID
+      const refUrlMap = new Map<string, string>()
+
+      // Manual uploads (new multi-image format: ManualReferenceImage[])
+      const manualRefs = data.referenceImageUrls as Array<{ id: string; url: string }> | undefined
+      if (manualRefs?.length) {
+        for (const img of manualRefs) {
+          refUrlMap.set(img.id, img.url)
+        }
+      }
+      // Legacy single referenceImageUrl
+      const nodeRefUrl = data.referenceImageUrl as string | undefined
+      if (nodeRefUrl && refUrlMap.size === 0) {
+        refUrlMap.set("__legacy__", nodeRefUrl)
+      }
+      // Wired upstream images
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
+      if (chainRefs) {
+        for (let i = 0; i < chainRefs.length; i++) {
+          refUrlMap.set(`wired_${i}`, chainRefs[i])
+        }
+      }
       const extractedRefs = data.extractedReferenceUrls as string[] | undefined
-      const nodeRefUrl = data.referenceImageUrl as string | undefined
-
+      if (extractedRefs) {
+        for (let i = 0; i < extractedRefs.length; i++) {
+          refUrlMap.set(`extracted_${i}`, extractedRefs[i])
+        }
+      }
+      // Character reference images
       const charIds = (data.characterDefinitionIds as string[]) ?? []
       const charDefs = (settings?.characterDefinitions ?? []).filter(
         (c) => charIds.includes(c.id),
       )
-      const charRefUrls = charDefs
-        .filter((c) => c.type === "reference" && c.referenceImageUrl)
-        .map((c) => c.referenceImageUrl as string)
+      for (const c of charDefs) {
+        if (c.type === "reference" && c.referenceImageUrl) {
+          refUrlMap.set(`char_${c.id}`, c.referenceImageUrl)
+        }
+      }
 
-      const directRefs = [
-        ...(nodeRefUrl ? [nodeRefUrl] : []),
-        ...(chainRefs ?? []),
-        ...(extractedRefs ?? []),
-        ...charRefUrls,
-      ]
+      // Apply ordering: use referenceImageOrder if set, otherwise default map order
+      const orderIds = (data.referenceImageOrder as string[]) ?? []
+      const directRefs: string[] = []
+      const seen = new Set<string>()
+      for (const id of orderIds) {
+        const url = refUrlMap.get(id)
+        if (url) {
+          directRefs.push(url)
+          seen.add(id)
+        }
+      }
+      for (const [id, url] of refUrlMap) {
+        if (!seen.has(id)) directRefs.push(url)
+      }
 
       // Ancestor refs fallback
       const ancestorRefs = directRefs.length === 0 && buildCtx?.nodes && buildCtx?.edges && buildCtx?.nodeStates
@@ -158,6 +192,7 @@ export function buildPayload(
           provider,
           data.quality as string | undefined,
           data.resolution as string | undefined,
+          data.renderingSpeed as string | undefined,
         ),
         payload: {
           jobId,
@@ -168,6 +203,8 @@ export function buildPayload(
           resolution: data.resolution,
           quality: data.quality,
           negativePrompt: result.nativeNegativePrompt,
+          seed: data.seed,
+          renderingSpeed: data.renderingSpeed,
           usageLogId,
         },
       }
@@ -175,6 +212,24 @@ export function buildPayload(
 
     case "edit-image": {
       const provider = (data.provider as string) ?? "recraft-remove-bg"
+
+      // Enrich prompt with character/asset descriptions for nano-banana-edit
+      let editPrompt = (resolvedInputs.prompt || data.prompt) as string | undefined
+      if (provider === "nano-banana-edit" && editPrompt) {
+        const charIds = (data.characterDefinitionIds as string[]) ?? []
+        const charDefs = (buildCtx?.settings?.characterDefinitions ?? []).filter(
+          (c: { id: string }) => charIds.includes(c.id),
+        )
+        if (charDefs.length > 0) {
+          const descriptions = charDefs
+            .map((c: { name: string; description?: string }) =>
+              c.description ? `${c.name}: ${c.description}` : c.name,
+            )
+            .join("; ")
+          editPrompt = `${editPrompt}\n\nContext: ${descriptions}`
+        }
+      }
+
       return {
         jobName: "edit-image",
         queueName: "video-generation",
@@ -182,8 +237,13 @@ export function buildPayload(
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-          prompt: resolvedInputs.prompt || data.prompt,
+          prompt: editPrompt,
           provider,
+          upscaleFactor: data.upscaleFactor,
+          aspectRatio: data.aspectRatio,
+          negativePrompt: data.negativePrompt,
+          style: data.style,
+          seed: data.seed,
           usageLogId,
         },
       }
@@ -191,6 +251,38 @@ export function buildPayload(
 
     case "image-to-image": {
       const provider = (data.provider as string) ?? "flux-i2i"
+      const settings = buildCtx?.settings
+
+      // Collect reference images from character assets
+      const charIds = (data.characterDefinitionIds as string[]) ?? []
+      const charDefs = (settings?.characterDefinitions ?? []).filter(
+        (c) => charIds.includes(c.id),
+      )
+      const charRefUrls = charDefs
+        .filter((c) => c.type === "reference" && c.referenceImageUrl)
+        .map((c) => c.referenceImageUrl as string)
+      const nodeRefUrl = data.referenceImageUrl as string | undefined
+      const chainRefs = resolvedInputs.referenceImageUrls ?? []
+      const directRefs = [
+        ...(nodeRefUrl ? [nodeRefUrl] : []),
+        ...chainRefs,
+        ...charRefUrls,
+      ]
+
+      const rawPrompt = (resolvedInputs.prompt || (data.prompt as string) || "") as string
+
+      // Build prompt with style + character descriptions (same as generate-image)
+      const i2iResult = buildImagePrompt({
+        prompt: rawPrompt,
+        provider,
+        style: typeof data.style === "string" ? data.style : undefined,
+        negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+        characterDefs: charDefs as CharacterDef[],
+        flowTemplates: settings?.flowPromptTemplates,
+        referenceImageUrls: directRefs,
+        ancestorRefs: [],
+      })
+
       return {
         jobName: "image-to-image",
         queueName: "video-generation",
@@ -198,18 +290,22 @@ export function buildPayload(
           provider,
           data.quality as string | undefined,
           data.resolution as string | undefined,
+          data.renderingSpeed as string | undefined,
         ),
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-          prompt: resolvedInputs.prompt || data.prompt,
-          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          prompt: i2iResult.prompt,
+          referenceImageUrls: i2iResult.referenceImageUrls,
           provider,
           strength: data.strength,
           aspectRatio: data.aspectRatio,
           resolution: data.resolution,
           quality: data.quality,
-          negativePrompt: data.negativePrompt,
+          negativePrompt: i2iResult.nativeNegativePrompt,
+          seed: data.seed,
+          renderingSpeed: data.renderingSpeed,
+          guidanceScale: data.guidanceScale,
           usageLogId,
         },
       }
