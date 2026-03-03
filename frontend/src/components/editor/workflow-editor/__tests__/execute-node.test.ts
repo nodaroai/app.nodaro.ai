@@ -399,6 +399,8 @@ describe("generate-image", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
     )
   })
 
@@ -415,6 +417,8 @@ describe("generate-image", () => {
       "n1",
       "override prompt",
       expect.anything(),
+      undefined,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -464,6 +468,7 @@ describe("edit-image", () => {
       expect.anything(),
       undefined,
       "recraft-upscale",
+      expect.anything(),
     )
   })
 })
@@ -518,6 +523,7 @@ describe("image-to-image", () => {
       expect.anything(),
       "nano-banana",
       undefined,
+      expect.anything(),
     )
   })
 })
