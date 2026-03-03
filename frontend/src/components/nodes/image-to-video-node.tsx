@@ -274,9 +274,9 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
             </div>
 
             {/* Master Prompt Preview */}
-            {(nodeData.motionPrompt || connectedTextPrompt) && (
+            {(nodeData.prompt || connectedTextPrompt) && (
               <div className="text-[10px] text-muted-foreground line-clamp-2 px-1" style={{ wordBreak: "break-word" }}>
-                {nodeData.motionPrompt || connectedTextPrompt?.text}
+                {nodeData.prompt || connectedTextPrompt?.text}
               </div>
             )}
 

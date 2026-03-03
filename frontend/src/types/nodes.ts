@@ -507,7 +507,7 @@ export type ImageToVideoData = {
   duration: number
   motion: "subtle" | "moderate" | "dynamic"
   cameraMotion: "static" | "pan-left" | "pan-right" | "zoom-in" | "zoom-out"
-  motionPrompt?: string  // Text description of desired motion/animation (required for Sora2)
+  prompt?: string  // Text description of desired motion/animation (required for Sora2)
   generateAudio?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"

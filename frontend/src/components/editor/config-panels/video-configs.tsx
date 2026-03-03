@@ -142,7 +142,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       {connectedTextPrompts.length > 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
-            Motion Prompt (from connected node)
+            Prompt (from connected node)
           </Label>
           {connectedTextPrompts.map((prompt, idx) => (
             <div key={`${prompt.id}-${idx}`} className="flex flex-col gap-1.5">
@@ -153,7 +153,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               <Textarea
                 value={prompt.text}
                 onChange={(e) => handleTextPromptChange(prompt.id, e.target.value)}
-                placeholder="Enter motion prompt..."
+                placeholder="Enter prompt..."
                 rows={3}
                 className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
               />
@@ -165,11 +165,11 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       {connectedTextPrompts.length === 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
-            Motion Prompt
+            Prompt
           </Label>
           <Textarea
-            value={data.motionPrompt || ""}
-            onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
+            value={data.prompt || ""}
+            onChange={(e) => onUpdate({ prompt: e.target.value })}
             placeholder="Describe the motion or animation you want..."
             rows={3}
             className="text-xs bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
