@@ -62,6 +62,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
+  const startFrameConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "startFrame").length
   const nodeInternals = useWorkflowStore((s) => s.nodes.find((n) => n.id === id))
   const nodeHeight = (nodeInternals?.measured?.height ?? nodeInternals?.height ?? 400)
 
@@ -515,6 +516,10 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
       style={{ top: `${startFrameTop - 14}px`, left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
+      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
+      {startFrameConnectionCount >= 2 && (
+        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{startFrameConnectionCount}</div>
+      )}
     </div>
 
     {/* endFrame handle icon */}
