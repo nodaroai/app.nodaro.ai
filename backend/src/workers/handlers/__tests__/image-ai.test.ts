@@ -188,7 +188,7 @@ describe("edit-image handler", () => {
 
     await handler(job as never, ctx)
 
-    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", "upscale")
+    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", "upscale", undefined)
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
   })
@@ -197,21 +197,21 @@ describe("edit-image handler", () => {
     const job = makeJob("edit-image", { imageUrl: "https://input.png" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", undefined)
+    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", undefined, undefined)
   })
 
   it("uses custom provider when specified", async () => {
     const job = makeJob("edit-image", { imageUrl: "https://input.png", provider: "recraft-remove-bg" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-remove-bg", undefined)
+    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-remove-bg", undefined, undefined)
   })
 
   it("handles undefined prompt", async () => {
     const job = makeJob("edit-image", { imageUrl: "https://input.png" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", undefined)
+    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", undefined, undefined)
   })
 })
 
@@ -232,7 +232,7 @@ describe("image-to-image handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "transform", "nano-banana", ["https://main.png", "https://ref1.png"],
+      "transform", "nano-banana", ["https://main.png", "https://ref1.png"], undefined,
     )
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
   })
@@ -241,21 +241,21 @@ describe("image-to-image handler", () => {
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "edit" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("edit", "nano-banana", ["https://main.png"])
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("edit", "nano-banana", ["https://main.png"], undefined)
   })
 
   it("uses custom provider when specified", async () => {
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "edit", provider: "flux-i2i" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("edit", "flux-i2i", ["https://main.png"])
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("edit", "flux-i2i", ["https://main.png"], undefined)
   })
 
   it("works without referenceImageUrls", async () => {
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "solo" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("solo", "nano-banana", ["https://main.png"])
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("solo", "nano-banana", ["https://main.png"], undefined)
   })
 
   it("returns early when cancelled", async () => {
