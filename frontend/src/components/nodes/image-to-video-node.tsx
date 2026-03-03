@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, Suspense } from "react"
+import { memo, useState, useMemo, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Maximize2, Download, Settings, LayoutGrid, Expand } from "lucide-react"
@@ -63,12 +63,6 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
   const startFrameConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "startFrame").length
-  const nodeInternals = useWorkflowStore((s) => s.nodes.find((n) => n.id === id))
-  const nodeHeight = (nodeInternals?.measured?.height ?? nodeInternals?.height ?? 400)
-
-  const startFrameTop = nodeHeight * 0.157
-  const endFrameTop = nodeHeight * 0.36
-  const audioTop = nodeHeight * 0.53
   const videoTop = 20
 
   const status = nodeData.executionStatus ?? "idle"
@@ -81,6 +75,8 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [directorOpen, setDirectorOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const credits = useModelCredits(nodeData.provider ?? "minimax", nodeData.provider === "kling-3.0" ? 10 : 4)
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
@@ -91,6 +87,14 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   const supportsEndFrame = END_FRAME_SUPPORTED_PROVIDERS.includes(nodeData.provider)
   const isKling3 = nodeData.provider === "kling-3.0"
+
+  const resultHeight = videoDimensions?.height ?? 445
+  const startFrameTop = 445 * 0.157
+  const endFrameTop = 445 * 0.36
+  const audioTop = 445 * 0.53
+
+  useEffect(() => { if (activeUrl) setShowConfig(false) }, [activeUrl])
+  useEffect(() => { setVideoDimensions(null) }, [activeUrl])
 
   // Resolve connected nodes per handle
   const startFrameInfo = useMemo(() => {
@@ -167,16 +171,16 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   // Build dynamic handles
   const handles = useMemo(() => [
-    { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop + 5}px`, left: '-29px' }, hideHandle: true },
-    { id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop + 5}px`, left: '-29px' }, hideHandle: true },
-    { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop + 5}px`, left: '-29px' }, hideHandle: true },
-    { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop + 5}px`, right: '-29px' }, hideHandle: true },
-  ], [startFrameTop, endFrameTop, audioTop, videoTop])
+    { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop}px`, left: '-29px' }, hideHandle: true },
+    { id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true },
+    { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop}px`, left: '-29px' }, hideHandle: true },
+    { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
+  ], [startFrameTop, endFrameTop, audioTop, videoTop, activeUrl, showConfig])
 
   const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo
 
   return (
-    <div className="relative" style={{ width: 245, height: 445, minHeight: 200 }}>
+    <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
     {/* Floating label above node */}
     <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
       <Clapperboard className="w-3.5 h-3.5" />
@@ -237,6 +241,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={handles}
     >
+      {activeUrl && !showConfig && !isKling3 ? null : (
       <div
         className="flex flex-col gap-2"
         onDoubleClick={isKling3 ? (e) => { e.stopPropagation(); setDirectorOpen(true) } : undefined}
@@ -340,6 +345,23 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </>
         ) : (
           <>
+        {/* Toggle button - only show when activeUrl exists */}
+        {activeUrl && (
+          <div className="flex justify-end px-3 pt-2 opacity-0 group-hover/node:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowConfig(v => !v) }}
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/60 hover:text-white text-[10px] transition-colors"
+            >
+              {showConfig ? <Clapperboard className="w-3 h-3" /> : <Settings className="w-3 h-3" />}
+              {showConfig ? "Result" : "Edit"}
+            </button>
+          </div>
+        )}
+
+        {/* Config view */}
+        {(!activeUrl || showConfig) && (
+          <>
         {/* Frame Previews */}
         <div className="flex flex-col gap-2">
           {/* Start Frame */}
@@ -398,6 +420,8 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
           </>
         )}
+          </>
+        )}
 
         {/* Video Preview / Loading / Error States */}
         {status === "running" && (
@@ -419,9 +443,9 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {status !== "running" && activeUrl && (
-          <div className="px-3">
-            <div className="relative group/video">
+        {status !== "running" && activeUrl && (isKling3 || !showConfig) && (
+          <div className="w-full h-full rounded-xl overflow-hidden" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+            <div className="relative group/video w-full h-full">
               {/* Version badge */}
               {results.length > 0 && (
                 <button type="button"
@@ -434,13 +458,13 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
               {activeThumbnail ? (
                 <CachedImage src={activeThumbnail} alt="Video preview"
-                  className="w-full h-[70px] object-cover rounded-xl cursor-pointer"
+                  className="w-full h-full object-cover cursor-pointer"
                   thumbnail thumbnailWidth={320}
                   onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
                 />
               ) : (
                 <video src={activeUrl}
-                  className="w-full h-[70px] object-cover rounded-xl cursor-pointer"
+                  className="w-full h-full object-cover cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
                   autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline
                 />
@@ -512,7 +536,74 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </span>
         </div>
       </div>
+      )}
     </BaseNode>
+
+    {/* Result view overlay */}
+    {activeUrl && !showConfig && !isKling3 && (
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', zIndex: 10 }} className="group/video">
+        {activeThumbnail ? (
+          <CachedImage src={activeThumbnail} alt="Video preview"
+            className="w-full h-full object-cover cursor-pointer"
+            thumbnail thumbnailWidth={320}
+            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+          />
+        ) : (
+          <video src={activeUrl} autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline className="w-full h-full object-cover cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+            onLoadedMetadata={(e) => {
+              const video = e.currentTarget
+              const ratio = video.videoWidth / video.videoHeight
+              const baseWidth = 490
+              const baseHeight = Math.round(baseWidth / ratio)
+              setVideoDimensions({ width: baseWidth, height: Math.max(180, Math.min(600, baseHeight)) })
+            }}
+          />
+        )}
+        {/* Edit button */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowConfig(true) }}
+          className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 hover:bg-black/80 text-white text-[10px]"
+        >
+          <Settings className="w-3 h-3" />
+          Edit
+        </button>
+        {/* Version badge */}
+        {results.length > 0 && (
+          <button type="button"
+            className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
+            onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}>
+            <LayoutGrid className="w-3 h-3" />
+            <span>{results.length}</span>
+          </button>
+        )}
+        {/* Bottom-left: fullscreen + download */}
+        <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
+          <button type="button"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}>
+            <Expand className="w-3.5 h-3.5" />
+          </button>
+          <button type="button"
+            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}>
+            <Download className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        {/* Bottom-right: save to library + delete */}
+        <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
+          <SaveToLibraryButton url={activeUrl} type="video" />
+          {results.length > 0 && (
+            <button type="button"
+              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    )}
 
     {/* startFrame handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
@@ -526,13 +617,13 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
     {/* endFrame handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(36% - 14px)', left: '-29px' }}>
+      style={{ top: `${endFrameTop - 14}px`, left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
     </div>
 
     {/* audio handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(53% - 14px)', left: '-29px' }}>
+      style={{ top: `${audioTop - 14}px`, left: '-29px' }}>
       <Volume2 className="w-3.5 h-3.5 text-white" />
     </div>
 
