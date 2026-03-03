@@ -61,6 +61,11 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
+  const nodeInternals = useWorkflowStore((s) => s.nodes.find((n) => n.id === id))
+  const nodeHeight = (nodeInternals?.measured?.height ?? nodeInternals?.height ?? 400)
+
+  const startFrameTop = nodeHeight * 0.157
+  const videoTop = 20
 
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -158,16 +163,16 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   // Build dynamic handles
   const handles = useMemo(() => [
-    { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: '16%', left: '-29px' }, hideHandle: true },
-    { id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: '34%', left: '-29px' }, hideHandle: true },
-    { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: '52%', left: '-29px' }, hideHandle: true },
-    { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '8%', right: '-29px' }, hideHandle: true },
-  ], [])
+    { id: "startFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${startFrameTop}px`, left: '-29px' }, hideHandle: true },
+    { id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: '36%', left: '-29px' }, hideHandle: true },
+    { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: '53%', left: '-29px' }, hideHandle: true },
+    { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
+  ], [startFrameTop, videoTop])
 
   const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ width: 245, height: 445, minHeight: 200 }}>
     {/* Floating label above node */}
     <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
       <Clapperboard className="w-3.5 h-3.5" />
@@ -507,25 +512,25 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
     {/* startFrame handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(16% - 14px)', left: '-29px' }}>
+      style={{ top: `${startFrameTop - 14}px`, left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
     </div>
 
     {/* endFrame handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(34% - 14px)', left: '-29px' }}>
+      style={{ top: 'calc(36% - 14px)', left: '-29px' }}>
       <ImageIcon className="w-3.5 h-3.5 text-white" />
     </div>
 
     {/* audio handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(52% - 14px)', left: '-29px' }}>
+      style={{ top: 'calc(53% - 14px)', left: '-29px' }}>
       <Volume2 className="w-3.5 h-3.5 text-white" />
     </div>
 
     {/* video output handle icon */}
     <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(8% - 14px)', right: '-29px' }}>
+      style={{ top: `${videoTop - 14}px`, right: '-29px' }}>
       <Clapperboard className="w-3.5 h-3.5 text-white" />
     </div>
 
