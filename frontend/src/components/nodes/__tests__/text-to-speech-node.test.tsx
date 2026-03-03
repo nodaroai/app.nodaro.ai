@@ -46,7 +46,7 @@ vi.mock("../run-node-button", () => ({
 
 vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Mic: I, Loader2: I, AlertCircle: I, X: I, Volume2: I }
+  return { Mic: I, Loader2: I, AlertCircle: I, X: I, Volume2: I, Type: I, LayoutGrid: I }
 })
 
 vi.mock("@/hooks/use-workflow-store", () => ({

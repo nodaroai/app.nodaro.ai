@@ -490,7 +490,7 @@ export function executeNode(
 
     if (audioUrl && !audioUrl.startsWith("http")) audioUrl = undefined;
 
-    const prompt = inputs.prompt ?? i2vData.motionPrompt;
+    const prompt = (inputs.prompt ?? i2vData.motionPrompt) as string | undefined;
     const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as
       | string
       | undefined;

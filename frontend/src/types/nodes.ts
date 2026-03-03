@@ -469,7 +469,7 @@ export type GenerateImageData = {
 }
 
 // Edit Image providers (KIE.ai only)
-export type EditImageProvider = "recraft-upscale" | "recraft-remove-bg" | "nano-banana-edit" | "topaz-image-upscale"
+export type EditImageProvider = ImageEditProvider
 
 export type EditImageData = {
   [key: string]: unknown
@@ -491,7 +491,7 @@ export type EditImageData = {
 }
 
 // Image-to-Image providers (transform source image with prompt)
-export type ImageToImageProvider = "nano-banana" | "nano-banana-pro" | "flux-i2i" | "flux-pro-i2i" | "grok-i2i" | "gpt-image-i2i" | "ideogram-remix" | "ideogram-reframe" | "qwen-i2i" | "qwen-edit" | "seedream-edit" | "seedream-5-lite-i2i" | "flux-kontext" | "flux-kontext-max"
+export type ImageToImageProvider = ImageI2IProvider
 
 export type ImageToImageData = {
   [key: string]: unknown

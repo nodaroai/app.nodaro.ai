@@ -723,7 +723,6 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
           {data.provider === "recraft-upscale" && "Upscale and enhance the input image to higher resolution."}
           {data.provider === "recraft-remove-bg" && "Remove the background from the input image, leaving a transparent PNG."}
           {data.provider === "topaz-image-upscale" && "Topaz AI upscale for maximum detail and sharpness."}
-          {data.provider === "grok-upscale" && "Grok-powered image upscale and enhancement."}
         </p>
       )}
       {showUpscaleFactor && (

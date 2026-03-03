@@ -269,7 +269,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
             Motion Prompt
           </Label>
           <Textarea
-            value={data.motionPrompt || ""}
+            value={(data.motionPrompt as string) || ""}
             onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
             placeholder="Describe the overall scene, characters, and setting. Use @name to reference elements. Add dialogue with 'character says ...'"
             rows={3}

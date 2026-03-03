@@ -472,7 +472,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                       Master Prompt
                     </label>
                     <textarea
-                      value={data.motionPrompt ?? ""}
+                      value={(data.motionPrompt as string) ?? ""}
                       onChange={(e) => handleUpdate({ motionPrompt: e.target.value })}
                       placeholder="Describe the overall scene, characters, and setting. Use @name to reference elements. Add dialogue with 'character says ...'"
                       rows={5}
