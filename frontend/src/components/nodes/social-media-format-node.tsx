@@ -12,6 +12,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { isVideoUrl } from "@/lib/media-type"
 import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialMediaFormatData } from "@/types/nodes"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
@@ -32,7 +33,9 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
 
   const spec = PLATFORM_SPECS[nodeData.specKey]
-  const isVideo = spec?.isVideo !== false
+  const specIsVideo = spec?.isVideo !== false
+  // Detect actual media type from URL — spec says "can be video" but result might be image
+  const urlIsVideo = activeUrl ? isVideoUrl(activeUrl) : specIsVideo
   const platformLabel = PLATFORM_LABELS[nodeData.platform as SocialMediaPlatform] ?? nodeData.platform
 
   function handleDeleteResult(indexToDelete: number) {
@@ -98,7 +101,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                 platform={(nodeData.platform ?? "instagram") as SocialMediaPlatform}
                 specKey={nodeData.specKey}
                 mediaUrl={activeUrl}
-                isVideo={isVideo}
+                isVideo={urlIsVideo}
                 caption={nodeData.formattedText}
                 size="sm"
               />
@@ -151,14 +154,14 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
 
     {/* Input handle icons */}
-    <HandleIcon icon={isVideo ? <FileVideo /> : <FileImage />} color="steel" side="left" top="35%"  />
+    <HandleIcon icon={specIsVideo ? <FileVideo /> : <FileImage />} color="steel" side="left" top="35%"  />
     <HandleIcon icon={<Type />} color="steel" side="left" top="65%" />
 
     {/* Output handle icons */}
-    <HandleIcon icon={isVideo ? <FileVideo /> : <FileImage />} color="steel" side="right" top="35%" />
+    <HandleIcon icon={specIsVideo ? <FileVideo /> : <FileImage />} color="steel" side="right" top="35%" />
     <HandleIcon icon={<Type />} color="steel" side="right" top="65%" />
 
-    {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type={isVideo ? "video" : "image"} url={activeUrl} />}
+    {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type={urlIsVideo ? "video" : "image"} url={activeUrl} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
   )

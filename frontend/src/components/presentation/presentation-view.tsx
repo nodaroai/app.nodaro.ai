@@ -247,12 +247,15 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
         const text = output.text as string | undefined
         if (url || text) return { url, text }
       }
+      // Check input values (upload nodes in fullscreen store URLs here)
+      const inputUrl = presInputValues[nodeId]?.url as string | undefined
+      if (inputUrl) return { url: inputUrl, text: undefined }
       // Fall back to node data (results already saved in workflow)
       const node = nodeMap.get(nodeId)
       if (!node) return { url: undefined, text: undefined }
       return getNodeResultWithInputFallback(node)
     },
-    [presNodeStates, nodeMap],
+    [presNodeStates, presInputValues, nodeMap],
   )
 
   const getResult = useCallback(
@@ -341,12 +344,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
   const mediaItems = useMemo(() => {
     const items: { nodeId: string; type: "image" | "video"; url: string }[] = []
     for (const node of [...orderedInputNodes, ...orderedOutputNodes]) {
+      const outputType = getOutputType(node.type)
+      if (outputType !== "image" && outputType !== "video") continue
       const result = getResult(node.id)
       if (!result.url) continue
-      const outputType = getOutputType(node.type)
-      if (outputType === "image" || outputType === "video") {
-        items.push({ nodeId: node.id, type: outputType, url: result.url })
-      }
+      items.push({ nodeId: node.id, type: outputType, url: result.url })
     }
     return items
   }, [orderedInputNodes, orderedOutputNodes, getResult])
@@ -388,8 +390,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
       inputValues={presInputValues}
       onUpdateInput={presUpdateInput}
       readOnly={isShareReadOnly}
+      onOpenMedia={handleOpenMedia}
     />
-  ), [isFullscreen, presInputValues, presUpdateInput, isShareReadOnly])
+  ), [isFullscreen, presInputValues, presUpdateInput, isShareReadOnly, handleOpenMedia])
 
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     const outputType = getOutputType(node.type)
@@ -600,12 +603,14 @@ function InputCard({
   inputValues,
   onUpdateInput,
   readOnly,
+  onOpenMedia,
 }: {
   node: WorkflowNode
   isFullscreen: boolean
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
   readOnly?: boolean
+  onOpenMedia?: (nodeId: string) => void
 }) {
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
@@ -638,6 +643,7 @@ function InputCard({
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
+          onOpenMedia={onOpenMedia}
         />
       )
 
