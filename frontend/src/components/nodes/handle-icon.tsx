@@ -7,6 +7,7 @@ const COLOR_MAP = {
   cyan: { bg: "bg-[#38BDF8]", shadow: "shadow-sky-500/30" },
   pink: { bg: "bg-[#ff0073]", shadow: "shadow-pink-500/30" },
   indigo: { bg: "bg-[#818CF8]", shadow: "shadow-indigo-500/30" },
+  steel: { bg: "bg-[#475569]", shadow: "shadow-slate-500/30" },
 } as const
 
 interface HandleIconProps {

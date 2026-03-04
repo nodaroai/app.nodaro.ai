@@ -5,6 +5,8 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Workflow, Loader2, Eye } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
@@ -29,6 +31,8 @@ function buildHandles(
       position: Position.Left,
       label: port.name,
       top: `${pct}%`,
+      hideHandle: true,
+      customStyle: { top: `${pct}%`, left: '-29px' },
     }
   })
 
@@ -42,14 +46,16 @@ function buildHandles(
       position: Position.Right,
       label: port.name,
       top: `${pct}%`,
+      hideHandle: true,
+      customStyle: { top: `${pct}%`, right: '-29px' },
     }
   })
 
   // Fallback handles if no snapshot
   if (targets.length === 0 && sources.length === 0) {
     return [
-      { id: "in", type: "target" as const, position: Position.Left, label: "In" },
-      { id: "out", type: "source" as const, position: Position.Right, label: "Out" },
+      { id: "in", type: "target" as const, position: Position.Left, label: "In", top: "50%", hideHandle: true, customStyle: { top: '50%', left: '-29px' } },
+      { id: "out", type: "source" as const, position: Position.Right, label: "Out", top: "50%", hideHandle: true, customStyle: { top: '50%', right: '-29px' } },
     ]
   }
 
@@ -59,6 +65,7 @@ function buildHandles(
 function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SubWorkflowData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
   const status = nodeData.executionStatus ?? "idle"
 
@@ -92,7 +99,12 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const nodeMinHeight = Math.max(120, maxPorts * 36 + 60)
 
   return (
-    <div className="relative group/run" style={{ minHeight: `${nodeMinHeight}px` }}>
+    <div className="relative group" style={{ maxWidth: '220px', minHeight: `${nodeMinHeight}px` }}>
+      <EditableNodeLabel
+        label={nodeData.routeSnapshot?.inputLabel || nodeData.label}
+        icon={<Workflow className="w-3.5 h-3.5" />}
+        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+      />
       <BaseNode
         id={id}
         label={nodeData.routeSnapshot?.inputLabel || nodeData.label}
@@ -101,6 +113,13 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         credits={0}
         selected={selected}
         isRunning={status === "running"}
+        hideHeader
+        minWidth={220}
+        toolbarActions={
+          status !== "running" ? (
+            <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+          ) : undefined
+        }
         handles={handles}
         minHeight={nodeMinHeight}
       >
@@ -153,12 +172,17 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+      {handles.filter(h => h.type === "target").map(h => (
+        <HandleIcon key={h.id} icon={<Workflow />} color="steel" side="left" top={h.top ?? "50%"} />
+      ))}
+      {handles.filter(h => h.type === "source").map(h => (
+        <HandleIcon key={h.id} icon={<Workflow />} color="steel" top={h.top ?? "50%"} />
+      ))}
       {nodeData.referencedWorkflowId && status !== "running" && (
         <button
           type="button"
           aria-label="View referenced workflow"
-          className="absolute top-1.5 right-1.5 opacity-0 group-hover/run:opacity-100 transition-opacity z-10 p-1 rounded bg-[#1E1E1E]/80 hover:bg-[#2D2D2D] text-white/70 hover:text-white"
+          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 rounded bg-[#1E1E1E]/80 hover:bg-[#2D2D2D] text-white/70 hover:text-white"
           onClick={(e) => { e.stopPropagation(); setViewerOpen(true) }}
         >
           <Eye className="w-3.5 h-3.5" />

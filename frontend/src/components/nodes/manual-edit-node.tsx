@@ -2,9 +2,11 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Scissors, Loader2, AlertCircle, X } from "lucide-react"
+import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -43,11 +45,15 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ maxWidth: '220px' }}>
+      <EditableNodeLabel label={nodeData.label} icon={<Scissors className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
     <BaseNode id={id} label={nodeData.label} icon={<Scissors className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
+      hideHeader
+      minWidth={220}
+      toolbarActions={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "video-out", type: "source", position: Position.Right, label: "Video" },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+        { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -143,7 +149,8 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground text-xs">Manual video editing</p>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <HandleIcon icon={<Clapperboard />} color="steel" side="left" />
+    <HandleIcon icon={<Film />} color="steel" />
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

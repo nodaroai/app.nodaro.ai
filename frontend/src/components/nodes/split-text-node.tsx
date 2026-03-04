@@ -5,12 +5,15 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Scissors, FileText } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SplitTextData } from "@/types/nodes"
 
 function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SplitTextData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
 
   const partCount = nodeData.splitResults?.length ?? 0
@@ -18,7 +21,12 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
   const separatorLabel = separator === "\n" ? "\\n" : separator.length > 8 ? `${separator.slice(0, 6)}...` : separator
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ maxWidth: '220px' }}>
+      <EditableNodeLabel
+        label={nodeData.label}
+        icon={<Scissors className="w-3.5 h-3.5" />}
+        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+      />
       <BaseNode
         id={id}
         label={nodeData.label}
@@ -27,9 +35,16 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
         credits={0}
         selected={selected}
         isRunning={status === "running"}
+        hideHeader
+        minWidth={220}
+        toolbarActions={
+          status !== "running" ? (
+            <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+          ) : undefined
+        }
         handles={[
-          { id: "in", type: "target", position: Position.Left, label: "Text In" },
-          { id: "out", type: "source", position: Position.Right, label: "Items Out" },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -53,7 +68,8 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+      <HandleIcon icon={<FileText />} color="steel" side="left" />
+      <HandleIcon icon={<FileText />} color="steel" />
     </div>
   )
 }
