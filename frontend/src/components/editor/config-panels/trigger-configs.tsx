@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Copy, Check } from "lucide-react"
+import { Copy, Check, Plus, Trash2 } from "lucide-react"
+import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import type { WebhookParam } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
 // ── Webhook Trigger ────────────────────────────────────────────
@@ -20,6 +22,7 @@ interface WebhookTriggerData {
   webhookToken?: string
   webhookUrl?: string
   label?: string
+  params?: WebhookParam[]
 }
 
 export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTriggerData>) {
@@ -27,12 +30,28 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
 
   const webhookUrl = data.webhookUrl || ""
   const hasToken = !!data.webhookToken
+  const params = data.params ?? []
 
   const handleCopy = () => {
     if (!webhookUrl) return
     navigator.clipboard.writeText(webhookUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const addParam = () => {
+    onUpdate({
+      params: [...params, { id: nanoid(), name: "", type: "text" }],
+    })
+  }
+
+  const updateParam = (index: number, patch: Partial<WebhookParam>) => {
+    const updated = params.map((p, i) => (i === index ? { ...p, ...patch } : p))
+    onUpdate({ params: updated })
+  }
+
+  const removeParam = (index: number) => {
+    onUpdate({ params: params.filter((_, i) => i !== index) })
   }
 
   return (
@@ -73,6 +92,57 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
           <span className="font-mono">{data.webhookToken}</span>
         </div>
       )}
+
+      <div className="border-t border-border pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <Label>Output Parameters</Label>
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addParam}>
+            <Plus className="h-3 w-3" />
+            Add
+          </Button>
+        </div>
+
+        {params.length === 0 && (
+          <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+            No parameters defined. The entire payload will be available as a single output.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-2">
+          {params.map((param, i) => (
+            <div key={param.id} className="flex items-center gap-1.5">
+              <Input
+                value={param.name}
+                onChange={(e) => updateParam(i, { name: e.target.value })}
+                placeholder="name"
+                className="text-xs h-8 flex-1"
+              />
+              <Select
+                value={param.type}
+                onValueChange={(v) => updateParam(i, { type: v as WebhookParam["type"] })}
+              >
+                <SelectTrigger className="h-8 w-[100px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="imageUrl">Image URL</SelectItem>
+                  <SelectItem value="videoUrl">Video URL</SelectItem>
+                  <SelectItem value="audioUrl">Audio URL</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={() => removeParam(i)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

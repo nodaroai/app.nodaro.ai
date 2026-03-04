@@ -2838,6 +2838,58 @@ export function executeNode(
     return Promise.resolve();
   }
 
+  // Webhook Output — collect upstream data and POST to configured URL
+  if (node.type === "webhook-output") {
+    const {
+      nodes: currentNodes,
+      edges: currentEdges,
+      updateNodeData,
+    } = useWorkflowStore.getState();
+    const whData = node.data as Record<string, unknown>;
+    const url = (whData.url as string)?.trim();
+    const params = (whData.params as Array<{ id: string; name: string; type: string }>) ?? [];
+
+    if (!url) {
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No webhook URL configured" });
+      return Promise.resolve();
+    }
+
+    // Build payload from upstream connections
+    const payload: Record<string, unknown> = {};
+    const incomingEdges = currentEdges.filter((e) => e.target === node.id);
+
+    if (params.length > 0) {
+      for (const param of params) {
+        const edge = incomingEdges.find((e) => e.targetHandle === param.id);
+        if (!edge) continue;
+        const sourceNode = currentNodes.find((n) => n.id === edge.source);
+        if (!sourceNode) continue;
+        const output = extractNodeOutput(sourceNode);
+        if (output) payload[param.name] = output;
+      }
+    } else {
+      for (const edge of incomingEdges) {
+        const sourceNode = currentNodes.find((n) => n.id === edge.source);
+        if (!sourceNode) continue;
+        const output = extractNodeOutput(sourceNode);
+        if (output) payload[sourceNode.type ?? "data"] = output;
+      }
+    }
+
+    updateNodeData(node.id, { executionStatus: "running" });
+    return import("@/lib/api").then(({ sendWebhookOutput }) =>
+      sendWebhookOutput({ url, payload }).then(
+        () => { updateNodeData(node.id, { executionStatus: "completed" }); },
+        (err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : "Webhook send failed",
+          });
+        },
+      ),
+    );
+  }
+
   // Sub-Workflow — delegates to the sub-workflow executor
   if (node.type === "sub-workflow") {
     return import("./sub-workflow-executor").then(({ executeSubWorkflow }) =>

@@ -1434,6 +1434,19 @@ export async function forcedAlignmentApi(audioUrl: string, transcript: string, u
   return res.json()
 }
 
+export async function sendWebhookOutput(data: { url: string; payload: Record<string, unknown> }): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/webhook-output/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to send webhook output")
+  }
+  return res.json()
+}
+
 export async function sunoGenerateApi(params: {
   prompt: string
   model?: string

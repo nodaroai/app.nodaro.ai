@@ -119,6 +119,7 @@ export const EXECUTABLE_TYPES = new Set([
   "voice-design",
   "forced-alignment",
   "sub-workflow",
+  "webhook-output",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 5;

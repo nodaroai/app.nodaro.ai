@@ -356,10 +356,35 @@ function routeOutput(
     return
   }
 
-  // --- Trigger nodes — only set prompt if output looks like real content ---
-  if (srcType === "schedule-trigger" || srcType === "webhook-trigger") {
-    // Trigger outputs are typically metadata (timestamps, webhook payloads).
-    // Only use as prompt if it doesn't look like an ISO timestamp.
+  // --- Webhook trigger with dynamic params ---
+  if (srcType === "webhook-trigger") {
+    const state = nodeStates[src.id]
+    const paramOutputs = state?.output?.paramOutputs
+    const params = src.data.params as Array<{ id: string; name: string; type: string }> | undefined
+
+    if (params && params.length > 0 && paramOutputs && edge.sourceHandle) {
+      // Route by param type using the source handle ID
+      const param = params.find((p) => p.id === edge.sourceHandle)
+      if (param) {
+        const val = paramOutputs[param.id]
+        if (val) {
+          if (param.type === "text") inputs.prompt = val
+          else if (param.type === "imageUrl") inputs.imageUrl = val
+          else if (param.type === "videoUrl") routeVideoOutput(inputs, val, targetType, src.id)
+          else if (param.type === "audioUrl") routeAudioOutput(inputs, val, targetType, src.id)
+        }
+      }
+    } else {
+      // Legacy fallback
+      if (output && !/^\d{4}-\d{2}-\d{2}T/.test(output)) {
+        inputs.prompt = output
+      }
+    }
+    return
+  }
+
+  // --- Schedule trigger ---
+  if (srcType === "schedule-trigger") {
     if (output && !/^\d{4}-\d{2}-\d{2}T/.test(output)) {
       inputs.prompt = output
     }

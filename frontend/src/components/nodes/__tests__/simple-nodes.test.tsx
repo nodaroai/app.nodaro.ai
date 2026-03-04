@@ -13,6 +13,7 @@ vi.mock("@xyflow/react", () => ({
   NodeResizer: () => null,
   useStore: vi.fn(() => 1),
   useNodeId: vi.fn(() => "test-node"),
+  useUpdateNodeInternals: vi.fn(() => vi.fn()),
 }))
 
 vi.mock("../base-node", () => ({
@@ -196,9 +197,9 @@ const SIMPLE_NODES: SimpleNodeTestConfig[] = [
     Component: WebhookOutputNode,
     expectedCategory: "output",
     expectedCredits: 0,
-    defaultData: { label: "Webhook Output", webhookId: "abc-123" },
-    contentAssertion: { text: "abc-123" },
-    placeholderAssertion: { text: "Set webhook..." },
+    defaultData: { label: "Webhook Output", url: "https://example.com/hook", params: [] },
+    contentAssertion: { text: "https://example.com/hook" },
+    placeholderAssertion: { text: "Set webhook URL..." },
   },
   {
     name: "SaveToStorageNode",
