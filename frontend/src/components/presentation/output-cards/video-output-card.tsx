@@ -15,7 +15,7 @@ export function VideoOutputCard({ label, status, url }: VideoOutputCardProps) {
   return (
     <GlassCard>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
         <StatusBadge status={status} />
       </div>
 
@@ -49,7 +49,7 @@ export function VideoOutputCard({ label, status, url }: VideoOutputCardProps) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-48 rounded-lg bg-gradient-to-br from-white/[0.03] to-white/[0.01] text-white/20">
+        <div className="flex flex-col items-center justify-center h-48 rounded-lg bg-muted/30 text-muted-foreground">
           <VideoIcon className="w-10 h-10 mb-2 animate-pulse" />
           <span className="text-xs">
             {status === "failed" ? "Generation failed" : "Awaiting generation"}

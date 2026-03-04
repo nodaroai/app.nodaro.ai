@@ -42,6 +42,8 @@ const EXECUTION_DATA_KEYS = new Set([
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
+export type PresentationViewMode = "horizontal" | "vertical" | "gallery" | "fullscreen" | "compare"
+
 export interface PresentationSettings {
   runTarget: "workflow" | "sub-workflow"
   subWorkflowNodeId?: string
@@ -49,6 +51,7 @@ export interface PresentationSettings {
   inputOrder?: string[] // node IDs in display order
   outputOrder?: string[] // node IDs in display order
   cardMeta?: Record<string, { title?: string; description?: string }>
+  viewMode?: PresentationViewMode // defaults to "horizontal"
 }
 
 export const DEFAULT_PRESENTATION_SETTINGS: PresentationSettings = { runTarget: "workflow" }

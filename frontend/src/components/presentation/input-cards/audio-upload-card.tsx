@@ -16,13 +16,13 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
 
   return (
     <GlassCard>
-      <label className="block text-xs font-medium text-white/50 uppercase tracking-wider mb-2">
+      <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
         {label}
       </label>
 
       {media.effectiveUrl ? (
         <div className="relative group">
-          <div className="flex items-center gap-3 bg-white/[0.03] rounded-lg p-3 border border-white/5">
+          <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
             <WaveformBars />
             <audio src={media.effectiveUrl} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
             <GlassButton onClick={media.handleRemove} title="Remove">
