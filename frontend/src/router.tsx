@@ -25,6 +25,7 @@ const LibraryPage = lazy(() => import("@/app/(dashboard)/library/page"))
 const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
+const PresentPage = lazy(() => import("@/routes/present-page"))
 
 // Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
@@ -84,6 +85,11 @@ export const router = createBrowserRouter([
   {
     path: "/pricing",
     element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/present/:shareToken",
+    element: <SuspenseWrapper><PresentPage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
   {

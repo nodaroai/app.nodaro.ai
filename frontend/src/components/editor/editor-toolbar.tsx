@@ -40,7 +40,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, LocationNodeData } from "@/types/nodes"
 
-type EditorTab = "editor" | "executions" | "cost"
+type EditorTab = "editor" | "present" | "executions" | "cost"
 
 interface EditorToolbarProps {
   readonly projectId?: string

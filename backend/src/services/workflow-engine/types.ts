@@ -57,6 +57,9 @@ export interface WorkflowExecutionJob {
   triggerData?: Record<string, unknown>
   /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
   nodeIds?: string[]
+  /** Presentation mode: override source node data before execution.
+   *  Keys are node IDs, values are partial data to merge into node.data. */
+  inputOverrides?: Record<string, Record<string, unknown>>
 }
 
 // ---------------------------------------------------------------------------

@@ -87,6 +87,7 @@ import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
 import { extendVideoRoutes } from "./routes/extend-video.js"
 import { webhookOutputRoutes } from "./routes/webhook-output.js"
+import { presentationRoutes } from "./routes/presentation.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -200,6 +201,7 @@ export async function buildApp() {
   await app.register(webhookTriggerRoutes)
   await app.register(extendVideoRoutes)
   await app.register(webhookOutputRoutes)
+  await app.register(presentationRoutes)
 
   return app
 }
