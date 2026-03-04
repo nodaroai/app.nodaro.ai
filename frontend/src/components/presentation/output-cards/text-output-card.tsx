@@ -12,7 +12,7 @@ export function TextOutputCard({ label, status, text }: TextOutputCardProps) {
   return (
     <GlassCard>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
         <div className="flex items-center gap-2">
           <StatusBadge status={status} />
           {text && (
@@ -27,7 +27,7 @@ export function TextOutputCard({ label, status, text }: TextOutputCardProps) {
       </div>
 
       {status === "running" ? (
-        <div className="flex items-center h-20 rounded-lg bg-white/[0.03] px-4">
+        <div className="flex items-center h-20 rounded-lg bg-muted/30 px-4">
           {/* Animated typing dots */}
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
@@ -43,11 +43,11 @@ export function TextOutputCard({ label, status, text }: TextOutputCardProps) {
           </div>
         </div>
       ) : text ? (
-        <div className="bg-white/[0.03] rounded-lg p-3 text-sm text-white/80 whitespace-pre-wrap max-h-64 overflow-y-auto border border-white/5 leading-relaxed">
+        <div className="bg-muted/30 rounded-lg p-3 text-sm text-foreground whitespace-pre-wrap max-h-64 overflow-y-auto border border-border leading-relaxed">
           {text}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-20 rounded-lg bg-gradient-to-br from-white/[0.03] to-white/[0.01] text-white/20">
+        <div className="flex flex-col items-center justify-center h-20 rounded-lg bg-muted/30 text-muted-foreground">
           <FileText className="w-8 h-8 mb-1 animate-pulse" />
           <span className="text-xs">
             {status === "failed" ? "Generation failed" : "Awaiting generation"}

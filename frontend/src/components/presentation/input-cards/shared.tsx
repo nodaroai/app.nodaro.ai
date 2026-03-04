@@ -117,13 +117,13 @@ export function UrlInputRow({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && onSubmit()}
         placeholder="https://..."
-        className="flex-1 bg-white/[0.03] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 placeholder:text-white/20 focus:outline-none focus:border-[#ff0073]/50"
+        className="flex-1 bg-muted/30 border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#ff0073]/50"
         autoFocus
       />
       <button
         type="button"
         onClick={onSubmit}
-        className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/15 text-white/70 rounded-lg transition-colors"
+        className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg transition-colors"
       >
         Set
       </button>
@@ -137,7 +137,7 @@ export function UploadSpinner({ size = "md" }: { size?: "sm" | "md" }) {
   return (
     <div className="flex flex-col items-center gap-2">
       <div className={`${dim} border-2 border-[#ff0073]/40 border-t-[#ff0073] rounded-full animate-spin`} />
-      <span className="text-xs text-white/40">Uploading...</span>
+      <span className="text-xs text-muted-foreground">Uploading...</span>
     </div>
   )
 }
@@ -173,7 +173,7 @@ export function FileDropZone({
       className={`relative flex flex-col items-center justify-center ${height} border-2 border-dashed rounded-lg transition-all duration-200 cursor-pointer ${
         isDragOver
           ? "border-[#ff0073]/60 bg-[#ff0073]/5"
-          : "border-white/10 hover:border-white/20 bg-white/[0.02]"
+          : "border-muted-foreground/20 hover:border-[#ff0073]/50 bg-muted/10"
       }`}
       onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
       onDragLeave={() => setIsDragOver(false)}
@@ -184,11 +184,11 @@ export function FileDropZone({
         <UploadSpinner size={height === "h-24" ? "sm" : "md"} />
       ) : (
         <>
-          <Upload className={height === "h-24" ? "w-6 h-6 text-white/20 mb-1" : "w-8 h-8 text-white/20 mb-2"} />
-          <span className="text-xs text-white/30">{label}</span>
+          <Upload className={height === "h-24" ? "w-6 h-6 text-muted-foreground/40 mb-1" : "w-8 h-8 text-muted-foreground/40 mb-2"} />
+          <span className="text-xs text-muted-foreground">{label}</span>
           <button
             type="button"
-            className="mt-2 text-[10px] text-white/40 hover:text-white/60 flex items-center gap-1 transition-colors"
+            className="mt-2 text-[10px] text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1 transition-colors"
             onClick={(e) => { e.stopPropagation(); onShowUrl() }}
           >
             <Link className="w-3 h-3" /> or paste URL

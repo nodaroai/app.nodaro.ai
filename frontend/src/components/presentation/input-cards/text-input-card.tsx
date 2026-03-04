@@ -21,7 +21,7 @@ export function TextInputCard({ label, value, placeholder, onChange }: TextInput
 
   return (
     <GlassCard>
-      <label className="block text-xs font-medium text-white/50 uppercase tracking-wider mb-2">
+      <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
         {label}
       </label>
       <textarea
@@ -29,7 +29,7 @@ export function TextInputCard({ label, value, placeholder, onChange }: TextInput
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full min-h-[80px] bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 placeholder:text-white/20 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
+        className="w-full min-h-[80px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
       />
     </GlassCard>
   )

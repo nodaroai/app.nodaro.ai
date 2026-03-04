@@ -20,12 +20,12 @@ export function AudioOutputCard({ label, status, url }: AudioOutputCardProps) {
   return (
     <GlassCard>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
         <StatusBadge status={status} />
       </div>
 
       {status === "running" ? (
-        <div className="flex items-center justify-center h-20 rounded-lg bg-white/[0.03]">
+        <div className="flex items-center justify-center h-20 rounded-lg bg-muted/30">
           <div className="flex items-center gap-1">
             {LOADING_WAVEFORM_STYLES.map((style, i) => (
               <div key={i} className="w-1 bg-[#ff0073]/50 rounded-full" style={style} />
@@ -33,7 +33,7 @@ export function AudioOutputCard({ label, status, url }: AudioOutputCardProps) {
           </div>
         </div>
       ) : url ? (
-        <div className="flex items-center gap-3 bg-white/[0.03] rounded-lg p-3 border border-white/5">
+        <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
           <WaveformBars />
           <audio src={url} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
           <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">
@@ -41,7 +41,7 @@ export function AudioOutputCard({ label, status, url }: AudioOutputCardProps) {
           </GlassButton>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-20 rounded-lg bg-gradient-to-br from-white/[0.03] to-white/[0.01] text-white/20">
+        <div className="flex flex-col items-center justify-center h-20 rounded-lg bg-muted/30 text-muted-foreground">
           <Music className="w-8 h-8 mb-1 animate-pulse" />
           <span className="text-xs">
             {status === "failed" ? "Generation failed" : "Awaiting generation"}

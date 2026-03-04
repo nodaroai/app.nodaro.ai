@@ -20,7 +20,7 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
 
   return (
     <GlassCard>
-      <label className="block text-xs font-medium text-white/50 uppercase tracking-wider mb-2">
+      <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
         {label}
       </label>
 

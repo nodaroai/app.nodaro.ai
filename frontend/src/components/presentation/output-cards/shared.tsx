@@ -3,9 +3,9 @@ import { toast } from "sonner"
 export type OutputStatus = "idle" | "running" | "completed" | "failed"
 
 const STATUS_COLORS: Record<string, string> = {
-  running: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
-  completed: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
-  failed: "bg-red-500/20 text-red-400 border border-red-500/30",
+  running: "bg-blue-500/10 text-blue-500 border border-blue-500/20",
+  completed: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",
+  failed: "bg-red-500/10 text-red-500 border border-red-500/20",
 }
 
 export function StatusBadge({ status }: { status: OutputStatus }) {
@@ -30,23 +30,14 @@ export function downloadFile(url: string, filename: string) {
   a.click()
 }
 
-const SHIMMER_GRADIENT_STYLE = {
-  background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)",
-} as const
-
 /** Animated shimmer loading placeholder */
 export function ShimmerPlaceholder({ className = "", height = "h-48" }: { className?: string; height?: string }) {
   return (
-    <div className={`relative overflow-hidden rounded-lg ${height} bg-white/[0.03] ${className}`}>
-      <div
-        className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
-        style={SHIMMER_GRADIENT_STYLE}
-      />
-    </div>
+    <div className={`relative overflow-hidden rounded-lg ${height} bg-muted/50 animate-pulse ${className}`} />
   )
 }
 
-/** Glass toolbar button used in hover overlays */
+/** Toolbar button used in hover overlays (stays dark since it overlays media) */
 export function GlassButton({
   onClick,
   children,
@@ -64,14 +55,14 @@ export function GlassButton({
         onClick(e)
       }}
       title={title}
-      className="flex items-center justify-center w-9 h-9 rounded-lg bg-black/40 backdrop-blur-sm hover:bg-black/60 text-white/80 hover:text-white transition-all duration-200"
+      className="flex items-center justify-center w-9 h-9 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-all duration-200"
     >
       {children}
     </button>
   )
 }
 
-/** Frosted glass card wrapper used by all presentation cards */
+/** Clean card wrapper used by all presentation cards */
 export function GlassCard({
   children,
   className = "",
@@ -81,7 +72,7 @@ export function GlassCard({
 }) {
   return (
     <div
-      className={`bg-white/[0.05] backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-4 transition-all duration-300 ${className}`}
+      className={`bg-card border border-border rounded-xl p-4 transition-all duration-300 ${className}`}
     >
       {children}
     </div>

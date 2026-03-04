@@ -61,8 +61,8 @@ export function ParameterCard({
 
   return (
     <GlassCard>
-      <label className="flex items-center gap-1.5 text-xs font-medium text-white/50 uppercase tracking-wider mb-2">
-        <span className="text-white/30">{getTypeIcon(nodeType)}</span>
+      <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+        <span className="text-muted-foreground/50">{getTypeIcon(nodeType)}</span>
         {label}
       </label>
       <input
@@ -70,7 +70,7 @@ export function ParameterCard({
         value={currentValue}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={`Enter ${label.toLowerCase()}...`}
-        className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 placeholder:text-white/20 focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
+        className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
       />
     </GlassCard>
   )
