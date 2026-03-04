@@ -237,6 +237,7 @@ const VIDEO_RESULT_TYPES = new Set([
   "merge-video-audio",
   "add-captions",
   "resize-video",
+  "social-media-format",
   "trim-video",
   "speed-ramp",
   "loop-video",

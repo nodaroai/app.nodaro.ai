@@ -86,6 +86,7 @@ import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
 import { extendVideoRoutes } from "./routes/extend-video.js"
+import { socialMediaFormatRoutes } from "./routes/social-media-format.js"
 import { webhookOutputRoutes } from "./routes/webhook-output.js"
 import { presentationRoutes } from "./routes/presentation.js"
 import { apiTokenRoutes } from "./routes/api-tokens.js"
@@ -201,6 +202,7 @@ export async function buildApp() {
   await app.register(workflowExecutionRoutes)
   await app.register(webhookTriggerRoutes)
   await app.register(extendVideoRoutes)
+  await app.register(socialMediaFormatRoutes)
   await app.register(webhookOutputRoutes)
   await app.register(presentationRoutes)
   await app.register(apiTokenRoutes)

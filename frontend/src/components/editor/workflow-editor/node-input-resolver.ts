@@ -274,6 +274,7 @@ export function resolveNodeInputs(
       src.type === "merge-video-audio" ||
       src.type === "add-captions" ||
       src.type === "resize-video" ||
+      src.type === "social-media-format" ||
       src.type === "trim-video" ||
       src.type === "render-video" ||
       src.type === "speed-ramp" ||

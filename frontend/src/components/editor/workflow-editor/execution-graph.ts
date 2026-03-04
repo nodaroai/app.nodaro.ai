@@ -237,6 +237,16 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       return activeScript.scenes[0].imagePrompt;
     }
   }
+  if (type === "social-media-format") {
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return (
+      results[activeIndex]?.url ??
+      (data.generatedVideoUrl as string | undefined) ??
+      (data.generatedImageUrl as string | undefined)
+    );
+  }
   if (
     type === "merge-video-audio" ||
     type === "add-captions" ||
@@ -450,6 +460,7 @@ const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "merge-video-audio",
   "add-captions",
   "resize-video",
+  "social-media-format",
   "trim-video",
 ]);
 const AUDIO_SOURCE_TYPES = new Set([

@@ -59,6 +59,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "voice-design": 5,
   "forced-alignment": 3,
   "sub-workflow": 0,
+  "social-media-format": 0,
 };
 
 export const EXECUTABLE_TYPES = new Set([
@@ -120,6 +121,7 @@ export const EXECUTABLE_TYPES = new Set([
   "forced-alignment",
   "sub-workflow",
   "webhook-output",
+  "social-media-format",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 5;

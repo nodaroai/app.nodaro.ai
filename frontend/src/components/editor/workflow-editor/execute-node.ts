@@ -38,6 +38,7 @@ import {
   loopVideoApi,
   fadeVideoApi,
   resizeVideoApi,
+  socialMediaFormatApi,
   adjustVolumeApi,
   addCaptionsApi,
   mixAudioApi,
@@ -108,6 +109,7 @@ import type {
   VoiceDesignData,
   ForcedAlignmentData,
   SubWorkflowData,
+  SocialMediaFormatData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -115,6 +117,7 @@ import {
   checkStorageError,
   type ExecutionContext,
 } from "./types";
+import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs } from "./execution-graph";
 import { resolveNodeInputs } from "./node-input-resolver";
 import { pollJobWithNodeUpdate } from "./poll-job";
@@ -2057,6 +2060,40 @@ export function executeNode(
         ),
       "generatedVideoUrl",
       "Resize Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "social-media-format") {
+    const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl;
+    if (!mediaUrl) {
+      toast.error(
+        `Node "${(node.data as SocialMediaFormatData).label}": no media input`,
+      );
+      return Promise.reject(new Error("No media"));
+    }
+    const d = node.data as SocialMediaFormatData;
+    const spec = PLATFORM_SPECS[d.specKey];
+    if (!spec) {
+      toast.error(`Node "${d.label}": invalid spec key "${d.specKey}"`);
+      return Promise.reject(new Error("Invalid spec key"));
+    }
+    const mediaType: "image" | "video" = inputs.videoUrl ? "video" : "image";
+    return runProcessingNode(
+      node.id,
+      () =>
+        socialMediaFormatApi(
+          mediaUrl,
+          mediaType,
+          d.specKey,
+          spec.width,
+          spec.height,
+          d.method,
+          d.padColor || undefined,
+          ctx.userId,
+        ),
+      "generatedVideoUrl",
+      "Social Media Format",
       ctx,
     );
   }

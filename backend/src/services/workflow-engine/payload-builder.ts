@@ -10,6 +10,7 @@ import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../pa
 import { buildImagePrompt } from "../../../../packages/shared/src/prompt-builder.js"
 import { buildCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import type { CharacterDef } from "../../../../packages/shared/src/types.js"
+import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
 
 // ---------------------------------------------------------------------------
 // Character definitions + prompt template types (from workflow settings)
@@ -795,6 +796,24 @@ export function buildPayload(
         aspectRatio: data.aspectRatio,
         usageLogId,
       })
+
+    case "social-media-format": {
+      const mediaUrl = resolvedInputs.videoUrl || resolvedInputs.imageUrl || data.mediaUrl
+      const mediaType = resolvedInputs.videoUrl ? "video" : "image"
+      const specKey = (data.specKey as string) || "instagram:feed-square"
+      const spec = PLATFORM_SPECS[specKey]
+      return ffmpegResult("social-media-format", {
+        jobId,
+        mediaUrl,
+        mediaType,
+        specKey,
+        width: spec?.width ?? 1080,
+        height: spec?.height ?? 1080,
+        method: data.method || "pad",
+        padColor: data.padColor || "#000000",
+        usageLogId,
+      })
+    }
 
     case "speed-ramp":
       return ffmpegResult("speed-ramp", {
