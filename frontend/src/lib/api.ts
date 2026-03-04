@@ -3065,3 +3065,59 @@ export async function getSharedExecutionStatus(
     "Failed to get execution status",
   )
 }
+
+// ---------------------------------------------------------------------------
+// API Tokens
+// ---------------------------------------------------------------------------
+
+export interface ApiToken {
+  id: string
+  name: string
+  prefix: string
+  workflowIds: string[]
+  rateLimit: number
+  isActive: boolean
+  lastUsedAt: string | null
+  createdAt: string
+}
+
+export interface CreateApiTokenResult extends ApiToken {
+  /** Plaintext token — shown only once at creation time */
+  token: string
+}
+
+export async function listApiTokens(): Promise<{ data: ApiToken[] }> {
+  return apiRequest("/v1/api-tokens", "Failed to list API tokens")
+}
+
+export async function createApiToken(params: {
+  name: string
+  workflowIds?: string[]
+  rateLimit?: number
+}): Promise<{ data: CreateApiTokenResult }> {
+  return apiRequest("/v1/api-tokens", "Failed to create API token", {
+    method: "POST",
+    body: params,
+  })
+}
+
+export async function updateApiToken(
+  id: string,
+  params: {
+    name?: string
+    workflowIds?: string[]
+    rateLimit?: number
+    isActive?: boolean
+  },
+): Promise<{ data: ApiToken }> {
+  return apiRequest(`/v1/api-tokens/${encodeURIComponent(id)}`, "Failed to update API token", {
+    method: "PATCH",
+    body: params,
+  })
+}
+
+export async function deleteApiToken(id: string): Promise<{ success: boolean }> {
+  return apiRequest(`/v1/api-tokens/${encodeURIComponent(id)}`, "Failed to delete API token", {
+    method: "DELETE",
+  })
+}

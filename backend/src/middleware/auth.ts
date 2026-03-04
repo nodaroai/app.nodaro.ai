@@ -84,6 +84,7 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/voices" },
   { method: "GET", path: "/v1/voices/library" },
   { path: "/v1/webhooks", prefix: true },
+  { path: "/v1/api/", prefix: true },
 ]
 
 function isPublicRoute(method: string, url: string): boolean {

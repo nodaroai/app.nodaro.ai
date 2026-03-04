@@ -53,7 +53,7 @@ export interface WorkflowExecutionJob {
   executionId: string
   workflowId: string
   userId: string
-  triggerType: "manual" | "webhook" | "schedule"
+  triggerType: "manual" | "webhook" | "schedule" | "api"
   triggerData?: Record<string, unknown>
   /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
   nodeIds?: string[]
@@ -119,7 +119,7 @@ export interface OrchestratorContext {
   executionId: string
   workflowId: string
   userId: string
-  triggerType: "manual" | "webhook" | "schedule"
+  triggerType: "manual" | "webhook" | "schedule" | "api"
   triggerData?: Record<string, unknown>
   /** Abort signal — set when execution is cancelled */
   cancelled: boolean
