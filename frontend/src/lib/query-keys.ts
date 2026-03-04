@@ -104,6 +104,12 @@ export const queryKeys = {
       ["executions", "list", params.status ?? "", String(params.viewAll ?? false), params.cursor ?? ""] as const,
   },
 
+  // API Tokens
+  apiTokens: {
+    all: ["api-tokens"] as const,
+    list: () => ["api-tokens", "list"] as const,
+  },
+
   // Admin
   admin: {
     all: ["admin"] as const,

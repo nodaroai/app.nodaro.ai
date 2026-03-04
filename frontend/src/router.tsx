@@ -26,6 +26,7 @@ const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
 const PresentPage = lazy(() => import("@/routes/present-page"))
+const ApiSettingsPage = lazy(() => import("@/app/(dashboard)/settings/api/page"))
 
 // Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
@@ -115,6 +116,10 @@ export const router = createBrowserRouter([
       {
         path: "/settings",
         element: <SuspenseWrapper><SettingsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/settings/api",
+        element: <SuspenseWrapper><ApiSettingsPage /></SuspenseWrapper>,
       },
       {
         path: "/executions",

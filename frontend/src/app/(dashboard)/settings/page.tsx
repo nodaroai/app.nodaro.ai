@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import {
   Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
-  Pencil, X, Download, Upload,
+  Pencil, X, Download, Upload, Key, ChevronRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,7 +12,9 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { hasAdmin } from "@/lib/edition"
 import { toast } from "sonner"
+import { Link } from "react-router-dom"
 import {
   SYSTEM_PROMPT_TEMPLATES,
   TEMPLATE_GROUPS,
@@ -217,6 +219,25 @@ export default function SettingsPage() {
           </TooltipProvider>
         </div>
       </div>
+
+      {/* API Tokens */}
+      {hasAdmin() && (
+        <Link
+          to="/settings/api"
+          className="mt-6 flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6 hover:bg-muted/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Key className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h2 className="text-base font-semibold">API Tokens</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Create tokens to execute workflows programmatically via REST API.
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Link>
+      )}
 
       {/* Prompt Templates */}
       <div className="mt-8">

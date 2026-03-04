@@ -28,3 +28,15 @@ export {
   type BuildImagePromptConfig,
   type BuildImagePromptResult,
 } from "./prompt-builder.js"
+
+export {
+  INPUT_NODE_TYPES,
+  getInputNodes,
+  getOutputNodes,
+  getOutputType,
+  getNodeResult,
+  getNodeLabel,
+  getInputFieldSchema,
+  type OutputType,
+  type InputFieldSchema,
+} from "./presentation-utils.js"
