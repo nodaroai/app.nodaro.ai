@@ -1,30 +1,20 @@
 "use client"
 
 import { memo } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
+import type { NodeProps } from "@xyflow/react"
 import { Activity } from "lucide-react"
-import { BaseNode } from "./base-node"
+import { ParameterNodeShell } from "./parameter-node-shell"
 import type { MotionData } from "@/types/nodes"
 
 function MotionNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MotionData
 
   return (
-    <BaseNode
-      id={id}
-      label={nodeData.label}
-      icon={<Activity className="h-4 w-4" />}
-      category="parameter"
-      credits={0}
-      selected={selected}
-      handles={[
-        { id: "out", type: "source", position: Position.Right, label: "Motion" },
-      ]}
-    >
-      <p className="text-muted-foreground">
+    <ParameterNodeShell id={id} label={nodeData.label} icon={<Activity />} handleId="out" selected={selected}>
+      <p className="text-muted-foreground text-xs">
         {nodeData.motion}
       </p>
-    </BaseNode>
+    </ParameterNodeShell>
   )
 }
 
