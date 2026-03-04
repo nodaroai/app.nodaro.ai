@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { Maximize2, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { getOutputType, type OutputType } from "@/lib/presentation-utils"
 import { GlassCard } from "../output-cards/shared"
@@ -14,14 +15,50 @@ interface CompareItem {
   text?: string
 }
 
+interface CompareViewProps extends ViewProps {
+  initialLeft?: string
+  initialRight?: string
+  onSelectionChange?: (left: string, right: string) => void
+}
+
 export function CompareView({
   orderedInputNodes,
   orderedOutputNodes,
   getResult,
   getCardTitle,
-}: ViewProps) {
-  const [leftId, setLeftId] = useState<string>("")
-  const [rightId, setRightId] = useState<string>("")
+  initialLeft,
+  initialRight,
+  onSelectionChange,
+}: CompareViewProps) {
+  const [leftId, setLeftId] = useState<string>(initialLeft ?? "")
+  const [rightId, setRightId] = useState<string>(initialRight ?? "")
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Persist selection changes — use refs to avoid stale closures
+  const leftIdRef = useRef(leftId)
+  const rightIdRef = useRef(rightId)
+  leftIdRef.current = leftId
+  rightIdRef.current = rightId
+
+  const handleLeftChange = useCallback((id: string) => {
+    setLeftId(id)
+    onSelectionChange?.(id, rightIdRef.current)
+  }, [onSelectionChange])
+
+  const handleRightChange = useCallback((id: string) => {
+    setRightId(id)
+    onSelectionChange?.(leftIdRef.current, id)
+  }, [onSelectionChange])
+
+  // ESC exits fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFullscreen(false)
+    }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [isFullscreen])
 
   const items: CompareItem[] = useMemo(() => {
     const result: CompareItem[] = []
@@ -77,19 +114,19 @@ export function CompareView({
 
   return (
     <div className="flex-1 overflow-auto p-4 sm:p-6">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Selectors */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-2 gap-4 mb-4">
           <ItemSelect
             label="Left"
             value={leftId}
-            onChange={setLeftId}
+            onChange={handleLeftChange}
             groups={groupedItems}
           />
           <ItemSelect
             label="Right"
             value={rightId}
-            onChange={setRightId}
+            onChange={handleRightChange}
             groups={groupedItems}
           />
         </div>
@@ -100,7 +137,17 @@ export function CompareView({
             Select two items to compare
           </div>
         ) : bothVisual ? (
-          <VisualSlider leftItem={leftItem} rightItem={rightItem} />
+          <div className="relative">
+            <VisualSlider leftItem={leftItem} rightItem={rightItem} />
+            <button
+              type="button"
+              onClick={() => setIsFullscreen(true)}
+              className="absolute bottom-3 right-3 z-20 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+              title="Fullscreen compare"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          </div>
         ) : bothText ? (
           <div className="grid grid-cols-2 gap-4">
             <GlassCard>
@@ -149,6 +196,20 @@ export function CompareView({
           </div>
         )}
       </div>
+
+      {/* Fullscreen overlay */}
+      {isFullscreen && leftItem && rightItem && bothVisual && (
+        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(false)}
+            className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <VisualSlider leftItem={leftItem} rightItem={rightItem} fullscreen />
+        </div>
+      )}
     </div>
   )
 }
@@ -198,7 +259,7 @@ function ItemSelect({
   )
 }
 
-function VisualSlider({ leftItem, rightItem }: { leftItem: CompareItem; rightItem: CompareItem }) {
+function VisualSlider({ leftItem, rightItem, fullscreen }: { leftItem: CompareItem; rightItem: CompareItem; fullscreen?: boolean }) {
   const [position, setPosition] = useState(50)
   const containerRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
@@ -252,7 +313,12 @@ function VisualSlider({ leftItem, rightItem }: { leftItem: CompareItem; rightIte
   return (
     <div
       ref={containerRef}
-      className="relative w-full aspect-video max-w-4xl mx-auto overflow-hidden rounded-xl bg-muted/30 select-none"
+      className={`relative w-full overflow-hidden select-none ${
+        fullscreen
+          ? "h-full max-h-screen"
+          : "rounded-xl bg-muted/30"
+      }`}
+      style={fullscreen ? undefined : { aspectRatio: "16 / 9" }}
     >
       {/* Left (bottom layer, full) */}
       <div className="absolute inset-0">

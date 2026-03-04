@@ -114,26 +114,32 @@ export function FullscreenView({
       </div>
 
       {/* Left arrow */}
-      {currentIndex > 0 && (
-        <button
-          type="button"
-          onClick={goPrev}
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-muted/80 hover:bg-muted flex items-center justify-center text-foreground transition-colors z-10"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={goPrev}
+        disabled={currentIndex === 0}
+        className={`absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center transition-colors z-10 ${
+          currentIndex === 0
+            ? "bg-muted/40 text-muted-foreground/30 cursor-default"
+            : "bg-muted/80 hover:bg-muted text-foreground cursor-pointer"
+        }`}
+      >
+        <ChevronLeft className="w-5 h-5" />
+      </button>
 
       {/* Right arrow */}
-      {currentIndex < items.length - 1 && (
-        <button
-          type="button"
-          onClick={goNext}
-          className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-muted/80 hover:bg-muted flex items-center justify-center text-foreground transition-colors z-10"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={goNext}
+        disabled={currentIndex >= items.length - 1}
+        className={`absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center transition-colors z-10 ${
+          currentIndex >= items.length - 1
+            ? "bg-muted/40 text-muted-foreground/30 cursor-default"
+            : "bg-muted/80 hover:bg-muted text-foreground cursor-pointer"
+        }`}
+      >
+        <ChevronRight className="w-5 h-5" />
+      </button>
 
       {/* Content */}
       <div className="px-16 py-12 w-full flex items-center justify-center">
