@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useMemo } from "react"
-import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck } from "lucide-react"
+import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 interface NodeContextMenuProps {
@@ -18,6 +18,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const runSelected = useWorkflowStore((s) => s.runSelected)
   const toggleSkipNode = useWorkflowStore((s) => s.toggleSkipNode)
+  const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const ref = useRef<HTMLDivElement>(null)
@@ -42,6 +43,13 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
     return !!(node.data as Record<string, unknown>).skipped
   }, [nodeId, nodes])
 
+  const thumbnailUrl = useMemo(() => {
+    const node = nodes.find((n) => n.id === nodeId)
+    if (!node) return null
+    const d = node.data as Record<string, unknown>
+    return (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? null
+  }, [nodeId, nodes])
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -64,6 +72,13 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
 
   function handleRunSelected() {
     runSelected?.()
+    onClose()
+  }
+
+  function handleSetThumbnail() {
+    if (thumbnailUrl) {
+      setWorkflowThumbnail(thumbnailUrl)
+    }
     onClose()
   }
 
@@ -123,6 +138,15 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         {isSkipped ? <CircleCheck className="h-3.5 w-3.5" /> : <CircleSlash className="h-3.5 w-3.5" />}
         {isSkipped ? "Unskip Node" : "Skip Node"}
       </button>
+      {thumbnailUrl && (
+        <button
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
+          onClick={handleSetThumbnail}
+        >
+          <ImageIcon className="h-3.5 w-3.5" />
+          Set as Thumbnail
+        </button>
+      )}
       <div className="my-1 border-t" />
       <button
         className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"

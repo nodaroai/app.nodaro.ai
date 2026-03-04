@@ -28,13 +28,14 @@ const updateWorkflowBody = z.object({
   edges: z.array(z.record(z.unknown())).optional(),
   settings: z.record(z.unknown()).optional(),
   sourcePrompt: z.string().max(10000).optional(),
+  thumbnailUrl: z.string().url().nullable().optional(),
 })
 
 const WORKFLOW_META_COLS =
-  "id, project_id, user_id, folder_id, name, description, is_template, version, created_at, updated_at"
+  "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, created_at, updated_at"
 
 const WORKFLOW_FULL_COLS =
-  "id, project_id, user_id, folder_id, name, description, is_template, version, source_prompt, nodes, edges, settings, created_at, updated_at"
+  "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, source_prompt, nodes, edges, settings, created_at, updated_at"
 
 function toWorkflowMeta(row: Record<string, unknown>) {
   return {
@@ -46,6 +47,7 @@ function toWorkflowMeta(row: Record<string, unknown>) {
     description: row.description,
     isTemplate: row.is_template,
     version: row.version,
+    thumbnailUrl: row.thumbnail_url ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -240,6 +242,8 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (body.settings !== undefined) updates.settings = body.settings
     if (body.sourcePrompt !== undefined)
       updates.source_prompt = body.sourcePrompt
+    if (body.thumbnailUrl !== undefined)
+      updates.thumbnail_url = body.thumbnailUrl
 
     const { data, error } = await supabase
       .from("workflows")

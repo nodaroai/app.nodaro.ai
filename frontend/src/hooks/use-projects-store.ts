@@ -23,6 +23,7 @@ export interface WorkflowMeta {
   readonly projectId: string
   readonly folderId: string | null
   readonly name: string
+  readonly thumbnailUrl: string | null
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -77,6 +78,7 @@ function toWorkflowMeta(row: Record<string, unknown>): WorkflowMeta {
     projectId: row.project_id as string,
     folderId: (row.folder_id as string) ?? null,
     name: row.name as string,
+    thumbnailUrl: (row.thumbnail_url as string) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -121,7 +123,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           .order("created_at"),
         supabase
           .from("workflows")
-          .select("id, project_id, folder_id, name, created_at, updated_at")
+          .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
           .eq("project_id", projectId)
           .order("created_at", { ascending: false }),
       ])
@@ -269,7 +271,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           folder_id: folderId,
           name,
         })
-        .select("id, project_id, folder_id, name, created_at, updated_at")
+        .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
         .single()
 
       if (error || !data) return null
@@ -361,7 +363,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           edges: original.edges,
           settings: original.settings,
         })
-        .select("id, project_id, folder_id, name, created_at, updated_at")
+        .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
         .single()
 
       if (error || !data) return null

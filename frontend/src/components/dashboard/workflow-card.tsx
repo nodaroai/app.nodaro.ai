@@ -17,6 +17,10 @@ interface WorkflowCardProps {
   readonly readOnly?: boolean
 }
 
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|webm|mov)(\?|$)/i.test(url)
+}
+
 export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: WorkflowCardProps) {
   function handleDragStart(e: DragEvent) {
     e.dataTransfer.setData("application/x-workflow-id", workflow.id)
@@ -31,13 +35,33 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: Work
     >
       <Link
         to={`/projects/${workflow.projectId}/workflows/${workflow.id}`}
-        className="flex-1 min-w-0"
+        className="flex-1 min-w-0 flex items-center gap-2.5"
         draggable={false}
       >
-        <p className="text-sm font-medium truncate">{workflow.name}</p>
-        <p className="text-[10px] text-muted-foreground">
-          {new Date(workflow.updatedAt).toLocaleDateString()}
-        </p>
+        {workflow.thumbnailUrl && (
+          isVideoUrl(workflow.thumbnailUrl) ? (
+            <video
+              src={workflow.thumbnailUrl}
+              muted
+              loop
+              autoPlay
+              playsInline
+              className="w-10 h-10 rounded object-cover shrink-0"
+            />
+          ) : (
+            <img
+              src={workflow.thumbnailUrl}
+              alt=""
+              className="w-10 h-10 rounded object-cover shrink-0"
+            />
+          )
+        )}
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate">{workflow.name}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {new Date(workflow.updatedAt).toLocaleDateString()}
+          </p>
+        </div>
       </Link>
       {!readOnly && (
         <DropdownMenu>

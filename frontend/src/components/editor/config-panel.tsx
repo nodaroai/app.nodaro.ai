@@ -2,7 +2,7 @@
 
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
+import { X, Play, Maximize2, Minimize2, Loader2, FastForward, ImageIcon } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -216,6 +216,7 @@ export function ConfigPanel() {
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
+  const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
 
   const [userId, setUserId] = useState<string | undefined>(undefined)
 
@@ -628,8 +629,22 @@ export function ConfigPanel() {
               const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
               if (!activeUrl) return null
               const mediaType: "image" | "video" | "audio" = LIBRARY_VIDEO_TYPES.has(nodeType) ? "video" : LIBRARY_AUDIO_TYPES.has(nodeType) ? "audio" : "image"
+              const thumbnailMediaUrl = (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string)
               return (
-                <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />
+                <>
+                  <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />
+                  {thumbnailMediaUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setWorkflowThumbnail(thumbnailMediaUrl)}
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 mr-2" />
+                      Set as Thumbnail
+                    </Button>
+                  )}
+                </>
               )
             })()}
 
