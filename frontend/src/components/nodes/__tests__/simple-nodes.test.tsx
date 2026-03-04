@@ -16,6 +16,14 @@ vi.mock("@xyflow/react", () => ({
   useUpdateNodeInternals: vi.fn(() => vi.fn()),
 }))
 
+vi.mock("../editable-node-label", () => ({
+  EditableNodeLabel: ({ label }: any) => <div data-testid="editable-node-label">{label}</div>,
+}))
+
+vi.mock("../handle-icon", () => ({
+  HandleIcon: () => <div data-testid="handle-icon" />,
+}))
+
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id }: any) => (
     <div
@@ -36,6 +44,7 @@ vi.mock("lucide-react", () => {
     List: I, Palette: I, Brush: I, Cpu: I, Hash: I, Clock: I,
     RectangleHorizontal: I, Activity: I, Video: I, ShieldCheck: I,
     Rss: I, Webhook: I, HardDrive: I, Scissors: I, FileText: I,
+    Type: I, ImageIcon: I,
   }
 })
 
