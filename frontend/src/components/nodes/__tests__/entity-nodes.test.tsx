@@ -36,6 +36,14 @@ vi.mock("lucide-react", () => {
     Maximize2: Icon,
     ChevronDown: Icon,
     ChevronRight: Icon,
+    Type: Icon,
+    FileVideo: Icon,
+    FileImage: Icon,
+    Share2: Icon,
+    Heart: Icon,
+    MessageCircle: Icon,
+    Send: Icon,
+    Expand: Icon,
   }
 })
 

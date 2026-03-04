@@ -21,9 +21,9 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => {
-  const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Scissors: I, Loader2: I, AlertCircle: I, X: I }
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>()
+  return { ...actual }
 })
 
 vi.mock("../run-node-button", () => ({

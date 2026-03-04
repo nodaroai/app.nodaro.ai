@@ -2,12 +2,14 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Share2, Loader2, AlertCircle, X } from "lucide-react"
+import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { HandleIcon } from "./handle-icon"
+import { EditableNodeLabel } from "./editable-node-label"
+import { PlatformPreview } from "./platform-preview"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
-import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
@@ -19,22 +21,19 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = currentNodeData ?? (data as SocialMediaFormatData)
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl ?? nodeData.generatedImageUrl
-  const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const [videoError, setVideoError] = useState(false)
 
   const spec = PLATFORM_SPECS[nodeData.specKey]
   const isVideo = spec?.isVideo !== false
   const platformLabel = PLATFORM_LABELS[nodeData.platform as SocialMediaPlatform] ?? nodeData.platform
-  const specLabel = spec ? `${spec.width}×${spec.height}` : ""
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
@@ -50,69 +49,115 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run">
-    <BaseNode id={id} label={nodeData.label} icon={<Share2 className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
+    <div className="relative" style={{ maxWidth: '220px' }}>
+    {/* Floating label above node */}
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Share2 className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
+    <BaseNode
+      id={id}
+      label={nodeData.label}
+      icon={<Share2 className="h-4 w-4" />}
+      category="processing"
+      credits={credits}
+      selected={selected}
+      isRunning={status === "running"}
+      minWidth={220}
+      minHeight={200}
+      hideHeader
+      topToolbarContent={
+        status !== "running" ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={[
-        { id: "media-in", type: "target", position: Position.Left, label: "Media" },
-        { id: "text-in", type: "target", position: Position.Left, label: "Text" },
-        { id: "media-out", type: "source", position: Position.Right, label: "Media" },
-        { id: "text-out", type: "source", position: Position.Right, label: "Text" },
+        { id: "media-in", type: "target", position: Position.Left, top: "35%", customStyle: { top: '35%', left: '-29px' }, hideHandle: true },
+        { id: "text-in", type: "target", position: Position.Left, top: "65%", customStyle: { top: '65%', left: '-29px' }, hideHandle: true },
+        { id: "media-out", type: "source", position: Position.Right, top: "35%", customStyle: { top: '35%', right: '-29px' }, hideHandle: true },
+        { id: "text-out", type: "source", position: Position.Right, top: "65%", customStyle: { top: '65%', right: '-29px' }, hideHandle: true },
       ]}
     >
-      <div className="flex flex-col gap-1">
+      <div className="relative w-full group">
+        {/* Running state */}
         {status === "running" && (
-          <div className="flex items-center justify-center h-28 rounded-md bg-muted/30"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-        )}
-        {status !== "running" && activeUrl && !videoError && (
-          <div className="relative group">
-            {isVideo && !activeThumbnail ? (
-              <video
-                src={activeUrl}
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-                autoPlay={videoAutoplay}
-                muted
-                loop={videoAutoplay}
-                playsInline
-                onError={() => setVideoError(true)}
-                onLoadedData={() => setVideoError(false)}
-              />
-            ) : (
-              <CachedImage
-                src={activeThumbnail ?? activeUrl}
-                alt="Media preview"
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
-                thumbnail
-                thumbnailWidth={320}
-                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-              />
-            )}
-            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{specLabel}</div>
-            {results.length > 0 && (
-              <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
-            )}
+          <div className="flex items-center justify-center bg-muted/30 rounded-xl h-[180px]">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         )}
+
+        {/* Preview state (idle or has result) */}
+        {status !== "running" && status !== "failed" && (
+          <>
+            <div
+              className="cursor-pointer"
+              onClick={(e) => { if (activeUrl) { e.stopPropagation(); setPreviewOpen(true) } else { e.stopPropagation(); selectNode(id) } }}
+            >
+              <PlatformPreview
+                platform={(nodeData.platform ?? "instagram") as SocialMediaPlatform}
+                specKey={nodeData.specKey}
+                mediaUrl={activeUrl}
+                isVideo={isVideo}
+                caption={nodeData.formattedText}
+                size="sm"
+              />
+            </div>
+            {/* Hover overlay buttons */}
+            {activeUrl && (
+              <>
+                <button
+                  type="button"
+                  className="absolute bottom-8 left-2 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+                  title="Fullscreen"
+                >
+                  <Expand className="w-3.5 h-3.5" />
+                </button>
+                {results.length > 0 && (
+                  <button
+                    type="button"
+                    aria-label="Remove result"
+                    className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
+                    title="Delete this result"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
+          <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2 h-[180px]">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="font-medium">Failed</span>
             </div>
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+              <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
                 {nodeData.errorMessage}
               </p>
             )}
           </div>
         )}
-        {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40"><Share2 className="w-5 h-5" /></div>
-        )}
-        <p className="text-muted-foreground">{platformLabel} — {spec?.label ?? nodeData.contentType}</p>
+
+        {/* Platform label below preview */}
+        <p className="text-[11px] text-muted-foreground text-center mt-1">{platformLabel} — {spec?.label ?? nodeData.contentType}</p>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+
+    {/* Input handle icons */}
+    <HandleIcon icon={isVideo ? <FileVideo /> : <FileImage />} color="steel" side="left" top="35%"  />
+    <HandleIcon icon={<Type />} color="steel" side="left" top="65%" />
+
+    {/* Output handle icons */}
+    <HandleIcon icon={isVideo ? <FileVideo /> : <FileImage />} color="steel" side="right" top="35%" />
+    <HandleIcon icon={<Type />} color="steel" side="right" top="65%" />
+
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type={isVideo ? "video" : "image"} url={activeUrl} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
