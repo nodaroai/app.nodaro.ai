@@ -23,24 +23,23 @@ export function ImageOutputCard({ label, status, url }: ImageOutputCardProps) {
       {status === "running" ? (
         <ShimmerPlaceholder />
       ) : url ? (
-        <div className="relative group rounded-lg overflow-hidden">
+        <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setPreviewOpen(true)}>
           <CachedImage
             src={url}
             alt={label}
             thumbnail
-            className="w-full rounded-lg bg-black/20 cursor-pointer"
-            onClick={() => setPreviewOpen(true)}
+            className="w-full rounded-lg bg-black/20"
           />
-          {/* Hover toolbar */}
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
-            <GlassButton onClick={() => setPreviewOpen(true)} title="Fullscreen">
-              <Maximize2 className="w-4 h-4" />
+          {/* Hover toolbar — top-right, no blur overlay */}
+          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <GlassButton onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+              <Maximize2 className="w-3.5 h-3.5" />
             </GlassButton>
-            <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.png`)} title="Download">
-              <Download className="w-4 h-4" />
+            <GlassButton onClick={(e) => { e.stopPropagation(); downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.png`) }} title="Download">
+              <Download className="w-3.5 h-3.5" />
             </GlassButton>
-            <GlassButton onClick={() => copyUrl(url)} title="Copy URL">
-              <Copy className="w-4 h-4" />
+            <GlassButton onClick={(e) => { e.stopPropagation(); copyUrl(url) }} title="Copy URL">
+              <Copy className="w-3.5 h-3.5" />
             </GlassButton>
           </div>
         </div>

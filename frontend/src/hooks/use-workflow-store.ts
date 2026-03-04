@@ -52,6 +52,8 @@ export interface PresentationSettings {
   outputOrder?: string[] // node IDs in display order
   cardMeta?: Record<string, { title?: string; description?: string }>
   viewMode?: PresentationViewMode // defaults to "horizontal"
+  compareLeft?: string // node ID for left compare item
+  compareRight?: string // node ID for right compare item
 }
 
 export const DEFAULT_PRESENTATION_SETTINGS: PresentationSettings = { runTarget: "workflow" }

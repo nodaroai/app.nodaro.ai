@@ -33,6 +33,8 @@ import {
   getNodeResult,
 } from "@/lib/presentation-utils"
 import { NODE_CREDIT_COSTS, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
+import { shareWorkflow } from "@/lib/api"
+import { toast } from "sonner"
 import { ShareDialog } from "./share-dialog"
 import { NodePickerDialog } from "./node-picker-dialog"
 import { RunTargetSelector } from "./run-target-selector"
@@ -72,6 +74,17 @@ function orderNodesByIds(nodes: WorkflowNode[], order: string[] | undefined): Wo
   return ordered
 }
 
+/** getNodeResult that also checks input node data fields (url, text) */
+function getNodeResultWithInputFallback(node: WorkflowNode): { url?: string; text?: string } {
+  const data = node.data as Record<string, unknown>
+  const result = getNodeResult(data)
+  if (result.url || result.text) return result
+  // Input nodes store their content in data.url / data.text directly
+  const url = data.url as string | undefined
+  const text = data.text as string | undefined
+  return { url: url || undefined, text: text || undefined }
+}
+
 interface PresentationViewProps {
   mode: "tab" | "fullscreen"
   isOwner: boolean
@@ -82,6 +95,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
   const { user } = useAuth()
   const [isEditMode, setIsEditMode] = useState(false)
   const [pickerSection, setPickerSection] = useState<"inputs" | "outputs" | null>(null)
+  const [isOpeningNewTab, setIsOpeningNewTab] = useState(false)
 
   // Tab mode: read from the editor store
   const editorNodes = useWorkflowStore((s) => s.nodes)
@@ -199,14 +213,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
 
   const getFullscreenResult = useCallback(
     (nodeId: string) => {
+      // Check execution state first (from a recent run)
       const state = presNodeStates[nodeId]
-      if (!state?.output) return { url: undefined, text: undefined }
-      const output = state.output as Record<string, unknown>
-      const url = (output.imageUrl ?? output.videoUrl ?? output.audioUrl) as string | undefined
-      const text = output.text as string | undefined
-      return { url, text }
+      if (state?.output) {
+        const output = state.output as Record<string, unknown>
+        const url = (output.imageUrl ?? output.videoUrl ?? output.audioUrl) as string | undefined
+        const text = output.text as string | undefined
+        if (url || text) return { url, text }
+      }
+      // Fall back to node data (results already saved in workflow)
+      const node = nodeMap.get(nodeId)
+      if (!node) return { url: undefined, text: undefined }
+      return getNodeResultWithInputFallback(node)
     },
-    [presNodeStates],
+    [presNodeStates, nodeMap],
   )
 
   const getResult = useCallback(
@@ -214,7 +234,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
       if (isFullscreen) return getFullscreenResult(nodeId)
       const node = nodeMap.get(nodeId)
       if (!node) return { url: undefined, text: undefined }
-      return getNodeResult(node.data as Record<string, unknown>)
+      return getNodeResultWithInputFallback(node)
     },
     [isFullscreen, getFullscreenResult, nodeMap],
   )
@@ -281,6 +301,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
     () => makeDragEndHandler(orderedOutputNodes, "outputOrder"),
     [makeDragEndHandler, orderedOutputNodes],
   )
+
+  // Compare selection persistence
+  const handleCompareSelectionChange = useCallback((left: string, right: string) => {
+    if (!isFullscreen) {
+      updatePresentationSettings({ compareLeft: left, compareRight: right })
+    }
+  }, [isFullscreen, updatePresentationSettings])
 
   // Card meta helpers
   const getCardTitle = useCallback((node: WorkflowNode) => {
@@ -387,11 +414,23 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
             <ShareDialog workflowId={workflowId} />
           )}
 
-          {mode === "tab" && (
+          {mode === "tab" && workflowId && (
             <Button
               variant="outline"
               size="sm"
-              onClick={onExitFullscreen}
+              disabled={isOpeningNewTab}
+              onClick={async () => {
+                if (isOpeningNewTab) return
+                setIsOpeningNewTab(true)
+                try {
+                  const { shareToken } = await shareWorkflow(workflowId)
+                  window.open(`/present/${shareToken}`, "_blank")
+                } catch {
+                  toast.error("Failed to open in new tab")
+                } finally {
+                  setIsOpeningNewTab(false)
+                }
+              }}
               title="Open in new tab"
               className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
             >
@@ -437,7 +476,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
       {viewMode === "fullscreen" && (
         <FullscreenView {...viewProps} onBack={handleExitFullscreenView} />
       )}
-      {viewMode === "compare" && <CompareView {...viewProps} />}
+      {viewMode === "compare" && (
+        <CompareView
+          {...viewProps}
+          initialLeft={settings.compareLeft}
+          initialRight={settings.compareRight}
+          onSelectionChange={handleCompareSelectionChange}
+        />
+      )}
 
       {/* Node picker dialog */}
       {pickerSection && (

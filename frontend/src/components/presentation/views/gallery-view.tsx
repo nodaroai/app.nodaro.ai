@@ -3,11 +3,17 @@ import { ImageIcon, VideoIcon, Music, FileText, Play } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { getOutputType } from "@/lib/presentation-utils"
-import { GlassCard, StatusBadge } from "../output-cards/shared"
+import { GlassCard, StatusBadge, type OutputStatus } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
 import type { ViewProps } from "./types"
 
-type Tab = "outputs" | "inputs"
+type Tab = "all" | "outputs" | "inputs"
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "outputs", label: "Outputs" },
+  { key: "inputs", label: "Inputs" },
+]
 
 export function GalleryView({
   orderedInputNodes,
@@ -16,7 +22,7 @@ export function GalleryView({
   getResult,
   getCardTitle,
 }: ViewProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("outputs")
+  const [activeTab, setActiveTab] = useState<Tab>("all")
   const [previewItem, setPreviewItem] = useState<{ type: "image" | "video" | "audio"; url: string } | null>(null)
   const [textPreview, setTextPreview] = useState<{ title: string; text: string } | null>(null)
 
@@ -29,73 +35,86 @@ export function GalleryView({
     })
   }, [orderedOutputNodes, getNodeStatus, getResult, getCardTitle])
 
+  const inputItems = useMemo(() => {
+    return orderedInputNodes.map((node) => {
+      const result = getResult(node.id)
+      return { node, result, title: getCardTitle(node) }
+    })
+  }, [orderedInputNodes, getResult, getCardTitle])
+
+  const showOutputs = activeTab === "all" || activeTab === "outputs"
+  const showInputs = activeTab === "all" || activeTab === "inputs"
+
   return (
     <div className="flex-1 overflow-auto p-4 sm:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Tab toggle */}
         <div className="flex items-center justify-center mb-6">
           <div className="flex items-center gap-0.5 bg-muted/50 rounded-lg p-0.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab("outputs")}
-              className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                activeTab === "outputs"
-                  ? "bg-[#ff0073]/10 text-[#ff0073]"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Outputs
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("inputs")}
-              className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                activeTab === "inputs"
-                  ? "bg-[#ff0073]/10 text-[#ff0073]"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Inputs
-            </button>
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  activeTab === tab.key
+                    ? "bg-[#ff0073]/10 text-[#ff0073]"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {activeTab === "outputs" ? (
-          outputItems.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-16">No outputs configured</div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {outputItems.map(({ node, outputType, status, result, title }) => (
-                <GalleryCard
-                  key={node.id}
-                  title={title}
-                  outputType={outputType}
-                  status={status}
-                  url={result.url}
-                  text={result.text}
-                  onClickImage={(url) => setPreviewItem({ type: "image", url })}
-                  onClickVideo={(url) => setPreviewItem({ type: "video", url })}
-                  onClickAudio={(url) => setPreviewItem({ type: "audio", url })}
-                  onClickText={(text) => setTextPreview({ title, text })}
-                />
-              ))}
-            </div>
-          )
-        ) : (
-          orderedInputNodes.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-16">No inputs configured</div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {orderedInputNodes.map((node) => {
-                const result = getResult(node.id)
-                return (
+        {/* Outputs section */}
+        {showOutputs && (
+          <>
+            {activeTab === "all" && outputItems.length > 0 && (
+              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">Outputs</h3>
+            )}
+            {outputItems.length === 0 && activeTab !== "all" ? (
+              <div className="text-sm text-muted-foreground text-center py-16">No outputs configured</div>
+            ) : outputItems.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+                {outputItems.map(({ node, outputType, status, result, title }) => (
+                  <GalleryCard
+                    key={node.id}
+                    title={title}
+                    outputType={outputType}
+                    status={status}
+                    url={result.url}
+                    text={result.text}
+                    onClickImage={(url) => setPreviewItem({ type: "image", url })}
+                    onClickVideo={(url) => setPreviewItem({ type: "video", url })}
+                    onClickAudio={(url) => setPreviewItem({ type: "audio", url })}
+                    onClickText={(text) => setTextPreview({ title, text })}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </>
+        )}
+
+        {/* Inputs section */}
+        {showInputs && (
+          <>
+            {activeTab === "all" && inputItems.length > 0 && (
+              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">Inputs</h3>
+            )}
+            {inputItems.length === 0 && activeTab !== "all" ? (
+              <div className="text-sm text-muted-foreground text-center py-16">No inputs configured</div>
+            ) : inputItems.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {inputItems.map(({ node, result, title }) => (
                   <GlassCard key={node.id}>
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-2 truncate">
-                      {getCardTitle(node)}
+                      {title}
                     </span>
                     <div className="flex items-center justify-center h-24 rounded-lg bg-muted/30 text-muted-foreground">
                       {result.url ? (
-                        <CachedImage src={result.url} alt="" thumbnail className="w-full h-full object-cover rounded-lg" />
+                        <CachedImage src={result.url} alt="" thumbnail className="w-full h-full object-cover rounded-lg cursor-pointer" onClick={() => setPreviewItem({ type: "image", url: result.url! })} />
                       ) : result.text ? (
                         <p className="text-xs px-2 line-clamp-4">{result.text}</p>
                       ) : (
@@ -103,10 +122,10 @@ export function GalleryView({
                       )}
                     </div>
                   </GlassCard>
-                )
-              })}
-            </div>
-          )
+                ))}
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 
@@ -152,7 +171,7 @@ function GalleryCard({
 }: {
   title: string
   outputType: string
-  status: string
+  status: OutputStatus
   url?: string
   text?: string
   onClickImage: (url: string) => void
@@ -173,7 +192,7 @@ function GalleryCard({
     <GlassCard className={hasContent ? "cursor-pointer hover:border-[#ff0073]/30 transition-colors" : ""}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider truncate">{title}</span>
-        <StatusBadge status={status as "idle" | "running" | "completed" | "failed"} />
+        <StatusBadge status={status} />
       </div>
       <div className="aspect-square rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center" onClick={handleClick}>
         {status === "running" ? (
