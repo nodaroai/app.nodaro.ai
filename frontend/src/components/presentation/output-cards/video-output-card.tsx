@@ -1,16 +1,18 @@
-import { useState } from "react"
 import { Download, Copy, Maximize2, Play, VideoIcon } from "lucide-react"
-import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, type OutputStatus } from "./shared"
 
 interface VideoOutputCardProps {
   label: string
   status: OutputStatus
   url?: string
+  nodeId?: string
+  onOpenMedia?: (nodeId: string) => void
 }
 
-export function VideoOutputCard({ label, status, url }: VideoOutputCardProps) {
-  const [previewOpen, setPreviewOpen] = useState(false)
+export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia }: VideoOutputCardProps) {
+  const handleClick = () => {
+    if (nodeId && onOpenMedia) onOpenMedia(nodeId)
+  }
 
   return (
     <GlassCard>
@@ -22,7 +24,7 @@ export function VideoOutputCard({ label, status, url }: VideoOutputCardProps) {
       {status === "running" ? (
         <ShimmerPlaceholder />
       ) : url ? (
-        <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setPreviewOpen(true)}>
+        <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={handleClick}>
           <video
             src={url}
             className="w-full rounded-lg bg-black/20 object-contain"
@@ -37,7 +39,7 @@ export function VideoOutputCard({ label, status, url }: VideoOutputCardProps) {
           </div>
           {/* Hover toolbar */}
           <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <GlassButton onClick={() => setPreviewOpen(true)} title="Fullscreen">
+            <GlassButton onClick={handleClick} title="Fullscreen">
               <Maximize2 className="w-3.5 h-3.5" />
             </GlassButton>
             <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`)} title="Download">
@@ -55,15 +57,6 @@ export function VideoOutputCard({ label, status, url }: VideoOutputCardProps) {
             {status === "failed" ? "Generation failed" : "Awaiting generation"}
           </span>
         </div>
-      )}
-
-      {url && (
-        <MediaPreviewModal
-          isOpen={previewOpen}
-          onClose={() => setPreviewOpen(false)}
-          type="video"
-          url={url}
-        />
       )}
     </GlassCard>
   )

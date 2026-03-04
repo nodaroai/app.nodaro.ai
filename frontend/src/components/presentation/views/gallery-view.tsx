@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react"
 import { ImageIcon, VideoIcon, Music, FileText, Play } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
-import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { getOutputType } from "@/lib/presentation-utils"
 import { GlassCard, StatusBadge, type OutputStatus } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
@@ -11,8 +10,8 @@ type Tab = "all" | "outputs" | "inputs"
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "outputs", label: "Outputs" },
   { key: "inputs", label: "Inputs" },
+  { key: "outputs", label: "Outputs" },
 ]
 
 export function GalleryView({
@@ -21,9 +20,9 @@ export function GalleryView({
   getNodeStatus,
   getResult,
   getCardTitle,
+  onOpenMedia,
 }: ViewProps) {
   const [activeTab, setActiveTab] = useState<Tab>("all")
-  const [previewItem, setPreviewItem] = useState<{ type: "image" | "video" | "audio"; url: string } | null>(null)
   const [textPreview, setTextPreview] = useState<{ title: string; text: string } | null>(null)
 
   const outputItems = useMemo(() => {
@@ -68,35 +67,6 @@ export function GalleryView({
           </div>
         </div>
 
-        {/* Outputs section */}
-        {showOutputs && (
-          <>
-            {activeTab === "all" && outputItems.length > 0 && (
-              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">Outputs</h3>
-            )}
-            {outputItems.length === 0 && activeTab !== "all" ? (
-              <div className="text-sm text-muted-foreground text-center py-16">No outputs configured</div>
-            ) : outputItems.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-                {outputItems.map(({ node, outputType, status, result, title }) => (
-                  <GalleryCard
-                    key={node.id}
-                    title={title}
-                    outputType={outputType}
-                    status={status}
-                    url={result.url}
-                    text={result.text}
-                    onClickImage={(url) => setPreviewItem({ type: "image", url })}
-                    onClickVideo={(url) => setPreviewItem({ type: "video", url })}
-                    onClickAudio={(url) => setPreviewItem({ type: "audio", url })}
-                    onClickText={(text) => setTextPreview({ title, text })}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </>
-        )}
-
         {/* Inputs section */}
         {showInputs && (
           <>
@@ -106,7 +76,7 @@ export function GalleryView({
             {inputItems.length === 0 && activeTab !== "all" ? (
               <div className="text-sm text-muted-foreground text-center py-16">No inputs configured</div>
             ) : inputItems.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
                 {inputItems.map(({ node, result, title }) => (
                   <GlassCard key={node.id}>
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-2 truncate">
@@ -114,7 +84,13 @@ export function GalleryView({
                     </span>
                     <div className="flex items-center justify-center h-24 rounded-lg bg-muted/30 text-muted-foreground">
                       {result.url ? (
-                        <CachedImage src={result.url} alt="" thumbnail className="w-full h-full object-cover rounded-lg cursor-pointer" onClick={() => setPreviewItem({ type: "image", url: result.url! })} />
+                        <CachedImage
+                          src={result.url}
+                          alt=""
+                          thumbnail
+                          className="w-full h-full object-cover rounded-lg cursor-pointer"
+                          onClick={() => onOpenMedia?.(node.id)}
+                        />
                       ) : result.text ? (
                         <p className="text-xs px-2 line-clamp-4">{result.text}</p>
                       ) : (
@@ -127,17 +103,35 @@ export function GalleryView({
             ) : null}
           </>
         )}
-      </div>
 
-      {/* Media preview modal */}
-      {previewItem && (
-        <MediaPreviewModal
-          isOpen
-          onClose={() => setPreviewItem(null)}
-          type={previewItem.type}
-          url={previewItem.url}
-        />
-      )}
+        {/* Outputs section */}
+        {showOutputs && (
+          <>
+            {activeTab === "all" && outputItems.length > 0 && (
+              <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-3">Outputs</h3>
+            )}
+            {outputItems.length === 0 && activeTab !== "all" ? (
+              <div className="text-sm text-muted-foreground text-center py-16">No outputs configured</div>
+            ) : outputItems.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {outputItems.map(({ node, outputType, status, result, title }) => (
+                  <GalleryCard
+                    key={node.id}
+                    nodeId={node.id}
+                    title={title}
+                    outputType={outputType}
+                    status={status}
+                    url={result.url}
+                    text={result.text}
+                    onClickMedia={onOpenMedia}
+                    onClickText={(text) => setTextPreview({ title, text })}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
 
       {/* Text preview dialog */}
       {textPreview && (
@@ -159,31 +153,30 @@ export function GalleryView({
 }
 
 function GalleryCard({
+  nodeId,
   title,
   outputType,
   status,
   url,
   text,
-  onClickImage,
-  onClickVideo,
-  onClickAudio,
+  onClickMedia,
   onClickText,
 }: {
+  nodeId: string
   title: string
   outputType: string
   status: OutputStatus
   url?: string
   text?: string
-  onClickImage: (url: string) => void
-  onClickVideo: (url: string) => void
-  onClickAudio: (url: string) => void
+  onClickMedia?: (nodeId: string) => void
   onClickText: (text: string) => void
 }) {
   const handleClick = () => {
-    if (outputType === "image" && url) onClickImage(url)
-    else if (outputType === "video" && url) onClickVideo(url)
-    else if (outputType === "audio" && url) onClickAudio(url)
-    else if (text) onClickText(text)
+    if ((outputType === "image" || outputType === "video" || outputType === "audio") && url) {
+      onClickMedia?.(nodeId)
+    } else if (text) {
+      onClickText(text)
+    }
   }
 
   const hasContent = url || text

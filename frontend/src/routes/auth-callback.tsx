@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { createClient } from "@/lib/supabase"
+import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 
 export default function AuthCallback() {
   const navigate = useNavigate()
@@ -8,14 +9,15 @@ export default function AuthCallback() {
   useEffect(() => {
     const supabase = createClient()
 
+    // Consume the saved redirect URL once (e.g., from /present/:shareToken)
+    const redirectUrl = localStorage.getItem(AUTH_REDIRECT_KEY) ?? "/projects"
+    localStorage.removeItem(AUTH_REDIRECT_KEY)
+
     // Supabase automatically exchanges the code/hash tokens via onAuthStateChange.
     // We just need to listen for the session to appear.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        navigate("/projects", { replace: true })
-      } else if (event === "TOKEN_REFRESHED") {
-        // Already signed in, redirect
-        navigate("/projects", { replace: true })
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+        navigate(redirectUrl, { replace: true })
       }
     })
 
@@ -23,7 +25,7 @@ export default function AuthCallback() {
     // or if the code exchange already happened before this listener attached
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate("/projects", { replace: true })
+        navigate(redirectUrl, { replace: true })
       }
     })
 
