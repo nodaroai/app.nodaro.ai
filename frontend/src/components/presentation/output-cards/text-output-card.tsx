@@ -1,7 +1,6 @@
-import { Loader2, Copy, FileText } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Copy, FileText } from "lucide-react"
 import { toast } from "sonner"
-import { StatusBadge, type OutputStatus } from "./shared"
+import { StatusBadge, GlassCard, GlassButton, type OutputStatus } from "./shared"
 
 interface TextOutputCardProps {
   label: string
@@ -11,34 +10,50 @@ interface TextOutputCardProps {
 
 export function TextOutputCard({ label, status, text }: TextOutputCardProps) {
   return (
-    <div className="bg-white dark:bg-[#1E1E1E] rounded-lg border border-gray-200 dark:border-[#2D2D2D] p-4 shadow-sm">
+    <GlassCard>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
-        <StatusBadge status={status} />
+        <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{label}</span>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={status} />
+          {text && (
+            <GlassButton
+              onClick={() => { navigator.clipboard.writeText(text); toast.success("Text copied") }}
+              title="Copy"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </GlassButton>
+          )}
+        </div>
       </div>
+
       {status === "running" ? (
-        <div className="flex items-center justify-center h-20 bg-gray-100 dark:bg-[#2D2D2D] rounded-md">
-          <Loader2 className="h-6 w-6 animate-spin text-[#ff0073]" />
+        <div className="flex items-center h-20 rounded-lg bg-white/[0.03] px-4">
+          {/* Animated typing dots */}
+          <div className="flex gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full bg-[#ff0073]/50"
+                style={{
+                  animation: "typing-dots 1.4s ease-in-out infinite",
+                  animationDelay: `${i * 0.2}s`,
+                }}
+              />
+            ))}
+          </div>
         </div>
       ) : text ? (
-        <>
-          <div className="bg-gray-50 dark:bg-[#2D2D2D] rounded-md p-3 text-sm whitespace-pre-wrap max-h-64 overflow-y-auto">
-            {text}
-          </div>
-          <div className="flex gap-2 mt-2">
-            <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(text); toast.success("Text copied") }}>
-              <Copy className="h-3 w-3 mr-1" /> Copy
-            </Button>
-          </div>
-        </>
+        <div className="bg-white/[0.03] rounded-lg p-3 text-sm text-white/80 whitespace-pre-wrap max-h-64 overflow-y-auto border border-white/5 leading-relaxed">
+          {text}
+        </div>
       ) : (
-        <div className="flex items-center justify-center h-20 bg-gray-100 dark:bg-[#2D2D2D] rounded-md text-gray-400">
-          <div className="text-center">
-            <FileText className="h-6 w-6 mx-auto mb-1" />
-            <span className="text-xs">{status === "failed" ? "Generation failed" : "Awaiting generation"}</span>
-          </div>
+        <div className="flex flex-col items-center justify-center h-20 rounded-lg bg-gradient-to-br from-white/[0.03] to-white/[0.01] text-white/20">
+          <FileText className="w-8 h-8 mb-1 animate-pulse" />
+          <span className="text-xs">
+            {status === "failed" ? "Generation failed" : "Awaiting generation"}
+          </span>
         </div>
       )}
-    </div>
+    </GlassCard>
   )
 }

@@ -1,6 +1,7 @@
-import { Input } from "@/components/ui/input"
+import { Clock, Ruler, Ratio, Sliders } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SceneNodeType } from "@/types/nodes"
+import { GlassCard } from "../output-cards/shared"
 
 interface ParameterCardProps {
   nodeId: string
@@ -27,6 +28,15 @@ function getValueField(nodeType: SceneNodeType): string {
   }
 }
 
+function getTypeIcon(nodeType: SceneNodeType) {
+  switch (nodeType) {
+    case "duration": return <Clock className="w-3.5 h-3.5" />
+    case "aspect-ratio": return <Ratio className="w-3.5 h-3.5" />
+    case "scene-count": return <Ruler className="w-3.5 h-3.5" />
+    default: return <Sliders className="w-3.5 h-3.5" />
+  }
+}
+
 export function ParameterCard({
   nodeId,
   label,
@@ -50,15 +60,18 @@ export function ParameterCard({
   }
 
   return (
-    <div className="bg-white dark:bg-[#1E1E1E] rounded-lg border border-gray-200 dark:border-[#2D2D2D] p-4 shadow-sm">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+    <GlassCard>
+      <label className="flex items-center gap-1.5 text-xs font-medium text-white/50 uppercase tracking-wider mb-2">
+        <span className="text-white/30">{getTypeIcon(nodeType)}</span>
         {label}
       </label>
-      <Input
+      <input
+        type="text"
         value={currentValue}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={`Enter ${label.toLowerCase()}...`}
+        className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 placeholder:text-white/20 focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
       />
-    </div>
+    </GlassCard>
   )
 }

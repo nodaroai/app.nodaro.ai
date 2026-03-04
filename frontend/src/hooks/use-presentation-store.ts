@@ -5,6 +5,7 @@
 
 import { create } from "zustand"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "./use-workflow-store"
 import {
   getSharedWorkflow,
   runSharedWorkflow,
@@ -27,6 +28,10 @@ interface PresentationState {
   edges: WorkflowEdge[]
   shareToken: string | null
   isOwner: boolean
+
+  // Presentation config (from workflow settings)
+  estimatedCost: number
+  presentationSettings: PresentationSettings
 
   // Viewer input overrides (ephemeral, never saved)
   inputValues: Record<string, Record<string, unknown>>
@@ -63,6 +68,8 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   edges: [],
   shareToken: null,
   isOwner: false,
+  estimatedCost: 0,
+  presentationSettings: DEFAULT_PRESENTATION_SETTINGS,
   inputValues: {},
   executionId: null,
   executionStatus: "idle",
@@ -81,6 +88,8 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         nodes: data.nodes as WorkflowNode[],
         edges: data.edges as WorkflowEdge[],
         isOwner: data.isOwner,
+        estimatedCost: data.estimatedCost ?? 0,
+        presentationSettings: data.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,
         executionStatus: "idle",
       })
     } catch (err) {
@@ -105,7 +114,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   run: async () => {
-    const { shareToken, inputValues } = get()
+    const { shareToken, inputValues, presentationSettings } = get()
     if (!shareToken) return
 
     clearPollTimeout()
@@ -121,6 +130,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       const { executionId } = await runSharedWorkflow(
         shareToken,
         Object.keys(inputValues).length > 0 ? inputValues : undefined,
+        presentationSettings.runTarget !== "workflow" ? presentationSettings : undefined,
       )
       set({ executionId })
 

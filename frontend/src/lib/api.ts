@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase"
 import type { SubWorkflowRouteSnapshot } from "@/types/nodes"
+import type { PresentationSettings } from "@/hooks/use-workflow-store"
 
 export const API_BASE_URL = ''
 
@@ -3023,6 +3024,8 @@ export async function getSharedWorkflow(token: string): Promise<{
   nodes: unknown[]
   edges: unknown[]
   isOwner: boolean
+  estimatedCost?: number
+  presentationSettings?: PresentationSettings
 }> {
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}`,
@@ -3034,11 +3037,12 @@ export async function getSharedWorkflow(token: string): Promise<{
 export async function runSharedWorkflow(
   token: string,
   inputOverrides?: Record<string, Record<string, unknown>>,
+  presentationSettings?: PresentationSettings,
 ): Promise<{ executionId: string; status: string }> {
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}/run`,
     "Failed to run shared workflow",
-    { method: "POST", body: { inputOverrides } },
+    { method: "POST", body: { inputOverrides, runTarget: presentationSettings?.runTarget, subWorkflowNodeId: presentationSettings?.subWorkflowNodeId } },
   )
 }
 

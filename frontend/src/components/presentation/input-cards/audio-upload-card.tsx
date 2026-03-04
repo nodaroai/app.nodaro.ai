@@ -1,26 +1,58 @@
-import { Music } from "lucide-react"
+import { X } from "lucide-react"
+import { GlassCard, GlassButton } from "../output-cards/shared"
+import { useMediaUpload, FileDropZone, UrlInputRow, WaveformBars } from "./shared"
 
 interface AudioUploadCardProps {
   label: string
   url?: string
+  nodeId: string
+  isFullscreen: boolean
+  inputValues: Record<string, Record<string, unknown>>
+  onUpdateInput: (nodeId: string, key: string, value: unknown) => void
 }
 
-export function AudioUploadCard({ label, url }: AudioUploadCardProps) {
+export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput }: AudioUploadCardProps) {
+  const media = useMediaUpload({ mimePrefix: "audio/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
+
   return (
-    <div className="bg-white dark:bg-[#1E1E1E] rounded-lg border border-gray-200 dark:border-[#2D2D2D] p-4 shadow-sm">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+    <GlassCard>
+      <label className="block text-xs font-medium text-white/50 uppercase tracking-wider mb-2">
         {label}
       </label>
-      {url ? (
-        <audio src={url} controls className="w-full" />
-      ) : (
-        <div className="flex items-center justify-center h-20 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md text-gray-400">
-          <div className="text-center">
-            <Music className="h-6 w-6 mx-auto mb-1" />
-            <span className="text-xs">No audio uploaded</span>
+
+      {media.effectiveUrl ? (
+        <div className="relative group">
+          <div className="flex items-center gap-3 bg-white/[0.03] rounded-lg p-3 border border-white/5">
+            <WaveformBars />
+            <audio src={media.effectiveUrl} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
+            <GlassButton onClick={media.handleRemove} title="Remove">
+              <X className="w-3.5 h-3.5" />
+            </GlassButton>
           </div>
         </div>
+      ) : (
+        <FileDropZone
+          isDragOver={media.isDragOver}
+          setIsDragOver={media.setIsDragOver}
+          onDrop={media.handleDrop}
+          onClick={() => media.fileInputRef.current?.click()}
+          isUploading={media.isUploading}
+          accept="audio/*"
+          fileInputRef={media.fileInputRef}
+          onFileChange={media.handleFile}
+          label="Upload audio"
+          height="h-24"
+          onShowUrl={() => media.setShowUrlInput(true)}
+        />
       )}
-    </div>
+
+      {media.showUrlInput && !media.effectiveUrl && (
+        <UrlInputRow
+          urlValue={media.urlValue}
+          onChange={media.setUrlValue}
+          onSubmit={media.handleUrlSubmit}
+        />
+      )}
+    </GlassCard>
   )
 }

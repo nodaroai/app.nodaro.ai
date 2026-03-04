@@ -13,6 +13,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { estimateWorkflowCredits } from "../billing/credits.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -29,6 +30,8 @@ const statusParams = z.object({
 
 const runBody = z.object({
   inputOverrides: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  runTarget: z.enum(["workflow", "sub-workflow"]).optional(),
+  subWorkflowNodeId: z.string().optional(),
 })
 
 export async function presentationRoutes(app: FastifyInstance) {
@@ -150,7 +153,7 @@ export async function presentationRoutes(app: FastifyInstance) {
     // Use service-role supabase to bypass RLS (share_token lookup)
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
-      .select("id, name, nodes, edges, user_id, is_presentation_enabled")
+      .select("id, name, nodes, edges, settings, user_id, is_presentation_enabled")
       .eq("share_token", token)
       .eq("is_presentation_enabled", true)
       .single()
@@ -163,12 +166,22 @@ export async function presentationRoutes(app: FastifyInstance) {
 
     const isOwner = workflow.user_id === req.userId
 
+    // Estimate credit cost from executable nodes
+    const wfNodes = (workflow.nodes ?? []) as Array<{ type: string }>
+    const estimatedCost = estimateWorkflowCredits(wfNodes)
+
+    // Extract presentation settings from workflow settings
+    const settings = (workflow.settings ?? {}) as Record<string, unknown>
+    const presentationSettings = settings.presentationSettings as { runTarget: string; subWorkflowNodeId?: string } | undefined
+
     return reply.send({
       workflowId: workflow.id,
       name: workflow.name,
       nodes: workflow.nodes,
       edges: workflow.edges,
       isOwner,
+      estimatedCost,
+      presentationSettings: presentationSettings ?? { runTarget: "workflow" },
     })
   })
 
@@ -195,12 +208,12 @@ export async function presentationRoutes(app: FastifyInstance) {
     }
 
     const { token } = paramsParsed.data
-    const { inputOverrides } = bodyParsed.data
+    const { inputOverrides, runTarget, subWorkflowNodeId } = bodyParsed.data
 
     // Look up workflow by share token
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
-      .select("id, user_id, is_presentation_enabled")
+      .select("id, user_id, nodes, is_presentation_enabled")
       .eq("share_token", token)
       .eq("is_presentation_enabled", true)
       .single()
@@ -248,6 +261,12 @@ export async function presentationRoutes(app: FastifyInstance) {
       })
     }
 
+    // Compute nodeIds if targeting a specific sub-workflow node
+    let nodeIds: string[] | undefined
+    if (runTarget === "sub-workflow" && subWorkflowNodeId) {
+      nodeIds = [subWorkflowNodeId]
+    }
+
     // Enqueue orchestration job
     const jobData: WorkflowExecutionJob = {
       executionId: execution.id,
@@ -255,6 +274,7 @@ export async function presentationRoutes(app: FastifyInstance) {
       userId: req.userId,
       triggerType: "manual",
       inputOverrides,
+      nodeIds,
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

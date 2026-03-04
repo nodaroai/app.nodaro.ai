@@ -1,6 +1,7 @@
-import { Loader2, Download, Copy, VideoIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { StatusBadge, copyUrl, downloadFile, type OutputStatus } from "./shared"
+import { useState } from "react"
+import { Download, Copy, Maximize2, Play, VideoIcon } from "lucide-react"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, type OutputStatus } from "./shared"
 
 interface VideoOutputCardProps {
   label: string
@@ -9,36 +10,61 @@ interface VideoOutputCardProps {
 }
 
 export function VideoOutputCard({ label, status, url }: VideoOutputCardProps) {
+  const [previewOpen, setPreviewOpen] = useState(false)
+
   return (
-    <div className="bg-white dark:bg-[#1E1E1E] rounded-lg border border-gray-200 dark:border-[#2D2D2D] p-4 shadow-sm">
+    <GlassCard>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
+        <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{label}</span>
         <StatusBadge status={status} />
       </div>
+
       {status === "running" ? (
-        <div className="flex items-center justify-center h-48 bg-gray-100 dark:bg-[#2D2D2D] rounded-md">
-          <Loader2 className="h-8 w-8 animate-spin text-[#ff0073]" />
-        </div>
+        <ShimmerPlaceholder />
       ) : url ? (
-        <>
-          <video src={url} controls className="w-full rounded-md bg-black" />
-          <div className="flex gap-2 mt-2">
-            <Button variant="outline" size="sm" onClick={() => copyUrl(url)}>
-              <Copy className="h-3 w-3 mr-1" /> Copy URL
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`)}>
-              <Download className="h-3 w-3 mr-1" /> Download
-            </Button>
+        <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setPreviewOpen(true)}>
+          <video
+            src={url}
+            className="w-full rounded-lg bg-black/20 object-contain"
+            muted
+            playsInline
+          />
+          {/* Centered play overlay */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/60 group-hover:scale-110 transition-all duration-200">
+              <Play className="w-7 h-7 text-white ml-1" fill="white" />
+            </div>
           </div>
-        </>
+          {/* Hover toolbar */}
+          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <GlassButton onClick={() => setPreviewOpen(true)} title="Fullscreen">
+              <Maximize2 className="w-3.5 h-3.5" />
+            </GlassButton>
+            <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp4`)} title="Download">
+              <Download className="w-3.5 h-3.5" />
+            </GlassButton>
+            <GlassButton onClick={() => copyUrl(url)} title="Copy URL">
+              <Copy className="w-3.5 h-3.5" />
+            </GlassButton>
+          </div>
+        </div>
       ) : (
-        <div className="flex items-center justify-center h-48 bg-gray-100 dark:bg-[#2D2D2D] rounded-md text-gray-400">
-          <div className="text-center">
-            <VideoIcon className="h-8 w-8 mx-auto mb-1" />
-            <span className="text-xs">{status === "failed" ? "Generation failed" : "Awaiting generation"}</span>
-          </div>
+        <div className="flex flex-col items-center justify-center h-48 rounded-lg bg-gradient-to-br from-white/[0.03] to-white/[0.01] text-white/20">
+          <VideoIcon className="w-10 h-10 mb-2 animate-pulse" />
+          <span className="text-xs">
+            {status === "failed" ? "Generation failed" : "Awaiting generation"}
+          </span>
         </div>
       )}
-    </div>
+
+      {url && (
+        <MediaPreviewModal
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          type="video"
+          url={url}
+        />
+      )}
+    </GlassCard>
   )
 }

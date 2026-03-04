@@ -5,7 +5,7 @@
 import type { WorkflowNode, WorkflowEdge, SceneNodeType } from "@/types/nodes"
 
 /** Node types that represent user-interactive inputs */
-const INPUT_NODE_TYPES = new Set<SceneNodeType>([
+export const INPUT_NODE_TYPES = new Set<SceneNodeType>([
   "text-prompt",
   "upload-image",
   "upload-video",
@@ -59,17 +59,24 @@ const NON_OUTPUT_TYPES = new Set<SceneNodeType>([
 
 export type OutputType = "image" | "video" | "audio" | "text" | "data"
 
-/** Get nodes that represent user-interactive inputs (excludes triggers) */
-export function getInputNodes(nodes: WorkflowNode[]): WorkflowNode[] {
-  return nodes.filter(
-    (n) => n.type && INPUT_NODE_TYPES.has(n.type) && !TRIGGER_NODE_TYPES.has(n.type),
-  )
+/** Get nodes that represent user-interactive inputs (excludes triggers).
+ *  When curatedOnly is true (default), only returns nodes with presentationVisible === true.
+ *  When false, returns all matching nodes (useful for the picker dialog). */
+export function getInputNodes(nodes: WorkflowNode[], curatedOnly = true): WorkflowNode[] {
+  return nodes.filter((n) => {
+    if (!n.type || !INPUT_NODE_TYPES.has(n.type) || TRIGGER_NODE_TYPES.has(n.type)) return false
+    if (curatedOnly) return (n.data as Record<string, unknown>).presentationVisible === true
+    return true
+  })
 }
 
-/** Get leaf nodes that produce visible output (no downstream edges to non-output nodes) */
+/** Get leaf nodes that produce visible output (no downstream edges to non-output nodes).
+ *  When curatedOnly is true (default), only returns nodes with presentationVisible === true.
+ *  When false, returns all matching nodes (useful for the picker dialog). */
 export function getOutputNodes(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
+  curatedOnly = true,
 ): WorkflowNode[] {
   // Find nodes that have outgoing edges
   const nodesWithOutgoing = new Set(edges.map((e) => e.source))
@@ -77,53 +84,56 @@ export function getOutputNodes(
   return nodes.filter((n) => {
     if (!n.type) return false
     if (NON_OUTPUT_TYPES.has(n.type)) return false
-    // Leaf node (no outgoing edges) OR produces media regardless
-    return !nodesWithOutgoing.has(n.id) || isMediaProducingNode(n.type)
+    const isOutput = !nodesWithOutgoing.has(n.id) || isMediaProducingNode(n.type)
+    if (!isOutput) return false
+    if (curatedOnly) return (n.data as Record<string, unknown>).presentationVisible === true
+    return true
   })
 }
 
+const MEDIA_PRODUCING_TYPES = new Set<SceneNodeType>([
+  "generate-image", "edit-image", "image-to-image",
+  "generate-script", "ai-writer",
+  "image-to-video", "video-to-video", "text-to-video", "extend-video",
+  "text-to-speech", "generate-music", "text-to-audio", "text-to-dialogue",
+  "voice-changer", "dubbing", "voice-remix", "voice-design",
+  "render-video", "video-composer", "after-effects", "lottie-overlay",
+  "3d-title", "motion-graphics", "composite",
+])
+
 function isMediaProducingNode(type: SceneNodeType): boolean {
-  return [
-    "generate-image", "edit-image", "image-to-image",
-    "generate-script", "ai-writer",
-    "image-to-video", "video-to-video", "text-to-video", "extend-video",
-    "text-to-speech", "generate-music", "text-to-audio", "text-to-dialogue",
-    "voice-changer", "dubbing", "voice-remix", "voice-design",
-    "render-video", "video-composer", "after-effects", "lottie-overlay",
-    "3d-title", "motion-graphics", "composite",
-  ].includes(type)
+  return MEDIA_PRODUCING_TYPES.has(type)
 }
+
+const IMAGE_OUTPUT_TYPES = new Set<SceneNodeType>([
+  "generate-image", "edit-image", "image-to-image",
+])
+const VIDEO_OUTPUT_TYPES = new Set<SceneNodeType>([
+  "image-to-video", "video-to-video", "text-to-video", "extend-video",
+  "render-video", "video-composer", "after-effects", "lottie-overlay",
+  "3d-title", "motion-graphics", "composite",
+  "combine-videos", "merge-video-audio", "resize-video", "trim-video",
+  "speed-ramp", "loop-video", "fade-video", "transcode-video",
+  "lip-sync", "motion-transfer", "video-upscale", "add-captions",
+])
+const AUDIO_OUTPUT_TYPES = new Set<SceneNodeType>([
+  "text-to-speech", "generate-music", "text-to-audio",
+  "text-to-dialogue", "voice-changer", "dubbing", "voice-remix",
+  "voice-design", "mix-audio", "adjust-volume", "extract-audio",
+  "audio-isolation",
+])
+const TEXT_OUTPUT_TYPES = new Set<SceneNodeType>([
+  "generate-script", "ai-writer", "transcribe", "image-to-text",
+  "qa-check",
+])
 
 /** Determine the output type of a node */
 export function getOutputType(nodeType: SceneNodeType | undefined): OutputType {
   if (!nodeType) return "data"
-
-  const imageTypes: SceneNodeType[] = [
-    "generate-image", "edit-image", "image-to-image",
-  ]
-  const videoTypes: SceneNodeType[] = [
-    "image-to-video", "video-to-video", "text-to-video", "extend-video",
-    "render-video", "video-composer", "after-effects", "lottie-overlay",
-    "3d-title", "motion-graphics", "composite",
-    "combine-videos", "merge-video-audio", "resize-video", "trim-video",
-    "speed-ramp", "loop-video", "fade-video", "transcode-video",
-    "lip-sync", "motion-transfer", "video-upscale", "add-captions",
-  ]
-  const audioTypes: SceneNodeType[] = [
-    "text-to-speech", "generate-music", "text-to-audio",
-    "text-to-dialogue", "voice-changer", "dubbing", "voice-remix",
-    "voice-design", "mix-audio", "adjust-volume", "extract-audio",
-    "audio-isolation",
-  ]
-  const textTypes: SceneNodeType[] = [
-    "generate-script", "ai-writer", "transcribe", "image-to-text",
-    "qa-check",
-  ]
-
-  if (imageTypes.includes(nodeType)) return "image"
-  if (videoTypes.includes(nodeType)) return "video"
-  if (audioTypes.includes(nodeType)) return "audio"
-  if (textTypes.includes(nodeType)) return "text"
+  if (IMAGE_OUTPUT_TYPES.has(nodeType)) return "image"
+  if (VIDEO_OUTPUT_TYPES.has(nodeType)) return "video"
+  if (AUDIO_OUTPUT_TYPES.has(nodeType)) return "audio"
+  if (TEXT_OUTPUT_TYPES.has(nodeType)) return "text"
   return "data"
 }
 
