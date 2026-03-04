@@ -28,7 +28,6 @@ import {
   getOutputType,
   getNodeLabel,
   getInputFieldSchema,
-  getNodeResult,
 } from "../../../packages/shared/src/presentation-utils.js"
 import type { GenericNode, GenericEdge } from "../../../packages/shared/src/types.js"
 
@@ -75,8 +74,20 @@ interface ResolvedToken {
   tokenHash: string
 }
 
+// Short-lived cache for resolved tokens (60s TTL) to avoid DB hit per request
+const TOKEN_CACHE_TTL_MS = 60_000
+const tokenCache = new Map<string, { token: ResolvedToken; expiresAt: number }>()
+// Throttle last_used_at writes to once per 5 minutes per token
+const lastUsedUpdates = new Map<string, number>()
+
 async function resolveApiToken(token: string): Promise<ResolvedToken | null> {
   const hash = hashToken(token)
+
+  // Check cache first
+  const cached = tokenCache.get(hash)
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.token
+  }
 
   const { data, error } = await supabase
     .from("api_tokens")
@@ -87,20 +98,42 @@ async function resolveApiToken(token: string): Promise<ResolvedToken | null> {
   if (error || !data) return null
   if (!data.is_active) return null
 
-  // Touch last_used_at (fire-and-forget)
-  supabase
-    .from("api_tokens")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", data.id)
-    .then(() => {})
-
-  return {
+  const resolved: ResolvedToken = {
     id: data.id,
     userId: data.user_id as string,
     workflowIds: (data.workflow_ids ?? []) as string[],
     rateLimit: (data.rate_limit as number) ?? 30,
     tokenHash: data.token_hash as string,
   }
+
+  // Cache the resolved token
+  tokenCache.set(hash, { token: resolved, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS })
+
+  // Touch last_used_at at most once per 5 minutes (fire-and-forget)
+  const lastUpdated = lastUsedUpdates.get(data.id) ?? 0
+  if (Date.now() - lastUpdated > 300_000) {
+    lastUsedUpdates.set(data.id, Date.now())
+    supabase
+      .from("api_tokens")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .then(() => {})
+  }
+
+  return resolved
+}
+
+/** Returns invalid workflow IDs not owned by the user, or empty array if all valid. */
+async function validateWorkflowOwnership(userId: string, workflowIds: string[]): Promise<string[]> {
+  if (workflowIds.length === 0) return []
+  const { data: owned } = await supabase
+    .from("workflows")
+    .select("id")
+    .eq("user_id", userId)
+    .in("id", workflowIds)
+
+  const ownedIds = new Set((owned ?? []).map((w) => w.id))
+  return workflowIds.filter((id) => !ownedIds.has(id))
 }
 
 function resolveInputOverrides(
@@ -225,20 +258,11 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     }
 
     // Validate workflow ownership
-    if (workflowIds.length > 0) {
-      const { data: owned } = await supabase
-        .from("workflows")
-        .select("id")
-        .eq("user_id", req.userId)
-        .in("id", workflowIds)
-
-      const ownedIds = new Set((owned ?? []).map((w) => w.id))
-      const invalid = workflowIds.filter((id) => !ownedIds.has(id))
-      if (invalid.length > 0) {
-        return reply.status(400).send({
-          error: { code: "invalid_workflow", message: `Workflows not found: ${invalid.join(", ")}` },
-        })
-      }
+    const invalidWfs = await validateWorkflowOwnership(req.userId, workflowIds)
+    if (invalidWfs.length > 0) {
+      return reply.status(400).send({
+        error: { code: "invalid_workflow", message: `Workflows not found: ${invalidWfs.join(", ")}` },
+      })
     }
 
     // Generate token: ndr_ + 32 random bytes hex
@@ -332,20 +356,11 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     if (bodyParsed.data.isActive !== undefined) updates.is_active = bodyParsed.data.isActive
     if (bodyParsed.data.workflowIds !== undefined) {
       // Validate ownership of new workflow IDs
-      if (bodyParsed.data.workflowIds.length > 0) {
-        const { data: owned } = await supabase
-          .from("workflows")
-          .select("id")
-          .eq("user_id", req.userId)
-          .in("id", bodyParsed.data.workflowIds)
-
-        const ownedIds = new Set((owned ?? []).map((w) => w.id))
-        const invalid = bodyParsed.data.workflowIds.filter((id) => !ownedIds.has(id))
-        if (invalid.length > 0) {
-          return reply.status(400).send({
-            error: { code: "invalid_workflow", message: `Workflows not found: ${invalid.join(", ")}` },
-          })
-        }
+      const invalidWfs = await validateWorkflowOwnership(req.userId!, bodyParsed.data.workflowIds)
+      if (invalidWfs.length > 0) {
+        return reply.status(400).send({
+          error: { code: "invalid_workflow", message: `Workflows not found: ${invalidWfs.join(", ")}` },
+        })
       }
       updates.workflow_ids = bodyParsed.data.workflowIds
     }
@@ -609,8 +624,14 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       )
       const start = Date.now()
 
-      while (Date.now() - start < timeout) {
-        await new Promise((resolve) => setTimeout(resolve, 3000))
+      // Stop polling if client disconnects
+      let clientDisconnected = false
+      req.raw.on("close", () => { clientDisconnected = true })
+
+      while (Date.now() - start < timeout && !clientDisconnected) {
+        await new Promise((resolve) => setTimeout(resolve, 5000))
+
+        if (clientDisconnected) break
 
         const { data: exec } = await supabase
           .from("workflow_executions")
@@ -625,10 +646,11 @@ export async function apiTokenRoutes(app: FastifyInstance) {
             execution.id,
             exec as Record<string, unknown>,
             nodes,
-            (workflow.nodes ?? []) as GenericNode[],
           ))
         }
       }
+
+      if (clientDisconnected) return
 
       // Timed out waiting — return 202 with executionId
       return reply.status(202).send({
@@ -738,7 +760,6 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       execution.id,
       execution as Record<string, unknown>,
       nodes,
-      nodes,
     ))
   })
 }
@@ -764,7 +785,6 @@ function formatExecutionResult(
   executionId: string,
   execution: Record<string, unknown>,
   workflowNodes: GenericNode[],
-  _allNodes: GenericNode[],
 ) {
   const nodeStates = (execution.node_states ?? {}) as Record<string, NodeExecutionState>
 
