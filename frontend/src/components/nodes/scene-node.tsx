@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect, Suspense } from "react"
+import { memo, useState, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Maximize2, Scissors, Type } from "lucide-react"
@@ -9,6 +9,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 const SceneEditorModal = lazy(() => import("@/components/editor/scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
@@ -27,8 +28,7 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const autoOpenEditorNodeId = useWorkflowStore((s) => s.autoOpenEditorNodeId)
   const setAutoOpenEditorNodeId = useWorkflowStore((s) => s.setAutoOpenEditorNodeId)
-  const edges = useWorkflowStore((s) => s.edges)
-  const inConnectionCount = useMemo(() => edges.filter(e => e.target === id && e.targetHandle === "in").length, [edges, id])
+  const inConnectionCount = useConnectionCount(id)
 
   const charCount = nodeData.characters.length
   const objCount = nodeData.objects.length

@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { MapPin, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useConnectionCount } from "@/hooks/use-connection-count"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -39,8 +40,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const edges = useWorkflowStore((s) => s.edges)
-  const inConnectionCount = useMemo(() => edges.filter(e => e.target === id && e.targetHandle === "in").length, [edges, id])
+  const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0

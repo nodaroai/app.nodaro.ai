@@ -6,6 +6,7 @@ import { Waypoints, Loader2, AlertCircle, X, Clapperboard, LayoutGrid, Expand, D
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
@@ -19,8 +20,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
-  const edges = useWorkflowStore((s) => s.edges)
-  const inConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "in").length
+  const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
