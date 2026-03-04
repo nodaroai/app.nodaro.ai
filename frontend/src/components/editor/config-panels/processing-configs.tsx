@@ -715,7 +715,7 @@ export function SocialMediaFormatConfig({ data, onUpdate }: ConfigProps<SocialMe
         platform={platform}
         specKey={data.specKey}
         mediaUrl={data.generatedVideoUrl ?? data.generatedImageUrl}
-        isVideo={spec?.isVideo !== false}
+        isVideo={data.generatedVideoUrl ? /\.(mp4|webm|mov|avi)(\?|$)/i.test(data.generatedVideoUrl) : false}
         caption={data.formattedText}
         size="lg"
       />

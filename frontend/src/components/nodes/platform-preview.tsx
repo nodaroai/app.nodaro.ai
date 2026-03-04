@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { Heart, MessageCircle, Send } from "lucide-react"
+import { Heart, MessageCircle, Send, Share2 } from "lucide-react"
 import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -177,8 +177,8 @@ function MediaSlot({
 }) {
   if (!mediaUrl) {
     return (
-      <div className={`${className} flex items-center justify-center`}>
-        <div className="w-full h-full bg-gradient-to-br from-muted/40 via-muted/20 to-muted/40" />
+      <div className={`${className} flex items-center justify-center bg-muted/20`}>
+        <Share2 className="w-6 h-6 text-muted-foreground/30" />
       </div>
     )
   }
@@ -191,6 +191,7 @@ function MediaSlot({
         muted
         loop
         playsInline
+        autoPlay
       />
     )
   }
