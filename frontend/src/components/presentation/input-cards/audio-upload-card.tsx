@@ -9,9 +9,10 @@ interface AudioUploadCardProps {
   isFullscreen: boolean
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
+  readOnly?: boolean
 }
 
-export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput }: AudioUploadCardProps) {
+export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly }: AudioUploadCardProps) {
   const media = useMediaUpload({ mimePrefix: "audio/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
 
   return (
@@ -25,10 +26,16 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
             <WaveformBars />
             <audio src={media.effectiveUrl} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
-            <GlassButton onClick={media.handleRemove} title="Remove">
-              <X className="w-3.5 h-3.5" />
-            </GlassButton>
+            {!readOnly && (
+              <GlassButton onClick={media.handleRemove} title="Remove">
+                <X className="w-3.5 h-3.5" />
+              </GlassButton>
+            )}
           </div>
+        </div>
+      ) : readOnly ? (
+        <div className="flex items-center justify-center h-24 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
+          No audio
         </div>
       ) : (
         <FileDropZone

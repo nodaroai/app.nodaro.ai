@@ -11,6 +11,7 @@ interface ParameterCardProps {
   isFullscreen: boolean
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
+  readOnly?: boolean
 }
 
 /** Get the primary value field name for a parameter node type */
@@ -45,6 +46,7 @@ export function ParameterCard({
   isFullscreen,
   inputValues,
   onUpdateInput,
+  readOnly,
 }: ParameterCardProps) {
   const field = getValueField(nodeType)
   const currentValue = isFullscreen
@@ -70,7 +72,8 @@ export function ParameterCard({
         value={currentValue}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={`Enter ${label.toLowerCase()}...`}
-        className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
+        readOnly={readOnly}
+        className={`w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
       />
     </GlassCard>
   )

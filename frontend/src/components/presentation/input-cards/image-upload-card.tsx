@@ -12,9 +12,10 @@ interface ImageUploadCardProps {
   isFullscreen: boolean
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
+  readOnly?: boolean
 }
 
-export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput }: ImageUploadCardProps) {
+export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly }: ImageUploadCardProps) {
   const media = useMediaUpload({ mimePrefix: "image/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
@@ -36,10 +37,16 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
             <GlassButton onClick={() => setLightboxSrc(media.effectiveUrl!)} title="Enlarge">
               <Maximize2 className="w-4 h-4" />
             </GlassButton>
-            <GlassButton onClick={media.handleRemove} title="Remove">
-              <X className="w-4 h-4" />
-            </GlassButton>
+            {!readOnly && (
+              <GlassButton onClick={media.handleRemove} title="Remove">
+                <X className="w-4 h-4" />
+              </GlassButton>
+            )}
           </div>
+        </div>
+      ) : readOnly ? (
+        <div className="flex items-center justify-center h-32 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
+          No image
         </div>
       ) : (
         <FileDropZone

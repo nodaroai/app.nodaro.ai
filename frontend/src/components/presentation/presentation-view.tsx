@@ -40,7 +40,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { ShareDialog } from "./share-dialog"
 import { NodePickerDialog } from "./node-picker-dialog"
 import { RunTargetSelector } from "./run-target-selector"
-import { ViewModeSelector } from "./view-mode-selector"
+import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
 import { TextInputCard } from "./input-cards/text-input-card"
 import { ImageUploadCard } from "./input-cards/image-upload-card"
 import { VideoUploadCard } from "./input-cards/video-upload-card"
@@ -59,7 +59,7 @@ import {
 } from "./views"
 
 const POINTER_ACTIVATION = { activationConstraint: { distance: 5 } } as const
-const VALID_VIEW_MODES = new Set<PresentationViewMode>(["horizontal", "vertical", "gallery", "fullscreen", "compare"])
+const VALID_VIEW_MODES = new Set<PresentationViewMode>(ALL_VIEW_MODES)
 
 /** Reorder nodes by an ID array, appending any new nodes at the end */
 function orderNodesByIds(nodes: WorkflowNode[], order: string[] | undefined): WorkflowNode[] {
@@ -127,12 +127,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
   const workflowName = isFullscreen ? presName : editorName
   const settings = isFullscreen ? presPresentationSettings : presentationSettings
 
-  // View mode — synced with URL ?view= param
+  // View mode — synced with URL ?view= param, constrained by allowed modes for shared viewers
   const [searchParams, setSearchParams] = useSearchParams()
   const urlViewMode = searchParams.get("view") as PresentationViewMode | null
-  const viewMode: PresentationViewMode = (urlViewMode && VALID_VIEW_MODES.has(urlViewMode) ? urlViewMode : null) ?? settings.viewMode ?? "horizontal"
+
+  // Shared viewers get constrained to allowed modes; owner/tab mode gets all modes
+  const allowedModes = isFullscreen ? (settings.shareAllowedModes ?? ALL_VIEW_MODES) : ALL_VIEW_MODES
+  const allowedSet = new Set(allowedModes)
+  const effectiveDefault = (settings.shareDefaultMode && allowedSet.has(settings.shareDefaultMode))
+    ? settings.shareDefaultMode : (isFullscreen ? (allowedModes[0] ?? "horizontal") : (settings.viewMode ?? "horizontal"))
+  const viewMode: PresentationViewMode = (urlViewMode && VALID_VIEW_MODES.has(urlViewMode) && allowedSet.has(urlViewMode)
+    ? urlViewMode : null) ?? effectiveDefault
   const canEdit = viewMode === "horizontal" || viewMode === "vertical"
   const isEditing = isEditMode && mode === "tab" && canEdit
+
+  // Read-only enforcement for shared viewers
+  const isShareReadOnly = isFullscreen && !!settings.shareReadOnly
 
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
     // Update URL param
@@ -377,8 +387,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
       isFullscreen={isFullscreen}
       inputValues={presInputValues}
       onUpdateInput={presUpdateInput}
+      readOnly={isShareReadOnly}
     />
-  ), [isFullscreen, presInputValues, presUpdateInput])
+  ), [isFullscreen, presInputValues, presUpdateInput, isShareReadOnly])
 
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     const outputType = getOutputType(node.type)
@@ -398,6 +409,12 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
   }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia])
 
   const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
+
+  // Stable reference for ShareDialog nodes prop
+  const allPresentationNodes = useMemo(
+    () => [...orderedInputNodes, ...orderedOutputNodes],
+    [orderedInputNodes, orderedOutputNodes],
+  )
 
   // Shared props for all views
   const viewProps = {
@@ -452,7 +469,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
             </Button>
           )}
 
-          {(isEditing || isFullscreen) && (
+          {(isEditing || (isFullscreen && !isShareReadOnly)) && (
             <RunTargetSelector
               nodes={nodes}
               presentationSettings={settings}
@@ -460,13 +477,21 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
             />
           )}
 
-          {/* View mode selector */}
+          {/* View mode selector — owner sees all, shared viewers see allowed subset */}
           {isOwner && mode === "tab" && (
             <ViewModeSelector viewMode={viewMode} onChange={handleViewModeChange} />
           )}
+          {isFullscreen && allowedModes.length > 1 && (
+            <ViewModeSelector viewMode={viewMode} onChange={handleViewModeChange} allowedModes={allowedModes} />
+          )}
 
           {isOwner && mode === "tab" && workflowId && (
-            <ShareDialog workflowId={workflowId} />
+            <ShareDialog
+              workflowId={workflowId}
+              presentationSettings={settings}
+              updatePresentationSettings={updatePresentationSettings}
+              nodes={allPresentationNodes}
+            />
           )}
 
           {mode === "tab" && workflowId && (
@@ -493,26 +518,28 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
             </Button>
           )}
 
-          {/* Run button */}
-          {isRunning ? (
-            <button
-              type="button"
-              className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] flex items-center gap-2 animate-pulse"
-              disabled
-            >
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Running...
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleRunClick}
-              className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
-              disabled={!isFullscreen && mode === "tab"}
-            >
-              <Play className="h-4 w-4" />
-              Run{costLabel}
-            </button>
+          {/* Run button — hidden when shared read-only */}
+          {!isShareReadOnly && (
+            isRunning ? (
+              <button
+                type="button"
+                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] flex items-center gap-2 animate-pulse"
+                disabled
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Running...
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleRunClick}
+                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
+                disabled={!isFullscreen && mode === "tab"}
+              >
+                <Play className="h-4 w-4" />
+                Run{costLabel}
+              </button>
+            )
           )}
         </div>
       </div>
@@ -572,11 +599,13 @@ function InputCard({
   isFullscreen,
   inputValues,
   onUpdateInput,
+  readOnly,
 }: {
   node: WorkflowNode
   isFullscreen: boolean
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
+  readOnly?: boolean
 }) {
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
@@ -595,6 +624,7 @@ function InputCard({
               useWorkflowStore.getState().updateNodeData(node.id, { text: val })
             }
           }}
+          readOnly={readOnly}
         />
       )
 
@@ -607,6 +637,7 @@ function InputCard({
           isFullscreen={isFullscreen}
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
+          readOnly={readOnly}
         />
       )
 
@@ -619,6 +650,7 @@ function InputCard({
           isFullscreen={isFullscreen}
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
+          readOnly={readOnly}
         />
       )
 
@@ -631,6 +663,7 @@ function InputCard({
           isFullscreen={isFullscreen}
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
+          readOnly={readOnly}
         />
       )
 
@@ -644,6 +677,7 @@ function InputCard({
           isFullscreen={isFullscreen}
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
+          readOnly={readOnly}
         />
       )
   }

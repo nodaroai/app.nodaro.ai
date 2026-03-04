@@ -6,9 +6,10 @@ interface TextInputCardProps {
   value: string
   placeholder?: string
   onChange: (value: string) => void
+  readOnly?: boolean
 }
 
-export function TextInputCard({ label, value, placeholder, onChange }: TextInputCardProps) {
+export function TextInputCard({ label, value, placeholder, onChange, readOnly }: TextInputCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-resize textarea to fit content
@@ -29,7 +30,8 @@ export function TextInputCard({ label, value, placeholder, onChange }: TextInput
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full min-h-[80px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200"
+        readOnly={readOnly}
+        className={`w-full min-h-[80px] bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-[#ff0073]/50 focus:ring-1 focus:ring-[#ff0073]/30 transition-all duration-200${readOnly ? " opacity-70 cursor-default" : ""}`}
       />
     </GlassCard>
   )
