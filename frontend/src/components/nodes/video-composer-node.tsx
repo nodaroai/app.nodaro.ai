@@ -1,8 +1,10 @@
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Sparkles, Loader2, AlertCircle } from "lucide-react"
+import { Sparkles, Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { VideoComposerData } from "@/types/nodes"
@@ -10,6 +12,7 @@ import type { VideoComposerData } from "@/types/nodes"
 function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as VideoComposerData | undefined
   const nodeData = currentNodeData ?? (data as VideoComposerData)
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const credits = useModelCredits("video-composer", 2)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -22,7 +25,12 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
   const duration = nodeData.durationSeconds ?? 30
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ maxWidth: '220px' }}>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Sparkles className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -31,9 +39,16 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={isRunning}
+      hideHeader
+      minWidth={220}
+      toolbarActions={
+        !isRunning ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "composition", type: "source", position: Position.Right, label: "Composition" },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -81,7 +96,8 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
+    <HandleIcon icon={<Sparkles />} color="steel" side="left" />
+    <HandleIcon icon={<Film />} color="steel" />
     </div>
   )
 }

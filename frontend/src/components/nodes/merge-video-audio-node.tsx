@@ -2,9 +2,11 @@
 
 import { memo, useState, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform } from "lucide-react"
+import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform, Clapperboard } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -75,7 +77,8 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ maxWidth: '220px' }}>
+      <EditableNodeLabel label={nodeData.label} icon={<Volume2 className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -84,9 +87,12 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      hideHeader
+      minWidth={220}
+      toolbarActions={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "video-out", type: "source", position: Position.Right, label: "Video" },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+        { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -221,7 +227,8 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <HandleIcon icon={<Clapperboard />} color="steel" side="left" />
+    <HandleIcon icon={<Film />} color="steel" />
     {activeUrl && (
       <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} />
     )}

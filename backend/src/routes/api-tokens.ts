@@ -8,6 +8,7 @@
  *   DELETE /v1/api-tokens/:id       — Delete token
  *
  * Public API (Bearer token auth, no JWT):
+ *   GET    /v1/api/workflows         — List accessible workflows
  *   GET    /v1/api/schema            — Get workflow input/output schema
  *   POST   /v1/api/run               — Execute workflow
  *   GET    /v1/api/status/:execId    — Poll execution status
@@ -447,6 +448,103 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       }
 
       req.apiToken = resolved
+    })
+
+    // --- List workflows ---
+    api.get("/v1/api/workflows", async (req, reply) => {
+      const resolved = req.apiToken!
+
+      if (!checkApiRateLimit(resolved.tokenHash, resolved.rateLimit)) {
+        return reply.status(429).send({
+          error: { code: "rate_limited", message: `Too many requests. Max ${resolved.rateLimit} per minute.` },
+        })
+      }
+
+      const query = req.query as Record<string, string>
+      const limit = Math.min(Math.max(parseInt(query.limit ?? "50", 10) || 50, 1), 100)
+
+      // Load workflows owned by user (scoped by token if configured)
+      let dbQuery = supabase
+        .from("workflows")
+        .select("id, name, description, project_id, version, thumbnail_url, created_at, updated_at, nodes")
+        .eq("user_id", resolved.userId)
+        .order("updated_at", { ascending: false })
+        .limit(limit + 1)
+
+      if (resolved.workflowIds.length > 0) {
+        dbQuery = dbQuery.in("id", resolved.workflowIds)
+      }
+
+      if (query.cursor) {
+        dbQuery = dbQuery.lt("updated_at", query.cursor)
+      }
+
+      const { data: workflows, error } = await dbQuery
+
+      if (error) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: "Failed to fetch workflows" },
+        })
+      }
+
+      const rows = workflows ?? []
+      const hasMore = rows.length > limit
+      const page = hasMore ? rows.slice(0, limit) : rows
+
+      // Collect all unique sub-workflow IDs across returned workflows
+      const subWorkflowIds = new Set<string>()
+      for (const wf of page) {
+        for (const node of ((wf.nodes ?? []) as GenericNode[])) {
+          if (node.type === "sub-workflow" && node.data?.referencedWorkflowId) {
+            subWorkflowIds.add(node.data.referencedWorkflowId as string)
+          }
+        }
+      }
+
+      // Batch-resolve sub-workflow names
+      const subWorkflowNames = new Map<string, string>()
+      if (subWorkflowIds.size > 0) {
+        const { data: subWfs } = await supabase
+          .from("workflows")
+          .select("id, name")
+          .eq("user_id", resolved.userId)
+          .in("id", Array.from(subWorkflowIds))
+
+        for (const sw of subWfs ?? []) {
+          subWorkflowNames.set(sw.id, sw.name)
+        }
+      }
+
+      const data = page.map((wf) => {
+        const seen = new Set<string>()
+        const subWorkflows: Array<{ id: string; name: string }> = []
+        for (const node of ((wf.nodes ?? []) as GenericNode[])) {
+          if (node.type === "sub-workflow" && node.data?.referencedWorkflowId) {
+            const refId = node.data.referencedWorkflowId as string
+            const name = subWorkflowNames.get(refId)
+            if (name && !seen.has(refId)) {
+              seen.add(refId)
+              subWorkflows.push({ id: refId, name })
+            }
+          }
+        }
+
+        return {
+          id: wf.id,
+          name: wf.name,
+          description: wf.description ?? null,
+          projectId: wf.project_id,
+          version: wf.version ?? 1,
+          thumbnailUrl: wf.thumbnail_url ?? null,
+          createdAt: wf.created_at,
+          updatedAt: wf.updated_at,
+          subWorkflows,
+        }
+      })
+
+      const nextCursor = hasMore ? page[page.length - 1]?.updated_at : undefined
+
+      return reply.send({ data, nextCursor })
     })
 
     // --- Schema ---

@@ -1,14 +1,17 @@
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Layers, Loader2, AlertCircle } from "lucide-react"
+import { Layers, Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { CompositeData } from "@/types/nodes"
 
 function CompositeNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as CompositeData | undefined
   const nodeData = currentNodeData ?? (data as CompositeData)
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"
@@ -19,7 +22,12 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
     : 0
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ maxWidth: '220px' }}>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Layers className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -27,12 +35,19 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
       category="processing"
       selected={selected}
       isRunning={isRunning}
+      hideHeader
+      minWidth={220}
+      toolbarActions={
+        !isRunning ? (
+          <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={[
-        { id: "video1", type: "target", position: Position.Left, label: "Video 1", top: "20%" },
-        { id: "video2", type: "target", position: Position.Left, label: "Video 2", top: "40%" },
-        { id: "video3", type: "target", position: Position.Left, label: "Video 3", top: "60%" },
-        { id: "video4", type: "target", position: Position.Left, label: "Video 4", top: "80%" },
-        { id: "composition", type: "source", position: Position.Right, label: "Composition" },
+        { id: "video1", type: "target", position: Position.Left, customStyle: { top: '20%', left: '-29px' }, hideHandle: true },
+        { id: "video2", type: "target", position: Position.Left, customStyle: { top: '40%', left: '-29px' }, hideHandle: true },
+        { id: "video3", type: "target", position: Position.Left, customStyle: { top: '60%', left: '-29px' }, hideHandle: true },
+        { id: "video4", type: "target", position: Position.Left, customStyle: { top: '80%', left: '-29px' }, hideHandle: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -80,7 +95,11 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={0} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="20%" />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="40%" />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="60%" />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="80%" />
+    <HandleIcon icon={<Film />} color="steel" />
     </div>
   )
 }

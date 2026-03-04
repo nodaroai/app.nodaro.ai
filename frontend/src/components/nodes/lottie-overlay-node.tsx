@@ -1,8 +1,10 @@
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Layers, Loader2, AlertCircle } from "lucide-react"
+import { Layers, Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { LottieOverlayData } from "@/types/nodes"
@@ -10,6 +12,7 @@ import type { LottieOverlayData } from "@/types/nodes"
 function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as LottieOverlayData | undefined
   const nodeData = currentNodeData ?? (data as LottieOverlayData)
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const credits = useModelCredits("lottie-overlay", 2)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -21,7 +24,12 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
     : 0
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ maxWidth: '220px' }}>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Layers className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -30,10 +38,17 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={isRunning}
+      hideHeader
+      minWidth={220}
+      toolbarActions={
+        !isRunning ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Video", top: "30%" },
-        { id: "lottie", type: "target", position: Position.Left, label: "Lottie", top: "70%" },
-        { id: "composition", type: "source", position: Position.Right, label: "Composition" },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '30%', left: '-29px' }, hideHandle: true },
+        { id: "lottie", type: "target", position: Position.Left, customStyle: { top: '70%', left: '-29px' }, hideHandle: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -81,7 +96,9 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
+    <HandleIcon icon={<Film />} color="steel" side="left" top="30%" />
+    <HandleIcon icon={<Layers />} color="steel" side="left" top="70%" />
+    <HandleIcon icon={<Film />} color="steel" />
     </div>
   )
 }
