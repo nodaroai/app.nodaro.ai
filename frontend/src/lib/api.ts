@@ -156,6 +156,7 @@ export async function editImage(
     negativePrompt?: string
     style?: string
     seed?: number
+    referenceImageUrls?: string[]
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl }
@@ -182,6 +183,9 @@ export async function editImage(
   }
   if (options?.seed != null) {
     body.seed = options.seed
+  }
+  if (options?.referenceImageUrls?.length) {
+    body.referenceImageUrls = options.referenceImageUrls
   }
   const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
     method: "POST",

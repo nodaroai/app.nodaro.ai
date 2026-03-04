@@ -482,6 +482,7 @@ export type EditImageData = {
   style?: string
   seed?: number
   characterDefinitionIds?: readonly string[]
+  connectedMediaOrder?: readonly string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -509,6 +510,7 @@ export type ImageToImageData = {
   guidanceScale?: number
   referenceImageUrl?: string
   characterDefinitionIds?: readonly string[]
+  connectedMediaOrder?: readonly string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -550,6 +552,7 @@ export type ImageToVideoData = {
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
+  connectedImageOrder?: readonly string[]
 }
 
 export type TextToSpeechData = {
@@ -1097,6 +1100,7 @@ export type MixAudioData = {
   label: string
   trackCount: number
   trackVolumes: Record<string, number>
+  trackOrder?: string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

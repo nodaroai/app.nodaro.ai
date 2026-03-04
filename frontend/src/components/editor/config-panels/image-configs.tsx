@@ -30,6 +30,7 @@ import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, IMAGE_STYLE_PRES
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import { ReferenceImageList } from "./reference-image-list"
+import { ConnectedMediaList } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
 
@@ -528,6 +529,19 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
               placeholder="Describe how to edit the image..."
             />
           </MappableField>
+
+          {/* Connected upstream images with ordering */}
+          {sources.filter((s) => IMAGE_SOURCE_TYPES.has(s.type)).length > 0 && (
+            <ConnectedMediaList
+              sources={sources}
+              mediaOrder={data.connectedMediaOrder ?? []}
+              onUpdateOrder={(order) => onUpdate({ connectedMediaOrder: order })}
+              acceptedTypes={IMAGE_SOURCE_TYPES}
+              mediaType="image"
+              primaryLabel="Image to Edit"
+            />
+          )}
+
           <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={isCustomStyle ? "__custom__" : (data.style || "__none__")}
@@ -904,6 +918,18 @@ export function ImageToImageConfig({ data, onUpdate, sources, fieldMappings, onM
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>
+
+      {/* Connected upstream images with ordering */}
+      {sources.filter((s) => IMAGE_SOURCE_TYPES.has(s.type)).length > 0 && (
+        <ConnectedMediaList
+          sources={sources}
+          mediaOrder={data.connectedMediaOrder ?? []}
+          onUpdateOrder={(order) => onUpdate({ connectedMediaOrder: order })}
+          acceptedTypes={IMAGE_SOURCE_TYPES}
+          mediaType="image"
+          primaryLabel="Main Image"
+        />
+      )}
 
       {/* Assets section (characters, locations, objects) */}
       <div className="pt-1">

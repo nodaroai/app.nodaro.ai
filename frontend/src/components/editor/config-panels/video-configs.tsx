@@ -33,6 +33,7 @@ import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { getConnectedProviderModel } from "./helpers"
+import { ConnectedMediaList } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 
 
@@ -103,40 +104,14 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   return (
     <div className="flex flex-col gap-3">
       {connectedImages.length > 0 && (
-        <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
-            Connected Images ({connectedImages.length})
-          </Label>
-          <div className="flex flex-col gap-2">
-            {connectedImages.map((img) => (
-              <div key={img.id} className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-500 dark:text-[#64748B] font-medium w-16 shrink-0 leading-tight truncate" title={img.label}>
-                  {img.label}
-                </span>
-                <div
-                  className="flex-1 h-16 rounded-lg border border-gray-200 dark:border-[#2D2D2D] overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#ff0073] transition-all bg-gray-100 dark:bg-[#121212]"
-                  onClick={() => img.imageUrl && setLightboxImage(img.imageUrl)}
-                  title={`Click to view: ${img.label}`}
-                >
-                  {img.imageUrl ? (
-                    <CachedImage
-                      src={img.imageUrl}
-                      alt={img.label}
-                      className="w-full h-full object-cover"
-                      thumbnail
-                      thumbnailWidth={160}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="w-6 h-6 text-gray-400" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-2">Click to view full size</p>
-        </div>
+        <ConnectedMediaList
+          sources={sources}
+          mediaOrder={data.connectedImageOrder ?? []}
+          onUpdateOrder={(order) => onUpdate({ connectedImageOrder: order })}
+          acceptedTypes={new Set(["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"])}
+          mediaType="image"
+          primaryLabel="Start Frame"
+        />
       )}
 
       {connectedTextPrompts.length > 0 && (

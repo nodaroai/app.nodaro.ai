@@ -174,6 +174,7 @@ export function runEditImage(
     negativePrompt?: string
     style?: string
     seed?: number
+    referenceImageUrls?: string[]
   },
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
