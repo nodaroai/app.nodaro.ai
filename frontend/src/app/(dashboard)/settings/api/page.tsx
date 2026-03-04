@@ -200,27 +200,32 @@ export default function ApiSettingsPage() {
         <div className="space-y-4">
           <CodeExample
             title="Get Schema"
-            code={`curl '${window.location.origin}/v1/api/YOUR_TOKEN/schema?workflowId=WORKFLOW_ID'`}
+            code={`curl -H 'Authorization: Bearer YOUR_TOKEN' \\
+  '${window.location.origin}/v1/api/schema?workflowId=WORKFLOW_ID'`}
           />
           <CodeExample
             title="Run Workflow (async)"
-            code={`curl -X POST '${window.location.origin}/v1/api/YOUR_TOKEN/run' \\
+            code={`curl -X POST -H 'Authorization: Bearer YOUR_TOKEN' \\
   -H 'Content-Type: application/json' \\
+  '${window.location.origin}/v1/api/run' \\
   -d '{"workflowId": "WORKFLOW_ID", "inputs": {"node_id": {"text": "A sunset"}}}'`}
           />
           <CodeExample
             title="Run Workflow (sync, wait for result)"
-            code={`curl -X POST '${window.location.origin}/v1/api/YOUR_TOKEN/run?wait=true&timeout=120' \\
+            code={`curl -X POST -H 'Authorization: Bearer YOUR_TOKEN' \\
   -H 'Content-Type: application/json' \\
+  '${window.location.origin}/v1/api/run?wait=true&timeout=120' \\
   -d '{"workflowId": "WORKFLOW_ID", "inputs": {"node_id": {"text": "A sunset"}}}'`}
           />
           <CodeExample
             title="Check Status"
-            code={`curl '${window.location.origin}/v1/api/YOUR_TOKEN/status/EXECUTION_ID'`}
+            code={`curl -H 'Authorization: Bearer YOUR_TOKEN' \\
+  '${window.location.origin}/v1/api/status/EXECUTION_ID'`}
           />
           <CodeExample
             title="Get Result"
-            code={`curl '${window.location.origin}/v1/api/YOUR_TOKEN/result/EXECUTION_ID'`}
+            code={`curl -H 'Authorization: Bearer YOUR_TOKEN' \\
+  '${window.location.origin}/v1/api/result/EXECUTION_ID'`}
           />
         </div>
       </div>
