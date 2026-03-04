@@ -30,6 +30,7 @@ import type {
 } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import { ConnectedMediaList, applyMediaOrder } from "./connected-media-list"
+import { isVideoUrl } from "@/lib/media-type"
 import { PLATFORM_SPECS, CONTENT_TYPES_BY_PLATFORM, PLATFORM_LABELS, type SocialMediaPlatform } from "@/lib/social-media-specs"
 import { PlatformPreview } from "@/components/nodes/platform-preview"
 import { Textarea } from "@/components/ui/textarea"
@@ -715,7 +716,7 @@ export function SocialMediaFormatConfig({ data, onUpdate }: ConfigProps<SocialMe
         platform={platform}
         specKey={data.specKey}
         mediaUrl={data.generatedVideoUrl ?? data.generatedImageUrl}
-        isVideo={data.generatedVideoUrl ? /\.(mp4|webm|mov|avi)(\?|$)/i.test(data.generatedVideoUrl) : false}
+        isVideo={data.generatedVideoUrl ? isVideoUrl(data.generatedVideoUrl) : false}
         caption={data.formattedText}
         size="lg"
       />

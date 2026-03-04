@@ -5,6 +5,7 @@ import { Heart, MessageCircle, Send, Share2 } from "lucide-react"
 import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 export const PLATFORM_COLORS: Record<SocialMediaPlatform, string> = {
   instagram: "#E1306C",
@@ -175,6 +176,8 @@ function MediaSlot({
 }: {
   mediaUrl?: string; isVideo?: boolean; className: string
 }) {
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+
   if (!mediaUrl) {
     return (
       <div className={`${className} flex items-center justify-center bg-muted/20`}>
@@ -189,9 +192,9 @@ function MediaSlot({
         src={mediaUrl}
         className={className}
         muted
-        loop
+        loop={videoAutoplay}
         playsInline
-        autoPlay
+        autoPlay={videoAutoplay}
       />
     )
   }

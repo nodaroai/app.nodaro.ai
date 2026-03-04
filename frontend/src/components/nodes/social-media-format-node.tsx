@@ -12,6 +12,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { isVideoUrl } from "@/lib/media-type"
 import { PLATFORM_SPECS, PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialMediaFormatData } from "@/types/nodes"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
@@ -34,7 +35,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const spec = PLATFORM_SPECS[nodeData.specKey]
   const specIsVideo = spec?.isVideo !== false
   // Detect actual media type from URL — spec says "can be video" but result might be image
-  const urlIsVideo = activeUrl ? /\.(mp4|webm|mov|avi)(\?|$)/i.test(activeUrl) : specIsVideo
+  const urlIsVideo = activeUrl ? isVideoUrl(activeUrl) : specIsVideo
   const platformLabel = PLATFORM_LABELS[nodeData.platform as SocialMediaPlatform] ?? nodeData.platform
 
   function handleDeleteResult(indexToDelete: number) {
