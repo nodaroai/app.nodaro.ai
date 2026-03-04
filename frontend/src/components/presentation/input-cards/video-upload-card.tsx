@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { X, Play } from "lucide-react"
+import { X, Play, Maximize2 } from "lucide-react"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { GlassCard, GlassButton } from "../output-cards/shared"
 import { useMediaUpload, FileDropZone, UrlInputRow } from "./shared"
@@ -25,28 +25,29 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
       </label>
 
       {media.effectiveUrl ? (
-        <div className="relative group rounded-lg overflow-hidden">
+        <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setPreviewOpen(true)}>
           <video
             src={media.effectiveUrl}
-            className="w-full max-h-48 rounded-lg bg-black/20 object-contain"
+            className="w-full rounded-lg bg-black/20 object-contain"
             muted
             playsInline
           />
-          <div
-            className="absolute inset-0 flex items-center justify-center cursor-pointer"
-            onClick={() => setPreviewOpen(true)}
-          >
-            <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/60 transition-all">
-              <Play className="w-6 h-6 text-white ml-0.5" fill="white" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center group-hover:bg-black/60 group-hover:scale-110 transition-all duration-200">
+              <Play className="w-7 h-7 text-white ml-1" fill="white" />
             </div>
           </div>
-          {!readOnly && (
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Hover toolbar — top-right, no blur overlay */}
+          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <GlassButton onClick={() => setPreviewOpen(true)} title="Fullscreen">
+              <Maximize2 className="w-3.5 h-3.5" />
+            </GlassButton>
+            {!readOnly && (
               <GlassButton onClick={media.handleRemove} title="Remove">
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </GlassButton>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       ) : readOnly ? (
         <div className="flex items-center justify-center h-32 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">

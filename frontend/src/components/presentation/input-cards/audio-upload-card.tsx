@@ -26,12 +26,14 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
             <WaveformBars />
             <audio src={media.effectiveUrl} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
-            {!readOnly && (
+          </div>
+          {!readOnly && (
+            <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <GlassButton onClick={media.handleRemove} title="Remove">
                 <X className="w-3.5 h-3.5" />
               </GlassButton>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       ) : readOnly ? (
         <div className="flex items-center justify-center h-24 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
