@@ -2,30 +2,49 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Rss } from "lucide-react"
+import { Rss, Type, ImageIcon } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { RSSFeedData } from "@/types/nodes"
+
+const HANDLES = [
+  { id: "text", type: "source" as const, position: Position.Right, customStyle: { top: '40%', right: '-29px' }, hideHandle: true },
+  { id: "image", type: "source" as const, position: Position.Right, customStyle: { top: '70%', right: '-29px' }, hideHandle: true },
+] as const
 
 function RSSFeedNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as RSSFeedData
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
   return (
-    <BaseNode
-      id={id}
-      label={nodeData.label}
-      icon={<Rss className="h-4 w-4" />}
-      category="input"
-      credits={0}
-      selected={selected}
-      handles={[
-        { id: "text", type: "source", position: Position.Right, label: "Text", top: "40%" },
-        { id: "image", type: "source", position: Position.Right, label: "Image", top: "70%" },
-      ]}
-    >
-      <p className="text-muted-foreground truncate max-w-[180px]">
-        {nodeData.feedUrl || "Enter feed URL..."}
-      </p>
-    </BaseNode>
+    <div className="relative max-w-[220px]">
+      <EditableNodeLabel
+        label={nodeData.label}
+        icon={<Rss className="w-3.5 h-3.5" />}
+        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+      />
+      <BaseNode
+        id={id}
+        label={nodeData.label}
+        icon={<Rss className="h-4 w-4" />}
+        category="input"
+        credits={0}
+        selected={selected}
+        minWidth={220}
+        hideHeader
+        handles={HANDLES}
+      >
+        <div className="p-3">
+          <p className="text-muted-foreground truncate max-w-[180px]">
+            {nodeData.feedUrl || "Enter feed URL..."}
+          </p>
+        </div>
+      </BaseNode>
+      <HandleIcon icon={<Type />} top="40%" />
+      <HandleIcon icon={<ImageIcon />} top="70%" />
+    </div>
   )
 }
 

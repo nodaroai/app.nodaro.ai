@@ -13,6 +13,14 @@ vi.mock("@xyflow/react", () => ({
   useUpdateNodeInternals: vi.fn(() => () => {}),
 }))
 
+vi.mock("../editable-node-label", () => ({
+  EditableNodeLabel: ({ label }: any) => <div data-testid="editable-node-label">{label}</div>,
+}))
+
+vi.mock("../handle-icon", () => ({
+  HandleIcon: () => <div data-testid="handle-icon" />,
+}))
+
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id, isRunning, handles }: any) => (
     <div data-testid="base-node" data-label={label} data-category={category} data-credits={credits} data-id={id} data-is-running={isRunning}>
@@ -24,7 +32,7 @@ vi.mock("../base-node", () => ({
 
 vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Repeat: I }
+  return { Repeat: I, Type: I }
 })
 
 vi.mock("../run-node-button", () => ({
@@ -34,6 +42,7 @@ vi.mock("../run-node-button", () => ({
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({
     runSingleNode: () => {},
+    updateNodeData: () => {},
     edges: [],
   }),
 }))
