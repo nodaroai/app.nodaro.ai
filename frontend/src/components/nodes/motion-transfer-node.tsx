@@ -50,7 +50,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const maxDuration = nodeData.characterOrientation === "image" ? 10 : 30
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ contain: 'inline-size' }}>
     {/* Floating label above node */}
     <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
       <Waypoints className="w-3.5 h-3.5" />
