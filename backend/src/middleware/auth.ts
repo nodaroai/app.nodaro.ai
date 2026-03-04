@@ -84,6 +84,9 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/voices" },
   { method: "GET", path: "/v1/voices/library" },
   { path: "/v1/webhooks", prefix: true },
+  // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/:token/..."
+  // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).
+  // Removing the trailing slash would expose token management routes publicly.
   { path: "/v1/api/", prefix: true },
 ]
 
