@@ -26,20 +26,20 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
       </label>
 
       {media.effectiveUrl ? (
-        <div className="relative group rounded-lg overflow-hidden">
+        <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setLightboxSrc(media.effectiveUrl!)}>
           <CachedImage
             src={media.effectiveUrl}
             alt={label}
-            className="w-full max-h-64 object-contain rounded-lg bg-black/20 cursor-pointer"
-            onClick={() => setLightboxSrc(media.effectiveUrl!)}
+            className="w-full rounded-lg bg-black/20"
           />
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
+          {/* Hover toolbar — top-right, no blur overlay */}
+          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <GlassButton onClick={() => setLightboxSrc(media.effectiveUrl!)} title="Enlarge">
-              <Maximize2 className="w-4 h-4" />
+              <Maximize2 className="w-3.5 h-3.5" />
             </GlassButton>
             {!readOnly && (
               <GlassButton onClick={media.handleRemove} title="Remove">
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </GlassButton>
             )}
           </div>
