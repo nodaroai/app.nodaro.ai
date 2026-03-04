@@ -1081,6 +1081,24 @@ export type ResizeVideoData = {
   activeResultIndex?: number
 }
 
+export type SocialMediaFormatData = {
+  [key: string]: unknown
+  label: string
+  platform: string
+  contentType: string
+  specKey: string
+  method: "crop" | "pad" | "stretch"
+  padColor: string
+  formattedText: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type ExtractAudioData = {
   [key: string]: unknown
   label: string
@@ -1773,6 +1791,7 @@ export type SceneNodeData =
   | MergeVideoAudioData
   | AddCaptionsData
   | ResizeVideoData
+  | SocialMediaFormatData
   | ExtractAudioData
   | MixAudioData
   | AdjustVolumeData
@@ -1860,6 +1879,7 @@ export type SceneNodeType =
   | "merge-video-audio"
   | "add-captions"
   | "resize-video"
+  | "social-media-format"
   | "extract-audio"
   | "mix-audio"
   | "adjust-volume"
@@ -2418,6 +2438,24 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Resize Video", targetAspect: "9:16", method: "crop", padColor: "#000000", fieldMappings: {} },
+  },
+  {
+    type: "social-media-format",
+    label: "Social Media Format",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["media", "text"],
+    outputs: ["media", "text"],
+    defaultData: {
+      label: "Social Media Format",
+      platform: "instagram",
+      contentType: "feed-square",
+      specKey: "instagram:feed-square",
+      method: "pad",
+      padColor: "#000000",
+      formattedText: "",
+      fieldMappings: {},
+    } as SocialMediaFormatData,
   },
   {
     type: "extract-audio",

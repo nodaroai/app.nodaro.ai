@@ -26,9 +26,12 @@ import type {
   FadeVideoData,
   TranscodeVideoData,
   ManualEditData,
+  SocialMediaFormatData,
 } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import { ConnectedMediaList, applyMediaOrder } from "./connected-media-list"
+import { PLATFORM_SPECS, CONTENT_TYPES_BY_PLATFORM, PLATFORM_LABELS, type SocialMediaPlatform } from "@/lib/social-media-specs"
+import { Textarea } from "@/components/ui/textarea"
 import type { ConfigProps } from "./types"
 
 export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
@@ -639,6 +642,121 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+export function SocialMediaFormatConfig({ data, onUpdate }: ConfigProps<SocialMediaFormatData>) {
+  const platform = (data.platform ?? "instagram") as SocialMediaPlatform
+  const contentTypes = CONTENT_TYPES_BY_PLATFORM[platform] ?? []
+  const spec = PLATFORM_SPECS[data.specKey]
+  const textLen = (data.formattedText ?? "").length
+  const textLimit = spec?.textLimit ?? 2200
+  const isOverLimit = textLen > textLimit
+
+  function handlePlatformChange(newPlatform: string) {
+    const types = CONTENT_TYPES_BY_PLATFORM[newPlatform as SocialMediaPlatform]
+    const firstKey = types?.[0]?.key ?? `${newPlatform}:video`
+    const firstSpec = PLATFORM_SPECS[firstKey]
+    onUpdate({
+      platform: newPlatform,
+      specKey: firstKey,
+      contentType: firstSpec?.contentType ?? "",
+    })
+  }
+
+  function handleContentTypeChange(specKey: string) {
+    const s = PLATFORM_SPECS[specKey]
+    onUpdate({
+      specKey,
+      contentType: s?.contentType ?? "",
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Platform</Label>
+        <Select value={platform} onValueChange={handlePlatformChange}>
+          <SelectTrigger aria-label="Platform"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {(Object.keys(PLATFORM_LABELS) as SocialMediaPlatform[]).map((p) => (
+              <SelectItem key={p} value={p}>{PLATFORM_LABELS[p]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Content Type</Label>
+        <Select value={data.specKey} onValueChange={handleContentTypeChange}>
+          <SelectTrigger aria-label="Content type"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {contentTypes.map((ct) => (
+              <SelectItem key={ct.key} value={ct.key}>{ct.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {spec && (
+        <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground space-y-1">
+          <div className="flex justify-between"><span>Dimensions</span><span className="font-medium text-foreground">{spec.width}×{spec.height}</span></div>
+          <div className="flex justify-between"><span>Aspect Ratio</span><span className="font-medium text-foreground">{(spec.width / spec.height).toFixed(2)}:1</span></div>
+          {spec.maxDurationSeconds && (
+            <div className="flex justify-between"><span>Max Duration</span><span className="font-medium text-foreground">{spec.maxDurationSeconds}s</span></div>
+          )}
+          <div className="flex justify-between"><span>Text Limit</span><span className="font-medium text-foreground">{spec.textLimit.toLocaleString()} chars</span></div>
+        </div>
+      )}
+
+      <div>
+        <Label>Resize Method</Label>
+        <Select value={data.method} onValueChange={(v) => onUpdate({ method: v as SocialMediaFormatData["method"] })}>
+          <SelectTrigger aria-label="Resize method"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="crop">Crop (fill, cut edges)</SelectItem>
+            <SelectItem value="pad">Pad (fit, add bars)</SelectItem>
+            <SelectItem value="stretch">Stretch (distort)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {data.method === "pad" && (
+        <div>
+          <Label htmlFor="smf-pad-color">Pad Color</Label>
+          <Input
+            id="smf-pad-color"
+            type="color"
+            value={data.padColor}
+            onChange={(e) => onUpdate({ padColor: e.target.value })}
+          />
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label>Caption / Post Text</Label>
+          <span className={`text-[10px] font-mono ${isOverLimit ? "text-red-500 font-bold" : "text-muted-foreground"}`}>
+            {textLen}/{textLimit}
+          </span>
+        </div>
+        <Textarea
+          value={data.formattedText ?? ""}
+          onChange={(e) => onUpdate({ formattedText: e.target.value })}
+          placeholder="Enter post text (optional)..."
+          className="min-h-[60px] text-xs"
+        />
+        {isOverLimit && (
+          <p className="text-[10px] text-red-500 mt-1">
+            Text exceeds {PLATFORM_LABELS[platform]}'s {textLimit} character limit by {textLen - textLimit} characters.
+          </p>
+        )}
+      </div>
+
+      <p className="text-[10px] text-muted-foreground">
+        0 credits — FFmpeg processing. Reformats media to {PLATFORM_LABELS[platform]} specs.
+      </p>
     </div>
   )
 }

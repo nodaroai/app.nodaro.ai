@@ -46,6 +46,7 @@ import { CombineVideosNode } from "./combine-videos-node";
 import { MergeVideoAudioNode } from "./merge-video-audio-node";
 import { AddCaptionsNode } from "./add-captions-node";
 import { ResizeVideoNode } from "./resize-video-node";
+import { SocialMediaFormatNode } from "./social-media-format-node";
 import { ExtractAudioNode } from "./extract-audio-node";
 import { MixAudioNode } from "./mix-audio-node";
 import { AdjustVolumeNode } from "./adjust-volume-node";
@@ -140,6 +141,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "merge-video-audio": MergeVideoAudioNode,
   "add-captions": AddCaptionsNode,
   "resize-video": ResizeVideoNode,
+  "social-media-format": SocialMediaFormatNode,
   "extract-audio": ExtractAudioNode,
   "mix-audio": MixAudioNode,
   "adjust-volume": AdjustVolumeNode,

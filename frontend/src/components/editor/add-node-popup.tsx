@@ -59,6 +59,7 @@ import {
   Workflow,
   LogIn,
   LogOut,
+  Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
@@ -416,6 +417,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "resize-video",
     label: "Resize Video",
     icon: <Maximize className="h-4 w-4" />,
+    category: "Processing",
+    group: "Video",
+  },
+  {
+    type: "social-media-format",
+    label: "Social Media Format",
+    icon: <Share2 className="h-4 w-4" />,
     category: "Processing",
     group: "Video",
   },

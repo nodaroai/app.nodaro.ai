@@ -157,6 +157,7 @@ export const VIDEO_SOURCE_TYPES = new Set([
   "merge-video-audio",
   "add-captions",
   "resize-video",
+  "social-media-format",
   "trim-video",
   "render-video",
   "speed-ramp",

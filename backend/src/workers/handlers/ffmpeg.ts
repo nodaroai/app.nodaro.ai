@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
+import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
 import { trimVideo } from "../../providers/video/trim-video.js"
@@ -227,6 +228,32 @@ const handleTranscodeVideo: HandlerFn = async function handleTranscodeVideo(job,
   await completeFfmpegVideoJob(outputPath, ctx)
 }
 
+const handleSocialMediaFormat: HandlerFn = async function handleSocialMediaFormat(job, ctx) {
+  const { mediaUrl, mediaType, width, height, method, padColor } = job.data as {
+    jobId: string; mediaUrl: string; mediaType: "image" | "video"
+    width: number; height: number; method: "crop" | "pad" | "stretch"; padColor?: string
+  }
+  console.log(`[worker] social-media-format ${ctx.jobId}: ${mediaType} → ${width}×${height}`)
+  const outputPath = await socialMediaFormat({ mediaUrl, mediaType, width, height, method, padColor })
+  await job.updateProgress(80)
+  if (mediaType === "image") {
+    const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "image", ctx.jobUserId)
+    await cleanupWorkDir(dirname(outputPath))
+    await job.updateProgress(100)
+    if (!await shouldSaveJobResult(ctx.jobId)) return
+    await supabase.from("jobs").update({
+      status: "completed",
+      progress: 100,
+      output_data: { videoUrl: r2Url, imageUrl: r2Url, mediaType: "image" },
+      completed_at: new Date().toISOString(),
+    }).eq("id", ctx.jobId)
+    await commitJobCredits(ctx.usageLogId, ctx.jobId)
+    console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+  } else {
+    await completeFfmpegVideoJob(outputPath, ctx)
+  }
+}
+
 export const ffmpegHandlers: Record<string, HandlerFn> = {
   "combine-videos": handleCombineVideos,
   "merge-video-audio": handleMergeVideoAudio,
@@ -240,4 +267,5 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "add-captions": handleAddCaptions,
   "mix-audio": handleMixAudio,
   "transcode-video": handleTranscodeVideo,
+  "social-media-format": handleSocialMediaFormat,
 }

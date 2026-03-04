@@ -1095,6 +1095,32 @@ export async function resizeVideoApi(videoUrl: string, targetAspect: string, met
   return res.json()
 }
 
+export async function socialMediaFormatApi(
+  mediaUrl: string,
+  mediaType: "image" | "video",
+  specKey: string,
+  width: number,
+  height: number,
+  method: string,
+  padColor?: string,
+  userId?: string,
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { mediaUrl, mediaType, specKey, width, height, method, padColor }
+  if (userId) {
+    body.userId = userId
+  }
+  const res = await fetch(`${API_BASE_URL}/v1/social-media-format`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start social-media-format")
+  }
+  return res.json()
+}
+
 export async function adjustVolumeApi(inputUrl: string, inputType: "audio" | "video", volume?: number, normalize?: boolean, fadeIn?: number, fadeOut?: number, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { volume, normalize, fadeIn, fadeOut }
   if (inputType === "video") {

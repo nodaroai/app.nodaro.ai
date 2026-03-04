@@ -16,6 +16,7 @@ const CREDIT_COSTS: Record<string, number> = {
   "trim-video": 0,
   "image-to-text": 1,
   "sub-workflow": 0,
+  "social-media-format": 0,
 }
 
 export function estimateWorkflowCredits(
