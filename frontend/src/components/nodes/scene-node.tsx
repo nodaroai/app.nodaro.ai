@@ -1,10 +1,13 @@
 "use client"
 
-import { memo, useState, useEffect, Suspense } from "react"
+import { memo, useState, useMemo, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Maximize2, Scissors, Play } from "lucide-react"
+import { Clapperboard, Users, MapPin, Box, Loader2, AlertCircle, X, Maximize2, Scissors, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -24,6 +27,8 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const autoOpenEditorNodeId = useWorkflowStore((s) => s.autoOpenEditorNodeId)
   const setAutoOpenEditorNodeId = useWorkflowStore((s) => s.setAutoOpenEditorNodeId)
+  const edges = useWorkflowStore((s) => s.edges)
+  const inConnectionCount = useMemo(() => edges.filter(e => e.target === id && e.targetHandle === "in").length, [edges, id])
 
   const charCount = nodeData.characters.length
   const objCount = nodeData.objects.length
@@ -69,7 +74,12 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ maxWidth: '220px' }}>
+    <EditableNodeLabel
+      label={nodeData.sceneName || nodeData.label}
+      icon={<Clapperboard className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.sceneName || nodeData.label}
@@ -78,9 +88,24 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      hideHeader
+      topToolbarContent={
+        status !== "running" ? (
+          <div className="flex gap-1">
+            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+            <button
+              type="button"
+              className="flex items-center gap-1 h-6 px-2 text-[11px] font-medium text-white rounded-md shadow-md transition-colors bg-[#8b5cf6] hover:bg-[#7c3aed]"
+              onClick={(e) => { e.stopPropagation(); setEditorOpen(true) }}
+            >
+              <Maximize2 className="w-3 h-3" />
+            </button>
+          </div>
+        ) : undefined
+      }
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "In" },
-        { id: "out", type: "source", position: Position.Right, label: "Out" },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
+        { id: "out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-6px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -238,27 +263,17 @@ function SceneNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Run + Expand buttons (hover tab) */}
-    {status !== "running" && (
-      <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover/run:opacity-100 transition-opacity flex">
-        <button
-          type="button"
-          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-bl-md shadow-md transition-colors bg-[#ff0073] hover:bg-[#e60068]"
-          onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}
-        >
-          <Play className="w-3 h-3" />
-          Run
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-1 h-6 px-3 text-[11px] font-medium text-white rounded-br-md shadow-md transition-colors border-l border-white/20 bg-[#8b5cf6] hover:bg-[#7c3aed]"
-          onClick={(e) => { e.stopPropagation(); setEditorOpen(true) }}
-        >
-          <Maximize2 className="w-3 h-3" />
-          Expand
-        </button>
-      </div>
-    )}
+    {/* Input handle icon */}
+    <HandleIcon icon={<Type />} color="pink" side="left" top="50%">
+      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
+      {inConnectionCount >= 2 && (
+        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
+          {inConnectionCount}
+        </div>
+      )}
+    </HandleIcon>
+    {/* Output handle icon */}
+    <HandleIcon icon={<Clapperboard />} color="pink" side="right" top="50%" />
 
     {activeUrl && (
       <MediaPreviewModal
