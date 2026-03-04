@@ -54,6 +54,9 @@ export interface PresentationSettings {
   viewMode?: PresentationViewMode // defaults to "horizontal"
   compareLeft?: string // node ID for left compare item
   compareRight?: string // node ID for right compare item
+  shareReadOnly?: boolean // default false — pure viewing, no inputs/run
+  shareAllowedModes?: PresentationViewMode[] // default all 5 — subset viewer can use
+  shareDefaultMode?: PresentationViewMode // default "horizontal" — initial mode for viewer
 }
 
 export const DEFAULT_PRESENTATION_SETTINGS: PresentationSettings = { runTarget: "workflow" }

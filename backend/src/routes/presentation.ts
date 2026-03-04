@@ -213,7 +213,7 @@ export async function presentationRoutes(app: FastifyInstance) {
     // Look up workflow by share token
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
-      .select("id, user_id, nodes, is_presentation_enabled")
+      .select("id, user_id, nodes, settings, is_presentation_enabled")
       .eq("share_token", token)
       .eq("is_presentation_enabled", true)
       .single()
@@ -221,6 +221,15 @@ export async function presentationRoutes(app: FastifyInstance) {
     if (wfError || !workflow) {
       return reply.status(404).send({
         error: { code: "not_found", message: "Shared workflow not found" },
+      })
+    }
+
+    // Enforce read-only for non-owners
+    const wfSettings = (workflow.settings ?? {}) as Record<string, unknown>
+    const presSettings = wfSettings.presentationSettings as { shareReadOnly?: boolean } | undefined
+    if (presSettings?.shareReadOnly && workflow.user_id !== req.userId) {
+      return reply.status(403).send({
+        error: { code: "read_only", message: "This shared workflow is in read-only mode" },
       })
     }
 

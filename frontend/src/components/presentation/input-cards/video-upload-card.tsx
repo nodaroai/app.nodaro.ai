@@ -11,9 +11,10 @@ interface VideoUploadCardProps {
   isFullscreen: boolean
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
+  readOnly?: boolean
 }
 
-export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput }: VideoUploadCardProps) {
+export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly }: VideoUploadCardProps) {
   const media = useMediaUpload({ mimePrefix: "video/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -39,11 +40,17 @@ export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues,
               <Play className="w-6 h-6 text-white ml-0.5" fill="white" />
             </div>
           </div>
-          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <GlassButton onClick={media.handleRemove} title="Remove">
-              <X className="w-4 h-4" />
-            </GlassButton>
-          </div>
+          {!readOnly && (
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <GlassButton onClick={media.handleRemove} title="Remove">
+                <X className="w-4 h-4" />
+              </GlassButton>
+            </div>
+          )}
+        </div>
+      ) : readOnly ? (
+        <div className="flex items-center justify-center h-32 bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
+          No video
         </div>
       ) : (
         <FileDropZone
