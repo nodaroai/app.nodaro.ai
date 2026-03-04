@@ -1,10 +1,12 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { UserCircle, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight } from "lucide-react"
+import { UserCircle, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
@@ -25,6 +27,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const edges = useWorkflowStore((s) => s.edges)
+  const inConnectionCount = useMemo(() => edges.filter(e => e.target === id && e.targetHandle === "in").length, [edges, id])
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -56,7 +60,12 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run" style={{ width: activeUrl ? 220 : 200 }}>
+    <div className="relative" style={{ maxWidth: '220px' }}>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<UserCircle className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -65,9 +74,15 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running" || anyAssetRunning}
+      hideHeader
+      topToolbarContent={
+        status !== "running" ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "characterRef", type: "source", position: Position.Right, label: "Character" },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
+        { id: "characterRef", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-6px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -223,8 +238,17 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Run button - Delete is only available via Character Page modal */}
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    {/* Input handle icon */}
+    <HandleIcon icon={<Type />} color="pink" side="left" top="50%">
+      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
+      {inConnectionCount >= 2 && (
+        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
+          {inConnectionCount}
+        </div>
+      )}
+    </HandleIcon>
+    {/* Output handle icon */}
+    <HandleIcon icon={<UserCircle />} color="pink" side="right" top="50%" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
@@ -233,7 +257,6 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
       }}
     />
-
 
     <ImageLightbox
       src={lightboxSrc}

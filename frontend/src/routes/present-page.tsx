@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
+import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 
 export default function PresentPage() {
   const { shareToken } = useParams<{ shareToken: string }>()
@@ -18,6 +19,8 @@ export default function PresentPage() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
+      // Persist the redirect URL so auth-callback can return here after login
+      localStorage.setItem(AUTH_REDIRECT_KEY, `/present/${shareToken}`)
       navigate(`/login?redirect=/present/${shareToken}`)
     }
   }, [authLoading, user, navigate, shareToken])

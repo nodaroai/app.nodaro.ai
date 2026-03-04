@@ -1,6 +1,7 @@
 /**
- * Dropdown for selecting the run target in presentation edit mode.
+ * Dropdown for selecting the run target in presentation mode.
  * Options: "Entire Workflow" + each sub-workflow node in the workflow.
+ * Supports both tab mode (reads from useWorkflowStore) and fullscreen mode (props).
  */
 
 import { useMemo } from "react"
@@ -11,14 +12,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import type { WorkflowNode } from "@/types/nodes"
+import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel } from "@/lib/presentation-utils"
 
-export function RunTargetSelector() {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const presentationSettings = useWorkflowStore((s) => s.presentationSettings)
-  const updatePresentationSettings = useWorkflowStore((s) => s.updatePresentationSettings)
+interface RunTargetSelectorProps {
+  nodes: WorkflowNode[]
+  presentationSettings: PresentationSettings
+  onUpdate?: (patch: Partial<PresentationSettings>) => void
+}
 
+export function RunTargetSelector({ nodes, presentationSettings, onUpdate }: RunTargetSelectorProps) {
   const subWorkflowNodes = useMemo(
     () => nodes.filter((n) => n.type === "sub-workflow"),
     [nodes],
@@ -29,11 +33,12 @@ export function RunTargetSelector() {
     : "workflow"
 
   const handleChange = (value: string) => {
+    if (!onUpdate) return
     if (value === "workflow") {
-      updatePresentationSettings({ runTarget: "workflow", subWorkflowNodeId: undefined })
+      onUpdate({ runTarget: "workflow", subWorkflowNodeId: undefined })
     } else if (value.startsWith("sub:")) {
       const nodeId = value.slice(4)
-      updatePresentationSettings({ runTarget: "sub-workflow", subWorkflowNodeId: nodeId })
+      onUpdate({ runTarget: "sub-workflow", subWorkflowNodeId: nodeId })
     }
   }
 
@@ -41,7 +46,7 @@ export function RunTargetSelector() {
   if (subWorkflowNodes.length === 0) return null
 
   return (
-    <Select value={currentValue} onValueChange={handleChange}>
+    <Select value={currentValue} onValueChange={handleChange} disabled={!onUpdate}>
       <SelectTrigger className="w-[180px] h-8 text-xs">
         <SelectValue placeholder="Run target" />
       </SelectTrigger>

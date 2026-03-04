@@ -72,7 +72,7 @@ export function GlassCard({
 }) {
   return (
     <div
-      className={`bg-card border border-border rounded-xl p-4 transition-all duration-300 ${className}`}
+      className={`bg-transparent border border-border/50 rounded-xl p-4 transition-all duration-300 ${className}`}
     >
       {children}
     </div>

@@ -6,6 +6,7 @@
  */
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Play, Loader2, ExternalLink, Pencil, Eye } from "lucide-react"
 import {
   KeyboardSensor,
@@ -35,6 +36,7 @@ import {
 import { NODE_CREDIT_COSTS, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
 import { shareWorkflow } from "@/lib/api"
 import { toast } from "sonner"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { ShareDialog } from "./share-dialog"
 import { NodePickerDialog } from "./node-picker-dialog"
 import { RunTargetSelector } from "./run-target-selector"
@@ -57,6 +59,7 @@ import {
 } from "./views"
 
 const POINTER_ACTIVATION = { activationConstraint: { distance: 5 } } as const
+const VALID_VIEW_MODES = new Set<PresentationViewMode>(["horizontal", "vertical", "gallery", "fullscreen", "compare"])
 
 /** Reorder nodes by an ID array, appending any new nodes at the end */
 function orderNodesByIds(nodes: WorkflowNode[], order: string[] | undefined): WorkflowNode[] {
@@ -124,12 +127,25 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
   const workflowName = isFullscreen ? presName : editorName
   const settings = isFullscreen ? presPresentationSettings : presentationSettings
 
-  // View mode
-  const viewMode: PresentationViewMode = settings.viewMode ?? "horizontal"
+  // View mode — synced with URL ?view= param
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlViewMode = searchParams.get("view") as PresentationViewMode | null
+  const viewMode: PresentationViewMode = (urlViewMode && VALID_VIEW_MODES.has(urlViewMode) ? urlViewMode : null) ?? settings.viewMode ?? "horizontal"
   const canEdit = viewMode === "horizontal" || viewMode === "vertical"
   const isEditing = isEditMode && mode === "tab" && canEdit
 
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
+    // Update URL param
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (newMode === "horizontal") {
+        next.delete("view")
+      } else {
+        next.set("view", newMode)
+      }
+      return next
+    }, { replace: true })
+    // Persist in settings
     if (!isFullscreen) {
       updatePresentationSettings({ viewMode: newMode })
     }
@@ -137,7 +153,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
     if (newMode !== "horizontal" && newMode !== "vertical") {
       setIsEditMode(false)
     }
-  }, [isFullscreen, updatePresentationSettings])
+  }, [isFullscreen, updatePresentationSettings, setSearchParams])
 
   const handleExitFullscreenView = useCallback(
     () => handleViewModeChange("horizontal"),
@@ -309,6 +325,36 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
     }
   }, [isFullscreen, updatePresentationSettings])
 
+  // Shared media lightbox — navigable across all media items
+  const [lightboxNodeId, setLightboxNodeId] = useState<string | null>(null)
+
+  const mediaItems = useMemo(() => {
+    const items: { nodeId: string; type: "image" | "video"; url: string }[] = []
+    for (const node of [...orderedInputNodes, ...orderedOutputNodes]) {
+      const result = getResult(node.id)
+      if (!result.url) continue
+      const outputType = getOutputType(node.type)
+      if (outputType === "image" || outputType === "video") {
+        items.push({ nodeId: node.id, type: outputType, url: result.url })
+      }
+    }
+    return items
+  }, [orderedInputNodes, orderedOutputNodes, getResult])
+
+  const lightboxIndex = lightboxNodeId ? mediaItems.findIndex((m) => m.nodeId === lightboxNodeId) : -1
+  const lightboxItem = lightboxIndex >= 0 ? mediaItems[lightboxIndex] : null
+
+  // setLightboxNodeId is stable (React guarantee), no useCallback needed
+  const handleOpenMedia = setLightboxNodeId
+
+  const handleLightboxPrev = useCallback(() => {
+    if (lightboxIndex > 0) setLightboxNodeId(mediaItems[lightboxIndex - 1].nodeId)
+  }, [lightboxIndex, mediaItems])
+
+  const handleLightboxNext = useCallback(() => {
+    if (lightboxIndex < mediaItems.length - 1) setLightboxNodeId(mediaItems[lightboxIndex + 1].nodeId)
+  }, [lightboxIndex, mediaItems])
+
   // Card meta helpers
   const getCardTitle = useCallback((node: WorkflowNode) => {
     return settings.cardMeta?.[node.id]?.title || getNodeLabel(node)
@@ -340,14 +386,16 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
     const result = getResult(node.id)
     return (
       <OutputCard
+        nodeId={node.id}
         label={getCardTitle(node)}
         outputType={outputType}
         status={status}
         url={result.url}
         text={result.text}
+        onOpenMedia={handleOpenMedia}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia])
 
   const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
 
@@ -358,6 +406,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
     getNodeStatus,
     getResult,
     getCardTitle,
+    onOpenMedia: handleOpenMedia,
   }
 
   const editableProps = {
@@ -403,7 +452,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
             </Button>
           )}
 
-          {isEditing && <RunTargetSelector />}
+          {(isEditing || isFullscreen) && (
+            <RunTargetSelector
+              nodes={nodes}
+              presentationSettings={settings}
+              onUpdate={isFullscreen ? undefined : updatePresentationSettings}
+            />
+          )}
 
           {/* View mode selector */}
           {isOwner && mode === "tab" && (
@@ -491,6 +546,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
           open
           onOpenChange={(open) => { if (!open) setPickerSection(null) }}
           section={pickerSection}
+        />
+      )}
+
+      {/* Shared media lightbox with prev/next navigation */}
+      {lightboxItem && (
+        <MediaPreviewModal
+          isOpen
+          onClose={() => setLightboxNodeId(null)}
+          type={lightboxItem.type}
+          url={lightboxItem.url}
+          currentIndex={lightboxIndex}
+          totalCount={mediaItems.length}
+          onPrev={lightboxIndex > 0 ? handleLightboxPrev : undefined}
+          onNext={lightboxIndex < mediaItems.length - 1 ? handleLightboxNext : undefined}
         />
       )}
     </div>
@@ -582,23 +651,27 @@ function InputCard({
 
 /** Renders the appropriate output card based on output type */
 function OutputCard({
+  nodeId,
   label,
   outputType,
   status,
   url,
   text,
+  onOpenMedia,
 }: {
+  nodeId: string
   label: string
   outputType: string
   status: "idle" | "running" | "completed" | "failed"
   url?: string
   text?: string
+  onOpenMedia?: (nodeId: string) => void
 }) {
   switch (outputType) {
     case "image":
-      return <ImageOutputCard label={label} status={status} url={url} />
+      return <ImageOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} />
     case "video":
-      return <VideoOutputCard label={label} status={status} url={url} />
+      return <VideoOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} />
     case "audio":
       return <AudioOutputCard label={label} status={status} url={url} />
     case "text":

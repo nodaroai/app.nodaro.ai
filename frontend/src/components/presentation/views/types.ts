@@ -10,6 +10,8 @@ export interface ViewProps {
   getNodeStatus: (nodeId: string) => OutputStatus
   getResult: (nodeId: string) => { url?: string; text?: string }
   getCardTitle: (node: WorkflowNode) => string
+  /** Open a shared media lightbox navigable across all items */
+  onOpenMedia?: (nodeId: string) => void
 }
 
 export interface EditableViewProps extends ViewProps {

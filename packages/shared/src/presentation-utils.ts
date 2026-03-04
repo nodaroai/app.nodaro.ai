@@ -92,6 +92,7 @@ const MEDIA_PRODUCING_TYPES = new Set([
 // Output type categorizations
 const IMAGE_OUTPUT_TYPES = new Set([
   "generate-image", "edit-image", "image-to-image",
+  "upload-image",
 ])
 
 const VIDEO_OUTPUT_TYPES = new Set([
@@ -100,6 +101,7 @@ const VIDEO_OUTPUT_TYPES = new Set([
   "3d-title", "motion-graphics", "composite",
   "combine-videos", "merge-video-audio", "resize-video", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video",
+  "upload-video",
   "lip-sync", "motion-transfer", "video-upscale", "add-captions",
 ])
 
@@ -108,10 +110,12 @@ const AUDIO_OUTPUT_TYPES = new Set([
   "text-to-dialogue", "voice-changer", "dubbing", "voice-remix",
   "voice-design", "mix-audio", "adjust-volume", "extract-audio",
   "audio-isolation",
+  "upload-audio",
 ])
 
 const TEXT_OUTPUT_TYPES = new Set([
   "generate-script", "ai-writer", "transcribe", "image-to-text", "qa-check",
+  "text-prompt",
 ])
 
 // ---------------------------------------------------------------------------
