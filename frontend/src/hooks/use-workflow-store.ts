@@ -42,6 +42,17 @@ const EXECUTION_DATA_KEYS = new Set([
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
+export interface PresentationSettings {
+  runTarget: "workflow" | "sub-workflow"
+  subWorkflowNodeId?: string
+  splitRatio?: number // 20-80, default 50
+  inputOrder?: string[] // node IDs in display order
+  outputOrder?: string[] // node IDs in display order
+  cardMeta?: Record<string, { title?: string; description?: string }>
+}
+
+export const DEFAULT_PRESENTATION_SETTINGS: PresentationSettings = { runTarget: "workflow" }
+
 interface WorkflowState {
   readonly workflowId: string | null
   readonly projectId: string | null
@@ -58,6 +69,7 @@ interface WorkflowState {
   readonly characterDefinitions: CharacterDefinition[]
   readonly userPromptTemplates: Record<string, string>
   readonly flowPromptTemplates: Record<string, string>
+  readonly presentationSettings: PresentationSettings
 
   readonly setWorkflowId: (id: string | null) => void
   readonly setProjectId: (id: string | null) => void
@@ -74,7 +86,7 @@ interface WorkflowState {
   readonly selectNode: (nodeId: string | null) => void
   readonly setUserPromptTemplates: (templates: Record<string, string>) => void
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
-  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>) => void
+  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
@@ -113,6 +125,7 @@ interface WorkflowState {
   readonly runAllWriterImageNodes: ((writerNodeId: string) => void) | null
   readonly setRunAllWriterImageNodes: (fn: ((writerNodeId: string) => void) | null) => void
   readonly setWorkflowThumbnail: (url: string) => void
+  readonly updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
 }
 
 let nextNodeId = 1
@@ -141,6 +154,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   characterDefinitions: [],
   userPromptTemplates: {},
   flowPromptTemplates: {},
+  presentationSettings: DEFAULT_PRESENTATION_SETTINGS,
 
   setWorkflowId: (id) => set({ workflowId: id }),
 
@@ -402,7 +416,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   setFlowPromptTemplates: (templates) => set({ flowPromptTemplates: templates, isDirty: true }),
 
-  loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates) => {
+  loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings) => {
     nextNodeId =
       nodes.reduce((max, n) => {
         const num = parseInt(n.id.replace("node_", ""), 10)
@@ -421,6 +435,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       saveError: null,
       characterDefinitions: characterDefinitions ?? [],
       flowPromptTemplates: flowPromptTemplates ?? {},
+      presentationSettings: presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,
     }))
   },
 
@@ -438,6 +453,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       saveError: null,
       characterDefinitions: [],
       flowPromptTemplates: {},
+      presentationSettings: DEFAULT_PRESENTATION_SETTINGS,
     }))
   },
 
@@ -599,4 +615,10 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         })
     })
   },
+
+  updatePresentationSettings: (settings) =>
+    set((state) => ({
+      presentationSettings: { ...state.presentationSettings, ...settings },
+      isDirty: true,
+    })),
 }))

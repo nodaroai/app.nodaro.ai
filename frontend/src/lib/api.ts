@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase"
 import type { SubWorkflowRouteSnapshot } from "@/types/nodes"
+import type { PresentationSettings } from "@/hooks/use-workflow-store"
 
 export const API_BASE_URL = ''
 
@@ -2990,5 +2991,77 @@ export function deleteWorkflowTrigger(triggerId: string): Promise<void> {
     `/v1/workflow-triggers/${encodeURIComponent(triggerId)}`,
     "Failed to delete trigger",
     { method: "DELETE" },
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Presentation mode
+// ---------------------------------------------------------------------------
+
+/** Enable sharing and get the share token. */
+export async function shareWorkflow(workflowId: string): Promise<{ shareToken: string }> {
+  const json = await apiRequest<{ shareToken: string }>(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/share`,
+    "Failed to share workflow",
+    { method: "POST" },
+  )
+  return json
+}
+
+/** Disable sharing / revoke share token. */
+export function unshareWorkflow(workflowId: string): Promise<void> {
+  return apiRequest(
+    `/v1/workflows/${encodeURIComponent(workflowId)}/share`,
+    "Failed to unshare workflow",
+    { method: "DELETE" },
+  )
+}
+
+/** Get shared workflow data by token. */
+export async function getSharedWorkflow(token: string): Promise<{
+  workflowId: string
+  name: string
+  nodes: unknown[]
+  edges: unknown[]
+  isOwner: boolean
+  estimatedCost?: number
+  presentationSettings?: PresentationSettings
+}> {
+  return apiRequest(
+    `/v1/present/${encodeURIComponent(token)}`,
+    "Failed to load shared workflow",
+  )
+}
+
+/** Run a shared workflow with input overrides (viewer pays credits). */
+export async function runSharedWorkflow(
+  token: string,
+  inputOverrides?: Record<string, Record<string, unknown>>,
+  presentationSettings?: PresentationSettings,
+): Promise<{ executionId: string; status: string }> {
+  return apiRequest(
+    `/v1/present/${encodeURIComponent(token)}/run`,
+    "Failed to run shared workflow",
+    { method: "POST", body: { inputOverrides, runTarget: presentationSettings?.runTarget, subWorkflowNodeId: presentationSettings?.subWorkflowNodeId } },
+  )
+}
+
+/** Poll shared workflow execution status. */
+export async function getSharedExecutionStatus(
+  token: string,
+  execId: string,
+): Promise<{
+  id: string
+  status: string
+  node_states: Record<string, unknown>
+  total_nodes: number
+  completed_nodes: number
+  failed_nodes: number
+  total_credits_used: number
+  error_message: string | null
+}> {
+  return apiRequest(
+    `/v1/present/${encodeURIComponent(token)}/status/${encodeURIComponent(execId)}`,
+    "Failed to get execution status",
   )
 }

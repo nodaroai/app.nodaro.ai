@@ -9,6 +9,7 @@ import {
   DollarSign,
   Layers,
   History,
+  Monitor,
 } from "lucide-react";
 import { WorkflowCanvas } from "../workflow-canvas";
 import { NodeToolbar } from "../node-toolbar";
@@ -54,6 +55,7 @@ import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWrite
 import { resolveManualEdit } from "./execute-node";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
+const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
 
 interface WorkflowEditorProps {
   readonly projectId?: string;
@@ -69,7 +71,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"editor" | "executions" | "cost">(
+  const [activeTab, setActiveTab] = useState<"editor" | "present" | "executions" | "cost">(
     "editor",
   );
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -662,6 +664,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab("present")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                activeTab === "present"
+                  ? "text-[#ff0073] border-[#ff0073]"
+                  : "text-[#64748B] dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              <Monitor className="w-4 h-4" />
+              Present
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab("executions")}
               className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
                 activeTab === "executions"
@@ -751,6 +765,17 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                 </Button>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === "present" && (
+          <div className="absolute inset-0">
+            <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+              <PresentationViewLazy
+                mode="tab"
+                isOwner={true}
+              />
+            </Suspense>
           </div>
         )}
 

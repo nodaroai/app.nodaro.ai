@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, getWorkflowExecution, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
 import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
@@ -384,7 +384,7 @@ export function useWorkflowPersistence(projectId?: string) {
       const resolvedProjectId = pid ?? projectId
       if (!resolvedProjectId) return { success: false, error: "No project ID" }
 
-      const { workflowId, workflowName, nodes: allNodes, edges: allEdges, characterDefinitions, flowPromptTemplates } =
+      const { workflowId, workflowName, nodes: allNodes, edges: allEdges, characterDefinitions, flowPromptTemplates, presentationSettings } =
         useWorkflowStore.getState()
 
       // Filter out temporary sub-workflow execution nodes/edges
@@ -407,6 +407,7 @@ export function useWorkflowPersistence(projectId?: string) {
           settings: {
             characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)),
             flowPromptTemplates: JSON.parse(JSON.stringify(flowPromptTemplates)),
+            presentationSettings: JSON.parse(JSON.stringify(presentationSettings)),
           },
         }
 
@@ -491,6 +492,7 @@ export function useWorkflowPersistence(projectId?: string) {
         const settings = (data.settings ?? {}) as Record<string, unknown>
         const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
         const flowTemplates = (settings.flowPromptTemplates ?? {}) as Record<string, string>
+        const presSettings = (settings.presentationSettings ?? undefined) as PresentationSettings | undefined
         let nodes = data.nodes as unknown as WorkflowNode[]
         const edges = data.edges as unknown as WorkflowEdge[]
 
@@ -560,6 +562,7 @@ export function useWorkflowPersistence(projectId?: string) {
           edges,
           charDefs,
           flowTemplates,
+          presSettings,
         )
 
         // Prefetch model credit costs for all nodes in one batch request

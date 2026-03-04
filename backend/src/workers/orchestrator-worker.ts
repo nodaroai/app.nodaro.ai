@@ -71,7 +71,7 @@ export function createOrchestratorWorker() {
 // ---------------------------------------------------------------------------
 
 async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise<void> {
-  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds } = job.data
+  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds, inputOverrides } = job.data
   const nodeSubset = nodeIds ? new Set(nodeIds) : null
 
   const ctx: OrchestratorContext = {
@@ -101,6 +101,16 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
     // Pass workflow settings (character definitions, prompt templates) to context
     ctx.workflowSettings = (workflow.settings as Record<string, unknown>) ?? {}
+
+    // Apply presentation mode input overrides to source node data
+    if (inputOverrides) {
+      for (const node of nodes) {
+        const overrides = inputOverrides[node.id]
+        if (overrides) {
+          node.data = { ...node.data, ...overrides }
+        }
+      }
+    }
 
     if (nodes.length === 0) {
       await failExecution(executionId, "Workflow has no nodes")

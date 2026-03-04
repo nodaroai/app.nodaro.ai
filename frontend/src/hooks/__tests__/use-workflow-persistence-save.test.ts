@@ -23,6 +23,7 @@ function resetStoreState(overrides: Record<string, unknown> = {}) {
     edges: [],
     characterDefinitions: [],
     flowPromptTemplates: {},
+    presentationSettings: { runTarget: "workflow" },
     saveStatus: "idle",
     ...overrides,
   }
