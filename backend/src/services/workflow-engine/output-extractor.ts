@@ -116,6 +116,28 @@ export function extractSourceNodeOutput(
 
     case "webhook-trigger": {
       if (!triggerData) return undefined
+
+      // Dynamic params: output keyed by param.id with values from triggerData[param.name]
+      const params = data.params as Array<{ id: string; name: string; type: string }> | undefined
+      if (params && params.length > 0) {
+        const output: NodeOutput = {}
+        const paramOutputs: Record<string, string> = {}
+        for (const p of params) {
+          const val = triggerData[p.name]
+          if (val == null) continue
+          const strVal = String(val)
+          paramOutputs[p.id] = strVal
+          // Also set top-level fields for getPrimaryOutput compatibility
+          if (p.type === "text") output.text = strVal
+          else if (p.type === "imageUrl") output.imageUrl = strVal
+          else if (p.type === "videoUrl") output.videoUrl = strVal
+          else if (p.type === "audioUrl") output.audioUrl = strVal
+        }
+        output.paramOutputs = paramOutputs
+        return Object.keys(paramOutputs).length > 0 ? output : { text: JSON.stringify(triggerData) }
+      }
+
+      // Legacy fallback: hardcoded field extraction
       const output: NodeOutput = {}
       if (triggerData.prompt) output.text = triggerData.prompt as string
       if (triggerData.imageUrl) output.imageUrl = triggerData.imageUrl as string

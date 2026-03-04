@@ -137,6 +137,7 @@ import {
 } from "./asset-executors";
 import { buildImagePrompt } from "@nodaro-shared/prompt-builder";
 import type { CharacterDef } from "@nodaro-shared/types";
+import { applyMediaOrder } from "../config-panels/connected-media-list";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -329,15 +330,37 @@ export function executeNode(
   }
 
   if (node.type === "edit-image") {
+    const editData = node.data as EditImageData;
+
+    // Apply connectedMediaOrder to determine main image vs references
+    let orderedImageUrls: string[] = inputs.referenceImageUrls ?? [];
+    if (editData.connectedMediaOrder?.length && orderedImageUrls.length > 1) {
+      const imageSourceNodes = edges
+        .filter((e) => e.target === node.id)
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .filter(Boolean) as WorkflowNode[];
+      const idToUrl = new Map<string, string>();
+      for (const src of imageSourceNodes) {
+        const url = extractNodeOutput(src);
+        if (url) idToUrl.set(src.id, url);
+      }
+      const reordered = applyMediaOrder(
+        imageSourceNodes.map((n) => ({ id: n.id })),
+        editData.connectedMediaOrder,
+      );
+      orderedImageUrls = reordered
+        .map((e) => idToUrl.get(e.id))
+        .filter((u): u is string => !!u);
+    }
+
     const imageUrl =
-      overrideMediaUrl ?? inputs.imageUrl ?? inputs.referenceImageUrls?.[0];
+      overrideMediaUrl ?? orderedImageUrls[0] ?? inputs.imageUrl;
     if (!imageUrl) {
       toast.error(
         `Node "${(node.data as EditImageData).label}": no input image found`,
       );
       return Promise.reject(new Error("No input image"));
     }
-    const editData = node.data as EditImageData;
     const provider = editData.provider || "recraft-upscale";
 
     // For nano-banana-edit: enrich prompt with character/asset descriptions
@@ -354,25 +377,52 @@ export function executeNode(
       }
     }
 
+    // Collect reference images for nano-banana-edit
+    const editRefUrls = orderedImageUrls.filter((url) => url !== imageUrl);
+
     return runEditImage(node.id, imageUrl, ctx, prompt, provider, {
       upscaleFactor: editData.upscaleFactor,
       aspectRatio: editData.aspectRatio,
       negativePrompt: editData.negativePrompt,
       style: editData.style,
       seed: editData.seed,
+      referenceImageUrls: editRefUrls.length > 0 ? editRefUrls : undefined,
     });
   }
 
   if (node.type === "image-to-image") {
+    const i2iData = node.data as ImageToImageData;
+
+    // Apply connectedMediaOrder to determine main image vs references
+    let orderedImageUrls: string[] = inputs.referenceImageUrls ?? [];
+    if (i2iData.connectedMediaOrder?.length && orderedImageUrls.length > 1) {
+      // Build node-id-to-url mapping from connected image sources
+      const imageSourceNodes = edges
+        .filter((e) => e.target === node.id)
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .filter(Boolean) as WorkflowNode[];
+      const idToUrl = new Map<string, string>();
+      for (const src of imageSourceNodes) {
+        const url = extractNodeOutput(src);
+        if (url) idToUrl.set(src.id, url);
+      }
+      const reordered = applyMediaOrder(
+        imageSourceNodes.map((n) => ({ id: n.id })),
+        i2iData.connectedMediaOrder,
+      );
+      orderedImageUrls = reordered
+        .map((e) => idToUrl.get(e.id))
+        .filter((u): u is string => !!u);
+    }
+
     const imageUrl =
-      overrideMediaUrl ?? inputs.imageUrl ?? inputs.referenceImageUrls?.[0];
+      overrideMediaUrl ?? orderedImageUrls[0] ?? inputs.imageUrl;
     if (!imageUrl) {
       toast.error(
         `Node "${(node.data as ImageToImageData).label}": no input image found`,
       );
       return Promise.reject(new Error("No input image"));
     }
-    const i2iData = node.data as ImageToImageData;
     const rawPrompt = i2iData.prompt;
     if (!rawPrompt) {
       toast.error(
@@ -383,8 +433,7 @@ export function executeNode(
     const provider = i2iData.provider || "nano-banana";
 
     // Collect reference images from connected nodes + character assets
-    const chainRefs =
-      inputs.referenceImageUrls?.filter((url) => url !== imageUrl) ?? [];
+    const chainRefs = orderedImageUrls.filter((url) => url !== imageUrl);
     const charIds = i2iData.characterDefinitionIds ?? [];
     const allCharDefs = useWorkflowStore.getState().characterDefinitions;
     const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
@@ -2080,15 +2129,24 @@ export function executeNode(
   }
 
   if (node.type === "mix-audio") {
-    const audioUrls = inputs.audioUrls ?? [];
+    const mixData = node.data as MixAudioData;
+    let sourceEntries = inputs.audioUrlsWithSourceIds ?? [];
+
+    // Apply trackOrder to reorder audio inputs
+    if (mixData.trackOrder?.length && sourceEntries.length > 1) {
+      sourceEntries = applyMediaOrder(
+        sourceEntries.map((e) => ({ id: e.nodeId, ...e })),
+        mixData.trackOrder,
+      ).map((e) => ({ nodeId: e.nodeId, url: e.url }));
+    }
+
+    const audioUrls = sourceEntries.map((e) => e.url);
     if (audioUrls.length < 2) {
       toast.error(
-        `Node "${(node.data as MixAudioData).label}": need at least 2 audio inputs`,
+        `Node "${mixData.label}": need at least 2 audio inputs`,
       );
       return Promise.reject(new Error("Need at least 2 audio tracks"));
     }
-    const mixData = node.data as MixAudioData;
-    const sourceEntries = inputs.audioUrlsWithSourceIds ?? [];
     const volumes = sourceEntries.map(
       (e) => mixData.trackVolumes?.[e.nodeId] ?? 100,
     );
@@ -2778,6 +2836,58 @@ export function executeNode(
       __listTotal: parts.length,
     });
     return Promise.resolve();
+  }
+
+  // Webhook Output — collect upstream data and POST to configured URL
+  if (node.type === "webhook-output") {
+    const {
+      nodes: currentNodes,
+      edges: currentEdges,
+      updateNodeData,
+    } = useWorkflowStore.getState();
+    const whData = node.data as Record<string, unknown>;
+    const url = (whData.url as string)?.trim();
+    const params = (whData.params as Array<{ id: string; name: string; type: string }>) ?? [];
+
+    if (!url) {
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No webhook URL configured" });
+      return Promise.resolve();
+    }
+
+    // Build payload from upstream connections
+    const payload: Record<string, unknown> = {};
+    const incomingEdges = currentEdges.filter((e) => e.target === node.id);
+
+    if (params.length > 0) {
+      for (const param of params) {
+        const edge = incomingEdges.find((e) => e.targetHandle === param.id);
+        if (!edge) continue;
+        const sourceNode = currentNodes.find((n) => n.id === edge.source);
+        if (!sourceNode) continue;
+        const output = extractNodeOutput(sourceNode);
+        if (output) payload[param.name] = output;
+      }
+    } else {
+      for (const edge of incomingEdges) {
+        const sourceNode = currentNodes.find((n) => n.id === edge.source);
+        if (!sourceNode) continue;
+        const output = extractNodeOutput(sourceNode);
+        if (output) payload[sourceNode.type ?? "data"] = output;
+      }
+    }
+
+    updateNodeData(node.id, { executionStatus: "running" });
+    return import("@/lib/api").then(({ sendWebhookOutput }) =>
+      sendWebhookOutput({ url, payload }).then(
+        () => { updateNodeData(node.id, { executionStatus: "completed" }); },
+        (err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : "Webhook send failed",
+          });
+        },
+      ),
+    );
   }
 
   // Sub-Workflow — delegates to the sub-workflow executor

@@ -57,6 +57,32 @@ function collectAncestorRefs(
   )
 }
 
+// ---------------------------------------------------------------------------
+// Apply user-specified ordering to a list of items with IDs
+// ---------------------------------------------------------------------------
+
+function applyOrder<T extends { id: string }>(
+  items: readonly T[],
+  order: readonly string[],
+): T[] {
+  if (!order.length) return [...items]
+  const ordered: T[] = []
+  const seen = new Set<string>()
+  for (const id of order) {
+    const item = items.find((i) => i.id === id)
+    if (item) {
+      ordered.push(item)
+      seen.add(id)
+    }
+  }
+  for (const item of items) {
+    if (!seen.has(item.id)) {
+      ordered.push(item)
+    }
+  }
+  return ordered
+}
+
 interface PayloadResult {
   /** BullMQ job name (e.g., "generate-image") */
   jobName: string
@@ -213,6 +239,30 @@ export function buildPayload(
     case "edit-image": {
       const provider = (data.provider as string) ?? "recraft-remove-bg"
 
+      // Apply connectedMediaOrder to determine main image vs references
+      let mainImageUrl = resolvedInputs.imageUrl || data.imageUrl
+      let editRefUrls: string[] | undefined
+      const connectedOrder = data.connectedMediaOrder as string[] | undefined
+      if (connectedOrder?.length && resolvedInputs.referenceImageUrls?.length) {
+        const allNodes = buildCtx?.nodes ?? []
+        const allEdges = buildCtx?.edges ?? []
+        const states = buildCtx?.nodeStates ?? {}
+        const sourceNodeIds = allEdges
+          .filter((e) => e.target === node.id)
+          .map((e) => e.source)
+        const sourceNodes = sourceNodeIds
+          .map((id) => allNodes.find((n) => n.id === id))
+          .filter((n): n is SimpleNode => !!n)
+        const ordered = applyOrder(sourceNodes, connectedOrder)
+        const orderedUrls = ordered
+          .map((n) => states[n.id]?.output?.imageUrl as string | undefined)
+          .filter((u): u is string => !!u)
+        if (orderedUrls.length > 0) {
+          mainImageUrl = orderedUrls[0]
+          editRefUrls = orderedUrls.slice(1)
+        }
+      }
+
       // Enrich prompt with character/asset descriptions for nano-banana-edit
       let editPrompt = (resolvedInputs.prompt || data.prompt) as string | undefined
       if (provider === "nano-banana-edit" && editPrompt) {
@@ -236,7 +286,7 @@ export function buildPayload(
         modelIdentifier: provider,
         payload: {
           jobId,
-          imageUrl: resolvedInputs.imageUrl || data.imageUrl,
+          imageUrl: mainImageUrl,
           prompt: editPrompt,
           provider,
           upscaleFactor: data.upscaleFactor,
@@ -244,6 +294,7 @@ export function buildPayload(
           negativePrompt: data.negativePrompt,
           style: data.style,
           seed: data.seed,
+          referenceImageUrls: editRefUrls,
           usageLogId,
         },
       }
@@ -252,6 +303,28 @@ export function buildPayload(
     case "image-to-image": {
       const provider = (data.provider as string) ?? "flux-i2i"
       const settings = buildCtx?.settings
+
+      // Apply connectedMediaOrder to determine main image vs references
+      let i2iMainImage = resolvedInputs.imageUrl || data.imageUrl
+      let i2iChainRefs = resolvedInputs.referenceImageUrls ?? []
+      const i2iOrder = data.connectedMediaOrder as string[] | undefined
+      if (i2iOrder?.length && i2iChainRefs.length > 0) {
+        const allNodes = buildCtx?.nodes ?? []
+        const allEdges = buildCtx?.edges ?? []
+        const states = buildCtx?.nodeStates ?? {}
+        const srcIds = allEdges.filter((e) => e.target === node.id).map((e) => e.source)
+        const srcNodes = srcIds
+          .map((id) => allNodes.find((n) => n.id === id))
+          .filter((n): n is SimpleNode => !!n)
+        const ordered = applyOrder(srcNodes, i2iOrder)
+        const orderedUrls = ordered
+          .map((n) => states[n.id]?.output?.imageUrl as string | undefined)
+          .filter((u): u is string => !!u)
+        if (orderedUrls.length > 0) {
+          i2iMainImage = orderedUrls[0]
+          i2iChainRefs = orderedUrls.slice(1)
+        }
+      }
 
       // Collect reference images from character assets
       const charIds = (data.characterDefinitionIds as string[]) ?? []
@@ -262,10 +335,9 @@ export function buildPayload(
         .filter((c) => c.type === "reference" && c.referenceImageUrl)
         .map((c) => c.referenceImageUrl as string)
       const nodeRefUrl = data.referenceImageUrl as string | undefined
-      const chainRefs = resolvedInputs.referenceImageUrls ?? []
       const directRefs = [
         ...(nodeRefUrl ? [nodeRefUrl] : []),
-        ...chainRefs,
+        ...i2iChainRefs,
         ...charRefUrls,
       ]
 
@@ -294,7 +366,7 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          imageUrl: resolvedInputs.imageUrl || data.imageUrl,
+          imageUrl: i2iMainImage,
           prompt: i2iResult.prompt,
           referenceImageUrls: i2iResult.referenceImageUrls,
           provider,

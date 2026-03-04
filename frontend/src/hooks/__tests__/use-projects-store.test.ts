@@ -114,7 +114,7 @@ describe("useProjectsStore", () => {
       useProjectsStore.setState({
         projects: [{ id: "p1", name: "To Delete", description: "", createdAt: NOW, updatedAt: NOW }],
         folders: [{ id: "f1", projectId: "p1", name: "Folder", createdAt: NOW }],
-        workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "WF", createdAt: NOW, updatedAt: NOW }],
+        workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "WF", thumbnailUrl: null, createdAt: NOW, updatedAt: NOW }],
       })
 
       mockSupabase = createMockSupabase({
@@ -176,7 +176,7 @@ describe("useProjectsStore", () => {
     it("deletes a folder and unassigns its workflows", async () => {
       useProjectsStore.setState({
         folders: [{ id: "f1", projectId: "p1", name: "F", createdAt: NOW }],
-        workflowMetas: [{ id: "w1", projectId: "p1", folderId: "f1", name: "WF", createdAt: NOW, updatedAt: NOW }],
+        workflowMetas: [{ id: "w1", projectId: "p1", folderId: "f1", name: "WF", thumbnailUrl: null, createdAt: NOW, updatedAt: NOW }],
       })
 
       mockSupabase = createMockSupabase({
@@ -232,7 +232,7 @@ describe("useProjectsStore", () => {
 
     it("deletes a workflow", async () => {
       useProjectsStore.setState({
-        workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "WF", createdAt: NOW, updatedAt: NOW }],
+        workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "WF", thumbnailUrl: null, createdAt: NOW, updatedAt: NOW }],
       })
 
       mockSupabase = createMockSupabase({
@@ -246,7 +246,7 @@ describe("useProjectsStore", () => {
 
     it("renames a workflow", async () => {
       useProjectsStore.setState({
-        workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "Old", createdAt: NOW, updatedAt: NOW }],
+        workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "Old", thumbnailUrl: null, createdAt: NOW, updatedAt: NOW }],
       })
 
       mockSupabase = createMockSupabase({
@@ -260,7 +260,7 @@ describe("useProjectsStore", () => {
 
     it("moves a workflow to a folder", async () => {
       useProjectsStore.setState({
-        workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "WF", createdAt: NOW, updatedAt: NOW }],
+        workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "WF", thumbnailUrl: null, createdAt: NOW, updatedAt: NOW }],
       })
 
       mockSupabase = createMockSupabase({
@@ -274,7 +274,7 @@ describe("useProjectsStore", () => {
 
     it("moves a workflow out of a folder to root", async () => {
       useProjectsStore.setState({
-        workflowMetas: [{ id: "w1", projectId: "p1", folderId: "f1", name: "WF", createdAt: NOW, updatedAt: NOW }],
+        workflowMetas: [{ id: "w1", projectId: "p1", folderId: "f1", name: "WF", thumbnailUrl: null, createdAt: NOW, updatedAt: NOW }],
       })
 
       mockSupabase = createMockSupabase({
@@ -288,7 +288,7 @@ describe("useProjectsStore", () => {
 
     it("duplicates a workflow", async () => {
       useProjectsStore.setState({
-        workflowMetas: [{ id: "w1", projectId: "p1", folderId: "f1", name: "Original", createdAt: NOW, updatedAt: NOW }],
+        workflowMetas: [{ id: "w1", projectId: "p1", folderId: "f1", name: "Original", thumbnailUrl: null, createdAt: NOW, updatedAt: NOW }],
       })
 
       // First call: select original workflow; second call: insert duplicate

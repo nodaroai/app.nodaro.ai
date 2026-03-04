@@ -1,5 +1,7 @@
 "use client"
 
+import { Plus, Trash2 } from "lucide-react"
+import { nanoid } from "nanoid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,6 +17,7 @@ import type {
   CombineTextNodeData,
   SaveToStorageData,
   WebhookOutputData,
+  WebhookParam,
   SplitTextData,
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
@@ -94,15 +97,88 @@ export function SaveToStorageConfig({ data, onUpdate }: ConfigProps<SaveToStorag
 }
 
 export function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutputData>) {
+  const params = data.params ?? []
+
+  const addParam = () => {
+    onUpdate({
+      params: [...params, { id: nanoid(), name: "", type: "text" }],
+    })
+  }
+
+  const updateParam = (index: number, patch: Partial<WebhookParam>) => {
+    const updated = params.map((p, i) => (i === index ? { ...p, ...patch } : p))
+    onUpdate({ params: updated })
+  }
+
+  const removeParam = (index: number) => {
+    onUpdate({ params: params.filter((_, i) => i !== index) })
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="webhook-id">Webhook ID</Label>
-        <Input id="webhook-id" value={data.webhookId} onChange={(e) => onUpdate({ webhookId: e.target.value })} placeholder="Select or enter webhook..." />
+        <Label htmlFor="webhook-url">Webhook URL</Label>
+        <Input
+          id="webhook-url"
+          value={data.url}
+          onChange={(e) => onUpdate({ url: e.target.value })}
+          placeholder="https://example.com/webhook"
+          className="text-xs font-mono"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          The URL to POST the collected data to.
+        </p>
       </div>
-      <div className="flex items-center gap-2">
-        <input type="checkbox" id="include-asset" checked={data.includeAssetUrl} onChange={(e) => onUpdate({ includeAssetUrl: e.target.checked })} />
-        <Label htmlFor="include-asset">Include asset URL</Label>
+
+      <div className="border-t border-border pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <Label>Input Parameters</Label>
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addParam}>
+            <Plus className="h-3 w-3" />
+            Add
+          </Button>
+        </div>
+
+        {params.length === 0 && (
+          <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
+            No parameters defined. All upstream data will be sent as a single payload.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-2">
+          {params.map((param, i) => (
+            <div key={param.id} className="flex items-center gap-1.5">
+              <Input
+                value={param.name}
+                onChange={(e) => updateParam(i, { name: e.target.value })}
+                placeholder="name"
+                className="text-xs h-8 flex-1"
+              />
+              <Select
+                value={param.type}
+                onValueChange={(v) => updateParam(i, { type: v as WebhookParam["type"] })}
+              >
+                <SelectTrigger className="h-8 w-[100px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="imageUrl">Image URL</SelectItem>
+                  <SelectItem value="videoUrl">Video URL</SelectItem>
+                  <SelectItem value="audioUrl">Audio URL</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={() => removeParam(i)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

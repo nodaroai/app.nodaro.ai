@@ -1342,6 +1342,7 @@ export type Database = {
           project_id: string
           settings: Json
           source_prompt: string | null
+          thumbnail_url: string | null
           updated_at: string
           user_id: string
           version: number
@@ -1358,6 +1359,7 @@ export type Database = {
           project_id: string
           settings?: Json
           source_prompt?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           user_id: string
           version?: number
@@ -1374,6 +1376,7 @@ export type Database = {
           project_id?: string
           settings?: Json
           source_prompt?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           user_id?: string
           version?: number

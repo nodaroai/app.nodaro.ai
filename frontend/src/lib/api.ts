@@ -156,6 +156,7 @@ export async function editImage(
     negativePrompt?: string
     style?: string
     seed?: number
+    referenceImageUrls?: string[]
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl }
@@ -182,6 +183,9 @@ export async function editImage(
   }
   if (options?.seed != null) {
     body.seed = options.seed
+  }
+  if (options?.referenceImageUrls?.length) {
+    body.referenceImageUrls = options.referenceImageUrls
   }
   const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
     method: "POST",
@@ -1426,6 +1430,19 @@ export async function forcedAlignmentApi(audioUrl: string, transcript: string, u
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start forced alignment")
+  }
+  return res.json()
+}
+
+export async function sendWebhookOutput(data: { url: string; payload: Record<string, unknown> }): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/webhook-output/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to send webhook output")
   }
   return res.json()
 }

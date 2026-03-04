@@ -565,7 +565,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {/* Edit button */}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setShowConfig(true); selectNode(null) }}
+          onClick={(e) => { e.stopPropagation(); setShowConfig(true); selectNode(id) }}
           className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 hover:bg-black/80 text-white text-[10px]"
         >
           <Settings className="w-3 h-3" />

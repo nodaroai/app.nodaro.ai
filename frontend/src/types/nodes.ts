@@ -482,6 +482,7 @@ export type EditImageData = {
   style?: string
   seed?: number
   characterDefinitionIds?: readonly string[]
+  connectedMediaOrder?: readonly string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -509,6 +510,7 @@ export type ImageToImageData = {
   guidanceScale?: number
   referenceImageUrl?: string
   characterDefinitionIds?: readonly string[]
+  connectedMediaOrder?: readonly string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -550,6 +552,7 @@ export type ImageToVideoData = {
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
+  connectedImageOrder?: readonly string[]
 }
 
 export type TextToSpeechData = {
@@ -1097,6 +1100,7 @@ export type MixAudioData = {
   label: string
   trackCount: number
   trackVolumes: Record<string, number>
+  trackOrder?: string[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1337,9 +1341,8 @@ export type SaveToStorageData = {
 export type WebhookOutputData = {
   [key: string]: unknown
   label: string
-  webhookId: string
-  includeAssetUrl: boolean
-  fieldMappings: FieldMappings
+  url: string
+  params: WebhookParam[]
 }
 
 // --- Character Node Data ---
@@ -1695,6 +1698,14 @@ export type SubWorkflowData = {
   subWorkflowProgress?: { currentNode: string; completed: number; total: number }
 }
 
+// --- Webhook Parameter Type (shared between trigger + output) ---
+
+export type WebhookParam = {
+  id: string
+  name: string
+  type: "text" | "imageUrl" | "videoUrl" | "audioUrl"
+}
+
 // --- Trigger Node Data Types ---
 
 export type WebhookTriggerData = {
@@ -1702,6 +1713,7 @@ export type WebhookTriggerData = {
   label: string
   webhookToken?: string
   webhookUrl?: string
+  params: WebhookParam[]
 }
 
 export type ScheduleTriggerData = {
@@ -1990,7 +2002,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: [],
     outputs: ["payload"],
-    defaultData: { label: "Webhook Trigger" } as unknown as SceneNodeData,
+    defaultData: { label: "Webhook Trigger", params: [] } as unknown as SceneNodeData,
   },
   {
     type: "schedule-trigger",
@@ -2700,7 +2712,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: [],
-    defaultData: { label: "Webhook Output", webhookId: "", includeAssetUrl: true, fieldMappings: {} },
+    defaultData: { label: "Webhook Output", url: "", params: [] },
   },
   // Character
   {

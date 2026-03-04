@@ -23,6 +23,7 @@ export interface NodeOutput {
   splitResults?: string[]
   combinedText?: string
   kieTaskId?: string
+  paramOutputs?: Record<string, string>
 }
 
 export type NodeExecutionStatus =

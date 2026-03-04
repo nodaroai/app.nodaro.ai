@@ -4,7 +4,8 @@
  */
 
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState } from "./types.js"
-import { getPrimaryOutput } from "./output-extractor.js"
+import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
+import { isSourceNode } from "./execution-graph.js"
 
 /**
  * Execute combine-text node: joins upstream text outputs with a separator.
@@ -113,4 +114,68 @@ export function executeComposite(
   }
 
   return { plan: compositePlan }
+}
+
+/**
+ * Execute webhook-output node: collect upstream outputs and POST to configured URL.
+ */
+export async function executeWebhookOutput(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+): Promise<NodeOutput> {
+  const url = (node.data.url as string)?.trim()
+  if (!url) {
+    throw new Error("No webhook URL configured")
+  }
+
+  const params = (node.data.params as Array<{ id: string; name: string; type: string }>) ?? []
+  const incomingEdges = edges.filter((e) => e.target === node.id)
+
+  const payload: Record<string, unknown> = {}
+
+  if (params.length > 0) {
+    // Param-based: match each param to its connected edge by targetHandle
+    for (const param of params) {
+      const edge = incomingEdges.find((e) => e.targetHandle === param.id)
+      if (!edge) continue
+      const srcNode = allNodes.find((n) => n.id === edge.source)
+      if (!srcNode) continue
+
+      let value: string | undefined
+      const state = nodeStates[srcNode.id]
+      if (state?.output) {
+        value = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
+      } else if (isSourceNode(srcNode.type)) {
+        const srcOutput = extractSourceNodeOutput(srcNode)
+        if (srcOutput) value = getPrimaryOutput(srcOutput, srcNode.type, edge.sourceHandle)
+      }
+      if (value) payload[param.name] = value
+    }
+  } else {
+    // No params — collect all upstream data
+    for (const edge of incomingEdges) {
+      const srcNode = allNodes.find((n) => n.id === edge.source)
+      if (!srcNode) continue
+      const state = nodeStates[srcNode.id]
+      if (!state?.output) continue
+      const value = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
+      if (value) payload[srcNode.type] = value
+    }
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30_000),
+  })
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "")
+    throw new Error(`Webhook POST failed (${response.status}): ${body.slice(0, 200)}`)
+  }
+
+  return { text: "sent" }
 }

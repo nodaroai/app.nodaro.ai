@@ -28,65 +28,18 @@ import type {
   ManualEditData,
 } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
+import { ConnectedMediaList, applyMediaOrder } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 
-export function CombineVideosConfig({ data, onUpdate, nodes }: ConfigProps<CombineVideosData>) {
-  const edges = useWorkflowStore((s) => s.edges)
-  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
-
-  const connectedNodeIds = edges
-    .filter((e) => e.target === selectedNodeId)
-    .map((e) => e.source)
-
-  const connectedNodes = connectedNodeIds
-    .map((id) => nodes?.find((n) => n.id === id))
-    .filter(Boolean) as ReadonlyArray<WorkflowNode>
-
-  const clipOrder: string[] = data.clipOrder?.length
-    ? data.clipOrder.filter((id) => connectedNodeIds.includes(id))
-    : connectedNodeIds
-
-  const orderedClips = clipOrder
-    .map((id) => connectedNodes.find((n) => n.id === id))
-    .filter(Boolean) as ReadonlyArray<WorkflowNode>
-
+export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
   return (
     <div className="flex flex-col gap-3">
-      {orderedClips.length > 1 && (
-        <div>
-          <Label>Clip Order</Label>
-          <p className="text-xs text-muted-foreground mb-2">Drag to reorder</p>
-          <div className="flex flex-col gap-1">
-            {orderedClips.map((clip, index) => (
-              <div
-                key={clip.id}
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData("text/plain", String(index))}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  const fromIndex = Number(e.dataTransfer.getData("text/plain"))
-                  const toIndex = index
-                  if (fromIndex === toIndex) return
-                  const newOrder = [...clipOrder]
-                  const [moved] = newOrder.splice(fromIndex, 1)
-                  newOrder.splice(toIndex, 0, moved)
-                  onUpdate({ clipOrder: newOrder })
-                }}
-                className="flex items-center gap-2 px-3 py-2 rounded-md bg-white/5 border border-white/10 cursor-grab active:cursor-grabbing select-none"
-              >
-                <span className="text-muted-foreground text-xs w-4">{index + 1}</span>
-                <svg className="w-3 h-3 text-muted-foreground" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M7 2a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM7 8a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM7 14a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z" />
-                </svg>
-                <span className="text-sm truncate flex-1">
-                  {(clip.data as Record<string, unknown>)?.label as string ?? clip.type ?? clip.id}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <ConnectedMediaList
+        sources={sources}
+        mediaOrder={data.clipOrder ?? []}
+        onUpdateOrder={(order) => onUpdate({ clipOrder: order })}
+        mediaType="video"
+      />
 
       <div>
         <Label>Transition</Label>
@@ -270,7 +223,7 @@ export function ExtractAudioConfig({ data, onUpdate }: ConfigProps<ExtractAudioD
   )
 }
 
-export function MixAudioConfig({ data, onUpdate, nodes }: ConfigProps<MixAudioData>) {
+export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<MixAudioData>) {
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
 
@@ -282,6 +235,12 @@ export function MixAudioConfig({ data, onUpdate, nodes }: ConfigProps<MixAudioDa
     .map((id) => nodes?.find((n) => n.id === id))
     .filter(Boolean) as ReadonlyArray<WorkflowNode>
 
+  // Apply track order
+  const orderedNodes = applyMediaOrder(
+    connectedNodes.map((n) => ({ ...n })),
+    data.trackOrder ?? [],
+  )
+
   const trackVolumes = data.trackVolumes ?? {}
 
   return (
@@ -289,29 +248,39 @@ export function MixAudioConfig({ data, onUpdate, nodes }: ConfigProps<MixAudioDa
       {connectedNodes.length === 0 && (
         <p className="text-xs text-muted-foreground">Connect audio nodes to set per-track volumes.</p>
       )}
-      {connectedNodes.map((node) => {
-        const volume = trackVolumes[node.id] ?? 100
-        const label = (node.data as Record<string, unknown>)?.label as string ?? node.type ?? node.id
-        return (
-          <div key={node.id}>
-            <div className="flex items-center justify-between mb-1">
-              <Label className="text-xs truncate flex-1">{label}</Label>
-              <span className="text-xs text-muted-foreground ml-2 tabular-nums">{volume}%</span>
+      {connectedNodes.length > 1 && (
+        <ConnectedMediaList
+          sources={sources}
+          mediaOrder={data.trackOrder ?? []}
+          onUpdateOrder={(order) => onUpdate({ trackOrder: order })}
+          mediaType="audio"
+        />
+      )}
+      <div className="flex flex-col gap-3">
+        {orderedNodes.map((node) => {
+          const volume = trackVolumes[node.id] ?? 100
+          const label = (node.data as Record<string, unknown>)?.label as string ?? node.type ?? node.id
+          return (
+            <div key={node.id}>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs truncate flex-1">{label}</Label>
+                <span className="text-xs text-muted-foreground ml-2 tabular-nums">{volume}%</span>
+              </div>
+              <Input
+                type="range"
+                min={0}
+                max={200}
+                step={1}
+                value={volume}
+                onChange={(e) => onUpdate({
+                  trackVolumes: { ...trackVolumes, [node.id]: parseInt(e.target.value, 10) },
+                })}
+                className="w-full h-2 accent-[#ff0073]"
+              />
             </div>
-            <Input
-              type="range"
-              min={0}
-              max={200}
-              step={1}
-              value={volume}
-              onChange={(e) => onUpdate({
-                trackVolumes: { ...trackVolumes, [node.id]: parseInt(e.target.value, 10) },
-              })}
-              className="w-full h-2 accent-[#ff0073]"
-            />
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -166,6 +166,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.executionStatus = undefined
           data.referenceImageUrls = undefined
           data.referenceImageOrder = undefined
+          data.connectedMediaOrder = undefined
           break
 
         case "image-to-video":
@@ -177,6 +178,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.generatedVideoUrl = undefined
           data.activeResultIndex = 0
           data.executionStatus = undefined
+          data.connectedImageOrder = undefined
           break
 
         case "generate-script":

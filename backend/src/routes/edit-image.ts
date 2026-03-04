@@ -16,6 +16,7 @@ const editImageBody = z.object({
   negativePrompt: z.string().max(5000).optional(),
   style: z.string().max(500).optional(),
   seed: z.number().int().min(0).optional(),
+  referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
 })
 
 export async function editImageRoutes(app: FastifyInstance) {
@@ -30,7 +31,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed } = parsed.data
+    const { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, referenceImageUrls } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -57,7 +58,7 @@ export async function editImageRoutes(app: FastifyInstance) {
         workflow_id: extractWorkflowId(req.body),
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, type: "edit-image" },
+        input_data: { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, referenceImageUrls, type: "edit-image" },
       })
       .select("id")
       .single()
@@ -82,6 +83,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       negativePrompt,
       style,
       seed,
+      referenceImageUrls,
       usageLogId,
     })
 
