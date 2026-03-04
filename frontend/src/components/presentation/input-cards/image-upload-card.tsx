@@ -1,7 +1,5 @@
-import { useState } from "react"
 import { X, Maximize2 } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
-import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { GlassCard, GlassButton } from "../output-cards/shared"
 import { useMediaUpload, FileDropZone, UrlInputRow } from "./shared"
 
@@ -13,11 +11,13 @@ interface ImageUploadCardProps {
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
   readOnly?: boolean
+  onOpenMedia?: (nodeId: string) => void
 }
 
-export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly }: ImageUploadCardProps) {
+export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly, onOpenMedia }: ImageUploadCardProps) {
   const media = useMediaUpload({ mimePrefix: "image/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+
+  const handleOpen = () => onOpenMedia?.(nodeId)
 
   return (
     <GlassCard>
@@ -26,7 +26,7 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
       </label>
 
       {media.effectiveUrl ? (
-        <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={() => setLightboxSrc(media.effectiveUrl!)}>
+        <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={handleOpen}>
           <CachedImage
             src={media.effectiveUrl}
             alt={label}
@@ -34,7 +34,7 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           />
           {/* Hover toolbar — top-right, no blur overlay */}
           <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <GlassButton onClick={() => setLightboxSrc(media.effectiveUrl!)} title="Enlarge">
+            <GlassButton onClick={handleOpen} title="Enlarge">
               <Maximize2 className="w-3.5 h-3.5" />
             </GlassButton>
             {!readOnly && (
@@ -70,12 +70,6 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           onSubmit={media.handleUrlSubmit}
         />
       )}
-
-      <ImageLightbox
-        src={lightboxSrc}
-        alt={label}
-        onClose={() => setLightboxSrc(null)}
-      />
     </GlassCard>
   )
 }
