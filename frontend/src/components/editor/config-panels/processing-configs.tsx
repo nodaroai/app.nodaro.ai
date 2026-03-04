@@ -31,6 +31,7 @@ import type {
 import type { WorkflowNode } from "@/types/nodes"
 import { ConnectedMediaList, applyMediaOrder } from "./connected-media-list"
 import { PLATFORM_SPECS, CONTENT_TYPES_BY_PLATFORM, PLATFORM_LABELS, type SocialMediaPlatform } from "@/lib/social-media-specs"
+import { PlatformPreview } from "@/components/nodes/platform-preview"
 import { Textarea } from "@/components/ui/textarea"
 import type { ConfigProps } from "./types"
 
@@ -709,6 +710,15 @@ export function SocialMediaFormatConfig({ data, onUpdate }: ConfigProps<SocialMe
           <div className="flex justify-between"><span>Text Limit</span><span className="font-medium text-foreground">{spec.textLimit.toLocaleString()} chars</span></div>
         </div>
       )}
+
+      <PlatformPreview
+        platform={platform}
+        specKey={data.specKey}
+        mediaUrl={data.generatedVideoUrl ?? data.generatedImageUrl}
+        isVideo={spec?.isVideo !== false}
+        caption={data.formattedText}
+        size="lg"
+      />
 
       <div>
         <Label>Resize Method</Label>

@@ -25,7 +25,8 @@ vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
   return {
     Clapperboard: I, Users: I, MapPin: I, Box: I, Loader2: I,
-    AlertCircle: I, X: I, Maximize2: I, Scissors: I, Play: I,
+    AlertCircle: I, X: I, Maximize2: I, Scissors: I, Play: I, Type: I,
+    FileVideo: I, FileImage: I, Share2: I, Heart: I, MessageCircle: I, Send: I, Expand: I,
   }
 })
 
