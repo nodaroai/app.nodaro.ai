@@ -7,15 +7,15 @@
  *   PATCH  /v1/api-tokens/:id       — Update token
  *   DELETE /v1/api-tokens/:id       — Delete token
  *
- * Public API (token-based auth, no JWT):
- *   GET    /v1/api/:token/schema    — Get workflow input/output schema
- *   POST   /v1/api/:token/run       — Execute workflow
- *   GET    /v1/api/:token/status/:execId  — Poll execution status
- *   GET    /v1/api/:token/result/:execId  — Get final outputs
+ * Public API (Bearer token auth, no JWT):
+ *   GET    /v1/api/schema            — Get workflow input/output schema
+ *   POST   /v1/api/run               — Execute workflow
+ *   GET    /v1/api/status/:execId    — Poll execution status
+ *   GET    /v1/api/result/:execId    — Get final outputs
  */
 
 import { createHash, randomBytes } from "node:crypto"
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { hasAdmin } from "../lib/config.js"
@@ -66,12 +66,24 @@ function hashToken(plaintext: string): string {
   return createHash("sha256").update(plaintext).digest("hex")
 }
 
+function extractBearerToken(req: FastifyRequest): string | null {
+  const auth = req.headers.authorization
+  if (!auth?.startsWith("Bearer ")) return null
+  return auth.slice(7)
+}
+
 interface ResolvedToken {
   id: string
   userId: string
   workflowIds: string[]
   rateLimit: number
   tokenHash: string
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    apiToken?: ResolvedToken
+  }
 }
 
 // Short-lived cache for resolved tokens (60s TTL) to avoid DB hit per request
@@ -195,12 +207,7 @@ const tokenIdParams = z.object({
   id: z.string().uuid(),
 })
 
-const apiTokenParams = z.object({
-  token: z.string().min(16).max(128),
-})
-
-const apiStatusParams = z.object({
-  token: z.string().min(16).max(128),
+const apiExecIdParams = z.object({
   execId: z.string().uuid(),
 })
 
@@ -418,349 +425,337 @@ export async function apiTokenRoutes(app: FastifyInstance) {
   })
 
   // =========================================================================
-  // Public API endpoints (token-based auth, no JWT)
+  // Public API endpoints (Bearer token auth, no JWT)
+  // Scoped plugin with shared preHandler for token extraction + resolution
   // =========================================================================
 
-  // --- Schema ---
-  app.get("/v1/api/:token/schema", async (req, reply) => {
-    const paramsParsed = apiTokenParams.safeParse(req.params)
-    if (!paramsParsed.success) {
-      return reply.status(400).send({
-        error: { code: "validation_error", message: "Invalid token" },
-      })
-    }
-
-    const queryParsed = schemaQuery.safeParse(req.query)
-    if (!queryParsed.success) {
-      return reply.status(400).send({
-        error: { code: "validation_error", message: "workflowId query parameter required" },
-      })
-    }
-
-    const resolved = await resolveApiToken(paramsParsed.data.token)
-    if (!resolved) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Invalid or inactive API token" },
-      })
-    }
-
-    const { workflowId } = queryParsed.data
-
-    // Check workflow scoping
-    if (resolved.workflowIds.length > 0 && !resolved.workflowIds.includes(workflowId)) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Token not authorized for this workflow" },
-      })
-    }
-
-    // Load workflow
-    const { data: workflow, error: wfError } = await supabase
-      .from("workflows")
-      .select("id, name, nodes, edges, settings")
-      .eq("id", workflowId)
-      .eq("user_id", resolved.userId)
-      .single()
-
-    if (wfError || !workflow) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: "Workflow not found" },
-      })
-    }
-
-    const nodes = (workflow.nodes ?? []) as GenericNode[]
-    const edges = (workflow.edges ?? []) as GenericEdge[]
-
-    // Use curated nodes (presentationVisible) if any exist, otherwise use all
-    const curatedInputs = getInputNodes(nodes, true)
-    const inputNodes = curatedInputs.length > 0 ? curatedInputs : getInputNodes(nodes, false)
-
-    const curatedOutputs = getOutputNodes(nodes, edges, true)
-    const outputNodes = curatedOutputs.length > 0 ? curatedOutputs : getOutputNodes(nodes, edges, false)
-
-    // Respect presentation ordering if available
-    const settings = (workflow.settings ?? {}) as Record<string, unknown>
-    const presSettings = settings.presentationSettings as {
-      inputOrder?: string[]
-      outputOrder?: string[]
-    } | undefined
-
-    const sortedInputs = presSettings?.inputOrder
-      ? sortByOrder(inputNodes, presSettings.inputOrder)
-      : inputNodes
-
-    const sortedOutputs = presSettings?.outputOrder
-      ? sortByOrder(outputNodes, presSettings.outputOrder)
-      : outputNodes
-
-    const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string }>)
-
-    const inputs = sortedInputs.map((node) => {
-      const fieldSchema = getInputFieldSchema(node.type ?? "")
-      return {
-        nodeId: node.id,
-        key: fieldSchema?.key ?? "value",
-        label: getNodeLabel(node),
-        type: fieldSchema?.type ?? "text",
-        nodeType: node.type,
-        required: false,
-        default: fieldSchema ? node.data[fieldSchema.key] : undefined,
+  app.register(async function publicApiRoutes(api) {
+    // Shared auth: extract Bearer token, resolve, attach to request
+    api.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
+      const token = extractBearerToken(req)
+      if (!token) {
+        return reply.status(401).send({
+          error: { code: "unauthorized", message: "Missing Authorization: Bearer <token> header" },
+        })
       }
+
+      const resolved = await resolveApiToken(token)
+      if (!resolved) {
+        return reply.status(401).send({
+          error: { code: "unauthorized", message: "Invalid or inactive API token" },
+        })
+      }
+
+      req.apiToken = resolved
     })
 
-    const outputs = sortedOutputs.map((node) => ({
-      nodeId: node.id,
-      label: getNodeLabel(node),
-      type: getOutputType(node.type),
-      nodeType: node.type,
-    }))
+    // --- Schema ---
+    api.get("/v1/api/schema", async (req, reply) => {
+      const resolved = req.apiToken!
 
-    return reply.send({
-      workflowId: workflow.id,
-      name: workflow.name,
-      estimatedCredits,
-      inputs,
-      outputs,
-    })
-  })
+      const queryParsed = schemaQuery.safeParse(req.query)
+      if (!queryParsed.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "workflowId query parameter required" },
+        })
+      }
 
-  // --- Run workflow ---
-  app.post("/v1/api/:token/run", async (req, reply) => {
-    const paramsParsed = apiTokenParams.safeParse(req.params)
-    if (!paramsParsed.success) {
-      return reply.status(400).send({
-        error: { code: "validation_error", message: "Invalid token" },
-      })
-    }
+      const { workflowId } = queryParsed.data
 
-    const bodyParsed = runBody.safeParse(req.body)
-    if (!bodyParsed.success) {
-      return reply.status(400).send({
-        error: { code: "validation_error", message: bodyParsed.error.issues[0]?.message ?? "Invalid request" },
-      })
-    }
+      // Check workflow scoping
+      if (resolved.workflowIds.length > 0 && !resolved.workflowIds.includes(workflowId)) {
+        return reply.status(403).send({
+          error: { code: "forbidden", message: "Token not authorized for this workflow" },
+        })
+      }
 
-    const resolved = await resolveApiToken(paramsParsed.data.token)
-    if (!resolved) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Invalid or inactive API token" },
-      })
-    }
+      // Load workflow
+      const { data: workflow, error: wfError } = await supabase
+        .from("workflows")
+        .select("id, name, nodes, edges, settings")
+        .eq("id", workflowId)
+        .eq("user_id", resolved.userId)
+        .single()
 
-    // Rate limit
-    if (!checkApiRateLimit(resolved.tokenHash, resolved.rateLimit)) {
-      return reply.status(429).send({
-        error: { code: "rate_limited", message: `Too many requests. Max ${resolved.rateLimit} per minute.` },
-      })
-    }
+      if (wfError || !workflow) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Workflow not found" },
+        })
+      }
 
-    const { workflowId, inputs } = bodyParsed.data
+      const nodes = (workflow.nodes ?? []) as GenericNode[]
+      const edges = (workflow.edges ?? []) as GenericEdge[]
 
-    // Check workflow scoping
-    if (resolved.workflowIds.length > 0 && !resolved.workflowIds.includes(workflowId)) {
-      return reply.status(403).send({
-        error: { code: "forbidden", message: "Token not authorized for this workflow" },
-      })
-    }
+      // Use curated nodes (presentationVisible) if any exist, otherwise use all
+      const curatedInputs = getInputNodes(nodes, true)
+      const inputNodes = curatedInputs.length > 0 ? curatedInputs : getInputNodes(nodes, false)
 
-    // Load workflow
-    const { data: workflow, error: wfError } = await supabase
-      .from("workflows")
-      .select("id, nodes")
-      .eq("id", workflowId)
-      .eq("user_id", resolved.userId)
-      .single()
+      const curatedOutputs = getOutputNodes(nodes, edges, true)
+      const outputNodes = curatedOutputs.length > 0 ? curatedOutputs : getOutputNodes(nodes, edges, false)
 
-    if (wfError || !workflow) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: "Workflow not found" },
-      })
-    }
+      // Respect presentation ordering if available
+      const settings = (workflow.settings ?? {}) as Record<string, unknown>
+      const presSettings = settings.presentationSettings as {
+        inputOrder?: string[]
+        outputOrder?: string[]
+      } | undefined
 
-    // Build input overrides
-    const nodes = (workflow.nodes ?? []) as GenericNode[]
-    const inputOverrides = inputs
-      ? resolveInputOverrides(inputs, nodes)
-      : undefined
+      const sortedInputs = presSettings?.inputOrder
+        ? sortByOrder(inputNodes, presSettings.inputOrder)
+        : inputNodes
 
-    // Create execution
-    const { data: execution, error: execError } = await supabase
-      .from("workflow_executions")
-      .insert({
-        workflow_id: workflowId,
-        user_id: resolved.userId,
-        status: "pending",
-        trigger_type: "api",
-        trigger_data: { apiTokenId: resolved.id },
-      })
-      .select("id")
-      .single()
+      const sortedOutputs = presSettings?.outputOrder
+        ? sortByOrder(outputNodes, presSettings.outputOrder)
+        : outputNodes
 
-    if (execError || !execution) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to create execution" },
-      })
-    }
+      const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string }>)
 
-    // Enqueue orchestration
-    const jobData: WorkflowExecutionJob = {
-      executionId: execution.id,
-      workflowId,
-      userId: resolved.userId,
-      triggerType: "api",
-      triggerData: { apiTokenId: resolved.id },
-      inputOverrides,
-    }
-
-    await orchestrationQueue.add("workflow-execution", jobData, {
-      jobId: execution.id,
-    })
-
-    // Sync mode: wait for completion
-    const query = req.query as Record<string, string>
-    if (query.wait === "true") {
-      const timeout = Math.min(
-        parseInt(query.timeout ?? "120", 10) * 1000,
-        600_000, // 10 min max
-      )
-      const start = Date.now()
-
-      // Stop polling if client disconnects
-      let clientDisconnected = false
-      req.raw.on("close", () => { clientDisconnected = true })
-
-      while (Date.now() - start < timeout && !clientDisconnected) {
-        await new Promise((resolve) => setTimeout(resolve, 5000))
-
-        if (clientDisconnected) break
-
-        const { data: exec } = await supabase
-          .from("workflow_executions")
-          .select("status, node_states, total_credits_used, completed_at")
-          .eq("id", execution.id)
-          .single()
-
-        if (!exec) break
-
-        if (exec.status === "completed" || exec.status === "failed" || exec.status === "cancelled") {
-          return reply.send(formatExecutionResult(
-            execution.id,
-            exec as Record<string, unknown>,
-            nodes,
-          ))
+      const inputs = sortedInputs.map((node) => {
+        const fieldSchema = getInputFieldSchema(node.type ?? "")
+        return {
+          nodeId: node.id,
+          key: fieldSchema?.key ?? "value",
+          label: getNodeLabel(node),
+          type: fieldSchema?.type ?? "text",
+          nodeType: node.type,
+          required: false,
+          default: fieldSchema ? node.data[fieldSchema.key] : undefined,
         }
+      })
+
+      const outputs = sortedOutputs.map((node) => ({
+        nodeId: node.id,
+        label: getNodeLabel(node),
+        type: getOutputType(node.type),
+        nodeType: node.type,
+      }))
+
+      return reply.send({
+        workflowId: workflow.id,
+        name: workflow.name,
+        estimatedCredits,
+        inputs,
+        outputs,
+      })
+    })
+
+    // --- Run workflow ---
+    api.post("/v1/api/run", async (req, reply) => {
+      const resolved = req.apiToken!
+
+      const bodyParsed = runBody.safeParse(req.body)
+      if (!bodyParsed.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: bodyParsed.error.issues[0]?.message ?? "Invalid request" },
+        })
       }
 
-      if (clientDisconnected) return
+      // Rate limit
+      if (!checkApiRateLimit(resolved.tokenHash, resolved.rateLimit)) {
+        return reply.status(429).send({
+          error: { code: "rate_limited", message: `Too many requests. Max ${resolved.rateLimit} per minute.` },
+        })
+      }
 
-      // Timed out waiting — return 202 with executionId
+      const { workflowId, inputs } = bodyParsed.data
+
+      // Check workflow scoping
+      if (resolved.workflowIds.length > 0 && !resolved.workflowIds.includes(workflowId)) {
+        return reply.status(403).send({
+          error: { code: "forbidden", message: "Token not authorized for this workflow" },
+        })
+      }
+
+      // Load workflow
+      const { data: workflow, error: wfError } = await supabase
+        .from("workflows")
+        .select("id, nodes")
+        .eq("id", workflowId)
+        .eq("user_id", resolved.userId)
+        .single()
+
+      if (wfError || !workflow) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Workflow not found" },
+        })
+      }
+
+      // Build input overrides
+      const nodes = (workflow.nodes ?? []) as GenericNode[]
+      const inputOverrides = inputs
+        ? resolveInputOverrides(inputs, nodes)
+        : undefined
+
+      // Create execution
+      const { data: execution, error: execError } = await supabase
+        .from("workflow_executions")
+        .insert({
+          workflow_id: workflowId,
+          user_id: resolved.userId,
+          status: "pending",
+          trigger_type: "api",
+          trigger_data: { apiTokenId: resolved.id },
+        })
+        .select("id")
+        .single()
+
+      if (execError || !execution) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: "Failed to create execution" },
+        })
+      }
+
+      // Enqueue orchestration
+      const jobData: WorkflowExecutionJob = {
+        executionId: execution.id,
+        workflowId,
+        userId: resolved.userId,
+        triggerType: "api",
+        triggerData: { apiTokenId: resolved.id },
+        inputOverrides,
+      }
+
+      await orchestrationQueue.add("workflow-execution", jobData, {
+        jobId: execution.id,
+      })
+
+      // Sync mode: wait for completion
+      const query = req.query as Record<string, string>
+      if (query.wait === "true") {
+        const timeout = Math.min(
+          parseInt(query.timeout ?? "120", 10) * 1000,
+          600_000, // 10 min max
+        )
+        const start = Date.now()
+
+        // Stop polling if client disconnects
+        let clientDisconnected = false
+        req.raw.on("close", () => { clientDisconnected = true })
+
+        while (Date.now() - start < timeout && !clientDisconnected) {
+          await new Promise((resolve) => setTimeout(resolve, 5000))
+
+          if (clientDisconnected) break
+
+          const { data: exec } = await supabase
+            .from("workflow_executions")
+            .select("status, node_states, total_credits_used, completed_at")
+            .eq("id", execution.id)
+            .single()
+
+          if (!exec) break
+
+          if (exec.status === "completed" || exec.status === "failed" || exec.status === "cancelled") {
+            return reply.send(formatExecutionResult(
+              execution.id,
+              exec as Record<string, unknown>,
+              nodes,
+            ))
+          }
+        }
+
+        if (clientDisconnected) return
+
+        // Timed out waiting — return 202 with executionId
+        return reply.status(202).send({
+          executionId: execution.id,
+          status: "pending",
+          message: "Execution still in progress. Poll /status/:execId for updates.",
+        })
+      }
+
+      // Async mode (default)
       return reply.status(202).send({
         executionId: execution.id,
         status: "pending",
-        message: "Execution still in progress. Poll /status/:execId for updates.",
       })
-    }
-
-    // Async mode (default)
-    return reply.status(202).send({
-      executionId: execution.id,
-      status: "pending",
     })
-  })
 
-  // --- Status ---
-  app.get("/v1/api/:token/status/:execId", async (req, reply) => {
-    const parsed = apiStatusParams.safeParse(req.params)
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: "validation_error", message: "Invalid parameters" },
-      })
-    }
+    // --- Status ---
+    api.get("/v1/api/status/:execId", async (req, reply) => {
+      const resolved = req.apiToken!
 
-    const resolved = await resolveApiToken(parsed.data.token)
-    if (!resolved) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Invalid or inactive API token" },
-      })
-    }
+      const parsed = apiExecIdParams.safeParse(req.params)
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "Invalid execution ID" },
+        })
+      }
 
-    const { data: execution, error } = await supabase
-      .from("workflow_executions")
-      .select("id, status, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
-      .eq("id", parsed.data.execId)
-      .eq("user_id", resolved.userId)
-      .single()
+      const { data: execution, error } = await supabase
+        .from("workflow_executions")
+        .select("id, status, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
+        .eq("id", parsed.data.execId)
+        .eq("user_id", resolved.userId)
+        .single()
 
-    if (error || !execution) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: "Execution not found" },
-      })
-    }
+      if (error || !execution) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Execution not found" },
+        })
+      }
 
-    return reply.send({
-      executionId: execution.id,
-      status: execution.status,
-      totalNodes: execution.total_nodes,
-      completedNodes: execution.completed_nodes,
-      failedNodes: execution.failed_nodes,
-      creditsUsed: execution.total_credits_used,
-      errorMessage: execution.error_message,
-      createdAt: execution.created_at,
-      completedAt: execution.completed_at,
-    })
-  })
-
-  // --- Result ---
-  app.get("/v1/api/:token/result/:execId", async (req, reply) => {
-    const parsed = apiStatusParams.safeParse(req.params)
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: "validation_error", message: "Invalid parameters" },
-      })
-    }
-
-    const resolved = await resolveApiToken(parsed.data.token)
-    if (!resolved) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Invalid or inactive API token" },
-      })
-    }
-
-    // Load execution with node states
-    const { data: execution, error } = await supabase
-      .from("workflow_executions")
-      .select("id, workflow_id, status, node_states, total_credits_used, error_message, created_at, completed_at")
-      .eq("id", parsed.data.execId)
-      .eq("user_id", resolved.userId)
-      .single()
-
-    if (error || !execution) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: "Execution not found" },
-      })
-    }
-
-    if (execution.status !== "completed" && execution.status !== "failed") {
-      return reply.status(202).send({
+      return reply.send({
         executionId: execution.id,
         status: execution.status,
-        message: "Execution not yet complete",
+        totalNodes: execution.total_nodes,
+        completedNodes: execution.completed_nodes,
+        failedNodes: execution.failed_nodes,
+        creditsUsed: execution.total_credits_used,
+        errorMessage: execution.error_message,
+        createdAt: execution.created_at,
+        completedAt: execution.completed_at,
       })
-    }
+    })
 
-    // Load workflow nodes/edges for output detection
-    const { data: workflow } = await supabase
-      .from("workflows")
-      .select("nodes, edges")
-      .eq("id", execution.workflow_id)
-      .single()
+    // --- Result ---
+    api.get("/v1/api/result/:execId", async (req, reply) => {
+      const resolved = req.apiToken!
 
-    const nodes = (workflow?.nodes ?? []) as GenericNode[]
+      const parsed = apiExecIdParams.safeParse(req.params)
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "Invalid execution ID" },
+        })
+      }
 
-    return reply.send(formatExecutionResult(
-      execution.id,
-      execution as Record<string, unknown>,
-      nodes,
-    ))
+      // Load execution with node states
+      const { data: execution, error } = await supabase
+        .from("workflow_executions")
+        .select("id, workflow_id, status, node_states, total_credits_used, error_message, created_at, completed_at")
+        .eq("id", parsed.data.execId)
+        .eq("user_id", resolved.userId)
+        .single()
+
+      if (error || !execution) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Execution not found" },
+        })
+      }
+
+      if (execution.status !== "completed" && execution.status !== "failed") {
+        return reply.status(202).send({
+          executionId: execution.id,
+          status: execution.status,
+          message: "Execution not yet complete",
+        })
+      }
+
+      // Load workflow nodes/edges for output detection
+      const { data: workflow } = await supabase
+        .from("workflows")
+        .select("nodes, edges")
+        .eq("id", execution.workflow_id)
+        .single()
+
+      const nodes = (workflow?.nodes ?? []) as GenericNode[]
+
+      return reply.send(formatExecutionResult(
+        execution.id,
+        execution as Record<string, unknown>,
+        nodes,
+      ))
+    })
   })
 }
 
