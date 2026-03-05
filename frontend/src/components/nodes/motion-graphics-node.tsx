@@ -3,6 +3,8 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Shapes, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import type { MotionGraphicsData } from "@/types/nodes"
@@ -11,6 +13,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MotionGraphicsData | undefined
   const nodeData = currentNodeData ?? (data as MotionGraphicsData)
   const credits = useModelCredits("motion-graphics", 2)
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"
@@ -21,7 +24,12 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
     : 0
 
   return (
-    <div className="relative group/run">
+    <div className="relative" style={{ maxWidth: '220px' }}>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Shapes className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -30,8 +38,14 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={isRunning}
+      hideHeader
+      topToolbarContent={
+        !isRunning ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={[
-        { id: "composition", type: "source", position: Position.Right, label: "Composition" },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -79,7 +93,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
+    <HandleIcon icon={<Shapes />} color="pink" side="right" top="25%" />
     </div>
   )
 }

@@ -13,6 +13,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { EditableNodeLabel } from "./editable-node-label"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
 // Providers that support End Frame (second image for video ending)
@@ -181,11 +182,11 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
-    {/* Floating label above node */}
-    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
-      <Clapperboard className="w-3.5 h-3.5" />
-      <span className="truncate">{isKling3 ? "Kling 3.0 Studio" : nodeData.label}</span>
-    </div>
+    <EditableNodeLabel
+      label={isKling3 ? "Kling 3.0 Studio" : nodeData.label}
+      icon={<Clapperboard className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       key={`${id}-${activeUrl && !showConfig ? 'result' : 'config'}`}
       id={id}
@@ -236,7 +237,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         ) : undefined
       }
-      toolbarActions={
+      topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined

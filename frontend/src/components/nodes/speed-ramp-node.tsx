@@ -47,7 +47,7 @@ function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
     <BaseNode id={id} label={nodeData.label} icon={<Gauge className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
       hideHeader
       minWidth={220}
-      toolbarActions={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
+      topToolbarContent={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
         { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },

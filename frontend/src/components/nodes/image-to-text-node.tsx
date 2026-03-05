@@ -9,6 +9,7 @@ import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { EditableNodeLabel } from "./editable-node-label"
 import type { ImageToTextData } from "@/types/nodes"
 
 function TextPreviewModal({
@@ -87,11 +88,11 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative" style={{ contain: 'inline-size' }}>
-    {/* Floating label above node */}
-    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
-      <Eye className="w-3.5 h-3.5" />
-      <span className="truncate">{nodeData.label}</span>
-    </div>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Eye className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -101,7 +102,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       hideHeader
-      toolbarActions={
+      topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={1} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined

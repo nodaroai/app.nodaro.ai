@@ -12,6 +12,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { EditableNodeLabel } from "./editable-node-label"
 import type { TextToVideoData } from "@/types/nodes"
 
 function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -55,11 +56,11 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative" style={{ contain: 'inline-size' }}>
-    {/* Floating label above node */}
-    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
-      <Clapperboard className="w-3.5 h-3.5" />
-      <span className="truncate">{nodeData.label}</span>
-    </div>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Clapperboard className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -108,7 +109,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         ) : undefined
       }
-      toolbarActions={
+      topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
