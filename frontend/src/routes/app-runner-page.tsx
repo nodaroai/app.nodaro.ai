@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useParams, Link } from "react-router-dom"
-import { Loader2, Clock, Plus, Trash2, ChevronLeft } from "lucide-react"
+import { Loader2, Clock, Plus, Trash2, ChevronLeft, Copy } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
@@ -270,13 +270,65 @@ export default function AppRunnerPage() {
     }
   }, [activeSlotId, inputNodes, newRun, slug])
 
-  // Header button: "Clear" when editing idle slot, "Create New" otherwise
+  // Retry — reset failed slot to idle (keep inputs), so Run becomes available
+  const handleRetry = useCallback(() => {
+    if (!activeSlotId) return
+    setSlots((prev) => prev.map((s) =>
+      s.id === activeSlotId
+        ? { ...s, nodeStates: {}, executionId: null, executionStatus: "idle" as const, completedNodes: 0, totalNodes: 0 }
+        : s,
+    ))
+    newRun()
+    usePresentationStore.setState({
+      inputValues: activeSlot?.inputValues ?? {},
+      nodeStates: {},
+      executionStatus: "idle",
+      completedNodes: 0,
+      totalNodes: 0,
+    })
+  }, [activeSlotId, activeSlot?.inputValues, newRun])
+
+  // Duplicate — create a new draft with same inputs as given slot
+  const handleDuplicateSlot = useCallback(async (slotId: string) => {
+    const slot = slots.find((s) => s.id === slotId)
+    if (!slot || !slug || !user) return
+
+    try {
+      const dbRun = await createAppRun(slug, slot.inputValues)
+      const newSlot: RunSlot = {
+        id: dbRun.id,
+        inputValues: { ...slot.inputValues },
+        nodeStates: {},
+        executionId: null,
+        executionStatus: "idle",
+        completedNodes: 0,
+        totalNodes: 0,
+        createdAt: new Date(dbRun.createdAt).getTime(),
+      }
+      setSlots((prev) => [newSlot, ...prev])
+      setActiveSlotId(newSlot.id)
+      newRun()
+      usePresentationStore.setState({
+        inputValues: newSlot.inputValues,
+        nodeStates: {},
+        executionStatus: "idle",
+        completedNodes: 0,
+        totalNodes: 0,
+      })
+    } catch {
+      // silently fail
+    }
+  }, [slots, slug, user, newRun])
+
+  // Header button: "Clear" when idle, "Retry" when failed, "Create New" otherwise
   const isSlotIdle = activeSlot?.executionStatus === "idle"
+  const isSlotFailed = activeSlot?.executionStatus === "failed"
   const handleHeaderAction = useCallback(() => {
     if (isSlotIdle) handleClear()
+    else if (isSlotFailed) handleRetry()
     else handleCreateNew()
-  }, [isSlotIdle, handleClear, handleCreateNew])
-  const newRunLabel = isSlotIdle ? "Clear" : "Create New"
+  }, [isSlotIdle, isSlotFailed, handleClear, handleRetry, handleCreateNew])
+  const newRunLabel = isSlotIdle ? "Clear" : isSlotFailed ? "Retry" : "Create New"
 
   // Select slot
   const handleSelectSlot = useCallback((slotId: string) => {
@@ -372,6 +424,7 @@ export default function AppRunnerPage() {
           activeSlotId={activeSlotId}
           onSelectSlot={handleSelectSlot}
           onCreateNew={handleCreateNew}
+          onDuplicateSlot={handleDuplicateSlot}
           onDeleteSlot={handleDeleteSlot}
           onClose={() => setShowHistory(false)}
         />
@@ -415,6 +468,7 @@ function RunsSidebar({
   activeSlotId,
   onSelectSlot,
   onCreateNew,
+  onDuplicateSlot,
   onDeleteSlot,
   onClose,
 }: {
@@ -422,6 +476,7 @@ function RunsSidebar({
   activeSlotId: string | null
   onSelectSlot: (slotId: string) => void
   onCreateNew: () => void
+  onDuplicateSlot: (slotId: string) => void
   onDeleteSlot: (slotId: string) => void
   onClose: () => void
 }) {
@@ -454,6 +509,17 @@ function RunsSidebar({
               </span>
               <div className="flex items-center gap-1">
                 <SlotStatusBadge status={slot.executionStatus} />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDuplicateSlot(slot.id)
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-all"
+                  title="Duplicate"
+                >
+                  <Copy className="h-3 w-3 text-muted-foreground" />
+                </button>
                 <button
                   type="button"
                   onClick={(e) => {
