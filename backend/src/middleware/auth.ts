@@ -115,6 +115,16 @@ export function registerAuthHook(app: FastifyInstance): void {
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
     const isPublic = isPublicRoute(req.method, req.url)
 
+    // Internal orchestrator calls: trust X-Internal-Orchestrator header from localhost
+    // and extract userId from the request body (sync HTTP nodes pass userId in body)
+    if (req.headers["x-internal-orchestrator"] === "true") {
+      const body = req.body as Record<string, unknown> | undefined
+      if (body?.userId && typeof body.userId === "string") {
+        req.userId = body.userId
+      }
+      return
+    }
+
     const authHeader = req.headers.authorization
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined
 
