@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server,
   Hash, Clock, RatioIcon, Mic, ShieldCheck,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2,
+  SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -123,6 +123,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Output
   { type: "save-to-storage", label: "Save to Storage", icon: <HardDrive className="h-4 w-4" />, category: "Output" },
   { type: "webhook-output", label: "Webhook Output", icon: <Webhook className="h-4 w-4" />, category: "Output" },
+  // Output — Social Media
+  { type: "instagram-post", label: "Instagram Post", icon: <Instagram className="h-4 w-4" />, category: "Output", group: "Social Media" },
+  { type: "tiktok-post", label: "TikTok Post", icon: <Video className="h-4 w-4" />, category: "Output", group: "Social Media" },
+  { type: "youtube-upload", label: "YouTube Upload", icon: <Youtube className="h-4 w-4" />, category: "Output", group: "Social Media" },
+  { type: "linkedin-post", label: "LinkedIn Post", icon: <Linkedin className="h-4 w-4" />, category: "Output", group: "Social Media" },
+  { type: "x-post", label: "X Post", icon: <Twitter className="h-4 w-4" />, category: "Output", group: "Social Media" },
+  { type: "facebook-post", label: "Facebook Post", icon: <Facebook className="h-4 w-4" />, category: "Output", group: "Social Media" },
   // Workflow
   { type: "sub-workflow-input", label: "Sub-Workflow Input", icon: <LogIn className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", icon: <LogOut className="h-4 w-4" />, category: "Workflow" },

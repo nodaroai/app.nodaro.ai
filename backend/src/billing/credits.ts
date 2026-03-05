@@ -239,6 +239,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "voice-design": 5,
   "forced-alignment": 3,
   "social-media-format": 0,
+  "social-publish": 1,
 }
 
 // Tier order for restriction checks

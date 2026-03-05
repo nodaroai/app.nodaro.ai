@@ -40,6 +40,12 @@ const SYNC_HTTP_NODES = new Set([
   "3d-title",
   "motion-graphics",
   "image-to-text",
+  "instagram-post",
+  "tiktok-post",
+  "youtube-upload",
+  "linkedin-post",
+  "x-post",
+  "facebook-post",
 ])
 
 // Maps node type to internal route path
@@ -51,6 +57,12 @@ const SYNC_HTTP_ROUTES: Record<string, string> = {
   "3d-title": "/v1/three-d-title-ai/generate",
   "motion-graphics": "/v1/motion-graphics-ai/generate",
   "image-to-text": "/v1/image-to-text/generate",
+  "instagram-post": "/v1/social/publish",
+  "tiktok-post": "/v1/social/publish",
+  "youtube-upload": "/v1/social/publish",
+  "linkedin-post": "/v1/social/publish",
+  "x-post": "/v1/social/publish",
+  "facebook-post": "/v1/social/publish",
 }
 
 // Model identifiers for sync HTTP routes
@@ -62,6 +74,22 @@ const SYNC_HTTP_MODEL_IDS: Record<string, string> = {
   "3d-title": "3d-title",
   "motion-graphics": "motion-graphics",
   "image-to-text": "image-to-text",
+  "instagram-post": "social-publish",
+  "tiktok-post": "social-publish",
+  "youtube-upload": "social-publish",
+  "linkedin-post": "social-publish",
+  "x-post": "social-publish",
+  "facebook-post": "social-publish",
+}
+
+// Maps social node type to platform name
+const SOCIAL_NODE_TO_PLATFORM: Record<string, string> = {
+  "instagram-post": "instagram",
+  "tiktok-post": "tiktok",
+  "youtube-upload": "youtube",
+  "linkedin-post": "linkedin",
+  "x-post": "x",
+  "facebook-post": "facebook",
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +296,25 @@ function buildSyncHttpBody(
         prompt: resolvedInputs.prompt || data.prompt || "Describe this image in detail.",
         userId: ctx.userId,
       }
+
+    case "instagram-post":
+    case "tiktok-post":
+    case "youtube-upload":
+    case "linkedin-post":
+    case "x-post":
+    case "facebook-post": {
+      return {
+        platform: SOCIAL_NODE_TO_PLATFORM[node.type],
+        action: data.action,
+        caption: data.caption || data.text,
+        mediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || resolvedInputs.audioUrl,
+        title: data.title,
+        description: data.description,
+        tags: data.tags,
+        privacy: data.privacy,
+        userId: ctx.userId,
+      }
+    }
 
     default:
       return { ...data, userId: ctx.userId }

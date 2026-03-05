@@ -82,6 +82,7 @@ import { SubWorkflowOutputNode } from "./sub-workflow-output-node";
 import { SubWorkflowNode } from "./sub-workflow-node";
 import { WebhookTriggerNode } from "./webhook-trigger-node";
 import { ScheduleTriggerNode } from "./schedule-trigger-node";
+import { SocialNode } from "./social-node";
 import type { SceneNodeType } from "@/types/nodes";
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -181,4 +182,11 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "sub-workflow-input": SubWorkflowInputNode,
   "sub-workflow-output": SubWorkflowOutputNode,
   "sub-workflow": SubWorkflowNode,
+  // Social Media
+  "instagram-post": SocialNode,
+  "tiktok-post": SocialNode,
+  "youtube-upload": SocialNode,
+  "linkedin-post": SocialNode,
+  "x-post": SocialNode,
+  "facebook-post": SocialNode,
 };

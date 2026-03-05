@@ -23,6 +23,10 @@ const envSchema = z.object({
   PADDLE_WEBHOOK_SECRET: z.string().default(""),
   /** Number of parallel browser tabs for Remotion renders. null = Remotion default (50% CPU cores) */
   REMOTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).nullable().default(null),
+  /** 64-char hex string (32 bytes) for AES-256-GCM encryption of social media OAuth tokens */
+  SOCIAL_ENCRYPTION_KEY: z.string().default(""),
+  /** Base URL for OAuth redirects (e.g. https://app.nodaro.ai or http://localhost:8000) */
+  PUBLIC_URL: z.string().default(""),
 })
 
 export type Edition = "community" | "business" | "cloud"

@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, useStore, type Edge, type EdgeProps } from "@xyflow/react"
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, useStore, type Edge, type EdgeProps } from "@xyflow/react"
 import { X } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { CSSProperties } from "react"
@@ -30,14 +30,13 @@ function AnimatedFlowEdgeComponent({
 }: AnimatedFlowEdgeProps) {
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
   const zoom = useStore((s) => s.transform[2])
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  })
+
+  // Use step routing for backward connections (target left of source)
+  // to avoid edges cutting through nodes
+  const pathParams = { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition }
+  const [edgePath, labelX, labelY] = targetX < sourceX
+    ? getSmoothStepPath({ ...pathParams, borderRadius: 8, offset: 30 })
+    : getBezierPath(pathParams)
 
   const edgeData = data as AnimatedFlowEdgeData | undefined
   const isRunning = edgeData?.isRunning || false           // Pink: data flowing OUT from running node
