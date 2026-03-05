@@ -91,9 +91,10 @@ export function generateAuthUrl(platform: SocialPlatform, userId: string): strin
     if (now >= val.expiresAt) stateStore.delete(key)
   }
   if (stateStore.size > MAX_STATE_ENTRIES) {
-    const oldest = [...stateStore.entries()].sort((a, b) => a[1].expiresAt - b[1].expiresAt)
-    for (let i = 0; i < oldest.length - MAX_STATE_ENTRIES; i++) {
-      stateStore.delete(oldest[i][0])
+    let toEvict = stateStore.size - MAX_STATE_ENTRIES
+    for (const key of stateStore.keys()) {
+      if (toEvict-- <= 0) break
+      stateStore.delete(key)
     }
   }
 
@@ -168,8 +169,12 @@ export async function exchangeCodeForTokens(
 
   const data = await res.json() as Record<string, unknown>
 
+  if (!data.access_token) {
+    throw new Error(`Token exchange for ${platform} returned no access_token`)
+  }
+
   return {
-    accessToken: (data.access_token as string) || "",
+    accessToken: data.access_token as string,
     refreshToken: data.refresh_token as string | undefined,
     expiresIn: data.expires_in as number | undefined,
     scopes: data.scope ? (data.scope as string).split(" ") : undefined,
@@ -205,8 +210,12 @@ export async function refreshAccessToken(
 
   const data = await res.json() as Record<string, unknown>
 
+  if (!data.access_token) {
+    throw new Error(`Token refresh for ${platform} returned no access_token`)
+  }
+
   return {
-    accessToken: (data.access_token as string) || "",
+    accessToken: data.access_token as string,
     refreshToken: data.refresh_token as string | undefined,
     expiresIn: data.expires_in as number | undefined,
   }

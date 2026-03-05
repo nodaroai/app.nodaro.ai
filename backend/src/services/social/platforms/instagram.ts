@@ -59,10 +59,26 @@ export const instagramPublisher: PlatformPublisher = {
       }
       const result = await publishRes.json() as { id: string }
 
+      // Fetch shortcode for the post URL (media ID != shortcode)
+      let platformPostUrl: string | undefined
+      try {
+        const mediaRes = await fetch(
+          `https://graph.facebook.com/v21.0/${result.id}?fields=shortcode&access_token=${accessToken}`,
+        )
+        if (mediaRes.ok) {
+          const mediaData = await mediaRes.json() as { shortcode?: string }
+          if (mediaData.shortcode) {
+            platformPostUrl = `https://www.instagram.com/p/${mediaData.shortcode}/`
+          }
+        }
+      } catch {
+        // Non-critical — URL is just for UI convenience
+      }
+
       return {
         success: true,
         platformPostId: result.id,
-        platformPostUrl: `https://www.instagram.com/p/${result.id}/`,
+        platformPostUrl,
       }
     }
 

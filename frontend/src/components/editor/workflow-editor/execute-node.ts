@@ -2966,6 +2966,7 @@ export function executeNode(
             executionStatus: "failed",
             errorMessage: err instanceof Error ? err.message : "Social publish failed",
           });
+          throw err;
         },
       ),
     );

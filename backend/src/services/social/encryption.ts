@@ -35,5 +35,5 @@ export function decryptToken(encoded: string): string {
   const ciphertext = buf.subarray(IV_LENGTH + TAG_LENGTH)
   const decipher = createDecipheriv(ALGORITHM, key, iv)
   decipher.setAuthTag(tag)
-  return decipher.update(ciphertext) + decipher.final("utf8")
+  return decipher.update(ciphertext, undefined, "utf8") + decipher.final("utf8")
 }

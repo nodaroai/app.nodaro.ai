@@ -6,12 +6,18 @@ import { decryptToken, encryptToken } from "../services/social/encryption.js"
 import { refreshAccessToken, type SocialPlatform } from "../services/social/oauth.js"
 import { platformPublishers, type PublishRequest } from "../services/social/platforms/index.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
+import { CreditsService } from "../billing/credits.js"
 
 const VALID_ACTIONS = [
   "post-image", "post-reel", "post-story", "post-carousel",
   "post-video", "upload-video", "upload-short",
   "post-text", "post-tweet",
 ] as const
+
+const MEDIA_REQUIRED_ACTIONS = new Set([
+  "post-image", "post-reel", "post-story", "post-carousel",
+  "post-video", "upload-video", "upload-short",
+])
 
 const publishSchema = z.object({
   platform: z.enum(["instagram", "tiktok", "youtube", "linkedin", "x", "facebook"]),
@@ -39,11 +45,6 @@ export async function socialPublishRoutes(app: FastifyInstance) {
 
     const { platform, action, caption, mediaUrl, title, description, tags, privacy } = parsed.data
 
-    // Actions that require media
-    const MEDIA_REQUIRED_ACTIONS = new Set([
-      "post-image", "post-reel", "post-story", "post-carousel",
-      "post-video", "upload-video", "upload-short",
-    ])
     if (MEDIA_REQUIRED_ACTIONS.has(action) && !mediaUrl) {
       return reply.status(400).send({
         error: { code: "validation_error", message: `Action "${action}" requires a media URL` },
@@ -163,6 +164,15 @@ export async function socialPublishRoutes(app: FastifyInstance) {
         .from("jobs")
         .update({ status: "failed", output_data: { error: message } })
         .eq("id", job.id)
+
+      // Refund reserved credits on failure
+      if (reservation?.usageLogId) {
+        try {
+          await CreditsService.refundCredits(reservation.usageLogId)
+        } catch (refundErr) {
+          app.log.error({ refundErr, jobId: job.id }, "Failed to refund credits after social publish failure")
+        }
+      }
 
       return reply.status(500).send({ error: { code: "publish_failed", message } })
     }

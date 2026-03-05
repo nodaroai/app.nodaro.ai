@@ -44,14 +44,20 @@ export function PlatformCard({ platform, connection, onConnectionChange }: Platf
       const popup = window.open(url, `social-auth-${platform}`, "width=600,height=700,scrollbars=yes")
 
       // Listen for postMessage from callback
+      let interval: ReturnType<typeof setInterval>
+      const cleanup = () => {
+        clearInterval(interval)
+        window.removeEventListener("message", handler)
+      }
       const handler = (e: MessageEvent) => {
+        if (e.origin !== window.location.origin) return
         if (e.data?.type === "social-auth-success" && e.data.platform === platform) {
-          window.removeEventListener("message", handler)
+          cleanup()
           toast.success(`Connected to ${PLATFORM_LABELS[platform]}!`)
           onConnectionChange()
           setConnecting(false)
         } else if (e.data?.type === "social-auth-error") {
-          window.removeEventListener("message", handler)
+          cleanup()
           toast.error(e.data.message || "Connection failed")
           setConnecting(false)
         }
@@ -59,12 +65,10 @@ export function PlatformCard({ platform, connection, onConnectionChange }: Platf
       window.addEventListener("message", handler)
 
       // Also poll for popup close
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         if (popup?.closed) {
-          clearInterval(interval)
-          window.removeEventListener("message", handler)
+          cleanup()
           setConnecting(false)
-          // Refresh anyway in case it worked
           onConnectionChange()
         }
       }, 1000)
