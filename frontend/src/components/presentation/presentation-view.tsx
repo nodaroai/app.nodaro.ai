@@ -151,8 +151,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const canEdit = viewMode === "horizontal" || viewMode === "vertical"
   const isEditing = isEditMode && mode === "tab" && canEdit
 
-  // Read-only enforcement for shared viewers
-  const isShareReadOnly = isFullscreen && !!settings.shareReadOnly
+  // Read-only enforcement for shared viewers (not app runner — app runner provides onNewRun)
+  const isAppRunner = isFullscreen && !!onNewRun
+  const isShareReadOnly = isFullscreen && !!settings.shareReadOnly && !isAppRunner
 
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
     // Update URL param
@@ -433,7 +434,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
       onOpenMedia={handleOpenMedia}
     />
-  ), [isFullscreen, presInputValues, presUpdateInput, isShareReadOnly, isRunning, isTerminal, handleOpenMedia])
+  ), [isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia])
 
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     const outputType = getOutputType(node.type)
@@ -487,12 +488,54 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 h-14 border-b border-border bg-card shrink-0">
+      <div className="relative flex items-center justify-between px-4 sm:px-6 h-14 border-b border-border bg-card shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <h1 className="text-lg font-semibold truncate text-foreground">
             {workflowName || "Untitled"}
           </h1>
         </div>
+
+        {/* App runner: centered action buttons (Create New + Run/Stop) */}
+        {isAppRunner && (
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onNewRun}
+              className="h-8 px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200"
+            >
+              <RotateCcw className="h-4 w-4" />
+              {newRunLabel ?? "Create New"}
+            </button>
+
+            {isRunning ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200"
+                disabled={!onCancel}
+              >
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Stop
+              </button>
+            ) : (
+              inputsReadOnly !== true && (
+                <button
+                  type="button"
+                  onClick={handleRunClick}
+                  className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!allInputsFilled || !user}
+                >
+                  {!user ? (
+                    <><LogIn className="h-4 w-4" />Sign in to Run</>
+                  ) : (
+                    <><Play className="h-4 w-4" />Run{costLabel}</>
+                  )}
+                </button>
+              )
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-2 shrink-0">
           {user && hasCredits() && <CreditBalance userId={user.id} />}
 
@@ -570,20 +613,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             </Button>
           )}
 
-          {/* Create New / Clear button — shown when onNewRun is provided (app runner) */}
-          {!isShareReadOnly && onNewRun && (
-            <button
-              type="button"
-              onClick={onNewRun}
-              className="h-8 px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200"
-            >
-              <RotateCcw className="h-4 w-4" />
-              {newRunLabel ?? "Create New"}
-            </button>
-          )}
-
-          {/* Run / Stop button — hidden when shared read-only; Run hidden when inputs read-only (app runner initial state) */}
-          {!isShareReadOnly && (
+          {/* Run / Stop button — tab/share mode only (app runner uses centered buttons above) */}
+          {!isAppRunner && !isShareReadOnly && (
             isRunning ? (
               <button
                 type="button"
@@ -595,21 +626,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 Stop
               </button>
             ) : (
-              // Hide Run when inputsReadOnly is explicitly true (app runner before Create New)
-              inputsReadOnly !== true && (
-                <button
-                  type="button"
-                  onClick={handleRunClick}
-                  className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
-                >
-                  {isFullscreen && !user ? (
-                    <><LogIn className="h-4 w-4" />Sign in to Run</>
-                  ) : (
-                    <><Play className="h-4 w-4" />Run{costLabel}</>
-                  )}
-                </button>
-              )
+              <button
+                type="button"
+                onClick={handleRunClick}
+                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
+              >
+                {isFullscreen && !user ? (
+                  <><LogIn className="h-4 w-4" />Sign in to Run</>
+                ) : (
+                  <><Play className="h-4 w-4" />Run{costLabel}</>
+                )}
+              </button>
             )
           )}
         </div>
