@@ -3235,6 +3235,7 @@ export interface PublishedApp {
   isActive: boolean
   isListed: boolean
   isEmbeddable: boolean
+  allowedOrigins: string[]
   estimatedCredits: number
   createdAt: string
   runCount?: number
@@ -3288,6 +3289,7 @@ export async function updateApp(appId: string, data: {
   isActive?: boolean
   isListed?: boolean
   isEmbeddable?: boolean
+  allowedOrigins?: string[]
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     `/v1/apps/${encodeURIComponent(appId)}`,

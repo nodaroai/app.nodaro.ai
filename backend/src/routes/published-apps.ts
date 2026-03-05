@@ -29,6 +29,7 @@ function toCamelCase(row: Record<string, unknown>) {
     isActive: row.is_active,
     isListed: row.is_listed,
     isEmbeddable: row.is_embeddable,
+    allowedOrigins: row.allowed_origins,
     estimatedCredits: row.estimated_credits,
     createdAt: row.created_at,
   }
@@ -160,6 +161,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       isActive: app.is_active,
       isListed: app.is_listed,
       isEmbeddable: app.is_embeddable,
+      allowedOrigins: app.allowed_origins,
       estimatedCredits: app.estimated_credits,
       createdAt: app.created_at,
       runCount: app.app_runs?.[0]?.count ?? 0,

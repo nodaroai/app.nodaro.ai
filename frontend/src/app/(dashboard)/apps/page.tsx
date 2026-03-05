@@ -10,8 +10,12 @@ import {
   ToggleRight,
   Code2,
   Loader2,
+  Shield,
+  Plus,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { getMyApps, updateApp, deactivateApp, type PublishedApp } from "@/lib/api"
 
@@ -30,6 +34,15 @@ export default function AppsPage() {
       } else {
         await deactivateApp(appId)
       }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-apps"] })
+    },
+  })
+
+  const originsMutation = useMutation({
+    mutationFn: async ({ appId, origins }: { appId: string; origins: string[] }) => {
+      await updateApp(appId, { allowedOrigins: origins })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-apps"] })
@@ -89,6 +102,7 @@ export default function AppsPage() {
                   onCopyUrl={handleCopyUrl}
                   onCopyEmbed={handleCopyEmbed}
                   onToggle={(isActive) => toggleMutation.mutate({ appId: app.id, isActive })}
+                  onUpdateOrigins={(origins) => originsMutation.mutate({ appId: app.id, origins })}
                 />
               ))}
             </div>
@@ -105,6 +119,7 @@ export default function AppsPage() {
                     onCopyUrl={handleCopyUrl}
                     onCopyEmbed={handleCopyEmbed}
                     onToggle={(isActive) => toggleMutation.mutate({ appId: app.id, isActive })}
+                    onUpdateOrigins={(origins) => originsMutation.mutate({ appId: app.id, origins })}
                   />
                 ))}
               </div>
@@ -121,12 +136,38 @@ function AppCard({
   onCopyUrl,
   onCopyEmbed,
   onToggle,
+  onUpdateOrigins,
 }: {
   app: PublishedApp
   onCopyUrl: (slug: string) => void
   onCopyEmbed: (slug: string) => void
   onToggle: (isActive: boolean) => void
+  onUpdateOrigins: (origins: string[]) => void
 }) {
+  const [showEmbed, setShowEmbed] = useState(false)
+  const [newOrigin, setNewOrigin] = useState("")
+  const origins = app.allowedOrigins ?? []
+
+  const handleAddOrigin = () => {
+    const trimmed = newOrigin.trim()
+    if (!trimmed) return
+    let origin = trimmed
+    if (!origin.startsWith("http://") && !origin.startsWith("https://")) {
+      origin = `https://${origin}`
+    }
+    origin = origin.replace(/\/+$/, "")
+    if (origins.includes(origin)) {
+      toast.error("Domain already added")
+      return
+    }
+    onUpdateOrigins([...origins, origin])
+    setNewOrigin("")
+  }
+
+  const handleRemoveOrigin = (originToRemove: string) => {
+    onUpdateOrigins(origins.filter((o) => o !== originToRemove))
+  }
+
   return (
     <div className="bg-card border border-border rounded-xl p-4 hover:border-border/80 transition-colors">
       <div className="flex items-start justify-between mb-3">
@@ -150,7 +191,7 @@ function AppCard({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <Button
           variant="outline"
           size="sm"
@@ -173,8 +214,8 @@ function AppCard({
           variant="outline"
           size="sm"
           className="h-7 px-2 text-xs"
-          onClick={() => onCopyEmbed(app.slug)}
-          title="Copy embed code"
+          onClick={() => setShowEmbed(!showEmbed)}
+          title="Embed settings"
         >
           <Code2 className="h-3 w-3 mr-1" />
           Embed
@@ -188,7 +229,7 @@ function AppCard({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0 ml-auto"
+          className="h-7 w-7 p-0"
           onClick={() => onToggle(!app.isActive)}
           title={app.isActive ? "Deactivate" : "Reactivate"}
         >
@@ -199,6 +240,71 @@ function AppCard({
           )}
         </Button>
       </div>
+
+      {/* Embed settings panel */}
+      {showEmbed && (
+        <div className="mt-3 pt-3 border-t border-border space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+            <Shield className="h-3 w-3" />
+            Allowed Embed Domains
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Add domains that can embed this app. Embedding is blocked until at least one domain is added.
+          </p>
+
+          {origins.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {origins.map((origin) => (
+                <span
+                  key={origin}
+                  className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
+                >
+                  {origin}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveOrigin(origin)}
+                    className="hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-1.5">
+            <Input
+              value={newOrigin}
+              onChange={(e) => setNewOrigin(e.target.value)}
+              placeholder="https://example.com"
+              className="h-7 text-xs flex-1"
+              onKeyDown={(e) => { if (e.key === "Enter") handleAddOrigin() }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs shrink-0"
+              onClick={handleAddOrigin}
+              disabled={!newOrigin.trim()}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add
+            </Button>
+          </div>
+
+          {origins.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs w-full"
+              onClick={() => onCopyEmbed(app.slug)}
+            >
+              <Copy className="h-3 w-3 mr-1" />
+              Copy Embed Code
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

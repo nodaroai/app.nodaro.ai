@@ -37,11 +37,14 @@ export async function embedRoutes(app: FastifyInstance) {
       return reply.status(403).send("This app does not allow embedding")
     }
 
-    // Build frame-ancestors CSP directive
+    // Embedding requires a domain allowlist — reject if none configured
     const origins = (appRow.allowed_origins as string[]) ?? []
-    const frameAncestors = origins.length > 0
-      ? origins.join(" ")
-      : "'self'"
+    if (origins.length === 0) {
+      return reply.status(403).send("Embedding requires an allowed domains list. Configure allowed domains in your app settings.")
+    }
+
+    // Build frame-ancestors CSP directive
+    const frameAncestors = origins.join(" ")
 
     // Determine the frontend URL
     const appUrl = config.PUBLIC_URL || "https://app.nodaro.ai"
