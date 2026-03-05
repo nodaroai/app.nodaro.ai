@@ -229,6 +229,14 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         />
       </div>
 
+      {/* Input handle — invisible connector for sub-workflow support */}
+      <Handle
+        id="in"
+        type="target"
+        position={Position.Left}
+        style={{ opacity: 0, width: 12, height: 12, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "50%", left: "-6px", transform: "translateY(-50%)" }}
+      />
+
       {/* Handle — fully invisible, interactive */}
       <Handle
         id="prompt"

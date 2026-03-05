@@ -47,8 +47,8 @@ const CAPTION_LIMITS: Record<SocialPlatformType, number> = {
   facebook: 63206,
 }
 
-function useSocialConnection(platform: SocialPlatformType) {
-  const [connection, setConnection] = useState<SocialConnection | null>(null)
+function useSocialConnections(platform: SocialPlatformType) {
+  const [connections, setConnections] = useState<SocialConnection[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -56,27 +56,38 @@ function useSocialConnection(platform: SocialPlatformType) {
     getSocialConnections()
       .then((data) => {
         if (cancelled) return
-        setConnection(data.connections.find((c) => c.platform === platform) ?? null)
+        setConnections(
+          data.connections.filter((c) => c.platform === platform)
+        )
       })
       .catch(() => { /* ignore */ })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [platform])
 
-  return { connection, loading }
+  return { connections, loading }
 }
 
 function SocialConfigBase({ data, onUpdate, platform }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
   const d = data as SocialPostData
-  const { connection, loading } = useSocialConnection(platform)
+  const { connections, loading } = useSocialConnections(platform)
   const actions = PLATFORM_ACTIONS[platform]
   const charLimit = CAPTION_LIMITS[platform]
   const captionLen = (d.caption || "").length
 
+  // Auto-select first connection if none selected
+  useEffect(() => {
+    if (!d.connectionId && connections.length > 0) {
+      onUpdate({ connectionId: connections[0].id })
+    }
+  }, [connections, d.connectionId, onUpdate])
+
+  const selectedConnection = connections.find((c) => c.id === d.connectionId)
+
   return (
     <div className="space-y-4">
       {/* Connection status */}
-      {!loading && !connection && (
+      {!loading && connections.length === 0 && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
           <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
           <div className="text-xs text-amber-700 dark:text-amber-400">
@@ -88,14 +99,39 @@ function SocialConfigBase({ data, onUpdate, platform }: ConfigProps<SocialPostDa
         </div>
       )}
 
-      {!loading && connection && (
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
-          {connection.platform_avatar_url && (
-            <img src={connection.platform_avatar_url} alt="" className="h-6 w-6 rounded-full" />
-          )}
-          <span className="text-xs text-green-700 dark:text-green-400 font-medium">
-            {connection.platform_username || "Connected"}
-          </span>
+      {/* Account selector */}
+      {!loading && connections.length > 0 && (
+        <div>
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Account</Label>
+          <Select
+            value={d.connectionId || ""}
+            onValueChange={(v) => onUpdate({ connectionId: v })}
+          >
+            <SelectTrigger className="mt-1.5">
+              <SelectValue placeholder="Select account">
+                {selectedConnection && (
+                  <div className="flex items-center gap-2">
+                    {selectedConnection.platform_avatar_url && (
+                      <img src={selectedConnection.platform_avatar_url} alt="" className="h-4 w-4 rounded-full" />
+                    )}
+                    <span>{selectedConnection.display_name || selectedConnection.platform_username || "Connected"}</span>
+                  </div>
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {connections.map((conn) => (
+                <SelectItem key={conn.id} value={conn.id}>
+                  <div className="flex items-center gap-2">
+                    {conn.platform_avatar_url && (
+                      <img src={conn.platform_avatar_url} alt="" className="h-4 w-4 rounded-full" />
+                    )}
+                    <span>{conn.display_name || conn.platform_username || "Connected"}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 

@@ -65,6 +65,7 @@ import {
   Linkedin,
   Twitter,
   Facebook,
+  StickyNote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SceneNodeType } from "@/types/nodes";
@@ -687,6 +688,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     label: "Sub-Workflow",
     icon: <Workflow className="h-4 w-4" />,
     category: "Workflow",
+  },
+  // Utility
+  {
+    type: "sticky-note",
+    label: "Sticky Note",
+    icon: <StickyNote className="h-4 w-4" />,
+    category: "Input",
   },
 ];
 

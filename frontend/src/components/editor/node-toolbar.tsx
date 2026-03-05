@@ -5,7 +5,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import {
   Type, List, BookOpen, ImageIcon, Film, Merge, Plus, X,
   Upload, Video, Rss, Palette, PaintBucket, Server,
-  Hash, Clock, RatioIcon, Mic, ShieldCheck,
+  Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook,
 } from "lucide-react"
@@ -134,6 +134,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "sub-workflow-input", label: "Sub-Workflow Input", icon: <LogIn className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", icon: <LogOut className="h-4 w-4" />, category: "Workflow" },
   { type: "sub-workflow", label: "Sub-Workflow", icon: <Workflow className="h-4 w-4" />, category: "Workflow" },
+  // Utility
+  { type: "sticky-note", label: "Sticky Note", icon: <StickyNote className="h-4 w-4" />, category: "Input" },
 ]
 
 const CATEGORIES = Array.from(new Set(NODE_OPTIONS.map((n) => n.category)))

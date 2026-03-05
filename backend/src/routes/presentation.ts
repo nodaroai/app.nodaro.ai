@@ -133,14 +133,8 @@ export async function presentationRoutes(app: FastifyInstance) {
     return reply.send({ success: true })
   })
 
-  // --- Get shared workflow (any authenticated user) ---
+  // --- Get shared workflow (public — auth optional for isOwner check) ---
   app.get("/v1/present/:token", async (req, reply) => {
-    if (!req.userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-
     const parsed = shareTokenParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -164,7 +158,8 @@ export async function presentationRoutes(app: FastifyInstance) {
       })
     }
 
-    const isOwner = workflow.user_id === req.userId
+    // isOwner only if user is authenticated and owns the workflow
+    const isOwner = !!req.userId && workflow.user_id === req.userId
 
     // Estimate credit cost from executable nodes
     const wfNodes = (workflow.nodes ?? []) as Array<{ type: string }>

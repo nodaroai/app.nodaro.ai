@@ -10,6 +10,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { RSSFeedData } from "@/types/nodes"
 
 const HANDLES = [
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
   { id: "text", type: "source" as const, position: Position.Right, customStyle: { top: '40%', right: '-29px' }, hideHandle: true },
   { id: "image", type: "source" as const, position: Position.Right, customStyle: { top: '70%', right: '-29px' }, hideHandle: true },
 ] as const

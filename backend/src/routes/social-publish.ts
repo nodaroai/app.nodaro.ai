@@ -22,6 +22,7 @@ const MEDIA_REQUIRED_ACTIONS = new Set([
 const publishSchema = z.object({
   platform: z.enum(["instagram", "tiktok", "youtube", "linkedin", "x", "facebook"]),
   action: z.enum(VALID_ACTIONS),
+  connectionId: z.string().uuid().optional(),
   caption: z.string().optional(),
   mediaUrl: z.string().url().optional(),
   title: z.string().optional(),
@@ -43,7 +44,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.message } })
     }
 
-    const { platform, action, caption, mediaUrl, title, description, tags, privacy } = parsed.data
+    const { platform, action, connectionId, caption, mediaUrl, title, description, tags, privacy } = parsed.data
 
     if (MEDIA_REQUIRED_ACTIONS.has(action) && !mediaUrl) {
       return reply.status(400).send({
@@ -51,13 +52,20 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       })
     }
 
-    // Get connection
-    const { data: connection, error: connErr } = await supabase
+    // Get connection — by ID if provided, otherwise first match for platform
+    let connQuery = supabase
       .from("social_connections")
       .select("*")
       .eq("user_id", userId)
-      .eq("platform", platform)
-      .single()
+
+    if (connectionId) {
+      connQuery = connQuery.eq("id", connectionId).eq("platform", platform)
+    } else {
+      connQuery = connQuery.eq("platform", platform).limit(1)
+    }
+
+    const { data: connRows, error: connErr } = await connQuery
+    const connection = connRows?.[0]
 
     if (connErr || !connection) {
       return reply.status(400).send({

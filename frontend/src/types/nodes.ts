@@ -1102,9 +1102,12 @@ export type SocialMediaFormatData = {
 export type SocialPlatformType = "instagram" | "tiktok" | "youtube" | "linkedin" | "x" | "facebook"
 
 export interface SocialConnection {
+  id: string
   platform: string
+  platform_user_id: string
   platform_username: string | null
   platform_avatar_url: string | null
+  display_name: string | null
 }
 
 export type SocialPostData = {
@@ -1112,6 +1115,7 @@ export type SocialPostData = {
   label: string
   platform: SocialPlatformType
   action: string
+  connectionId?: string
   caption: string
   title?: string
   description?: string
@@ -1971,7 +1975,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Text Prompt",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["prompt"],
     defaultData: { label: "Text Prompt", text: "", variables: {} },
   },
@@ -1980,7 +1984,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "List",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["list"],
     defaultData: { label: "List", items: "", fieldMappings: {} },
   },
@@ -1989,7 +1993,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Loop",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: [],
     defaultData: { label: "Loop", columns: [], rows: [], fieldMappings: {} } as LoopNodeData,
   },
@@ -1998,7 +2002,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Upload Image",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["image"],
     defaultData: { label: "Upload Image", assetId: "", url: "" } as unknown as SceneNodeData,
   },
@@ -2007,7 +2011,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Upload Video",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Upload Video", assetId: "", url: "" } as unknown as SceneNodeData,
   },
@@ -2016,7 +2020,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Upload Audio",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Upload Audio", assetId: "", url: "" } as unknown as SceneNodeData,
   },
@@ -2025,7 +2029,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "RSS Feed",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["content"],
     defaultData: { label: "RSS Feed", feedUrl: "", itemIndex: 0, extractFields: ["title", "description"] },
   },
@@ -2034,7 +2038,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Video URL",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Video URL", youtubeUrl: "", videoId: "", title: "", thumbnailUrl: "" },
   },
@@ -2043,7 +2047,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Reference Audio",
     category: "input",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Reference Audio", sourceType: "youtube", youtubeUrl: "", uploadedFileUrl: "", directUrl: "", videoTitle: "", videoThumbnail: "", videoDuration: "", extractedAudioUrl: "", extractionStatus: "idle" },
   },
@@ -2071,7 +2075,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Tone",
     category: "parameter",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["tone"],
     defaultData: { label: "Tone", tone: "" },
   },
@@ -2080,7 +2084,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Style Guide",
     category: "parameter",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["style_guide"],
     defaultData: { label: "Style Guide", text: "" },
   },
@@ -2089,7 +2093,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Provider",
     category: "parameter",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["provider"],
     defaultData: { label: "Provider", category: "image", provider: "nano-banana", model: "" },
   },
@@ -2098,7 +2102,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Scene Count",
     category: "parameter",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["scene_count"],
     defaultData: { label: "Scene Count", count: 5 },
   },
@@ -2107,7 +2111,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Duration",
     category: "parameter",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["duration"],
     defaultData: { label: "Duration", seconds: 60 },
   },
@@ -2116,7 +2120,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Aspect Ratio",
     category: "parameter",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["aspect_ratio"],
     defaultData: { label: "Aspect Ratio", ratio: "16:9" },
   },
@@ -2125,7 +2129,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Motion",
     category: "parameter",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Motion", motion: "moderate" },
   },
@@ -2134,7 +2138,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Camera Motion",
     category: "parameter",
     creditCost: 0,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Camera Motion", cameraMotion: "static" },
   },
@@ -2598,7 +2602,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Motion Graphics",
     category: "ai",
     creditCost: 2,
-    inputs: [],
+    inputs: ["in"],
     outputs: ["composition"],
     defaultData: {
       label: "Motion Graphics",

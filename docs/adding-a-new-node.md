@@ -107,7 +107,15 @@ export type YourNodeData = {
 | 3a | `frontend/src/components/nodes/<node-type>-node.tsx` | **Create** component |
 | 3b | `frontend/src/components/nodes/index.ts` | Import + add to `nodeTypes` map |
 
-Use `BaseNode` wrapper with handles, status states, and `RunNodeButton`. See `transcribe-node.tsx` for text-output pattern, `generate-image-node.tsx` for image-output pattern.
+**All new nodes MUST use the new UI style:**
+- Wrap in `<div className="relative max-w-[220px]">`
+- `EditableNodeLabel` floating above (from `./editable-node-label`)
+- `BaseNode` with `hideHeader`, `minWidth={220}`, `isRunning`, custom handles with `hideHandle: true` + `customStyle`
+- `HandleIcon` components (from `./handle-icon`) for visual handle indicators
+- `RunNodeButton` as `topToolbarContent` (for executable nodes)
+- Status states: running (Loader2 spinner), completed (result preview), failed (AlertCircle + error), idle (placeholder)
+
+See `social-node.tsx` for action/output pattern, `transcribe-node.tsx` for text-output pattern, `generate-image-node.tsx` for image-output pattern.
 
 ### 4. Config Panel
 

@@ -441,7 +441,32 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       return { nodes, edges: newEdges, isDirty: true }
     }),
 
-  selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
+  selectNode: (nodeId) =>
+    set((state) => {
+      if (nodeId === null) {
+        // Deselect all
+        const anySelected = state.nodes.some((n) => n.selected)
+        return {
+          selectedNodeId: null,
+          ...(anySelected ? { nodes: state.nodes.map((n) => n.selected ? { ...n, selected: false } : n) } : {}),
+        }
+      }
+
+      const target = state.nodes.find((n) => n.id === nodeId)
+      if (target?.selected) {
+        // React Flow already handled selection — just sync selectedNodeId
+        return { selectedNodeId: nodeId }
+      }
+
+      // Target not yet selected (e.g. stopPropagation prevented React Flow) — select it, deselect others
+      return {
+        selectedNodeId: nodeId,
+        nodes: state.nodes.map((n) => ({
+          ...n,
+          selected: n.id === nodeId,
+        })),
+      }
+    }),
 
   setUserPromptTemplates: (templates) => set({ userPromptTemplates: templates }),
 

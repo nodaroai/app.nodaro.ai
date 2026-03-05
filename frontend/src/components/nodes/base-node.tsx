@@ -142,7 +142,7 @@ function BaseNodeComponent({
 
   return (
     <div
-      style={{ minWidth: '100%', minHeight: '100%', position: 'relative' }}
+      className="w-full h-full relative flex flex-col"
       onMouseEnter={() => {
         if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
         setIsHovered(true)
@@ -193,7 +193,7 @@ function BaseNodeComponent({
       )}
       <div
         className={cn(
-          "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground min-h-full overflow-hidden",
+          "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground flex-1 overflow-hidden",
           "dark:hover:border-[#ff0073] transition-colors duration-200",
           CATEGORY_STYLES[category],
           selected && "ring-2 ring-primary shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",

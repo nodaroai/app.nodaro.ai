@@ -29,28 +29,32 @@ export function SortableCardWrapper({
   return (
     <div ref={setNodeRef} style={style} className="relative group mb-4">
       {isEditMode && (
-        <>
-          {/* Drag handle */}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute -top-2 -right-2 z-10 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-red-500/80 text-white hover:bg-red-500 transition-colors"
+          title="Remove from presentation"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+
+      {isEditMode ? (
+        <div className="flex items-start gap-1">
           <div
             {...attributes}
             {...listeners}
-            className="absolute -left-6 top-4 w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+            className="shrink-0 mt-4 w-5 h-5 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
           >
             <GripVertical className="w-4 h-4" />
           </div>
-          {/* Remove button */}
-          <button
-            type="button"
-            onClick={onRemove}
-            className="absolute -top-2 -right-2 z-10 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-red-500/80 text-white hover:bg-red-500 transition-colors"
-            title="Remove from presentation"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </>
+          <div className="flex-1 min-w-0">
+            {children}
+          </div>
+        </div>
+      ) : (
+        children
       )}
-
-      {children}
 
       {/* Editable description below card — edit mode only */}
       {isEditMode && (

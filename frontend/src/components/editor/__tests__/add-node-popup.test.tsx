@@ -22,7 +22,7 @@ vi.mock("lucide-react", () => {
     Smile: I, Sparkles: I, Repeat: I, Gauge: I, SunDim: I,
     RefreshCw: I, Shapes: I, Box: I, AudioWaveform: I, Eye: I,
     Languages: I, AlignLeft: I, Workflow: I, LogIn: I, LogOut: I, Share2: I,
-    Instagram: I, Youtube: I, Linkedin: I, Twitter: I, Facebook: I,
+    Instagram: I, Youtube: I, Linkedin: I, Twitter: I, Facebook: I, StickyNote: I,
   }
 })
 

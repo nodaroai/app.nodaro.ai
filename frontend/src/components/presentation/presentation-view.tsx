@@ -6,8 +6,8 @@
  */
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
-import { useSearchParams } from "react-router-dom"
-import { Play, Loader2, ExternalLink, Pencil, Eye } from "lucide-react"
+import { useSearchParams, useNavigate } from "react-router-dom"
+import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn } from "lucide-react"
 import {
   KeyboardSensor,
   PointerSensor,
@@ -35,6 +35,7 @@ import {
 } from "@/lib/presentation-utils"
 import { NODE_CREDIT_COSTS, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
 import { shareWorkflow } from "@/lib/api"
+import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { toast } from "sonner"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { ShareDialog } from "./share-dialog"
@@ -98,6 +99,7 @@ interface PresentationViewProps {
 
 export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRunning: externalIsRunning }: PresentationViewProps) {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
   const [pickerSection, setPickerSection] = useState<"inputs" | "outputs" | null>(null)
   const [isOpeningNewTab, setIsOpeningNewTab] = useState(false)
@@ -203,9 +205,16 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRun
   const isRunning = isFullscreen ? presStatus === "running" : (externalIsRunning ?? isEditorRunning)
 
   const handleRunClick = useCallback(() => {
-    if (isFullscreen) presRun()
-    else if (onRun) onRun()
-  }, [isFullscreen, presRun, onRun])
+    if (isFullscreen) {
+      if (!user) {
+        // Save current URL so user returns here after login (consumed by auth-callback)
+        localStorage.setItem(AUTH_REDIRECT_KEY, window.location.pathname + window.location.search)
+        navigate("/login")
+        return
+      }
+      presRun()
+    } else if (onRun) onRun()
+  }, [isFullscreen, user, presRun, onRun, navigate])
 
   const handleRemoveNode = useCallback(
     (nodeId: string) => {
@@ -542,8 +551,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRun
                 className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
                 disabled={!isFullscreen && mode === "tab" && !onRun}
               >
-                <Play className="h-4 w-4" />
-                Run{costLabel}
+                {isFullscreen && !user ? (
+                  <><LogIn className="h-4 w-4" />Sign in to Run</>
+                ) : (
+                  <><Play className="h-4 w-4" />Run{costLabel}</>
+                )}
               </button>
             )
           )}

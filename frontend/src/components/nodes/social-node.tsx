@@ -2,8 +2,12 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Instagram, Video, Youtube, Linkedin, Twitter, Facebook } from "lucide-react"
+import { Instagram, Video, Youtube, Linkedin, Twitter, Facebook, CheckCircle, AlertCircle, Send, Loader2 } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
+import { RunNodeButton } from "./run-node-button"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import type { SocialPostData, SocialPlatformType } from "@/types/nodes"
 
@@ -18,33 +22,91 @@ const PLATFORM_ICONS: Record<SocialPlatformType, React.ReactNode> = {
 
 function SocialNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SocialPostData
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const platform = nodeData.platform
   const icon = PLATFORM_ICONS[platform] || PLATFORM_ICONS.instagram
-
-  const statusText = nodeData.executionStatus === "completed" && nodeData.platformPostUrl
-    ? "Published ✓"
-    : nodeData.executionStatus === "failed"
-      ? "Failed"
-      : nodeData.caption
-        ? nodeData.caption.slice(0, 40) + (nodeData.caption.length > 40 ? "..." : "")
-        : `Post to ${PLATFORM_LABELS[platform]}...`
+  const status = nodeData.executionStatus ?? "idle"
 
   return (
-    <BaseNode
-      id={id}
-      label={nodeData.label}
-      icon={icon}
-      category="output"
-      credits={1}
-      selected={selected}
-      handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Media" },
-      ]}
-    >
-      <p className="text-muted-foreground text-[11px] truncate max-w-[180px]">
-        {statusText}
-      </p>
-    </BaseNode>
+    <div className="relative max-w-[220px]">
+      <EditableNodeLabel
+        label={nodeData.label}
+        icon={icon}
+        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+      />
+      <BaseNode
+        id={id}
+        label={nodeData.label}
+        icon={icon}
+        category="output"
+        credits={1}
+        selected={selected}
+        isRunning={status === "running"}
+        minWidth={220}
+        minHeight={120}
+        hideHeader
+        topToolbarContent={
+          status !== "running" ? (
+            <RunNodeButton nodeId={id} credits={1} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+          ) : undefined
+        }
+        handles={[
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+        ]}
+      >
+        <div className="p-3 flex flex-col items-center justify-center gap-2" style={{ minHeight: '100px' }}>
+          {status === "running" && (
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              <span className="text-[11px] text-muted-foreground">Publishing...</span>
+            </div>
+          )}
+
+          {status === "completed" && (
+            <div className="flex flex-col items-center gap-2">
+              <CheckCircle className="w-6 h-6 text-green-500" />
+              <span className="text-[11px] font-medium text-green-600 dark:text-green-400">Published</span>
+              {nodeData.platformPostUrl && (
+                <a
+                  href={nodeData.platformPostUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-[#ff0073] hover:underline truncate max-w-[180px]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  View post
+                </a>
+              )}
+            </div>
+          )}
+
+          {status === "failed" && (
+            <div className="flex flex-col items-center gap-1.5">
+              <AlertCircle className="w-6 h-6 text-red-500" />
+              <span className="text-[11px] font-medium text-red-500">Failed</span>
+              {nodeData.errorMessage && (
+                <p className="text-[10px] text-center text-red-400 line-clamp-2 max-w-[180px]" title={nodeData.errorMessage}>
+                  {nodeData.errorMessage}
+                </p>
+              )}
+            </div>
+          )}
+
+          {status === "idle" && (
+            <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
+              <Send className="w-8 h-8" />
+              <span className="text-[11px]">
+                {nodeData.caption
+                  ? nodeData.caption.slice(0, 50) + (nodeData.caption.length > 50 ? "..." : "")
+                  : `Post to ${PLATFORM_LABELS[platform]}`}
+              </span>
+            </div>
+          )}
+        </div>
+      </BaseNode>
+      <HandleIcon icon={icon} color="green" side="left" top="50%" />
+    </div>
   )
 }
 

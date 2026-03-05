@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { useMemo, type ReactNode } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -17,11 +17,13 @@ interface ParameterNodeShellProps {
 }
 
 const makeHandles = (id: string) => [
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
   { id, type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
 ] as const
 
 export function ParameterNodeShell({ id, label, icon, handleId, selected, children }: ParameterNodeShellProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const handles = useMemo(() => makeHandles(handleId), [handleId])
 
   return (
     <div className="relative max-w-[220px]">
@@ -39,7 +41,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
         selected={selected}
         minWidth={220}
         hideHeader
-        handles={makeHandles(handleId)}
+        handles={handles}
       >
         <div className="px-3 py-3">
           {children}

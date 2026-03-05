@@ -79,6 +79,8 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   errorMessage: null,
 
   loadSharedWorkflow: async (token: string) => {
+    // Guard against duplicate concurrent loads
+    if (get().executionStatus === "loading") return
     set({ executionStatus: "loading", shareToken: token })
     try {
       const data = await getSharedWorkflow(token)
