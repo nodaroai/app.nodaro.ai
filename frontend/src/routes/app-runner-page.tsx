@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
-import { Loader2, Clock, Plus, Trash2, ChevronLeft } from "lucide-react"
+import { useParams, Link } from "react-router-dom"
+import { Loader2, Clock, Plus, Trash2, ChevronLeft, RotateCcw } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
 import { Button } from "@/components/ui/button"
+import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { AppRun } from "@/lib/api"
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
-  const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
   const [showHistory, setShowHistory] = useState(false)
 
@@ -35,9 +35,11 @@ export default function AppRunnerPage() {
     return () => { reset() }
   }, [authLoading, slug, loadApp, reset])
 
-  // When app loads, seed the presentation store with snapshot data
+  // When app loads, seed the presentation store with snapshot data + presentationSettings
   useEffect(() => {
     if (!app) return
+    const snapshotSettings = (app.snapshotSettings ?? {}) as Record<string, unknown>
+    const presentationSettings = (snapshotSettings.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS) as PresentationSettings
     usePresentationStore.setState({
       workflowId: app.workflowId,
       workflowName: app.name,
@@ -45,6 +47,7 @@ export default function AppRunnerPage() {
       edges: app.snapshotEdges as WorkflowEdge[],
       isOwner: false,
       estimatedCost: app.estimatedCredits,
+      presentationSettings,
       executionStatus: "idle",
       nodeStates: {},
     })
@@ -78,6 +81,9 @@ export default function AppRunnerPage() {
     }
   }, [user, app, loadRuns])
 
+  const isTerminal = executionStatus === "completed" || executionStatus === "failed"
+  const showNewRun = isTerminal || activeRunId !== null
+
   if (authLoading || loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -92,9 +98,9 @@ export default function AppRunnerPage() {
         <div className="text-center max-w-md">
           <h1 className="text-2xl font-bold mb-2">App Not Found</h1>
           <p className="text-muted-foreground mb-4">{errorMessage}</p>
-          <button onClick={() => navigate("/projects")} className="text-[#ff0073] hover:underline">
+          <Link to="/projects" className="text-[#ff0073] hover:underline">
             Go to Dashboard
-          </button>
+          </Link>
         </div>
       </div>
     )
@@ -104,9 +110,9 @@ export default function AppRunnerPage() {
 
   return (
     <div className="h-screen flex">
-      {/* Run history sidebar */}
+      {/* Past runs sidebar */}
       {user && showHistory && (
-        <RunHistorySidebar
+        <PastRunsSidebar
           runs={runs}
           activeRunId={activeRunId}
           onSelectRun={selectRun}
@@ -118,27 +124,45 @@ export default function AppRunnerPage() {
 
       {/* Main content — PresentationView reads from usePresentationStore */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* History toggle (injected before PresentationView's own header) */}
-        {user && runs.length > 0 && !showHistory && (
-          <div className="absolute top-3 left-3 z-20">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowHistory(true)}
-              className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <Clock className="h-4 w-4 mr-1" />
-              History ({runs.length})
-            </Button>
-          </div>
-        )}
+        {/* Top bar with past runs toggle + new run button */}
+        <div className="flex items-center justify-center h-0 relative z-20">
+          {/* Past runs toggle — left side */}
+          {user && runs.length > 0 && !showHistory && (
+            <div className="absolute top-3 left-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHistory(true)}
+                className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <Clock className="h-4 w-4 mr-1" />
+                Past Runs ({runs.length})
+              </Button>
+            </div>
+          )}
+
+          {/* New Run button — center */}
+          {user && showNewRun && (
+            <div className="absolute top-3">
+              <Button
+                size="sm"
+                onClick={newRun}
+                className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              >
+                <RotateCcw className="h-4 w-4 mr-1" />
+                New Run
+              </Button>
+            </div>
+          )}
+        </div>
+
         <PresentationView mode="fullscreen" isOwner={false} />
       </div>
     </div>
   )
 }
 
-function RunHistorySidebar({
+function PastRunsSidebar({
   runs,
   activeRunId,
   onSelectRun,
@@ -156,12 +180,12 @@ function RunHistorySidebar({
   return (
     <div className="w-72 border-r border-border bg-card flex flex-col shrink-0">
       <div className="flex items-center justify-between px-4 h-14 border-b border-border">
-        <h2 className="text-sm font-semibold text-foreground">Run History</h2>
+        <h2 className="text-sm font-semibold text-foreground">Past Runs</h2>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={onNewRun} title="New run">
             <Plus className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onClose} title="Close history">
+          <Button variant="ghost" size="sm" onClick={onClose} title="Close">
             <ChevronLeft className="h-4 w-4" />
           </Button>
         </div>

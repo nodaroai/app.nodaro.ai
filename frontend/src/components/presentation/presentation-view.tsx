@@ -39,6 +39,7 @@ import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { toast } from "sonner"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { ShareDialog } from "./share-dialog"
+import { PublishDialog } from "./publish-dialog"
 import { NodePickerDialog } from "./node-picker-dialog"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
@@ -501,12 +502,15 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRun
           )}
 
           {isOwner && mode === "tab" && workflowId && (
-            <ShareDialog
-              workflowId={workflowId}
-              presentationSettings={settings}
-              updatePresentationSettings={updatePresentationSettings}
-              nodes={allPresentationNodes}
-            />
+            <>
+              <ShareDialog
+                workflowId={workflowId}
+                presentationSettings={settings}
+                updatePresentationSettings={updatePresentationSettings}
+                nodes={allPresentationNodes}
+              />
+              <PublishDialog workflowId={workflowId} />
+            </>
           )}
 
           {mode === "tab" && workflowId && (

@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
+import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 export default function EmbedPage() {
@@ -46,6 +47,8 @@ export default function EmbedPage() {
   // Sync to presentation store (same pattern as app-runner-page)
   useEffect(() => {
     if (!app) return
+    const snapshotSettings = (app.snapshotSettings ?? {}) as Record<string, unknown>
+    const presentationSettings = (snapshotSettings.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS) as PresentationSettings
     usePresentationStore.setState({
       workflowId: app.workflowId,
       workflowName: app.name,
@@ -53,6 +56,7 @@ export default function EmbedPage() {
       edges: app.snapshotEdges as WorkflowEdge[],
       isOwner: false,
       estimatedCost: app.estimatedCredits,
+      presentationSettings,
       executionStatus: "idle",
       nodeStates: {},
     })
