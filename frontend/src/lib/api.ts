@@ -3391,19 +3391,26 @@ export async function deleteAppRun(slug: string, runId: string): Promise<void> {
 
 /** Poll execution status for an app run (reuses presentation status endpoint pattern). */
 export async function getAppExecutionStatus(execId: string): Promise<{
-  id: string
   status: string
   node_states: Record<string, unknown>
   total_nodes: number
   completed_nodes: number
   failed_nodes: number
-  total_credits_used: number
   error_message: string | null
 }> {
-  return apiRequest(
+  const res = await apiRequest<{ data: Record<string, unknown> }>(
     `/v1/workflow-executions/${encodeURIComponent(execId)}`,
     "Failed to get execution status",
   )
+  const d = res.data
+  return {
+    status: d.status as string,
+    node_states: (d.nodeStates ?? {}) as Record<string, unknown>,
+    total_nodes: (d.totalNodes ?? 0) as number,
+    completed_nodes: (d.completedNodes ?? 0) as number,
+    failed_nodes: (d.failedNodes ?? 0) as number,
+    error_message: (d.errorMessage ?? null) as string | null,
+  }
 }
 
 // ---------------------------------------------------------------------------
