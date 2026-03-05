@@ -8,6 +8,7 @@ import { PresentationView } from "@/components/presentation/presentation-view"
 import { Button } from "@/components/ui/button"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getInputNodes } from "@/lib/presentation-utils"
+import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 // --- Types ---
@@ -48,14 +49,22 @@ function toSlotStatus(s: string): RunSlot["executionStatus"] {
   return "idle"
 }
 
+function dbStatusToSlotStatus(s: string): RunSlot["executionStatus"] {
+  if (s === "running" || s === "pending") return "running"
+  if (s === "completed") return "completed"
+  if (s === "failed" || s === "cancelled") return "failed"
+  return "idle" // "draft"
+}
+
 // --- Component ---
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
   const { user, loading: authLoading } = useAuth()
   const [showHistory, setShowHistory] = useState(false)
+  const [runsLoaded, setRunsLoaded] = useState(false)
 
-  // Run slots (local, within session)
+  // Run slots (synced with DB)
   const [slots, setSlots] = useState<RunSlot[]>([])
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null)
   const activeSlot = useMemo(() => slots.find((s) => s.id === activeSlotId), [slots, activeSlotId])
@@ -103,6 +112,29 @@ export default function AppRunnerPage() {
     })
   }, [app])
 
+  // Load past runs from DB when app is ready and user is authenticated
+  useEffect(() => {
+    if (!app || !user || !slug || runsLoaded) return
+    setRunsLoaded(true)
+
+    getAppRuns(slug).then(({ data }) => {
+      if (!data || data.length === 0) return
+      const dbSlots: RunSlot[] = data.map((run) => ({
+        id: run.id,
+        inputValues: (run.inputValues ?? {}) as Record<string, Record<string, unknown>>,
+        nodeStates: (run.nodeStates ?? {}) as Record<string, RunSlotNodeState>,
+        executionId: run.executionId ?? null,
+        executionStatus: dbStatusToSlotStatus(run.status),
+        completedNodes: run.completedNodes ?? 0,
+        totalNodes: run.totalNodes ?? 0,
+        createdAt: new Date(run.createdAt).getTime(),
+      }))
+      setSlots(dbSlots)
+    }).catch(() => {
+      // silently fail — user may not be authenticated
+    })
+  }, [app, user, slug, runsLoaded])
+
   // Sync execution state: app runner store -> presentation store + active slot
   useEffect(() => {
     usePresentationStore.setState({ executionStatus, nodeStates, completedNodes, totalNodes })
@@ -125,56 +157,95 @@ export default function AppRunnerPage() {
     }
   }, [storeExecutionId, activeSlotId])
 
-  // Wire run action — saves slot inputs before running
+  // Wire run action — saves slot inputs before running, passes runId to backend
   const activeSlotIdRef = useRef(activeSlotId)
   activeSlotIdRef.current = activeSlotId
 
   useEffect(() => {
-    const bridgedRun = createBridgedRun(() => usePresentationStore.getState().inputValues)
+    const bridgedRun = createBridgedRun(
+      () => usePresentationStore.getState().inputValues,
+      () => activeSlotIdRef.current,
+    )
     usePresentationStore.setState({
       run: async () => {
         const slotId = activeSlotIdRef.current
         if (slotId) {
           const inputs = usePresentationStore.getState().inputValues
           setSlots((prev) => prev.map((s) => s.id === slotId ? { ...s, inputValues: inputs } : s))
+          // Save inputs to DB before running
+          if (slug) {
+            updateAppRunInputs(slug, slotId, inputs).catch(() => {})
+          }
         }
         await bridgedRun()
       },
     })
-  }, [appRun])
+  }, [appRun, slug])
 
   // Save current slot inputs from presentation store
   const saveCurrentSlotInputs = useCallback(() => {
     if (!activeSlotId) return
     const inputs = usePresentationStore.getState().inputValues
     setSlots((prev) => prev.map((s) => s.id === activeSlotId ? { ...s, inputValues: inputs } : s))
-  }, [activeSlotId])
+    // Persist to DB
+    if (slug) {
+      updateAppRunInputs(slug, activeSlotId, inputs).catch(() => {})
+    }
+  }, [activeSlotId, slug])
 
-  // Create New — create a new empty slot
-  const handleCreateNew = useCallback(() => {
+  // Create New — create a new empty slot (persisted to DB)
+  const handleCreateNew = useCallback(async () => {
     saveCurrentSlotInputs()
     const emptyInputs = makeEmptyInputs(inputNodes)
-    const slot: RunSlot = {
-      id: crypto.randomUUID(),
-      inputValues: emptyInputs,
-      nodeStates: {},
-      executionId: null,
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-      createdAt: Date.now(),
+
+    if (!slug || !user) return
+
+    try {
+      const dbRun = await createAppRun(slug, emptyInputs)
+      const slot: RunSlot = {
+        id: dbRun.id,
+        inputValues: emptyInputs,
+        nodeStates: {},
+        executionId: null,
+        executionStatus: "idle",
+        completedNodes: 0,
+        totalNodes: 0,
+        createdAt: new Date(dbRun.createdAt).getTime(),
+      }
+      setSlots((prev) => [slot, ...prev])
+      setActiveSlotId(slot.id)
+      newRun()
+      usePresentationStore.setState({
+        inputValues: emptyInputs,
+        nodeStates: {},
+        executionStatus: "idle",
+        completedNodes: 0,
+        totalNodes: 0,
+      })
+    } catch {
+      // Fallback: create local slot if DB fails
+      const slot: RunSlot = {
+        id: crypto.randomUUID(),
+        inputValues: emptyInputs,
+        nodeStates: {},
+        executionId: null,
+        executionStatus: "idle",
+        completedNodes: 0,
+        totalNodes: 0,
+        createdAt: Date.now(),
+      }
+      setSlots((prev) => [slot, ...prev])
+      setActiveSlotId(slot.id)
+      newRun()
+      usePresentationStore.setState({
+        inputValues: emptyInputs,
+        nodeStates: {},
+        executionStatus: "idle",
+        completedNodes: 0,
+        totalNodes: 0,
+      })
     }
-    setSlots((prev) => [slot, ...prev])
-    setActiveSlotId(slot.id)
-    newRun()
-    usePresentationStore.setState({
-      inputValues: emptyInputs,
-      nodeStates: {},
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-    })
-  }, [saveCurrentSlotInputs, inputNodes, newRun])
+  }, [saveCurrentSlotInputs, inputNodes, newRun, slug, user])
 
   // Clear — reset current slot's inputs
   const handleClear = useCallback(() => {
@@ -193,7 +264,11 @@ export default function AppRunnerPage() {
       completedNodes: 0,
       totalNodes: 0,
     })
-  }, [activeSlotId, inputNodes, newRun])
+    // Persist cleared inputs to DB
+    if (slug) {
+      updateAppRunInputs(slug, activeSlotId, emptyInputs).catch(() => {})
+    }
+  }, [activeSlotId, inputNodes, newRun, slug])
 
   // Header button: "Clear" when editing idle slot, "Create New" otherwise
   const isSlotIdle = activeSlot?.executionStatus === "idle"
@@ -238,7 +313,7 @@ export default function AppRunnerPage() {
     }
   }, [activeSlotId, saveCurrentSlotInputs, slots, newRun])
 
-  // Delete slot
+  // Delete slot (from DB too)
   const handleDeleteSlot = useCallback((slotId: string) => {
     setSlots((prev) => prev.filter((s) => s.id !== slotId))
     if (activeSlotId === slotId) {
@@ -252,7 +327,11 @@ export default function AppRunnerPage() {
         totalNodes: 0,
       })
     }
-  }, [activeSlotId, newRun])
+    // Delete from DB
+    if (slug) {
+      deleteAppRun(slug, slotId).catch(() => {})
+    }
+  }, [activeSlotId, newRun, slug])
 
   // Derived state
   const isRunning = executionStatus === "running"
