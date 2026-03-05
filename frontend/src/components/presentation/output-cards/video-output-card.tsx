@@ -1,4 +1,5 @@
-import { Download, Copy, Maximize2, Play, VideoIcon } from "lucide-react"
+import { useRef, useState, useCallback } from "react"
+import { Download, Copy, Maximize2, Play, Pause, Volume2, VolumeX, VideoIcon } from "lucide-react"
 import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, type OutputStatus } from "./shared"
 
 interface VideoOutputCardProps {
@@ -10,6 +11,27 @@ interface VideoOutputCardProps {
 }
 
 export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia }: VideoOutputCardProps) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [muted, setMuted] = useState(true)
+  const [paused, setPaused] = useState(false)
+
+  const toggleMute = useCallback(() => {
+    if (!videoRef.current) return
+    videoRef.current.muted = !videoRef.current.muted
+    setMuted(videoRef.current.muted)
+  }, [])
+
+  const togglePlay = useCallback(() => {
+    if (!videoRef.current) return
+    if (videoRef.current.paused) {
+      videoRef.current.play()
+      setPaused(false)
+    } else {
+      videoRef.current.pause()
+      setPaused(true)
+    }
+  }, [])
+
   const handleClick = () => {
     if (nodeId && onOpenMedia) onOpenMedia(nodeId)
   }
@@ -26,18 +48,31 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia }: Vid
       ) : url ? (
         <div className="relative group rounded-lg overflow-hidden cursor-pointer" onClick={handleClick}>
           <video
+            ref={videoRef}
             src={url}
             className="w-full rounded-lg bg-black/20 object-contain"
             muted
+            autoPlay
+            loop
             playsInline
           />
-          {/* Centered play overlay */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-16 h-16 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-black/60 group-hover:scale-110 transition-all duration-200">
-              <Play className="w-7 h-7 text-white ml-1" fill="white" />
-            </div>
+          {/* Bottom-left: play/pause */}
+          <div className="absolute bottom-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <GlassButton onClick={togglePlay} title={paused ? "Play" : "Pause"}>
+              {paused
+                ? <Play className="w-3.5 h-3.5 ml-0.5" fill="white" />
+                : <Pause className="w-3.5 h-3.5" fill="white" />}
+            </GlassButton>
           </div>
-          {/* Hover toolbar */}
+          {/* Bottom-right: mute/unmute */}
+          <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <GlassButton onClick={toggleMute} title={muted ? "Unmute" : "Mute"}>
+              {muted
+                ? <VolumeX className="w-3.5 h-3.5" />
+                : <Volume2 className="w-3.5 h-3.5" />}
+            </GlassButton>
+          </div>
+          {/* Top-right: fullscreen, download, copy */}
           <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <GlassButton onClick={handleClick} title="Fullscreen">
               <Maximize2 className="w-3.5 h-3.5" />
