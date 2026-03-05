@@ -53,6 +53,7 @@ interface AppRunnerState {
   cancel: () => Promise<void>
   deleteRun: (runId: string) => Promise<void>
   updateInputValue: (nodeId: string, key: string, value: unknown) => void
+  resumeExecution: (executionId: string) => void
   reset: () => void
 }
 
@@ -199,6 +200,12 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     } catch {
       // silently fail
     }
+  },
+
+  resumeExecution: (executionId: string) => {
+    clearPollTimeout()
+    set({ executionId, executionStatus: "running", errorMessage: null })
+    startPolling(set, get)
   },
 
   updateInputValue: (nodeId: string, key: string, value: unknown) => {

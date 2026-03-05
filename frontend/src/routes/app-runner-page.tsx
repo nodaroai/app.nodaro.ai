@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useParams, Link } from "react-router-dom"
 import { Loader2, Clock, Plus, Trash2, ChevronLeft } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
@@ -9,36 +9,83 @@ import { Button } from "@/components/ui/button"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getInputNodes } from "@/lib/presentation-utils"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import type { AppRun } from "@/lib/api"
+
+// --- Types ---
+
+interface RunSlotNodeState {
+  status: "pending" | "running" | "completed" | "failed" | "skipped"
+  output?: Record<string, unknown>
+  error?: string
+}
+
+interface RunSlot {
+  id: string
+  inputValues: Record<string, Record<string, unknown>>
+  nodeStates: Record<string, RunSlotNodeState>
+  executionId: string | null
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  completedNodes: number
+  totalNodes: number
+  createdAt: number
+}
+
+// --- Helpers ---
+
+function makeEmptyInputs(inputNodes: WorkflowNode[]): Record<string, Record<string, unknown>> {
+  const empty: Record<string, Record<string, unknown>> = {}
+  for (const node of inputNodes) {
+    const t = node.type ?? ""
+    if (t === "text-prompt") empty[node.id] = { text: "" }
+    else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") empty[node.id] = { url: "" }
+  }
+  return empty
+}
+
+function toSlotStatus(s: string): RunSlot["executionStatus"] {
+  if (s === "loading" || s === "running") return "running"
+  if (s === "completed") return "completed"
+  if (s === "failed") return "failed"
+  return "idle"
+}
+
+// --- Component ---
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
   const { user, loading: authLoading } = useAuth()
   const [showHistory, setShowHistory] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
 
+  // Run slots (local, within session)
+  const [slots, setSlots] = useState<RunSlot[]>([])
+  const [activeSlotId, setActiveSlotId] = useState<string | null>(null)
+  const activeSlot = useMemo(() => slots.find((s) => s.id === activeSlotId), [slots, activeSlotId])
+
+  // App runner store
   const loadApp = useAppRunnerStore((s) => s.loadApp)
-  const loadRuns = useAppRunnerStore((s) => s.loadRuns)
   const app = useAppRunnerStore((s) => s.app)
   const loading = useAppRunnerStore((s) => s.loading)
   const errorMessage = useAppRunnerStore((s) => s.errorMessage)
-  const runs = useAppRunnerStore((s) => s.runs)
-  const activeRunId = useAppRunnerStore((s) => s.activeRunId)
-  const selectRun = useAppRunnerStore((s) => s.selectRun)
   const newRun = useAppRunnerStore((s) => s.newRun)
-  const deleteRun = useAppRunnerStore((s) => s.deleteRun)
   const cancel = useAppRunnerStore((s) => s.cancel)
   const reset = useAppRunnerStore((s) => s.reset)
+  const executionStatus = useAppRunnerStore((s) => s.executionStatus)
+  const nodeStates = useAppRunnerStore((s) => s.nodeStates)
+  const completedNodes = useAppRunnerStore((s) => s.completedNodes)
+  const totalNodes = useAppRunnerStore((s) => s.totalNodes)
+  const storeExecutionId = useAppRunnerStore((s) => s.executionId)
+  const appRun = useAppRunnerStore((s) => s.run)
 
-  // Load app on mount — populates app runner store
+  // Input nodes (for building empty input maps)
+  const presNodes = usePresentationStore((s) => s.nodes)
+  const inputNodes = useMemo(() => getInputNodes(presNodes, true), [presNodes])
+
+  // Load app on mount
   useEffect(() => {
-    if (!authLoading && slug) {
-      loadApp(slug)
-    }
+    if (!authLoading && slug) loadApp(slug)
     return () => { reset() }
   }, [authLoading, slug, loadApp, reset])
 
-  // When app loads, seed the presentation store with snapshot data + presentationSettings
+  // Seed presentation store when app loads
   useEffect(() => {
     if (!app) return
     const snapshotSettings = (app.snapshotSettings ?? {}) as Record<string, unknown>
@@ -56,70 +103,163 @@ export default function AppRunnerPage() {
     })
   }, [app])
 
-  // Sync execution state from app runner store → presentation store
-  const executionStatus = useAppRunnerStore((s) => s.executionStatus)
-  const nodeStates = useAppRunnerStore((s) => s.nodeStates)
-  const completedNodes = useAppRunnerStore((s) => s.completedNodes)
-  const totalNodes = useAppRunnerStore((s) => s.totalNodes)
+  // Sync execution state: app runner store -> presentation store + active slot
+  useEffect(() => {
+    usePresentationStore.setState({ executionStatus, nodeStates, completedNodes, totalNodes })
+
+    if (activeSlotId) {
+      setSlots((prev) => prev.map((s) =>
+        s.id === activeSlotId
+          ? { ...s, nodeStates: nodeStates as Record<string, RunSlotNodeState>, executionStatus: toSlotStatus(executionStatus), completedNodes, totalNodes }
+          : s,
+      ))
+    }
+  }, [executionStatus, nodeStates, completedNodes, totalNodes, activeSlotId])
+
+  // Sync executionId to active slot
+  useEffect(() => {
+    if (activeSlotId && storeExecutionId) {
+      setSlots((prev) => prev.map((s) =>
+        s.id === activeSlotId ? { ...s, executionId: storeExecutionId } : s,
+      ))
+    }
+  }, [storeExecutionId, activeSlotId])
+
+  // Wire run action — saves slot inputs before running
+  const activeSlotIdRef = useRef(activeSlotId)
+  activeSlotIdRef.current = activeSlotId
 
   useEffect(() => {
+    const bridgedRun = createBridgedRun(() => usePresentationStore.getState().inputValues)
     usePresentationStore.setState({
-      executionStatus,
-      nodeStates,
-      completedNodes,
-      totalNodes,
-    })
-  }, [executionStatus, nodeStates, completedNodes, totalNodes])
-
-  // Wire presentation store's run action to app runner store's run (with input bridging)
-  const appRun = useAppRunnerStore((s) => s.run)
-  useEffect(() => {
-    usePresentationStore.setState({
-      run: createBridgedRun(() => usePresentationStore.getState().inputValues),
+      run: async () => {
+        const slotId = activeSlotIdRef.current
+        if (slotId) {
+          const inputs = usePresentationStore.getState().inputValues
+          setSlots((prev) => prev.map((s) => s.id === slotId ? { ...s, inputValues: inputs } : s))
+        }
+        await bridgedRun()
+      },
     })
   }, [appRun])
 
-  // Compute input nodes for clearing
-  const presNodes = usePresentationStore((s) => s.nodes)
-  const inputNodes = useMemo(() => getInputNodes(presNodes, true), [presNodes])
+  // Save current slot inputs from presentation store
+  const saveCurrentSlotInputs = useCallback(() => {
+    if (!activeSlotId) return
+    const inputs = usePresentationStore.getState().inputValues
+    setSlots((prev) => prev.map((s) => s.id === activeSlotId ? { ...s, inputValues: inputs } : s))
+  }, [activeSlotId])
 
-  // "Create New" / "Clear" — clears both stores, sets explicit empty values for inputs
-  const handleNewRun = useCallback(() => {
-    newRun()
-    // Set explicit empty values so snapshot fallback is overridden
-    const emptyInputValues: Record<string, Record<string, unknown>> = {}
-    for (const node of inputNodes) {
-      const nodeType = node.type ?? ""
-      if (nodeType === "text-prompt") {
-        emptyInputValues[node.id] = { text: "" }
-      } else if (nodeType === "upload-image" || nodeType === "upload-video" || nodeType === "upload-audio") {
-        emptyInputValues[node.id] = { url: "" }
-      }
+  // Create New — create a new empty slot
+  const handleCreateNew = useCallback(() => {
+    saveCurrentSlotInputs()
+    const emptyInputs = makeEmptyInputs(inputNodes)
+    const slot: RunSlot = {
+      id: crypto.randomUUID(),
+      inputValues: emptyInputs,
+      nodeStates: {},
+      executionId: null,
+      executionStatus: "idle",
+      completedNodes: 0,
+      totalNodes: 0,
+      createdAt: Date.now(),
     }
+    setSlots((prev) => [slot, ...prev])
+    setActiveSlotId(slot.id)
+    newRun()
     usePresentationStore.setState({
-      inputValues: emptyInputValues,
+      inputValues: emptyInputs,
       nodeStates: {},
       executionStatus: "idle",
       completedNodes: 0,
       totalNodes: 0,
     })
-    setIsEditing(true)
-  }, [newRun, inputNodes])
+  }, [saveCurrentSlotInputs, inputNodes, newRun])
 
-  // When execution starts, exit editing mode
-  useEffect(() => {
-    if (executionStatus === "running") {
-      setIsEditing(false)
+  // Clear — reset current slot's inputs
+  const handleClear = useCallback(() => {
+    if (!activeSlotId) return
+    const emptyInputs = makeEmptyInputs(inputNodes)
+    setSlots((prev) => prev.map((s) =>
+      s.id === activeSlotId
+        ? { ...s, inputValues: emptyInputs, nodeStates: {}, executionId: null, executionStatus: "idle" as const, completedNodes: 0, totalNodes: 0 }
+        : s,
+    ))
+    newRun()
+    usePresentationStore.setState({
+      inputValues: emptyInputs,
+      nodeStates: {},
+      executionStatus: "idle",
+      completedNodes: 0,
+      totalNodes: 0,
+    })
+  }, [activeSlotId, inputNodes, newRun])
+
+  // Header button: "Clear" when editing idle slot, "Create New" otherwise
+  const isSlotIdle = activeSlot?.executionStatus === "idle"
+  const handleHeaderAction = useCallback(() => {
+    if (isSlotIdle) handleClear()
+    else handleCreateNew()
+  }, [isSlotIdle, handleClear, handleCreateNew])
+  const newRunLabel = isSlotIdle ? "Clear" : "Create New"
+
+  // Select slot
+  const handleSelectSlot = useCallback((slotId: string) => {
+    if (slotId === activeSlotId) return
+    saveCurrentSlotInputs()
+    const slot = slots.find((s) => s.id === slotId)
+    if (!slot) return
+
+    setActiveSlotId(slotId)
+
+    // Apply slot data to presentation store
+    usePresentationStore.setState({
+      inputValues: slot.inputValues,
+      nodeStates: slot.nodeStates,
+      executionStatus: slot.executionStatus === "running" ? "running" : slot.executionStatus,
+      completedNodes: slot.completedNodes,
+      totalNodes: slot.totalNodes,
+    })
+
+    // Handle app runner store execution state
+    if (slot.executionId && slot.executionStatus === "running") {
+      useAppRunnerStore.getState().resumeExecution(slot.executionId)
+    } else {
+      newRun() // clears poll timeout
+      if (slot.executionId) {
+        useAppRunnerStore.setState({
+          executionId: slot.executionId,
+          executionStatus: slot.executionStatus as "idle" | "running" | "completed" | "failed",
+          nodeStates: slot.nodeStates,
+          completedNodes: slot.completedNodes,
+          totalNodes: slot.totalNodes,
+        })
+      }
     }
-  }, [executionStatus])
+  }, [activeSlotId, saveCurrentSlotInputs, slots, newRun])
 
-  // Load runs when user is authenticated and app is loaded
-  useEffect(() => {
-    if (user && app) {
-      loadRuns()
+  // Delete slot
+  const handleDeleteSlot = useCallback((slotId: string) => {
+    setSlots((prev) => prev.filter((s) => s.id !== slotId))
+    if (activeSlotId === slotId) {
+      setActiveSlotId(null)
+      newRun()
+      usePresentationStore.setState({
+        inputValues: {},
+        nodeStates: {},
+        executionStatus: "idle",
+        completedNodes: 0,
+        totalNodes: 0,
+      })
     }
-  }, [user, app, loadRuns])
+  }, [activeSlotId, newRun])
 
+  // Derived state
+  const isRunning = executionStatus === "running"
+  const isTerminal = activeSlot?.executionStatus === "completed" || activeSlot?.executionStatus === "failed"
+  const inputsReadOnlyValue = !activeSlotId || isRunning || isTerminal
+
+  // Loading / error states
   if (authLoading || loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -146,22 +286,22 @@ export default function AppRunnerPage() {
 
   return (
     <div className="h-screen flex">
-      {/* Past runs sidebar */}
+      {/* Run slots sidebar */}
       {user && showHistory && (
-        <PastRunsSidebar
-          runs={runs}
-          activeRunId={activeRunId}
-          onSelectRun={selectRun}
-          onNewRun={handleNewRun}
-          onDeleteRun={deleteRun}
+        <RunsSidebar
+          slots={slots}
+          activeSlotId={activeSlotId}
+          onSelectSlot={handleSelectSlot}
+          onCreateNew={handleCreateNew}
+          onDeleteSlot={handleDeleteSlot}
           onClose={() => setShowHistory(false)}
         />
       )}
 
-      {/* Main content — PresentationView reads from usePresentationStore */}
+      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Past runs toggle */}
-        {user && runs.length > 0 && !showHistory && (
+        {/* Runs toggle button */}
+        {user && slots.length > 0 && !showHistory && (
           <div className="absolute top-[3.75rem] left-3 z-20">
             <Button
               variant="outline"
@@ -170,7 +310,7 @@ export default function AppRunnerPage() {
               className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               <Clock className="h-4 w-4 mr-1" />
-              Past Runs ({runs.length})
+              Runs ({slots.length})
             </Button>
           </div>
         )}
@@ -179,37 +319,39 @@ export default function AppRunnerPage() {
           mode="fullscreen"
           isOwner={false}
           onCancel={cancel}
-          onNewRun={handleNewRun}
-          newRunLabel={isEditing ? "Clear" : "Create New"}
-          inputsReadOnly={!isEditing}
-          suppressOutputFallback={isEditing}
+          onNewRun={handleHeaderAction}
+          newRunLabel={newRunLabel}
+          inputsReadOnly={inputsReadOnlyValue}
+          suppressOutputFallback={activeSlotId !== null}
         />
       </div>
     </div>
   )
 }
 
-function PastRunsSidebar({
-  runs,
-  activeRunId,
-  onSelectRun,
-  onNewRun,
-  onDeleteRun,
+// --- Sidebar ---
+
+function RunsSidebar({
+  slots,
+  activeSlotId,
+  onSelectSlot,
+  onCreateNew,
+  onDeleteSlot,
   onClose,
 }: {
-  runs: AppRun[]
-  activeRunId: string | null
-  onSelectRun: (runId: string) => void
-  onNewRun: () => void
-  onDeleteRun: (runId: string) => void
+  slots: RunSlot[]
+  activeSlotId: string | null
+  onSelectSlot: (slotId: string) => void
+  onCreateNew: () => void
+  onDeleteSlot: (slotId: string) => void
   onClose: () => void
 }) {
   return (
     <div className="w-72 border-r border-border bg-card flex flex-col shrink-0">
       <div className="flex items-center justify-between px-4 h-14 border-b border-border">
-        <h2 className="text-sm font-semibold text-foreground">Past Runs</h2>
+        <h2 className="text-sm font-semibold text-foreground">Runs</h2>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={onNewRun} title="New run">
+          <Button variant="ghost" size="sm" onClick={onCreateNew} title="New run">
             <Plus className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={onClose} title="Close">
@@ -218,55 +360,57 @@ function PastRunsSidebar({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {runs.map((run) => (
+        {slots.map((slot) => (
           <button
-            key={run.id}
+            key={slot.id}
             type="button"
-            onClick={() => onSelectRun(run.id)}
+            onClick={() => onSelectSlot(slot.id)}
             className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors group ${
-              activeRunId === run.id ? "bg-muted/80" : ""
+              activeSlotId === slot.id ? "bg-muted/80" : ""
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">
-                {new Date(run.createdAt).toLocaleString()}
+                {new Date(slot.createdAt).toLocaleTimeString()}
               </span>
               <div className="flex items-center gap-1">
-                <RunStatusBadge status={run.execution?.status} />
+                <SlotStatusBadge status={slot.executionStatus} />
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    onDeleteRun(run.id)
+                    onDeleteSlot(slot.id)
                   }}
                   className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
-                  title="Delete run"
+                  title="Delete"
                 >
                   <Trash2 className="h-3 w-3 text-destructive" />
                 </button>
               </div>
             </div>
-            {run.creditsUsed > 0 && (
-              <span className="text-[10px] text-muted-foreground">{run.creditsUsed} credits</span>
-            )}
           </button>
         ))}
+        {slots.length === 0 && (
+          <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+            Click + to create a new run
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function RunStatusBadge({ status }: { status?: string }) {
-  if (!status) return null
-  const colors: Record<string, string> = {
-    completed: "bg-emerald-500/10 text-emerald-500",
-    failed: "bg-red-500/10 text-red-500",
-    running: "bg-blue-500/10 text-blue-500",
-    pending: "bg-yellow-500/10 text-yellow-500",
+function SlotStatusBadge({ status }: { status: RunSlot["executionStatus"] }) {
+  const config: Record<string, { label: string; className: string }> = {
+    idle: { label: "draft", className: "bg-muted text-muted-foreground" },
+    running: { label: "running", className: "bg-blue-500/10 text-blue-500" },
+    completed: { label: "done", className: "bg-emerald-500/10 text-emerald-500" },
+    failed: { label: "failed", className: "bg-red-500/10 text-red-500" },
   }
+  const c = config[status] ?? config.idle
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colors[status] ?? "text-muted-foreground"}`}>
-      {status}
+    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${c.className}`}>
+      {c.label}
     </span>
   )
 }
