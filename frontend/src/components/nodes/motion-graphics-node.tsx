@@ -45,6 +45,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
         { id: "composition", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
       ]}
     >

@@ -10,6 +10,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ListNodeData } from "@/types/nodes"
 
 const HANDLES = [
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
   { id: "list", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
 ] as const
 
