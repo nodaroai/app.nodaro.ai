@@ -774,6 +774,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               <PresentationViewLazy
                 mode="tab"
                 isOwner={true}
+                onRun={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded)}
+                isRunning={isRunning}
               />
             </Suspense>
           </div>

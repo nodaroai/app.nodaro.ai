@@ -92,9 +92,11 @@ interface PresentationViewProps {
   mode: "tab" | "fullscreen"
   isOwner: boolean
   onExitFullscreen?: () => void
+  onRun?: () => void
+  isRunning?: boolean
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRunning: externalIsRunning }: PresentationViewProps) {
   const { user } = useAuth()
   const [isEditMode, setIsEditMode] = useState(false)
   const [pickerSection, setPickerSection] = useState<"inputs" | "outputs" | null>(null)
@@ -192,17 +194,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
 
   // Running state
   const isEditorRunning = useWorkflowStore((s) => {
-    if (isFullscreen) return false
+    if (isFullscreen || externalIsRunning !== undefined) return false
     return s.nodes.some((n) => {
       const data = n.data as Record<string, unknown>
       return data.executionStatus === "running" || data.executionStatus === "loading"
     })
   })
-  const isRunning = isFullscreen ? presStatus === "running" : isEditorRunning
+  const isRunning = isFullscreen ? presStatus === "running" : (externalIsRunning ?? isEditorRunning)
 
   const handleRunClick = useCallback(() => {
     if (isFullscreen) presRun()
-  }, [isFullscreen, presRun])
+    else if (onRun) onRun()
+  }, [isFullscreen, presRun, onRun])
 
   const handleRemoveNode = useCallback(
     (nodeId: string) => {
@@ -537,7 +540,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen }: Presentati
                 type="button"
                 onClick={handleRunClick}
                 className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
-                disabled={!isFullscreen && mode === "tab"}
+                disabled={!isFullscreen && mode === "tab" && !onRun}
               >
                 <Play className="h-4 w-4" />
                 Run{costLabel}
