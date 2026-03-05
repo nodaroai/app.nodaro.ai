@@ -92,6 +92,10 @@ import { presentationRoutes } from "./routes/presentation.js"
 import { apiTokenRoutes } from "./routes/api-tokens.js"
 import { socialAuthRoutes } from "./routes/social-auth.js"
 import { socialPublishRoutes } from "./routes/social-publish.js"
+import { publishedAppsRoutes } from "./routes/published-apps.js"
+import { appRunnerRoutes } from "./routes/app-runner.js"
+import { appAnalyticsRoutes } from "./routes/app-analytics.js"
+import { embedRoutes } from "./routes/embed.js"
 import { registerAuthHook } from "./middleware/auth.js"
 
 export async function buildApp() {
@@ -210,6 +214,10 @@ export async function buildApp() {
   await app.register(apiTokenRoutes)
   await app.register(socialAuthRoutes)
   await app.register(socialPublishRoutes)
+  await app.register(publishedAppsRoutes)
+  await app.register(appRunnerRoutes)
+  await app.register(appAnalyticsRoutes)
+  await app.register(embedRoutes)
 
   return app
 }

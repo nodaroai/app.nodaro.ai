@@ -25,8 +25,12 @@ const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
 const PresentPage = lazy(() => import("@/routes/present-page"))
+const AppRunnerPage = lazy(() => import("@/routes/app-runner-page"))
+const EmbedPage = lazy(() => import("@/routes/embed-page"))
 const ApiSettingsPage = lazy(() => import("@/app/(dashboard)/settings/api/page"))
 const IntegrationsPage = lazy(() => import("@/app/(dashboard)/integrations/page"))
+const AppsPage = lazy(() => import("@/app/(dashboard)/apps/page"))
+const AppAnalyticsPage = lazy(() => import("@/app/(dashboard)/apps/analytics-page"))
 
 // Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
@@ -90,6 +94,16 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
   },
   {
+    path: "/app/:slug",
+    element: <SuspenseWrapper><AppRunnerPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/embed/:slug",
+    element: <SuspenseWrapper><EmbedPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
     element: <DashboardLayout />,
     errorElement: <RouteErrorBoundary />,
     children: [
@@ -128,6 +142,14 @@ export const router = createBrowserRouter([
       {
         path: "/integrations",
         element: <SuspenseWrapper><IntegrationsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/apps",
+        element: <SuspenseWrapper><AppsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/apps/:appId/analytics",
+        element: <SuspenseWrapper><AppAnalyticsPage /></SuspenseWrapper>,
       },
       {
         path: "/_gallery",
