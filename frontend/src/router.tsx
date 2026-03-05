@@ -1,7 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom"
 import { Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { Loader2 } from "lucide-react"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -47,11 +46,7 @@ const AdminSettings = lazy(() => import("@/app/(admin)/admin/settings/page"))
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
     <Suspense
-      fallback={
-        <div className="flex h-screen items-center justify-center bg-background">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      }
+      fallback={<div className="h-screen bg-background" />}
     >
       {children}
     </Suspense>

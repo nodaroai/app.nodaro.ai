@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect, type ReactNode, type MouseEvent } from "react"
+import { memo, useState, useEffect, useRef, type ReactNode, type MouseEvent } from "react"
 import { Handle, Position, NodeResizer, NodeToolbar } from "@xyflow/react"
 import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -110,6 +110,14 @@ function BaseNodeComponent({
   className,
 }: BaseNodeProps) {
   const [isHovered, setIsHovered] = useState(false)
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+    }
+  }, [])
+
   const { isMobile } = useMobileCanvas()
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
@@ -133,16 +141,36 @@ function BaseNodeComponent({
   }
 
   return (
-    <div style={{ minWidth: '100%', minHeight: '100%', position: 'relative' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-      <NodeToolbar align="center" isVisible={isHovered} position={Position.Top} offset={4} className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1">
-        <button
-          className="hover:bg-white/10 rounded px-2 py-1 text-white/70 hover:text-white"
-          onClick={handleDuplicate}
-          aria-label="Duplicate node"
+    <div
+      style={{ minWidth: '100%', minHeight: '100%', position: 'relative' }}
+      onMouseEnter={() => {
+        if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+        setIsHovered(true)
+      }}
+      onMouseLeave={() => {
+        leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
+      }}
+    >
+      <NodeToolbar align="center" isVisible={isHovered} position={Position.Top} offset={4}>
+        <div
+          className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1"
+          onMouseEnter={() => {
+            if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+            setIsHovered(true)
+          }}
+          onMouseLeave={() => {
+            leaveTimerRef.current = setTimeout(() => setIsHovered(false), 300)
+          }}
         >
-          <Copy className="h-3 w-3" />
-        </button>
-        {toolbarActions}
+          <button
+            className="hover:bg-white/10 rounded px-2 py-1 text-white/70 hover:text-white"
+            onClick={handleDuplicate}
+            aria-label="Duplicate node"
+          >
+            <Copy className="h-3 w-3" />
+          </button>
+          {toolbarActions}
+        </div>
       </NodeToolbar>
       {topToolbarContent && isHovered && (
         <div className="absolute left-0 right-0 top-0 -translate-y-full z-50 pb-1 flex justify-center">
