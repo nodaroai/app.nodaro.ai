@@ -535,6 +535,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 workflowId={workflowId}
                 presentationSettings={settings}
                 updatePresentationSettings={updatePresentationSettings}
+                nodes={allPresentationNodes}
               />
             </>
           )}

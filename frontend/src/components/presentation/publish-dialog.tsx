@@ -1,5 +1,7 @@
 import { useState, useCallback, useMemo } from "react"
 import { Rocket, Copy, Check, Loader2, ExternalLink } from "lucide-react"
+import type { WorkflowNode } from "@/types/nodes"
+import { getNodeLabel } from "@/lib/presentation-utils"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -26,9 +28,10 @@ interface PublishDialogProps {
   workflowId: string
   presentationSettings?: PresentationSettings
   updatePresentationSettings?: (patch: Partial<PresentationSettings>) => void
+  nodes?: WorkflowNode[]
 }
 
-export function PublishDialog({ workflowId, presentationSettings, updatePresentationSettings }: PublishDialogProps) {
+export function PublishDialog({ workflowId, presentationSettings, updatePresentationSettings, nodes }: PublishDialogProps) {
   const [open, setOpen] = useState(false)
   const [publishName, setPublishName] = useState("")
   const [publishSlug, setPublishSlug] = useState("")
@@ -104,7 +107,18 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     updatePresentationSettings?.({ shareReadOnly: checked })
   }, [updatePresentationSettings])
 
+  // Compare node options
+  const nodeOptions = useMemo(() => {
+    if (!nodes) return []
+    return nodes.map((n) => ({ id: n.id, label: getNodeLabel(n) }))
+  }, [nodes])
+
+  const handleCompareChange = useCallback((side: "compareLeft" | "compareRight", nodeId: string) => {
+    updatePresentationSettings?.({ [side]: nodeId })
+  }, [updatePresentationSettings])
+
   const showSettings = !!updatePresentationSettings && !!presentationSettings
+  const showCompareSettings = showSettings && allowedSet.has("compare")
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -132,15 +146,16 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   {publishCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => window.open(`/app/${publishedSlug}`, "_blank")}
-              >
-                <ExternalLink className="h-4 w-4 mr-1" />
-                Open App
-              </Button>
+              <a href={`/app/${publishedSlug}`} target="_blank" rel="noopener noreferrer" className="block w-full">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Open App
+                </Button>
+              </a>
             </>
           ) : (
             <>
@@ -230,6 +245,46 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* Compare side defaults */}
+                  {showCompareSettings && nodeOptions.length >= 2 && (
+                    <div>
+                      <p className="text-sm font-medium mb-1.5">Compare defaults</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Left</p>
+                          <Select
+                            value={presentationSettings.compareLeft ?? ""}
+                            onValueChange={(v) => handleCompareChange("compareLeft", v)}
+                          >
+                            <SelectTrigger className="w-full h-8 text-xs">
+                              <SelectValue placeholder="Select node" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {nodeOptions.map(({ id, label }) => (
+                                <SelectItem key={id} value={id}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Right</p>
+                          <Select
+                            value={presentationSettings.compareRight ?? ""}
+                            onValueChange={(v) => handleCompareChange("compareRight", v)}
+                          >
+                            <SelectTrigger className="w-full h-8 text-xs">
+                              <SelectValue placeholder="Select node" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {nodeOptions.map(({ id, label }) => (
+                                <SelectItem key={id} value={id}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

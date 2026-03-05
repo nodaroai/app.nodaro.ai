@@ -9,7 +9,7 @@ function generateSlug(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 40)
-  const suffix = Math.random().toString(36).slice(2, 6)
+  const suffix = Math.random().toString(36).slice(2, 8)
   return `${base}-${suffix}`
 }
 
@@ -90,37 +90,61 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
 
     const version = existingApps && existingApps.length > 0 ? existingApps[0].version + 1 : 1
 
-    // Generate or use provided slug
-    const slug = providedSlug || generateSlug(name)
-
     // Estimate credits
     const nodes = workflow.nodes || []
     const edges = workflow.edges || []
     const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string }>)
 
-    // Insert published app
-    const { data: publishedApp, error: insertError } = await supabase
-      .from("published_apps")
-      .insert({
-        workflow_id: workflowId,
-        creator_id: userId,
-        name,
-        description: description || null,
-        slug,
-        icon_url: iconUrl || null,
-        version,
-        snapshot_nodes: nodes,
-        snapshot_edges: edges,
-        snapshot_settings: workflow.settings || {},
-        estimated_credits: estimatedCredits,
-      })
-      .select()
-      .single()
+    // Generate slug with collision retry
+    const MAX_SLUG_RETRIES = 5
+    let publishedApp: Record<string, unknown> | null = null
+    let insertError: { code?: string; message?: string } | null = null
 
-    if (insertError) {
-      if (insertError.code === "23505") {
+    for (let attempt = 0; attempt < MAX_SLUG_RETRIES; attempt++) {
+      const slug = providedSlug && attempt === 0
+        ? providedSlug
+        : generateSlug(name)
+
+      const result = await supabase
+        .from("published_apps")
+        .insert({
+          workflow_id: workflowId,
+          creator_id: userId,
+          name,
+          description: description || null,
+          slug,
+          icon_url: iconUrl || null,
+          version,
+          snapshot_nodes: nodes,
+          snapshot_edges: edges,
+          snapshot_settings: workflow.settings || {},
+          estimated_credits: estimatedCredits,
+        })
+        .select()
+        .single()
+
+      if (!result.error) {
+        publishedApp = result.data
+        insertError = null
+        break
+      }
+
+      // Unique constraint violation — retry with a new slug
+      if (result.error.code === "23505" && !providedSlug) {
+        insertError = result.error
+        continue
+      }
+
+      // User-provided slug collision — don't retry
+      if (result.error.code === "23505" && providedSlug) {
         return reply.status(409).send({ error: { code: "conflict", message: "Slug already taken" } })
       }
+
+      insertError = result.error
+      break
+    }
+
+    if (insertError || !publishedApp) {
       return reply.status(500).send({ error: { code: "internal_error", message: "Failed to publish app" } })
     }
 
