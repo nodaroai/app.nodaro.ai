@@ -146,16 +146,17 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                   {publishCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
-              <a href={`/app/${publishedSlug}`} target="_blank" rel="noopener noreferrer" className="block w-full">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                >
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                asChild
+              >
+                <a href={`/app/${publishedSlug}`} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4 mr-1" />
                   Open App
-                </Button>
-              </a>
+                </a>
+              </Button>
             </>
           ) : (
             <>
