@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn } from "lucide-react"
+import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, RotateCcw } from "lucide-react"
 import {
   KeyboardSensor,
   PointerSensor,
@@ -96,12 +96,14 @@ interface PresentationViewProps {
   onExitFullscreen?: () => void
   onRun?: () => void
   onCancel?: () => void
-  hideRunButton?: boolean
+  onNewRun?: () => void
+  newRunLabel?: string
   inputsReadOnly?: boolean
+  suppressOutputFallback?: boolean
   isRunning?: boolean
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, hideRunButton, inputsReadOnly, isRunning: externalIsRunning }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning }: PresentationViewProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
@@ -287,12 +289,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       // Check input values (upload nodes in fullscreen store URLs here)
       const inputUrl = presInputValues[nodeId]?.url as string | undefined
       if (inputUrl) return { url: inputUrl, text: undefined }
+      // When outputs are explicitly cleared (e.g. Create New), don't fall back to snapshot
+      if (suppressOutputFallback) return { url: undefined, text: undefined }
       // Fall back to node data (results already saved in workflow)
       const node = nodeMap.get(nodeId)
       if (!node) return { url: undefined, text: undefined }
       return getNodeResultWithInputFallback(node)
     },
-    [presNodeStates, presInputValues, nodeMap],
+    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback],
   )
 
   const getResult = useCallback(
@@ -566,8 +570,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             </Button>
           )}
 
-          {/* Run / Stop button — hidden when shared read-only or when parent controls it */}
-          {!hideRunButton && !isShareReadOnly && (
+          {/* Create New / Clear button — shown when onNewRun is provided (app runner) */}
+          {!isShareReadOnly && onNewRun && (
+            <button
+              type="button"
+              onClick={onNewRun}
+              className="h-8 px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200"
+            >
+              <RotateCcw className="h-4 w-4" />
+              {newRunLabel ?? "Create New"}
+            </button>
+          )}
+
+          {/* Run / Stop button — hidden when shared read-only; Run hidden when inputs read-only (app runner initial state) */}
+          {!isShareReadOnly && (
             isRunning ? (
               <button
                 type="button"
@@ -579,18 +595,21 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 Stop
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={handleRunClick}
-                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
-              >
-                {isFullscreen && !user ? (
-                  <><LogIn className="h-4 w-4" />Sign in to Run</>
-                ) : (
-                  <><Play className="h-4 w-4" />Run{costLabel}</>
-                )}
-              </button>
+              // Hide Run when inputsReadOnly is explicitly true (app runner before Create New)
+              inputsReadOnly !== true && (
+                <button
+                  type="button"
+                  onClick={handleRunClick}
+                  className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
+                >
+                  {isFullscreen && !user ? (
+                    <><LogIn className="h-4 w-4" />Sign in to Run</>
+                  ) : (
+                    <><Play className="h-4 w-4" />Run{costLabel}</>
+                  )}
+                </button>
+              )
             )
           )}
         </div>

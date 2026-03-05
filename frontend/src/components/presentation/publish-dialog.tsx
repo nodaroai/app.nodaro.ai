@@ -150,7 +150,11 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                 variant="outline"
                 size="sm"
                 className="w-full"
-                onClick={(e) => { e.preventDefault(); window.open(`/app/${publishedSlug}`, "_blank") }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  setOpen(false)
+                  window.open(`/app/${publishedSlug}`, "_blank")
+                }}
               >
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Open App
