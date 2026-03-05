@@ -84,6 +84,7 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/voices" },
   { method: "GET", path: "/v1/voices/library" },
   { path: "/v1/webhooks", prefix: true },
+  { method: "GET", path: "/v1/social/callback", prefix: true },
   // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/run", "/v1/api/schema", etc.
   // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).
   // These routes authenticate via Bearer token (API token), not JWT.

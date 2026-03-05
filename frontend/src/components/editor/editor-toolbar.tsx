@@ -296,6 +296,18 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "schedule-trigger":
           break
 
+        case "instagram-post":
+        case "tiktok-post":
+        case "youtube-upload":
+        case "linkedin-post":
+        case "x-post":
+        case "facebook-post":
+          data.executionStatus = undefined
+          data.errorMessage = undefined
+          data.platformPostId = undefined
+          data.platformPostUrl = undefined
+          break
+
         default:
           // For any other node type, clear common generated fields
           if ('generatedResults' in data) {

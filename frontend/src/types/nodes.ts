@@ -1099,6 +1099,31 @@ export type SocialMediaFormatData = {
   activeResultIndex?: number
 }
 
+export type SocialPlatformType = "instagram" | "tiktok" | "youtube" | "linkedin" | "x" | "facebook"
+
+export interface SocialConnection {
+  platform: string
+  platform_username: string | null
+  platform_avatar_url: string | null
+}
+
+export type SocialPostData = {
+  [key: string]: unknown
+  label: string
+  platform: SocialPlatformType
+  action: string
+  caption: string
+  title?: string
+  description?: string
+  tags?: string[]
+  privacy?: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  platformPostId?: string
+  platformPostUrl?: string
+}
+
 export type ExtractAudioData = {
   [key: string]: unknown
   label: string
@@ -1830,6 +1855,7 @@ export type SceneNodeData =
   | SubWorkflowData
   | WebhookTriggerData
   | ScheduleTriggerData
+  | SocialPostData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -1916,6 +1942,12 @@ export type SceneNodeType =
   | "sub-workflow"
   | "webhook-trigger"
   | "schedule-trigger"
+  | "instagram-post"
+  | "tiktok-post"
+  | "youtube-upload"
+  | "linkedin-post"
+  | "x-post"
+  | "facebook-post"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -3043,5 +3075,100 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as SubWorkflowData,
+  },
+  // Social Media
+  {
+    type: "instagram-post",
+    label: "Instagram Post",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "Instagram Post",
+      platform: "instagram",
+      action: "post-image",
+      caption: "",
+      fieldMappings: {},
+    } as SocialPostData,
+  },
+  {
+    type: "tiktok-post",
+    label: "TikTok Post",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "TikTok Post",
+      platform: "tiktok",
+      action: "post-video",
+      caption: "",
+      fieldMappings: {},
+    } as SocialPostData,
+  },
+  {
+    type: "youtube-upload",
+    label: "YouTube Upload",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "YouTube Upload",
+      platform: "youtube",
+      action: "upload-video",
+      caption: "",
+      title: "",
+      description: "",
+      tags: [],
+      privacy: "private",
+      fieldMappings: {},
+    } as SocialPostData,
+  },
+  {
+    type: "linkedin-post",
+    label: "LinkedIn Post",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "LinkedIn Post",
+      platform: "linkedin",
+      action: "post-image",
+      caption: "",
+      fieldMappings: {},
+    } as SocialPostData,
+  },
+  {
+    type: "x-post",
+    label: "X Post",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "X Post",
+      platform: "x",
+      action: "post-tweet",
+      caption: "",
+      fieldMappings: {},
+    } as SocialPostData,
+  },
+  {
+    type: "facebook-post",
+    label: "Facebook Post",
+    category: "output",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: [],
+    defaultData: {
+      label: "Facebook Post",
+      platform: "facebook",
+      action: "post-image",
+      caption: "",
+      fieldMappings: {},
+    } as SocialPostData,
   },
 ]

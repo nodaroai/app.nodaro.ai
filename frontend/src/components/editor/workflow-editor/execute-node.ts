@@ -110,6 +110,7 @@ import type {
   ForcedAlignmentData,
   SubWorkflowData,
   SocialMediaFormatData,
+  SocialPostData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -2921,6 +2922,49 @@ export function executeNode(
           updateNodeData(node.id, {
             executionStatus: "failed",
             errorMessage: err instanceof Error ? err.message : "Webhook send failed",
+          });
+        },
+      ),
+    );
+  }
+
+  // Social Media Post — publish to connected platform
+  if (
+    node.type === "instagram-post" ||
+    node.type === "tiktok-post" ||
+    node.type === "youtube-upload" ||
+    node.type === "linkedin-post" ||
+    node.type === "x-post" ||
+    node.type === "facebook-post"
+  ) {
+    const { updateNodeData } = useWorkflowStore.getState();
+    const d = node.data as SocialPostData;
+    const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl ?? inputs.audioUrl;
+
+    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+
+    return import("@/lib/api").then(({ socialPublishApi }) =>
+      socialPublishApi({
+        platform: d.platform,
+        action: d.action,
+        mediaUrl,
+        caption: d.caption || undefined,
+        title: d.title || undefined,
+        description: d.description || undefined,
+        tags: d.tags,
+        privacy: d.privacy,
+      }).then(
+        (result) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            platformPostId: result.platformPostId,
+            platformPostUrl: result.platformPostUrl,
+          });
+        },
+        (err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: err instanceof Error ? err.message : "Social publish failed",
           });
         },
       ),

@@ -60,6 +60,12 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "forced-alignment": 3,
   "sub-workflow": 0,
   "social-media-format": 0,
+  "instagram-post": 1,
+  "tiktok-post": 1,
+  "youtube-upload": 1,
+  "linkedin-post": 1,
+  "x-post": 1,
+  "facebook-post": 1,
 };
 
 export const EXECUTABLE_TYPES = new Set([
@@ -122,6 +128,12 @@ export const EXECUTABLE_TYPES = new Set([
   "sub-workflow",
   "webhook-output",
   "social-media-format",
+  "instagram-post",
+  "tiktok-post",
+  "youtube-upload",
+  "linkedin-post",
+  "x-post",
+  "facebook-post",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 5;

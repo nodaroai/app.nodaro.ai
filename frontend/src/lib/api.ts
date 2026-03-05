@@ -3147,3 +3147,69 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
     method: "DELETE",
   })
 }
+
+// ---------- Social Media ----------
+
+export async function socialPublishApi(params: {
+  platform: string
+  action: string
+  mediaUrl?: string
+  caption?: string
+  title?: string
+  description?: string
+  tags?: string[]
+  privacy?: string
+}): Promise<{ jobId: string; success: boolean; platformPostId?: string; platformPostUrl?: string }> {
+  const body: Record<string, unknown> = { platform: params.platform, action: params.action }
+  if (params.mediaUrl) body.mediaUrl = params.mediaUrl
+  if (params.caption) body.caption = params.caption
+  if (params.title) body.title = params.title
+  if (params.description) body.description = params.description
+  if (params.tags && params.tags.length > 0) body.tags = params.tags
+  if (params.privacy) body.privacy = params.privacy
+
+  const res = await fetch(`${API_BASE_URL}/v1/social/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to publish to social media")
+  }
+  return res.json()
+}
+
+export async function getSocialConnections(): Promise<{ connections: Array<{ platform: string; platform_username: string | null; platform_avatar_url: string | null; created_at: string }> }> {
+  const res = await fetch(`${API_BASE_URL}/v1/social/connections`, {
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to fetch social connections")
+  }
+  return res.json()
+}
+
+export async function getSocialAuthUrl(platform: string): Promise<{ url: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/social/auth-url?platform=${encodeURIComponent(platform)}`, {
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to get auth URL")
+  }
+  return res.json()
+}
+
+export async function disconnectSocial(platform: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/social/connections/${encodeURIComponent(platform)}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to disconnect")
+  }
+  return res.json()
+}

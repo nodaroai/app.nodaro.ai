@@ -108,6 +108,12 @@ import {
   SubWorkflowConfig,
   WebhookTriggerConfig,
   ScheduleTriggerConfig,
+  InstagramPostConfig,
+  TiktokPostConfig,
+  YoutubeUploadConfig,
+  LinkedinPostConfig,
+  XPostConfig,
+  FacebookPostConfig,
 } from "./config-panels"
 
 const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync"])
@@ -184,6 +190,12 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "sub-workflow": "Sub-Workflow",
   "webhook-trigger": "Webhook Trigger",
   "schedule-trigger": "Schedule Trigger",
+  "instagram-post": "Instagram Post",
+  "tiktok-post": "TikTok Post",
+  "youtube-upload": "YouTube Upload",
+  "linkedin-post": "LinkedIn Post",
+  "x-post": "X Post",
+  "facebook-post": "Facebook Post",
 }
 
 export function getNodeTypeDisplayName(type: string): string {
@@ -205,6 +217,7 @@ export const RUN_BUTTON_TYPES = new Set([
   "speed-ramp", "loop-video", "fade-video", "transcode-video", "manual-edit", "resize-video", "social-media-format", "adjust-volume",
   "add-captions", "mix-audio", "combine-text", "split-text", "composite", "render-video",
   "sub-workflow",
+  "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
@@ -564,6 +577,13 @@ export function ConfigPanel() {
 
           {nodeType === "save-to-storage" && <SaveToStorageConfig {...configProps} />}
           {nodeType === "webhook-output" && <WebhookOutputConfig {...configProps} />}
+
+          {nodeType === "instagram-post" && <InstagramPostConfig {...configProps} />}
+          {nodeType === "tiktok-post" && <TiktokPostConfig {...configProps} />}
+          {nodeType === "youtube-upload" && <YoutubeUploadConfig {...configProps} />}
+          {nodeType === "linkedin-post" && <LinkedinPostConfig {...configProps} />}
+          {nodeType === "x-post" && <XPostConfig {...configProps} />}
+          {nodeType === "facebook-post" && <FacebookPostConfig {...configProps} />}
 
           {nodeType === "sub-workflow-input" && <SubWorkflowInputConfig {...configProps} />}
           {nodeType === "sub-workflow-output" && <SubWorkflowOutputConfig {...configProps} />}

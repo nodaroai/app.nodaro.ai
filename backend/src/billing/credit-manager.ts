@@ -17,6 +17,12 @@ const CREDIT_COSTS: Record<string, number> = {
   "image-to-text": 1,
   "sub-workflow": 0,
   "social-media-format": 0,
+  "instagram-post": 1,
+  "tiktok-post": 1,
+  "youtube-upload": 1,
+  "linkedin-post": 1,
+  "x-post": 1,
+  "facebook-post": 1,
 }
 
 export function estimateWorkflowCredits(

@@ -15,6 +15,7 @@ import {
   Images,
   Archive,
   History,
+  Plug,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -48,6 +49,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: "/library", label: "Library", icon: Archive },
   { href: "/_pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
   { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
+  { href: "/integrations", label: "Integrations", icon: Plug },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ]
