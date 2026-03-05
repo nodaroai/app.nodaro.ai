@@ -68,6 +68,8 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
   }),
 }
 
+const PKCE_PLATFORMS: ReadonlySet<SocialPlatform> = new Set(["x", "linkedin", "tiktok"])
+
 // In-memory state store for CSRF protection (production should use Redis)
 const MAX_STATE_ENTRIES = 1000
 const stateStore = new Map<string, { platform: SocialPlatform; userId: string; expiresAt: number; codeVerifier?: string }>()
@@ -80,8 +82,8 @@ export function generateAuthUrl(platform: SocialPlatform, userId: string): strin
   const cfg = getOAuthConfig(platform)
   const state = crypto.randomUUID()
 
-  // Generate PKCE code verifier for platforms that need it
-  const codeVerifier = randomBytes(32).toString("base64url")
+  // Generate PKCE code verifier only for platforms that need it
+  const codeVerifier = PKCE_PLATFORMS.has(platform) ? randomBytes(32).toString("base64url") : undefined
 
   stateStore.set(state, { platform, userId, expiresAt: Date.now() + 10 * 60 * 1000, codeVerifier })
 
@@ -106,14 +108,19 @@ export function generateAuthUrl(platform: SocialPlatform, userId: string): strin
     state,
   })
 
-  // Platform-specific params
-  if (platform === "x") {
+  // Platforms requiring PKCE (S256)
+  if (codeVerifier) {
     const challenge = createHash("sha256").update(codeVerifier).digest("base64url")
     params.set("code_challenge", challenge)
     params.set("code_challenge_method", "S256")
   }
+  // YouTube needs access_type + prompt for offline refresh tokens
+  if (platform === "youtube") {
+    params.set("access_type", "offline")
+    params.set("prompt", "consent")
+  }
+  // TikTok uses client_key instead of client_id
   if (platform === "tiktok") {
-    // TikTok uses client_key instead of client_id
     params.delete("client_id")
     params.set("client_key", cfg.clientId)
   }
@@ -149,7 +156,7 @@ export async function exchangeCodeForTokens(
     client_secret: cfg.clientSecret,
   }
 
-  if (platform === "x" && codeVerifier) {
+  if (PKCE_PLATFORMS.has(platform) && codeVerifier) {
     body.code_verifier = codeVerifier
   }
   if (platform === "tiktok") {

@@ -18,7 +18,7 @@ const PLATFORM_ICONS: Record<SocialPlatformType, React.ReactNode> = {
 }
 
 const PLATFORM_DESCRIPTIONS: Record<SocialPlatformType, string> = {
-  instagram: "Post images, reels, and stories",
+  instagram: "Post images, reels, and stories (uses Facebook Login)",
   tiktok: "Upload videos directly",
   youtube: "Upload videos and shorts",
   linkedin: "Share posts with text, images, or video",
