@@ -85,6 +85,7 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/voices/library" },
   { path: "/v1/webhooks", prefix: true },
   { method: "GET", path: "/v1/social/callback", prefix: true },
+  { method: "GET", path: "/v1/present/", prefix: true },
   // IMPORTANT: trailing slash is deliberate — "/v1/api/" matches "/v1/api/run", "/v1/api/schema", etc.
   // but NOT "/v1/api-tokens" (CRUD routes that require JWT auth).
   // These routes authenticate via Bearer token (API token), not JWT.
@@ -110,11 +111,13 @@ function isPublicRoute(method: string, url: string): boolean {
 
 export function registerAuthHook(app: FastifyInstance): void {
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
-    // Skip public routes
-    if (isPublicRoute(req.method, req.url)) return
+    const isPublic = isPublicRoute(req.method, req.url)
 
     const authHeader = req.headers.authorization
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined
+
+    // Public routes: still try to resolve userId if a token is present (for optional auth)
+    if (isPublic && !token) return
 
     if (token) {
       // --- JWT path: verify token ---
@@ -129,6 +132,8 @@ export function registerAuthHook(app: FastifyInstance): void {
       const { data, error } = await supabase.auth.getUser(token)
 
       if (error || !data.user) {
+        // Public routes: silently skip invalid tokens (optional auth)
+        if (isPublic) return
         reply.status(401).send({
           error: { code: "unauthorized", message: "Invalid or expired token" },
         })
@@ -153,7 +158,7 @@ export function registerAuthHook(app: FastifyInstance): void {
       return
     }
 
-    // No valid token — reject
+    // No valid token — reject (unless public route, already handled above)
     reply.status(401).send({
       error: { code: "unauthorized", message: "Authentication required" },
     })

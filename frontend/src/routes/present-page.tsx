@@ -4,33 +4,23 @@ import { Loader2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
-import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 
 export default function PresentPage() {
   const { shareToken } = useParams<{ shareToken: string }>()
   const navigate = useNavigate()
-  const { user, loading: authLoading } = useAuth()
+  const { loading: authLoading } = useAuth()
   const loadSharedWorkflow = usePresentationStore((s) => s.loadSharedWorkflow)
   const executionStatus = usePresentationStore((s) => s.executionStatus)
   const errorMessage = usePresentationStore((s) => s.errorMessage)
   const isOwner = usePresentationStore((s) => s.isOwner)
   const hasWorkflow = usePresentationStore((s) => s.workflowId !== null)
 
-  // Redirect to login if not authenticated
+  // Load workflow immediately (no auth required for viewing)
   useEffect(() => {
-    if (!authLoading && !user) {
-      // Persist the redirect URL so auth-callback can return here after login
-      localStorage.setItem(AUTH_REDIRECT_KEY, `/present/${shareToken}`)
-      navigate(`/login?redirect=/present/${shareToken}`)
-    }
-  }, [authLoading, user, navigate, shareToken])
-
-  // Load workflow once authenticated
-  useEffect(() => {
-    if (user && shareToken) {
+    if (!authLoading && shareToken) {
       loadSharedWorkflow(shareToken)
     }
-  }, [user, shareToken, loadSharedWorkflow])
+  }, [authLoading, shareToken, loadSharedWorkflow])
 
   if (authLoading || executionStatus === "loading") {
     return (
