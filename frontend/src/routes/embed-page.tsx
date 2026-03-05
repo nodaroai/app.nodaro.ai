@@ -7,7 +7,7 @@ import { useEffect } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { Loader2, RotateCcw } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
+import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
 import { Button } from "@/components/ui/button"
@@ -76,17 +76,9 @@ export default function EmbedPage() {
   }, [executionStatus, nodeStates, completedNodes, totalNodes])
 
   useEffect(() => {
-    // Wrap appRun to sync input values from presentation store → app runner store before running
-    const bridgedRun = async () => {
-      const presInputs = usePresentationStore.getState().inputValues
-      for (const [nodeId, values] of Object.entries(presInputs)) {
-        for (const [key, value] of Object.entries(values)) {
-          useAppRunnerStore.getState().updateInputValue(nodeId, key, value)
-        }
-      }
-      await useAppRunnerStore.getState().run()
-    }
-    usePresentationStore.setState({ run: bridgedRun })
+    usePresentationStore.setState({
+      run: createBridgedRun(() => usePresentationStore.getState().inputValues),
+    })
   }, [appRun])
 
   // postMessage API — listen for commands from parent frame

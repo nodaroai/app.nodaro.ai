@@ -239,10 +239,6 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     } else if (onRun) onRun()
   }, [isFullscreen, user, presRun, onRun, navigate])
 
-  const handleCancelClick = useCallback(() => {
-    if (onCancel) onCancel()
-  }, [onCancel])
-
   const handleRemoveNode = useCallback(
     (nodeId: string) => {
       updateNodeData(nodeId, { presentationVisible: false })
@@ -568,7 +564,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             isRunning ? (
               <button
                 type="button"
-                onClick={handleCancelClick}
+                onClick={onCancel}
                 className="h-8 px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200"
                 disabled={!onCancel}
               >

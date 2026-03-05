@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { Loader2, Clock, Plus, Trash2, ChevronLeft, RotateCcw } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
+import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
 import { Button } from "@/components/ui/button"
@@ -69,21 +69,12 @@ export default function AppRunnerPage() {
     })
   }, [executionStatus, nodeStates, completedNodes, totalNodes])
 
-  // Wire presentation store's run action to app runner store's run
+  // Wire presentation store's run action to app runner store's run (with input bridging)
   const appRun = useAppRunnerStore((s) => s.run)
   useEffect(() => {
-    // Wrap appRun to sync input values from presentation store → app runner store before running
-    const bridgedRun = async () => {
-      const presInputs = usePresentationStore.getState().inputValues
-      // Copy presentation store inputs to app runner store
-      for (const [nodeId, values] of Object.entries(presInputs)) {
-        for (const [key, value] of Object.entries(values)) {
-          useAppRunnerStore.getState().updateInputValue(nodeId, key, value)
-        }
-      }
-      await useAppRunnerStore.getState().run()
-    }
-    usePresentationStore.setState({ run: bridgedRun })
+    usePresentationStore.setState({
+      run: createBridgedRun(() => usePresentationStore.getState().inputValues),
+    })
   }, [appRun])
 
   // Load runs when user is authenticated and app is loaded
