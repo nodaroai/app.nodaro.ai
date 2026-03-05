@@ -196,12 +196,10 @@ function AppCard({
           variant="outline"
           size="sm"
           className="h-7 px-2 text-xs"
-          asChild
+          onClick={() => window.open(`/app/${app.slug}`, "_blank")}
         >
-          <a href={`/app/${app.slug}`} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-3 w-3 mr-1" />
-            Open
-          </a>
+          <ExternalLink className="h-3 w-3 mr-1" />
+          Open
         </Button>
         <Button
           variant="outline"

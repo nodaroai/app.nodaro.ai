@@ -1,19 +1,24 @@
-import { useEffect, useState, useCallback } from "react"
-import { useParams, Link } from "react-router-dom"
-import { Loader2, Clock, Plus, Trash2, ChevronLeft } from "lucide-react"
+import { useEffect, useState, useCallback, useMemo } from "react"
+import { useParams, Link, useNavigate } from "react-router-dom"
+import { Loader2, Clock, Plus, Trash2, ChevronLeft, Play, RotateCcw, LogIn, Square } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
 import { Button } from "@/components/ui/button"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
+import { getInputNodes } from "@/lib/presentation-utils"
+import { hasCredits } from "@/lib/edition"
+import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { AppRun } from "@/lib/api"
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
   const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
   const [showHistory, setShowHistory] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
 
   const loadApp = useAppRunnerStore((s) => s.loadApp)
   const loadRuns = useAppRunnerStore((s) => s.loadRuns)
@@ -87,7 +92,52 @@ export default function AppRunnerPage() {
       completedNodes: 0,
       totalNodes: 0,
     })
+    setIsEditing(true)
   }, [newRun])
+
+  // When execution starts, exit editing mode
+  useEffect(() => {
+    if (executionStatus === "running") {
+      setIsEditing(false)
+    }
+  }, [executionStatus])
+
+  // Compute whether all inputs are filled
+  const presNodes = usePresentationStore((s) => s.nodes)
+  const presInputValues = usePresentationStore((s) => s.inputValues)
+  const presEstimatedCost = usePresentationStore((s) => s.estimatedCost)
+
+  const inputNodes = useMemo(() => getInputNodes(presNodes, true), [presNodes])
+
+  const allInputsFilled = useMemo(() => {
+    for (const node of inputNodes) {
+      const data = node.data as Record<string, unknown>
+      const nodeType = node.type ?? ""
+      const inputVals = presInputValues[node.id] as Record<string, unknown> | undefined
+      if (nodeType === "text-prompt") {
+        const text = (inputVals?.text as string) ?? (data.text as string) ?? ""
+        if (!text.trim()) return false
+      } else if (nodeType === "upload-image" || nodeType === "upload-video" || nodeType === "upload-audio") {
+        const url = (inputVals?.url as string) ?? (data.url as string) ?? ""
+        if (!url) return false
+      }
+    }
+    return true
+  }, [inputNodes, presInputValues])
+
+  const isRunning = executionStatus === "running"
+  const isTerminal = executionStatus === "completed" || executionStatus === "failed"
+
+  const handleRunClick = useCallback(() => {
+    if (!user) {
+      localStorage.setItem(AUTH_REDIRECT_KEY, window.location.pathname + window.location.search)
+      navigate("/login")
+      return
+    }
+    usePresentationStore.getState().run()
+  }, [user, navigate])
+
+  const costLabel = hasCredits() && presEstimatedCost > 0 ? ` (${presEstimatedCost} CR)` : ""
 
   // Load runs when user is authenticated and app is loaded
   useEffect(() => {
@@ -136,22 +186,69 @@ export default function AppRunnerPage() {
 
       {/* Main content — PresentationView reads from usePresentationStore */}
       <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Floating controls — above PresentationView header */}
-        {user && runs.length > 0 && !showHistory && (
-          <div className="absolute top-[3.75rem] left-3 z-20">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowHistory(true)}
-              className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <Clock className="h-4 w-4 mr-1" />
-              Past Runs ({runs.length})
-            </Button>
-          </div>
-        )}
+        {/* Floating action bar — centered below header */}
+        <div className="absolute top-[3.75rem] left-0 right-0 flex justify-center z-20 pointer-events-none">
+          <div className="flex items-center gap-2 mt-3 pointer-events-auto">
+            {/* Past Runs button (left) */}
+            {user && runs.length > 0 && !showHistory && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHistory(true)}
+                className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <Clock className="h-4 w-4 mr-1" />
+                Past Runs ({runs.length})
+              </Button>
+            )}
 
-        <PresentationView mode="fullscreen" isOwner={false} onCancel={cancel} onNewRun={handleNewRun} />
+            {/* Create New — always visible, always pressable */}
+            <button
+              type="button"
+              onClick={handleNewRun}
+              className="h-9 px-5 rounded-full text-sm font-medium text-foreground bg-card/80 backdrop-blur-sm hover:bg-muted border border-border flex items-center gap-2 transition-all duration-200 shadow-sm"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Create New
+            </button>
+
+            {/* Run — visible when editing (not running), disabled until all inputs filled */}
+            {isEditing && !isRunning && (
+              <button
+                type="button"
+                onClick={handleRunClick}
+                className="h-9 px-5 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!allInputsFilled || !user}
+              >
+                {!user ? (
+                  <><LogIn className="h-4 w-4" />Sign in to Run</>
+                ) : (
+                  <><Play className="h-4 w-4" />Run{costLabel}</>
+                )}
+              </button>
+            )}
+
+            {/* Stop — visible when running */}
+            {isRunning && (
+              <button
+                type="button"
+                onClick={cancel}
+                className="h-9 px-5 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200 shadow-sm"
+              >
+                <Square className="h-4 w-4" />
+                Stop
+              </button>
+            )}
+          </div>
+        </div>
+
+        <PresentationView
+          mode="fullscreen"
+          isOwner={false}
+          onCancel={cancel}
+          hideRunButton
+          inputsReadOnly={!isEditing}
+        />
       </div>
     </div>
   )
