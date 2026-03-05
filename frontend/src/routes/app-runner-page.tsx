@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { Loader2, Clock, Plus, Trash2, ChevronLeft, RotateCcw } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
+import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ export default function AppRunnerPage() {
   const selectRun = useAppRunnerStore((s) => s.selectRun)
   const newRun = useAppRunnerStore((s) => s.newRun)
   const deleteRun = useAppRunnerStore((s) => s.deleteRun)
+  const cancel = useAppRunnerStore((s) => s.cancel)
   const reset = useAppRunnerStore((s) => s.reset)
 
   // Load app on mount — populates app runner store
@@ -68,10 +69,12 @@ export default function AppRunnerPage() {
     })
   }, [executionStatus, nodeStates, completedNodes, totalNodes])
 
-  // Wire presentation store's run action to app runner store's run
+  // Wire presentation store's run action to app runner store's run (with input bridging)
   const appRun = useAppRunnerStore((s) => s.run)
   useEffect(() => {
-    usePresentationStore.setState({ run: appRun })
+    usePresentationStore.setState({
+      run: createBridgedRun(() => usePresentationStore.getState().inputValues),
+    })
   }, [appRun])
 
   // Load runs when user is authenticated and app is loaded
@@ -123,17 +126,17 @@ export default function AppRunnerPage() {
       )}
 
       {/* Main content — PresentationView reads from usePresentationStore */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar with past runs toggle + new run button */}
-        <div className="flex items-center justify-center h-0 relative z-20">
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Floating controls — above PresentationView header */}
+        <div className="absolute top-[3.75rem] left-0 right-0 flex items-center justify-center z-20 pointer-events-none">
           {/* Past runs toggle — left side */}
           {user && runs.length > 0 && !showHistory && (
-            <div className="absolute top-3 left-3">
+            <div className="absolute left-3 pointer-events-auto">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowHistory(true)}
-                className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted"
               >
                 <Clock className="h-4 w-4 mr-1" />
                 Past Runs ({runs.length})
@@ -143,11 +146,11 @@ export default function AppRunnerPage() {
 
           {/* New Run button — center */}
           {user && showNewRun && (
-            <div className="absolute top-3">
+            <div className="pointer-events-auto">
               <Button
                 size="sm"
                 onClick={newRun}
-                className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+                className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white shadow-md"
               >
                 <RotateCcw className="h-4 w-4 mr-1" />
                 New Run
@@ -156,7 +159,7 @@ export default function AppRunnerPage() {
           )}
         </div>
 
-        <PresentationView mode="fullscreen" isOwner={false} />
+        <PresentationView mode="fullscreen" isOwner={false} onCancel={cancel} />
       </div>
     </div>
   )

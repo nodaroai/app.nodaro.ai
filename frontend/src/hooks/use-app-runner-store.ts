@@ -11,6 +11,7 @@ import {
   getAppRuns,
   getAppExecutionStatus,
   deleteAppRun,
+  cancelWorkflowExecution,
   type PublishedApp,
   type AppRun,
 } from "@/lib/api"
@@ -49,6 +50,7 @@ interface AppRunnerState {
   selectRun: (runId: string) => void
   newRun: () => void
   run: () => Promise<void>
+  cancel: () => Promise<void>
   deleteRun: (runId: string) => Promise<void>
   updateInputValue: (nodeId: string, key: string, value: unknown) => void
   reset: () => void
@@ -172,6 +174,18 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     }
   },
 
+  cancel: async () => {
+    const { executionId } = get()
+    if (!executionId) return
+    clearPollTimeout()
+    set({ executionStatus: "failed", errorMessage: "Cancelled" })
+    try {
+      await cancelWorkflowExecution(executionId)
+    } catch {
+      // best effort
+    }
+  },
+
   deleteRun: async (runId: string) => {
     const { slug, runs, activeRunId } = get()
     if (!slug) return
@@ -215,6 +229,24 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     })
   },
 }))
+
+/**
+ * Creates a bridged run function that syncs input values from the presentation store
+ * to the app runner store (batched) before triggering the run.
+ * Used by both app-runner-page and embed-page.
+ */
+export function createBridgedRun(getPresentationInputs: () => Record<string, Record<string, unknown>>): () => Promise<void> {
+  return async () => {
+    const presInputs = getPresentationInputs()
+    const current = useAppRunnerStore.getState().inputValues
+    const merged: Record<string, Record<string, unknown>> = { ...current }
+    for (const [nodeId, values] of Object.entries(presInputs)) {
+      merged[nodeId] = { ...merged[nodeId], ...values }
+    }
+    useAppRunnerStore.setState({ inputValues: merged })
+    await useAppRunnerStore.getState().run()
+  }
+}
 
 function startPolling(
   set: (partial: Partial<AppRunnerState>) => void,

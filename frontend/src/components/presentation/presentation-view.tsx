@@ -95,10 +95,11 @@ interface PresentationViewProps {
   isOwner: boolean
   onExitFullscreen?: () => void
   onRun?: () => void
+  onCancel?: () => void
   isRunning?: boolean
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRunning: externalIsRunning }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, isRunning: externalIsRunning }: PresentationViewProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
@@ -204,6 +205,27 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRun
     })
   })
   const isRunning = isFullscreen ? presStatus === "running" : (externalIsRunning ?? isEditorRunning)
+  const isTerminal = isFullscreen && (presStatus === "completed" || presStatus === "failed")
+
+  // Check if all required inputs are filled (fullscreen app/embed mode only)
+  const allInputsFilled = useMemo(() => {
+    if (!isFullscreen) return true
+    for (const node of orderedInputNodes) {
+      const data = node.data as Record<string, unknown>
+      const nodeType = node.type ?? ""
+      // Check presInputValues first, then fall back to snapshot data
+      const inputVals = presInputValues[node.id] as Record<string, unknown> | undefined
+      if (nodeType === "text-prompt") {
+        const text = (inputVals?.text as string) ?? (data.text as string) ?? ""
+        if (!text.trim()) return false
+      } else if (nodeType === "upload-image" || nodeType === "upload-video" || nodeType === "upload-audio") {
+        const url = (inputVals?.url as string) ?? (data.url as string) ?? ""
+        if (!url) return false
+      }
+      // Parameter nodes always have defaults, so skip validation
+    }
+    return true
+  }, [isFullscreen, orderedInputNodes, presInputValues])
 
   const handleRunClick = useCallback(() => {
     if (isFullscreen) {
@@ -402,10 +424,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRun
       isFullscreen={isFullscreen}
       inputValues={presInputValues}
       onUpdateInput={presUpdateInput}
-      readOnly={isShareReadOnly}
+      readOnly={isShareReadOnly || isRunning || isTerminal}
       onOpenMedia={handleOpenMedia}
     />
-  ), [isFullscreen, presInputValues, presUpdateInput, isShareReadOnly, handleOpenMedia])
+  ), [isFullscreen, presInputValues, presUpdateInput, isShareReadOnly, isRunning, isTerminal, handleOpenMedia])
 
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     const outputType = getOutputType(node.type)
@@ -537,23 +559,24 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, isRun
             </Button>
           )}
 
-          {/* Run button — hidden when shared read-only */}
+          {/* Run / Stop button — hidden when shared read-only */}
           {!isShareReadOnly && (
             isRunning ? (
               <button
                 type="button"
-                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] flex items-center gap-2 animate-pulse"
-                disabled
+                onClick={onCancel}
+                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200"
+                disabled={!onCancel}
               >
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Running...
+                Stop
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleRunClick}
-                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
-                disabled={!isFullscreen && mode === "tab" && !onRun}
+                className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
               >
                 {isFullscreen && !user ? (
                   <><LogIn className="h-4 w-4" />Sign in to Run</>
