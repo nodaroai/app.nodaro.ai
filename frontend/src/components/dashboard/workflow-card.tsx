@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
+import { WorkflowThumbnail } from "./workflow-thumbnail"
 import type { WorkflowMeta } from "@/hooks/use-projects-store"
 
 interface WorkflowCardProps {
@@ -15,10 +16,6 @@ interface WorkflowCardProps {
   readonly onDuplicate: (id: string) => void
   readonly onDelete: (id: string) => void
   readonly readOnly?: boolean
-}
-
-function isVideoUrl(url: string): boolean {
-  return /\.(mp4|webm|mov)(\?|$)/i.test(url)
 }
 
 export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: WorkflowCardProps) {
@@ -29,34 +26,17 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: Work
 
   return (
     <div
-      className="group flex items-center justify-between px-3 py-2 rounded-md border bg-card hover:bg-accent/30 transition-colors cursor-grab active:cursor-grabbing"
+      className="group relative rounded-lg border bg-card hover:bg-accent/30 transition-colors cursor-grab active:cursor-grabbing overflow-hidden"
       draggable
       onDragStart={handleDragStart}
     >
       <Link
         to={`/projects/${workflow.projectId}/workflows/${workflow.id}`}
-        className="flex-1 min-w-0 flex items-center gap-2.5"
+        className="block"
         draggable={false}
       >
-        {workflow.thumbnailUrl && (
-          isVideoUrl(workflow.thumbnailUrl) ? (
-            <video
-              src={workflow.thumbnailUrl}
-              muted
-              loop
-              autoPlay
-              playsInline
-              className="w-10 h-10 rounded object-cover shrink-0"
-            />
-          ) : (
-            <img
-              src={workflow.thumbnailUrl}
-              alt=""
-              className="w-10 h-10 rounded object-cover shrink-0"
-            />
-          )
-        )}
-        <div className="min-w-0">
+        <WorkflowThumbnail thumbnailUrl={workflow.thumbnailUrl} />
+        <div className="px-3 py-2">
           <p className="text-sm font-medium truncate">{workflow.name}</p>
           <p className="text-[10px] text-muted-foreground">
             {new Date(workflow.updatedAt).toLocaleDateString()}
@@ -64,35 +44,37 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: Work
         </div>
       </Link>
       {!readOnly && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-              aria-label={`Workflow options for ${workflow.name}`}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled>
-              <Pencil className="h-3.5 w-3.5 mr-2" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDuplicate(workflow.id)}>
-              <Copy className="h-3.5 w-3.5 mr-2" />
-              Duplicate
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => onDelete(workflow.id)}
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 w-7 p-0 shadow-sm"
+                aria-label={`Workflow options for ${workflow.name}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled>
+                <Pencil className="h-3.5 w-3.5 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDuplicate(workflow.id)}>
+                <Copy className="h-3.5 w-3.5 mr-2" />
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={() => onDelete(workflow.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       )}
     </div>
   )

@@ -1,7 +1,8 @@
 import { useMemo, useState, type DragEvent } from "react"
 import { useNavigate } from "react-router-dom"
-import { Plus, FolderPlus } from "lucide-react"
+import { Plus, FolderPlus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { WorkflowCard } from "./workflow-card"
@@ -35,8 +36,19 @@ export function WorkflowsTab({ projectId, readOnly }: WorkflowsTabProps) {
   const navigate = useNavigate()
 
   const [rootDragOver, setRootDragOver] = useState(false)
+  const [search, setSearch] = useState("")
 
-  const rootWorkflows = workflows.filter((w) => w.folderId === null)
+  const isSearching = search.length > 0
+
+  const filteredWorkflows = useMemo(() => {
+    if (!search) return workflows
+    const lower = search.toLowerCase()
+    return workflows.filter((w) => w.name.toLowerCase().includes(lower))
+  }, [workflows, search])
+
+  const rootWorkflows = isSearching
+    ? filteredWorkflows
+    : filteredWorkflows.filter((w) => w.folderId === null)
 
   async function handleNewWorkflow() {
     const wf = await createWorkflow(projectId, "Untitled Workflow")
@@ -82,66 +94,89 @@ export function WorkflowsTab({ projectId, readOnly }: WorkflowsTabProps) {
 
   return (
     <div>
-      {!readOnly && (
-        <div className="flex items-center gap-2 mb-4">
-          <Button size="sm" onClick={handleNewWorkflow}>
-            <Plus className="h-4 w-4 mr-1" />
-            New Workflow
-          </Button>
-          <Button size="sm" variant="outline" onClick={handleNewFolder}>
-            <FolderPlus className="h-4 w-4 mr-1" />
-            New Folder
-          </Button>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2">
-        {folders.map((folder) => (
-          <FolderItem
-            key={folder.id}
-            folder={folder}
-            workflows={workflows.filter((w) => w.folderId === folder.id)}
-            onRenameFolder={renameFolder}
-            onDeleteFolder={deleteFolder}
-            onDuplicateWorkflow={duplicateWorkflow}
-            onDeleteWorkflow={deleteWorkflow}
-            onMoveWorkflow={moveWorkflow}
-            onCreateWorkflow={handleNewWorkflowInFolder}
-            readOnly={readOnly}
+      <div className="flex items-center gap-2 mb-4">
+        {!readOnly && (
+          <>
+            <Button size="sm" onClick={handleNewWorkflow}>
+              <Plus className="h-4 w-4 mr-1" />
+              New Workflow
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleNewFolder}>
+              <FolderPlus className="h-4 w-4 mr-1" />
+              New Folder
+            </Button>
+          </>
+        )}
+        <div className="relative flex-1 max-w-xs ml-auto">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search workflows..."
+            className="pl-8 h-8 text-sm"
           />
-        ))}
+        </div>
+      </div>
 
-        <div
-          className={cn(
-            "flex flex-col gap-1 rounded-md transition-colors min-h-[40px]",
-            rootDragOver && folders.length > 0 && "bg-primary/10 ring-2 ring-primary/50 p-2",
-          )}
-          onDragOver={handleRootDragOver}
-          onDragLeave={handleRootDragLeave}
-          onDrop={handleRootDrop}
-        >
-          {rootDragOver && folders.length > 0 && rootWorkflows.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-1">
-              Drop here to move to root
-            </p>
-          )}
-          {rootWorkflows.map((wf) => (
-            <WorkflowCard
-              key={wf.id}
-              workflow={wf}
-              onDuplicate={duplicateWorkflow}
-              onDelete={deleteWorkflow}
+      {!isSearching && (
+        <div className="flex flex-col gap-2 mb-4">
+          {folders.map((folder) => (
+            <FolderItem
+              key={folder.id}
+              folder={folder}
+              workflows={workflows.filter((w) => w.folderId === folder.id)}
+              onRenameFolder={renameFolder}
+              onDeleteFolder={deleteFolder}
+              onDuplicateWorkflow={duplicateWorkflow}
+              onDeleteWorkflow={deleteWorkflow}
+              onMoveWorkflow={moveWorkflow}
+              onCreateWorkflow={handleNewWorkflowInFolder}
               readOnly={readOnly}
             />
           ))}
         </div>
+      )}
 
-        {workflows.length === 0 && folders.length === 0 && (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            No workflows yet. Create one to get started.
+      <div
+        className={cn(
+          "rounded-md transition-colors min-h-[40px]",
+          rootDragOver && folders.length > 0 && "bg-primary/10 ring-2 ring-primary/50 p-2",
+        )}
+        onDragOver={handleRootDragOver}
+        onDragLeave={handleRootDragLeave}
+        onDrop={handleRootDrop}
+      >
+        {rootDragOver && folders.length > 0 && rootWorkflows.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-1">
+            Drop here to move to root
           </p>
         )}
+        {rootWorkflows.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {rootWorkflows.map((wf) => (
+              <WorkflowCard
+                key={wf.id}
+                workflow={wf}
+                onDuplicate={duplicateWorkflow}
+                onDelete={deleteWorkflow}
+                readOnly={readOnly}
+              />
+            ))}
+          </div>
+        )}
       </div>
+
+      {isSearching && filteredWorkflows.length === 0 && (
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          No workflows match "{search}"
+        </p>
+      )}
+
+      {!isSearching && workflows.length === 0 && folders.length === 0 && (
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          No workflows yet. Create one to get started.
+        </p>
+      )}
     </div>
   )
 }
