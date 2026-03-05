@@ -11,6 +11,7 @@ import {
   getAppRuns,
   getAppExecutionStatus,
   deleteAppRun,
+  cancelWorkflowExecution,
   type PublishedApp,
   type AppRun,
 } from "@/lib/api"
@@ -49,6 +50,7 @@ interface AppRunnerState {
   selectRun: (runId: string) => void
   newRun: () => void
   run: () => Promise<void>
+  cancel: () => Promise<void>
   deleteRun: (runId: string) => Promise<void>
   updateInputValue: (nodeId: string, key: string, value: unknown) => void
   reset: () => void
@@ -170,6 +172,18 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
         errorMessage: err instanceof Error ? err.message : "Failed to run app",
       })
     }
+  },
+
+  cancel: async () => {
+    const { executionId } = get()
+    if (!executionId) return
+    clearPollTimeout()
+    try {
+      await cancelWorkflowExecution(executionId)
+    } catch {
+      // best effort
+    }
+    set({ executionStatus: "failed", errorMessage: "Cancelled" })
   },
 
   deleteRun: async (runId: string) => {
