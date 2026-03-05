@@ -175,12 +175,35 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       const newNodes = applyNodeChanges(changes, state.nodes)
       // Only mark dirty for content changes (position, add, remove, replace)
       // NOT for selection or dimension measurements from React Flow
-      const hasContentChange = changes.some(
-        (c) => c.type !== "select" && c.type !== "dimensions"
-      )
+      // Single pass: detect content changes and collect selection info
+      let hasContentChange = false
+      let hasSelectionChange = false
+      let lastSelectedId: string | null = null
+      for (const c of changes) {
+        if (c.type === "select") {
+          hasSelectionChange = true
+          if (c.selected) lastSelectedId = c.id
+        } else if (c.type !== "dimensions") {
+          hasContentChange = true
+        }
+      }
+
+      // Sync selectedNodeId with React Flow's selection state
+      let selectedNodeId = state.selectedNodeId
+      if (hasSelectionChange) {
+        if (lastSelectedId !== null) {
+          selectedNodeId = lastSelectedId
+        } else {
+          // All selection changes were deselects — pick any remaining selected node or null
+          const anySelected = newNodes.find((n) => n.selected)
+          selectedNodeId = anySelected?.id ?? null
+        }
+      }
+
       return {
         nodes: newNodes,
         ...(hasContentChange ? { isDirty: true } : {}),
+        ...(selectedNodeId !== state.selectedNodeId ? { selectedNodeId } : {}),
       }
     }),
 
