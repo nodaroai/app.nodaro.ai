@@ -52,7 +52,7 @@ export async function socialAuthRoutes(app: FastifyInstance) {
         ? new Date(Date.now() + tokens.expiresIn * 1000).toISOString()
         : null
 
-      // Upsert connection
+      // Upsert connection (same platform account updates tokens, different account creates new row)
       const { error: dbError } = await supabase
         .from("social_connections")
         .upsert({
@@ -61,6 +61,7 @@ export async function socialAuthRoutes(app: FastifyInstance) {
           platform_user_id: userInfo.id,
           platform_username: userInfo.username,
           platform_avatar_url: userInfo.avatarUrl,
+          display_name: userInfo.username || platform,
           access_token_encrypted: accessTokenEncrypted,
           refresh_token_encrypted: refreshTokenEncrypted,
           token_expires_at: tokenExpiresAt,
@@ -68,7 +69,7 @@ export async function socialAuthRoutes(app: FastifyInstance) {
           metadata: userInfo.metadata || {},
           updated_at: new Date().toISOString(),
         }, {
-          onConflict: "user_id,platform",
+          onConflict: "user_id,platform,platform_user_id",
         })
 
       if (dbError) {
@@ -90,25 +91,25 @@ export async function socialAuthRoutes(app: FastifyInstance) {
 
     const { data, error } = await supabase
       .from("social_connections")
-      .select("id, platform, platform_username, platform_avatar_url, created_at, updated_at, token_expires_at, scopes")
+      .select("id, platform, platform_user_id, platform_username, platform_avatar_url, display_name, created_at, updated_at, token_expires_at, scopes")
       .eq("user_id", userId)
 
     if (error) return reply.status(500).send({ error: { code: "internal_error" } })
     return { connections: data || [] }
   })
 
-  // DELETE /v1/social/connections/:platform — disconnect
-  app.delete("/v1/social/connections/:platform", async (req, reply) => {
+  // DELETE /v1/social/connections/:id — disconnect a specific connection
+  app.delete("/v1/social/connections/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized" } })
 
-    const { platform } = req.params as { platform: string }
+    const { id } = req.params as { id: string }
 
     const { error } = await supabase
       .from("social_connections")
       .delete()
       .eq("user_id", userId)
-      .eq("platform", platform)
+      .eq("id", id)
 
     if (error) return reply.status(500).send({ error: { code: "internal_error" } })
     return { success: true }

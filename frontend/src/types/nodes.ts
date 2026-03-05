@@ -1102,9 +1102,12 @@ export type SocialMediaFormatData = {
 export type SocialPlatformType = "instagram" | "tiktok" | "youtube" | "linkedin" | "x" | "facebook"
 
 export interface SocialConnection {
+  id: string
   platform: string
+  platform_user_id: string
   platform_username: string | null
   platform_avatar_url: string | null
+  display_name: string | null
 }
 
 export type SocialPostData = {
@@ -1112,6 +1115,7 @@ export type SocialPostData = {
   label: string
   platform: SocialPlatformType
   action: string
+  connectionId?: string
   caption: string
   title?: string
   description?: string

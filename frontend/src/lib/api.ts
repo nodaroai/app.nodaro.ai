@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase"
-import type { SubWorkflowRouteSnapshot } from "@/types/nodes"
+import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 
 export const API_BASE_URL = ''
@@ -3153,6 +3153,7 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
 export async function socialPublishApi(params: {
   platform: string
   action: string
+  connectionId?: string
   mediaUrl?: string
   caption?: string
   title?: string
@@ -3161,6 +3162,7 @@ export async function socialPublishApi(params: {
   privacy?: string
 }): Promise<{ jobId: string; success: boolean; platformPostId?: string; platformPostUrl?: string }> {
   const body: Record<string, unknown> = { platform: params.platform, action: params.action }
+  if (params.connectionId) body.connectionId = params.connectionId
   if (params.mediaUrl) body.mediaUrl = params.mediaUrl
   if (params.caption) body.caption = params.caption
   if (params.title) body.title = params.title
@@ -3180,7 +3182,7 @@ export async function socialPublishApi(params: {
   return res.json()
 }
 
-export async function getSocialConnections(): Promise<{ connections: Array<{ platform: string; platform_username: string | null; platform_avatar_url: string | null; created_at: string }> }> {
+export async function getSocialConnections(): Promise<{ connections: Array<SocialConnection & { created_at: string }> }> {
   const res = await fetch(`${API_BASE_URL}/v1/social/connections`, {
     headers: await getAuthHeaders(),
   })
@@ -3202,8 +3204,8 @@ export async function getSocialAuthUrl(platform: string): Promise<{ url: string 
   return res.json()
 }
 
-export async function disconnectSocial(platform: string): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE_URL}/v1/social/connections/${encodeURIComponent(platform)}`, {
+export async function disconnectSocial(connectionId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/social/connections/${encodeURIComponent(connectionId)}`, {
     method: "DELETE",
     headers: await getAuthHeaders(),
   })

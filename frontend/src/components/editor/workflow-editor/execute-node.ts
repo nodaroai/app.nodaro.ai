@@ -2947,6 +2947,7 @@ export function executeNode(
       socialPublishApi({
         platform: d.platform,
         action: d.action,
+        connectionId: d.connectionId,
         mediaUrl,
         caption: d.caption || undefined,
         title: d.title || undefined,

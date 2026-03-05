@@ -46,7 +46,7 @@ export default function IntegrationsPage() {
             <PlatformCard
               key={platform}
               platform={platform}
-              connection={connections.find((c) => c.platform === platform) ?? null}
+              connections={connections.filter((c) => c.platform === platform)}
               onConnectionChange={loadConnections}
             />
           ))}
