@@ -309,10 +309,10 @@ describe("useAppRunnerStore", () => {
       expect(state.totalNodes).toBe(0)
       expect(state.errorMessage).toBeNull()
 
-      // App state is preserved
+      // App state is preserved (except inputValues which are cleared for fresh run)
       expect(state.app).toEqual({ id: "app_1" })
       expect(state.slug).toBe("my-app")
-      expect(state.inputValues).toEqual({ node_1: { prompt: "hello" } })
+      expect(state.inputValues).toEqual({})
       expect(state.runs).toHaveLength(1)
     })
   })
