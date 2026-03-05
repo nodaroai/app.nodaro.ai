@@ -49,7 +49,7 @@ interface AppRunnerState {
   loadRuns: () => Promise<void>
   selectRun: (runId: string) => void
   newRun: () => void
-  run: () => Promise<void>
+  run: (runId?: string) => Promise<void>
   cancel: () => Promise<void>
   deleteRun: (runId: string) => Promise<void>
   updateInputValue: (nodeId: string, key: string, value: unknown) => void
@@ -149,7 +149,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     })
   },
 
-  run: async () => {
+  run: async (existingRunId?: string) => {
     const { slug, inputValues } = get()
     if (!slug) return
 
@@ -165,6 +165,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       const { executionId, runId } = await runPublishedApp(
         slug,
         Object.keys(inputValues).length > 0 ? inputValues : undefined,
+        existingRunId,
       )
       set({ executionId, activeRunId: runId })
       startPolling(set, get)
@@ -243,7 +244,10 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
  * to the app runner store (batched) before triggering the run.
  * Used by both app-runner-page and embed-page.
  */
-export function createBridgedRun(getPresentationInputs: () => Record<string, Record<string, unknown>>): () => Promise<void> {
+export function createBridgedRun(
+  getPresentationInputs: () => Record<string, Record<string, unknown>>,
+  getRunId?: () => string | null,
+): () => Promise<void> {
   return async () => {
     const presInputs = getPresentationInputs()
     const current = useAppRunnerStore.getState().inputValues
@@ -252,7 +256,8 @@ export function createBridgedRun(getPresentationInputs: () => Record<string, Rec
       merged[nodeId] = { ...merged[nodeId], ...values }
     }
     useAppRunnerStore.setState({ inputValues: merged })
-    await useAppRunnerStore.getState().run()
+    const runId = getRunId?.() ?? undefined
+    await useAppRunnerStore.getState().run(runId)
   }
 }
 

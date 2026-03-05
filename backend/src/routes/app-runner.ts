@@ -24,6 +24,15 @@ const slugRunParams = z.object({
 
 const runBody = z.object({
   inputOverrides: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  runId: z.string().uuid().optional(),
+})
+
+const createRunBody = z.object({
+  inputValues: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+})
+
+const updateRunBody = z.object({
+  inputValues: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 })
 
 const runsQuery = z.object({
@@ -97,7 +106,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { slug } = paramsParsed.data
-    const { inputOverrides } = bodyParsed.data
+    const { inputOverrides, runId } = bodyParsed.data
 
     // Load app by slug
     const { data: appRow, error: appError } = await supabase
@@ -182,21 +191,48 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    // Create app_run record linking app_id, execution_id, runner_id
-    const { data: appRun, error: runError } = await supabase
-      .from("app_runs")
-      .insert({
-        app_id: appRow.id,
-        execution_id: execution.id,
-        runner_id: req.userId,
-      })
-      .select("id")
-      .single()
+    let appRunId: string
 
-    if (runError || !appRun) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to create app run" },
-      })
+    if (runId) {
+      // Link existing draft run to this execution
+      const { data: updated, error: updateError } = await supabase
+        .from("app_runs")
+        .update({
+          execution_id: execution.id,
+          status: "running",
+          input_values: inputOverrides ?? undefined,
+        })
+        .eq("id", runId)
+        .eq("runner_id", req.userId)
+        .select("id")
+        .single()
+
+      if (updateError || !updated) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Run not found" },
+        })
+      }
+      appRunId = updated.id
+    } else {
+      // Create new app_run record
+      const { data: appRun, error: runError } = await supabase
+        .from("app_runs")
+        .insert({
+          app_id: appRow.id,
+          execution_id: execution.id,
+          runner_id: req.userId,
+          status: "running",
+          input_values: inputOverrides ?? undefined,
+        })
+        .select("id")
+        .single()
+
+      if (runError || !appRun) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: "Failed to create app run" },
+        })
+      }
+      appRunId = appRun.id
     }
 
     // Enqueue orchestration job — use the app's workflow_id since the orchestrator loads by workflow ID
@@ -214,9 +250,115 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     return reply.status(202).send({
       executionId: execution.id,
-      runId: appRun.id,
+      runId: appRunId,
       status: "pending",
     })
+  })
+
+  // --- Create a draft run (no execution yet) ---
+  app.post("/v1/app/:slug/runs", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const paramsParsed = slugParams.safeParse(req.params)
+    if (!paramsParsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid app slug" },
+      })
+    }
+
+    const bodyParsed = createRunBody.safeParse(req.body ?? {})
+    if (!bodyParsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid request body" },
+      })
+    }
+
+    const { slug } = paramsParsed.data
+    const { inputValues } = bodyParsed.data
+
+    // Load app by slug
+    const { data: appRow, error: appError } = await supabase
+      .from("published_apps")
+      .select("id")
+      .eq("slug", slug)
+      .eq("is_active", true)
+      .single()
+
+    if (appError || !appRow) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "App not found" },
+      })
+    }
+
+    const { data: run, error: runError } = await supabase
+      .from("app_runs")
+      .insert({
+        app_id: appRow.id,
+        runner_id: req.userId,
+        input_values: inputValues ?? {},
+        status: "draft",
+      })
+      .select("id, created_at, input_values, status")
+      .single()
+
+    if (runError || !run) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: "Failed to create run" },
+      })
+    }
+
+    return reply.status(201).send({
+      id: run.id,
+      createdAt: run.created_at,
+      inputValues: run.input_values,
+      status: run.status,
+    })
+  })
+
+  // --- Update a draft run's input values ---
+  app.patch("/v1/app/:slug/runs/:runId", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const paramsParsed = slugRunParams.safeParse(req.params)
+    if (!paramsParsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid parameters" },
+      })
+    }
+
+    const bodyParsed = updateRunBody.safeParse(req.body ?? {})
+    if (!bodyParsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid request body" },
+      })
+    }
+
+    const { runId } = paramsParsed.data
+    const { inputValues } = bodyParsed.data
+
+    const { data: run, error: runError } = await supabase
+      .from("app_runs")
+      .update({ input_values: inputValues })
+      .eq("id", runId)
+      .eq("runner_id", req.userId)
+      .select("id, input_values")
+      .single()
+
+    if (runError || !run) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Run not found" },
+      })
+    }
+
+    return reply.send({ id: run.id, inputValues: run.input_values })
   })
 
   // --- List runner's past runs for this app ---
@@ -262,7 +404,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     let query = supabase
       .from("app_runs")
       .select(
-        "id, created_at, execution_id, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at)"
+        "id, created_at, execution_id, input_values, status, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at)"
       )
       .eq("app_id", appRow.id)
       .eq("runner_id", req.userId)
@@ -308,9 +450,10 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
         return {
           id: run.id,
-          executionId: run.execution_id,
+          executionId: run.execution_id ?? null,
           createdAt: run.created_at,
-          status: exec?.status ?? "unknown",
+          inputValues: run.input_values ?? null,
+          status: exec?.status ?? (run as { status?: string }).status ?? "draft",
           nodeStates: exec?.node_states ?? null,
           completedNodes: exec?.completed_nodes ?? 0,
           totalNodes: exec?.total_nodes ?? 0,
@@ -341,7 +484,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { data: run, error: runError } = await supabase
       .from("app_runs")
       .select(
-        "id, app_id, runner_id, execution_id, created_at, workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
+        "id, app_id, runner_id, execution_id, input_values, status, created_at, workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
       )
       .eq("id", runId)
       .eq("runner_id", req.userId)
@@ -368,7 +511,9 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     return reply.send({
       id: run.id,
       appId: run.app_id,
-      executionId: run.execution_id,
+      executionId: run.execution_id ?? null,
+      inputValues: run.input_values ?? null,
+      status: (run as { status?: string }).status ?? "draft",
       createdAt: run.created_at,
       execution: exec
         ? {
