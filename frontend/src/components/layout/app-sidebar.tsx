@@ -16,6 +16,7 @@ import {
   Archive,
   History,
   Plug,
+  Rocket,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -44,6 +45,7 @@ interface NavItem {
 
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/projects", label: "Projects", icon: FolderOpen },
+  { href: "/apps", label: "My Apps", icon: Rocket },
   { href: "/executions", label: "Executions", icon: History },
   { href: "/_gallery", label: "Gallery", icon: Images },
   { href: "/library", label: "Library", icon: Archive },

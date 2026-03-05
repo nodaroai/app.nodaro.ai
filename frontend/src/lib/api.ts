@@ -3215,3 +3215,216 @@ export async function disconnectSocial(connectionId: string): Promise<{ success:
   }
   return res.json()
 }
+
+// ---------------------------------------------------------------------------
+// Published Apps (Mini-Apps)
+// ---------------------------------------------------------------------------
+
+export interface PublishedApp {
+  id: string
+  workflowId: string
+  creatorId: string
+  version: number
+  slug: string
+  name: string
+  description: string
+  iconUrl: string | null
+  snapshotNodes: unknown[]
+  snapshotEdges: unknown[]
+  snapshotSettings: Record<string, unknown>
+  isActive: boolean
+  isListed: boolean
+  isEmbeddable: boolean
+  estimatedCredits: number
+  createdAt: string
+  runCount?: number
+}
+
+export interface AppRun {
+  id: string
+  appId: string
+  executionId: string
+  runnerId: string
+  creditsUsed: number
+  createdAt: string
+  execution?: {
+    status: string
+    nodeStates: Record<string, unknown>
+    totalNodes: number
+    completedNodes: number
+    failedNodes: number
+    completedAt: string | null
+    errorMessage: string | null
+  }
+}
+
+/** Publish a workflow as a mini-app. */
+export async function publishApp(data: {
+  workflowId: string
+  name: string
+  slug?: string
+  description?: string
+  iconUrl?: string
+}): Promise<PublishedApp> {
+  return apiRequest<PublishedApp>(
+    "/v1/apps/publish",
+    "Failed to publish app",
+    { method: "POST", body: data },
+  )
+}
+
+/** List creator's published apps. */
+export async function getMyApps(): Promise<PublishedApp[]> {
+  return apiRequest<PublishedApp[]>(
+    "/v1/apps/mine",
+    "Failed to load apps",
+  )
+}
+
+/** Update published app metadata. */
+export async function updateApp(appId: string, data: {
+  name?: string
+  description?: string
+  isActive?: boolean
+  isListed?: boolean
+  isEmbeddable?: boolean
+}): Promise<PublishedApp> {
+  return apiRequest<PublishedApp>(
+    `/v1/apps/${encodeURIComponent(appId)}`,
+    "Failed to update app",
+    { method: "PATCH", body: data },
+  )
+}
+
+/** Deactivate a published app (soft delete). */
+export async function deactivateApp(appId: string): Promise<void> {
+  return apiRequest(
+    `/v1/apps/${encodeURIComponent(appId)}`,
+    "Failed to deactivate app",
+    { method: "DELETE" },
+  )
+}
+
+/** Load a published app by slug (public). */
+export async function getPublishedApp(slug: string): Promise<PublishedApp> {
+  return apiRequest<PublishedApp>(
+    `/v1/app/${encodeURIComponent(slug)}`,
+    "Failed to load app",
+  )
+}
+
+/** Run a published app (runner pays credits). */
+export async function runPublishedApp(
+  slug: string,
+  inputOverrides?: Record<string, Record<string, unknown>>,
+): Promise<{ executionId: string; runId: string; status: string }> {
+  return apiRequest(
+    `/v1/app/${encodeURIComponent(slug)}/run`,
+    "Failed to run app",
+    { method: "POST", body: { inputOverrides } },
+  )
+}
+
+/** List runner's past runs for a published app. */
+export async function getAppRuns(slug: string, cursor?: string): Promise<{ data: AppRun[]; nextCursor: string | null }> {
+  const params = new URLSearchParams()
+  if (cursor) params.set("cursor", cursor)
+  const qs = params.toString()
+  return apiRequest(
+    `/v1/app/${encodeURIComponent(slug)}/runs${qs ? `?${qs}` : ""}`,
+    "Failed to load runs",
+  )
+}
+
+/** Get a specific run's details. */
+export async function getAppRun(slug: string, runId: string): Promise<AppRun> {
+  return apiRequest<AppRun>(
+    `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
+    "Failed to load run",
+  )
+}
+
+/** Delete a run from history. */
+export async function deleteAppRun(slug: string, runId: string): Promise<void> {
+  return apiRequest(
+    `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
+    "Failed to delete run",
+    { method: "DELETE" },
+  )
+}
+
+/** Poll execution status for an app run (reuses presentation status endpoint pattern). */
+export async function getAppExecutionStatus(execId: string): Promise<{
+  id: string
+  status: string
+  node_states: Record<string, unknown>
+  total_nodes: number
+  completed_nodes: number
+  failed_nodes: number
+  total_credits_used: number
+  error_message: string | null
+}> {
+  return apiRequest(
+    `/v1/workflow-executions/${encodeURIComponent(execId)}`,
+    "Failed to get execution status",
+  )
+}
+
+// ---------------------------------------------------------------------------
+// App Analytics (Creator)
+// ---------------------------------------------------------------------------
+
+export interface AnalyticsPeriod {
+  totalRuns: number
+  uniqueRunners: number
+  totalCredits: number
+  successfulRuns: number
+  failedRuns: number
+}
+
+export interface DailyAnalytics {
+  date: string
+  totalRuns: number
+  uniqueRunners: number
+  totalCredits: number
+  successfulRuns: number
+  failedRuns: number
+}
+
+export interface AppAnalytics {
+  today: AnalyticsPeriod
+  last7Days: AnalyticsPeriod
+  last30Days: AnalyticsPeriod
+  allTime: AnalyticsPeriod
+  daily: DailyAnalytics[]
+}
+
+/** Get aggregated analytics for a published app. */
+export async function getAppAnalytics(appId: string): Promise<AppAnalytics> {
+  return apiRequest<AppAnalytics>(
+    `/v1/apps/${encodeURIComponent(appId)}/analytics`,
+    "Failed to load analytics",
+  )
+}
+
+export interface AnalyticsRun {
+  id: string
+  runnerId: string
+  creditsUsed: number
+  createdAt: string
+  status: string
+  completedNodes: number
+  totalNodes: number
+  completedAt: string | null
+}
+
+/** Get paginated run list for creator analytics. */
+export async function getAppAnalyticsRuns(appId: string, cursor?: string): Promise<{ data: AnalyticsRun[]; nextCursor: string | null }> {
+  const params = new URLSearchParams()
+  if (cursor) params.set("cursor", cursor)
+  const qs = params.toString()
+  return apiRequest(
+    `/v1/apps/${encodeURIComponent(appId)}/analytics/runs${qs ? `?${qs}` : ""}`,
+    "Failed to load analytics runs",
+  )
+}

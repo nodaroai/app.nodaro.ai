@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react"
-import { Share2, Copy, Check, Loader2, Link2Off } from "lucide-react"
+import { Share2, Copy, Check, Loader2, Link2Off, Rocket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { shareWorkflow, unshareWorkflow } from "@/lib/api"
+import { shareWorkflow, unshareWorkflow, publishApp } from "@/lib/api"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { getNodeLabel } from "@/lib/presentation-utils"
@@ -33,9 +33,18 @@ interface ShareDialogProps {
 
 export function ShareDialog({ workflowId, presentationSettings, updatePresentationSettings, nodes }: ShareDialogProps) {
   const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState<"share" | "publish">("share")
   const [loading, setLoading] = useState(false)
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  // Publish state
+  const [publishName, setPublishName] = useState("")
+  const [publishSlug, setPublishSlug] = useState("")
+  const [publishDesc, setPublishDesc] = useState("")
+  const [publishing, setPublishing] = useState(false)
+  const [publishedSlug, setPublishedSlug] = useState<string | null>(null)
+  const [publishCopied, setPublishCopied] = useState(false)
 
   const shareUrl = shareToken
     ? `${window.location.origin}/present/${shareToken}`
@@ -117,6 +126,42 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
     updatePresentationSettings?.({ [side]: nodeId })
   }, [updatePresentationSettings])
 
+  const handlePublish = useCallback(async () => {
+    if (!publishName.trim()) {
+      toast.error("Name is required")
+      return
+    }
+    setPublishing(true)
+    try {
+      const slug = publishSlug.trim() || undefined
+      const result = await publishApp({
+        workflowId,
+        name: publishName.trim(),
+        slug,
+        description: publishDesc.trim() || undefined,
+      })
+      setPublishedSlug(result.slug)
+      toast.success("App published!")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to publish")
+    } finally {
+      setPublishing(false)
+    }
+  }, [workflowId, publishName, publishSlug, publishDesc])
+
+  const publishedUrl = publishedSlug
+    ? `${window.location.origin}/app/${publishedSlug}`
+    : ""
+
+  const handleCopyPublished = useCallback(() => {
+    if (publishedUrl) {
+      navigator.clipboard.writeText(publishedUrl)
+      setPublishCopied(true)
+      toast.success("Link copied")
+      setTimeout(() => setPublishCopied(false), 2000)
+    }
+  }, [publishedUrl])
+
   const showSettings = shareToken && updatePresentationSettings && presentationSettings
   const showCompareSettings = showSettings && allowedSet.has("compare")
 
@@ -130,8 +175,38 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share Workflow</DialogTitle>
+          <DialogTitle>Share & Publish</DialogTitle>
         </DialogHeader>
+
+        {/* Tab toggle */}
+        <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
+          <button
+            type="button"
+            onClick={() => setTab("share")}
+            className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${
+              tab === "share"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Share2 className="h-3.5 w-3.5 inline mr-1" />
+            Share Link
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("publish")}
+            className={`flex-1 text-sm py-1.5 rounded-md transition-colors ${
+              tab === "publish"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Rocket className="h-3.5 w-3.5 inline mr-1" />
+            Publish App
+          </button>
+        </div>
+
+        {tab === "share" ? (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Share this workflow as a presentation. Anyone with the link can run it (they pay their own credits).
@@ -277,6 +352,77 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
             </Button>
           )}
         </div>
+        ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Publish as a standalone mini-app with its own URL, persistent run history, and versioning.
+          </p>
+
+          {publishedSlug ? (
+            <>
+              <div className="flex gap-2">
+                <Input value={publishedUrl} readOnly className="text-xs" />
+                <Button variant="outline" size="sm" onClick={handleCopyPublished}>
+                  {publishCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => window.open(publishedUrl, "_blank")}
+              >
+                Open App
+              </Button>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="text-sm font-medium mb-1 block">App Name *</label>
+                <Input
+                  value={publishName}
+                  onChange={(e) => setPublishName(e.target.value)}
+                  placeholder="My AI App"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">URL Slug</label>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground shrink-0">/app/</span>
+                  <Input
+                    value={publishSlug}
+                    onChange={(e) => setPublishSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                    placeholder="auto-generated"
+                    className="text-xs"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">Leave blank to auto-generate from name</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Description</label>
+                <Input
+                  value={publishDesc}
+                  onChange={(e) => setPublishDesc(e.target.value)}
+                  placeholder="What does this app do?"
+                />
+              </div>
+              <Button
+                onClick={handlePublish}
+                disabled={publishing || !publishName.trim()}
+                className="w-full text-white hover:opacity-90"
+                style={{ backgroundColor: "#ff0073" }}
+              >
+                {publishing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Rocket className="h-4 w-4 mr-2" />
+                )}
+                Publish App
+              </Button>
+            </>
+          )}
+        </div>
+        )}
       </DialogContent>
     </Dialog>
   )
