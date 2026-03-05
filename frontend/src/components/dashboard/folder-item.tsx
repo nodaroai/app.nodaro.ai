@@ -139,17 +139,20 @@ export function FolderItem({
         )}
       </div>
       {open && (
-        <div className="ml-6 flex flex-col gap-1 mt-1">
-          {workflows.map((wf) => (
-            <WorkflowCard
-              key={wf.id}
-              workflow={wf}
-              onDuplicate={onDuplicateWorkflow}
-              onDelete={onDeleteWorkflow}
-              readOnly={readOnly}
-            />
-          ))}
-          {workflows.length === 0 && (
+        <div className="ml-6 mt-2">
+          {workflows.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {workflows.map((wf) => (
+                <WorkflowCard
+                  key={wf.id}
+                  workflow={wf}
+                  onDuplicate={onDuplicateWorkflow}
+                  onDelete={onDeleteWorkflow}
+                  readOnly={readOnly}
+                />
+              ))}
+            </div>
+          ) : (
             <p className="text-xs text-muted-foreground py-2 pl-2">
               Empty folder. Drag workflows here or click + to create one.
             </p>
