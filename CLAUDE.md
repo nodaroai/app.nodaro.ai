@@ -144,6 +144,7 @@ Full guide: `docs/adding-a-new-node.md`
 | `paddle_customers` | id, user_id, paddle_customer_id | Supabase <> Paddle mapping |
 | `subscriptions` | id, paddle_subscription_id, paddle_price_id, tier, status, current_period_start/end, canceled_at | Synced from Paddle |
 | `transactions` | id, paddle_transaction_id, type, amount_usd, credits_granted | Payment history |
+| `social_connections` | id, user_id, platform, platform_user_id, access_token_encrypted, refresh_token_encrypted, token_expires_at, scopes, metadata | OAuth tokens (AES-256-GCM encrypted), one per user+platform |
 
 ---
 
@@ -154,16 +155,16 @@ frontend/src/
   main.tsx                — Vite entry point
   router.tsx              — React Router config (createBrowserRouter)
   app/(auth)/             — Login, signup
-  app/(dashboard)/        — Projects, workflows, billing, settings, library
+  app/(dashboard)/        — Projects, workflows, billing, settings, library, integrations
   app/(admin)/            — Admin panel (cloud/business only)
   app/pricing/            — Pricing page (Paddle)
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node)
+  components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
-    config-panels/        — 23 files: per-category node config components (image, video, audio, composition, entity, trigger, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags)
+    config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags)
     remotion-player-preview.tsx — Generic @remotion/player wrapper (lazy-loaded)
     after-effects-player-preview.tsx — AE composition preview (shows when sourceVideo exists)
     motion-graphics-player-preview.tsx — MG composition preview (always available)
@@ -178,6 +179,8 @@ frontend/src/
   lib/audio-tags.ts       — Audio tags, SSML breaks, model-aware language lists (getLanguagesForModel, ALL_LANGUAGES)
   lib/suno-tags.ts        — Suno metatags for lyrics autocomplete ([Verse], [Chorus], genres, etc.)
   lib/pricing-data.ts     — Tier/model pricing constants
+  lib/social-media-specs.ts — Platform labels, action specs, character limits
+  components/integrations/ — Platform OAuth connect/disconnect cards
   types/nodes.ts          — Node data types
 
 packages/shared/          — Shared pure logic between frontend & backend (model-constants, prompt-templates, ancestor-refs, credit-identifiers, prompt-builder, types)
@@ -189,12 +192,13 @@ backend/src/
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
   orchestrator.ts         — BullMQ workflow orchestrator entry point (concurrency:2)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers, social-auth, social-publish)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction; KIE clients: `client.ts` (core + VEO), `kontext-client.ts` (Flux Kontext), `runway-client.ts` (Runway gen + extend), `luma-client.ts` (Luma Modify)
   billing/                — Credits, Paddle, cleanup (see Credit System)
   services/workflow-engine/ — Backend workflow orchestration (8 files: types, execution-graph, input-resolver, output-extractor, payload-builder, node-executor, inline-executor, sub-workflow-handler)
+  services/social/        — Social media OAuth + publishing (encryption, oauth, platforms/)
   workers/orchestrator-worker.ts — Main orchestrator BullMQ worker
   middleware/             — credit-guard.ts, auth.ts (JWT verification + 5-min SHA-256 cache)
   lib/config.ts           — Env config + edition helpers
@@ -246,12 +250,13 @@ backend/src/
 | Voice Design | ElevenLabs Text-to-Voice Design direct API | `POST /v1/voice-design` (5 credits), full controls: model (multilingual v2/english v2/turbo v2.5), loudness, guidance_scale, seed, quality, should_enhance; outputs audio + `generatedVoiceId`; uses `POST /v1/text-to-voice/design`; node has dual output handles (`audio` + `voiceId`) |
 | Forced Alignment | ElevenLabs Forced Alignment direct API | `POST /v1/forced-alignment` (3 credits), audio + transcript → word-level timestamps JSON; output is data (not audio) |
 | Suno metatags | `suno-tags.ts` + `TagTextarea` | Autocomplete for `[Verse]`, `[Chorus]`, genre tags, etc. in lyrics fields; `TagTextarea` component with portal-rendered dropdown, supports both Suno metatags and ElevenLabs audio tags via `customTags` prop |
-| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (7 AI routes via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 15min per-node timeout, 60min per-workflow; two stop modes: "cancelled" (immediate) and "stopping" (finish current level then stop) |
+| Workflow orchestrator | BullMQ `"workflow-orchestration"` queue | Server-side DAG execution: topological sort → level-by-level parallel execution → per-node state tracking; 3 execution categories: worker-queued (40+ types via existing BullMQ queues), sync HTTP (13 routes: 7 AI + 6 social via internal fetch), inline (combine-text, split-text, composite); concurrency 2; 15min per-node timeout, 60min per-workflow; two stop modes: "cancelled" (immediate) and "stopping" (finish current level then stop) |
 | Webhook triggers | Token-based auth, no user auth needed | `POST /v1/webhooks/:token` (public route), 32-byte hex token per trigger, rate limited 10/min per token; creates execution + enqueues orchestrator |
 | Schedule triggers | Cron expressions + interval strings | `schedule-cron.ts` checks every 60s, supports 5-field cron + simple intervals ("5m", "1h", "1d"); respects `maxExecutions` limit; skips if workflow already running |
 | Sub-workflow execution | Recursive with depth limit 5 | `sub-workflow-handler.ts`: loads referenced workflow, filters to selected route's reachable nodes (BFS), executes with same orchestrator logic; cycle detection via `workflowId:routeId` set |
 | Single-node execution history | Jobs tagged with workflowId | Frontend `setCurrentWorkflowId()` + `withWorkflowId()` inject workflowId into all job-creating API calls; backend `extractWorkflowId(req.body)` reads it before Zod strips it; `GET /v1/workflows/:id/executions` merges `workflow_executions` + standalone `jobs` (where `workflow_execution_id IS NULL`); standalone jobs shown as `triggerType: "single-node"` with synthetic nodeStates |
 | Shared package | `packages/shared/` with relative imports | Deduplicates ~500 lines of pure logic (prompt building, model constants, templates, ancestor refs, credit identifiers) between frontend DAG executor and backend orchestrator. Frontend resolves via Vite alias; backend uses relative imports (NOT path aliases — `tsc` doesn't rewrite them). Backend `rootDir: ".."` so dist output is `dist/backend/src/`. Dockerfile copies `packages/shared/` into build stages. |
+| Social media publishing | OAuth 2.0 + platform APIs | 6 platforms: Instagram, TikTok, YouTube, LinkedIn, X, Facebook. OAuth popup flow with PKCE (X), CSRF state param. Tokens AES-256-GCM encrypted at rest (`SOCIAL_ENCRYPTION_KEY`). `social_connections` table (1 account per user+platform). Publishing via sync HTTP nodes in orchestrator. 1 credit per post. |
 | Deployment | Railway + single Dockerfile | `dev` branch → staging (`next.nodaro.ai`); `main` branch → production (`app.nodaro.ai`). Single multi-stage Dockerfile at repo root builds backend, frontend, and Remotion. Caddy reverse proxy in front. |
 
 ---
@@ -273,8 +278,9 @@ backend/src/
 - [ ] Scene Node + Shot Node as optional "Director Mode"
 - [x] Backend workflow execution engine (orchestrator, webhook triggers, schedule triggers)
 - [x] Execution history UI (per-workflow execution list + per-node status + single-node runs)
+- [x] Social media integrations (Instagram, TikTok, YouTube, LinkedIn, X, Facebook — OAuth + publishing nodes + integrations page)
 
 ---
 
-*Last updated: 2026-03-01*
-*Version: 1.51.0*
+*Last updated: 2026-03-05*
+*Version: 1.52.0*
