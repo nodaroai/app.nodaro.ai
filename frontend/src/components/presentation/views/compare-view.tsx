@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
-import { Maximize2, X } from "lucide-react"
+import { ArrowLeftRight, Maximize2, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { getOutputType, type OutputType } from "@/lib/presentation-utils"
 import { GlassCard } from "../output-cards/shared"
@@ -48,6 +48,14 @@ export function CompareView({
   const handleRightChange = useCallback((id: string) => {
     setRightId(id)
     onSelectionChange?.(leftIdRef.current, id)
+  }, [onSelectionChange])
+
+  const handleSwap = useCallback(() => {
+    const prevLeft = leftIdRef.current
+    const prevRight = rightIdRef.current
+    setLeftId(prevRight)
+    setRightId(prevLeft)
+    onSelectionChange?.(prevRight, prevLeft)
   }, [onSelectionChange])
 
   // ESC exits fullscreen
@@ -116,19 +124,31 @@ export function CompareView({
     <div className="flex-1 overflow-auto p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Selectors */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <ItemSelect
-            label="Left"
-            value={leftId}
-            onChange={handleLeftChange}
-            groups={groupedItems}
-          />
-          <ItemSelect
-            label="Right"
-            value={rightId}
-            onChange={handleRightChange}
-            groups={groupedItems}
-          />
+        <div className="flex items-end gap-2 mb-4">
+          <div className="flex-1">
+            <ItemSelect
+              label="Left"
+              value={leftId}
+              onChange={handleLeftChange}
+              groups={groupedItems}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSwap}
+            title="Swap selections"
+            className="shrink-0 mb-0.5 w-9 h-9 rounded-lg border border-border bg-card hover:bg-accent/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+          </button>
+          <div className="flex-1">
+            <ItemSelect
+              label="Right"
+              value={rightId}
+              onChange={handleRightChange}
+              groups={groupedItems}
+            />
+          </div>
         </div>
 
         {/* Comparison area */}
