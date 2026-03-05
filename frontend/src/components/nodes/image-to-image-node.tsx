@@ -13,6 +13,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { EditableNodeLabel } from "./editable-node-label"
 import type { ImageToImageData } from "@/types/nodes"
 
 function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
@@ -53,11 +54,11 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative" style={{ contain: 'inline-size' }}>
-    {/* Floating label above node */}
-    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
-      <ImageIcon className="w-3.5 h-3.5" />
-      <span className="truncate">{nodeData.label}</span>
-    </div>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<ImageIcon className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -88,7 +89,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         ) : undefined
       }
-      toolbarActions={
+      topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined

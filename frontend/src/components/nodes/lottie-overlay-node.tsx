@@ -40,7 +40,7 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={isRunning}
       hideHeader
       minWidth={220}
-      toolbarActions={
+      topToolbarContent={
         !isRunning ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined

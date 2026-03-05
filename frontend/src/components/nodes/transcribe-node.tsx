@@ -2,10 +2,12 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { FileText, Loader2, AlertCircle, X } from "lucide-react"
+import { FileText, Loader2, AlertCircle, X, Type, Volume2 } from "lucide-react"
 import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
@@ -94,7 +96,12 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <div className="relative group/run">
+      <div className="relative">
+        <EditableNodeLabel
+          label={nodeData.label}
+          icon={<FileText className="w-3.5 h-3.5" />}
+          onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+        />
         <BaseNode
           id={id}
           label={nodeData.label}
@@ -103,9 +110,15 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
           credits={credits}
           selected={selected}
           isRunning={status === "running"}
+          hideHeader
+          topToolbarContent={
+            status !== "running" ? (
+              <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+            ) : undefined
+          }
           handles={[
-            { id: "in", type: "target", position: Position.Left, label: "Input" },
-            { id: "text", type: "source", position: Position.Right, label: "Text" },
+            { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+            { id: "text", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
           ]}
         >
           <div className="flex flex-col gap-1">
@@ -214,7 +227,8 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           </div>
         </BaseNode>
-        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <HandleIcon icon={<Volume2 />} color="pink" side="left" top="50%" />
+        <HandleIcon icon={<Type />} color="pink" side="right" top="25%" />
         <DeleteConfirmationDialog
           isOpen={deleteConfirm !== null}
           onClose={() => setDeleteConfirm(null)}

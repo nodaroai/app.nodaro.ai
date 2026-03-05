@@ -67,7 +67,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       hideHeader
-      toolbarActions={
+      topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
