@@ -3,7 +3,7 @@ import "./globals.css"
 // Backstop: prevent browser back from exiting the app on mobile.
 // Push a /projects entry at the bottom of the history stack so back
 // always has somewhere to go within the app.
-if (window.history.length <= 2 && window.location.pathname !== "/projects" && !window.location.pathname.startsWith("/present/")) {
+if (window.history.length <= 2 && window.location.pathname !== "/projects" && !window.location.pathname.startsWith("/present/") && !window.location.pathname.startsWith("/app/") && !window.location.pathname.startsWith("/embed/")) {
   window.history.replaceState(null, "", "/projects")
   window.history.pushState(null, "", window.location.pathname + window.location.search + window.location.hash)
 }
