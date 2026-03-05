@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select"
 import { useModelCredits } from "@/hooks/use-model-credits"
 import { CachedImage } from "@/components/ui/cached-image"
+import { EditableNodeLabel } from "./editable-node-label"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
 
 // Node types that output images (for portrait/face)
@@ -196,11 +197,11 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative" style={{ contain: 'inline-size' }}>
-    {/* Floating label above node */}
-    <div className="absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-white/70 pointer-events-none select-none">
-      <Users className="w-3.5 h-3.5" />
-      <span className="truncate">{nodeData.label}</span>
-    </div>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Users className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
 
     {/* Narrower wrapper — only around BaseNode */}
     <div style={{ width: '85%' }}>
@@ -249,7 +250,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         ) : undefined
       }
-      toolbarActions={
+      topToolbarContent={
         status !== "running" ? (
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined

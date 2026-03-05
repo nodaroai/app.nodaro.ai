@@ -2,11 +2,13 @@
 
 import { memo, useState, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Sparkles, Loader2, AlertCircle, X, FileText, Square } from "lucide-react"
+import { Sparkles, Loader2, AlertCircle, X, FileText, Square, Type } from "lucide-react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credits"
@@ -236,7 +238,12 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <div className="relative group/run">
+      <div className="relative">
+        <EditableNodeLabel
+          label={nodeData.label}
+          icon={<Sparkles className="w-3.5 h-3.5" />}
+          onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+        />
         <BaseNode
           id={id}
           label={nodeData.label}
@@ -248,9 +255,15 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
           listCount={listTotal}
           listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
           listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
+          hideHeader
+          topToolbarContent={
+            status !== "running" ? (
+              <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={handleStreamingRun} />
+            ) : undefined
+          }
           handles={[
-            { id: "in", type: "target", position: Position.Left, label: "Input" },
-            { id: "text", type: "source", position: Position.Right, label: "Text" },
+            { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+            { id: "text", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
           ]}
         >
           <div className="flex flex-col gap-1">
@@ -384,7 +397,8 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           </div>
         </BaseNode>
-        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={handleStreamingRun} />
+        <HandleIcon icon={<Type />} color="pink" side="left" top="50%" />
+        <HandleIcon icon={<Sparkles />} color="pink" side="right" top="25%" />
         <DeleteConfirmationDialog
           isOpen={deleteConfirm !== null}
           onClose={() => setDeleteConfirm(null)}

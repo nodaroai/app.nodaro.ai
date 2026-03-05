@@ -2,9 +2,10 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Loader2, AlertCircle, X } from "lucide-react"
+import { Film, Loader2, AlertCircle, X, Clapperboard } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -41,7 +42,12 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run">
+    <div className="relative">
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<Film className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -50,9 +56,15 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      hideHeader
+      topToolbarContent={
+        status !== "running" ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={[
-        { id: "in", type: "target", position: Position.Top, label: "Input" },
-        { id: "video", type: "source", position: Position.Bottom, label: "Video" },
+        { id: "in", type: "target", position: Position.Top, customStyle: { top: '-29px', left: '50%' }, hideHandle: true },
+        { id: "video", type: "source", position: Position.Bottom, customStyle: { bottom: '-29px', left: '50%' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -198,7 +210,20 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    {/* Input handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
+      style={{ top: '-29px', left: 'calc(50% - 14px)' }}
+    >
+      <Clapperboard className="w-3.5 h-3.5 text-white" />
+    </div>
+    {/* Video output handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
+      style={{ bottom: '-29px', left: 'calc(50% - 14px)' }}
+    >
+      <Film className="w-3.5 h-3.5 text-white" />
+    </div>
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}

@@ -37,7 +37,7 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={status === "running"}
         hideHeader
         minWidth={220}
-        toolbarActions={
+        topToolbarContent={
           status !== "running" ? (
             <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
           ) : undefined

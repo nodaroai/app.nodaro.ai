@@ -45,7 +45,7 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
     <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel label={nodeData.label} icon={<Volume1 className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
     <BaseNode id={id} label={nodeData.label} icon={<Volume1 className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"} hideHeader minWidth={220}
-      toolbarActions={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
+      topToolbarContent={status !== "running" ? (<RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />) : undefined}
       handles={[
         { id: "in", type: "target", position: Position.Left, label: "Input", hideHandle: true, customStyle: { top: '50%', left: '-29px' } },
         { id: outputHandleId, type: "source", position: Position.Right, label: outputLabel, hideHandle: true, customStyle: { top: '50%', right: '-29px' } },

@@ -3,9 +3,11 @@
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2 } from "lucide-react"
+import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import type { ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
 const ScriptPreviewModal = lazy(() => import("@/components/editor/script-preview-modal").then(m => ({ default: m.ScriptPreviewModal })))
 const ExpandStoryboardDialog = lazy(() => import("@/components/editor/expand-storyboard-dialog").then(m => ({ default: m.ExpandStoryboardDialog })))
@@ -52,7 +54,12 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/run" style={{ width: activeScript ? 350 : 220 }}>
+    <div className="relative" style={{ width: activeScript ? 350 : 220 }}>
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<BookOpen className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
     <BaseNode
       id={id}
       label={nodeData.label}
@@ -61,9 +68,15 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      hideHeader
+      topToolbarContent={
+        status !== "running" ? (
+          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+        ) : undefined
+      }
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input" },
-        { id: "scenes", type: "source", position: Position.Right, label: "Scenes" },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+        { id: "scenes", type: "source", position: Position.Right, customStyle: { top: '25%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -219,7 +232,8 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+    <HandleIcon icon={<Type />} color="pink" side="left" top="50%" />
+    <HandleIcon icon={<BookOpen />} color="pink" side="right" top="25%" />
     {activeScript && showFullscreen && (
       <Suspense fallback={null}>
       <ScriptPreviewModal

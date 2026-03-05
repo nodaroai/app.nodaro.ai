@@ -8,6 +8,8 @@ const COLOR_MAP = {
   pink: { bg: "bg-[#ff0073]", shadow: "shadow-pink-500/30" },
   indigo: { bg: "bg-[#818CF8]", shadow: "shadow-indigo-500/30" },
   steel: { bg: "bg-[#475569]", shadow: "shadow-slate-500/30" },
+  green: { bg: "bg-[#22c55e]", shadow: "shadow-green-500/30" },
+  red: { bg: "bg-[#ef4444]", shadow: "shadow-red-500/30" },
 } as const
 
 interface HandleIconProps {
