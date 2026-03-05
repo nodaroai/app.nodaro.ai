@@ -272,6 +272,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
+  const wasDraggingRef = useRef(false)
   const [snapEnabled, setSnapEnabled] = useState(() => localStorage.getItem("nodaro:snapToGrid") === "true")
   const [alignmentEnabled, setAlignmentEnabled] = useState(() => localStorage.getItem("nodaro:alignmentGuides") !== "false")
   const [guideLines, setGuideLines] = useState<GuideLine[]>([])
@@ -452,6 +453,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
+      if (wasDraggingRef.current) return
       selectNode(node.id)
     },
     [selectNode],
@@ -545,7 +547,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     })
   }, [])
 
-  const handleNodeDragStart = useCallback((_event: React.MouseEvent, node: { id: string }) => setDraggingNodeId(node.id), [])
+  const handleNodeDragStart = useCallback((_event: React.MouseEvent, node: { id: string }) => {
+    wasDraggingRef.current = true
+    setDraggingNodeId(node.id)
+  }, [])
   const handleNodeDrag = useCallback((_event: React.MouseEvent, node: { id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }) => {
     if (!alignmentEnabled) return
     const rect: DraggedNodeRect = {
@@ -560,6 +565,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleNodeDragStop = useCallback(() => {
     setDraggingNodeId(null)
     setGuideLines([])
+    // Reset wasDragging after a tick so the click handler (which fires after dragStop) can still see it
+    requestAnimationFrame(() => { wasDraggingRef.current = false })
   }, [])
 
   const handleTidyUp = useCallback(() => {
