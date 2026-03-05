@@ -141,6 +141,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       executionId: null,
       executionStatus: "idle",
       nodeStates: {},
+      inputValues: {},
       completedNodes: 0,
       totalNodes: 0,
       errorMessage: null,

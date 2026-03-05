@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn } from "lucide-react"
+import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, RotateCcw } from "lucide-react"
 import {
   KeyboardSensor,
   PointerSensor,
@@ -96,10 +96,11 @@ interface PresentationViewProps {
   onExitFullscreen?: () => void
   onRun?: () => void
   onCancel?: () => void
+  onNewRun?: () => void
   isRunning?: boolean
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, isRunning: externalIsRunning }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, isRunning: externalIsRunning }: PresentationViewProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
@@ -562,6 +563,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             >
               <ExternalLink className="h-4 w-4" />
             </Button>
+          )}
+
+          {/* Create New button — always visible in app runner, clears all state */}
+          {!isShareReadOnly && onNewRun && (
+            <button
+              type="button"
+              onClick={onNewRun}
+              className="h-8 px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Create New
+            </button>
           )}
 
           {/* Run / Stop button — hidden when shared read-only */}

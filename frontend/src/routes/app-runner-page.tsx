@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useParams, Link } from "react-router-dom"
-import { Loader2, Clock, Plus, Trash2, ChevronLeft, RotateCcw } from "lucide-react"
+import { Loader2, Clock, Plus, Trash2, ChevronLeft } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
@@ -77,14 +77,24 @@ export default function AppRunnerPage() {
     })
   }, [appRun])
 
+  // "Create New" — clears both app runner store and presentation store inputs/outputs
+  const handleNewRun = useCallback(() => {
+    newRun()
+    usePresentationStore.setState({
+      inputValues: {},
+      nodeStates: {},
+      executionStatus: "idle",
+      completedNodes: 0,
+      totalNodes: 0,
+    })
+  }, [newRun])
+
   // Load runs when user is authenticated and app is loaded
   useEffect(() => {
     if (user && app) {
       loadRuns()
     }
   }, [user, app, loadRuns])
-
-  const isTerminal = executionStatus === "completed" || executionStatus === "failed"
 
   if (authLoading || loading) {
     return (
@@ -118,7 +128,7 @@ export default function AppRunnerPage() {
           runs={runs}
           activeRunId={activeRunId}
           onSelectRun={selectRun}
-          onNewRun={newRun}
+          onNewRun={handleNewRun}
           onDeleteRun={deleteRun}
           onClose={() => setShowHistory(false)}
         />
@@ -127,38 +137,21 @@ export default function AppRunnerPage() {
       {/* Main content — PresentationView reads from usePresentationStore */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Floating controls — above PresentationView header */}
-        <div className="absolute top-[3.75rem] left-0 right-0 flex items-center justify-center z-20 pointer-events-none">
-          {/* Past runs toggle — left side */}
-          {user && runs.length > 0 && !showHistory && (
-            <div className="absolute left-3 pointer-events-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowHistory(true)}
-                className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                <Clock className="h-4 w-4 mr-1" />
-                Past Runs ({runs.length})
-              </Button>
-            </div>
-          )}
+        {user && runs.length > 0 && !showHistory && (
+          <div className="absolute top-[3.75rem] left-3 z-20">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowHistory(true)}
+              className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <Clock className="h-4 w-4 mr-1" />
+              Past Runs ({runs.length})
+            </Button>
+          </div>
+        )}
 
-          {/* New Run button — center, visible after any execution or when viewing a past run */}
-          {user && (isTerminal || activeRunId !== null) && (
-            <div className="pointer-events-auto">
-              <Button
-                size="sm"
-                onClick={newRun}
-                className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white shadow-md"
-              >
-                <RotateCcw className="h-4 w-4 mr-1" />
-                New Run
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <PresentationView mode="fullscreen" isOwner={false} onCancel={cancel} />
+        <PresentationView mode="fullscreen" isOwner={false} onCancel={cancel} onNewRun={handleNewRun} />
       </div>
     </div>
   )
