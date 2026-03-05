@@ -3244,10 +3244,18 @@ export interface PublishedApp {
 export interface AppRun {
   id: string
   appId: string
-  executionId: string
+  executionId: string | null
   runnerId: string
   creditsUsed: number
+  inputValues: Record<string, Record<string, unknown>> | null
+  status: string
   createdAt: string
+  // Flat fields from list endpoint
+  nodeStates?: Record<string, unknown> | null
+  completedNodes?: number
+  totalNodes?: number
+  completedAt?: string | null
+  // Nested execution from detail endpoint
   execution?: {
     status: string
     nodeStates: Record<string, unknown>
@@ -3319,11 +3327,37 @@ export async function getPublishedApp(slug: string): Promise<PublishedApp> {
 export async function runPublishedApp(
   slug: string,
   inputOverrides?: Record<string, Record<string, unknown>>,
+  runId?: string,
 ): Promise<{ executionId: string; runId: string; status: string }> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/run`,
     "Failed to run app",
-    { method: "POST", body: { inputOverrides } },
+    { method: "POST", body: { inputOverrides, runId } },
+  )
+}
+
+/** Create a draft run (before execution). */
+export async function createAppRun(
+  slug: string,
+  inputValues?: Record<string, Record<string, unknown>>,
+): Promise<{ id: string; createdAt: string; inputValues: Record<string, Record<string, unknown>> | null; status: string }> {
+  return apiRequest(
+    `/v1/app/${encodeURIComponent(slug)}/runs`,
+    "Failed to create run",
+    { method: "POST", body: { inputValues } },
+  )
+}
+
+/** Update a draft run's input values. */
+export async function updateAppRunInputs(
+  slug: string,
+  runId: string,
+  inputValues: Record<string, Record<string, unknown>>,
+): Promise<{ id: string; inputValues: Record<string, Record<string, unknown>> }> {
+  return apiRequest(
+    `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
+    "Failed to update run",
+    { method: "PATCH", body: { inputValues } },
   )
 }
 

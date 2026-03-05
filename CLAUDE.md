@@ -19,6 +19,7 @@
   - Feature branches: branch from `dev`, PR back to `dev`
   - Railway auto-deploys `dev` to staging: `next.nodaro.ai`
   - After 1-2 days testing on staging, **always use a PR from `dev` to `main`** (never direct merge — Supabase requires PR events to apply migrations to production)
+  - **Always regular merge** dev→main PRs (`gh pr merge --merge`, NOT `--squash`) — squash merge causes dev to diverge from main
   - Railway auto-deploys `main` to production: `app.nodaro.ai`
 - **Branch naming**: `feat/`, `fix/`, `refactor/`, `docs/` prefixes
 - **Commit style**: Conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`)
