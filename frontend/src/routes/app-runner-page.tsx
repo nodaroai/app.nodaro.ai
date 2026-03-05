@@ -85,7 +85,6 @@ export default function AppRunnerPage() {
   }, [user, app, loadRuns])
 
   const isTerminal = executionStatus === "completed" || executionStatus === "failed"
-  const showNewRun = isTerminal || activeRunId !== null
 
   if (authLoading || loading) {
     return (
@@ -144,8 +143,8 @@ export default function AppRunnerPage() {
             </div>
           )}
 
-          {/* New Run button — center */}
-          {user && showNewRun && (
+          {/* New Run button — center, visible after any execution or when viewing a past run */}
+          {user && (isTerminal || activeRunId !== null) && (
             <div className="pointer-events-auto">
               <Button
                 size="sm"

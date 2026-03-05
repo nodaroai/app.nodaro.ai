@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react"
-import { Rocket, Copy, Check, Loader2 } from "lucide-react"
+import { useState, useCallback, useMemo } from "react"
+import { Rocket, Copy, Check, Loader2, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -9,14 +9,26 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
 import { publishApp } from "@/lib/api"
+import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
+import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 
 interface PublishDialogProps {
   workflowId: string
+  presentationSettings?: PresentationSettings
+  updatePresentationSettings?: (patch: Partial<PresentationSettings>) => void
 }
 
-export function PublishDialog({ workflowId }: PublishDialogProps) {
+export function PublishDialog({ workflowId, presentationSettings, updatePresentationSettings }: PublishDialogProps) {
   const [open, setOpen] = useState(false)
   const [publishName, setPublishName] = useState("")
   const [publishSlug, setPublishSlug] = useState("")
@@ -61,6 +73,39 @@ export function PublishDialog({ workflowId }: PublishDialogProps) {
     }
   }, [publishedUrl])
 
+  // View mode settings
+  const allowedModes = presentationSettings?.shareAllowedModes ?? ALL_VIEW_MODES
+  const allowedSet = useMemo(() => new Set(allowedModes), [allowedModes])
+  const defaultMode = presentationSettings?.shareDefaultMode ?? "horizontal"
+
+  const handleToggleMode = useCallback((mode: PresentationViewMode) => {
+    if (!updatePresentationSettings) return
+    const current = presentationSettings?.shareAllowedModes ?? ALL_VIEW_MODES
+    const currentSet = new Set(current)
+
+    if (currentSet.has(mode)) {
+      if (currentSet.size <= 1) return
+      const next = current.filter((m) => m !== mode)
+      const patch: Partial<PresentationSettings> = { shareAllowedModes: next }
+      if (presentationSettings?.shareDefaultMode === mode) {
+        patch.shareDefaultMode = next[0]
+      }
+      updatePresentationSettings(patch)
+    } else {
+      updatePresentationSettings({ shareAllowedModes: [...current, mode] })
+    }
+  }, [updatePresentationSettings, presentationSettings?.shareAllowedModes, presentationSettings?.shareDefaultMode])
+
+  const handleDefaultModeChange = useCallback((mode: string) => {
+    updatePresentationSettings?.({ shareDefaultMode: mode as PresentationViewMode })
+  }, [updatePresentationSettings])
+
+  const handleReadOnlyChange = useCallback((checked: boolean) => {
+    updatePresentationSettings?.({ shareReadOnly: checked })
+  }, [updatePresentationSettings])
+
+  const showSettings = !!updatePresentationSettings && !!presentationSettings
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -91,8 +136,9 @@ export function PublishDialog({ workflowId }: PublishDialogProps) {
                 variant="outline"
                 size="sm"
                 className="w-full"
-                onClick={() => window.open(publishedUrl, "_blank")}
+                onClick={() => window.open(`/app/${publishedSlug}`, "_blank")}
               >
+                <ExternalLink className="h-4 w-4 mr-1" />
                 Open App
               </Button>
             </>
@@ -127,6 +173,66 @@ export function PublishDialog({ workflowId }: PublishDialogProps) {
                   placeholder="What does this app do?"
                 />
               </div>
+
+              {/* View mode settings */}
+              {showSettings && (
+                <div className="space-y-3 border-t border-border pt-3">
+                  <h3 className="text-sm font-medium text-foreground">App Settings</h3>
+
+                  {/* Read-only toggle */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Read-only</p>
+                      <p className="text-xs text-muted-foreground">Users can only see results, not edit inputs</p>
+                    </div>
+                    <Switch
+                      checked={!!presentationSettings.shareReadOnly}
+                      onCheckedChange={handleReadOnlyChange}
+                    />
+                  </div>
+
+                  {/* Allowed view modes */}
+                  <div>
+                    <p className="text-sm font-medium mb-2">Allowed view modes</p>
+                    <div className="flex items-center gap-1">
+                      {VIEW_MODES.map(({ mode, icon: Icon, label }) => {
+                        const isActive = allowedSet.has(mode)
+                        return (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => handleToggleMode(mode)}
+                            title={label}
+                            className={`flex items-center justify-center w-9 h-8 rounded-md border transition-colors ${
+                              isActive
+                                ? "bg-[#ff0073]/10 text-[#ff0073] border-[#ff0073]/30"
+                                : "text-muted-foreground/40 border-border hover:text-muted-foreground hover:border-border"
+                            }`}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Default view mode */}
+                  <div>
+                    <p className="text-sm font-medium mb-1.5">Default view mode</p>
+                    <Select value={defaultMode} onValueChange={handleDefaultModeChange}>
+                      <SelectTrigger className="w-full h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VIEW_MODES.filter((m) => allowedSet.has(m.mode)).map(({ mode, label }) => (
+                          <SelectItem key={mode} value={mode}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
               <Button
                 onClick={handlePublish}
                 disabled={publishing || !publishName.trim()}

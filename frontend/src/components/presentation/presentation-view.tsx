@@ -531,7 +531,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 updatePresentationSettings={updatePresentationSettings}
                 nodes={allPresentationNodes}
               />
-              <PublishDialog workflowId={workflowId} />
+              <PublishDialog
+                workflowId={workflowId}
+                presentationSettings={settings}
+                updatePresentationSettings={updatePresentationSettings}
+              />
             </>
           )}
 

@@ -192,20 +192,15 @@ function AppCard({
 
       {/* Actions */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <a
-          href={`/app/${app.slug}`}
-          target="_blank"
-          rel="noopener noreferrer"
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={() => window.open(`/app/${app.slug}`, "_blank")}
         >
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2 text-xs"
-          >
-            <ExternalLink className="h-3 w-3 mr-1" />
-            Open
-          </Button>
-        </a>
+          <ExternalLink className="h-3 w-3 mr-1" />
+          Open
+        </Button>
         <Button
           variant="outline"
           size="sm"
