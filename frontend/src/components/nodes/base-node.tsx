@@ -186,8 +186,8 @@ function BaseNodeComponent({
           minWidth={minWidth}
           minHeight={minHeight}
           isVisible={selected}
-          lineClassName="!border-blue-400"
-          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
+          lineClassName="!border-blue-400 !z-10"
+          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded !z-10"
         />
       )}
       <div
