@@ -96,8 +96,16 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       return
     }
 
-    const nodes: SimpleNode[] = (workflow.nodes as SimpleNode[]) ?? []
-    const edges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
+    // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
+    const iterPattern = /_iter_\d+$/
+    const allNodes: SimpleNode[] = (workflow.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
+    const nodes: SimpleNode[] = allNodes.filter(
+      (n) => !(n as { hidden?: boolean }).hidden && !(n.data as Record<string, unknown>).__expandedClone && !iterPattern.test(n.id),
+    )
+    const nodeIds = new Set(nodes.map((n) => n.id))
+    const edges: SimpleEdge[] = ((workflow.edges as SimpleEdge[]) ?? []).filter(
+      (e) => nodeIds.has(e.source) && nodeIds.has(e.target),
+    )
 
     // Pass workflow settings (character definitions, prompt templates) to context
     ctx.workflowSettings = (workflow.settings as Record<string, unknown>) ?? {}
