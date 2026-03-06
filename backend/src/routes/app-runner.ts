@@ -11,6 +11,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
 const slugParams = z.object({
@@ -135,12 +136,13 @@ export async function appRunnerRoutes(app: FastifyInstance) {
             .eq("runner_id", req.userId)
             .gte("created_at", todayStart.toISOString())
         : null,
+      // Check for active executions scoped to THIS app (not workflow-wide)
       supabase
-        .from("workflow_executions")
-        .select("id")
-        .eq("workflow_id", appRow.workflow_id)
-        .eq("user_id", req.userId)
-        .in("status", ["pending", "running", "stopping"])
+        .from("app_runs")
+        .select("execution_id, workflow_executions!inner(id, status)")
+        .eq("app_id", appRow.id)
+        .eq("runner_id", req.userId)
+        .in("workflow_executions.status", ACTIVE_EXECUTION_STATUSES as unknown as string[])
         .limit(1),
     ])
 
@@ -162,14 +164,17 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    const activeExec = activeExecResult.data
-    if (activeExec && activeExec.length > 0) {
+    if (activeExecResult?.error) {
+      console.error("[app-runner] Active execution check failed:", activeExecResult.error.message)
+    }
+    const activeRuns = activeExecResult?.data
+    if (activeRuns && activeRuns.length > 0) {
       return reply.status(409).send({
         error: {
           code: "already_running",
           message: "You already have an active execution for this app",
         },
-        executionId: activeExec[0].id,
+        executionId: activeRuns[0].execution_id,
       })
     }
 
