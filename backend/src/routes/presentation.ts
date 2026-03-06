@@ -13,6 +13,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits } from "../billing/credits.js"
 
 const workflowIdParams = z.object({
@@ -234,7 +235,7 @@ export async function presentationRoutes(app: FastifyInstance) {
       .select("id")
       .eq("workflow_id", workflow.id)
       .eq("user_id", req.userId)
-      .in("status", ["pending", "running", "stopping"])
+      .in("status", ACTIVE_EXECUTION_STATUSES as unknown as string[])
       .limit(1)
 
     if (activeExec && activeExec.length > 0) {

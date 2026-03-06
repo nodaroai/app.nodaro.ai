@@ -13,6 +13,7 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 
 const workflowIdParams = z.object({
@@ -82,7 +83,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .from("workflow_executions")
       .select("id")
       .eq("workflow_id", workflowId)
-      .in("status", ["pending", "running", "stopping"])
+      .in("status", ACTIVE_EXECUTION_STATUSES as unknown as string[])
       .limit(1)
 
     if (activeExec && activeExec.length > 0) {
