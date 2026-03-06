@@ -226,7 +226,6 @@ export function ConfigPanel() {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -307,13 +306,13 @@ export function ConfigPanel() {
       if (dy < -60) {
         setSheetState("expanded")
       } else if (dy > 80) {
-        selectNode(null)
+        useWorkflowStore.setState({ selectedNodeId: null })
       }
     }
 
     if (sheetRef.current) sheetRef.current.style.transform = ""
     dragDelta.current = 0
-  }, [selectNode])
+  }, [])
 
   const isVisible = !!foundNode && foundNode.type !== "sticky-note"
   const lastNodeRef = useRef(foundNode)
@@ -400,7 +399,7 @@ export function ConfigPanel() {
             {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
         )}
-        <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setIsExpanded(false); selectNode(null) }} aria-label="Close panel">
+        <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setIsExpanded(false); useWorkflowStore.setState({ selectedNodeId: null }) }} aria-label="Close panel">
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -446,7 +445,7 @@ export function ConfigPanel() {
                   {(selectedNode.data as { label: string }).label}
                 </span>
               </div>
-              <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-gray-400 dark:text-[#64748B]" onClick={() => selectNode(null)} aria-label="Close panel">
+              <Button variant="ghost" size="icon" className="shrink-0 h-7 w-7 text-gray-400 dark:text-[#64748B]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label="Close panel">
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
