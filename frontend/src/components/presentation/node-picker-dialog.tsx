@@ -1,6 +1,6 @@
 /**
  * Dialog for selecting which nodes appear in presentation mode.
- * Shows inputs and outputs as separate sections with checkboxes.
+ * Shows both inputs and outputs with the primary group first, grouped by type.
  */
 
 import { useMemo } from "react"
@@ -19,6 +19,7 @@ import {
   getNodeLabel,
   getOutputType,
 } from "@/lib/presentation-utils"
+import type { WorkflowNode } from "@/types/nodes"
 
 interface NodePickerDialogProps {
   open: boolean
@@ -26,16 +27,41 @@ interface NodePickerDialogProps {
   section: "inputs" | "outputs"
 }
 
+function NodeRow({ node, onToggle }: { node: WorkflowNode; onToggle: (nodeId: string, checked: boolean) => void }) {
+  const data = node.data as Record<string, unknown>
+  const isVisible = data.presentationVisible === true
+  const label = getNodeLabel(node)
+  const typeBadge = getOutputType(node.type)
+
+  return (
+    <label className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+      <Checkbox
+        checked={isVisible}
+        onCheckedChange={(checked) => onToggle(node.id, checked === true)}
+      />
+      <span className="flex-1 text-sm truncate">{label}</span>
+      <Badge variant="secondary" className="text-xs shrink-0">
+        {typeBadge}
+      </Badge>
+    </label>
+  )
+}
+
 export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDialogProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
-  // Get all eligible nodes (curatedOnly=false to show all candidates)
-  const eligibleNodes = useMemo(() => {
-    if (section === "inputs") return getInputNodes(nodes, false)
-    return getOutputNodes(nodes, edges, false)
-  }, [nodes, edges, section])
+  const inputNodes = useMemo(() => getInputNodes(nodes, false), [nodes])
+  const outputNodes = useMemo(() => getOutputNodes(nodes, edges, false), [nodes, edges])
+
+  // Show both groups, primary group first
+  const primaryNodes = section === "inputs" ? inputNodes : outputNodes
+  const secondaryNodes = section === "inputs" ? outputNodes : inputNodes
+  const primaryLabel = section === "inputs" ? "Inputs" : "Outputs"
+  const secondaryLabel = section === "inputs" ? "Outputs" : "Inputs"
+
+  const hasAny = primaryNodes.length > 0 || secondaryNodes.length > 0
 
   const handleToggle = (nodeId: string, checked: boolean) => {
     updateNodeData(nodeId, { presentationVisible: checked })
@@ -49,36 +75,38 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
             {section === "inputs" ? "Select Input Nodes" : "Select Output Nodes"}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-1 max-h-80 overflow-auto py-2">
-          {eligibleNodes.length === 0 ? (
+        <div className="max-h-80 overflow-auto py-2">
+          {!hasAny ? (
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-              No {section === "inputs" ? "input" : "output"} nodes in this workflow
+              No nodes in this workflow
             </p>
           ) : (
-            eligibleNodes.map((node) => {
-              const data = node.data as Record<string, unknown>
-              const isVisible = data.presentationVisible === true
-              const label = getNodeLabel(node)
-              const typeBadge = section === "outputs"
-                ? getOutputType(node.type)
-                : node.type?.replace(/-/g, " ") ?? "unknown"
-
-              return (
-                <label
-                  key={node.id}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-                >
-                  <Checkbox
-                    checked={isVisible}
-                    onCheckedChange={(checked) => handleToggle(node.id, checked === true)}
-                  />
-                  <span className="flex-1 text-sm truncate">{label}</span>
-                  <Badge variant="secondary" className="text-xs shrink-0">
-                    {typeBadge}
-                  </Badge>
-                </label>
-              )
-            })
+            <>
+              {primaryNodes.length > 0 && (
+                <div>
+                  <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {primaryLabel}
+                  </p>
+                  <div className="space-y-1">
+                    {primaryNodes.map((node) => (
+                      <NodeRow key={node.id} node={node} onToggle={handleToggle} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {secondaryNodes.length > 0 && (
+                <div className={primaryNodes.length > 0 ? "mt-3 pt-3 border-t border-border" : ""}>
+                  <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {secondaryLabel}
+                  </p>
+                  <div className="space-y-1">
+                    {secondaryNodes.map((node) => (
+                      <NodeRow key={node.id} node={node} onToggle={handleToggle} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </DialogContent>

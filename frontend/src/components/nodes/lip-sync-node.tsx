@@ -67,7 +67,6 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const edges = useWorkflowStore((s) => s.edges)
   const nodes = useWorkflowStore((s) => s.nodes)
 
@@ -196,7 +195,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const providerLabel = PROVIDER_LABELS[nodeData.provider] ?? nodeData.provider
 
   return (
-    <div className="relative" style={{ contain: 'inline-size' }}>
+    <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Users className="w-3.5 h-3.5" />}
@@ -383,16 +382,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                 <CachedImage
                   src={activeThumbnail}
                   alt="Video preview"
-                  className="w-full h-full object-cover rounded-xl cursor-pointer"
+                  className="w-full h-full object-cover rounded-xl"
                   style={{ minHeight: 180 }}
-                  onClick={() => selectNode(id)}
                 />
               ) : (
                 <video
                   src={activeUrl}
-                  className="w-full object-cover rounded-xl cursor-pointer"
+                  className="w-full object-cover rounded-xl"
                   style={{ minHeight: 180 }}
-                  onClick={() => selectNode(id)}
                   autoPlay={videoAutoplay}
                   muted
                   loop={videoAutoplay}

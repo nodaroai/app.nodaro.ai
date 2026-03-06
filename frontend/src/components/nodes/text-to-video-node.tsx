@@ -19,7 +19,6 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TextToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
@@ -55,7 +54,7 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ contain: 'inline-size' }}>
+    <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Clapperboard className="w-3.5 h-3.5" />}
@@ -127,16 +126,14 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-full object-cover rounded-xl cursor-pointer"
+                className="w-full h-full object-cover rounded-xl"
                 style={{ minHeight: 180 }}
-                onClick={() => selectNode(id)}
               />
             ) : (
               <video
                 src={activeUrl}
-                className="w-full object-cover rounded-xl cursor-pointer"
+                className="w-full object-cover rounded-xl"
                 style={{ minHeight: 180 }}
-                onClick={() => selectNode(id)}
                 autoPlay={videoAutoplay}
                 muted
                 loop={videoAutoplay}

@@ -837,11 +837,63 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Enter — toggle settings panel
+      if (e.key === "Enter") {
+        e.preventDefault()
+        // Read fresh state to avoid stale closure
+        const currentSelectedId = useWorkflowStore.getState().selectedNodeId
+        if (currentSelectedId) {
+          // Close config panel but keep node visually selected in React Flow
+          useWorkflowStore.setState({ selectedNodeId: null })
+        } else {
+          // Open config panel for the currently React Flow-selected node
+          const rfSelected = useWorkflowStore.getState().nodes.find((n) => n.selected)
+          if (rfSelected) selectNode(rfSelected.id)
+        }
+        return
+      }
+
+      // Arrow keys — navigate to nearest node when settings panel is open
+      // Read fresh selectedNodeId to handle rapid key presses correctly
+      const currentSelectedForArrow = useWorkflowStore.getState().selectedNodeId
+      if (currentSelectedForArrow && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault()
+        const current = getNode(currentSelectedForArrow)
+        if (current) {
+          const cx = current.position.x + (current.measured?.width ?? 200) / 2
+          const cy = current.position.y + (current.measured?.height ?? 100) / 2
+          let bestId: string | null = null
+          let bestDist = Infinity
+          for (const n of useWorkflowStore.getState().nodes) {
+            if (n.id === currentSelectedForArrow || n.hidden) continue
+            const nx = n.position.x + ((n.measured?.width ?? 200) / 2)
+            const ny = n.position.y + ((n.measured?.height ?? 100) / 2)
+            const dx = nx - cx
+            const dy = ny - cy
+            const ok =
+              (e.key === "ArrowRight" && dx > 20) ||
+              (e.key === "ArrowLeft" && dx < -20) ||
+              (e.key === "ArrowDown" && dy > 20) ||
+              (e.key === "ArrowUp" && dy < -20)
+            if (!ok) continue
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            if (dist < bestDist) {
+              bestDist = dist
+              bestId = n.id
+            }
+          }
+          if (bestId) selectNode(bestId)
+        }
+        return
+      }
+
       // Arrow keys — show alignment guides after React Flow moves the node
-      if (alignmentEnabled && selectedNodeId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      if (alignmentEnabled && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        const rfSelected = useWorkflowStore.getState().nodes.find((n) => n.selected)
+        if (!rfSelected) return
         clearTimeout(arrowGuideClearRef.current)
         requestAnimationFrame(() => {
-          const n = getNode(selectedNodeId)
+          const n = getNode(rfSelected.id)
           if (!n) return
           setGuideLines(computeGuides({
             id: n.id,
@@ -855,11 +907,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Escape - Close popups
+      // Escape — two-step: close settings first, then deselect node
       if (e.key === "Escape") {
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
+        if (useWorkflowStore.getState().selectedNodeId) {
+          // Step 1: close settings panel, keep node focused
+          useWorkflowStore.setState({ selectedNodeId: null })
+        } else {
+          // Step 2: deselect node entirely
+          selectNode(null)
+        }
         return
       }
     }

@@ -99,6 +99,28 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
       }
+      bottomToolbarContent={
+        showThumbnails && results.length > 1 ? (
+          <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
+            {results.slice(0, 8).map((r, i) => (
+              <CachedImage
+                key={`${r.jobId}-${i}`}
+                src={r.url}
+                alt={`Result ${i + 1}`}
+                className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
+                  i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
+                }`}
+                thumbnail
+                thumbnailWidth={96}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
+                }}
+              />
+            ))}
+          </div>
+        ) : undefined
+      }
       handles={[
         { id: "in", type: "target", position: Position.Left, top: "calc(75% + 33px)", customStyle: { top: 'calc(75% + 33px)', left: '-29px' }, hideHandle: true },
         { id: "image", type: "source", position: Position.Right, customStyle: { top: 'calc(25% - 33px)', right: '-29px' }, hideHandle: true },
@@ -129,10 +151,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <CachedImage
               src={activeUrl}
               alt="Generated"
-              className="w-full object-cover rounded-xl cursor-pointer"
+              className="w-full object-cover rounded-xl"
               thumbnail={!useFull}
               thumbnailWidth={320}
-              onClick={(e) => { e.stopPropagation(); selectNode(id) }}
             />
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button

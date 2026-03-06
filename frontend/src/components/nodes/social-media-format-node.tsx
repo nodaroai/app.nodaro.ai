@@ -23,7 +23,6 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits("ffmpeg", 0)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -93,10 +92,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
         {/* Preview state (idle or has result) */}
         {status !== "running" && status !== "failed" && (
           <>
-            <div
-              className="cursor-pointer"
-              onClick={(e) => { if (activeUrl) { e.stopPropagation(); setPreviewOpen(true) } else { e.stopPropagation(); selectNode(id) } }}
-            >
+            <div>
               <PlatformPreview
                 platform={(nodeData.platform ?? "instagram") as SocialMediaPlatform}
                 specKey={nodeData.specKey}

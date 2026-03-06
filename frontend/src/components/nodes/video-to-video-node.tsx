@@ -55,7 +55,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ contain: 'inline-size' }}>
+    <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Clapperboard className="w-3.5 h-3.5" />}

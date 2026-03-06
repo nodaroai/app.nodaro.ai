@@ -3,12 +3,34 @@ import { AlertTriangle, ArrowLeft, Home, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import NotFound from "@/components/not-found"
 
+function isChunkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const msg = error.message.toLowerCase()
+  return (
+    msg.includes("failed to fetch dynamically imported module") ||
+    msg.includes("importing a module script failed") ||
+    msg.includes("error loading dynamically imported module") ||
+    msg.includes("loading chunk") ||
+    msg.includes("loading css chunk")
+  )
+}
+
 export default function RouteErrorBoundary() {
   const error = useRouteError()
 
   // 404 responses get the dedicated not-found page
   if (isRouteErrorResponse(error) && error.status === 404) {
     return <NotFound />
+  }
+
+  // Stale chunk after deployment — auto-reload once
+  if (isChunkError(error)) {
+    const reloaded = sessionStorage.getItem("chunk-reload")
+    if (!reloaded) {
+      sessionStorage.setItem("chunk-reload", "1")
+      window.location.reload()
+      return null
+    }
   }
 
   const message = isRouteErrorResponse(error)

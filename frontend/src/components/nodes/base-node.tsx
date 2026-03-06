@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect, useRef, type ReactNode, type MouseEvent } from "react"
+import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent } from "react"
 import { Handle, Position, NodeResizer, NodeToolbar } from "@xyflow/react"
 import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -111,18 +111,28 @@ function BaseNodeComponent({
 }: BaseNodeProps) {
   const [isHovered, setIsHovered] = useState(false)
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
+  const outerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     return () => {
       if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
     }
   }, [])
 
+  const handleResize = useCallback((_event: unknown, params: { width: number; height: number }) => {
+    // Override the wrapper's maxWidth so the card grows with the resize
+    const wrapper = outerRef.current?.parentElement
+    if (wrapper) {
+      wrapper.style.maxWidth = "none"
+      wrapper.style.width = params.width + "px"
+      wrapper.style.height = params.height + "px"
+    }
+  }, [])
+
   const { isMobile } = useMobileCanvas()
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
+  const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
   const isSkipped = useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === id)
     return !!(node?.data as Record<string, unknown> | undefined)?.skipped
@@ -141,7 +151,9 @@ function BaseNodeComponent({
   }
 
   return (
+    <>
     <div
+      ref={outerRef}
       className="w-full h-full relative flex flex-col"
       onMouseEnter={() => {
         if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
@@ -172,45 +184,37 @@ function BaseNodeComponent({
           {toolbarActions}
         </div>
       </NodeToolbar>
-      {topToolbarContent && isHovered && (
-        <div className="absolute left-0 right-0 top-0 -translate-y-full z-50 pb-1 flex justify-center">
-          {topToolbarContent}
-        </div>
-      )}
+      {/* Content above card (e.g. thumbnail gallery) */}
       {bottomToolbarContent && isHovered && (
-        <div className="absolute left-0 right-0 bottom-0 translate-y-full z-50 pt-2 flex justify-center">
-          {bottomToolbarContent}
+        <div className="relative">
+          <div className="absolute left-0 right-0 bottom-0 -translate-y-1 z-50 flex justify-center">
+            {bottomToolbarContent}
+          </div>
         </div>
-      )}
-      {!isMobile && (
-        <NodeResizer
-          minWidth={minWidth}
-          minHeight={minHeight}
-          isVisible={selected}
-          lineClassName="!border-blue-400"
-          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
-        />
       )}
       <div
         className={cn(
           "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground flex-1 overflow-hidden",
           "dark:hover:border-[#ff0073] transition-colors duration-200",
           CATEGORY_STYLES[category],
-          selected && "ring-2 ring-primary shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",
-          selected && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
-          selected && category === "parameter" && "dark:shadow-[0_0_20px_rgba(129,140,248,0.4)]",
-          selected && (category === "ai" || category === "scene" || category === "script" || category === "i2v") && "dark:shadow-[0_0_25px_rgba(255,0,115,0.5)]",
-          selected && category === "processing" && "dark:shadow-[0_0_20px_rgba(71,85,105,0.4)]",
-          selected && category === "character" && "dark:shadow-[0_0_20px_rgba(244,114,182,0.4)]",
-          selected && category === "location" && "dark:shadow-[0_0_20px_rgba(34,211,238,0.4)]",
-          selected && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
-          selected && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
+          // Focused (selected, no settings): blue ring
+          selected && !isEditing && "ring-2 ring-blue-400/70 shadow-[0_0_12px_rgba(96,165,250,0.3)]",
+          // Editing (selected + settings open): pink ring + category glow
+          isEditing && "ring-2 ring-[#ff0073] shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",
+          isEditing && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
+          isEditing && category === "parameter" && "dark:shadow-[0_0_20px_rgba(129,140,248,0.4)]",
+          isEditing && (category === "ai" || category === "scene" || category === "script" || category === "i2v") && "dark:shadow-[0_0_25px_rgba(255,0,115,0.5)]",
+          isEditing && category === "processing" && "dark:shadow-[0_0_20px_rgba(71,85,105,0.4)]",
+          isEditing && category === "character" && "dark:shadow-[0_0_20px_rgba(244,114,182,0.4)]",
+          isEditing && category === "location" && "dark:shadow-[0_0_20px_rgba(34,211,238,0.4)]",
+          isEditing && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
+          isEditing && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
           isRunning && "node-running",
           isNew && !isRunning && "node-new-pulse",
           isSkipped && "opacity-40 border-dashed",
           className,
         )}
-        onClick={(e) => { selectNode(id) }}
+        /* Selection handled by onNodeClick in workflow-canvas (has drag guard) */
       >
       {!hideHeader && (
         <div
@@ -311,6 +315,14 @@ function BaseNodeComponent({
           : <div className="px-3 py-2 text-xs overflow-hidden bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>
       )}
     </div>
+      {/* Content below card (e.g. run button) */}
+      {topToolbarContent && isHovered && (
+        <div className="relative">
+          <div className="absolute left-0 right-0 top-0 translate-y-1 z-50 flex justify-center">
+            {topToolbarContent}
+          </div>
+        </div>
+      )}
 
       {handles.map((h) => (
         <div key={h.id}>
@@ -339,7 +351,22 @@ function BaseNodeComponent({
           )}
         </div>
       ))}
+
+      {/* NodeResizer — rendered after card & handles so it paints on top */}
+      {!isMobile && selected && (
+        <NodeResizer
+          minWidth={minWidth}
+          minHeight={minHeight}
+          isVisible={true}
+          onResize={handleResize}
+          lineClassName="!border-blue-400"
+          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
+          handleStyle={{ pointerEvents: "all" }}
+          lineStyle={{ pointerEvents: "all" }}
+        />
+      )}
     </div>
+    </>
   )
 }
 

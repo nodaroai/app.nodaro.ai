@@ -5,6 +5,7 @@ import { getBatchJobStatus, getWorkflowExecution, listWorkflowExecutions, type B
 import { prefetchModelCredits } from "@/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
+import { filterCloneNodes } from "@nodaro-shared/clone-utils"
 
 interface StillRunningJob {
   readonly nodeId: string
@@ -387,9 +388,10 @@ export function useWorkflowPersistence(projectId?: string) {
       const { workflowId, workflowName, nodes: allNodes, edges: allEdges, characterDefinitions, flowPromptTemplates, presentationSettings } =
         useWorkflowStore.getState()
 
-      // Filter out temporary sub-workflow execution nodes/edges
-      const nodes = allNodes.filter((n) => !n.id.startsWith("__sub_"))
-      const edges = allEdges.filter((e) => !e.id.startsWith("__sub_"))
+      // Filter out temporary nodes: sub-workflow execution nodes and expanded loop clones
+      const cleaned = filterCloneNodes(allNodes, allEdges, { filterSubWorkflow: true })
+      const nodes = cleaned.nodes
+      const edges = cleaned.edges
 
       // Don't save empty workflows
       if (nodes.length === 0) return { success: false, error: "Empty workflow" }

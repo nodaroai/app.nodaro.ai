@@ -48,7 +48,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ contain: 'inline-size' }}>
+    <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Wand2 className="w-3.5 h-3.5" />}
@@ -100,9 +100,8 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
           <CachedImage
             src={activeUrl}
             alt="Result"
-            className="w-full h-full object-cover rounded-xl cursor-pointer"
+            className="w-full h-full object-cover rounded-xl"
             style={{ minHeight: 180 }}
-            onClick={() => selectNode(id)}
           />
         )}
 

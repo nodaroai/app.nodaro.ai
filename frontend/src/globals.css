@@ -494,6 +494,12 @@ html, body {
   background: color-mix(in srgb, #ff0073 18%, transparent);
 }
 
+/* NodeResizer: ensure resize handles stay interactive above card content */
+.react-flow__resize-control {
+  z-index: 9999 !important;
+  pointer-events: all !important;
+}
+
 /* Touch-optimized React Flow handles for mobile */
 @media (pointer: coarse) {
   .react-flow__handle {

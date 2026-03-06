@@ -60,13 +60,12 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
+                className="w-full h-28 object-cover rounded-md"
                 thumbnail
                 thumbnailWidth={320}
-                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
               />
             ) : (
-              <video src={activeUrl} className="w-full h-28 object-cover rounded-md cursor-pointer" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline />
+              <video src={activeUrl} className="w-full h-28 object-cover rounded-md" autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline />
             )}
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Captioned</div>
             {results.length > 0 && (

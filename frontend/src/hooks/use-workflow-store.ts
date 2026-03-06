@@ -11,6 +11,7 @@ import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, Characte
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
+import { filterCloneNodes } from "@nodaro-shared/clone-utils"
 
 /**
  * Fields that are purely execution-related (job status, progress, results).
@@ -188,15 +189,15 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         }
       }
 
-      // Sync selectedNodeId with React Flow's selection state
+      // Don't sync selectedNodeId from React Flow selection events here.
+      // Only explicit selectNode() calls (from handleNodeClick with drag guard)
+      // should open the config panel. This prevents drag-start from opening settings.
+      // However, if the currently selected node was deselected (e.g. removed), clear it.
       let selectedNodeId = state.selectedNodeId
-      if (hasSelectionChange) {
-        if (lastSelectedId !== null) {
-          selectedNodeId = lastSelectedId
-        } else {
-          // All selection changes were deselects — pick any remaining selected node or null
-          const anySelected = newNodes.find((n) => n.selected)
-          selectedNodeId = anySelected?.id ?? null
+      if (hasSelectionChange && selectedNodeId) {
+        const stillExists = newNodes.find((n) => n.id === selectedNodeId)
+        if (!stillExists) {
+          selectedNodeId = null
         }
       }
 
@@ -479,11 +480,26 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         return isNaN(num) ? max : Math.max(max, num)
       }, 0) + 1
 
+    // Clean up stale loop expansion artifacts and strip explicit height.
+    const cleaned = filterCloneNodes(nodes, edges)
+    const cleanedNodes = cleaned.nodes.map((n) => {
+      // Strip explicit height so nodes auto-size to content
+      // (Sticky notes use data.height, not the node prop, so they're unaffected.)
+      if (n.height != null) {
+        const { height: _, ...rest } = n
+        return rest as typeof n
+      }
+      return n
+    })
+    // Also drop edges referencing nodes that no longer exist
+    const cleanedNodeIds = new Set(cleanedNodes.map((n) => n.id))
+    const cleanedEdges = cleaned.edges.filter((e) => cleanedNodeIds.has(e.source) && cleanedNodeIds.has(e.target))
+
     set((state) => ({
       workflowId: id,
       workflowName: name,
-      nodes,
-      edges,
+      nodes: cleanedNodes,
+      edges: cleanedEdges,
       selectedNodeId: null,
       isDirty: false,
       loadGeneration: state.loadGeneration + 1,
