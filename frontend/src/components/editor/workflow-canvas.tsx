@@ -903,12 +903,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Escape - Close popups & deselect node
+      // Escape — two-step: close settings first, then deselect node
       if (e.key === "Escape") {
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
-        selectNode(null)
+        if (selectedNodeId) {
+          // Step 1: close settings panel, keep node focused
+          useWorkflowStore.setState({ selectedNodeId: null })
+        } else {
+          // Step 2: deselect node entirely
+          selectNode(null)
+        }
         return
       }
     }

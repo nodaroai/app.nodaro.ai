@@ -122,6 +122,7 @@ function BaseNodeComponent({
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
+  const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
   const isSkipped = useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === id)
     return !!(node?.data as Record<string, unknown> | undefined)?.skipped
@@ -189,15 +190,18 @@ function BaseNodeComponent({
           "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground flex-1 overflow-hidden",
           "dark:hover:border-[#ff0073] transition-colors duration-200",
           CATEGORY_STYLES[category],
-          selected && "ring-2 ring-primary shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",
-          selected && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
-          selected && category === "parameter" && "dark:shadow-[0_0_20px_rgba(129,140,248,0.4)]",
-          selected && (category === "ai" || category === "scene" || category === "script" || category === "i2v") && "dark:shadow-[0_0_25px_rgba(255,0,115,0.5)]",
-          selected && category === "processing" && "dark:shadow-[0_0_20px_rgba(71,85,105,0.4)]",
-          selected && category === "character" && "dark:shadow-[0_0_20px_rgba(244,114,182,0.4)]",
-          selected && category === "location" && "dark:shadow-[0_0_20px_rgba(34,211,238,0.4)]",
-          selected && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
-          selected && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
+          // Focused (selected, no settings): blue ring
+          selected && !isEditing && "ring-2 ring-blue-400/70 shadow-[0_0_12px_rgba(96,165,250,0.3)]",
+          // Editing (selected + settings open): pink ring + category glow
+          isEditing && "ring-2 ring-[#ff0073] shadow-[0_4px_12px_-2px_rgb(0_0_0/0.1)]",
+          isEditing && category === "input" && "dark:shadow-[0_0_20px_rgba(56,189,248,0.4)]",
+          isEditing && category === "parameter" && "dark:shadow-[0_0_20px_rgba(129,140,248,0.4)]",
+          isEditing && (category === "ai" || category === "scene" || category === "script" || category === "i2v") && "dark:shadow-[0_0_25px_rgba(255,0,115,0.5)]",
+          isEditing && category === "processing" && "dark:shadow-[0_0_20px_rgba(71,85,105,0.4)]",
+          isEditing && category === "character" && "dark:shadow-[0_0_20px_rgba(244,114,182,0.4)]",
+          isEditing && category === "location" && "dark:shadow-[0_0_20px_rgba(34,211,238,0.4)]",
+          isEditing && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
+          isEditing && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
           isRunning && "node-running",
           isNew && !isRunning && "node-new-pulse",
           isSkipped && "opacity-40 border-dashed",
