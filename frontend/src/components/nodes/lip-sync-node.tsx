@@ -195,7 +195,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const providerLabel = PROVIDER_LABELS[nodeData.provider] ?? nodeData.provider
 
   return (
-    <div className="relative" style={{ contain: 'inline-size' }}>
+    <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Users className="w-3.5 h-3.5" />}
