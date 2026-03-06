@@ -61,16 +61,14 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
+                className="w-full h-28 object-cover rounded-md"
                 thumbnail
                 thumbnailWidth={320}
-                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
               />
             ) : (
               <video
                 src={activeUrl}
-                className="w-full h-28 object-cover rounded-md cursor-pointer bg-black"
-                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+                className="w-full h-28 object-cover rounded-md bg-black"
                 autoPlay={videoAutoplay}
                 muted
                 loop={videoAutoplay}
@@ -87,7 +85,7 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
         {status !== "running" && activeUrl && videoError && (
           <div className="relative group">
-            <div role="button" aria-label="Open video preview" tabIndex={0} className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1 cursor-pointer" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setPreviewOpen(true) } }}>
+            <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
               <AlertCircle className="w-5 h-5 text-amber-500" />
               <span className="text-[10px] text-amber-500">Video load failed</span>
               <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>

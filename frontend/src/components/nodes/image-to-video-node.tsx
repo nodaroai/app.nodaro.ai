@@ -461,14 +461,12 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
               {activeThumbnail ? (
                 <CachedImage src={activeThumbnail} alt="Video preview"
-                  className="w-full h-full object-cover cursor-pointer"
+                  className="w-full h-full object-cover"
                   thumbnail thumbnailWidth={320}
-                  onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
                 />
               ) : (
                 <video src={activeUrl}
-                  className="w-full h-full object-cover cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+                  className="w-full h-full object-cover"
                   autoPlay={videoAutoplay} muted loop={videoAutoplay} playsInline
                 />
               )}
@@ -547,13 +545,11 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', zIndex: 10 }} className="group/video">
         {activeThumbnail ? (
           <CachedImage src={activeThumbnail} alt="Video preview"
-            className="w-full h-full object-cover cursor-pointer"
+            className="w-full h-full object-cover"
             thumbnail thumbnailWidth={320}
-            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
           />
         ) : (
-          <video src={activeUrl} autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline className="w-full h-full object-cover cursor-pointer"
-            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
+          <video src={activeUrl} autoPlay={videoAutoplay} loop={videoAutoplay} muted playsInline className="w-full h-full object-cover"
             onLoadedMetadata={(e) => {
               const video = e.currentTarget
               const ratio = video.videoWidth / video.videoHeight

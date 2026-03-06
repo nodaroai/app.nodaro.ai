@@ -1,5 +1,15 @@
 import "./globals.css"
 
+// Auto-reload on stale chunks after deployment.
+// Vite fires this when any preloaded JS/CSS dep returns 404.
+window.addEventListener("vite:preloadError", () => {
+  const reloaded = sessionStorage.getItem("chunk-reload")
+  if (!reloaded) {
+    sessionStorage.setItem("chunk-reload", "1")
+    window.location.reload()
+  }
+})
+
 // Backstop: prevent browser back from exiting the app on mobile.
 // Push a /projects entry at the bottom of the history stack so back
 // always has somewhere to go within the app.

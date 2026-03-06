@@ -188,15 +188,15 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         }
       }
 
-      // Sync selectedNodeId with React Flow's selection state
+      // Don't sync selectedNodeId from React Flow selection events here.
+      // Only explicit selectNode() calls (from handleNodeClick with drag guard)
+      // should open the config panel. This prevents drag-start from opening settings.
+      // However, if the currently selected node was deselected (e.g. removed), clear it.
       let selectedNodeId = state.selectedNodeId
-      if (hasSelectionChange) {
-        if (lastSelectedId !== null) {
-          selectedNodeId = lastSelectedId
-        } else {
-          // All selection changes were deselects — pick any remaining selected node or null
-          const anySelected = newNodes.find((n) => n.selected)
-          selectedNodeId = anySelected?.id ?? null
+      if (hasSelectionChange && selectedNodeId) {
+        const stillExists = newNodes.find((n) => n.id === selectedNodeId)
+        if (!stillExists) {
+          selectedNodeId = null
         }
       }
 
@@ -479,10 +479,20 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         return isNaN(num) ? max : Math.max(max, num)
       }, 0) + 1
 
+    // Strip explicit height from nodes so they auto-size to content.
+    // (Sticky notes use data.height, not the node prop, so they're unaffected.)
+    const cleanedNodes = nodes.map((n) => {
+      if (n.height != null) {
+        const { height: _, ...rest } = n
+        return rest as typeof n
+      }
+      return n
+    })
+
     set((state) => ({
       workflowId: id,
       workflowName: name,
-      nodes,
+      nodes: cleanedNodes,
       edges,
       selectedNodeId: null,
       isDirty: false,

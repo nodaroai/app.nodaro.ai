@@ -151,11 +151,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="relative group">
                   {thumbnailUrl ? (
                     <div
-                      className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setPreviewOpen(true)
-                      }}
+                      className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative"
                     >
                       <CachedImage
                         src={thumbnailUrl}
@@ -172,11 +168,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                   ) : videoUrl ? (
                     <div
-                      className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setPreviewOpen(true)
-                      }}
+                      className="w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative"
                     >
                       <video
                         src={videoUrl}

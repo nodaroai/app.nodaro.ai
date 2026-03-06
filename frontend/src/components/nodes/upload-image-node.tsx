@@ -145,11 +145,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                       <CachedImage
                         src={imageUrl}
                         alt={nodeData.filename || "Uploaded image"}
-                        className="w-full h-full object-cover cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setLightboxSrc(imageUrl)
-                        }}
+                        className="w-full h-full object-cover"
                         thumbnail
                         thumbnailWidth={480}
                       />
@@ -248,11 +244,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                     <CachedImage
                       src={nodeData.externalUrl}
                       alt="External image"
-                      className="w-full h-full object-cover cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setLightboxSrc(nodeData.externalUrl)
-                      }}
+                      className="w-full h-full object-cover"
                       thumbnail
                       thumbnailWidth={480}
                     />
