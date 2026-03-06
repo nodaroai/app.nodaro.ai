@@ -1,3 +1,6 @@
+/** Workflow execution statuses that indicate an active (non-terminal) execution. */
+export const ACTIVE_EXECUTION_STATUSES = ["pending", "running", "stopping"] as const
+
 /**
  * Extracts an optional workflowId from the raw request body.
  * The field is NOT part of any Zod schema — it's injected by the frontend
