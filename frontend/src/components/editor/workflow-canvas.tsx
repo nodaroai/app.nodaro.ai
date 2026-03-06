@@ -853,6 +853,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       // Arrow keys — navigate to nearest node when settings panel is open
       if (selectedNodeId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault()
         const current = getNode(selectedNodeId)
         if (current) {
           const cx = current.position.x + (current.measured?.width ?? 200) / 2
@@ -877,19 +878,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
               bestId = n.id
             }
           }
-          if (bestId) {
-            e.preventDefault()
-            selectNode(bestId)
-            return
-          }
+          if (bestId) selectNode(bestId)
         }
+        return
       }
 
       // Arrow keys — show alignment guides after React Flow moves the node
-      if (alignmentEnabled && selectedNodeId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      if (alignmentEnabled && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        const rfSelected = useWorkflowStore.getState().nodes.find((n) => n.selected)
+        if (!rfSelected) return
         clearTimeout(arrowGuideClearRef.current)
         requestAnimationFrame(() => {
-          const n = getNode(selectedNodeId)
+          const n = getNode(rfSelected.id)
           if (!n) return
           setGuideLines(computeGuides({
             id: n.id,
