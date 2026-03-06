@@ -181,15 +181,6 @@ function BaseNodeComponent({
           {topToolbarContent}
         </div>
       )}
-      {!isMobile && (
-        <NodeResizer
-          minWidth={minWidth}
-          minHeight={minHeight}
-          isVisible={selected}
-          lineClassName="!border-blue-400 !z-10"
-          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded !z-10"
-        />
-      )}
       <div
         className={cn(
           "group relative rounded-xl border-2 shadow-[0_4px_6px_-1px_rgb(0_0_0/0.05)] min-w-[200px] bg-card text-card-foreground flex-1 overflow-hidden",
@@ -310,6 +301,15 @@ function BaseNodeComponent({
           : <div className="px-3 py-2 text-xs overflow-hidden bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>
       )}
     </div>
+      {!isMobile && (
+        <NodeResizer
+          minWidth={minWidth}
+          minHeight={minHeight}
+          isVisible={selected}
+          lineClassName="!border-blue-400 !z-10"
+          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded !z-10"
+        />
+      )}
 
       {handles.map((h) => (
         <div key={h.id}>

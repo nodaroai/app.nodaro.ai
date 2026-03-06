@@ -837,6 +837,54 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Enter — toggle settings panel
+      if (e.key === "Enter") {
+        e.preventDefault()
+        if (selectedNodeId) {
+          // Close config panel but keep node visually selected in React Flow
+          useWorkflowStore.setState({ selectedNodeId: null })
+        } else {
+          // Open config panel for the currently React Flow-selected node
+          const rfSelected = useWorkflowStore.getState().nodes.find((n) => n.selected)
+          if (rfSelected) selectNode(rfSelected.id)
+        }
+        return
+      }
+
+      // Arrow keys — navigate to nearest node when settings panel is open
+      if (selectedNodeId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        const current = getNode(selectedNodeId)
+        if (current) {
+          const cx = current.position.x + (current.measured?.width ?? 200) / 2
+          const cy = current.position.y + (current.measured?.height ?? 100) / 2
+          let bestId: string | null = null
+          let bestDist = Infinity
+          for (const n of useWorkflowStore.getState().nodes) {
+            if (n.id === selectedNodeId || n.hidden) continue
+            const nx = n.position.x + ((n.measured?.width ?? 200) / 2)
+            const ny = n.position.y + ((n.measured?.height ?? 100) / 2)
+            const dx = nx - cx
+            const dy = ny - cy
+            const ok =
+              (e.key === "ArrowRight" && dx > 20) ||
+              (e.key === "ArrowLeft" && dx < -20) ||
+              (e.key === "ArrowDown" && dy > 20) ||
+              (e.key === "ArrowUp" && dy < -20)
+            if (!ok) continue
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            if (dist < bestDist) {
+              bestDist = dist
+              bestId = n.id
+            }
+          }
+          if (bestId) {
+            e.preventDefault()
+            selectNode(bestId)
+            return
+          }
+        }
+      }
+
       // Arrow keys — show alignment guides after React Flow moves the node
       if (alignmentEnabled && selectedNodeId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         clearTimeout(arrowGuideClearRef.current)
@@ -855,11 +903,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Escape - Close popups
+      // Escape - Close popups & deselect node
       if (e.key === "Escape") {
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
+        selectNode(null)
         return
       }
     }
