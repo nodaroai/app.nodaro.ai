@@ -27,6 +27,7 @@ import type {
   OrchestratorContext,
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
+import { filterCloneNodes } from "../../../packages/shared/src/clone-utils.js"
 
 // ---------------------------------------------------------------------------
 // Worker creation
@@ -97,15 +98,13 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     }
 
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
-    const iterPattern = /_iter_\d+$/
-    const allNodes: SimpleNode[] = (workflow.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
-    const nodes: SimpleNode[] = allNodes.filter(
-      (n) => !(n as { hidden?: boolean }).hidden && !(n.data as Record<string, unknown>).__expandedClone && !iterPattern.test(n.id),
-    )
+    const allNodes = (workflow.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
+    const allEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
+    const cleaned = filterCloneNodes(allNodes, allEdges)
+    // Also filter nodes still marked hidden after clone cleanup
+    const nodes: SimpleNode[] = cleaned.nodes.filter((n) => !(n as { hidden?: boolean }).hidden)
     const nodeIds = new Set(nodes.map((n) => n.id))
-    const edges: SimpleEdge[] = ((workflow.edges as SimpleEdge[]) ?? []).filter(
-      (e) => nodeIds.has(e.source) && nodeIds.has(e.target),
-    )
+    const edges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
 
     // Pass workflow settings (character definitions, prompt templates) to context
     ctx.workflowSettings = (workflow.settings as Record<string, unknown>) ?? {}

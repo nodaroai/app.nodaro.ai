@@ -361,8 +361,8 @@ function BaseNodeComponent({
           onResize={handleResize}
           lineClassName="!border-blue-400"
           handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
-          handleStyle={{ zIndex: 9999, pointerEvents: "all" }}
-          lineStyle={{ zIndex: 9999, pointerEvents: "all" }}
+          handleStyle={{ pointerEvents: "all" }}
+          lineStyle={{ pointerEvents: "all" }}
         />
       )}
     </div>

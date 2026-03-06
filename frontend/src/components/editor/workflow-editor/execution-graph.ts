@@ -1,6 +1,7 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro-shared/ancestor-refs";
+import { isExpandedClone } from "@nodaro-shared/clone-utils";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -410,23 +411,13 @@ export function collapseExpandedClones(): {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
 } {
-  let { nodes, edges } = useWorkflowStore.getState();
-  const iterPattern = /_iter_\d+$/;
-  const cloneIds = new Set(
-    nodes
-      .filter(
-        (n) =>
-          !!(n.data as Record<string, unknown>).__expandedClone ||
-          iterPattern.test(n.id),
-      )
-      .map((n) => n.id),
-  );
-  if (cloneIds.size === 0) return { nodes, edges };
+  const { nodes: rawNodes, edges: rawEdges } = useWorkflowStore.getState();
+  const hasClones = rawNodes.some((n) => isExpandedClone(n));
+  if (!hasClones) return { nodes: rawNodes, edges: rawEdges };
 
-  nodes = nodes.filter((n) => !cloneIds.has(n.id));
-  edges = edges.filter(
-    (e) => !cloneIds.has(e.source) && !cloneIds.has(e.target),
-  );
+  const cloneIds = new Set(rawNodes.filter((n) => isExpandedClone(n)).map((n) => n.id));
+  let nodes = rawNodes.filter((n) => !cloneIds.has(n.id));
+  const edges = rawEdges.filter((e) => !cloneIds.has(e.source) && !cloneIds.has(e.target));
 
   nodes = nodes.map((n) => {
     if (!n.hidden) return n;

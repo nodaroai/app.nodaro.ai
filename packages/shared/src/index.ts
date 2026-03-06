@@ -40,3 +40,9 @@ export {
   type OutputType,
   type InputFieldSchema,
 } from "./presentation-utils.js"
+
+export {
+  ITER_CLONE_PATTERN,
+  isExpandedClone,
+  filterCloneNodes,
+} from "./clone-utils.js"
