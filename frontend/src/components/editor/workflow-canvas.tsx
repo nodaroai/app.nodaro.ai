@@ -840,7 +840,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       // Enter — toggle settings panel
       if (e.key === "Enter") {
         e.preventDefault()
-        if (selectedNodeId) {
+        // Read fresh state to avoid stale closure
+        const currentSelectedId = useWorkflowStore.getState().selectedNodeId
+        if (currentSelectedId) {
           // Close config panel but keep node visually selected in React Flow
           useWorkflowStore.setState({ selectedNodeId: null })
         } else {
@@ -852,16 +854,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
 
       // Arrow keys — navigate to nearest node when settings panel is open
-      if (selectedNodeId && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      // Read fresh selectedNodeId to handle rapid key presses correctly
+      const currentSelectedForArrow = useWorkflowStore.getState().selectedNodeId
+      if (currentSelectedForArrow && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault()
-        const current = getNode(selectedNodeId)
+        const current = getNode(currentSelectedForArrow)
         if (current) {
           const cx = current.position.x + (current.measured?.width ?? 200) / 2
           const cy = current.position.y + (current.measured?.height ?? 100) / 2
           let bestId: string | null = null
           let bestDist = Infinity
           for (const n of useWorkflowStore.getState().nodes) {
-            if (n.id === selectedNodeId || n.hidden) continue
+            if (n.id === currentSelectedForArrow || n.hidden) continue
             const nx = n.position.x + ((n.measured?.width ?? 200) / 2)
             const ny = n.position.y + ((n.measured?.height ?? 100) / 2)
             const dx = nx - cx
@@ -908,7 +912,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
-        if (selectedNodeId) {
+        if (useWorkflowStore.getState().selectedNodeId) {
           // Step 1: close settings panel, keep node focused
           useWorkflowStore.setState({ selectedNodeId: null })
         } else {

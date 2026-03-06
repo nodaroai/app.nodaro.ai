@@ -7,6 +7,7 @@ export interface GenericNode {
   id: string
   type: string
   data: Record<string, unknown>
+  hidden?: boolean
 }
 
 export interface GenericEdge {
