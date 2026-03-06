@@ -119,7 +119,6 @@ function BaseNodeComponent({
   }, [])
 
   const { isMobile } = useMobileCanvas()
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
@@ -172,14 +171,14 @@ function BaseNodeComponent({
           {toolbarActions}
         </div>
       </NodeToolbar>
-      {topToolbarContent && isHovered && (
+      {bottomToolbarContent && isHovered && (
         <div className="absolute left-0 right-0 top-0 -translate-y-full z-50 pb-1 flex justify-center">
-          {topToolbarContent}
+          {bottomToolbarContent}
         </div>
       )}
-      {bottomToolbarContent && isHovered && (
+      {topToolbarContent && isHovered && (
         <div className="absolute left-0 right-0 bottom-0 translate-y-full z-50 pt-2 flex justify-center">
-          {bottomToolbarContent}
+          {topToolbarContent}
         </div>
       )}
       {!isMobile && (
@@ -210,7 +209,7 @@ function BaseNodeComponent({
           isSkipped && "opacity-40 border-dashed",
           className,
         )}
-        onClick={(e) => { selectNode(id) }}
+        /* Selection handled by onNodeClick in workflow-canvas (has drag guard) */
       >
       {!hideHeader && (
         <div

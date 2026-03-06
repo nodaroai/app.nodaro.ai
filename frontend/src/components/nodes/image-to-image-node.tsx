@@ -105,9 +105,8 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
           <CachedImage
             src={activeUrl}
             alt="Result"
-            className="w-full h-full object-cover rounded-xl cursor-pointer"
+            className="w-full h-full object-cover rounded-xl"
             style={{ minHeight: 180 }}
-            onClick={() => selectNode(id)}
           />
         )}
 

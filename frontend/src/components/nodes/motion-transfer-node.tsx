@@ -20,7 +20,6 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -120,16 +119,14 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-full object-cover rounded-xl cursor-pointer"
+                className="w-full h-full object-cover rounded-xl"
                 style={{ minHeight: 180 }}
-                onClick={() => selectNode(id)}
               />
             ) : (
               <video
                 src={activeUrl}
-                className="w-full object-cover rounded-xl cursor-pointer"
+                className="w-full object-cover rounded-xl"
                 style={{ minHeight: 180 }}
-                onClick={() => selectNode(id)}
                 autoPlay={videoAutoplay}
                 muted
                 loop={videoAutoplay}

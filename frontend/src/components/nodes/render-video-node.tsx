@@ -97,22 +97,14 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={activeThumbnail}
                 alt="Video preview"
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
+                className="w-full h-28 object-cover rounded-md"
                 thumbnail
                 thumbnailWidth={320}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewOpen(true)
-                }}
               />
             ) : (
               <video
                 src={activeUrl}
-                className="w-full h-28 object-cover rounded-md cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewOpen(true)
-                }}
+                className="w-full h-28 object-cover rounded-md"
                 autoPlay={videoAutoplay}
                 muted
                 loop={videoAutoplay}
