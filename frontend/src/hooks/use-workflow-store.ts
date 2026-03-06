@@ -479,21 +479,31 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         return isNaN(num) ? max : Math.max(max, num)
       }, 0) + 1
 
-    // Strip explicit height from nodes so they auto-size to content.
-    // (Sticky notes use data.height, not the node prop, so they're unaffected.)
-    const cleanedNodes = nodes.map((n) => {
-      if (n.height != null) {
-        const { height: _, ...rest } = n
-        return rest as typeof n
-      }
-      return n
-    })
+    // Clean up stale loop expansion artifacts and strip explicit height.
+    const iterPattern = /_iter_\d+$/
+    const cleanedNodes = nodes
+      .filter((n) => !(n.data as Record<string, unknown>).__expandedClone && !iterPattern.test(n.id))
+      .map((n) => {
+        // Unhide originals that were hidden during loop expansion
+        const unhidden = n.hidden ? { ...n, hidden: false } : n
+        // Strip explicit height so nodes auto-size to content
+        // (Sticky notes use data.height, not the node prop, so they're unaffected.)
+        if (unhidden.height != null) {
+          const { height: _, ...rest } = unhidden
+          return rest as typeof unhidden
+        }
+        return unhidden
+      })
+
+    // Filter edges that reference removed clone nodes
+    const cleanedNodeIds = new Set(cleanedNodes.map((n) => n.id))
+    const cleanedEdges = edges.filter((e) => cleanedNodeIds.has(e.source) && cleanedNodeIds.has(e.target))
 
     set((state) => ({
       workflowId: id,
       workflowName: name,
       nodes: cleanedNodes,
-      edges,
+      edges: cleanedEdges,
       selectedNodeId: null,
       isDirty: false,
       loadGeneration: state.loadGeneration + 1,
