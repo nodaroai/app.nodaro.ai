@@ -56,7 +56,7 @@ const SYNC_HTTP_ROUTES: Record<string, string> = {
   "lottie-overlay": "/v1/lottie-overlay-ai/generate",
   "3d-title": "/v1/three-d-title-ai/generate",
   "motion-graphics": "/v1/motion-graphics-ai/generate",
-  "image-to-text": "/v1/image-to-text/generate",
+  "image-to-text": "/v1/image-to-text/describe",
   "instagram-post": "/v1/social/publish",
   "tiktok-post": "/v1/social/publish",
   "youtube-upload": "/v1/social/publish",
@@ -293,7 +293,8 @@ function buildSyncHttpBody(
     case "image-to-text":
       return {
         imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-        prompt: resolvedInputs.prompt || data.prompt || "Describe this image in detail.",
+        customPrompt: resolvedInputs.prompt || data.prompt,
+        detailLevel: data.detailLevel || "detailed",
         userId: ctx.userId,
       }
 
