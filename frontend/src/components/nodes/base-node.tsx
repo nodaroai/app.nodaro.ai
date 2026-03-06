@@ -1,7 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect, useRef, type ReactNode, type MouseEvent } from "react"
-import { createPortal } from "react-dom"
+import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent } from "react"
 import { Handle, Position, NodeResizer, NodeToolbar } from "@xyflow/react"
 import { Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -113,17 +112,19 @@ function BaseNodeComponent({
   const [isHovered, setIsHovered] = useState(false)
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const outerRef = useRef<HTMLDivElement>(null)
-  const [rfNodeEl, setRfNodeEl] = useState<HTMLElement | null>(null)
-
   useEffect(() => {
     return () => {
       if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
     }
   }, [])
 
-  useEffect(() => {
-    if (outerRef.current) {
-      setRfNodeEl(outerRef.current.closest('.react-flow__node') as HTMLElement | null)
+  const handleResize = useCallback((_event: unknown, params: { width: number; height: number }) => {
+    // Override the wrapper's maxWidth so the card grows with the resize
+    const wrapper = outerRef.current?.parentElement
+    if (wrapper) {
+      wrapper.style.maxWidth = "none"
+      wrapper.style.width = params.width + "px"
+      wrapper.style.height = params.height + "px"
     }
   }, [])
 
@@ -350,19 +351,21 @@ function BaseNodeComponent({
           )}
         </div>
       ))}
+
+      {/* NodeResizer — rendered after card & handles so it paints on top */}
+      {!isMobile && selected && (
+        <NodeResizer
+          minWidth={minWidth}
+          minHeight={minHeight}
+          isVisible={true}
+          onResize={handleResize}
+          lineClassName="!border-blue-400"
+          handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
+          handleStyle={{ zIndex: 9999, pointerEvents: "all" }}
+          lineStyle={{ zIndex: 9999, pointerEvents: "all" }}
+        />
+      )}
     </div>
-    {!isMobile && rfNodeEl && selected && createPortal(
-      <NodeResizer
-        minWidth={minWidth}
-        minHeight={minHeight}
-        isVisible={true}
-        lineClassName="!border-blue-400"
-        handleClassName="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded"
-        handleStyle={{ zIndex: 9999 }}
-        lineStyle={{ zIndex: 9999 }}
-      />,
-      rfNodeEl,
-    )}
     </>
   )
 }

@@ -132,6 +132,7 @@ export type OutputType = "image" | "video" | "audio" | "text" | "data"
 export function getInputNodes<T extends GenericNode>(nodes: T[], curatedOnly = true): T[] {
   return nodes.filter((n) => {
     if (!n.type || !INPUT_NODE_TYPES.has(n.type)) return false
+    if (n.hidden) return false
     if (TRIGGER_NODE_TYPES.has(n.type)) return false
     if (curatedOnly) return n.data.presentationVisible === true
     return true
@@ -148,6 +149,7 @@ export function getOutputNodes<T extends GenericNode>(
 
   return nodes.filter((n) => {
     if (!n.type) return false
+    if (n.hidden) return false
     if (NON_OUTPUT_TYPES.has(n.type)) return false
 
     // A node is an output if it either produces media or has no outgoing edges
