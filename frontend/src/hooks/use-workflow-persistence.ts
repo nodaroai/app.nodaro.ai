@@ -387,9 +387,13 @@ export function useWorkflowPersistence(projectId?: string) {
       const { workflowId, workflowName, nodes: allNodes, edges: allEdges, characterDefinitions, flowPromptTemplates, presentationSettings } =
         useWorkflowStore.getState()
 
-      // Filter out temporary sub-workflow execution nodes/edges
-      const nodes = allNodes.filter((n) => !n.id.startsWith("__sub_"))
-      const edges = allEdges.filter((e) => !e.id.startsWith("__sub_"))
+      // Filter out temporary nodes: sub-workflow execution nodes and expanded loop clones
+      const iterPattern = /_iter_\d+$/
+      const nodes = allNodes
+        .filter((n) => !n.id.startsWith("__sub_") && !(n.data as Record<string, unknown>).__expandedClone && !iterPattern.test(n.id))
+        .map((n) => n.hidden ? { ...n, hidden: false } : n)
+      const cloneIds = new Set(allNodes.filter((n) => (n.data as Record<string, unknown>).__expandedClone || iterPattern.test(n.id)).map((n) => n.id))
+      const edges = allEdges.filter((e) => !e.id.startsWith("__sub_") && !cloneIds.has(e.source) && !cloneIds.has(e.target))
 
       // Don't save empty workflows
       if (nodes.length === 0) return { success: false, error: "Empty workflow" }
