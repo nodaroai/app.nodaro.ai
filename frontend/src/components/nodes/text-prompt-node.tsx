@@ -202,6 +202,11 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       {/* Container */}
       <div
         className="w-full h-full rounded-xl overflow-hidden flex flex-col"
+        onMouseDown={(e) => {
+          if (e.target instanceof HTMLTextAreaElement) {
+            e.stopPropagation()
+          }
+        }}
         style={{
           backgroundColor: color,
           border: `2px solid ${adjustColor(color, -30)}`,
@@ -211,7 +216,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         {/* Textarea */}
         <textarea
           ref={textareaRef}
-          className="nopan w-full flex-1 bg-transparent text-white/80 placeholder:text-white/25 resize-none outline-none border-none p-3 leading-relaxed"
+          className="nopan nodrag w-full flex-1 bg-transparent text-white/80 placeholder:text-white/25 resize-none outline-none border-none p-3 leading-relaxed"
+          onMouseDown={(e) => e.stopPropagation()}
           style={{
             fontSize,
             fontWeight,
