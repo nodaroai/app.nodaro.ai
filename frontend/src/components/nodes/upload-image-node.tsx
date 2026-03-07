@@ -14,7 +14,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import type { UploadImageData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
   { id: "image", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
 ] as const
 
@@ -264,6 +264,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             )}
           </div>
         </BaseNode>
+        <HandleIcon icon={<ImageIcon />} color="cyan" side="left" />
         <HandleIcon icon={<ImageIcon />} />
       </div>
 

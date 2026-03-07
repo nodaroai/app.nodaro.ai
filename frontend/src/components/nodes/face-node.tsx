@@ -73,8 +73,8 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
-        { id: "faceRef", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-6px' }, hideHandle: true },
+        { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+        { id: "faceRef", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">

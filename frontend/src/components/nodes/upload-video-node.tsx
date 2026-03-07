@@ -14,7 +14,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import type { UploadVideoData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
   { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
 ] as const
 
@@ -283,6 +283,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
+      <HandleIcon icon={<Video />} color="cyan" side="left" />
       <HandleIcon icon={<Video />} />
     </div>
     {videoUrl && (

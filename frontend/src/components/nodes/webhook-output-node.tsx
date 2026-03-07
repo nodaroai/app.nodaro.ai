@@ -5,19 +5,23 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Webhook } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WebhookOutputData, WebhookParam } from "@/types/nodes"
+
+const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true }
 
 function buildHandles(params: ReadonlyArray<WebhookParam>) {
   if (params.length === 0) {
     return [
       { id: "in", type: "target" as const, position: Position.Left, label: "Input" },
+      SOURCE_HANDLE,
     ]
   }
 
   const startPct = 42
   const endPct = 88
-  return params.map((p, i) => {
+  const targetHandles = params.map((p, i) => {
     const pct = params.length === 1
       ? Math.round((startPct + endPct) / 2)
       : Math.round(startPct + (i / (params.length - 1)) * (endPct - startPct))
@@ -29,6 +33,7 @@ function buildHandles(params: ReadonlyArray<WebhookParam>) {
       top: `${pct}%`,
     }
   })
+  return [...targetHandles, SOURCE_HANDLE]
 }
 
 function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
@@ -70,6 +75,7 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
         </p>
       )}
       </BaseNode>
+      <HandleIcon icon={<Webhook />} color="green" />
     </div>
   )
 }

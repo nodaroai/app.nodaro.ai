@@ -53,6 +53,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
         }
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
         ]}
       >
         <div className="p-3 flex flex-col items-center justify-center gap-2" style={{ minHeight: '100px' }}>
@@ -106,6 +107,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <HandleIcon icon={icon} color="green" side="left" top="50%" />
+      <HandleIcon icon={icon} color="green" top="50%" />
     </div>
   )
 }

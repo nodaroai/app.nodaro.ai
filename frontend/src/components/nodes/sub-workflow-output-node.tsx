@@ -17,14 +17,16 @@ const MEDIA_TYPE_COLORS: Record<string, string> = {
   any: "bg-gray-400",
 }
 
+const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true }
+
 function buildHandles(ports: ReadonlyArray<SubWorkflowPort>) {
   if (ports.length === 0) {
-    return [{ id: "in", type: "target" as const, position: Position.Left, label: "In", top: "50%", hideHandle: true, customStyle: { top: '50%', left: '-29px' } }]
+    return [{ id: "in", type: "target" as const, position: Position.Left, label: "In", top: "50%", hideHandle: true, customStyle: { top: '50%', left: '-29px' } }, SOURCE_HANDLE]
   }
 
   const startPct = 42
   const endPct = 88
-  return ports.map((port, i) => {
+  const targetHandles = ports.map((port, i) => {
     const pct = ports.length === 1
       ? Math.round((startPct + endPct) / 2)
       : Math.round(startPct + (i / (ports.length - 1)) * (endPct - startPct))
@@ -38,6 +40,7 @@ function buildHandles(ports: ReadonlyArray<SubWorkflowPort>) {
       customStyle: { top: `${pct}%`, left: '-29px' },
     }
   })
+  return [...targetHandles, SOURCE_HANDLE]
 }
 
 function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
@@ -98,9 +101,10 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      {handles.map(h => (
+      {handles.filter(h => h.type === "target").map(h => (
         <HandleIcon key={h.id} icon={<LogOut />} color="steel" side="left" top={h.top ?? "50%"} />
       ))}
+      <HandleIcon icon={<LogOut />} color="steel" />
     </div>
   )
 }
