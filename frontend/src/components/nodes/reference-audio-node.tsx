@@ -11,7 +11,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ReferenceAudioData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-6px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: '50%', left: '-29px' }, hideHandle: true },
   { id: "audio-out", type: "source" as const, position: Position.Right, customStyle: { top: '50%', right: '-29px' }, hideHandle: true },
 ] as const
 
@@ -63,6 +63,7 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
+      <HandleIcon icon={<Music />} color="cyan" side="left" />
       <HandleIcon icon={<Music />} />
     </div>
   )

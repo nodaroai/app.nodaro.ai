@@ -202,11 +202,6 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       {/* Container */}
       <div
         className="w-full h-full rounded-xl overflow-hidden flex flex-col"
-        onMouseDown={(e) => {
-          if (e.target instanceof HTMLTextAreaElement) {
-            e.stopPropagation()
-          }
-        }}
         style={{
           backgroundColor: color,
           border: `2px solid ${adjustColor(color, -30)}`,
@@ -216,8 +211,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         {/* Textarea */}
         <textarea
           ref={textareaRef}
-          className="nopan nodrag w-full flex-1 bg-transparent text-white/80 placeholder:text-white/25 resize-none outline-none border-none p-3 leading-relaxed"
-          onMouseDown={(e) => e.stopPropagation()}
+          className={`w-full flex-1 bg-transparent text-white/80 placeholder:text-white/25 resize-none outline-none border-none p-3 leading-relaxed ${selected ? "nopan nodrag cursor-text" : "pointer-events-none"}`}
+          onMouseDown={selected ? (e) => e.stopPropagation() : undefined}
           style={{
             fontSize,
             fontWeight,
@@ -230,18 +225,26 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
             e.stopPropagation()
             updateNodeData(id, { text: e.target.value })
           }}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
+          onClick={selected ? (e) => e.stopPropagation() : undefined}
+          onKeyDown={selected ? (e) => e.stopPropagation() : undefined}
         />
       </div>
 
-      {/* Input handle — invisible connector for sub-workflow support */}
+      {/* Input handle */}
       <Handle
         id="in"
         type="target"
         position={Position.Left}
-        style={{ opacity: 0, width: 12, height: 12, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "50%", left: "-6px", transform: "translateY(-50%)" }}
+        style={{ opacity: 0, width: 28, height: 28, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "50%", left: "-29px", transform: "translateY(-50%)" }}
       />
+
+      {/* Input handle icon */}
+      <div
+        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#38BDF8] shadow-lg shadow-sky-500/30"
+        style={{ top: '50%', left: '-29px', transform: 'translateY(-50%)' }}
+      >
+        <Type className="w-3.5 h-3.5 text-white" />
+      </div>
 
       {/* Handle — fully invisible, interactive */}
       <Handle

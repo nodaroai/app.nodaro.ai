@@ -173,7 +173,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   onNodesChange: (changes) =>
     set((state) => {
-      const newNodes = applyNodeChanges(changes, state.nodes)
+      let newNodes = applyNodeChanges(changes, state.nodes)
       // Only mark dirty for content changes (position, add, remove, replace)
       // NOT for selection or dimension measurements from React Flow
       // Single pass: detect content changes and collect selection info
@@ -198,6 +198,19 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
         const stillExists = newNodes.find((n) => n.id === selectedNodeId)
         if (!stillExists) {
           selectedNodeId = null
+        } else {
+          // Enforce our selectedNodeId as the only selected node.
+          // React Flow's internal focus may try to re-select a previously
+          // clicked node, overriding programmatic selection (e.g. arrow nav).
+          const wrongSelection = newNodes.some((n) =>
+            (n.id === selectedNodeId && !n.selected) || (n.id !== selectedNodeId && n.selected)
+          )
+          if (wrongSelection) {
+            newNodes = newNodes.map((n) => ({
+              ...n,
+              selected: n.id === selectedNodeId,
+            }))
+          }
         }
       }
 
