@@ -2789,9 +2789,9 @@ export interface WorkflowTrigger {
 async function apiRequest<T>(
   path: string,
   errorMessage: string,
-  opts?: { method?: string; body?: unknown },
+  opts?: { method?: string; body?: unknown; skipAuth?: boolean },
 ): Promise<T> {
-  const headers: Record<string, string> = { ...(await getAuthHeaders()) }
+  const headers: Record<string, string> = opts?.skipAuth ? {} : { ...(await getAuthHeaders()) }
   if (opts?.body !== undefined) headers["Content-Type"] = "application/json"
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -3356,6 +3356,7 @@ export async function getPublishedApp(slug: string, version?: number): Promise<P
   return apiRequest<PublishedApp>(
     `/v1/app/${encodeURIComponent(slug)}${qs ? `?${qs}` : ""}`,
     "Failed to load app",
+    { skipAuth: true },
   )
 }
 
