@@ -1,7 +1,7 @@
 import { config, hasCredits } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCleanupCron } from "./billing/cleanup-cron.js"
-import { startScheduleCron } from "./lib/schedule-cron.js"
+import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 
 process.on("unhandledRejection", (err) => {
@@ -31,6 +31,7 @@ async function main() {
 
   // Graceful shutdown
   const shutdown = async () => {
+    stopScheduleCron()
     await orchestratorWorker.close()
     await app.close()
     process.exit(0)

@@ -82,8 +82,22 @@ export default function EmbedPage() {
   }, [appRun])
 
   // postMessage API — listen for commands from parent frame
+  // Allowed origins are configured via the app's allowedOrigins field;
+  // fallback: only accept messages from same origin.
   useEffect(() => {
+    const allowedOrigins = new Set<string>()
+    // Always allow same-origin
+    allowedOrigins.add(window.location.origin)
+    // Add app-configured origins if available
+    const configuredOrigins = (app as Record<string, unknown> | null)?.allowedOrigins as string[] | undefined
+    if (configuredOrigins) {
+      for (const origin of configuredOrigins) allowedOrigins.add(origin)
+    }
+
     const handler = (event: MessageEvent) => {
+      // Validate origin — reject messages from untrusted origins
+      if (!allowedOrigins.has(event.origin)) return
+
       const data = event.data
       if (!data || typeof data !== "object" || !data.type) return
 
@@ -109,11 +123,22 @@ export default function EmbedPage() {
 
     window.addEventListener("message", handler)
     return () => window.removeEventListener("message", handler)
-  }, [updateInputValue, appRun])
+  }, [updateInputValue, appRun, app])
 
   // Notify parent frame of execution status changes
+  // Use document.referrer origin or same-origin as target (not wildcard)
   useEffect(() => {
     if (!window.parent || window.parent === window) return
+
+    // Determine target origin for postMessage
+    let targetOrigin = window.location.origin
+    try {
+      if (document.referrer) {
+        targetOrigin = new URL(document.referrer).origin
+      }
+    } catch {
+      // Invalid referrer — fall back to same-origin
+    }
 
     if (executionStatus === "completed") {
       // Collect outputs from node states
@@ -124,11 +149,11 @@ export default function EmbedPage() {
           outputs[nodeId] = s.output
         }
       }
-      window.parent.postMessage({ type: "nodaro:runComplete", outputs }, "*")
+      window.parent.postMessage({ type: "nodaro:runComplete", outputs }, targetOrigin)
     } else if (executionStatus === "failed") {
-      window.parent.postMessage({ type: "nodaro:runFailed", error: errorMessage }, "*")
+      window.parent.postMessage({ type: "nodaro:runFailed", error: errorMessage }, targetOrigin)
     } else if (executionStatus === "running") {
-      window.parent.postMessage({ type: "nodaro:runStarted" }, "*")
+      window.parent.postMessage({ type: "nodaro:runStarted" }, targetOrigin)
     }
   }, [executionStatus, nodeStates, errorMessage])
 

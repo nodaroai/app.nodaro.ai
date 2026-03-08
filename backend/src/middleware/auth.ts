@@ -115,13 +115,21 @@ export function registerAuthHook(app: FastifyInstance): void {
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
     const isPublic = isPublicRoute(req.method, req.url)
 
-    // Internal orchestrator calls: trust X-Internal-Orchestrator header from localhost
+    // Internal orchestrator calls: trust X-Internal-Orchestrator header ONLY from localhost
     // and extract userId from the request body (sync HTTP nodes pass userId in body)
     if (req.headers["x-internal-orchestrator"] === "true") {
-      const body = req.body as Record<string, unknown> | undefined
-      if (body?.userId && typeof body.userId === "string") {
-        req.userId = body.userId
+      const remoteIp = req.ip
+      if (remoteIp === "127.0.0.1" || remoteIp === "::1" || remoteIp === "::ffff:127.0.0.1") {
+        const body = req.body as Record<string, unknown> | undefined
+        if (body?.userId && typeof body.userId === "string") {
+          req.userId = body.userId
+        }
+        return
       }
+      // External request with internal header — reject
+      reply.status(403).send({
+        error: { code: "forbidden", message: "Internal header not allowed from external sources" },
+      })
       return
     }
 

@@ -42,11 +42,12 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         })
       }
 
-      const { imageUrl, detailLevel, customPrompt, userId } = parsed.data
+      const { imageUrl, detailLevel, customPrompt } = parsed.data
+      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "userId is required" },
+          error: { code: "unauthorized", message: "Authentication required" },
         })
       }
 
