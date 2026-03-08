@@ -89,7 +89,15 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
       {hasToken && (
         <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2 border border-border">
           <span className="font-medium">Token:</span>{" "}
-          <span className="font-mono">{data.webhookToken}</span>
+          <span className="font-mono">{data.webhookToken!.slice(0, 8)}{"••••••••"}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 text-[10px] ml-2 px-1.5"
+            onClick={() => navigator.clipboard.writeText(data.webhookToken!)}
+          >
+            Copy
+          </Button>
         </div>
       )}
 

@@ -6,35 +6,32 @@
 
 -- ============================================================
 -- PART 1: Enable RLS on executions table + create policies
+-- Guard: only if executions table exists (it was created manually
+-- in some environments; fresh deploys use workflow_executions instead)
 -- ============================================================
 
-ALTER TABLE public.executions ENABLE ROW LEVEL SECURITY;
-
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'executions' AND policyname = 'Users can view own executions') THEN
-    CREATE POLICY "Users can view own executions" ON executions
-      FOR SELECT USING ((select auth.uid()) = user_id);
-  END IF;
-END $$;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'executions'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.executions ENABLE ROW LEVEL SECURITY';
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'executions' AND policyname = 'Users can insert own executions') THEN
-    CREATE POLICY "Users can insert own executions" ON executions
-      FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
-  END IF;
-END $$;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'executions' AND policyname = 'Users can view own executions') THEN
+      EXECUTE 'CREATE POLICY "Users can view own executions" ON executions FOR SELECT USING ((select auth.uid()) = user_id)';
+    END IF;
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'executions' AND policyname = 'Users can update own executions') THEN
-    CREATE POLICY "Users can update own executions" ON executions
-      FOR UPDATE USING ((select auth.uid()) = user_id);
-  END IF;
-END $$;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'executions' AND policyname = 'Users can insert own executions') THEN
+      EXECUTE 'CREATE POLICY "Users can insert own executions" ON executions FOR INSERT WITH CHECK ((select auth.uid()) = user_id)';
+    END IF;
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'executions' AND policyname = 'Users can delete own executions') THEN
-    CREATE POLICY "Users can delete own executions" ON executions
-      FOR DELETE USING ((select auth.uid()) = user_id);
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'executions' AND policyname = 'Users can update own executions') THEN
+      EXECUTE 'CREATE POLICY "Users can update own executions" ON executions FOR UPDATE USING ((select auth.uid()) = user_id)';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'executions' AND policyname = 'Users can delete own executions') THEN
+      EXECUTE 'CREATE POLICY "Users can delete own executions" ON executions FOR DELETE USING ((select auth.uid()) = user_id)';
+    END IF;
   END IF;
 END $$;
 

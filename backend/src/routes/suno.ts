@@ -95,12 +95,13 @@ export async function sunoRoutes(app: FastifyInstance) {
         prompt, model, lyrics, style, title,
         negativeStyle, vocalGender, styleWeight,
         weirdnessConstraint, audioWeight, customMode,
-        instrumental, userId,
+        instrumental,
       } = parsed.data
+      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "userId is required" },
+          error: { code: "unauthorized", message: "Authentication required" },
         })
       }
 
@@ -180,12 +181,13 @@ export async function sunoRoutes(app: FastifyInstance) {
       const {
         prompt, uploadUrl, model, lyrics, style,
         title, negativeStyle, vocalGender, customMode,
-        instrumental, userId,
+        instrumental,
       } = parsed.data
+      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "userId is required" },
+          error: { code: "unauthorized", message: "Authentication required" },
         })
       }
 
@@ -261,12 +263,13 @@ export async function sunoRoutes(app: FastifyInstance) {
       const {
         audioId, defaultParamFlag, prompt, model, style,
         title, continueAt, negativeStyle, vocalGender,
-        styleWeight, weirdnessConstraint, audioWeight, userId,
+        styleWeight, weirdnessConstraint, audioWeight,
       } = parsed.data
+      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "userId is required" },
+          error: { code: "unauthorized", message: "Authentication required" },
         })
       }
 
@@ -343,11 +346,12 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const { prompt, userId } = parsed.data
+      const { prompt } = parsed.data
+      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "userId is required" },
+          error: { code: "unauthorized", message: "Authentication required" },
         })
       }
 
@@ -402,11 +406,12 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const { taskId, audioId, type, userId } = parsed.data
+      const { taskId, audioId, type } = parsed.data
+      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "userId is required" },
+          error: { code: "unauthorized", message: "Authentication required" },
         })
       }
 
@@ -461,11 +466,12 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const { taskId, audioId, userId } = parsed.data
+      const { taskId, audioId } = parsed.data
+      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "userId is required" },
+          error: { code: "unauthorized", message: "Authentication required" },
         })
       }
 

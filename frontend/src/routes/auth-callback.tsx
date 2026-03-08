@@ -10,8 +10,12 @@ export default function AuthCallback() {
     const supabase = createClient()
 
     // Consume the saved redirect URL once (e.g., from /present/:shareToken)
-    const redirectUrl = localStorage.getItem(AUTH_REDIRECT_KEY) ?? "/projects"
+    let redirectUrl = localStorage.getItem(AUTH_REDIRECT_KEY) ?? "/projects"
     localStorage.removeItem(AUTH_REDIRECT_KEY)
+    // Validate redirect is a relative path (prevent open redirect)
+    if (!redirectUrl.startsWith("/") || redirectUrl.startsWith("//")) {
+      redirectUrl = "/projects"
+    }
 
     // Supabase automatically exchanges the code/hash tokens via onAuthStateChange.
     // We just need to listen for the session to appear.

@@ -25,11 +25,12 @@ export async function audioIsolationRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, userId } = parsed.data
+    const { audioUrl } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

@@ -38,11 +38,12 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    const { text, voice, provider, userId, voiceType, stability, similarityBoost, style, speed, languageCode } = parsed.data
+    const { text, voice, provider, voiceType, stability, similarityBoost, style, speed, languageCode } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

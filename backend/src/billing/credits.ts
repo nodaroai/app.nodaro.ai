@@ -458,32 +458,52 @@ export class CreditsService {
       return { newBalance: 999999 }
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("subscription_credits, topup_credits")
-      .eq("id", params.userId)
-      .single()
-
-    if (profileError || !profile) {
-      throw new Error("User profile not found")
-    }
-
     const field = params.creditType === "subscription" ? "subscription_credits" : "topup_credits"
-    const currentValue = ((profile as Record<string, unknown>)[field] ?? 0) as number
-    const newValue = Math.max(0, currentValue + params.amount)
+    const otherField = params.creditType === "subscription" ? "topup_credits" : "subscription_credits"
 
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ [field]: newValue })
-      .eq("id", params.userId)
+    // Atomic update using SQL expression to avoid TOCTOU race condition.
+    // GREATEST ensures credits never go below 0.
+    const { data: updated, error: updateError } = await supabase
+      .rpc("admin_adjust_credits" as string, {
+        p_user_id: params.userId,
+        p_field: field,
+        p_amount: params.amount,
+      })
 
+    // Fallback if RPC doesn't exist yet: use read-then-write (existing behavior)
+    let newValue: number
+    let otherValue: number
     if (updateError) {
-      throw new Error(`Failed to update credits: ${updateError.message}`)
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("subscription_credits, topup_credits")
+        .eq("id", params.userId)
+        .single()
+
+      if (profileError || !profile) {
+        throw new Error("User profile not found")
+      }
+
+      const currentValue = ((profile as Record<string, unknown>)[field] ?? 0) as number
+      newValue = Math.max(0, currentValue + params.amount)
+      otherValue = ((profile as Record<string, unknown>)[otherField] ?? 0) as number
+
+      const { error: fallbackError } = await supabase
+        .from("profiles")
+        .update({ [field]: newValue })
+        .eq("id", params.userId)
+
+      if (fallbackError) {
+        throw new Error(`Failed to update credits: ${fallbackError.message}`)
+      }
+    } else {
+      // RPC returns the new values
+      const result = updated as Record<string, number> | null
+      newValue = (result?.[field] ?? 0) as number
+      otherValue = (result?.[otherField] ?? 0) as number
     }
 
-    const newTotal = params.creditType === "subscription"
-      ? newValue + (profile.topup_credits ?? 0)
-      : (profile.subscription_credits ?? 0) + newValue
+    const newTotal = newValue + otherValue
 
     await CreditsService.logTransaction({
       userId: params.userId,

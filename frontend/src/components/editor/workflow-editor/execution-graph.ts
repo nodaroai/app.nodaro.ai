@@ -173,7 +173,8 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "voice-changer" ||
     type === "dubbing" ||
     type === "voice-remix" ||
-    type === "voice-design"
+    type === "voice-design" ||
+    type === "audio-isolation"
   ) {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -448,6 +449,7 @@ const AUDIO_SOURCE_TYPES = new Set([
   "dubbing",
   "voice-remix",
   "voice-design",
+  "audio-isolation",
 ]);
 
 export function collectMediaAssets(
