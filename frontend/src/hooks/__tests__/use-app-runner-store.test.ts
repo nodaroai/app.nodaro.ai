@@ -133,7 +133,7 @@ describe("useAppRunnerStore", () => {
       const state = useAppRunnerStore.getState()
       expect(state.executionId).toBe("exec_1")
       expect(state.activeRunId).toBe("run_1")
-      expect(runPublishedApp).toHaveBeenCalledWith("my-app", undefined, undefined)
+      expect(runPublishedApp).toHaveBeenCalledWith("my-app", undefined, undefined, undefined)
     })
 
     it("sends inputValues when present", async () => {
@@ -150,7 +150,7 @@ describe("useAppRunnerStore", () => {
 
       expect(runPublishedApp).toHaveBeenCalledWith("my-app", {
         node_1: { prompt: "hello" },
-      }, undefined)
+      }, undefined, undefined)
     })
 
     it("sets executionStatus to failed and errorMessage on error", async () => {
