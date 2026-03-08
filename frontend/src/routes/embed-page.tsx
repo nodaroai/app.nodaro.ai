@@ -48,9 +48,9 @@ export default function EmbedPage() {
     }
   }, [themeParam, setTheme])
 
-  // Prevent internal scrolling so wheel events chain to the parent page.
-  // When no element inside the iframe is scrollable, browsers naturally
-  // pass scroll events to the outer page.
+  // Prevent internal scrolling and forward wheel events to parent page.
+  // Browsers capture wheel events on iframes even with overflow:hidden,
+  // so we explicitly forward them via postMessage.
   useEffect(() => {
     const style = document.createElement("style")
     style.setAttribute("data-embed-scroll", "")
@@ -59,7 +59,21 @@ export default function EmbedPage() {
       ".overflow-auto, .overflow-y-auto, .overflow-x-auto { overflow: hidden !important; }",
     ].join("\n")
     document.head.appendChild(style)
-    return () => { style.remove() }
+
+    const onWheel = (e: WheelEvent) => {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(
+          { type: "nodaro:wheel", deltaX: e.deltaX, deltaY: e.deltaY },
+          "*",
+        )
+      }
+    }
+    window.addEventListener("wheel", onWheel, { passive: true })
+
+    return () => {
+      style.remove()
+      window.removeEventListener("wheel", onWheel)
+    }
   }, [])
 
   // Load app

@@ -81,6 +81,28 @@ function getStableSnapshot() {
   return lastSnapshot
 }
 
+/** Re-check session from Supabase (e.g. after popup login completes) */
+export async function refreshAuth(): Promise<void> {
+  const supabase = createClient()
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
+  cachedUser = currentUser
+
+  if (currentUser) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", currentUser.id)
+      .single()
+    if (profile?.role) {
+      cachedRole = profile.role as UserRole
+    }
+  }
+
+  cachedRoleLoaded = true
+  cachedLoading = false
+  notifyListeners()
+}
+
 export function useAuth() {
   const navigate = useNavigate()
 
