@@ -33,11 +33,12 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, audioUrl, prompt, provider, resolution, userId } = parsed.data
+    const { imageUrl, audioUrl, prompt, provider, resolution } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

@@ -26,11 +26,12 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrls, transition, transitionDuration, audioMode, userId } = parsed.data
+    const { videoUrls, transition, transitionDuration, audioMode } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

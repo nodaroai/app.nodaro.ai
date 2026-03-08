@@ -28,11 +28,12 @@ export async function dubbingRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, targetLanguage, sourceLanguage, numSpeakers, userId } = parsed.data
+    const { audioUrl, targetLanguage, sourceLanguage, numSpeakers } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

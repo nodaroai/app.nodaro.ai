@@ -108,18 +108,15 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // PUT /v1/admin/users/:id/tier - Admin change user tier
   app.put("/v1/admin/users/:id/tier", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const { tier, adminUserId } = request.body as {
-      tier: string
-      adminUserId: string
+    const tierBody = z.object({
+      tier: z.enum(["free", "basic", "standard", "pro", "business"]),
+      adminUserId: z.string().uuid().optional(),
+    }).safeParse(request.body)
+    if (!tierBody.success) {
+      return reply.code(400).send({ error: tierBody.error.issues[0]?.message ?? "Invalid request" })
     }
-
-    const VALID_TIERS = ["free", "basic", "standard", "pro", "business"]
-    if (!tier || !VALID_TIERS.includes(tier)) {
-      return reply.code(400).send({ error: `Invalid tier. Must be one of: ${VALID_TIERS.join(", ")}` })
-    }
-    if (!adminUserId) {
-      return reply.code(400).send({ error: "Missing required field: adminUserId" })
-    }
+    const { tier, adminUserId: bodyAdminUserId } = tierBody.data
+    const adminUserId = request.userId ?? bodyAdminUserId ?? ""
 
     // Fetch current profile
     const { data: profile, error: fetchError } = await supabase
@@ -176,13 +173,13 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // PUT /v1/admin/users/:id/storage - Admin change user storage limit
   app.put("/v1/admin/users/:id/storage", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const { storageLimitBytes } = request.body as {
-      storageLimitBytes: number
+    const storageBody = z.object({
+      storageLimitBytes: z.number().int().positive(),
+    }).safeParse(request.body)
+    if (!storageBody.success) {
+      return reply.code(400).send({ error: storageBody.error.issues[0]?.message ?? "storageLimitBytes must be a positive number" })
     }
-
-    if (!storageLimitBytes || storageLimitBytes <= 0) {
-      return reply.code(400).send({ error: "storageLimitBytes must be a positive number" })
-    }
+    const { storageLimitBytes } = storageBody.data
 
     // Fetch current limit
     const { data: profile, error: fetchError } = await supabase
@@ -212,14 +209,13 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // PUT /v1/admin/users/:id/role - Admin change user role (super_admin only)
   app.put("/v1/admin/users/:id/role", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const { role } = request.body as {
-      role: string
+    const roleBody = z.object({
+      role: z.enum(["user", "admin", "super_admin"]),
+    }).safeParse(request.body)
+    if (!roleBody.success) {
+      return reply.code(400).send({ error: roleBody.error.issues[0]?.message ?? "Invalid role" })
     }
-
-    const VALID_ROLES = ["user", "admin", "super_admin"]
-    if (!role || !VALID_ROLES.includes(role)) {
-      return reply.code(400).send({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` })
-    }
+    const { role } = roleBody.data
 
     // Verify requesting user is super_admin
     const { data: adminProfile, error: adminError } = await supabase
@@ -289,11 +285,15 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // PUT /v1/admin/models/:identifier/pricing - Update model pricing
   app.put("/v1/admin/models/:identifier/pricing", { preHandler: requireAdmin }, async (request, reply) => {
     const { identifier } = request.params as { identifier: string }
-    const { creditCost, isEnabled, tierRestriction } = request.body as {
-      creditCost?: number
-      isEnabled?: boolean
-      tierRestriction?: string | null
+    const pricingBody = z.object({
+      creditCost: z.number().int().min(0).optional(),
+      isEnabled: z.boolean().optional(),
+      tierRestriction: z.string().nullable().optional(),
+    }).safeParse(request.body)
+    if (!pricingBody.success) {
+      return reply.code(400).send({ error: pricingBody.error.issues[0]?.message ?? "Invalid request" })
     }
+    const { creditCost, isEnabled, tierRestriction } = pricingBody.data
 
     const updates: Record<string, unknown> = {}
     if (creditCost !== undefined) updates.credit_cost = creditCost

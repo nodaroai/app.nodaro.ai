@@ -42,7 +42,8 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId, userId } = parsed.data
+    const { projectId } = parsed.data
+    const userId = req.userId
 
     let query = supabase
       .from("characters")
@@ -149,11 +150,12 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, userId, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

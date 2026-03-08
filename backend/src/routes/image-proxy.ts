@@ -46,7 +46,7 @@ export async function imageProxyRoutes(app: FastifyInstance) {
     reply.raw.writeHead(200, {
       "Content-Type": contentType,
       "Cache-Control": "public, max-age=31536000, immutable",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": req.headers.origin ?? "*",
       ...(contentLength ? { "Content-Length": contentLength } : {}),
       ...(parsed.data.download === '1' ? { "Content-Disposition": 'attachment; filename="image.png"' } : {}),
     })
