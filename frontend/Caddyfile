@@ -11,9 +11,9 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(self), geolocation=()"
 	}
-	# Allow framing on embed routes
-	@embed path /embed/*
-	header @embed X-Frame-Options ""
+	# Allow framing on embeddable routes
+	@frameable path /embed/* /app/*
+	header @frameable X-Frame-Options ""
 
 	handle /v1/* {
 		reverse_proxy 127.0.0.1:9000
