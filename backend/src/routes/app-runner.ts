@@ -35,6 +35,7 @@ const createRunBody = z.object({
 
 const updateRunBody = z.object({
   inputValues: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  name: z.string().max(100).nullable().optional(),
 })
 
 const runsQuery = z.object({
@@ -110,7 +111,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         .order("version", { ascending: false }),
       loadAppVersion(
         workflowId,
-        "id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, created_at, workflow_id",
+        "id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, created_at, workflow_id",
         requestedVersion,
       ),
     ])
@@ -139,6 +140,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       estimatedCredits: appRow.estimated_credits,
       creatorId: appRow.creator_id,
       maxRunsPerUserPerDay: appRow.max_runs_per_user_per_day,
+      thumbnailNodeId: appRow.thumbnail_node_id ?? null,
       createdAt: appRow.created_at,
       workflowId: appRow.workflow_id,
       versions,
@@ -379,14 +381,24 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { runId } = paramsParsed.data
-    const { inputValues } = bodyParsed.data
+    const { inputValues, name } = bodyParsed.data
+
+    const updates: Record<string, unknown> = {}
+    if (inputValues !== undefined) updates.input_values = inputValues
+    if (name !== undefined) updates.name = name
+
+    if (Object.keys(updates).length === 0) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "No fields to update" },
+      })
+    }
 
     const { data: run, error: runError } = await supabase
       .from("app_runs")
-      .update({ input_values: inputValues })
+      .update(updates)
       .eq("id", runId)
       .eq("runner_id", req.userId)
-      .select("id, input_values")
+      .select("id, input_values, name")
       .single()
 
     if (runError || !run) {
@@ -395,7 +407,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    return reply.send({ id: run.id, inputValues: run.input_values })
+    return reply.send({ id: run.id, inputValues: run.input_values, name: run.name })
   })
 
   // --- List runner's past runs for this app ---
@@ -441,11 +453,22 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const versionIds = allVersions.map((v) => v.id as string)
     const versionMap = new Map(allVersions.map((v) => [v.id as string, v.version as number]))
 
+    // Load thumbnail_node_id from latest version
+    const { data: latestApp } = await supabase
+      .from("published_apps")
+      .select("thumbnail_node_id")
+      .eq("workflow_id", workflowId)
+      .order("version", { ascending: false })
+      .limit(1)
+      .single()
+
+    const thumbnailNodeId = (latestApp?.thumbnail_node_id as string | null) ?? null
+
     // Build query for app_runs across ALL versions, joined with workflow_executions
     let query = supabase
       .from("app_runs")
       .select(
-        "id, app_id, created_at, execution_id, input_values, status, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at)"
+        "id, app_id, created_at, execution_id, input_values, status, name, credits_used, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)"
       )
       .in("app_id", versionIds)
       .eq("runner_id", req.userId)
@@ -485,19 +508,34 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           completed_nodes: number | null
           total_nodes: number | null
           completed_at: string | null
+          total_credits_used: number | null
         } | null
+
+        // Extract thumbnail URL from the designated node's output
+        let thumbnailUrl: string | null = null
+        if (thumbnailNodeId && exec?.node_states) {
+          const ns = exec.node_states as Record<string, { output?: Record<string, unknown> }>
+          const nodeOutput = ns[thumbnailNodeId]?.output
+          if (nodeOutput) {
+            // Try common output keys: url, imageUrl, videoUrl, audioUrl, resultUrl
+            thumbnailUrl = (nodeOutput.url ?? nodeOutput.imageUrl ?? nodeOutput.videoUrl ?? nodeOutput.audioUrl ?? nodeOutput.resultUrl ?? null) as string | null
+          }
+        }
 
         return {
           id: run.id,
           executionId: run.execution_id ?? null,
           createdAt: run.created_at,
+          name: (run as { name?: string | null }).name ?? null,
           inputValues: run.input_values ?? null,
           status: exec?.status ?? (run as { status?: string }).status ?? "draft",
           nodeStates: exec?.node_states ?? null,
           completedNodes: exec?.completed_nodes ?? 0,
           totalNodes: exec?.total_nodes ?? 0,
           completedAt: exec?.completed_at ?? null,
+          creditsUsed: exec?.total_credits_used ?? (run as { credits_used?: number }).credits_used ?? 0,
           version: versionMap.get(run.app_id) ?? null,
+          thumbnailUrl,
         }
       }),
       nextCursor,
@@ -524,7 +562,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { data: run, error: runError } = await supabase
       .from("app_runs")
       .select(
-        "id, app_id, runner_id, execution_id, input_values, status, created_at, published_apps!app_id(version), workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
+        "id, app_id, runner_id, execution_id, input_values, status, name, credits_used, created_at, published_apps!app_id(version, thumbnail_node_id), workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
       )
       .eq("id", runId)
       .eq("runner_id", req.userId)
@@ -548,16 +586,30 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       completed_at: string | null
     } | null
 
-    const pubApp = run.published_apps as unknown as { version: number } | null
+    const pubApp = run.published_apps as unknown as { version: number; thumbnail_node_id: string | null } | null
+
+    // Extract thumbnail URL
+    let thumbnailUrl: string | null = null
+    const tnNodeId = pubApp?.thumbnail_node_id
+    if (tnNodeId && exec?.node_states) {
+      const ns = exec.node_states as Record<string, { output?: Record<string, unknown> }>
+      const nodeOutput = ns[tnNodeId]?.output
+      if (nodeOutput) {
+        thumbnailUrl = (nodeOutput.url ?? nodeOutput.imageUrl ?? nodeOutput.videoUrl ?? nodeOutput.audioUrl ?? nodeOutput.resultUrl ?? null) as string | null
+      }
+    }
 
     return reply.send({
       id: run.id,
       appId: run.app_id,
       executionId: run.execution_id ?? null,
+      name: (run as { name?: string | null }).name ?? null,
       inputValues: run.input_values ?? null,
       status: (run as { status?: string }).status ?? "draft",
+      creditsUsed: exec?.total_credits_used ?? (run as { credits_used?: number }).credits_used ?? 0,
       createdAt: run.created_at,
       version: pubApp?.version ?? null,
+      thumbnailUrl,
       execution: exec
         ? {
             id: exec.id,

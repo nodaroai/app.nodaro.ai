@@ -39,6 +39,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   const [publishing, setPublishing] = useState(false)
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null)
   const [publishCopied, setPublishCopied] = useState(false)
+  const [thumbnailNodeId, setThumbnailNodeId] = useState<string>("")
 
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
@@ -53,6 +54,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         name: publishName.trim(),
         slug,
         description: publishDesc.trim() || undefined,
+        thumbnailNodeId: thumbnailNodeId || null,
       })
       setPublishedSlug(result.slug)
       toast.success("App published!")
@@ -286,6 +288,27 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                           </Select>
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Thumbnail node for runs list */}
+                  {nodeOptions.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium mb-1.5">Run thumbnail</p>
+                      <p className="text-xs text-muted-foreground mb-1.5">
+                        Select a node whose output will be shown as a thumbnail in the runs list
+                      </p>
+                      <Select value={thumbnailNodeId} onValueChange={setThumbnailNodeId}>
+                        <SelectTrigger className="w-full h-9 text-sm">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {nodeOptions.map(({ id, label }) => (
+                            <SelectItem key={id} value={id}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                 </div>
