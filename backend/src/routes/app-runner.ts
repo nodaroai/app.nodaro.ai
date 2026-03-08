@@ -111,7 +111,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     // Check in-memory cache
     const cached = appCache.get(cacheKey)
     if (cached && Date.now() < cached.expiry) {
-      reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=600")
+      reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
       return reply.send(cached.data)
     }
 
@@ -171,7 +171,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       }
     }
 
-    reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=600")
+    reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
     return reply.send(responseData)
   })
 
