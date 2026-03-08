@@ -435,36 +435,36 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { slug } = paramsParsed.data
     const { cursor, limit } = queryParsed.data
 
-    const workflowId = await resolveSlug(slug)
-    if (!workflowId) {
-      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
-    }
-
-    // Get all version IDs for this workflow
+    // Single query: resolve slug + get all versions + thumbnail_node_id
     const { data: allVersions } = await supabase
       .from("published_apps")
-      .select("id, version")
-      .eq("workflow_id", workflowId)
+      .select("id, version, thumbnail_node_id")
+      .eq("slug", slug)
 
     if (!allVersions || allVersions.length === 0) {
-      return reply.send({ data: [], nextCursor: undefined })
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
     const versionIds = allVersions.map((v) => v.id as string)
     const versionMap = new Map(allVersions.map((v) => [v.id as string, v.version as number]))
 
-    // Load thumbnail_node_id from latest version
-    const { data: latestApp } = await supabase
-      .from("published_apps")
-      .select("thumbnail_node_id")
-      .eq("workflow_id", workflowId)
-      .order("version", { ascending: false })
-      .limit(1)
-      .single()
+    // Thumbnail from latest version
+    const latestVersion = allVersions.reduce((a, b) =>
+      (a.version as number) > (b.version as number) ? a : b,
+    )
+    const thumbnailNodeId = (latestVersion.thumbnail_node_id as string | null) ?? null
 
-    const thumbnailNodeId = (latestApp?.thumbnail_node_id as string | null) ?? null
+    // Build runs query + resolve cursor in parallel
+    let cursorDate: string | undefined
+    if (cursor) {
+      const { data: cursorRow } = await supabase
+        .from("app_runs")
+        .select("created_at")
+        .eq("id", cursor)
+        .single()
+      cursorDate = cursorRow?.created_at as string | undefined
+    }
 
-    // Build query for app_runs across ALL versions, joined with workflow_executions
     let query = supabase
       .from("app_runs")
       .select(
@@ -475,16 +475,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       .order("created_at", { ascending: false })
       .limit(limit + 1) // fetch one extra for cursor
 
-    if (cursor) {
-      const { data: cursorRow } = await supabase
-        .from("app_runs")
-        .select("created_at")
-        .eq("id", cursor)
-        .single()
-
-      if (cursorRow) {
-        query = query.lt("created_at", cursorRow.created_at)
-      }
+    if (cursorDate) {
+      query = query.lt("created_at", cursorDate)
     }
 
     const { data: runs, error: runsError } = await query
