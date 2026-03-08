@@ -44,7 +44,7 @@ beforeAll(async () => {
   app.get("/health", async () => ({ status: "ok" }))
   app.get("/v1/gallery", async () => ({ data: [] }))
   app.get("/v1/download/test", async () => ({ ok: true }))
-  app.post("/v1/billing/paddle-webhook", async () => ({ ok: true }))
+  app.post("/v1/billing/stripe-webhook", async () => ({ ok: true }))
 
   // Protected routes
   app.get("/v1/jobs/123", async () => ({ data: {} }))
@@ -81,10 +81,10 @@ describe("auth middleware", () => {
       expect(res.statusCode).not.toBe(401)
     })
 
-    it("allows POST /v1/billing/paddle-webhook without a token", async () => {
+    it("allows POST /v1/billing/stripe-webhook without a token", async () => {
       const res = await app.inject({
         method: "POST",
-        url: "/v1/billing/paddle-webhook",
+        url: "/v1/billing/stripe-webhook",
         payload: {},
       })
       expect(res.statusCode).not.toBe(401)

@@ -533,7 +533,7 @@ describe("getTransactions", () => {
 describe("getManageSubscriptionUrl", () => {
   it("returns url from json.data.url on success", async () => {
     sessionWith("tok-mgmt")
-    const mock = mockFetchJson({ data: { url: "https://paddle.com/manage/123" } })
+    const mock = mockFetchJson({ data: { url: "https://billing.stripe.com/session/abc" } })
     vi.stubGlobal("fetch", mock)
 
     const result = await getManageSubscriptionUrl("u-8")
@@ -544,7 +544,7 @@ describe("getManageSubscriptionUrl", () => {
     )
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body).toEqual({ userId: "u-8" })
-    expect(result).toBe("https://paddle.com/manage/123")
+    expect(result).toBe("https://billing.stripe.com/session/abc")
   })
 
   it("returns null on non-ok response (does not throw)", async () => {

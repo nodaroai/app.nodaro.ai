@@ -83,6 +83,7 @@ const DB_RUN_ROW = {
   runner_id: TEST_USER_ID,
   execution_id: TEST_EXECUTION_ID,
   created_at: "2026-01-01T12:00:00Z",
+  published_apps: { version: 1 },
   workflow_executions: {
     id: TEST_EXECUTION_ID,
     status: "completed",
@@ -124,19 +125,39 @@ afterEach(async () => {
 })
 
 // ---------------------------------------------------------------------------
+// Helper: create a chainable Supabase query mock
+// ---------------------------------------------------------------------------
+
+function createChainMock(resolveValue: unknown) {
+  const self: Record<string, unknown> = {}
+  const handler: ProxyHandler<Record<string, unknown>> = {
+    get(_target, prop) {
+      if (prop === "then") {
+        // Make it thenable so it resolves when awaited
+        return (resolve: (v: unknown) => void) => resolve(resolveValue)
+      }
+      // Any chained method returns the proxy itself
+      if (!self[prop as string]) {
+        self[prop as string] = new Proxy({}, handler)
+      }
+      return (..._args: unknown[]) => new Proxy({}, handler)
+    },
+  }
+  return new Proxy({}, handler)
+}
+
+// ---------------------------------------------------------------------------
 // GET /v1/app/:slug
 // ---------------------------------------------------------------------------
 
 describe("GET /v1/app/:slug", () => {
   it("returns 404 when app not found", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { code: "PGRST116", message: "not found" },
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      // First call: slug lookup — not found
+      return createChainMock({ data: null, error: { code: "PGRST116", message: "not found" } }) as never
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -147,33 +168,21 @@ describe("GET /v1/app/:slug", () => {
     expect(res.json().error.code).toBe("not_found")
   })
 
-  it("returns 404 when app is inactive (error from supabase)", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { message: "no rows" },
-    })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
-
-    const res = await app.inject({
-      method: "GET",
-      url: `/v1/app/${TEST_SLUG}`,
-    })
-
-    expect(res.statusCode).toBe(404)
-  })
-
   it("returns 200 with camelCase response on success", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: DB_APP_ROW,
-      error: null,
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // Slug lookup → workflow_id
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      }
+      if (callCount === 2) {
+        // All versions
+        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, created_at: "2026-01-01T00:00:00Z" }], error: null }) as never
+      }
+      // App row
+      return createChainMock({ data: DB_APP_ROW, error: null }) as never
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -191,6 +200,8 @@ describe("GET /v1/app/:slug", () => {
     expect(body.creatorId).toBe("creator-123")
     expect(body.maxRunsPerUserPerDay).toBe(5)
     expect(body.createdAt).toBe("2026-01-01T00:00:00Z")
+    expect(body.versions).toEqual([{ version: 1, id: TEST_APP_ID, createdAt: "2026-01-01T00:00:00Z" }])
+    expect(body.workflowId).toBe(TEST_WORKFLOW_ID)
     // Ensure no snake_case keys leaked
     expect(body.icon_url).toBeUndefined()
     expect(body.snapshot_nodes).toBeUndefined()
@@ -198,14 +209,13 @@ describe("GET /v1/app/:slug", () => {
   })
 
   it("does not require auth", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: DB_APP_ROW,
-      error: null,
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      if (callCount === 2) return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, created_at: "2026-01-01T00:00:00Z" }], error: null }) as never
+      return createChainMock({ data: DB_APP_ROW, error: null }) as never
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     // No x-user-id header
     const res = await app.inject({
@@ -233,14 +243,9 @@ describe("POST /v1/app/:slug/run", () => {
   })
 
   it("returns 404 when app not found", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { message: "not found" },
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: null, error: { message: "not found" } }) as never
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -254,30 +259,22 @@ describe("POST /v1/app/:slug/run", () => {
   })
 
   it("returns 429 when daily rate limit exceeded", async () => {
+    let callCount = 0
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "published_apps") {
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: { ...DB_APP_ROW, max_runs_per_user_per_day: 5 },
-          error: null,
-        })
-        const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
+      callCount++
+      if (callCount === 1) {
+        // Slug lookup
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      }
+      if (callCount === 2) {
+        // Version lookup
+        return createChainMock({ data: { ...DB_APP_ROW, max_runs_per_user_per_day: 5 }, error: null }) as never
       }
       if (table === "app_runs") {
-        // Rate limit check: select("id", { count: "exact", head: true }).eq(app_id).eq(runner_id).gte(created_at)
-        const mockGte = vi.fn().mockResolvedValue({
-          count: 5,
-          data: null,
-          error: null,
-        })
-        const mockEq2 = vi.fn().mockReturnValue({ gte: mockGte })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
+        // Rate limit check
+        return createChainMock({ count: 5, data: null, error: null }) as never
       }
-      return {} as never
+      return createChainMock({ data: null, error: null }) as never
     })
 
     const res = await app.inject({
@@ -292,38 +289,24 @@ describe("POST /v1/app/:slug/run", () => {
   })
 
   function setupSuccessfulRunMocks() {
+    let callCount = 0
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "published_apps") {
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: { ...DB_APP_ROW, max_runs_per_user_per_day: null },
-          error: null,
-        })
-        const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
+      callCount++
+      if (callCount === 1) {
+        // Slug lookup
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
       }
-      if (table === "app_runs") {
-        // Insert app_run
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: { id: TEST_RUN_ID },
-          error: null,
-        })
-        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-        return { insert: mockInsert } as never
+      if (callCount === 2) {
+        // Version lookup
+        return createChainMock({ data: { ...DB_APP_ROW, max_runs_per_user_per_day: null }, error: null }) as never
       }
       if (table === "workflow_executions") {
-        // Insert execution
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: { id: TEST_EXECUTION_ID },
-          error: null,
-        })
-        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-        return { insert: mockInsert } as never
+        return createChainMock({ data: { id: TEST_EXECUTION_ID }, error: null }) as never
       }
-      return {} as never
+      if (table === "app_runs") {
+        return createChainMock({ data: { id: TEST_RUN_ID }, error: null }) as never
+      }
+      return createChainMock({ data: null, error: null }) as never
     })
   }
 
@@ -351,6 +334,7 @@ describe("POST /v1/app/:slug/run", () => {
         userId: TEST_USER_ID,
         triggerType: "manual",
         inputOverrides: { n1: { prompt: "a cat" } },
+        appVersionId: TEST_APP_ID,
       }),
       { jobId: TEST_EXECUTION_ID }
     )
@@ -392,18 +376,8 @@ describe("GET /v1/app/:slug/runs", () => {
   })
 
   it("returns 404 when app not found", async () => {
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "published_apps") {
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: null,
-          error: { message: "not found" },
-        })
-        const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
-      }
-      return {} as never
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: null, error: { message: "not found" } }) as never
     })
 
     const res = await app.inject({
@@ -419,6 +393,7 @@ describe("GET /v1/app/:slug/runs", () => {
   it("returns 200 with paginated results", async () => {
     const runItem = {
       id: TEST_RUN_ID,
+      app_id: TEST_APP_ID,
       created_at: "2026-01-01T12:00:00Z",
       execution_id: TEST_EXECUTION_ID,
       workflow_executions: {
@@ -430,30 +405,19 @@ describe("GET /v1/app/:slug/runs", () => {
       },
     }
 
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "published_apps") {
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: { id: TEST_APP_ID },
-          error: null,
-        })
-        const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // Slug lookup
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
       }
-      if (table === "app_runs") {
-        // The query chain: select -> eq(app_id) -> eq(runner_id) -> order -> limit
-        const mockLimit = vi.fn().mockResolvedValue({
-          data: [runItem],
-          error: null,
-        })
-        const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-        const mockEq2 = vi.fn().mockReturnValue({ order: mockOrder })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
+      if (callCount === 2) {
+        // All versions
+        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1 }], error: null }) as never
       }
-      return {} as never
+      // Runs query
+      return createChainMock({ data: [runItem], error: null }) as never
     })
 
     const res = await app.inject({
@@ -471,33 +435,21 @@ describe("GET /v1/app/:slug/runs", () => {
     expect(body.data[0].completedNodes).toBe(1)
     expect(body.data[0].totalNodes).toBe(1)
     expect(body.data[0].createdAt).toBe("2026-01-01T12:00:00Z")
+    expect(body.data[0].version).toBe(1)
     expect(body.nextCursor).toBeUndefined()
   })
 
   it("returns 200 with empty list", async () => {
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "published_apps") {
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: { id: TEST_APP_ID },
-          error: null,
-        })
-        const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
       }
-      if (table === "app_runs") {
-        const mockLimit = vi.fn().mockResolvedValue({
-          data: [],
-          error: null,
-        })
-        const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-        const mockEq2 = vi.fn().mockReturnValue({ order: mockOrder })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
+      if (callCount === 2) {
+        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1 }], error: null }) as never
       }
-      return {} as never
+      return createChainMock({ data: [], error: null }) as never
     })
 
     const res = await app.inject({
@@ -537,14 +489,9 @@ describe("GET /v1/app/:slug/runs/:runId", () => {
   })
 
   it("returns 404 when run not found", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: null,
-      error: { code: "PGRST116", message: "not found" },
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: null, error: { code: "PGRST116", message: "not found" } }) as never
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -557,14 +504,9 @@ describe("GET /v1/app/:slug/runs/:runId", () => {
   })
 
   it("returns 200 with execution data", async () => {
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: DB_RUN_ROW,
-      error: null,
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: DB_RUN_ROW, error: null }) as never
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -578,6 +520,7 @@ describe("GET /v1/app/:slug/runs/:runId", () => {
     expect(body.appId).toBe(TEST_APP_ID)
     expect(body.executionId).toBe(TEST_EXECUTION_ID)
     expect(body.createdAt).toBe("2026-01-01T12:00:00Z")
+    expect(body.version).toBe(1)
     // Verify execution sub-object is camelCased
     expect(body.execution).toBeDefined()
     expect(body.execution.id).toBe(TEST_EXECUTION_ID)
@@ -594,17 +537,13 @@ describe("GET /v1/app/:slug/runs/:runId", () => {
   it("returns 200 with null execution when not joined", async () => {
     const runWithoutExec = {
       ...DB_RUN_ROW,
+      published_apps: { version: 1 },
       workflow_executions: null,
     }
 
-    const mockSingle = vi.fn().mockResolvedValue({
-      data: runWithoutExec,
-      error: null,
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: runWithoutExec, error: null }) as never
     })
-    const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -642,19 +581,8 @@ describe("DELETE /v1/app/:slug/runs/:runId", () => {
   })
 
   it("returns 404 when run not found", async () => {
-    // First call: find run (ownership check)
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "app_runs") {
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: null,
-          error: { code: "PGRST116", message: "not found" },
-        })
-        const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
-      }
-      return {} as never
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: null, error: { code: "PGRST116", message: "not found" } }) as never
     })
 
     const res = await app.inject({
@@ -668,29 +596,15 @@ describe("DELETE /v1/app/:slug/runs/:runId", () => {
   })
 
   it("returns 200 on successful delete", async () => {
-    let deleteCallCount = 0
-
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "app_runs") {
-        deleteCallCount++
-        if (deleteCallCount <= 1) {
-          // First call: ownership check (select)
-          const mockSingle = vi.fn().mockResolvedValue({
-            data: { id: TEST_RUN_ID },
-            error: null,
-          })
-          const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-          const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-          const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-          return { select: mockSelect } as never
-        }
-        // Second call: actual delete
-        const mockEq2 = vi.fn().mockResolvedValue({ error: null })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { delete: mockDelete } as never
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // Ownership check
+        return createChainMock({ data: { id: TEST_RUN_ID }, error: null }) as never
       }
-      return {} as never
+      // Delete
+      return createChainMock({ error: null }) as never
     })
 
     const res = await app.inject({
@@ -704,31 +618,15 @@ describe("DELETE /v1/app/:slug/runs/:runId", () => {
   })
 
   it("returns 500 when delete fails", async () => {
-    let deleteCallCount = 0
-
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "app_runs") {
-        deleteCallCount++
-        if (deleteCallCount <= 1) {
-          // Ownership check succeeds
-          const mockSingle = vi.fn().mockResolvedValue({
-            data: { id: TEST_RUN_ID },
-            error: null,
-          })
-          const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-          const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-          const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-          return { select: mockSelect } as never
-        }
-        // Delete fails
-        const mockEq2 = vi.fn().mockResolvedValue({
-          error: { message: "FK constraint" },
-        })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { delete: mockDelete } as never
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // Ownership check succeeds
+        return createChainMock({ data: { id: TEST_RUN_ID }, error: null }) as never
       }
-      return {} as never
+      // Delete fails
+      return createChainMock({ error: { message: "FK constraint" } }) as never
     })
 
     const res = await app.inject({

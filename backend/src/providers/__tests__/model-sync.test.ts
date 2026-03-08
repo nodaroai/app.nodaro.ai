@@ -12,7 +12,7 @@ vi.mock("@/lib/config.js", () => ({
   isBusiness: () => false,
   hasAdmin: () => true,
 }))
-vi.mock("@/billing/paddle-config.js", () => ({
+vi.mock("@/billing/stripe-config.js", () => ({
   FREE_TIER_RESTRICTIONS: { blockedModels: [], dailyCreditCap: 10 },
   TIER_STORAGE_LIMITS: {},
 }))

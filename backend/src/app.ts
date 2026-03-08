@@ -59,7 +59,7 @@ import { transcribeRoutes } from "./routes/transcribe.js"
 import { adminCreditsRoutes } from "./routes/admin-credits.js"
 import { workflowCostRoutes } from "./routes/workflow-costs.js"
 import { sunoRoutes } from "./routes/suno.js"
-import { paddleWebhookRoutes } from "./routes/paddle-webhook.js"
+import { stripeWebhookRoutes } from "./routes/stripe-webhook.js"
 import { billingRoutes } from "./routes/billing.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
@@ -181,7 +181,7 @@ export async function buildApp() {
   await app.register(adminCreditsRoutes)
   await app.register(workflowCostRoutes)
   await app.register(sunoRoutes)
-  await app.register(paddleWebhookRoutes)
+  await app.register(stripeWebhookRoutes)
   await app.register(billingRoutes)
   await app.register(galleryRoutes)
   await app.register(userSettingsRoutes)

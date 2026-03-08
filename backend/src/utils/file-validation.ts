@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
-import { TIER_STORAGE_LIMITS } from "../billing/paddle-config.js"
+import { TIER_STORAGE_LIMITS } from "../billing/stripe-config.js"
 
 // ============================================================
 // MIME Type Validation

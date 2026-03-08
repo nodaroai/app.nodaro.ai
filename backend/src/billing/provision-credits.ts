@@ -1,7 +1,7 @@
 /**
- * Paddle Credit Provisioning Service
+ * Stripe Credit Provisioning Service
  *
- * Helper functions called by the Paddle webhook handler to manage
+ * Helper functions called by the Stripe webhook handler to manage
  * subscriptions, tiers, and credit allocations.
  * All DB operations use the Supabase service-role client.
  */
@@ -12,50 +12,50 @@ import {
   getTopupCredits,
   TIER_CREDITS,
   TIER_STORAGE_LIMITS,
-} from "./paddle-config.js"
+} from "./stripe-config.js"
 import { CreditsService } from "./credits.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 
-// ── Paddle Customer Mapping ──────────────────────────────────────
+// ── Stripe Customer Mapping ──────────────────────────────────────
 
-export async function getUserIdFromPaddleCustomer(
-  paddleCustomerId: string
+export async function getUserIdFromStripeCustomer(
+  stripeCustomerId: string
 ): Promise<string | null> {
   const { data } = await supabase
-    .from("paddle_customers")
+    .from("stripe_customers")
     .select("user_id")
-    .eq("paddle_customer_id", paddleCustomerId)
+    .eq("stripe_customer_id", stripeCustomerId)
     .single()
   return data?.user_id ?? null
 }
 
-export async function ensurePaddleCustomer(
-  paddleCustomerId: string,
+export async function ensureStripeCustomer(
+  stripeCustomerId: string,
   userId: string
 ): Promise<void> {
   const { error } = await supabase
-    .from("paddle_customers")
+    .from("stripe_customers")
     .upsert(
-      { paddle_customer_id: paddleCustomerId, user_id: userId },
-      { onConflict: "paddle_customer_id" }
+      { stripe_customer_id: stripeCustomerId, user_id: userId },
+      { onConflict: "stripe_customer_id" }
     )
   if (error) {
-    console.error("[paddle] Failed to upsert paddle_customers:", error.message)
+    console.error("[stripe] Failed to upsert stripe_customers:", error.message)
   }
 }
 
-// ── Resolve userId from event (customer lookup + custom_data fallback) ──
+// ── Resolve userId from event (customer lookup + metadata fallback) ──
 
 export async function resolveUserId(
-  paddleCustomerId: string,
-  customData: Record<string, unknown> | null
+  stripeCustomerId: string,
+  metadata: Record<string, string> | null
 ): Promise<string | null> {
-  const userId = await getUserIdFromPaddleCustomer(paddleCustomerId)
+  const userId = await getUserIdFromStripeCustomer(stripeCustomerId)
   if (userId) return userId
 
-  const fallbackUserId = customData?.userId as string | undefined
+  const fallbackUserId = metadata?.userId
   if (fallbackUserId) {
-    await ensurePaddleCustomer(paddleCustomerId, fallbackUserId)
+    await ensureStripeCustomer(stripeCustomerId, fallbackUserId)
     return fallbackUserId
   }
 
@@ -66,12 +66,12 @@ export async function resolveUserId(
 
 interface SubscriptionCreatedData {
   readonly subscriptionId: string
-  readonly paddleCustomerId: string
+  readonly stripeCustomerId: string
   readonly priceId: string
   readonly status: string
   readonly currentPeriodStart: string | null
   readonly currentPeriodEnd: string | null
-  readonly customData: Record<string, unknown> | null
+  readonly metadata: Record<string, string> | null
   readonly transactionId?: string
   readonly amountUsd?: number
 }
@@ -79,9 +79,9 @@ interface SubscriptionCreatedData {
 export async function handleSubscriptionCreated(
   data: SubscriptionCreatedData
 ): Promise<void> {
-  const userId = await resolveUserId(data.paddleCustomerId, data.customData)
+  const userId = await resolveUserId(data.stripeCustomerId, data.metadata)
   if (!userId) {
-    console.error("[paddle] subscription.created: cannot resolve userId for customer", data.paddleCustomerId)
+    console.error("[stripe] subscription.created: cannot resolve userId for customer", data.stripeCustomerId)
     return
   }
 
@@ -93,11 +93,11 @@ export async function handleSubscriptionCreated(
   const { data: existing } = await supabase
     .from("subscriptions")
     .select("id")
-    .eq("paddle_subscription_id", data.subscriptionId)
+    .eq("stripe_subscription_id", data.subscriptionId)
     .single()
 
   if (existing) {
-    console.log("[paddle] subscription.created: already exists, skipping", data.subscriptionId)
+    console.log("[stripe] subscription.created: already exists, skipping", data.subscriptionId)
     return
   }
 
@@ -106,8 +106,8 @@ export async function handleSubscriptionCreated(
     .from("subscriptions")
     .insert({
       user_id: userId,
-      paddle_subscription_id: data.subscriptionId,
-      paddle_price_id: data.priceId,
+      stripe_subscription_id: data.subscriptionId,
+      stripe_price_id: data.priceId,
       tier,
       status: data.status,
       current_period_start: data.currentPeriodStart,
@@ -115,7 +115,7 @@ export async function handleSubscriptionCreated(
     })
 
   if (subError) {
-    console.error("[paddle] subscription.created: insert failed:", subError.message)
+    console.error("[stripe] subscription.created: insert failed:", subError.message)
     return
   }
 
@@ -132,7 +132,7 @@ export async function handleSubscriptionCreated(
     .eq("id", userId)
 
   if (profileError) {
-    console.error("[paddle] subscription.created: profile update failed:", profileError.message)
+    console.error("[stripe] subscription.created: profile update failed:", profileError.message)
   }
 
   invalidateBalanceCache(userId)
@@ -141,7 +141,7 @@ export async function handleSubscriptionCreated(
   if (data.transactionId) {
     await insertTransaction({
       userId,
-      paddleTransactionId: data.transactionId,
+      stripeTransactionId: data.transactionId,
       type: "subscription",
       amountUsd: data.amountUsd ?? 0,
       creditsGranted: credits,
@@ -159,50 +159,50 @@ export async function handleSubscriptionCreated(
     balanceAfter: credits,
   })
 
-  console.log(`[paddle] subscription.created: user=${userId} tier=${tier} credits=${credits}`)
+  console.log(`[stripe] subscription.created: user=${userId} tier=${tier} credits=${credits}`)
 }
 
 // ── Subscription Updated ─────────────────────────────────────────
 
 interface SubscriptionUpdatedData {
   readonly subscriptionId: string
-  readonly paddleCustomerId: string
+  readonly stripeCustomerId: string
   readonly priceId: string
   readonly status: string
   readonly currentPeriodStart: string | null
   readonly currentPeriodEnd: string | null
-  readonly customData: Record<string, unknown> | null
+  readonly metadata: Record<string, string> | null
 }
 
 export async function handleSubscriptionUpdated(
   data: SubscriptionUpdatedData
 ): Promise<void> {
-  const userId = await resolveUserId(data.paddleCustomerId, data.customData)
+  const userId = await resolveUserId(data.stripeCustomerId, data.metadata)
   if (!userId) {
-    console.error("[paddle] subscription.updated: cannot resolve userId for customer", data.paddleCustomerId)
+    console.error("[stripe] subscription.updated: cannot resolve userId for customer", data.stripeCustomerId)
     return
   }
 
   // Look up existing subscription
   const { data: existing } = await supabase
     .from("subscriptions")
-    .select("id, paddle_price_id, tier, current_period_start")
-    .eq("paddle_subscription_id", data.subscriptionId)
+    .select("id, stripe_price_id, tier, current_period_start")
+    .eq("stripe_subscription_id", data.subscriptionId)
     .single()
 
   if (!existing) {
-    console.warn("[paddle] subscription.updated: subscription not found", data.subscriptionId)
+    console.warn("[stripe] subscription.updated: subscription not found", data.subscriptionId)
     return
   }
 
   const newTier = getTierFromPriceId(data.priceId)
   const oldTier = existing.tier
-  const newCredits = TIER_CREDITS[newTier] ?? 50
-  const oldCredits = TIER_CREDITS[oldTier] ?? 50
+  const newCredits = TIER_CREDITS[newTier] ?? 0
+  const oldCredits = TIER_CREDITS[oldTier] ?? 0
   const storageLimit = TIER_STORAGE_LIMITS[newTier] ?? TIER_STORAGE_LIMITS.free
 
   // Check if this is a tier change (upgrade/downgrade)
-  const tierChanged = existing.paddle_price_id !== data.priceId
+  const tierChanged = existing.stripe_price_id !== data.priceId
 
   // Check if this is a renewal (billing period changed)
   const isRenewal = existing.current_period_start !== data.currentPeriodStart
@@ -218,7 +218,7 @@ export async function handleSubscriptionUpdated(
         .eq("id", userId)
 
       if (creditError) {
-        console.error("[paddle] subscription.updated: credit SET failed:", creditError.message)
+        console.error("[stripe] subscription.updated: credit SET failed:", creditError.message)
       }
 
       // Audit log: upgrade
@@ -231,7 +231,7 @@ export async function handleSubscriptionUpdated(
         balanceAfter: newCredits,
       })
 
-      console.log(`[paddle] subscription.updated: upgrade ${oldTier}->${newTier}, set credits to ${newCredits}`)
+      console.log(`[stripe] subscription.updated: upgrade ${oldTier}->${newTier}, set credits to ${newCredits}`)
     } else {
       // Downgrade: don't reduce credits immediately — let user keep current credits until next renewal
       await CreditsService.logTransaction({
@@ -243,7 +243,7 @@ export async function handleSubscriptionUpdated(
         balanceAfter: newCredits,
       })
 
-      console.log(`[paddle] subscription.updated: downgrade ${oldTier}->${newTier}, credits unchanged until renewal`)
+      console.log(`[stripe] subscription.updated: downgrade ${oldTier}->${newTier}, credits unchanged until renewal`)
     }
   }
 
@@ -258,7 +258,7 @@ export async function handleSubscriptionUpdated(
       .eq("id", userId)
 
     if (resetError) {
-      console.error("[paddle] subscription.updated: credit reset failed:", resetError.message)
+      console.error("[stripe] subscription.updated: credit reset failed:", resetError.message)
     } else {
       // Audit log: renewal
       await CreditsService.logTransaction({
@@ -269,7 +269,7 @@ export async function handleSubscriptionUpdated(
         description: `Subscription renewal: ${newTier} tier (credits reset to ${newCredits})`,
         balanceAfter: newCredits,
       })
-      console.log(`[paddle] subscription.updated: renewal, reset credits to ${newCredits}`)
+      console.log(`[stripe] subscription.updated: renewal, reset credits to ${newCredits}`)
     }
   }
 
@@ -277,17 +277,17 @@ export async function handleSubscriptionUpdated(
   const { error: subError } = await supabase
     .from("subscriptions")
     .update({
-      paddle_price_id: data.priceId,
+      stripe_price_id: data.priceId,
       tier: newTier,
       status: data.status,
       current_period_start: data.currentPeriodStart,
       current_period_end: data.currentPeriodEnd,
       updated_at: new Date().toISOString(),
     })
-    .eq("paddle_subscription_id", data.subscriptionId)
+    .eq("stripe_subscription_id", data.subscriptionId)
 
   if (subError) {
-    console.error("[paddle] subscription.updated: update failed:", subError.message)
+    console.error("[stripe] subscription.updated: update failed:", subError.message)
   }
 
   // Update profile tier and storage
@@ -300,7 +300,7 @@ export async function handleSubscriptionUpdated(
     .eq("id", userId)
 
   if (profileError) {
-    console.error("[paddle] subscription.updated: profile update failed:", profileError.message)
+    console.error("[stripe] subscription.updated: profile update failed:", profileError.message)
   }
 
   invalidateBalanceCache(userId)
@@ -310,15 +310,15 @@ export async function handleSubscriptionUpdated(
 
 interface SubscriptionCanceledData {
   readonly subscriptionId: string
-  readonly paddleCustomerId: string
+  readonly stripeCustomerId: string
   readonly currentPeriodEnd: string | null
-  readonly customData: Record<string, unknown> | null
+  readonly metadata: Record<string, string> | null
 }
 
 export async function handleSubscriptionCanceled(
   data: SubscriptionCanceledData
 ): Promise<void> {
-  const userId = await resolveUserId(data.paddleCustomerId, data.customData)
+  const userId = await resolveUserId(data.stripeCustomerId, data.metadata)
   const now = new Date().toISOString()
 
   // Update subscription status
@@ -329,21 +329,16 @@ export async function handleSubscriptionCanceled(
       canceled_at: now,
       updated_at: now,
     })
-    .eq("paddle_subscription_id", data.subscriptionId)
+    .eq("stripe_subscription_id", data.subscriptionId)
 
   if (subError) {
-    console.error("[paddle] subscription.canceled: update failed:", subError.message)
+    console.error("[stripe] subscription.canceled: update failed:", subError.message)
   }
 
   if (!userId) {
-    console.error("[paddle] subscription.canceled: cannot resolve userId for customer", data.paddleCustomerId)
+    console.error("[stripe] subscription.canceled: cannot resolve userId for customer", data.stripeCustomerId)
     return
   }
-
-  // When subscription.canceled fires, the subscription is definitively over:
-  // - Immediate cancellations: Paddle fires this right away
-  // - End-of-period cancellations: Paddle fires this when the period ends
-  // In both cases, downgrade the user to free tier now.
 
   // Get current subscription credits to cap at free tier limit
   const { data: profile } = await supabase
@@ -353,7 +348,7 @@ export async function handleSubscriptionCanceled(
     .single()
 
   const currentSubCredits = profile?.subscription_credits ?? 0
-  const freeCredits = TIER_CREDITS.free ?? 50
+  const freeCredits = TIER_CREDITS.free ?? 0
   const cappedCredits = Math.min(currentSubCredits, freeCredits)
 
   const { error: profileError } = await supabase
@@ -367,7 +362,7 @@ export async function handleSubscriptionCanceled(
     .eq("id", userId)
 
   if (profileError) {
-    console.error("[paddle] subscription.canceled: profile downgrade failed:", profileError.message)
+    console.error("[stripe] subscription.canceled: profile downgrade failed:", profileError.message)
   }
 
   invalidateBalanceCache(userId)
@@ -383,37 +378,57 @@ export async function handleSubscriptionCanceled(
   })
 
   console.log(
-    `[paddle] subscription.canceled: sub=${data.subscriptionId} user=${userId} downgraded to free (credits: ${cappedCredits})`
+    `[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} downgraded to free (credits: ${cappedCredits})`
   )
 }
 
-// ── Subscription Status Updates (past_due, paused, resumed) ──────
+// ── Invoice Paid (credit renewal for subscriptions) ──────────────
 
-export async function updateSubscriptionStatus(
-  subscriptionId: string,
-  status: string
+interface InvoicePaidData {
+  readonly invoiceId: string
+  readonly subscriptionId: string
+  readonly stripeCustomerId: string
+  readonly amountPaid: number
+  readonly metadata: Record<string, string> | null
+}
+
+export async function handleInvoicePaid(
+  data: InvoicePaidData
 ): Promise<void> {
-  const { error } = await supabase
+  // Look up subscription to get tier info
+  const { data: sub } = await supabase
     .from("subscriptions")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("paddle_subscription_id", subscriptionId)
+    .select("tier, user_id")
+    .eq("stripe_subscription_id", data.subscriptionId)
+    .single()
 
-  if (error) {
-    console.error(`[paddle] subscription.${status}: update failed:`, error.message)
-  } else {
-    console.log(`[paddle] subscription.${status}: sub=${subscriptionId}`)
+  if (!sub) {
+    console.log("[stripe] invoice.paid: subscription not found, skipping", data.subscriptionId)
+    return
   }
+
+  // Insert transaction record for tracking
+  await insertTransaction({
+    userId: sub.user_id,
+    stripeTransactionId: data.invoiceId,
+    type: "subscription",
+    amountUsd: data.amountPaid / 100,
+    creditsGranted: TIER_CREDITS[sub.tier] ?? 0,
+    tier: sub.tier,
+  })
+
+  console.log(`[stripe] invoice.paid: user=${sub.user_id} tier=${sub.tier} invoice=${data.invoiceId}`)
 }
 
 // ── Transaction Completed (top-ups) ──────────────────────────────
 
 interface TransactionCompletedData {
   readonly transactionId: string
-  readonly paddleCustomerId: string | null
+  readonly stripeCustomerId: string | null
   readonly subscriptionId: string | null
-  readonly items: ReadonlyArray<{ priceId: string }>
+  readonly lineItems: ReadonlyArray<{ priceId: string }>
   readonly totalAmount: number
-  readonly customData: Record<string, unknown> | null
+  readonly metadata: Record<string, string> | null
 }
 
 export async function handleTransactionCompleted(
@@ -421,7 +436,7 @@ export async function handleTransactionCompleted(
 ): Promise<void> {
   // Skip subscription-related transactions (handled by subscription events)
   if (data.subscriptionId) {
-    console.log("[paddle] transaction.completed: subscription tx, skipping", data.transactionId)
+    console.log("[stripe] transaction.completed: subscription tx, skipping", data.transactionId)
     return
   }
 
@@ -429,17 +444,17 @@ export async function handleTransactionCompleted(
   const { data: existing } = await supabase
     .from("transactions")
     .select("id")
-    .eq("paddle_transaction_id", data.transactionId)
+    .eq("stripe_transaction_id", data.transactionId)
     .single()
 
   if (existing) {
-    console.log("[paddle] transaction.completed: already processed, skipping", data.transactionId)
+    console.log("[stripe] transaction.completed: already processed, skipping", data.transactionId)
     return
   }
 
-  // Find top-up price in items
+  // Find top-up price in line items
   let totalCredits = 0
-  for (const item of data.items) {
+  for (const item of data.lineItems) {
     const credits = getTopupCredits(item.priceId)
     if (credits) {
       totalCredits += credits
@@ -447,17 +462,17 @@ export async function handleTransactionCompleted(
   }
 
   if (totalCredits === 0) {
-    console.log("[paddle] transaction.completed: no top-up items found", data.transactionId)
+    console.log("[stripe] transaction.completed: no top-up items found", data.transactionId)
     return
   }
 
   // Resolve user
-  const userId = data.paddleCustomerId
-    ? await resolveUserId(data.paddleCustomerId, data.customData)
-    : (data.customData?.userId as string | undefined) ?? null
+  const userId = data.stripeCustomerId
+    ? await resolveUserId(data.stripeCustomerId, data.metadata)
+    : data.metadata?.userId ?? null
 
   if (!userId) {
-    console.error("[paddle] transaction.completed: cannot resolve userId for tx", data.transactionId)
+    console.error("[stripe] transaction.completed: cannot resolve userId for tx", data.transactionId)
     return
   }
 
@@ -468,29 +483,29 @@ export async function handleTransactionCompleted(
   })
 
   if (rpcError) {
-    console.error("[paddle] transaction.completed: add_topup_credits failed:", rpcError.message)
+    console.error("[stripe] transaction.completed: add_topup_credits failed:", rpcError.message)
     return
   }
 
   // Record transaction
   await insertTransaction({
     userId,
-    paddleTransactionId: data.transactionId,
+    stripeTransactionId: data.transactionId,
     type: "topup",
-    amountUsd: data.totalAmount / 100, // Paddle amounts in cents
+    amountUsd: data.totalAmount / 100, // Stripe amounts in cents
     creditsGranted: totalCredits,
   })
 
   invalidateBalanceCache(userId)
 
-  console.log(`[paddle] transaction.completed: user=${userId} topup +${totalCredits} credits`)
+  console.log(`[stripe] transaction.completed: user=${userId} topup +${totalCredits} credits`)
 }
 
 // ── Shared: Insert Transaction Record ────────────────────────────
 
 interface InsertTransactionParams {
   readonly userId: string
-  readonly paddleTransactionId: string
+  readonly stripeTransactionId: string
   readonly type: "subscription" | "topup"
   readonly amountUsd: number
   readonly creditsGranted: number
@@ -503,16 +518,16 @@ async function insertTransaction(params: InsertTransactionParams): Promise<void>
     .upsert(
       {
         user_id: params.userId,
-        paddle_transaction_id: params.paddleTransactionId,
+        stripe_transaction_id: params.stripeTransactionId,
         type: params.type,
         amount_usd: params.amountUsd,
         credits_granted: params.creditsGranted,
         tier: params.tier ?? null,
       },
-      { onConflict: "paddle_transaction_id" }
+      { onConflict: "stripe_transaction_id" }
     )
 
   if (error) {
-    console.error("[paddle] insertTransaction failed:", error.message)
+    console.error("[stripe] insertTransaction failed:", error.message)
   }
 }

@@ -76,7 +76,7 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/gallery/items" },
   { path: "/v1/gallery/report" },
   { path: "/v1/download", prefix: true },
-  { path: "/v1/billing/paddle-webhook" },
+  { path: "/v1/billing/stripe-webhook" },
   { path: "/v1/image-proxy" },
   { path: "/v1/credits/model-cost" },
   { path: "/v1/credits/model-costs" },

@@ -2,7 +2,7 @@
  * Pricing Tier Data
  *
  * Client-side pricing constants for the pricing page and billing dashboard.
- * Price IDs match the Paddle configuration in backend/src/billing/paddle-config.ts.
+ * Price IDs match the Stripe configuration in backend/src/billing/stripe-config.ts.
  *
  * Two billing cycles: "monthly" (higher price) and "annual" (billed yearly at lower per-month rate).
  */
@@ -37,6 +37,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     storage: "1 GB",
     features: [
       "250 credits / month",
+      "50 credits / day cap",
       "20 LLM requests / month",
       "1 GB storage",
       "Basic models only",
@@ -50,8 +51,8 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     name: "Basic",
     priceMonthly: 24,
     priceAnnual: 19,
-    priceIdMonthly: import.meta.env.VITE_PADDLE_PRICE_BASIC_MONTHLY || null,
-    priceIdAnnual: import.meta.env.VITE_PADDLE_PRICE_BASIC || "pri_01kh3bsqwcvna2shws5ee1fzek",
+    priceIdMonthly: "price_1T8T2r6EOX16l3P8KLqPT0Gp",
+    priceIdAnnual: "price_1T8T376EOX16l3P8eW5VKwoe",
     credits: 475,
     llmRequests: 100,
     storage: "10 GB",
@@ -70,8 +71,8 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     name: "Standard",
     priceMonthly: 49,
     priceAnnual: 39,
-    priceIdMonthly: import.meta.env.VITE_PADDLE_PRICE_STANDARD_MONTHLY || null,
-    priceIdAnnual: import.meta.env.VITE_PADDLE_PRICE_STANDARD || "pri_01kh3btfezxg529x44qknn5h1q",
+    priceIdMonthly: "price_1T8T1m6EOX16l3P8TuFGxcZr",
+    priceIdAnnual: "price_1T8T266EOX16l3P8g39cb6jm",
     credits: 1175,
     llmRequests: 300,
     storage: "25 GB",
@@ -90,8 +91,8 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     name: "Pro",
     priceMonthly: 99,
     priceAnnual: 79,
-    priceIdMonthly: import.meta.env.VITE_PADDLE_PRICE_PRO_MONTHLY || null,
-    priceIdAnnual: import.meta.env.VITE_PADDLE_PRICE_PRO || "pri_01kh3bvg0gjkhnydp175zyzzd6",
+    priceIdMonthly: "price_1T8Swg6EOX16l3P8NNctdzT3",
+    priceIdAnnual: "price_1T8Syr6EOX16l3P8z92jaRh6",
     credits: 2650,
     llmRequests: 1000,
     storage: "50 GB",
@@ -111,8 +112,8 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     name: "Business",
     priceMonthly: 189,
     priceAnnual: 149,
-    priceIdMonthly: import.meta.env.VITE_PADDLE_PRICE_BUSINESS_MONTHLY || null,
-    priceIdAnnual: import.meta.env.VITE_PADDLE_PRICE_BUSINESS || "pri_01kh3bwnatzcgmj55pxdrkhap7",
+    priceIdMonthly: "price_1T8T0C6EOX16l3P8ffdUbr2t",
+    priceIdAnnual: "price_1T8T0s6EOX16l3P8VRjmbJhr",
     credits: 5600,
     llmRequests: null,
     storage: "200 GB",
@@ -130,7 +131,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
 
 /**
  * Storage limits per tier in bytes.
- * Must match backend TIER_STORAGE_LIMITS in paddle-config.ts.
+ * Must match backend TIER_STORAGE_LIMITS in stripe-config.ts.
  */
 export const TIER_STORAGE_BYTES: Record<string, number> = {
   free: 1 * 1024 * 1024 * 1024,          // 1 GB
@@ -146,7 +147,7 @@ export function getTierPrice(tier: PricingTier, cycle: BillingCycle): number {
   return cycle === "monthly" ? tier.priceMonthly : tier.priceAnnual
 }
 
-/** Get the Paddle price ID for a tier based on billing cycle. */
+/** Get the Stripe price ID for a tier based on billing cycle. */
 export function getTierPriceId(tier: PricingTier, cycle: BillingCycle): string | null {
   return cycle === "monthly" ? tier.priceIdMonthly : tier.priceIdAnnual
 }
@@ -157,7 +158,7 @@ export function getAnnualSavingsPercent(tier: PricingTier): number {
   return Math.round(((tier.priceMonthly - tier.priceAnnual) / tier.priceMonthly) * 100)
 }
 
-/** Determine billing cycle from a Paddle price ID by matching against all tiers. */
+/** Determine billing cycle from a Stripe price ID by matching against all tiers. */
 export function getBillingCycleFromPriceId(priceId: string | null | undefined): BillingCycle {
   if (!priceId) return "annual"
   for (const tier of PRICING_TIERS) {
@@ -179,14 +180,14 @@ export interface TopupPackage {
 export const TOPUP_PACKAGES: readonly TopupPackage[] = [
   {
     id: "topup_10",
-    priceId: import.meta.env.VITE_PADDLE_PRICE_TOPUP_10 || "pri_01kh3bxzszyn16c2mzsyyz4105",
+    priceId: "price_1T8T5M6EOX16l3P85i5sCtUs",
     credits: 275,
     price: 10,
     perCredit: "$0.04",
   },
   {
     id: "topup_25",
-    priceId: import.meta.env.VITE_PADDLE_PRICE_TOPUP_25 || "pri_01kh3bympxgkk83md78ey177bt",
+    priceId: "price_1T8T5k6EOX16l3P8a1goDXGm",
     credits: 750,
     price: 25,
     perCredit: "$0.03",
@@ -194,14 +195,14 @@ export const TOPUP_PACKAGES: readonly TopupPackage[] = [
   },
   {
     id: "topup_50",
-    priceId: import.meta.env.VITE_PADDLE_PRICE_TOPUP_50 || "pri_01kh3bz8shkvr7vrq65zpfdfn6",
+    priceId: "price_1T8T5w6EOX16l3P8mNU7sLkU",
     credits: 1650,
     price: 50,
     perCredit: "$0.03",
   },
   {
     id: "topup_100",
-    priceId: import.meta.env.VITE_PADDLE_PRICE_TOPUP_100 || "pri_01kh3bzr8tq1jbnkg2arkng5n9",
+    priceId: "price_1T8T6B6EOX16l3P8CmcSaJyR",
     credits: 3500,
     price: 100,
     perCredit: "$0.03",

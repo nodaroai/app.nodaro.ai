@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
-  PADDLE_PRICES,
+  STRIPE_PRODUCTS,
   TIER_CREDITS,
   TIER_STORAGE_LIMITS,
-} from "../paddle-config.js"
+} from "../stripe-config.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
@@ -148,26 +148,26 @@ describe("provision-credits", () => {
   // ════════════════════════════════════════════════════════════════════════
 
   describe("resolveUserId", () => {
-    it("returns userId from paddle_customers table", async () => {
-      mockSelect("paddle_customers", { user_id: "user-abc" })
+    it("returns userId from stripe_customers table", async () => {
+      mockSelect("stripe_customers", { user_id: "user-abc" })
 
       const result = await resolveUserId("cus_123", null)
 
       expect(result).toBe("user-abc")
     })
 
-    it("falls back to customData.userId when not in paddle_customers", async () => {
-      mockSelectNotFound("paddle_customers")
+    it("falls back to customData.userId when not in stripe_customers", async () => {
+      mockSelectNotFound("stripe_customers")
 
       const result = await resolveUserId("cus_123", { userId: "user-fallback" })
 
       expect(result).toBe("user-fallback")
-      // Should also upsert the paddle customer for future lookups
-      expect(mockFrom).toHaveBeenCalledWith("paddle_customers")
+      // Should also upsert the stripe customer for future lookups
+      expect(mockFrom).toHaveBeenCalledWith("stripe_customers")
     })
 
     it("returns null when both lookups fail", async () => {
-      mockSelectNotFound("paddle_customers")
+      mockSelectNotFound("stripe_customers")
 
       const result = await resolveUserId("cus_123", null)
 
@@ -182,17 +182,17 @@ describe("provision-credits", () => {
   describe("handleSubscriptionCreated", () => {
     const baseData = {
       subscriptionId: "sub_001",
-      paddleCustomerId: "cus_001",
-      priceId: PADDLE_PRICES.pro_monthly,
+      stripeCustomerId: "cus_001",
+      priceId: STRIPE_PRODUCTS.pro.monthly,
       status: "active",
       currentPeriodStart: "2026-01-01T00:00:00Z",
       currentPeriodEnd: "2026-02-01T00:00:00Z",
-      customData: { userId: "user-001" } as Record<string, unknown>,
+      metadata: { userId: "user-001" },
     }
 
     it("creates subscription and updates profile on success", async () => {
-      // resolveUserId: paddle_customers not found, falls back to customData
-      mockSelectNotFound("paddle_customers")
+      // resolveUserId: stripe_customers not found, falls back to customData
+      mockSelectNotFound("stripe_customers")
       // Idempotency check: subscription does not exist yet
       mockSelectNotFound("subscriptions")
 
@@ -215,7 +215,7 @@ describe("provision-credits", () => {
     })
 
     it("skips if subscription already exists (idempotent)", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       // Subscription already exists
       mockSelect("subscriptions", { id: "existing-sub-id" })
 
@@ -226,10 +226,10 @@ describe("provision-credits", () => {
     })
 
     it("sets correct tier, credits, and storage from price ID", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       mockSelectNotFound("subscriptions")
 
-      const basicData = { ...baseData, priceId: PADDLE_PRICES.basic_monthly }
+      const basicData = { ...baseData, priceId: STRIPE_PRODUCTS.basic.monthly }
 
       await handleSubscriptionCreated(basicData)
 
@@ -242,7 +242,7 @@ describe("provision-credits", () => {
     })
 
     it("logs transaction when transactionId provided", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       mockSelectNotFound("subscriptions")
 
       const dataWithTx = {
@@ -266,20 +266,20 @@ describe("provision-credits", () => {
   describe("handleSubscriptionUpdated", () => {
     const baseUpdatedData = {
       subscriptionId: "sub_001",
-      paddleCustomerId: "cus_001",
-      priceId: PADDLE_PRICES.pro_monthly,
+      stripeCustomerId: "cus_001",
+      priceId: STRIPE_PRODUCTS.pro.monthly,
       status: "active",
       currentPeriodStart: "2026-02-01T00:00:00Z",
       currentPeriodEnd: "2026-03-01T00:00:00Z",
-      customData: null,
+      metadata: null,
     }
 
     it("handles tier upgrade (sets credits to new tier amount)", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       // Existing subscription is basic tier, same period (not a renewal)
       mockSelect("subscriptions", {
         id: "sub-id",
-        paddle_price_id: PADDLE_PRICES.basic_monthly,
+        stripe_price_id: STRIPE_PRODUCTS.basic.monthly,
         tier: "basic",
         current_period_start: "2026-02-01T00:00:00Z",
       })
@@ -298,18 +298,18 @@ describe("provision-credits", () => {
     })
 
     it("handles tier downgrade (keeps current credits until renewal)", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       // Existing subscription is pro tier, same period
       mockSelect("subscriptions", {
         id: "sub-id",
-        paddle_price_id: PADDLE_PRICES.pro_monthly,
+        stripe_price_id: STRIPE_PRODUCTS.pro.monthly,
         tier: "pro",
         current_period_start: "2026-02-01T00:00:00Z",
       })
 
       const downgradeData = {
         ...baseUpdatedData,
-        priceId: PADDLE_PRICES.basic_monthly,
+        priceId: STRIPE_PRODUCTS.basic.monthly,
       }
 
       await handleSubscriptionUpdated(downgradeData)
@@ -322,11 +322,11 @@ describe("provision-credits", () => {
     })
 
     it("handles renewal (resets credits to tier amount)", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       // Same price but different period start (renewal)
       mockSelect("subscriptions", {
         id: "sub-id",
-        paddle_price_id: PADDLE_PRICES.pro_monthly,
+        stripe_price_id: STRIPE_PRODUCTS.pro.monthly,
         tier: "pro",
         current_period_start: "2026-01-01T00:00:00Z",
       })
@@ -342,11 +342,11 @@ describe("provision-credits", () => {
     })
 
     it("updates subscription record with new data", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       // Same tier, same period — no tier change, no renewal
       mockSelect("subscriptions", {
         id: "sub-id",
-        paddle_price_id: PADDLE_PRICES.pro_monthly,
+        stripe_price_id: STRIPE_PRODUCTS.pro.monthly,
         tier: "pro",
         current_period_start: "2026-02-01T00:00:00Z",
       })
@@ -369,13 +369,13 @@ describe("provision-credits", () => {
   describe("handleSubscriptionCanceled", () => {
     const baseCanceledData = {
       subscriptionId: "sub_001",
-      paddleCustomerId: "cus_001",
+      stripeCustomerId: "cus_001",
       currentPeriodEnd: "2026-02-01T00:00:00Z",
-      customData: null as Record<string, unknown> | null,
+      metadata: null as Record<string, string> | null,
     }
 
     it("downgrades to free tier immediately", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       mockSelect("profiles", { subscription_credits: 30 })
 
       await handleSubscriptionCanceled(baseCanceledData)
@@ -397,7 +397,7 @@ describe("provision-credits", () => {
     })
 
     it("caps subscription_credits at min(current, 50)", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       // User has 400 credits — should be capped to free tier (50)
       mockSelect("profiles", { subscription_credits: 400 })
 
@@ -413,7 +413,7 @@ describe("provision-credits", () => {
     })
 
     it("sets storage_limit to 1GB", async () => {
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
       mockSelect("profiles", { subscription_credits: 20 })
 
       await handleSubscriptionCanceled(baseCanceledData)
@@ -440,18 +440,18 @@ describe("provision-credits", () => {
   describe("handleTransactionCompleted", () => {
     const baseTransactionData = {
       transactionId: "txn_001",
-      paddleCustomerId: "cus_001" as string | null,
+      stripeCustomerId: "cus_001" as string | null,
       subscriptionId: null as string | null,
-      items: [{ priceId: PADDLE_PRICES.credits_150 }],
+      lineItems: [{ priceId: "price_1T8T5k6EOX16l3P8a1goDXGm" }],
       totalAmount: 2500, // $25.00 in cents
-      customData: null as Record<string, unknown> | null,
+      metadata: null as Record<string, string> | null,
     }
 
     it("grants topup credits for valid topup transaction", async () => {
       // Idempotency check: transaction not found
       mockSelectNotFound("transactions")
-      // resolveUserId: paddle_customers found
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      // resolveUserId: stripe_customers found
+      mockSelect("stripe_customers", { user_id: "user-001" })
 
       await handleTransactionCompleted(baseTransactionData)
 
@@ -490,11 +490,11 @@ describe("provision-credits", () => {
 
     it("returns early if no topup credits found for price", async () => {
       mockSelectNotFound("transactions")
-      mockSelect("paddle_customers", { user_id: "user-001" })
+      mockSelect("stripe_customers", { user_id: "user-001" })
 
       const unknownPriceData = {
         ...baseTransactionData,
-        items: [{ priceId: "pri_unknown_price" }],
+        lineItems: [{ priceId: "pri_unknown_price" }],
       }
 
       await handleTransactionCompleted(unknownPriceData)
