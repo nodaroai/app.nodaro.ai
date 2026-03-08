@@ -31,6 +31,7 @@ function toCamelCase(row: Record<string, unknown>) {
     isEmbeddable: row.is_embeddable,
     allowedOrigins: row.allowed_origins,
     estimatedCredits: row.estimated_credits,
+    thumbnailNodeId: row.thumbnail_node_id ?? null,
     createdAt: row.created_at,
   }
 }
@@ -41,6 +42,7 @@ const publishBodySchema = z.object({
   description: z.string().max(500).optional(),
   slug: z.string().min(1).max(50).optional(),
   iconUrl: z.string().url().optional(),
+  thumbnailNodeId: z.string().max(100).nullable().optional(),
 })
 
 const updateBodySchema = z.object({
@@ -51,6 +53,7 @@ const updateBodySchema = z.object({
   isEmbeddable: z.boolean().optional(),
   allowedOrigins: z.array(z.string()).optional(),
   maxRunsPerUserPerDay: z.number().int().min(0).optional(),
+  thumbnailNodeId: z.string().max(100).nullable().optional(),
 })
 
 export async function publishedAppsRoutes(app: FastifyInstance) {
@@ -64,7 +67,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: parsed.error.flatten() })
     }
 
-    const { workflowId, name, description, slug: providedSlug, iconUrl } = parsed.data
+    const { workflowId, name, description, slug: providedSlug, iconUrl, thumbnailNodeId } = parsed.data
 
     // Verify user owns the workflow
     const { data: workflow, error: wfError } = await supabase
@@ -119,6 +122,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           snapshot_edges: edges,
           snapshot_settings: workflow.settings || {},
           estimated_credits: estimatedCredits,
+          thumbnail_node_id: thumbnailNodeId ?? null,
         })
         .select()
         .single()
@@ -187,6 +191,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       isEmbeddable: app.is_embeddable,
       allowedOrigins: app.allowed_origins,
       estimatedCredits: app.estimated_credits,
+      thumbnailNodeId: app.thumbnail_node_id ?? null,
       createdAt: app.created_at,
       runCount: app.app_runs?.[0]?.count ?? 0,
     }))
@@ -230,6 +235,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     if (body.isEmbeddable !== undefined) updates.is_embeddable = body.isEmbeddable
     if (body.allowedOrigins !== undefined) updates.allowed_origins = body.allowedOrigins
     if (body.maxRunsPerUserPerDay !== undefined) updates.max_runs_per_user_per_day = body.maxRunsPerUserPerDay
+    if (body.thumbnailNodeId !== undefined) updates.thumbnail_node_id = body.thumbnailNodeId
 
     if (Object.keys(updates).length === 0) {
       return reply.status(400).send({ error: { code: "bad_request", message: "No fields to update" } })

@@ -3262,6 +3262,7 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
+  thumbnailNodeId: string | null
   createdAt: string
   runCount?: number
   versions?: AppVersion[]
@@ -3273,10 +3274,12 @@ export interface AppRun {
   executionId: string | null
   runnerId: string
   creditsUsed: number
+  name: string | null
   inputValues: Record<string, Record<string, unknown>> | null
   status: string
   createdAt: string
   version?: number | null
+  thumbnailUrl?: string | null
   // Flat fields from list endpoint
   nodeStates?: Record<string, unknown> | null
   completedNodes?: number
@@ -3289,6 +3292,7 @@ export interface AppRun {
     totalNodes: number
     completedNodes: number
     failedNodes: number
+    totalCreditsUsed: number | null
     completedAt: string | null
     errorMessage: string | null
   }
@@ -3301,6 +3305,7 @@ export async function publishApp(data: {
   slug?: string
   description?: string
   iconUrl?: string
+  thumbnailNodeId?: string | null
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     "/v1/apps/publish",
@@ -3325,6 +3330,7 @@ export async function updateApp(appId: string, data: {
   isListed?: boolean
   isEmbeddable?: boolean
   allowedOrigins?: string[]
+  thumbnailNodeId?: string | null
 }): Promise<PublishedApp> {
   return apiRequest<PublishedApp>(
     `/v1/apps/${encodeURIComponent(appId)}`,
@@ -3380,16 +3386,20 @@ export async function createAppRun(
   )
 }
 
-/** Update a draft run's input values. */
+/** Update a draft run's input values and/or name. */
 export async function updateAppRunInputs(
   slug: string,
   runId: string,
-  inputValues: Record<string, Record<string, unknown>>,
+  inputValues?: Record<string, Record<string, unknown>>,
+  name?: string | null,
 ): Promise<{ id: string; inputValues: Record<string, Record<string, unknown>> }> {
+  const body: Record<string, unknown> = {}
+  if (inputValues !== undefined) body.inputValues = inputValues
+  if (name !== undefined) body.name = name
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
     "Failed to update run",
-    { method: "PATCH", body: { inputValues } },
+    { method: "PATCH", body },
   )
 }
 
