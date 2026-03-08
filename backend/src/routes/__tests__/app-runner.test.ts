@@ -46,7 +46,7 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { appRunnerRoutes } from "../app-runner.js"
+import { appRunnerRoutes, invalidateAppCache } from "../app-runner.js"
 import { supabase } from "../../lib/supabase.js"
 import { orchestrationQueue } from "../../lib/orchestration-queue.js"
 
@@ -101,6 +101,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  invalidateAppCache(TEST_SLUG)
 
   app = Fastify({ logger: false })
 
@@ -169,19 +170,9 @@ describe("GET /v1/app/:slug", () => {
   })
 
   it("returns 200 with camelCase response on success", async () => {
-    let callCount = 0
     vi.mocked(supabase.from).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        // Slug lookup → workflow_id
-        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
-      }
-      if (callCount === 2) {
-        // All versions
-        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, created_at: "2026-01-01T00:00:00Z" }], error: null }) as never
-      }
-      // App row
-      return createChainMock({ data: DB_APP_ROW, error: null }) as never
+      // Single query: all versions by slug (returns array)
+      return createChainMock({ data: [DB_APP_ROW], error: null }) as never
     })
 
     const res = await app.inject({
@@ -209,12 +200,9 @@ describe("GET /v1/app/:slug", () => {
   })
 
   it("does not require auth", async () => {
-    let callCount = 0
     vi.mocked(supabase.from).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
-      if (callCount === 2) return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, created_at: "2026-01-01T00:00:00Z" }], error: null }) as never
-      return createChainMock({ data: DB_APP_ROW, error: null }) as never
+      // Single query: all versions by slug (returns array)
+      return createChainMock({ data: [DB_APP_ROW], error: null }) as never
     })
 
     // No x-user-id header
@@ -409,12 +397,8 @@ describe("GET /v1/app/:slug/runs", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       callCount++
       if (callCount === 1) {
-        // Slug lookup
-        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
-      }
-      if (callCount === 2) {
-        // All versions
-        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1 }], error: null }) as never
+        // Single query: versions by slug
+        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, thumbnail_node_id: null }], error: null }) as never
       }
       // Runs query
       return createChainMock({ data: [runItem], error: null }) as never
@@ -444,11 +428,10 @@ describe("GET /v1/app/:slug/runs", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       callCount++
       if (callCount === 1) {
-        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+        // Single query: versions by slug
+        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, thumbnail_node_id: null }], error: null }) as never
       }
-      if (callCount === 2) {
-        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1 }], error: null }) as never
-      }
+      // Runs query
       return createChainMock({ data: [], error: null }) as never
     })
 
