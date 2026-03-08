@@ -524,12 +524,6 @@ html, body {
 .text-prompt-tag-textarea .tag-textarea-input::placeholder {
   color: rgba(255, 255, 255, 0.25) !important;
 }
-@media (min-width: 768px) {
-  .text-prompt-tag-textarea .tag-textarea-backdrop {
-    font-size: inherit;
-  }
-}
-
 /* NodeResizer: ensure resize handles stay interactive above card content */
 .react-flow__resize-control {
   z-index: 9999 !important;

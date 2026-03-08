@@ -337,37 +337,33 @@ export default function AppRunnerPage() {
     const slot = slots.find((s) => s.id === slotId)
     if (!slot) return
 
-    // Clear old polling FIRST so in-flight responses are discarded
-    // (the poll guard checks executionId which we change below)
-    newRun()
-
     setActiveSlotId(slotId)
 
-    // Set both stores with the slot's data
-    const slotNodeStates = slot.nodeStates
-    const slotExecStatus = slot.executionStatus === "running" ? "running" as const : slot.executionStatus
-
+    // Apply slot data to presentation store
     usePresentationStore.setState({
       inputValues: slot.inputValues,
-      nodeStates: slotNodeStates,
-      executionStatus: slotExecStatus,
+      nodeStates: slot.nodeStates,
+      executionStatus: slot.executionStatus,
       completedNodes: slot.completedNodes,
       totalNodes: slot.totalNodes,
     })
 
-    // Handle app runner store execution state
+    // Set app runner store — changing executionId causes poll guard to
+    // discard any in-flight responses from a previous execution
     if (slot.executionId && slot.executionStatus === "running") {
       useAppRunnerStore.getState().resumeExecution(slot.executionId)
-    } else if (slot.executionId) {
+    } else {
       useAppRunnerStore.setState({
-        executionId: slot.executionId,
-        executionStatus: slotExecStatus as "idle" | "running" | "completed" | "failed",
-        nodeStates: slotNodeStates,
+        activeRunId: slotId,
+        executionId: slot.executionId ?? null,
+        executionStatus: slot.executionStatus as "idle" | "running" | "completed" | "failed",
+        nodeStates: slot.nodeStates,
         completedNodes: slot.completedNodes,
         totalNodes: slot.totalNodes,
+        errorMessage: null,
       })
     }
-  }, [activeSlotId, saveCurrentSlotInputs, slots, newRun])
+  }, [activeSlotId, saveCurrentSlotInputs, slots])
 
   // Delete slot (from DB too)
   const handleDeleteSlot = useCallback((slotId: string) => {
