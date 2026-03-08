@@ -170,8 +170,14 @@ describe("GET /v1/app/:slug", () => {
   })
 
   it("returns 200 with camelCase response on success", async () => {
+    let callCount = 0
     vi.mocked(supabase.from).mockImplementation(() => {
-      // Single query: all versions by slug (returns array)
+      callCount++
+      if (callCount === 1) {
+        // resolveSlug → workflow_id
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      }
+      // All versions by workflow_id
       return createChainMock({ data: [DB_APP_ROW], error: null }) as never
     })
 
@@ -200,8 +206,14 @@ describe("GET /v1/app/:slug", () => {
   })
 
   it("does not require auth", async () => {
+    let callCount = 0
     vi.mocked(supabase.from).mockImplementation(() => {
-      // Single query: all versions by slug (returns array)
+      callCount++
+      if (callCount === 1) {
+        // resolveSlug → workflow_id
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      }
+      // All versions by workflow_id
       return createChainMock({ data: [DB_APP_ROW], error: null }) as never
     })
 
@@ -397,7 +409,11 @@ describe("GET /v1/app/:slug/runs", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       callCount++
       if (callCount === 1) {
-        // Single query: versions by slug
+        // resolveSlug → workflow_id
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      }
+      if (callCount === 2) {
+        // All versions by workflow_id
         return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, thumbnail_node_id: null }], error: null }) as never
       }
       // Runs query
@@ -428,7 +444,11 @@ describe("GET /v1/app/:slug/runs", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       callCount++
       if (callCount === 1) {
-        // Single query: versions by slug
+        // resolveSlug → workflow_id
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      }
+      if (callCount === 2) {
+        // All versions by workflow_id
         return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, thumbnail_node_id: null }], error: null }) as never
       }
       // Runs query

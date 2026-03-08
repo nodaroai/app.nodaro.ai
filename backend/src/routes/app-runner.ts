@@ -115,11 +115,17 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.send(cached.data)
     }
 
-    // Single query: load all versions by slug (skips resolveSlug round trip)
+    // Step 1: resolve slug → workflow_id
+    const workflowId = await resolveSlug(slug)
+    if (!workflowId) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
+
+    // Step 2: load all versions by workflow_id (slug is unique per row, workflow_id spans versions)
     const { data: allVersionRows } = await supabase
       .from("published_apps")
       .select("id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, created_at, workflow_id")
-      .eq("slug", slug)
+      .eq("workflow_id", workflowId)
       .order("version", { ascending: false })
 
     if (!allVersionRows || allVersionRows.length === 0) {
@@ -463,11 +469,17 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { slug } = paramsParsed.data
     const { cursor, limit } = queryParsed.data
 
-    // Single query: resolve slug + get all versions + thumbnail_node_id
+    // Step 1: resolve slug → workflow_id
+    const workflowId = await resolveSlug(slug)
+    if (!workflowId) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
+
+    // Step 2: all versions by workflow_id (slug is unique per row, workflow_id spans versions)
     const { data: allVersions } = await supabase
       .from("published_apps")
       .select("id, version, thumbnail_node_id")
-      .eq("slug", slug)
+      .eq("workflow_id", workflowId)
 
     if (!allVersions || allVersions.length === 0) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
