@@ -32,11 +32,12 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
       })
     }
 
-    const { text, voiceDescription, model, loudness, guidanceScale, seed, quality, shouldEnhance, userId } = parsed.data
+    const { text, voiceDescription, model, loudness, guidanceScale, seed, quality, shouldEnhance } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

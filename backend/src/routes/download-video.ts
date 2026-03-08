@@ -290,7 +290,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": req.headers.origin ?? "*",
     })
 
     const sendEvent = (data: Record<string, unknown>) => {

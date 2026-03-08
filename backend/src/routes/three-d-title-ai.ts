@@ -48,7 +48,8 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
         })
       }
 
-      const { prompt, fps, durationSeconds, backgroundMediaUrl, userId } = parsed.data
+      const { prompt, fps, durationSeconds, backgroundMediaUrl } = parsed.data
+      const userId = req.userId
 
       if (!config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({

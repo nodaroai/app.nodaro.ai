@@ -38,7 +38,8 @@ export async function faceRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId, userId } = parsed.data
+    const { projectId } = parsed.data
+    const userId = req.userId
 
     let query = supabase
       .from("faces")
@@ -136,11 +137,12 @@ export async function faceRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, userId, nodeId, workflowId, projectId, name, description, style, sourceImageUrl, expressions } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, style, sourceImageUrl, expressions } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 

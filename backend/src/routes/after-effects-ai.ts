@@ -47,7 +47,8 @@ export async function afterEffectsAIRoutes(app: FastifyInstance) {
         })
       }
 
-      const { prompt, inputVideoUrl, fps, aspectRatio, durationSeconds, userId } = parsed.data
+      const { prompt, inputVideoUrl, fps, aspectRatio, durationSeconds } = parsed.data
+      const userId = req.userId
 
       if (!config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({

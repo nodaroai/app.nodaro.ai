@@ -47,7 +47,8 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
         })
       }
 
-      const { prompt, assets, fps, aspectRatio, durationSeconds, userId } = parsed.data
+      const { prompt, assets, fps, aspectRatio, durationSeconds } = parsed.data
+      const userId = req.userId
 
       if (!config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({
