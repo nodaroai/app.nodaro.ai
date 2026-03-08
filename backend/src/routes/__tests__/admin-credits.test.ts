@@ -236,7 +236,7 @@ describe("PUT /v1/admin/users/:id/tier", () => {
 
     expect(res.statusCode).toBe(400)
     const body = res.json()
-    expect(body.error).toContain("Invalid tier")
+    expect(body.error).toContain("Invalid enum value")
   })
 
   it("returns success on valid tier change", async () => {
@@ -283,7 +283,7 @@ describe("PUT /v1/admin/users/:id/storage", () => {
 
     expect(res.statusCode).toBe(400)
     const body = res.json()
-    expect(body.error).toContain("storageLimitBytes must be a positive number")
+    expect(body.error).toContain("Number must be greater than 0")
   })
 
   it("returns success on valid storage update", async () => {

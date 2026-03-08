@@ -48,6 +48,20 @@ export default function EmbedPage() {
     }
   }, [themeParam, setTheme])
 
+  // Prevent internal scrolling so wheel events chain to the parent page.
+  // When no element inside the iframe is scrollable, browsers naturally
+  // pass scroll events to the outer page.
+  useEffect(() => {
+    const style = document.createElement("style")
+    style.setAttribute("data-embed-scroll", "")
+    style.textContent = [
+      "html, body { overflow: hidden !important; overscroll-behavior: none; }",
+      ".overflow-auto, .overflow-y-auto, .overflow-x-auto { overflow: hidden !important; }",
+    ].join("\n")
+    document.head.appendChild(style)
+    return () => { style.remove() }
+  }, [])
+
   // Load app
   useEffect(() => {
     if (!authLoading && slug) {
