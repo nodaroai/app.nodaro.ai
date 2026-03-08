@@ -60,36 +60,13 @@ export function buildExecutionLevels(
 
 export function getEffectivelySkippedIds(
   nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
+  _edges: WorkflowEdge[],
 ): Set<string> {
-  const directlySkipped = new Set(
+  return new Set(
     nodes
       .filter((n) => !!(n.data as Record<string, unknown>).skipped)
       .map((n) => n.id),
   );
-  const effectivelySkipped = new Set(directlySkipped);
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const node of nodes) {
-      if (effectivelySkipped.has(node.id)) continue;
-
-      const parentIds = edges
-        .filter((e) => e.target === node.id)
-        .map((e) => e.source);
-
-      if (
-        parentIds.length > 0 &&
-        parentIds.every((pid) => effectivelySkipped.has(pid))
-      ) {
-        effectivelySkipped.add(node.id);
-        changed = true;
-      }
-    }
-  }
-
-  return effectivelySkipped;
 }
 
 export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): string | undefined {

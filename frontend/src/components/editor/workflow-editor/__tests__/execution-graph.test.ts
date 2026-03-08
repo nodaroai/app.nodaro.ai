@@ -164,7 +164,7 @@ describe("getEffectivelySkippedIds", () => {
     expect(skipped.has("A")).toBe(true)
   })
 
-  it("propagates skip to downstream nodes when all parents are skipped", () => {
+  it("does NOT propagate skip to downstream nodes (skip = freeze)", () => {
     const A = makeNode("A", "text-prompt", { skipped: true })
     const B = makeNode("B", "generate-image")
     const C = makeNode("C", "image-to-video")
@@ -172,11 +172,11 @@ describe("getEffectivelySkippedIds", () => {
 
     const skipped = getEffectivelySkippedIds([A, B, C], edges)
     expect(skipped.has("A")).toBe(true)
-    expect(skipped.has("B")).toBe(true)
-    expect(skipped.has("C")).toBe(true)
+    expect(skipped.has("B")).toBe(false)
+    expect(skipped.has("C")).toBe(false)
   })
 
-  it("does NOT propagate skip when at least one parent is not skipped", () => {
+  it("only returns directly skipped nodes, not their children", () => {
     const A = makeNode("A", "text-prompt", { skipped: true })
     const B = makeNode("B", "text-prompt") // not skipped
     const C = makeNode("C", "generate-image")
@@ -197,8 +197,8 @@ describe("getEffectivelySkippedIds", () => {
     expect(skipped.size).toBe(0)
   })
 
-  it("propagates through a multi-level chain", () => {
-    // A(skipped) -> B -> C -> D  -- all should be skipped
+  it("does NOT propagate through a multi-level chain (freeze semantics)", () => {
+    // A(skipped) -> B -> C -> D  -- only A should be skipped
     const A = makeNode("A", "text-prompt", { skipped: true })
     const B = makeNode("B", "generate-image")
     const C = makeNode("C", "image-to-video")
@@ -211,9 +211,9 @@ describe("getEffectivelySkippedIds", () => {
 
     const skipped = getEffectivelySkippedIds([A, B, C, D], edges)
     expect(skipped.has("A")).toBe(true)
-    expect(skipped.has("B")).toBe(true)
-    expect(skipped.has("C")).toBe(true)
-    expect(skipped.has("D")).toBe(true)
+    expect(skipped.has("B")).toBe(false)
+    expect(skipped.has("C")).toBe(false)
+    expect(skipped.has("D")).toBe(false)
   })
 })
 

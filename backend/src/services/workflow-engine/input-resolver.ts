@@ -176,6 +176,23 @@ function routeOutput(
   const srcType = src.type
   const targetType = target.type
 
+  // --- Handle-specific routing takes priority for named input slots ---
+  // These MUST be checked before source-type routing, otherwise source-type
+  // handlers (e.g., generate-image → imageUrl) return early and these are
+  // never reached.
+  if (edge.targetHandle === "startFrame") {
+    inputs.startFrameUrl = output
+    return
+  }
+  if (edge.targetHandle === "endFrame") {
+    inputs.endFrameUrl = output
+    return
+  }
+  if (edge.targetHandle === "audio") {
+    routeAudioOutput(inputs, output, targetType, src.id)
+    return
+  }
+
   // --- Text/prompt sources ---
   if (TEXT_SOURCE_NODE_TYPES.has(srcType)) {
     inputs.prompt = output
@@ -306,16 +323,6 @@ function routeOutput(
     if (state?.output?.text) {
       inputs.prompt = state.output.text
     }
-    return
-  }
-
-  // --- Handle-specific routing (e.g., endFrame) ---
-  if (edge.targetHandle === "endFrame") {
-    inputs.endFrameUrl = output
-    return
-  }
-  if (edge.targetHandle === "startFrame") {
-    inputs.startFrameUrl = output
     return
   }
 
