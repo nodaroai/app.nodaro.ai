@@ -26,11 +26,12 @@ export async function forcedAlignmentRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, transcript, userId } = parsed.data
+    const { audioUrl, transcript } = parsed.data
+    const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
+        error: { code: "unauthorized", message: "Authentication required" },
       })
     }
 
