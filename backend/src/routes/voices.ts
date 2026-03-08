@@ -180,6 +180,7 @@ function getSharedCacheKey(params: Record<string, string | undefined>): string {
 export async function voicesRoutes(app: FastifyInstance) {
   app.get("/v1/voices", async (_req, reply) => {
     const voices = await getVoices()
+    reply.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
     return reply.send({ voices })
   })
 

@@ -215,7 +215,7 @@ export async function galleryRoutes(app: FastifyInstance) {
     const lastItem = items[items.length - 1]
     const nextCursor = hasMore && lastItem?.createdAt ? lastItem.createdAt : null
 
-    reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=60")
+    reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=86400")
     return reply.send({
       data: items,
       nextCursor,

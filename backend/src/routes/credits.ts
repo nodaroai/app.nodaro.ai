@@ -123,7 +123,8 @@ export async function creditsRoutes(app: FastifyInstance) {
 
     try {
       const creditCost = await CreditsService.getModelCreditCost(model)
-      return { data: { model, creditCost } }
+      reply.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+      return reply.send({ data: { model, creditCost } })
     } catch (error) {
       console.error("[credits] Failed to get model cost:", error)
       return reply.status(500).send({
