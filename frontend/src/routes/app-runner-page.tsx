@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useParams, Link } from "react-router-dom"
 import { Loader2, Clock, Plus, Trash2, ChevronLeft, Copy, Info, Pencil, Check, X } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { useIsMobile } from "@/hooks/use-is-mobile"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
@@ -462,7 +463,7 @@ export default function AppRunnerPage() {
   // Loading / error states
   if (authLoading || loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-[100dvh] items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
@@ -470,7 +471,7 @@ export default function AppRunnerPage() {
 
   if (errorMessage && !app) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-[100dvh] items-center justify-center bg-background">
         <div className="text-center max-w-md">
           <h1 className="text-2xl font-bold mb-2">App Not Found</h1>
           <p className="text-muted-foreground mb-4">{errorMessage}</p>
@@ -485,9 +486,10 @@ export default function AppRunnerPage() {
   if (!app) return null
 
   return (
-    <div className="h-screen flex">
-      {/* Run slots sidebar */}
-      {user && showHistory && (
+    <AppRunnerLayout
+      showHistory={showHistory && !!user}
+      onCloseHistory={() => setShowHistory(false)}
+      sidebar={
         <RunsSidebar
           slots={slots}
           activeSlotId={activeSlotId}
@@ -502,35 +504,32 @@ export default function AppRunnerPage() {
           onSelectVersion={setSelectedVersion}
           latestVersion={latestVersion}
         />
-      )}
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Runs toggle button */}
-        {user && slots.length > 0 && !showHistory && (
-          <div className="absolute top-[3.75rem] left-3 z-20">
+      }
+      runsButton={
+        user && slots.length > 0 && !showHistory ? (
+          <div className="absolute top-[3.75rem] sm:top-[3.75rem] left-3 z-20">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowHistory(true)}
-              className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted"
+              className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation"
             >
               <Clock className="h-4 w-4 mr-1" />
               Runs ({slots.length})
             </Button>
           </div>
-        )}
-
-        <PresentationView
-          mode="fullscreen"
-          isOwner={false}
-          onCancel={cancel}
-          onNewRun={handleHeaderAction}
-          newRunLabel={newRunLabel}
-          inputsReadOnly={inputsReadOnlyValue}
-          suppressOutputFallback={activeSlotId !== null}
-        />
-      </div>
+        ) : null
+      }
+    >
+      <PresentationView
+        mode="fullscreen"
+        isOwner={false}
+        onCancel={cancel}
+        onNewRun={handleHeaderAction}
+        newRunLabel={newRunLabel}
+        inputsReadOnly={inputsReadOnlyValue}
+        suppressOutputFallback={activeSlotId !== null}
+      />
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmSlotId(null) }}>
@@ -551,6 +550,58 @@ export default function AppRunnerPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </AppRunnerLayout>
+  )
+}
+
+// --- Layout wrapper: handles sidebar as overlay on mobile, side panel on desktop ---
+
+function AppRunnerLayout({
+  showHistory,
+  onCloseHistory,
+  sidebar,
+  runsButton,
+  children,
+}: {
+  showHistory: boolean
+  onCloseHistory: () => void
+  sidebar: React.ReactNode
+  runsButton: React.ReactNode
+  children: React.ReactNode
+}) {
+  const isMobile = useIsMobile()
+
+  if (isMobile) {
+    return (
+      <div className="h-[100dvh] flex flex-col relative">
+        {/* Mobile overlay sidebar */}
+        {showHistory && (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/50"
+              onClick={onCloseHistory}
+            />
+            <div className="fixed inset-y-0 left-0 z-50 w-[85vw] max-w-80 animate-in slide-in-from-left duration-200">
+              {sidebar}
+            </div>
+          </>
+        )}
+
+        <div className="flex-1 flex flex-col min-w-0 relative">
+          {runsButton}
+          {children}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-screen flex">
+      {showHistory && sidebar}
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        {runsButton}
+        {children}
+      </div>
     </div>
   )
 }
@@ -617,7 +668,7 @@ function RunsSidebar({
     <div
       ref={sidebarRef}
       tabIndex={-1}
-      className="w-72 border-r border-border bg-card flex flex-col shrink-0 outline-none"
+      className="w-full sm:w-72 h-full border-r border-border bg-card flex flex-col shrink-0 outline-none"
     >
       <div className="flex items-center justify-between px-4 h-14 border-b border-border">
         <h2 className="text-sm font-semibold text-foreground">Runs</h2>
