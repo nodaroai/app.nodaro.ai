@@ -23,14 +23,11 @@ export default function RouteErrorBoundary() {
     return <NotFound />
   }
 
-  // Stale chunk after deployment — auto-reload once
+  // Stale chunk after deployment — auto-reload once per deploy
   if (isChunkError(error)) {
-    const reloaded = sessionStorage.getItem("chunk-reload")
-    if (!reloaded) {
-      sessionStorage.setItem("chunk-reload", "1")
-      window.location.reload()
-      return null
-    }
+    sessionStorage.setItem("chunk-reload", "1")
+    window.location.reload()
+    return null
   }
 
   const message = isRouteErrorResponse(error)

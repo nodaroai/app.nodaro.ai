@@ -2,6 +2,8 @@ import "./globals.css"
 
 // Auto-reload on stale chunks after deployment.
 // Vite fires this when any preloaded JS/CSS dep returns 404.
+// Clear the flag on successful load so the next deploy can trigger a reload.
+sessionStorage.removeItem("chunk-reload")
 window.addEventListener("vite:preloadError", () => {
   const reloaded = sessionStorage.getItem("chunk-reload")
   if (!reloaded) {
