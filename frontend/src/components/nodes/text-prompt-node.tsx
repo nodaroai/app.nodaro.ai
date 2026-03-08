@@ -1,10 +1,12 @@
 "use client"
 
-import { memo, useCallback, useRef, useState } from "react"
+import { memo, useCallback, useMemo, useRef, useState } from "react"
 import { Position, type NodeProps, NodeResizer, Handle, NodeToolbar } from "@xyflow/react"
 import { Type, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ChevronDown } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
+import { TagTextarea } from "@/components/editor/config-panels/tag-textarea"
+import { getUpstreamNodes } from "@/lib/node-refs"
 import type { TextPromptData } from "@/types/nodes"
 
 const COLORS = ["#0f172a", "#1e3a5f", "#1a2e1a", "#2d1a1a", "#2d1a2d", "#1a2d2d"]
@@ -22,8 +24,11 @@ function adjustColor(hex: string, amount: number): string {
 function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TextPromptData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
   const [isHovered, setIsHovered] = useState(false)
+
+  const nodeRefs = useMemo(() => getUpstreamNodes(id, nodes, edges), [id, nodes, edges])
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const color = nodeData.color ?? "#0f172a"
@@ -75,8 +80,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         onResize={handleResize}
       />
 
-      {/* Floating toolbar above node */}
-      <NodeToolbar isVisible={selected || isHovered} position={Position.Top} offset={0}>
+      {/* Floating toolbar below node */}
+      <NodeToolbar isVisible={selected || isHovered} position={Position.Bottom} offset={0}>
         <div
           className="flex items-center gap-1 px-2 py-1.5 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl backdrop-blur-sm flex-wrap"
           onClick={(e) => e.stopPropagation()}
@@ -209,25 +214,21 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         }}
       >
         {/* Textarea */}
-        <textarea
-          ref={textareaRef}
-          className={`w-full flex-1 bg-transparent text-white/80 placeholder:text-white/25 resize-none outline-none border-none p-3 leading-relaxed ${selected ? "nopan nodrag cursor-text" : "pointer-events-none"}`}
+        <div
+          className={`text-prompt-tag-textarea w-full flex-1 min-h-0 ${selected ? "nopan nodrag" : "pointer-events-none"}`}
           onMouseDown={selected ? (e) => e.stopPropagation() : undefined}
-          style={{
-            fontSize,
-            fontWeight,
-            fontStyle,
-            textAlign,
-          }}
-          placeholder="Enter your prompt..."
-          value={nodeData.text ?? ""}
-          onChange={(e) => {
-            e.stopPropagation()
-            updateNodeData(id, { text: e.target.value })
-          }}
           onClick={selected ? (e) => e.stopPropagation() : undefined}
           onKeyDown={selected ? (e) => e.stopPropagation() : undefined}
-        />
+          style={{ fontSize, fontWeight, fontStyle, textAlign }}
+        >
+          <TagTextarea
+            value={nodeData.text ?? ""}
+            onChange={(value) => updateNodeData(id, { text: value })}
+            placeholder="Enter your prompt..."
+            className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !p-3 !leading-relaxed !h-full !resize-none"
+            nodeRefs={nodeRefs}
+          />
+        </div>
       </div>
 
       {/* Input handle */}

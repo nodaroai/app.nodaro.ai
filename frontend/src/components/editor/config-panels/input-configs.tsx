@@ -5,7 +5,7 @@ import { X, Plus, Loader2, Check, Download, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { TagTextarea } from "./tag-textarea"
 import {
   Select,
   SelectContent,
@@ -30,17 +30,17 @@ import type {
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
-export function TextPromptConfig({ data, onUpdate }: ConfigProps<TextPromptData>) {
+export function TextPromptConfig({ data, onUpdate, nodeRefs }: ConfigProps<TextPromptData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="prompt-text">Prompt Text</Label>
-        <Textarea
-          id="prompt-text"
+        <Label>Prompt Text</Label>
+        <TagTextarea
           rows={5}
           value={data.text}
-          onChange={(e) => onUpdate({ text: e.target.value })}
+          onChange={(value) => onUpdate({ text: value })}
           placeholder="Enter your story prompt..."
+          nodeRefs={nodeRefs}
         />
       </div>
     </div>
