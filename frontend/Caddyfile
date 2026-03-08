@@ -3,18 +3,7 @@
 	admin off
 }
 
-:{$PORT:3000} {
-	# Security headers
-	header {
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "SAMEORIGIN"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(self), geolocation=()"
-	}
-	# Allow framing on embed routes
-	@embed path /embed/*
-	header @embed X-Frame-Options ""
-
+:3000 {
 	handle /v1/* {
 		reverse_proxy 127.0.0.1:9000
 	}
