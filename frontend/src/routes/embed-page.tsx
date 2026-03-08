@@ -264,6 +264,7 @@ export default function EmbedPage() {
         newRunLabel={runSlots.newRunLabel}
         inputsReadOnly={runSlots.inputsReadOnlyValue}
         suppressOutputFallback={runSlots.activeSlotId !== null}
+        showFullscreenToggle
       />
 
       {/* Delete confirmation dialog */}

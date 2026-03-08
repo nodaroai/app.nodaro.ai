@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, RotateCcw } from "lucide-react"
+import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   KeyboardSensor,
@@ -102,14 +102,32 @@ interface PresentationViewProps {
   inputsReadOnly?: boolean
   suppressOutputFallback?: boolean
   isRunning?: boolean
+  /** Show a native fullscreen toggle button in the header */
+  showFullscreenToggle?: boolean
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle }: PresentationViewProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
   const [pickerSection, setPickerSection] = useState<"inputs" | "outputs" | null>(null)
   const [isOpeningNewTab, setIsOpeningNewTab] = useState(false)
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
+
+  // Native fullscreen toggle (browser Fullscreen API)
+  const toggleNativeFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {})
+    } else {
+      document.exitFullscreen().catch(() => {})
+    }
+  }, [])
+
+  useEffect(() => {
+    const handler = () => setIsNativeFullscreen(!!document.fullscreenElement)
+    document.addEventListener("fullscreenchange", handler)
+    return () => document.removeEventListener("fullscreenchange", handler)
+  }, [])
 
   // Tab mode: read from the editor store
   const editorNodes = useWorkflowStore((s) => s.nodes)
@@ -602,6 +620,17 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
         {/* Desktop-only right-side controls */}
         <div className="hidden md:flex items-center gap-2 shrink-0">
+          {showFullscreenToggle && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleNativeFullscreen}
+              title={isNativeFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {isNativeFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          )}
           {isFullscreen && <ThemeToggle />}
           {user && hasCredits() && <CreditBalance userId={user.id} />}
 

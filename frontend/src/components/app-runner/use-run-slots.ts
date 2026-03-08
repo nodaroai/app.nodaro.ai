@@ -385,6 +385,31 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
     }
   }, [slug, persistRuns])
 
+  // Navigate between runs with up/down arrow keys (global)
+  useEffect(() => {
+    if (slots.length === 0) return
+    const handler = (e: KeyboardEvent) => {
+      // Don't capture when typing in an input/textarea/select
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return
+
+      e.preventDefault()
+      const currentIndex = activeSlotId ? slots.findIndex((s) => s.id === activeSlotId) : -1
+
+      let nextIndex: number
+      if (e.key === "ArrowDown") {
+        nextIndex = currentIndex < slots.length - 1 ? currentIndex + 1 : 0
+      } else {
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : slots.length - 1
+      }
+
+      handleSelectSlot(slots[nextIndex].id)
+    }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [slots, activeSlotId, handleSelectSlot])
+
   // Derived state
   const isRunning = executionStatus === "running"
   const isTerminal = activeSlot?.executionStatus === "completed" || activeSlot?.executionStatus === "failed"
