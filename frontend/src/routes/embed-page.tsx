@@ -42,7 +42,6 @@ export default function EmbedPage() {
 
   const loadApp = useAppRunnerStore((s) => s.loadApp)
   const app = useAppRunnerStore((s) => s.app)
-  const loading = useAppRunnerStore((s) => s.loading)
   const errorMessage = useAppRunnerStore((s) => s.errorMessage)
   const executionStatus = useAppRunnerStore((s) => s.executionStatus)
   const nodeStates = useAppRunnerStore((s) => s.nodeStates)
@@ -205,14 +204,6 @@ export default function EmbedPage() {
     }
   }, [executionStatus, nodeStates, errorMessage])
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
   if (errorMessage && !app) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -221,7 +212,13 @@ export default function EmbedPage() {
     )
   }
 
-  if (!app) return null
+  if (!app) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <AppRunnerLayout
@@ -263,7 +260,7 @@ export default function EmbedPage() {
         mode="fullscreen"
         isOwner={false}
         onCancel={cancel}
-        onNewRun={runSlots.handleHeaderAction}
+        onNewRun={user ? runSlots.handleHeaderAction : undefined}
         newRunLabel={runSlots.newRunLabel}
         inputsReadOnly={runSlots.inputsReadOnlyValue}
         suppressOutputFallback={runSlots.activeSlotId !== null}
