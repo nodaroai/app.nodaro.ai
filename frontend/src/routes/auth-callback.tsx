@@ -9,8 +9,8 @@ export default function AuthCallback() {
   useEffect(() => {
     const supabase = createClient()
 
-    // If opened as a popup (e.g., from embedded iframe), close the window
-    // after auth succeeds — session syncs to the opener via localStorage.
+    // If opened as a popup (e.g., from embedded iframe), send the session
+    // to the opener via postMessage and close the window.
     const isPopup = !!window.opener
 
     // Consume the saved redirect URL once (e.g., from /present/:shareToken)
@@ -23,7 +23,21 @@ export default function AuthCallback() {
 
     function onAuthSuccess() {
       if (isPopup) {
-        window.close()
+        // Send session tokens to opener (iframe) via postMessage.
+        // Cross-origin iframes have partitioned localStorage, so the
+        // session stored here is invisible to the iframe — tokens must
+        // be passed explicitly.
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session && window.opener) {
+            window.opener.postMessage({
+              type: "nodaro:authComplete",
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+            }, window.location.origin)
+          }
+          // Small delay to let the message be received before closing
+          setTimeout(() => window.close(), 200)
+        })
         return
       }
       navigate(redirectUrl, { replace: true })
