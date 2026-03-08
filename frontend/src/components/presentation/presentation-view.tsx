@@ -23,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { hasCredits } from "@/lib/edition"
-import { useAuth, refreshAuth } from "@/hooks/use-auth"
+import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import type { WorkflowNode } from "@/types/nodes"
@@ -259,9 +259,24 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             `width=${w},height=${h},left=${left},top=${top},popup=1`,
           )
           if (popup) {
+            // Listen for session tokens from popup via postMessage.
+            // This is necessary because cross-origin iframes have partitioned
+            // localStorage — the popup's session is invisible to us.
+            const handleAuthMessage = (event: MessageEvent) => {
+              if (event.origin !== window.location.origin) return
+              if (event.data?.type === "nodaro:authComplete" && event.data.access_token) {
+                window.removeEventListener("message", handleAuthMessage)
+                clearInterval(interval)
+                setAuthFromTokens(event.data.access_token, event.data.refresh_token)
+              }
+            }
+            window.addEventListener("message", handleAuthMessage)
+
             const interval = setInterval(() => {
               if (popup.closed) {
                 clearInterval(interval)
+                window.removeEventListener("message", handleAuthMessage)
+                // Fallback: try refreshAuth in case message was missed
                 refreshAuth()
               }
             }, 500)

@@ -103,6 +103,19 @@ export async function refreshAuth(): Promise<void> {
   notifyListeners()
 }
 
+/** Set session from tokens received via postMessage (e.g. from popup login).
+ *  Necessary for cross-origin iframes where localStorage is partitioned. */
+export async function setAuthFromTokens(accessToken: string, refreshToken: string): Promise<void> {
+  const supabase = createClient()
+  await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  })
+  // setSession triggers onAuthStateChange which updates cachedUser,
+  // but also refresh explicitly to load role
+  await refreshAuth()
+}
+
 export function useAuth() {
   const navigate = useNavigate()
 
