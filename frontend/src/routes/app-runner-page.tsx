@@ -337,13 +337,20 @@ export default function AppRunnerPage() {
     const slot = slots.find((s) => s.id === slotId)
     if (!slot) return
 
+    // Clear old polling FIRST so in-flight responses are discarded
+    // (the poll guard checks executionId which we change below)
+    newRun()
+
     setActiveSlotId(slotId)
 
-    // Apply slot data to presentation store
+    // Set both stores with the slot's data
+    const slotNodeStates = slot.nodeStates
+    const slotExecStatus = slot.executionStatus === "running" ? "running" as const : slot.executionStatus
+
     usePresentationStore.setState({
       inputValues: slot.inputValues,
-      nodeStates: slot.nodeStates,
-      executionStatus: slot.executionStatus === "running" ? "running" : slot.executionStatus,
+      nodeStates: slotNodeStates,
+      executionStatus: slotExecStatus,
       completedNodes: slot.completedNodes,
       totalNodes: slot.totalNodes,
     })
@@ -351,17 +358,14 @@ export default function AppRunnerPage() {
     // Handle app runner store execution state
     if (slot.executionId && slot.executionStatus === "running") {
       useAppRunnerStore.getState().resumeExecution(slot.executionId)
-    } else {
-      newRun() // clears poll timeout
-      if (slot.executionId) {
-        useAppRunnerStore.setState({
-          executionId: slot.executionId,
-          executionStatus: slot.executionStatus as "idle" | "running" | "completed" | "failed",
-          nodeStates: slot.nodeStates,
-          completedNodes: slot.completedNodes,
-          totalNodes: slot.totalNodes,
-        })
-      }
+    } else if (slot.executionId) {
+      useAppRunnerStore.setState({
+        executionId: slot.executionId,
+        executionStatus: slotExecStatus as "idle" | "running" | "completed" | "failed",
+        nodeStates: slotNodeStates,
+        completedNodes: slot.completedNodes,
+        totalNodes: slot.totalNodes,
+      })
     }
   }, [activeSlotId, saveCurrentSlotInputs, slots, newRun])
 
