@@ -24,7 +24,6 @@ export default function AppRunnerPage() {
   // App runner store
   const loadApp = useAppRunnerStore((s) => s.loadApp)
   const app = useAppRunnerStore((s) => s.app)
-  const loading = useAppRunnerStore((s) => s.loading)
   const errorMessage = useAppRunnerStore((s) => s.errorMessage)
   const cancel = useAppRunnerStore((s) => s.cancel)
   const reset = useAppRunnerStore((s) => s.reset)
@@ -56,15 +55,7 @@ export default function AppRunnerPage() {
   // Run slots hook — all slot state, CRUD, DB sync
   const runSlots = useRunSlots({ slug, user, persistRuns: !!user })
 
-  // Loading / error states — only wait for app load, not auth
-  if (loading) {
-    return (
-      <div className="flex h-[100dvh] items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
+  // Loading / error states — show spinner until app is loaded (no blank flash)
   if (errorMessage && !app) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-background">
@@ -79,7 +70,13 @@ export default function AppRunnerPage() {
     )
   }
 
-  if (!app) return null
+  if (!app) {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <AppRunnerLayout
@@ -121,7 +118,7 @@ export default function AppRunnerPage() {
         mode="fullscreen"
         isOwner={false}
         onCancel={cancel}
-        onNewRun={runSlots.handleHeaderAction}
+        onNewRun={user ? runSlots.handleHeaderAction : undefined}
         newRunLabel={runSlots.newRunLabel}
         inputsReadOnly={runSlots.inputsReadOnlyValue}
         suppressOutputFallback={runSlots.activeSlotId !== null}
