@@ -97,36 +97,34 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const requestedVersion = queryParsed.success ? queryParsed.data.version : undefined
 
     const { slug } = parsed.data
-    const workflowId = await resolveSlug(slug)
-    if (!workflowId) {
+
+    // Single query: load all versions by slug (skips resolveSlug round trip)
+    const { data: allVersionRows } = await supabase
+      .from("published_apps")
+      .select("id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, created_at, workflow_id")
+      .eq("slug", slug)
+      .order("version", { ascending: false })
+
+    if (!allVersionRows || allVersionRows.length === 0) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    // Load all versions + requested app data in parallel
-    const [versionsResult, appRow] = await Promise.all([
-      supabase
-        .from("published_apps")
-        .select("id, version, created_at")
-        .eq("workflow_id", workflowId)
-        .order("version", { ascending: false }),
-      loadAppVersion(
-        workflowId,
-        "id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, created_at, workflow_id",
-        requestedVersion,
-      ),
-    ])
+    // Pick the requested version or latest
+    const appRow = requestedVersion
+      ? allVersionRows.find((v) => v.version === requestedVersion)
+      : allVersionRows[0]
 
-    const versions = (versionsResult.data ?? []).map((v) => ({
+    if (!appRow) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: `Version ${requestedVersion} not found` },
+      })
+    }
+
+    const versions = allVersionRows.map((v) => ({
       version: v.version as number,
       id: v.id as string,
       createdAt: v.created_at as string,
     }))
-
-    if (!appRow) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: requestedVersion ? `Version ${requestedVersion} not found` : "App not found" },
-      })
-    }
 
     return reply.send({
       id: appRow.id,
