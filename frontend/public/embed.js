@@ -61,12 +61,14 @@
 
     container.appendChild(iframe);
 
-    // Forward wheel events from iframe so the parent page scrolls normally
+    // Forward wheel and touch scroll events from iframe so the parent page scrolls normally
     window.addEventListener("message", function (event) {
       if (event.origin !== EMBED_ORIGIN) return;
       var data = event.data;
-      if (!data || data.type !== "nodaro:wheel") return;
-      window.scrollBy({ left: data.deltaX, top: data.deltaY });
+      if (!data) return;
+      if (data.type === "nodaro:wheel" || data.type === "nodaro:touch") {
+        window.scrollBy({ left: data.deltaX, top: data.deltaY });
+      }
     });
 
     return iframe;
