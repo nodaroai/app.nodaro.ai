@@ -254,9 +254,6 @@ describe("POST /v1/app/:slug/run", () => {
   })
 
   it("returns 429 when daily rate limit exceeded", async () => {
-    let appRunsCallCount = 0
-
-    // Mock supabase.from to handle multiple tables
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "published_apps") {
         const mockSingle = vi.fn().mockResolvedValue({
@@ -269,23 +266,13 @@ describe("POST /v1/app/:slug/run", () => {
         return { select: mockSelect } as never
       }
       if (table === "app_runs") {
-        appRunsCallCount++
-        if (appRunsCallCount <= 1) {
-          // Rate limit check: select("id", { count: "exact", head: true }).eq(app_id).eq(runner_id).gte(created_at)
-          const mockGte = vi.fn().mockResolvedValue({
-            count: 5,
-            data: null,
-            error: null,
-          })
-          const mockEq2 = vi.fn().mockReturnValue({ gte: mockGte })
-          const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-          const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-          return { select: mockSelect } as never
-        }
-        // Active execution check: select(...).eq(app_id).eq(runner_id).in(status).limit(1)
-        const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
-        const mockIn = vi.fn().mockReturnValue({ limit: mockLimit })
-        const mockEq2 = vi.fn().mockReturnValue({ in: mockIn })
+        // Rate limit check: select("id", { count: "exact", head: true }).eq(app_id).eq(runner_id).gte(created_at)
+        const mockGte = vi.fn().mockResolvedValue({
+          count: 5,
+          data: null,
+          error: null,
+        })
+        const mockEq2 = vi.fn().mockReturnValue({ gte: mockGte })
         const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
         const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
         return { select: mockSelect } as never
@@ -304,48 +291,7 @@ describe("POST /v1/app/:slug/run", () => {
     expect(res.json().error.code).toBe("rate_limit_exceeded")
   })
 
-  it("returns 409 when already running", async () => {
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "published_apps") {
-        const mockSingle = vi.fn().mockResolvedValue({
-          data: { ...DB_APP_ROW, max_runs_per_user_per_day: null },
-          error: null,
-        })
-        const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
-      }
-      if (table === "app_runs") {
-        // Active execution check via app_runs join — returns active run
-        const mockLimit = vi.fn().mockResolvedValue({
-          data: [{ execution_id: TEST_EXECUTION_ID }],
-          error: null,
-        })
-        const mockIn = vi.fn().mockReturnValue({ limit: mockLimit })
-        const mockEq2 = vi.fn().mockReturnValue({ in: mockIn })
-        const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-        return { select: mockSelect } as never
-      }
-      return {} as never
-    })
-
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/app/${TEST_SLUG}/run`,
-      headers: { "x-user-id": TEST_USER_ID },
-      payload: {},
-    })
-
-    expect(res.statusCode).toBe(409)
-    expect(res.json().error.code).toBe("already_running")
-    expect(res.json().executionId).toBe(TEST_EXECUTION_ID)
-  })
-
   function setupSuccessfulRunMocks() {
-    let appRunsCallCount = 0
-
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "published_apps") {
         const mockSingle = vi.fn().mockResolvedValue({
@@ -358,16 +304,6 @@ describe("POST /v1/app/:slug/run", () => {
         return { select: mockSelect } as never
       }
       if (table === "app_runs") {
-        appRunsCallCount++
-        if (appRunsCallCount <= 1) {
-          // Active execution check via join — no active runs
-          const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
-          const mockIn = vi.fn().mockReturnValue({ limit: mockLimit })
-          const mockEq2 = vi.fn().mockReturnValue({ in: mockIn })
-          const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-          const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
-          return { select: mockSelect } as never
-        }
         // Insert app_run
         const mockSingle = vi.fn().mockResolvedValue({
           data: { id: TEST_RUN_ID },
