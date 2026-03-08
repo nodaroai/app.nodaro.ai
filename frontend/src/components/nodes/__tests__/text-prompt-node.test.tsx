@@ -25,6 +25,8 @@ vi.mock("lucide-react", async (importOriginal) => {
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({
     updateNodeData: () => {},
+    nodes: [],
+    edges: [],
   }),
 }))
 
