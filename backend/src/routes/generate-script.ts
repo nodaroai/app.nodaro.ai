@@ -27,12 +27,11 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, sceneCount, tone, targetDuration, provider } = parsed.data
-    const userId = req.userId
+    const { prompt, sceneCount, tone, targetDuration, provider, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 

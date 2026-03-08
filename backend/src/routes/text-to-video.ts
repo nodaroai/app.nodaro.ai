@@ -34,12 +34,11 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements } = parsed.data
-    const userId = req.userId
+    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 

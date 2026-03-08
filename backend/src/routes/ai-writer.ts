@@ -45,13 +45,12 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, model, temperature, maxTokens } =
+      const { systemPrompt, userInput, model, temperature, maxTokens, userId } =
         parsed.data
-      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "Authentication required" },
+          error: { code: "unauthorized", message: "userId is required" },
         })
       }
 
@@ -195,13 +194,12 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, model, temperature, maxTokens } =
+      const { systemPrompt, userInput, model, temperature, maxTokens, userId } =
         parsed.data
-      const userId = req.userId
 
       if (!userId) {
         return reply.status(401).send({
-          error: { code: "unauthorized", message: "Authentication required" },
+          error: { code: "unauthorized", message: "userId is required" },
         })
       }
 

@@ -112,13 +112,8 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     // Parse optional fields from multipart form
     const fields = data.fields as Record<string, { value?: string } | undefined>
-    // Use authenticated userId from JWT; reject unauthenticated uploads
-    const userId = req.userId ?? null
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required for uploads" },
-      })
-    }
+    // Use authenticated userId from JWT; fall back to form field for unauthenticated uploads
+    const userId = req.userId ?? fields?.userId?.value ?? null
     const projectId = fields?.projectId?.value ?? null
     const filenameOverride = fields?.filename?.value ?? null
 

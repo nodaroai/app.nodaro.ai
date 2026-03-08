@@ -32,12 +32,11 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    const { youtubeUrl } = parsed.data
-    const userId = req.userId
+    const { youtubeUrl, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 

@@ -25,12 +25,11 @@ export async function voiceRemixRoutes(app: FastifyInstance) {
       })
     }
 
-    const { text, voiceDescription } = parsed.data
-    const userId = req.userId
+    const { text, voiceDescription, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 

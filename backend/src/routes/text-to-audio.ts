@@ -27,12 +27,11 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, loop, promptInfluence } = parsed.data
-    const userId = req.userId
+    const { prompt, provider, duration, loop, promptInfluence, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 

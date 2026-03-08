@@ -41,8 +41,7 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId } = parsed.data
-    const userId = req.userId
+    const { projectId, userId } = parsed.data
 
     let query = supabase
       .from("locations")
@@ -147,12 +146,11 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, category, style, sourceImageUrl, timeOfDay, weather, angles } = parsed.data
-    const userId = req.userId
+    const { id, userId, nodeId, workflowId, projectId, name, description, category, style, sourceImageUrl, timeOfDay, weather, angles } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 
