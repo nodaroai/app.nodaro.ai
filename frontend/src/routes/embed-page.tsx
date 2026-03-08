@@ -36,7 +36,7 @@ import { useRunSlots, AppRunnerLayout, RunsSidebar } from "@/components/app-runn
 export default function EmbedPage() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const { setTheme } = useTheme()
   const themeParam = searchParams.get("theme")
 
@@ -104,13 +104,11 @@ export default function EmbedPage() {
     }
   }, [])
 
-  // Load app
+  // Load app — don't wait for auth (app is public)
   useEffect(() => {
-    if (!authLoading && slug) {
-      loadApp(slug)
-    }
+    if (slug) loadApp(slug)
     return () => { reset() }
-  }, [authLoading, slug, loadApp, reset])
+  }, [slug, loadApp, reset])
 
   // Sync to presentation store (same pattern as app-runner-page)
   useEffect(() => {
@@ -207,7 +205,7 @@ export default function EmbedPage() {
     }
   }, [executionStatus, nodeStates, errorMessage])
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

@@ -19,7 +19,7 @@ import { useRunSlots, AppRunnerLayout, RunsSidebar } from "@/components/app-runn
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
 
   // App runner store
   const loadApp = useAppRunnerStore((s) => s.loadApp)
@@ -29,11 +29,11 @@ export default function AppRunnerPage() {
   const cancel = useAppRunnerStore((s) => s.cancel)
   const reset = useAppRunnerStore((s) => s.reset)
 
-  // Load app on mount
+  // Load app on mount — don't wait for auth (app is public)
   useEffect(() => {
-    if (!authLoading && slug) loadApp(slug)
+    if (slug) loadApp(slug)
     return () => { reset() }
-  }, [authLoading, slug, loadApp, reset])
+  }, [slug, loadApp, reset])
 
   // Seed presentation store when app loads
   useEffect(() => {
@@ -56,8 +56,8 @@ export default function AppRunnerPage() {
   // Run slots hook — all slot state, CRUD, DB sync
   const runSlots = useRunSlots({ slug, user, persistRuns: !!user })
 
-  // Loading / error states
-  if (authLoading || loading) {
+  // Loading / error states — only wait for app load, not auth
+  if (loading) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
