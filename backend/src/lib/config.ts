@@ -20,7 +20,8 @@ const envSchema = z.object({
   EDITION: z.enum(["community", "business", "cloud"]).default("community"),
   /** Comma-separated list of allowed CORS origins (e.g. "https://app.nodaro.ai,http://localhost:3000") */
   CORS_ORIGIN: z.string().default(""),
-  PADDLE_WEBHOOK_SECRET: z.string().default(""),
+  STRIPE_SECRET_KEY: z.string().default(""),
+  STRIPE_WEBHOOK_SECRET: z.string().default(""),
   /** Number of parallel browser tabs for Remotion renders. null = Remotion default (50% CPU cores) */
   REMOTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).nullable().default(null),
   /** 64-char hex string (32 bytes) for AES-256-GCM encryption of social media OAuth tokens */

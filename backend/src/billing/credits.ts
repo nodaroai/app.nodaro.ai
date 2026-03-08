@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
-import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./paddle-config.js"
+import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 
 // ============================================================
 // Types
@@ -412,10 +412,10 @@ export class CreditsService {
     userId: string
     amount: number
     creditType: "subscription" | "topup"
-    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "refund" | "paddle_refund" | "expiry"
+    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "refund" | "stripe_refund" | "expiry"
     description?: string
     jobId?: string
-    paddleTransactionId?: string
+    stripeTransactionId?: string
     adminUserId?: string
     balanceAfter: number
   }): Promise<boolean> {
@@ -429,7 +429,7 @@ export class CreditsService {
           source: params.source,
           description: params.description || null,
           job_id: params.jobId || null,
-          paddle_transaction_id: params.paddleTransactionId || null,
+          stripe_transaction_id: params.stripeTransactionId || null,
           admin_user_id: params.adminUserId || null,
           balance_after: params.balanceAfter,
         })

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { TIER_STORAGE_LIMITS } from "../paddle-config.js"
+import { TIER_STORAGE_LIMITS } from "../stripe-config.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()

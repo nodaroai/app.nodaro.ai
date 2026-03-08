@@ -2488,10 +2488,10 @@ export async function getBatchModelCreditCosts(models: string[]): Promise<Record
 
 export interface SubscriptionInfo {
   id: string
-  paddle_subscription_id: string
+  stripe_subscription_id: string
   tier: string
   status: string
-  paddle_price_id: string
+  stripe_price_id: string
   current_period_start: string | null
   current_period_end: string | null
   canceled_at: string | null
@@ -2499,7 +2499,7 @@ export interface SubscriptionInfo {
 
 export interface TransactionRecord {
   id: string
-  paddle_transaction_id: string
+  stripe_transaction_id: string
   type: "subscription" | "topup"
   amount_usd: number
   credits_granted: number
@@ -2555,6 +2555,25 @@ export async function changePlan(
   }
   const json = await res.json()
   return (json as Record<string, unknown>).data as { subscriptionId: string; tier: string }
+}
+
+export async function createCheckoutSession(params: {
+  priceId: string
+  mode?: "subscription" | "payment"
+}): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/v1/billing/create-checkout-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as Record<string, string>).error ?? "Failed to create checkout session")
+  }
+  const json = await res.json()
+  return (json as Record<string, unknown>).data
+    ? ((json as Record<string, unknown>).data as { url: string }).url
+    : (json as { url: string }).url
 }
 
 // ============================================================
@@ -3220,6 +3239,12 @@ export async function disconnectSocial(connectionId: string): Promise<{ success:
 // Published Apps (Mini-Apps)
 // ---------------------------------------------------------------------------
 
+export interface AppVersion {
+  version: number
+  id: string
+  createdAt: string
+}
+
 export interface PublishedApp {
   id: string
   workflowId: string
@@ -3239,6 +3264,7 @@ export interface PublishedApp {
   estimatedCredits: number
   createdAt: string
   runCount?: number
+  versions?: AppVersion[]
 }
 
 export interface AppRun {
@@ -3250,6 +3276,7 @@ export interface AppRun {
   inputValues: Record<string, Record<string, unknown>> | null
   status: string
   createdAt: string
+  version?: number | null
   // Flat fields from list endpoint
   nodeStates?: Record<string, unknown> | null
   completedNodes?: number
@@ -3315,10 +3342,13 @@ export async function deactivateApp(appId: string): Promise<void> {
   )
 }
 
-/** Load a published app by slug (public). */
-export async function getPublishedApp(slug: string): Promise<PublishedApp> {
+/** Load a published app by slug (public). Optionally load a specific version. */
+export async function getPublishedApp(slug: string, version?: number): Promise<PublishedApp> {
+  const params = new URLSearchParams()
+  if (version) params.set("version", String(version))
+  const qs = params.toString()
   return apiRequest<PublishedApp>(
-    `/v1/app/${encodeURIComponent(slug)}`,
+    `/v1/app/${encodeURIComponent(slug)}${qs ? `?${qs}` : ""}`,
     "Failed to load app",
   )
 }
@@ -3328,11 +3358,12 @@ export async function runPublishedApp(
   slug: string,
   inputOverrides?: Record<string, Record<string, unknown>>,
   runId?: string,
+  version?: number,
 ): Promise<{ executionId: string; runId: string; status: string }> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/run`,
     "Failed to run app",
-    { method: "POST", body: { inputOverrides, runId } },
+    { method: "POST", body: { inputOverrides, runId, version } },
   )
 }
 
@@ -3340,11 +3371,12 @@ export async function runPublishedApp(
 export async function createAppRun(
   slug: string,
   inputValues?: Record<string, Record<string, unknown>>,
+  version?: number,
 ): Promise<{ id: string; createdAt: string; inputValues: Record<string, Record<string, unknown>> | null; status: string }> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs`,
     "Failed to create run",
-    { method: "POST", body: { inputValues } },
+    { method: "POST", body: { inputValues, version } },
   )
 }
 

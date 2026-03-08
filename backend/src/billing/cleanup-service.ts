@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { deleteFromR2, batchDeleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
-import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "../billing/paddle-config.js"
+import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "../billing/stripe-config.js"
 
 // ============================================================
 // Types
@@ -399,7 +399,7 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
   // Find canceled subscriptions whose paid period has ended
   const { data: subs, error: subsError } = await supabase
     .from("subscriptions")
-    .select("id, user_id, paddle_subscription_id")
+    .select("id, user_id, stripe_subscription_id")
     .eq("status", "canceled")
     .lt("current_period_end", now)
     .limit(100)

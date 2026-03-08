@@ -60,6 +60,8 @@ export interface WorkflowExecutionJob {
   /** Presentation mode: override source node data before execution.
    *  Keys are node IDs, values are partial data to merge into node.data. */
   inputOverrides?: Record<string, Record<string, unknown>>
+  /** When running a published app version, load snapshot from published_apps instead of workflows. */
+  appVersionId?: string
 }
 
 // ---------------------------------------------------------------------------

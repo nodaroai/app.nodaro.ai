@@ -30,6 +30,9 @@ interface AppRunnerState {
   slug: string | null
   loading: boolean
 
+  // Versioning
+  selectedVersion: number | null // null = latest
+
   // Run history
   runs: AppRun[]
   runsLoading: boolean
@@ -54,6 +57,7 @@ interface AppRunnerState {
   deleteRun: (runId: string) => Promise<void>
   updateInputValue: (nodeId: string, key: string, value: unknown) => void
   resumeExecution: (executionId: string) => void
+  setSelectedVersion: (version: number | null) => void
   reset: () => void
 }
 
@@ -70,6 +74,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   app: null,
   slug: null,
   loading: false,
+  selectedVersion: null,
   runs: [],
   runsLoading: false,
   activeRunId: null,
@@ -150,7 +155,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   },
 
   run: async (existingRunId?: string) => {
-    const { slug, inputValues } = get()
+    const { slug, inputValues, selectedVersion } = get()
     if (!slug) return
 
     clearPollTimeout()
@@ -166,6 +171,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
         slug,
         Object.keys(inputValues).length > 0 ? inputValues : undefined,
         existingRunId,
+        selectedVersion ?? undefined,
       )
       set({ executionId, activeRunId: runId })
       startPolling(set, get)
@@ -209,6 +215,10 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     startPolling(set, get)
   },
 
+  setSelectedVersion: (version: number | null) => {
+    set({ selectedVersion: version })
+  },
+
   updateInputValue: (nodeId: string, key: string, value: unknown) => {
     const { inputValues } = get()
     set({
@@ -225,6 +235,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       app: null,
       slug: null,
       loading: false,
+      selectedVersion: null,
       runs: [],
       runsLoading: false,
       activeRunId: null,

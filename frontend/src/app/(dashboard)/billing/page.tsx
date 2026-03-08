@@ -47,7 +47,7 @@ export default function BillingPage() {
   const storageUsed = storage?.storageUsed ?? 0
   const storageLimit = storage?.storageLimit ?? 0
 
-  // Handle success redirect from Paddle checkout
+  // Handle success redirect from Stripe checkout
   useEffect(() => {
     if (!user?.id) return
     if (!searchParams.get("success") && !searchParams.get("topup")) return
@@ -100,7 +100,7 @@ export default function BillingPage() {
   }
 
   const currentTier = PRICING_TIERS.find((t) => t.id === (balance?.tier ?? "free"))
-  const subBillingCycle = getBillingCycleFromPriceId(subscription?.paddle_price_id)
+  const subBillingCycle = getBillingCycleFromPriceId(subscription?.stripe_price_id)
   const displayPrice = currentTier
     ? subBillingCycle === "monthly" ? currentTier.priceMonthly : currentTier.priceAnnual
     : 0
@@ -261,7 +261,7 @@ export default function BillingPage() {
 
         <Separator />
 
-        {user && <CreditTopup userId={user.id} userEmail={user.email ?? undefined} />}
+        {user && <CreditTopup />}
       </section>
 
       {/* Storage */}

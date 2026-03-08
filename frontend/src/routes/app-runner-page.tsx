@@ -28,6 +28,7 @@ interface RunSlot {
   completedNodes: number
   totalNodes: number
   createdAt: number
+  version: number | null
 }
 
 // --- Helpers ---
@@ -128,6 +129,7 @@ export default function AppRunnerPage() {
         completedNodes: run.completedNodes ?? 0,
         totalNodes: run.totalNodes ?? 0,
         createdAt: new Date(run.createdAt).getTime(),
+        version: run.version ?? null,
       }))
       setSlots(dbSlots)
     }).catch(() => {
@@ -193,6 +195,14 @@ export default function AppRunnerPage() {
     }
   }, [activeSlotId, slug])
 
+  // Selected version for new runs
+  const selectedVersion = useAppRunnerStore((s) => s.selectedVersion)
+  const setSelectedVersion = useAppRunnerStore((s) => s.setSelectedVersion)
+  const versions = app?.versions ?? []
+  const latestVersion = versions.length > 0
+    ? Math.max(...versions.map((v) => v.version))
+    : app?.version ?? 1
+
   // Create New — create a new empty slot (persisted to DB)
   const handleCreateNew = useCallback(async () => {
     saveCurrentSlotInputs()
@@ -200,8 +210,10 @@ export default function AppRunnerPage() {
 
     if (!slug || !user) return
 
+    const runVersion = selectedVersion ?? undefined
+
     try {
-      const dbRun = await createAppRun(slug, emptyInputs)
+      const dbRun = await createAppRun(slug, emptyInputs, runVersion)
       const slot: RunSlot = {
         id: dbRun.id,
         inputValues: emptyInputs,
@@ -211,6 +223,7 @@ export default function AppRunnerPage() {
         completedNodes: 0,
         totalNodes: 0,
         createdAt: new Date(dbRun.createdAt).getTime(),
+        version: selectedVersion ?? latestVersion,
       }
       setSlots((prev) => [slot, ...prev])
       setActiveSlotId(slot.id)
@@ -233,6 +246,7 @@ export default function AppRunnerPage() {
         completedNodes: 0,
         totalNodes: 0,
         createdAt: Date.now(),
+        version: selectedVersion ?? latestVersion,
       }
       setSlots((prev) => [slot, ...prev])
       setActiveSlotId(slot.id)
@@ -245,7 +259,7 @@ export default function AppRunnerPage() {
         totalNodes: 0,
       })
     }
-  }, [saveCurrentSlotInputs, inputNodes, newRun, slug, user])
+  }, [saveCurrentSlotInputs, inputNodes, newRun, slug, user, selectedVersion, latestVersion])
 
   // Clear — reset current slot's inputs
   const handleClear = useCallback(() => {
@@ -253,7 +267,7 @@ export default function AppRunnerPage() {
     const emptyInputs = makeEmptyInputs(inputNodes)
     setSlots((prev) => prev.map((s) =>
       s.id === activeSlotId
-        ? { ...s, inputValues: emptyInputs, nodeStates: {}, executionId: null, executionStatus: "idle" as const, completedNodes: 0, totalNodes: 0 }
+        ? { ...s, inputValues: emptyInputs, nodeStates: {}, executionId: null, executionStatus: "idle" as const, completedNodes: 0, totalNodes: 0, version: s.version }
         : s,
     ))
     newRun()
@@ -293,8 +307,10 @@ export default function AppRunnerPage() {
     const slot = slots.find((s) => s.id === slotId)
     if (!slot || !slug || !user) return
 
+    const runVersion = selectedVersion ?? undefined
+
     try {
-      const dbRun = await createAppRun(slug, slot.inputValues)
+      const dbRun = await createAppRun(slug, slot.inputValues, runVersion)
       const newSlot: RunSlot = {
         id: dbRun.id,
         inputValues: { ...slot.inputValues },
@@ -304,6 +320,7 @@ export default function AppRunnerPage() {
         completedNodes: 0,
         totalNodes: 0,
         createdAt: new Date(dbRun.createdAt).getTime(),
+        version: selectedVersion ?? latestVersion,
       }
       setSlots((prev) => [newSlot, ...prev])
       setActiveSlotId(newSlot.id)
@@ -318,7 +335,7 @@ export default function AppRunnerPage() {
     } catch {
       // silently fail
     }
-  }, [slots, slug, user, newRun])
+  }, [slots, slug, user, newRun, selectedVersion, latestVersion])
 
   // Header button: "Clear" when idle, "Retry" when failed, "Create New" otherwise
   const isSlotIdle = activeSlot?.executionStatus === "idle"
@@ -427,6 +444,10 @@ export default function AppRunnerPage() {
           onDuplicateSlot={handleDuplicateSlot}
           onDeleteSlot={handleDeleteSlot}
           onClose={() => setShowHistory(false)}
+          versions={versions}
+          selectedVersion={selectedVersion}
+          onSelectVersion={setSelectedVersion}
+          latestVersion={latestVersion}
         />
       )}
 
@@ -471,6 +492,10 @@ function RunsSidebar({
   onDuplicateSlot,
   onDeleteSlot,
   onClose,
+  versions,
+  selectedVersion,
+  onSelectVersion,
+  latestVersion,
 }: {
   slots: RunSlot[]
   activeSlotId: string | null
@@ -479,7 +504,13 @@ function RunsSidebar({
   onDuplicateSlot: (slotId: string) => void
   onDeleteSlot: (slotId: string) => void
   onClose: () => void
+  versions: { version: number; id: string; createdAt: string }[]
+  selectedVersion: number | null
+  onSelectVersion: (version: number | null) => void
+  latestVersion: number
 }) {
+  const hasMultipleVersions = versions.length > 1
+
   return (
     <div className="w-72 border-r border-border bg-card flex flex-col shrink-0">
       <div className="flex items-center justify-between px-4 h-14 border-b border-border">
@@ -493,6 +524,31 @@ function RunsSidebar({
           </Button>
         </div>
       </div>
+
+      {/* Version selector — only shown when multiple versions exist */}
+      {hasMultipleVersions && (
+        <div className="px-4 py-2 border-b border-border/50">
+          <label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
+            Run on version
+          </label>
+          <select
+            value={selectedVersion ?? ""}
+            onChange={(e) => {
+              const v = e.target.value
+              onSelectVersion(v ? Number(v) : null)
+            }}
+            className="w-full text-xs bg-background border border-border rounded px-2 py-1.5 text-foreground"
+          >
+            <option value="">Latest (v{latestVersion})</option>
+            {versions.map((v) => (
+              <option key={v.version} value={v.version}>
+                v{v.version}{v.version === latestVersion ? " (latest)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
         {slots.map((slot) => (
           <button
@@ -504,9 +560,16 @@ function RunsSidebar({
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                {new Date(slot.createdAt).toLocaleTimeString()}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">
+                  {new Date(slot.createdAt).toLocaleTimeString()}
+                </span>
+                {hasMultipleVersions && slot.version != null && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                    v{slot.version}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-1">
                 <SlotStatusBadge status={slot.executionStatus} />
                 <button

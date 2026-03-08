@@ -72,7 +72,7 @@ export function createOrchestratorWorker() {
 // ---------------------------------------------------------------------------
 
 async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise<void> {
-  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds, inputOverrides } = job.data
+  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds, inputOverrides, appVersionId } = job.data
   const nodeSubset = nodeIds ? new Set(nodeIds) : null
 
   const ctx: OrchestratorContext = {
@@ -85,21 +85,42 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
   }
 
   try {
-    // 1. Load workflow from DB
-    const { data: workflow, error: wfError } = await supabase
-      .from("workflows")
-      .select("nodes, edges, settings")
-      .eq("id", workflowId)
-      .single()
+    // 1. Load workflow from DB (or from published app snapshot if running a specific version)
+    let workflowData: { nodes: unknown; edges: unknown; settings: unknown } | null = null
 
-    if (wfError || !workflow) {
-      await failExecution(executionId, `Workflow ${workflowId} not found`)
-      return
+    if (appVersionId) {
+      const { data: appVersion, error: appError } = await supabase
+        .from("published_apps")
+        .select("snapshot_nodes, snapshot_edges, snapshot_settings")
+        .eq("id", appVersionId)
+        .single()
+
+      if (!appError && appVersion) {
+        workflowData = {
+          nodes: appVersion.snapshot_nodes,
+          edges: appVersion.snapshot_edges,
+          settings: appVersion.snapshot_settings,
+        }
+      }
+    }
+
+    if (!workflowData) {
+      const { data: workflow, error: wfError } = await supabase
+        .from("workflows")
+        .select("nodes, edges, settings")
+        .eq("id", workflowId)
+        .single()
+
+      if (wfError || !workflow) {
+        await failExecution(executionId, `Workflow ${workflowId} not found`)
+        return
+      }
+      workflowData = workflow
     }
 
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
-    const allNodes = (workflow.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
-    const allEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
+    const allNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
+    const allEdges: SimpleEdge[] = (workflowData.edges as SimpleEdge[]) ?? []
     const cleaned = filterCloneNodes(allNodes, allEdges)
     // Also filter nodes still marked hidden after clone cleanup
     const nodes: SimpleNode[] = cleaned.nodes.filter((n) => !(n as { hidden?: boolean }).hidden)
@@ -107,7 +128,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     const edges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
 
     // Pass workflow settings (character definitions, prompt templates) to context
-    ctx.workflowSettings = (workflow.settings as Record<string, unknown>) ?? {}
+    ctx.workflowSettings = (workflowData.settings as Record<string, unknown>) ?? {}
 
     // Apply presentation mode input overrides to source node data
     if (inputOverrides) {

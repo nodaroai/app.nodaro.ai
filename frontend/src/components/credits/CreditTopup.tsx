@@ -1,30 +1,21 @@
-"use client"
-
 import { useState } from "react"
 import { Coins, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { openCheckout } from "@/lib/paddle"
+import { createCheckoutSession } from "@/lib/api"
 import { TOPUP_PACKAGES, type TopupPackage } from "@/lib/pricing-data"
 
-interface CreditTopupProps {
-  readonly userId: string
-  readonly userEmail?: string
-}
-
-export function CreditTopup({ userId, userEmail }: CreditTopupProps) {
+export function CreditTopup() {
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
   async function handlePurchase(pkg: TopupPackage) {
     setLoadingId(pkg.id)
     try {
-      await openCheckout({
+      const url = await createCheckoutSession({
         priceId: pkg.priceId,
-        userId,
-        userEmail,
-        successUrl: `${window.location.origin}/billing?topup=true`,
+        mode: "payment",
       })
+      window.location.href = url
     } catch (err) {
       toast.error("Failed to open checkout")
     } finally {

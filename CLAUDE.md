@@ -68,7 +68,7 @@
 | 7 | `backend/src/billing/credits.ts` | `STATIC_CREDIT_COSTS` (supports composite identifiers like `"gpt-image:high"`) |
 | 8 | `frontend/src/lib/pricing-data.ts` | MODEL_REFERENCE |
 | 9 | `model_pricing` DB table | Include actual provider cost |
-| 10 | `backend/src/billing/paddle-config.ts` | If pricing tiers or credit allocations change |
+| 10 | `backend/src/billing/stripe-config.ts` | If pricing tiers or credit allocations change |
 | 11 | `frontend/src/lib/pricing-data.ts` | PRICING_TIERS if tier features/prices change |
 
 **Forgetting step 3 (Zod enum) has caused the same validation bug 3 times.**
@@ -120,7 +120,7 @@ Full guide: `docs/adding-a-new-node.md`
 | Database | Supabase (PostgreSQL + Auth + Realtime) |
 | Storage | Cloudflare R2 (S3-compatible) |
 | Auth | Supabase Auth (Google OAuth) + JWT middleware (`middleware/auth.ts`, 5-min SHA-256 token cache) |
-| Payments | Paddle (Merchant of Record) |
+| Payments | Stripe |
 
 ---
 
@@ -142,9 +142,9 @@ Full guide: `docs/adding-a-new-node.md`
 | `app_settings` | key (unique), value (JSONB) | ai_provider, cost_markup_percent |
 | `credit_transactions` | id, user_id, amount, credit_type, source, job_id | Audit log |
 | `voice_clones` | id, user_id, name, elevenlabs_voice_id, sample_audio_url | Custom cloned voices |
-| `paddle_customers` | id, user_id, paddle_customer_id | Supabase <> Paddle mapping |
-| `subscriptions` | id, paddle_subscription_id, paddle_price_id, tier, status, current_period_start/end, canceled_at | Synced from Paddle |
-| `transactions` | id, paddle_transaction_id, type, amount_usd, credits_granted | Payment history |
+| `stripe_customers` | id, user_id, stripe_customer_id | Supabase <> Stripe mapping |
+| `subscriptions` | id, stripe_subscription_id, stripe_price_id, tier, status, current_period_start/end, canceled_at | Synced from Stripe |
+| `transactions` | id, stripe_transaction_id, type, amount_usd, credits_granted | Payment history |
 | `social_connections` | id, user_id, platform, platform_user_id, access_token_encrypted, refresh_token_encrypted, token_expires_at, scopes, metadata | OAuth tokens (AES-256-GCM encrypted), one per user+platform |
 
 ---
@@ -158,7 +158,7 @@ frontend/src/
   app/(auth)/             — Login, signup
   app/(dashboard)/        — Projects, workflows, billing, settings, library, integrations
   app/(admin)/            — Admin panel (cloud/business only)
-  app/pricing/            — Pricing page (Paddle)
+  app/pricing/            — Pricing page (Stripe Checkout)
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
@@ -175,7 +175,7 @@ frontend/src/
   components/ui/          — shadcn/ui
   hooks/                  — useModelCredits, undo-flags (shared skip flag), use-undo-redo, use-workflow-store, etc.
   lib/api.ts              — API client (includes `setCurrentWorkflowId` + `withWorkflowId` for tagging single-node jobs)
-  lib/paddle.ts           — Paddle.js singleton
+  lib/stripe.ts           — Stripe.js singleton
   lib/edition.ts          — Edition helpers
   lib/audio-tags.ts       — Audio tags, SSML breaks, model-aware language lists (getLanguagesForModel, ALL_LANGUAGES)
   lib/suno-tags.ts        — Suno metatags for lyrics autocomplete ([Verse], [Chorus], genres, etc.)
@@ -197,7 +197,7 @@ backend/src/
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction; KIE clients: `client.ts` (core + VEO), `kontext-client.ts` (Flux Kontext), `runway-client.ts` (Runway gen + extend), `luma-client.ts` (Luma Modify)
-  billing/                — Credits, Paddle, cleanup (see Credit System)
+  billing/                — Credits, Stripe, cleanup (see Credit System)
   services/workflow-engine/ — Backend workflow orchestration (8 files: types, execution-graph, input-resolver, output-extractor, payload-builder, node-executor, inline-executor, sub-workflow-handler)
   services/social/        — Social media OAuth + publishing (encryption, oauth, platforms/)
   workers/orchestrator-worker.ts — Main orchestrator BullMQ worker
@@ -263,8 +263,7 @@ backend/src/
 ---
 
 ## Active TODOs
-- [ ] Phase 7: Paddle production go-live (swap sandbox keys for production)
-- [ ] Create monthly Paddle price IDs and add env vars (currently only annual prices exist)
+- [ ] Stripe production go-live (swap test keys for live keys)
 - [ ] Phase 6 Templates (preset workflow templates)
 - [ ] Landing page storage tier update
 - [ ] Project Folders
@@ -283,5 +282,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-03-05*
-*Version: 1.52.0*
+*Last updated: 2026-03-08*
+*Version: 1.53.0*

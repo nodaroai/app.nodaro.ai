@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { openCheckout } from "@/lib/paddle"
 import {
   PRICING_TIERS,
   getTierPrice,
@@ -13,6 +12,7 @@ import {
   getAnnualSavingsPercent,
   type BillingCycle,
 } from "@/lib/pricing-data"
+import { createCheckoutSession } from "@/lib/api"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 import { useSubscription, useChangePlanMutation } from "@/hooks/queries/use-billing-queries"
@@ -36,12 +36,12 @@ export default function PricingPage() {
   const currentTierId = isActiveSub
     ? PRICING_TIERS.find(
         (t) =>
-          t.priceIdAnnual === subscription.paddle_price_id ||
-          t.priceIdMonthly === subscription.paddle_price_id,
+          t.priceIdAnnual === subscription.stripe_price_id ||
+          t.priceIdMonthly === subscription.stripe_price_id,
       )?.id ?? null
     : null
 
-  // Auto-open Paddle checkout when redirected from login with ?plan= param
+  // Auto-open Stripe checkout when redirected from login with ?plan= param
   useEffect(() => {
     if (authLoading || subLoading || autoCheckoutTriggered.current) return
     const planParam = searchParams.get("plan")
@@ -80,11 +80,8 @@ export default function PricingPage() {
         toast.success("Plan changed successfully! Changes will apply shortly.")
         navigate("/billing?success=true")
       } else {
-        await openCheckout({
-          priceId,
-          userId: user.id,
-          userEmail: user.email ?? undefined,
-        })
+        const url = await createCheckoutSession({ priceId, mode: "subscription" })
+        window.location.href = url
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong"

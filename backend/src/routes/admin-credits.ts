@@ -5,7 +5,7 @@ import { CreditsService, invalidateModelPricingCache } from "../billing/credits.
 import { invalidateBalanceCache } from "./credits.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { invalidateAuthCache } from "../middleware/auth.js"
-import { TIER_CREDITS } from "../billing/paddle-config.js"
+import { TIER_CREDITS } from "../billing/stripe-config.js"
 
 // ---- Zod Schemas ----
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { TIER_STORAGE_LIMITS } from "../paddle-config.js"
+import { TIER_STORAGE_LIMITS } from "../stripe-config.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
@@ -107,8 +107,8 @@ vi.mock("@/utils/file-validation.js", () => ({
   updateStorageUsage: mockUpdateStorageUsage,
 }))
 
-vi.mock("@/billing/paddle-config.js", async () => {
-  const actual = await vi.importActual<typeof import("../paddle-config.js")>("@/billing/paddle-config.js")
+vi.mock("@/billing/stripe-config.js", async () => {
+  const actual = await vi.importActual<typeof import("../stripe-config.js")>("@/billing/stripe-config.js")
   return actual
 })
 
@@ -155,8 +155,8 @@ describe("cleanup-service", () => {
       mockTableQueue("subscriptions", [
         {
           data: [
-            { id: "sub-1", user_id: "user-1", paddle_subscription_id: "ps-1" },
-            { id: "sub-2", user_id: "user-2", paddle_subscription_id: "ps-2" },
+            { id: "sub-1", user_id: "user-1", stripe_subscription_id: "ps-1" },
+            { id: "sub-2", user_id: "user-2", stripe_subscription_id: "ps-2" },
           ],
           error: null,
         },

@@ -25,10 +25,12 @@ const slugRunParams = z.object({
 const runBody = z.object({
   inputOverrides: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   runId: z.string().uuid().optional(),
+  version: z.coerce.number().int().min(1).optional(),
 })
 
 const createRunBody = z.object({
   inputValues: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  version: z.coerce.number().int().min(1).optional(),
 })
 
 const updateRunBody = z.object({
@@ -40,6 +42,46 @@ const runsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 })
 
+const appQuery = z.object({
+  version: z.coerce.number().int().min(1).optional(),
+})
+
+// ---------------------------------------------------------------------------
+// Shared helpers — resolve slug → workflow_id → version(s)
+// No is_active filter: runs and app data remain visible even when deactivated.
+// ---------------------------------------------------------------------------
+
+async function resolveSlug(slug: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("published_apps")
+    .select("workflow_id")
+    .eq("slug", slug)
+    .limit(1)
+    .single()
+  return error || !data ? null : (data.workflow_id as string)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadAppVersion(
+  workflowId: string,
+  columns: string,
+  version?: number,
+): Promise<any | null> {
+  let query = supabase
+    .from("published_apps")
+    .select(columns)
+    .eq("workflow_id", workflowId)
+
+  if (version) {
+    query = query.eq("version", version)
+  } else {
+    query = query.order("version", { ascending: false }).limit(1)
+  }
+
+  const { data, error } = await query.single()
+  return error || !data ? null : data
+}
+
 export async function appRunnerRoutes(app: FastifyInstance) {
   // --- Load published app (public, auth optional for personalization) ---
   app.get("/v1/app/:slug", async (req, reply) => {
@@ -50,20 +92,38 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
+    const queryParsed = appQuery.safeParse(req.query)
+    const requestedVersion = queryParsed.success ? queryParsed.data.version : undefined
+
     const { slug } = parsed.data
+    const workflowId = await resolveSlug(slug)
+    if (!workflowId) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
 
-    const { data: appRow, error: appError } = await supabase
-      .from("published_apps")
-      .select(
-        "id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, created_at"
-      )
-      .eq("slug", slug)
-      .eq("is_active", true)
-      .single()
+    // Load all versions + requested app data in parallel
+    const [versionsResult, appRow] = await Promise.all([
+      supabase
+        .from("published_apps")
+        .select("id, version, created_at")
+        .eq("workflow_id", workflowId)
+        .order("version", { ascending: false }),
+      loadAppVersion(
+        workflowId,
+        "id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, created_at, workflow_id",
+        requestedVersion,
+      ),
+    ])
 
-    if (appError || !appRow) {
+    const versions = (versionsResult.data ?? []).map((v) => ({
+      version: v.version as number,
+      id: v.id as string,
+      createdAt: v.created_at as string,
+    }))
+
+    if (!appRow) {
       return reply.status(404).send({
-        error: { code: "not_found", message: "App not found" },
+        error: { code: "not_found", message: requestedVersion ? `Version ${requestedVersion} not found` : "App not found" },
       })
     }
 
@@ -80,6 +140,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       creatorId: appRow.creator_id,
       maxRunsPerUserPerDay: appRow.max_runs_per_user_per_day,
       createdAt: appRow.created_at,
+      workflowId: appRow.workflow_id,
+      versions,
     })
   })
 
@@ -106,19 +168,17 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { slug } = paramsParsed.data
-    const { inputOverrides, runId } = bodyParsed.data
+    const { inputOverrides, runId, version } = bodyParsed.data
 
-    // Load app by slug
-    const { data: appRow, error: appError } = await supabase
-      .from("published_apps")
-      .select("id, workflow_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges")
-      .eq("slug", slug)
-      .eq("is_active", true)
-      .single()
+    const workflowId = await resolveSlug(slug)
+    if (!workflowId) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
 
-    if (appError || !appRow) {
+    const appRow = await loadAppVersion(workflowId, "id, workflow_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges", version)
+    if (!appRow) {
       return reply.status(404).send({
-        error: { code: "not_found", message: "App not found" },
+        error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
       })
     }
 
@@ -213,12 +273,14 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     // Enqueue orchestration job — use the app's workflow_id since the orchestrator loads by workflow ID
+    // Pass appVersionId so the orchestrator uses the snapshot from this specific version
     const jobData: WorkflowExecutionJob = {
       executionId: execution.id,
       workflowId: appRow.workflow_id,
       userId: req.userId,
       triggerType: "manual",
       inputOverrides,
+      appVersionId: appRow.id,
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {
@@ -255,19 +317,17 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { slug } = paramsParsed.data
-    const { inputValues } = bodyParsed.data
+    const { inputValues, version } = bodyParsed.data
 
-    // Load app by slug
-    const { data: appRow, error: appError } = await supabase
-      .from("published_apps")
-      .select("id")
-      .eq("slug", slug)
-      .eq("is_active", true)
-      .single()
+    const workflowId = await resolveSlug(slug)
+    if (!workflowId) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
 
-    if (appError || !appRow) {
+    const appRow = await loadAppVersion(workflowId, "id", version)
+    if (!appRow) {
       return reply.status(404).send({
-        error: { code: "not_found", message: "App not found" },
+        error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
       })
     }
 
@@ -363,34 +423,36 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { slug } = paramsParsed.data
     const { cursor, limit } = queryParsed.data
 
-    // Load app by slug
-    const { data: appRow, error: appError } = await supabase
-      .from("published_apps")
-      .select("id")
-      .eq("slug", slug)
-      .eq("is_active", true)
-      .single()
-
-    if (appError || !appRow) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: "App not found" },
-      })
+    const workflowId = await resolveSlug(slug)
+    if (!workflowId) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    // Build query for app_runs joined with workflow_executions
+    // Get all version IDs for this workflow
+    const { data: allVersions } = await supabase
+      .from("published_apps")
+      .select("id, version")
+      .eq("workflow_id", workflowId)
+
+    if (!allVersions || allVersions.length === 0) {
+      return reply.send({ data: [], nextCursor: undefined })
+    }
+
+    const versionIds = allVersions.map((v) => v.id as string)
+    const versionMap = new Map(allVersions.map((v) => [v.id as string, v.version as number]))
+
+    // Build query for app_runs across ALL versions, joined with workflow_executions
     let query = supabase
       .from("app_runs")
       .select(
-        "id, created_at, execution_id, input_values, status, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at)"
+        "id, app_id, created_at, execution_id, input_values, status, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at)"
       )
-      .eq("app_id", appRow.id)
+      .in("app_id", versionIds)
       .eq("runner_id", req.userId)
       .order("created_at", { ascending: false })
       .limit(limit + 1) // fetch one extra for cursor
 
     if (cursor) {
-      // Cursor is the id of the last item from the previous page
-      // We need the created_at of that item for cursor-based pagination
       const { data: cursorRow } = await supabase
         .from("app_runs")
         .select("created_at")
@@ -435,6 +497,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           completedNodes: exec?.completed_nodes ?? 0,
           totalNodes: exec?.total_nodes ?? 0,
           completedAt: exec?.completed_at ?? null,
+          version: versionMap.get(run.app_id) ?? null,
         }
       }),
       nextCursor,
@@ -461,7 +524,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { data: run, error: runError } = await supabase
       .from("app_runs")
       .select(
-        "id, app_id, runner_id, execution_id, input_values, status, created_at, workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
+        "id, app_id, runner_id, execution_id, input_values, status, created_at, published_apps!app_id(version), workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
       )
       .eq("id", runId)
       .eq("runner_id", req.userId)
@@ -485,6 +548,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       completed_at: string | null
     } | null
 
+    const pubApp = run.published_apps as unknown as { version: number } | null
+
     return reply.send({
       id: run.id,
       appId: run.app_id,
@@ -492,6 +557,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       inputValues: run.input_values ?? null,
       status: (run as { status?: string }).status ?? "draft",
       createdAt: run.created_at,
+      version: pubApp?.version ?? null,
       execution: exec
         ? {
             id: exec.id,

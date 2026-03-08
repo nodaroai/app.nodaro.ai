@@ -20,23 +20,27 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-vi.mock("@/billing/paddle-client.js", () => ({
-  paddle: {
-    customerPortalSessions: {
-      create: vi.fn(),
+vi.mock("@/billing/stripe-client.js", () => ({
+  stripe: {
+    billingPortal: {
+      sessions: {
+        create: vi.fn(),
+      },
     },
     subscriptions: {
+      retrieve: vi.fn(),
       update: vi.fn(),
     },
   },
 }))
 
-vi.mock("@/billing/paddle-config.js", () => ({
-  PRICE_TO_TIER: {
-    "pri_basic": "basic",
-    "pri_standard": "standard",
-    "pri_pro": "pro",
-  } as Record<string, string>,
+vi.mock("@/billing/stripe-config.js", () => ({
+  PRICE_TO_PLAN: {
+    "pri_basic": { plan: "basic", interval: "monthly" },
+    "pri_standard": { plan: "standard", interval: "monthly" },
+    "pri_pro": { plan: "pro", interval: "monthly" },
+  } as Record<string, { plan: string; interval: string }>,
+  TOP_UPS: {} as Record<string, number>,
   getTierFromPriceId: (priceId: string) => {
     const map: Record<string, string> = {
       "pri_basic": "basic",
@@ -46,10 +50,10 @@ vi.mock("@/billing/paddle-config.js", () => ({
     return map[priceId] || "free"
   },
   TIER_CREDITS: {
-    free: 50,
-    basic: 95,
-    standard: 235,
-    pro: 530,
+    free: 250,
+    basic: 475,
+    standard: 1175,
+    pro: 2650,
   } as Record<string, number>,
   TIER_STORAGE_LIMITS: {
     free: 1 * 1024 * 1024 * 1024,
@@ -57,6 +61,10 @@ vi.mock("@/billing/paddle-config.js", () => ({
     standard: 25 * 1024 * 1024 * 1024,
     pro: 50 * 1024 * 1024 * 1024,
   } as Record<string, number>,
+}))
+
+vi.mock("@/billing/provision-credits.js", () => ({
+  ensureStripeCustomer: vi.fn(),
 }))
 
 vi.mock("@/middleware/credit-guard.js", () => ({
@@ -97,7 +105,7 @@ vi.mock("@/routes/credits.js", () => ({
 
 import { billingRoutes } from "../billing.js"
 import { supabase } from "../../lib/supabase.js"
-import { paddle } from "../../billing/paddle-client.js"
+import { stripe } from "../../billing/stripe-client.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -188,10 +196,10 @@ describe("GET /v1/billing/subscription", () => {
   it("returns subscription data when found", async () => {
     const subscription = {
       id: "sub-1",
-      paddle_subscription_id: "paddle_sub_1",
+      stripe_subscription_id: "stripe_sub_1",
       tier: "pro",
       status: "active",
-      paddle_price_id: "pri_pro",
+      stripe_price_id: "pri_pro",
       current_period_start: "2026-01-01",
       current_period_end: "2026-02-01",
       canceled_at: null,
@@ -246,7 +254,7 @@ describe("GET /v1/billing/transactions", () => {
     const transactions = [
       {
         id: "txn-1",
-        paddle_transaction_id: "paddle_txn_1",
+        stripe_transaction_id: "stripe_txn_1",
         type: "subscription",
         amount_usd: 49,
         credits_granted: 235,
@@ -255,7 +263,7 @@ describe("GET /v1/billing/transactions", () => {
       },
       {
         id: "txn-2",
-        paddle_transaction_id: "paddle_txn_2",
+        stripe_transaction_id: "stripe_txn_2",
         type: "topup",
         amount_usd: 10,
         credits_granted: 55,
@@ -294,7 +302,7 @@ describe("POST /v1/billing/manage-subscription", () => {
     expect(res.json()).toEqual({ error: "Authentication required" })
   })
 
-  it("returns 404 when no Paddle customer is found", async () => {
+  it("returns 404 when no Stripe customer is found", async () => {
     const chain = createSupabaseChain({
       single: vi.fn().mockResolvedValue({ data: null, error: { message: "Not found" } }),
     })
@@ -307,36 +315,20 @@ describe("POST /v1/billing/manage-subscription", () => {
     })
 
     expect(res.statusCode).toBe(404)
-    expect(res.json()).toEqual({ error: "No Paddle customer found for this user" })
+    expect(res.json()).toEqual({ error: "No Stripe customer found for this user" })
   })
 
   it("returns portal URL on success", async () => {
-    const mockFrom = vi.mocked(supabase.from)
-    let callCount = 0
-
-    mockFrom.mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        // paddle_customers query
-        const chain = createSupabaseChain({
-          single: vi.fn().mockResolvedValue({
-            data: { paddle_customer_id: "ctm_123" },
-            error: null,
-          }),
-        })
-        return chain as never
-      }
-      // subscriptions query
-      const chain = createSupabaseChain()
-      chain.in = vi.fn().mockResolvedValue({
-        data: [{ paddle_subscription_id: "sub_456" }],
+    const chain = createSupabaseChain({
+      single: vi.fn().mockResolvedValue({
+        data: { stripe_customer_id: "cus_123" },
         error: null,
-      })
-      return chain as never
+      }),
     })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
 
-    vi.mocked(paddle.customerPortalSessions.create).mockResolvedValue({
-      urls: { general: { overview: "https://portal.paddle.com/session/abc" } },
+    vi.mocked(stripe.billingPortal.sessions.create).mockResolvedValue({
+      url: "https://billing.stripe.com/session/abc",
     } as never)
 
     const res = await app.inject({
@@ -347,12 +339,13 @@ describe("POST /v1/billing/manage-subscription", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({
-      data: { url: "https://portal.paddle.com/session/abc" },
+      data: { url: "https://billing.stripe.com/session/abc" },
     })
 
-    expect(paddle.customerPortalSessions.create).toHaveBeenCalledWith(
-      "ctm_123",
-      ["sub_456"],
+    expect(stripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: "cus_123",
+      })
     )
   })
 })
@@ -397,8 +390,8 @@ describe("POST /v1/billing/change-plan", () => {
         const chain = createSupabaseChain({
           single: vi.fn().mockResolvedValue({
             data: {
-              paddle_subscription_id: "sub_existing",
-              paddle_price_id: "pri_basic",
+              stripe_subscription_id: "sub_existing",
+              stripe_price_id: "pri_basic",
               status: "active",
             },
             error: null,
@@ -420,7 +413,13 @@ describe("POST /v1/billing/change-plan", () => {
       return chain as never
     })
 
-    vi.mocked(paddle.subscriptions.update).mockResolvedValue({
+    // stripe.subscriptions.retrieve returns subscription with items
+    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue({
+      id: "sub_existing",
+      items: { data: [{ id: "si_item_1" }] },
+    } as never)
+
+    vi.mocked(stripe.subscriptions.update).mockResolvedValue({
       id: "sub_existing",
     } as never)
 
@@ -435,11 +434,11 @@ describe("POST /v1/billing/change-plan", () => {
       data: { subscriptionId: "sub_existing", tier: "pro" },
     })
 
-    expect(paddle.subscriptions.update).toHaveBeenCalledWith(
+    expect(stripe.subscriptions.update).toHaveBeenCalledWith(
       "sub_existing",
       {
-        items: [{ priceId: "pri_pro", quantity: 1 }],
-        prorationBillingMode: "prorated_immediately",
+        items: [{ id: "si_item_1", price: "pri_pro" }],
+        proration_behavior: "create_prorations",
       },
     )
   })
