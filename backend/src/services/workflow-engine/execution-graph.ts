@@ -56,41 +56,18 @@ export function buildExecutionLevels(
 }
 
 /**
- * Compute effectively skipped node IDs.
- * A node is effectively skipped if:
- * - It is directly skipped (node.data.skipped = true), OR
- * - ALL of its parents are effectively skipped
+ * Compute skipped (frozen) node IDs.
+ * "Skip" means "freeze" — the node keeps its existing output but does not
+ * re-execute.  Downstream nodes still run using the frozen node's saved output.
+ * No propagation: only directly skipped nodes are returned.
  */
 export function getEffectivelySkippedIds(
   nodes: SimpleNode[],
-  edges: SimpleEdge[],
+  _edges: SimpleEdge[],
 ): Set<string> {
-  const directlySkipped = new Set(
+  return new Set(
     nodes.filter((n) => !!n.data.skipped).map((n) => n.id),
   )
-  const effectivelySkipped = new Set(directlySkipped)
-
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const node of nodes) {
-      if (effectivelySkipped.has(node.id)) continue
-
-      const parentIds = edges
-        .filter((e) => e.target === node.id)
-        .map((e) => e.source)
-
-      if (
-        parentIds.length > 0 &&
-        parentIds.every((pid) => effectivelySkipped.has(pid))
-      ) {
-        effectivelySkipped.add(node.id)
-        changed = true
-      }
-    }
-  }
-
-  return effectivelySkipped
 }
 
 // ---------------------------------------------------------------------------

@@ -144,6 +144,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     }
 
     // 3. Inject source node outputs + pre-complete nodes outside the subset
+    //    Also handle skipped/frozen nodes — they keep their saved output
+    //    so downstream nodes can resolve inputs from them.
+    const skippedIds = getEffectivelySkippedIds(nodes, edges)
+
     for (const node of nodes) {
       if (isSourceNode(node.type)) {
         const output = extractSourceNodeOutput(node, triggerData)
@@ -154,11 +158,18 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             completedAt: new Date().toISOString(),
           }
         }
+      } else if (skippedIds.has(node.id)) {
+        // Skipped = frozen: don't re-execute, but preserve saved output
+        // so downstream nodes can still resolve inputs from this node.
+        const output = extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData)
+        nodeStates[node.id] = {
+          status: "completed",
+          output: output ?? undefined,
+          completedAt: new Date().toISOString(),
+        }
       } else if (nodeSubset && !nodeSubset.has(node.id)) {
         // Node is outside the requested subset — treat as pre-completed
         // so downstream nodes can resolve inputs from its saved data.
-        // Try extracting saved results from node data (e.g. generatedImageUrl)
-        // which the frontend stores after each manual run.
         const output = extractSavedNodeOutput(node) ?? extractSourceNodeOutput(node, triggerData)
         nodeStates[node.id] = {
           status: "completed",
@@ -170,17 +181,6 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
     // 4. Build execution levels (topological sort)
     const levels = buildExecutionLevels(nodes, edges)
-
-    // 5. Compute effectively skipped node IDs
-    const skippedIds = getEffectivelySkippedIds(nodes, edges)
-
-    // Mark skipped nodes
-    for (const nodeId of skippedIds) {
-      nodeStates[nodeId] = {
-        status: "skipped",
-        completedAt: new Date().toISOString(),
-      }
-    }
 
     // Initialize all executable nodes as "pending" so they appear in the UI immediately
     const executableNodes = nodes.filter((n) => {
