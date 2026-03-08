@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { hasCredits } from "@/lib/edition"
 import { useAuth } from "@/hooks/use-auth"
-import { useWorkflowStore, type PresentationViewMode } from "@/hooks/use-workflow-store"
+import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import type { WorkflowNode } from "@/types/nodes"
 import {
@@ -130,6 +130,16 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const presUpdateInput = usePresentationStore((s) => s.updateInputValue)
   const presEstimatedCost = usePresentationStore((s) => s.estimatedCost)
   const presPresentationSettings = usePresentationStore((s) => s.presentationSettings)
+
+  // Allow fullscreen mode to update run target locally (e.g. sub-workflow selector in app runner)
+  const updatePresPresentationSettings = useCallback(
+    (patch: Partial<PresentationSettings>) => {
+      usePresentationStore.setState((prev) => ({
+        presentationSettings: { ...prev.presentationSettings, ...patch },
+      }))
+    },
+    [],
+  )
 
   const isFullscreen = mode === "fullscreen"
   const nodes = isFullscreen ? presNodes : editorNodes
@@ -556,11 +566,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             </Button>
           )}
 
-          {(isEditing || (isFullscreen && !isShareReadOnly)) && (
+          {(mode === "tab" || (isFullscreen && !isShareReadOnly)) && (
             <RunTargetSelector
               nodes={nodes}
               presentationSettings={settings}
-              onUpdate={isFullscreen ? undefined : updatePresentationSettings}
+              onUpdate={isFullscreen ? updatePresPresentationSettings : updatePresentationSettings}
             />
           )}
 

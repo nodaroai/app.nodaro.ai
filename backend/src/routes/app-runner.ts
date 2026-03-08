@@ -11,7 +11,6 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
-import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
 const slugParams = z.object({
@@ -123,59 +122,32 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    // Run rate limit + active execution checks in parallel
-    const todayStart = new Date()
-    todayStart.setUTCHours(0, 0, 0, 0)
+    // Run rate limit check
+    if (appRow.max_runs_per_user_per_day != null) {
+      const todayStart = new Date()
+      todayStart.setUTCHours(0, 0, 0, 0)
 
-    const [rateLimitResult, activeExecResult] = await Promise.all([
-      appRow.max_runs_per_user_per_day != null
-        ? supabase
-            .from("app_runs")
-            .select("id", { count: "exact", head: true })
-            .eq("app_id", appRow.id)
-            .eq("runner_id", req.userId)
-            .gte("created_at", todayStart.toISOString())
-        : null,
-      // Check for active executions scoped to THIS app (not workflow-wide)
-      supabase
+      const { count, error: rlError } = await supabase
         .from("app_runs")
-        .select("execution_id, workflow_executions!inner(id, status)")
+        .select("id", { count: "exact", head: true })
         .eq("app_id", appRow.id)
         .eq("runner_id", req.userId)
-        .in("workflow_executions.status", ACTIVE_EXECUTION_STATUSES as unknown as string[])
-        .limit(1),
-    ])
+        .gte("created_at", todayStart.toISOString())
 
-    if (rateLimitResult?.error) {
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to check rate limit" },
-      })
-    }
+      if (rlError) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: "Failed to check rate limit" },
+        })
+      }
 
-    if (
-      appRow.max_runs_per_user_per_day != null &&
-      (rateLimitResult?.count ?? 0) >= appRow.max_runs_per_user_per_day
-    ) {
-      return reply.status(429).send({
-        error: {
-          code: "rate_limit_exceeded",
-          message: `Daily run limit of ${appRow.max_runs_per_user_per_day} reached for this app`,
-        },
-      })
-    }
-
-    if (activeExecResult?.error) {
-      console.error("[app-runner] Active execution check failed:", activeExecResult.error.message)
-    }
-    const activeRuns = activeExecResult?.data
-    if (activeRuns && activeRuns.length > 0) {
-      return reply.status(409).send({
-        error: {
-          code: "already_running",
-          message: "You already have an active execution for this app",
-        },
-        executionId: activeRuns[0].execution_id,
-      })
+      if ((count ?? 0) >= appRow.max_runs_per_user_per_day) {
+        return reply.status(429).send({
+          error: {
+            code: "rate_limit_exceeded",
+            message: `Daily run limit of ${appRow.max_runs_per_user_per_day} reached for this app`,
+          },
+        })
+      }
     }
 
     // Create workflow_execution under runner's userId
