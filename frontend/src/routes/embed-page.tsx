@@ -5,24 +5,38 @@
  * Theme can be set via:
  *   - URL query param: ?theme=light or ?theme=dark (default: dark)
  *   - postMessage: { type: "nodaro:setTheme", theme: "light" | "dark" }
+ *
+ * Features:
+ *   - Run history sidebar (when authenticated)
+ *   - Create/delete/duplicate/rename runs
+ *   - Version selection
+ *   - Touch event forwarding for mobile iframe scroll
  */
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { useTheme } from "next-themes"
-import { Loader2, RotateCcw } from "lucide-react"
+import { Loader2, Clock } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import { useRunSlots, AppRunnerLayout, RunsSidebar } from "@/components/app-runner"
 
 export default function EmbedPage() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
-  const { loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { setTheme } = useTheme()
   const themeParam = searchParams.get("theme")
 
@@ -36,8 +50,6 @@ export default function EmbedPage() {
   const totalNodes = useAppRunnerStore((s) => s.totalNodes)
   const appRun = useAppRunnerStore((s) => s.run)
   const cancel = useAppRunnerStore((s) => s.cancel)
-  const newRun = useAppRunnerStore((s) => s.newRun)
-  const activeRunId = useAppRunnerStore((s) => s.activeRunId)
   const updateInputValue = useAppRunnerStore((s) => s.updateInputValue)
   const reset = useAppRunnerStore((s) => s.reset)
 
@@ -48,16 +60,12 @@ export default function EmbedPage() {
     }
   }, [themeParam, setTheme])
 
-  // Prevent internal scrolling and forward wheel events to parent page.
-  // Browsers capture wheel events on iframes even with overflow:hidden,
-  // so we explicitly forward them via postMessage.
+  // Prevent internal scrolling and forward wheel + touch events to parent page.
+  // Only apply overflow:hidden to html/body — NOT to .overflow-auto (needed for sidebar scroll).
   useEffect(() => {
     const style = document.createElement("style")
     style.setAttribute("data-embed-scroll", "")
-    style.textContent = [
-      "html, body { overflow: hidden !important; overscroll-behavior: none; }",
-      ".overflow-auto, .overflow-y-auto, .overflow-x-auto { overflow: hidden !important; }",
-    ].join("\n")
+    style.textContent = "html, body { overflow: hidden !important; overscroll-behavior: none; }"
     document.head.appendChild(style)
 
     const onWheel = (e: WheelEvent) => {
@@ -70,9 +78,29 @@ export default function EmbedPage() {
     }
     window.addEventListener("wheel", onWheel, { passive: true })
 
+    // Touch event forwarding for mobile
+    let touchStartY = 0
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) touchStartY = e.touches[0].clientY
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (window.parent && window.parent !== window && e.touches.length === 1) {
+        const deltaY = touchStartY - e.touches[0].clientY
+        touchStartY = e.touches[0].clientY
+        window.parent.postMessage(
+          { type: "nodaro:touch", deltaX: 0, deltaY },
+          "*",
+        )
+      }
+    }
+    window.addEventListener("touchstart", onTouchStart, { passive: true })
+    window.addEventListener("touchmove", onTouchMove, { passive: true })
+
     return () => {
       style.remove()
       window.removeEventListener("wheel", onWheel)
+      window.removeEventListener("touchstart", onTouchStart)
+      window.removeEventListener("touchmove", onTouchMove)
     }
   }, [])
 
@@ -102,36 +130,19 @@ export default function EmbedPage() {
     })
   }, [app])
 
-  useEffect(() => {
-    usePresentationStore.setState({
-      executionStatus,
-      nodeStates,
-      completedNodes,
-      totalNodes,
-    })
-  }, [executionStatus, nodeStates, completedNodes, totalNodes])
-
-  useEffect(() => {
-    usePresentationStore.setState({
-      run: createBridgedRun(() => usePresentationStore.getState().inputValues),
-    })
-  }, [appRun])
+  // Run slots hook — all slot state, CRUD, DB sync
+  const runSlots = useRunSlots({ slug, user, persistRuns: !!user })
 
   // postMessage API — listen for commands from parent frame
-  // Allowed origins are configured via the app's allowedOrigins field;
-  // fallback: only accept messages from same origin.
   useEffect(() => {
     const allowedOrigins = new Set<string>()
-    // Always allow same-origin
     allowedOrigins.add(window.location.origin)
-    // Add app-configured origins if available
     const configuredOrigins = (app as Record<string, unknown> | null)?.allowedOrigins as string[] | undefined
     if (configuredOrigins) {
       for (const origin of configuredOrigins) allowedOrigins.add(origin)
     }
 
     const handler = (event: MessageEvent) => {
-      // Validate origin — reject messages from untrusted origins
       if (!allowedOrigins.has(event.origin)) return
 
       const data = event.data
@@ -139,7 +150,6 @@ export default function EmbedPage() {
 
       switch (data.type) {
         case "nodaro:setInputs": {
-          // data.inputs: Record<string, Record<string, unknown>>
           const inputs = data.inputs as Record<string, Record<string, unknown>> | undefined
           if (inputs) {
             for (const [nodeId, values] of Object.entries(inputs)) {
@@ -169,11 +179,9 @@ export default function EmbedPage() {
   }, [updateInputValue, appRun, setTheme, app])
 
   // Notify parent frame of execution status changes
-  // Use document.referrer origin or same-origin as target (not wildcard)
   useEffect(() => {
     if (!window.parent || window.parent === window) return
 
-    // Determine target origin for postMessage
     let targetOrigin = window.location.origin
     try {
       if (document.referrer) {
@@ -184,7 +192,6 @@ export default function EmbedPage() {
     }
 
     if (executionStatus === "completed") {
-      // Collect outputs from node states
       const outputs: Record<string, unknown> = {}
       for (const [nodeId, state] of Object.entries(nodeStates)) {
         const s = state as { output?: Record<string, unknown> }
@@ -218,27 +225,71 @@ export default function EmbedPage() {
 
   if (!app) return null
 
-  const isTerminal = executionStatus === "completed" || executionStatus === "failed"
-  const showNewRun = isTerminal || activeRunId !== null
-
   return (
-    <div className="h-screen overflow-hidden relative">
-      {/* New Run floating button */}
-      {showNewRun && (
-        <div className="absolute top-[3.75rem] left-0 right-0 flex items-center justify-center z-20 pointer-events-none">
-          <div className="pointer-events-auto">
+    <AppRunnerLayout
+      showHistory={runSlots.showHistory && !!user}
+      onCloseHistory={() => runSlots.setShowHistory(false)}
+      sidebar={
+        <RunsSidebar
+          slots={runSlots.slots}
+          activeSlotId={runSlots.activeSlotId}
+          onSelectSlot={runSlots.handleSelectSlot}
+          onCreateNew={runSlots.handleCreateNew}
+          onDuplicateSlot={runSlots.handleDuplicateSlot}
+          onDeleteSlot={runSlots.handleRequestDelete}
+          onRenameSlot={runSlots.handleRenameSlot}
+          onClose={() => runSlots.setShowHistory(false)}
+          versions={runSlots.versions}
+          selectedVersion={runSlots.selectedVersion}
+          onSelectVersion={runSlots.setSelectedVersion}
+          latestVersion={runSlots.latestVersion}
+        />
+      }
+      runsButton={
+        user && runSlots.slots.length > 0 && !runSlots.showHistory ? (
+          <div className="absolute top-[5.5rem] md:top-[3.75rem] left-3 z-20">
             <Button
+              variant="outline"
               size="sm"
-              onClick={newRun}
-              className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white shadow-md"
+              onClick={() => runSlots.setShowHistory(true)}
+              className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation"
             >
-              <RotateCcw className="h-4 w-4 mr-1" />
-              New Run
+              <Clock className="h-4 w-4 mr-1" />
+              Runs ({runSlots.slots.length})
             </Button>
           </div>
-        </div>
-      )}
-      <PresentationView mode="fullscreen" isOwner={false} onCancel={cancel} />
-    </div>
+        ) : null
+      }
+    >
+      <PresentationView
+        mode="fullscreen"
+        isOwner={false}
+        onCancel={cancel}
+        onNewRun={runSlots.handleHeaderAction}
+        newRunLabel={runSlots.newRunLabel}
+        inputsReadOnly={runSlots.inputsReadOnlyValue}
+        suppressOutputFallback={runSlots.activeSlotId !== null}
+      />
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={runSlots.deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) runSlots.setDeleteConfirmSlotId(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Run</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete this run? This action cannot be undone.
+          </p>
+          <DialogFooter className="flex gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => runSlots.setDeleteConfirmSlotId(null)} autoFocus>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={runSlots.handleConfirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </AppRunnerLayout>
   )
 }
