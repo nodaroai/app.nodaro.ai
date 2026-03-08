@@ -23,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { hasCredits } from "@/lib/edition"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuth, refreshAuth } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import type { WorkflowNode } from "@/types/nodes"
@@ -249,15 +249,23 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         const isInIframe = window.parent !== window
         if (isInIframe) {
           // Google OAuth blocks loading inside iframes — open login in a popup.
-          // Session syncs back via localStorage (same origin).
+          // Poll for popup close, then refresh auth state.
           const w = 500, h = 650
           const left = window.screenX + (window.outerWidth - w) / 2
           const top = window.screenY + (window.outerHeight - h) / 2
-          window.open(
+          const popup = window.open(
             `${window.location.origin}/login`,
             "nodaro-login",
             `width=${w},height=${h},left=${left},top=${top},popup=1`,
           )
+          if (popup) {
+            const interval = setInterval(() => {
+              if (popup.closed) {
+                clearInterval(interval)
+                refreshAuth()
+              }
+            }, 500)
+          }
           return
         }
         // Save current URL so user returns here after login (consumed by auth-callback)
