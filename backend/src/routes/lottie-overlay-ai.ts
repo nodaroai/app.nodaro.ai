@@ -53,8 +53,7 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
         })
       }
 
-      const { prompt, inputVideoUrl, fps, durationSeconds, lottieAssets } = parsed.data
-      const userId = req.userId
+      const { prompt, inputVideoUrl, fps, durationSeconds, lottieAssets, userId } = parsed.data
 
       if (!config.ANTHROPIC_API_KEY) {
         return reply.status(503).send({

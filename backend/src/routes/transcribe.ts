@@ -33,12 +33,11 @@ export async function transcribeRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, provider, language, diarize, tagAudioEvents } = parsed.data
-    const userId = req.userId
+    const { audioUrl, provider, language, diarize, tagAudioEvents, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 

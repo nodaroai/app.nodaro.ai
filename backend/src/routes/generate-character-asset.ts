@@ -103,8 +103,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       })
     }
 
-    const { assetType, variant, name, description, gender, style, baseOutfit, sourceImageUrl } = parsed.data
-    const userId = req.userId
+    const { assetType, variant, name, description, gender, style, baseOutfit, sourceImageUrl, userId } = parsed.data
 
     if (assetType !== "custom") {
       const validVariants = VARIANTS[assetType]

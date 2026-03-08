@@ -16,7 +16,7 @@ const socialMediaFormatBody = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   method: z.enum(["crop", "pad", "stretch"]).optional().default("pad"),
-  padColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "padColor must be a valid hex color (e.g. #000000)").optional().default("#000000"),
+  padColor: z.string().optional().default("#000000"),
   userId: z.string().uuid().optional(),
 })
 
@@ -29,12 +29,11 @@ export async function socialMediaFormatRoutes(app: FastifyInstance) {
       })
     }
 
-    const { userId: _bodyUserId, ...restData } = parsed.data
-    const userId = req.userId
+    const { userId, ...restData } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 

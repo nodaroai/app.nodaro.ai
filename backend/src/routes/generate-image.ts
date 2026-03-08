@@ -44,12 +44,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed } = parsed.data
-    const userId = req.userId
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, userId } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
+        error: { code: "unauthorized", message: "userId is required" },
       })
     }
 

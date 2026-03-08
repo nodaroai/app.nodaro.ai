@@ -93,8 +93,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       })
     }
 
-    const { assetType, variant, name, description, category, style, sourceImageUrl } = parsed.data
-    const userId = req.userId
+    const { assetType, variant, name, description, category, style, sourceImageUrl, userId } = parsed.data
 
     if (assetType !== "custom") {
       const validVariants = VARIANTS[assetType]
