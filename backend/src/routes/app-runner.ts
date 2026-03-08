@@ -13,8 +13,8 @@ import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
-// In-memory cache for published app data (60s TTL)
-const APP_CACHE_TTL_MS = 60_000
+// In-memory cache for published app data (30min TTL — explicit invalidation on publish)
+const APP_CACHE_TTL_MS = 30 * 60_000
 const appCache = new Map<string, { data: unknown; expiry: number }>()
 
 /** Invalidate cached app data when a new version is published */
@@ -111,7 +111,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     // Check in-memory cache
     const cached = appCache.get(cacheKey)
     if (cached && Date.now() < cached.expiry) {
-      reply.header("Cache-Control", "public, max-age=60, s-maxage=60")
+      reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=600")
       return reply.send(cached.data)
     }
 
@@ -171,7 +171,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       }
     }
 
-    reply.header("Cache-Control", "public, max-age=60, s-maxage=60")
+    reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=600")
     return reply.send(responseData)
   })
 
