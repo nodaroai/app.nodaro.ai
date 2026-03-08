@@ -1,6 +1,5 @@
 import { useMemo } from "react"
 import { NodeSection } from "../node-section"
-import { useIsMobile } from "@/hooks/use-is-mobile"
 import type { EditableViewProps } from "./types"
 
 interface HorizontalViewProps extends EditableViewProps {
@@ -28,52 +27,14 @@ export function HorizontalView({
   containerRef,
   handleDividerMouseDown,
 }: HorizontalViewProps) {
-  const isMobile = useIsMobile()
   const leftColumnStyle = useMemo(() => ({ width: `${splitRatio}%` }), [splitRatio])
   const rightColumnStyle = useMemo(() => ({ width: `${100 - splitRatio}%` }), [splitRatio])
 
-  // On mobile, stack vertically instead of side-by-side
-  if (isMobile) {
-    return (
-      <div className="flex-1 overflow-auto p-3" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
-        <div className="space-y-6">
-          <NodeSection
-            label="In"
-            nodes={orderedInputNodes}
-            isEditing={isEditing}
-            sensors={sensors}
-            onDragEnd={handleInputDragEnd}
-            onAdd={() => setPickerSection("inputs")}
-            onRemove={handleRemoveNode}
-            settings={settings}
-            updateCardMeta={updateCardMeta}
-            renderCard={renderInputCard}
-          />
-
-          <div className="border-t border-border" />
-
-          <NodeSection
-            label="Out"
-            nodes={orderedOutputNodes}
-            isEditing={isEditing}
-            sensors={sensors}
-            onDragEnd={handleOutputDragEnd}
-            onAdd={() => setPickerSection("outputs")}
-            onRemove={handleRemoveNode}
-            settings={settings}
-            updateCardMeta={updateCardMeta}
-            renderCard={renderOutputCard}
-          />
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex-1 overflow-auto p-4 sm:p-6">
-      <div ref={containerRef} className="max-w-7xl mx-auto flex gap-0 h-full" style={CONTAINER_MIN_HEIGHT}>
-        {/* Inputs column */}
-        <div className="overflow-y-auto pr-3" style={leftColumnStyle}>
+    <div className="flex-1 overflow-auto p-3 md:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
+      <div ref={containerRef} className="pres-horiz-container max-w-7xl mx-auto flex gap-0 h-full" style={CONTAINER_MIN_HEIGHT}>
+        {/* Inputs column — width overridden to 100% on mobile via CSS */}
+        <div className="pres-horiz-column overflow-y-auto md:pr-3" style={leftColumnStyle}>
           <NodeSection
             label="In"
             nodes={orderedInputNodes}
@@ -88,9 +49,9 @@ export function HorizontalView({
           />
         </div>
 
-        {/* Resizable divider */}
+        {/* Resizable divider — hidden on mobile via CSS */}
         <div
-          className={`relative shrink-0 flex items-center justify-center ${
+          className={`pres-horiz-divider relative shrink-0 flex items-center justify-center ${
             isEditing ? "w-4 cursor-col-resize group" : "w-4"
           }`}
           onMouseDown={isEditing ? handleDividerMouseDown : undefined}
@@ -105,8 +66,8 @@ export function HorizontalView({
           )}
         </div>
 
-        {/* Outputs column */}
-        <div className="overflow-y-auto pl-3" style={rightColumnStyle}>
+        {/* Outputs column — width overridden to 100% on mobile via CSS */}
+        <div className="pres-horiz-column overflow-y-auto md:pl-3" style={rightColumnStyle}>
           <NodeSection
             label="Out"
             nodes={orderedOutputNodes}

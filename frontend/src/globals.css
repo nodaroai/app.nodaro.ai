@@ -547,3 +547,38 @@ html, body {
     min-height: 16px;
   }
 }
+
+/* Presentation horizontal view: stack columns vertically on mobile.
+   Uses !important to override inline split-ratio width styles. */
+@media (max-width: 767px) {
+  .pres-horiz-container {
+    flex-direction: column !important;
+    gap: 1.5rem;
+  }
+  .pres-horiz-column {
+    width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  .pres-horiz-divider {
+    display: none !important;
+  }
+}
+
+/* App runner sidebar: overlay on mobile, inline on desktop */
+@media (max-width: 767px) {
+  .app-runner-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .app-runner-sidebar-panel {
+    position: fixed;
+    inset-block: 0;
+    left: 0;
+    z-index: 50;
+    width: 85vw;
+    max-width: 320px;
+  }
+}

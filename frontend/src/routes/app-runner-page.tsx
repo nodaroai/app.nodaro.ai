@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useParams, Link } from "react-router-dom"
 import { Loader2, Clock, Plus, Trash2, ChevronLeft, Copy, Info, Pencil, Check, X } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useIsMobile } from "@/hooks/use-is-mobile"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
@@ -507,12 +506,12 @@ export default function AppRunnerPage() {
       }
       runsButton={
         user && slots.length > 0 && !showHistory ? (
-          <div className="absolute top-[3.75rem] sm:top-[3.75rem] left-3 z-20">
+          <div className="absolute top-[5.5rem] md:top-[3.75rem] left-3 z-20">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowHistory(true)}
-              className="border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation"
+              className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation"
             >
               <Clock className="h-4 w-4 mr-1" />
               Runs ({slots.length})
@@ -554,7 +553,7 @@ export default function AppRunnerPage() {
   )
 }
 
-// --- Layout wrapper: handles sidebar as overlay on mobile, side panel on desktop ---
+// --- Layout wrapper: sidebar as overlay on mobile (<768px via CSS), inline on desktop ---
 
 function AppRunnerLayout({
   showHistory,
@@ -569,35 +568,23 @@ function AppRunnerLayout({
   runsButton: React.ReactNode
   children: React.ReactNode
 }) {
-  const isMobile = useIsMobile()
-
-  if (isMobile) {
-    return (
-      <div className="h-[100dvh] flex flex-col relative">
-        {/* Mobile overlay sidebar */}
-        {showHistory && (
-          <>
-            <div
-              className="fixed inset-0 z-40 bg-black/50"
-              onClick={onCloseHistory}
-            />
-            <div className="fixed inset-y-0 left-0 z-50 w-[85vw] max-w-80 animate-in slide-in-from-left duration-200">
-              {sidebar}
-            </div>
-          </>
-        )}
-
-        <div className="flex-1 flex flex-col min-w-0 relative">
-          {runsButton}
-          {children}
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="h-screen flex">
-      {showHistory && sidebar}
+    <div className="h-[100dvh] flex relative">
+      {/* Sidebar: overlay on mobile (<768px via CSS), inline on desktop */}
+      {showHistory && (
+        <>
+          {/* Backdrop — visible on mobile only (styled by CSS media query), hidden on desktop */}
+          <div
+            className="app-runner-sidebar-backdrop md:hidden"
+            onClick={onCloseHistory}
+          />
+          {/* Panel — fixed overlay on mobile (CSS media query), inline flow on desktop */}
+          <div className="app-runner-sidebar-panel shrink-0">
+            {sidebar}
+          </div>
+        </>
+      )}
+
       <div className="flex-1 flex flex-col min-w-0 relative">
         {runsButton}
         {children}
