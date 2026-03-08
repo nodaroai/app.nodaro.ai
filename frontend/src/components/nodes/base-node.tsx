@@ -216,7 +216,7 @@ function BaseNodeComponent({
         )}
         /* Selection handled by onNodeClick in workflow-canvas (has drag guard) */
       >
-      {!hideHeader && (
+      {(!hideHeader || isSkipped) && (
         <div
           className={cn(
             "flex items-center gap-2 px-3 py-1.5 rounded-t-md font-sans text-[11px] font-semibold uppercase tracking-[0.05em]",

@@ -181,7 +181,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo
 
   return (
-    <div className="relative group/node" style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
+    <div className={`relative group/node${nodeData.skipped ? " opacity-40" : ""}`} style={{ width: (activeUrl && !showConfig) ? (videoDimensions?.width ?? 245) : 245, height: (activeUrl && !showConfig) ? (videoDimensions?.height ?? 445) : 445, minHeight: 200, overflow: 'visible', position: 'relative' }}>
     <EditableNodeLabel
       label={isKling3 ? "Kling 3.0 Studio" : nodeData.label}
       icon={<Clapperboard className="w-3.5 h-3.5" />}
