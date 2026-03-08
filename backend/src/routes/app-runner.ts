@@ -13,6 +13,15 @@ import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
+// In-memory cache for published app data (60s TTL)
+const APP_CACHE_TTL_MS = 60_000
+const appCache = new Map<string, { data: unknown; expiry: number }>()
+
+/** Invalidate cached app data when a new version is published */
+export function invalidateAppCache(slug: string): void {
+  appCache.delete(slug)
+}
+
 const slugParams = z.object({
   slug: z.string().min(1),
 })
@@ -97,6 +106,14 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const requestedVersion = queryParsed.success ? queryParsed.data.version : undefined
 
     const { slug } = parsed.data
+    const cacheKey = requestedVersion ? `${slug}:v${requestedVersion}` : slug
+
+    // Check in-memory cache
+    const cached = appCache.get(cacheKey)
+    if (cached && Date.now() < cached.expiry) {
+      reply.header("Cache-Control", "public, max-age=60, s-maxage=60")
+      return reply.send(cached.data)
+    }
 
     // Single query: load all versions by slug (skips resolveSlug round trip)
     const { data: allVersionRows } = await supabase
@@ -126,7 +143,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       createdAt: v.created_at as string,
     }))
 
-    return reply.send({
+    const responseData = {
       id: appRow.id,
       name: appRow.name,
       description: appRow.description,
@@ -142,7 +159,20 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       createdAt: appRow.created_at,
       workflowId: appRow.workflow_id,
       versions,
-    })
+    }
+
+    // Cache the response
+    appCache.set(cacheKey, { data: responseData, expiry: Date.now() + APP_CACHE_TTL_MS })
+    // Evict stale entries periodically
+    if (appCache.size > 1000) {
+      const now = Date.now()
+      for (const [k, v] of appCache) {
+        if (now >= v.expiry) appCache.delete(k)
+      }
+    }
+
+    reply.header("Cache-Control", "public, max-age=60, s-maxage=60")
+    return reply.send(responseData)
   })
 
   // --- Run the app (auth required, runner pays) ---

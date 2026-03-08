@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../billing/credits.js"
+import { invalidateAppCache } from "./app-runner.js"
 
 function generateSlug(name: string): string {
   const base = name
@@ -151,6 +152,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     if (insertError || !publishedApp) {
       return reply.status(500).send({ error: { code: "internal_error", message: "Failed to publish app" } })
     }
+
+    // Invalidate app cache for this slug
+    const publishedSlug = publishedApp.slug as string
+    if (publishedSlug) invalidateAppCache(publishedSlug)
 
     // Update workflow with published_app_id
     await supabase
