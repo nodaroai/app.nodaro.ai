@@ -498,14 +498,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
       {/* Header */}
-      <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 sm:px-6 border-b border-border bg-card shrink-0" style={{ paddingTop: 'max(0.5rem, var(--safe-area-top))' }}>
+      <div className="relative flex flex-col md:flex-row md:items-center md:justify-between px-3 md:px-6 border-b border-border bg-card shrink-0" style={{ paddingTop: 'max(0.5rem, var(--safe-area-top))' }}>
         {/* Top row: title + right-side controls */}
-        <div className="flex items-center justify-between h-12 sm:h-14 w-full sm:w-auto min-w-0">
-          <h1 className="text-base sm:text-lg font-semibold truncate text-foreground">
+        <div className="flex items-center justify-between h-11 md:h-14 w-full md:w-auto min-w-0">
+          <h1 className="text-base md:text-lg font-semibold truncate text-foreground">
             {workflowName || "Untitled"}
           </h1>
           {/* Mobile-only: compact right-side controls */}
-          <div className="flex items-center gap-1.5 sm:hidden shrink-0">
+          <div className="flex items-center gap-1.5 md:hidden shrink-0">
             {user && hasCredits() && <CreditBalance userId={user.id} />}
             {(mode === "tab" || (isFullscreen && !isShareReadOnly)) && (
               <RunTargetSelector
@@ -522,11 +522,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
         {/* App runner: action buttons — stacked below title on mobile, centered on desktop */}
         {isAppRunner && (
-          <div className="flex items-center gap-2 pb-2 sm:pb-0 sm:absolute sm:left-1/2 sm:-translate-x-1/2">
+          <div className="flex items-center gap-2 pb-2 md:pb-0 md:absolute md:left-1/2 md:-translate-x-1/2">
             <button
               type="button"
               onClick={onNewRun}
-              className="h-9 sm:h-8 px-3 sm:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
+              className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
             >
               <RotateCcw className="h-4 w-4" />
               {newRunLabel ?? "Create New"}
@@ -536,7 +536,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               <button
                 type="button"
                 onClick={onCancel}
-                className="h-9 sm:h-8 px-3 sm:px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-red-600 hover:bg-red-700 flex items-center gap-2 transition-all duration-200 touch-manipulation"
                 disabled={!onCancel}
               >
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -547,7 +547,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 <button
                   type="button"
                   onClick={handleRunClick}
-                  className="h-9 sm:h-8 px-3 sm:px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                  className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                   disabled={!allInputsFilled || !user}
                 >
                   {!user ? (
@@ -562,7 +562,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         )}
 
         {/* Desktop-only right-side controls */}
-        <div className="hidden sm:flex items-center gap-2 shrink-0">
+        <div className="hidden md:flex items-center gap-2 shrink-0">
           {user && hasCredits() && <CreditBalance userId={user.id} />}
 
           {/* Edit/View toggle — only for editable view modes */}
