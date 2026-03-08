@@ -111,6 +111,18 @@ let app: FastifyInstance
 beforeEach(async () => {
   vi.clearAllMocks()
   app = Fastify({ logger: false })
+  // Simulate auth middleware: set req.userId from X-User-Id header or userId in body
+  app.addHook("preHandler", async (req) => {
+    const header = req.headers["x-user-id"]
+    if (typeof header === "string") {
+      req.userId = header
+    } else {
+      const body = req.body as Record<string, unknown> | undefined
+      if (body?.userId && typeof body.userId === "string") {
+        req.userId = body.userId
+      }
+    }
+  })
   await app.register(async (instance) => {
     await characterRoutes(instance)
   })

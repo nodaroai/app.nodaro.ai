@@ -82,40 +82,40 @@ describe("isExecutableNode", () => {
 // ---------------------------------------------------------------------------
 
 describe("NODE_CREDIT_COSTS", () => {
-  it("has generate-image at 5 credits", () => {
-    expect(NODE_CREDIT_COSTS["generate-image"]).toBe(5)
+  it("has generate-image at 2 credits", () => {
+    expect(NODE_CREDIT_COSTS["generate-image"]).toBe(2)
   })
 
-  it("has generate-script at 2 credits", () => {
-    expect(NODE_CREDIT_COSTS["generate-script"]).toBe(2)
+  it("has generate-script at 10 credits", () => {
+    expect(NODE_CREDIT_COSTS["generate-script"]).toBe(10)
   })
 
   it("has trim-video at 0 credits", () => {
     expect(NODE_CREDIT_COSTS["trim-video"]).toBe(0)
   })
 
-  it("has 3d-title at 3 credits", () => {
-    expect(NODE_CREDIT_COSTS["3d-title"]).toBe(3)
+  it("has 3d-title at 15 credits", () => {
+    expect(NODE_CREDIT_COSTS["3d-title"]).toBe(15)
   })
 
-  it("has motion-graphics at 2 credits", () => {
-    expect(NODE_CREDIT_COSTS["motion-graphics"]).toBe(2)
+  it("has motion-graphics at 10 credits", () => {
+    expect(NODE_CREDIT_COSTS["motion-graphics"]).toBe(10)
   })
 
   it("has composite at 0 credits", () => {
     expect(NODE_CREDIT_COSTS["composite"]).toBe(0)
   })
 
-  it("has image-to-video at 20 credits", () => {
-    expect(NODE_CREDIT_COSTS["image-to-video"]).toBe(20)
+  it("has image-to-video at 22 credits", () => {
+    expect(NODE_CREDIT_COSTS["image-to-video"]).toBe(22)
   })
 
-  it("has lip-sync at 40 credits", () => {
-    expect(NODE_CREDIT_COSTS["lip-sync"]).toBe(40)
+  it("has lip-sync at 13 credits", () => {
+    expect(NODE_CREDIT_COSTS["lip-sync"]).toBe(13)
   })
 
-  it("has render-video at 3 credits", () => {
-    expect(NODE_CREDIT_COSTS["render-video"]).toBe(3)
+  it("has render-video at 15 credits", () => {
+    expect(NODE_CREDIT_COSTS["render-video"]).toBe(15)
   })
 
   it("returns undefined for a non-existent node type", () => {
