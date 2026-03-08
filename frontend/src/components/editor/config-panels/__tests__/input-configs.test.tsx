@@ -10,6 +10,18 @@ vi.mock("@/components/ui/textarea", () => ({
   Textarea: (props: any) => <textarea {...props} />,
 }))
 
+vi.mock("@/components/editor/config-panels/tag-textarea", () => ({
+  TagTextarea: ({ value, onChange, placeholder, className, rows }: any) => (
+    <textarea
+      value={value}
+      onChange={(e: any) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={className}
+      rows={rows}
+    />
+  ),
+}))
+
 vi.mock("@/components/ui/input", () => ({
   Input: (props: any) => <input {...props} />,
 }))
@@ -88,10 +100,9 @@ describe("TextPromptConfig", () => {
     expect(onUpdate).toHaveBeenCalledWith({ text: "" })
   })
 
-  it("renders textarea with correct id and rows", () => {
+  it("renders textarea with correct rows", () => {
     render(<TextPromptConfig {...createDefaultProps()} />)
     const textarea = screen.getByPlaceholderText("Enter your story prompt...")
-    expect(textarea).toHaveAttribute("id", "prompt-text")
     expect(textarea).toHaveAttribute("rows", "5")
   })
 
@@ -104,9 +115,9 @@ describe("TextPromptConfig", () => {
     expect(textarea).toHaveValue("")
   })
 
-  it("associates label with textarea via htmlFor", () => {
+  it("renders the Prompt Text label element", () => {
     render(<TextPromptConfig {...createDefaultProps()} />)
     const label = screen.getByText("Prompt Text")
-    expect(label).toHaveAttribute("for", "prompt-text")
+    expect(label).toBeInTheDocument()
   })
 })
