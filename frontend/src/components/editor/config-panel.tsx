@@ -22,6 +22,7 @@ import type { SceneNodeDataType } from "@/types/nodes"
 import { SceneConfig } from "./scene-config"
 const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
 import { IterationResultsPanel } from "./iteration-results-panel"
+import { getUpstreamNodes } from "@/lib/node-refs"
 import {
   getConnectedSources,
   getModelIdentifier,
@@ -248,6 +249,11 @@ export function ConfigPanel() {
     return getConnectedSources(selectedNodeId, edges, nodes)
   }, [edges, nodes, selectedNodeId])
 
+  const liveNodeRefs = useMemo(() => {
+    if (!selectedNodeId) return []
+    return getUpstreamNodes(selectedNodeId, nodes, edges)
+  }, [selectedNodeId, nodes, edges])
+
   const liveHasDownstream = useMemo(() => {
     if (!selectedNodeId) return false
     return edges.some((e) => e.source === selectedNodeId)
@@ -322,14 +328,17 @@ export function ConfigPanel() {
   const frozenSourcesRef = useRef(liveSources)
   const frozenFieldMappingsRef = useRef(liveFieldMappings)
   const frozenHasDownstreamRef = useRef(liveHasDownstream)
+  const frozenNodeRefsRef = useRef(liveNodeRefs)
   if (isVisible) {
     frozenSourcesRef.current = liveSources
     frozenFieldMappingsRef.current = liveFieldMappings
     frozenHasDownstreamRef.current = liveHasDownstream
+    frozenNodeRefsRef.current = liveNodeRefs
   }
   const sources = isVisible ? liveSources : frozenSourcesRef.current
   const fieldMappings = isVisible ? liveFieldMappings : frozenFieldMappingsRef.current
   const hasDownstream = isVisible ? liveHasDownstream : frozenHasDownstreamRef.current
+  const nodeRefs = isVisible ? liveNodeRefs : frozenNodeRefsRef.current
 
   useEffect(() => {
     if (!isVisible) setIsExpanded(false)
@@ -364,8 +373,9 @@ export function ConfigPanel() {
       fieldMappings,
       onMapField: handleMapField,
       nodes,
+      nodeRefs,
     }),
-    [displayNode?.data, update, sources, fieldMappings, handleMapField, nodes]
+    [displayNode?.data, update, sources, fieldMappings, handleMapField, nodes, nodeRefs]
   )
 
   if (!displayNode) {

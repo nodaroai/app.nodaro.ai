@@ -9,8 +9,10 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
 import { buildImagePrompt } from "../../../../packages/shared/src/prompt-builder.js"
 import { buildCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
+import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import type { CharacterDef } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
+import { extractSavedNodeOutput, extractSourceNodeOutput } from "./output-extractor.js"
 
 // ---------------------------------------------------------------------------
 // Character definitions + prompt template types (from workflow settings)
@@ -122,6 +124,74 @@ function simpleResult(
   }
 }
 
+/**
+ * Build a label→output map for resolving {Node Label} refs in text fields.
+ * Uses BFS to traverse all upstream ancestors.
+ */
+function buildNodeRefMap(
+  nodeId: string,
+  ctx?: PayloadBuildContext,
+): Map<string, string> {
+  const map = new Map<string, string>()
+  if (!ctx?.nodes || !ctx?.edges || !ctx?.nodeStates) return map
+
+  const nodes = ctx.nodes
+  const edges = ctx.edges
+  const states = ctx.nodeStates
+  const visited = new Set<string>()
+  const queue: string[] = []
+
+  for (const edge of edges) {
+    if (edge.target === nodeId && !visited.has(edge.source)) {
+      visited.add(edge.source)
+      queue.push(edge.source)
+    }
+  }
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!
+    const node = nodes.find((n) => n.id === currentId)
+    if (!node) continue
+
+    const label = (node.data.label as string) || node.type || currentId
+
+    // Get output from state or from node data
+    let output: string | undefined
+    const state = states[currentId]
+    if (state?.output?.text) {
+      output = state.output.text
+    } else if (state?.output?.imageUrl) {
+      output = state.output.imageUrl
+    } else if (state?.output?.videoUrl) {
+      output = state.output.videoUrl
+    } else if (state?.output?.audioUrl) {
+      output = state.output.audioUrl
+    } else {
+      const saved = extractSavedNodeOutput(node)
+      if (saved) {
+        output = saved.text ?? saved.imageUrl ?? saved.videoUrl ?? saved.audioUrl
+      }
+    }
+
+    if (output) map.set(label, output)
+
+    for (const edge of edges) {
+      if (edge.target === currentId && !visited.has(edge.source)) {
+        visited.add(edge.source)
+        queue.push(edge.source)
+      }
+    }
+  }
+
+  return map
+}
+
+/** Resolve {Node Label} refs in a text string if the map is non-empty. */
+function resolveRefs(text: string | undefined, refMap: Map<string, string>): string | undefined {
+  if (!text || refMap.size === 0) return text
+  return resolveNodeRefs(text, refMap)
+}
+
 export function buildPayload(
   node: SimpleNode,
   jobId: string,
@@ -131,6 +201,13 @@ export function buildPayload(
 ): PayloadResult {
   const data = node.data
   const type = node.type
+
+  // Build label→output map for resolving {Node Label} refs in text fields
+  const refMap = buildNodeRefMap(node.id, buildCtx)
+  // Pre-resolve refs in the upstream prompt so all downstream code sees clean text
+  if (resolvedInputs.prompt && refMap.size > 0) {
+    resolvedInputs.prompt = resolveRefs(resolvedInputs.prompt, refMap)
+  }
 
   switch (type) {
     // --- Image generation ---
@@ -198,7 +275,9 @@ export function buildPayload(
         ? collectAncestorRefs(node.id, buildCtx.nodes, buildCtx.edges, buildCtx.nodeStates)
         : []
 
-      const rawPrompt = (resolvedInputs.prompt || (data.prompt as string) || "") as string
+      const rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+        || resolveRefs(data.prompt as string | undefined, refMap)
+        || ""
 
       // Use shared prompt builder (single source of truth with frontend)
       const result = buildImagePrompt({
@@ -265,7 +344,7 @@ export function buildPayload(
       }
 
       // Enrich prompt with character/asset descriptions for nano-banana-edit
-      let editPrompt = (resolvedInputs.prompt || data.prompt) as string | undefined
+      let editPrompt = (resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined
       if (provider === "nano-banana-edit" && editPrompt) {
         const charIds = (data.characterDefinitionIds as string[]) ?? []
         const charDefs = (buildCtx?.settings?.characterDefinitions ?? []).filter(
@@ -342,7 +421,9 @@ export function buildPayload(
         ...charRefUrls,
       ]
 
-      const rawPrompt = (resolvedInputs.prompt || (data.prompt as string) || "") as string
+      const rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+        || resolveRefs(data.prompt as string | undefined, refMap)
+        || ""
 
       // Build prompt with style + character descriptions (same as generate-image)
       const i2iResult = buildImagePrompt({
@@ -396,7 +477,7 @@ export function buildPayload(
           imageUrl: resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl,
           endFrameUrl: resolvedInputs.endFrameUrl,
           audioUrl: resolvedInputs.audioUrl,
-          prompt: resolvedInputs.prompt || data.prompt || data.motionPrompt,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap),
           provider,
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
@@ -426,7 +507,7 @@ export function buildPayload(
         modelIdentifier: provider,
         payload: {
           jobId,
-          prompt: resolvedInputs.prompt || data.prompt,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
           provider,
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
@@ -454,7 +535,7 @@ export function buildPayload(
         payload: {
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-          prompt: resolvedInputs.prompt || data.prompt,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
           provider: v2vProvider,
           strength: data.strength,
           usageLogId,
@@ -515,7 +596,7 @@ export function buildPayload(
         payload: {
           jobId,
           kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,
-          prompt: resolvedInputs.prompt || data.prompt,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
           provider: evProvider,
           model: evProvider === "veo-extend" ? (data.model ?? "fast") : undefined,
           quality: evProvider === "runway-extend" ? (data.quality ?? "720p") : undefined,
@@ -529,8 +610,8 @@ export function buildPayload(
       const provider = (data.provider as string) ?? "elevenlabs-v3"
       // Frontend reads text from directText field when textSource is "direct"
       const ttsText = resolvedInputs.prompt
-        || (data.textSource === "direct" ? data.directText : undefined)
-        || data.text
+        || (data.textSource === "direct" ? resolveRefs(data.directText as string | undefined, refMap) : undefined)
+        || resolveRefs(data.text as string | undefined, refMap)
       return {
         jobName: "text-to-speech",
         queueName: "video-generation",
@@ -559,13 +640,13 @@ export function buildPayload(
         modelIdentifier: provider,
         payload: {
           jobId,
-          prompt: resolvedInputs.prompt || data.prompt,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
           provider,
           duration: data.duration,
           genre: data.genre,
           mood: data.mood,
           instrumental: data.instrumental,
-          lyrics: data.lyrics,
+          lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
           referenceAudioUrl: resolvedInputs.audioUrl || data.referenceAudioUrl,
           usageLogId,
         },
@@ -575,7 +656,7 @@ export function buildPayload(
     case "text-to-audio":
       return simpleResult("text-to-audio", "elevenlabs-sfx", {
         jobId,
-        text: resolvedInputs.prompt || data.text || data.prompt,
+        text: resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap) || resolveRefs(data.prompt as string | undefined, refMap),
         provider: data.provider,
         duration: data.duration,
         loop: data.loop,
@@ -624,14 +705,14 @@ export function buildPayload(
       return simpleResult("voice-remix", "elevenlabs-voice-remix", {
         jobId,
         voiceDescription: data.voiceDescription,
-        text: resolvedInputs.prompt || data.text,
+        text: resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap),
         usageLogId,
       })
 
     case "voice-design":
       return simpleResult("voice-design", "elevenlabs-voice-design", {
         jobId,
-        text: resolvedInputs.prompt || data.text,
+        text: resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap),
         voiceDescription: data.voiceDescription,
         model: data.model,
         loudness: data.loudness,
@@ -646,7 +727,7 @@ export function buildPayload(
       return simpleResult("forced-alignment", "elevenlabs-forced-alignment", {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
-        transcript: resolvedInputs.prompt || data.transcript,
+        transcript: resolvedInputs.prompt || resolveRefs(data.transcript as string | undefined, refMap),
         usageLogId,
       })
 
@@ -655,9 +736,9 @@ export function buildPayload(
       const hasCustomFields = !!(data.style || data.title || data.lyrics)
       return simpleResult("suno-generate", "suno-generate", {
         jobId,
-        prompt: resolvedInputs.prompt || data.prompt,
+        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         model: data.model,
-        lyrics: data.lyrics,
+        lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
         style: data.style,
         title: data.title,
         negativeStyle: data.negativeStyle,
@@ -677,7 +758,7 @@ export function buildPayload(
       const hasCoverCustomFields = !!(data.style || data.title || data.lyrics)
       return simpleResult("suno-cover", "suno-cover", {
         jobId,
-        prompt: resolvedInputs.prompt || data.prompt,
+        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         uploadUrl: resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
         model: data.model,
         lyrics: data.lyrics,
@@ -697,7 +778,7 @@ export function buildPayload(
         audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
         taskId: resolvedInputs.sunoTaskId || data.sunoTaskId,
         defaultParamFlag: data.defaultParamFlag ?? true,
-        prompt: resolvedInputs.prompt || data.prompt,
+        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         model: data.model,
         style: data.style,
         title: data.title,
@@ -713,7 +794,7 @@ export function buildPayload(
     case "suno-lyrics":
       return simpleResult("suno-lyrics", "suno-lyrics", {
         jobId,
-        prompt: resolvedInputs.prompt || data.prompt,
+        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         usageLogId,
       })
 
@@ -887,7 +968,7 @@ export function buildPayload(
         modelIdentifier: provider,
         payload: {
           jobId,
-          prompt: data.description || data.prompt,
+          prompt: resolveRefs(data.description as string | undefined, refMap) || resolveRefs(data.prompt as string | undefined, refMap),
           provider,
           referenceImageUrls: resolvedInputs.referenceImageUrls,
           usageLogId,
@@ -903,7 +984,7 @@ export function buildPayload(
         modelIdentifier: provider,
         payload: {
           jobId,
-          prompt: resolvedInputs.prompt || data.prompt,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
           provider,
           referenceImageUrls: resolvedInputs.referenceImageUrls,
           aspectRatio: data.aspectRatio,
@@ -915,7 +996,7 @@ export function buildPayload(
     case "generate-script":
       return simpleResult("generate-script", "generate-script", {
         jobId,
-        prompt: resolvedInputs.prompt || data.prompt,
+        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         style: data.style,
         sceneCount: data.sceneCount,
         tone: data.tone,

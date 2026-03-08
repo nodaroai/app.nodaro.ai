@@ -41,7 +41,7 @@ import type {
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 
-export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToSpeechData>) {
+export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<TextToSpeechData>) {
   const textSource = data.textSource || "connected"
   return (
     <div className="flex flex-col gap-3">
@@ -73,6 +73,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
             onChange={(v) => onUpdate({ directText: v })}
             placeholder="Enter text to convert to speech..."
             provider={data.provider}
+            nodeRefs={nodeRefs}
           />
           <p className="text-[10px] text-muted-foreground mt-1">Type [ or / for audio tags</p>
         </div>
@@ -148,7 +149,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TextToAudioData>) {
+export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<TextToAudioData>) {
   const isSfx = data.provider === "elevenlabs-sfx"
   const maxPromptLen = isSfx ? 450 : 2000
   const minDuration = isSfx ? 0.5 : 1
@@ -223,7 +224,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
   )
 }
 
-export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoGenerateData>) {
+export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoGenerateData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -234,6 +235,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           placeholder="Describe the song... (type [ or / for tags)"
           maxLength={3000}
           customTags={SUNO_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
       </MappableField>
@@ -260,6 +262,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           placeholder="Write custom lyrics... (type [ or / for metatags)"
           maxLength={3000}
           customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -270,6 +273,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           placeholder="e.g. pop, rock, jazz, lo-fi... (type [ or / for suggestions)"
           maxLength={500}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -280,6 +284,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           placeholder="Styles to avoid... (type [ or / for suggestions)"
           maxLength={500}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -312,7 +317,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoCoverData>) {
+export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoCoverData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -323,6 +328,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           placeholder="Describe the cover style... (type [ or / for tags)"
           maxLength={3000}
           customTags={SUNO_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
       </MappableField>
@@ -352,6 +358,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           placeholder="Write custom lyrics for the cover... (type [ or / for metatags)"
           maxLength={3000}
           customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -362,6 +369,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           placeholder="e.g. pop, rock, jazz, lo-fi... (type [ or / for suggestions)"
           maxLength={500}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -372,6 +380,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           placeholder="Styles to avoid... (type [ or / for suggestions)"
           maxLength={500}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -392,7 +401,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
   )
 }
 
-export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoExtendData>) {
+export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoExtendData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="audioId" label="Audio ID (from Suno node)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -409,6 +418,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
           placeholder="Describe how the music should continue... (type [ or / for tags)"
           maxLength={5000}
           customTags={SUNO_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
         <p className="text-xs text-muted-foreground mt-1">{(data.prompt ?? "").length}/5000</p>
       </MappableField>
@@ -435,6 +445,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
           placeholder="e.g. pop, rock, jazz... (type [ or / for suggestions)"
           maxLength={1000}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <div className="flex items-center gap-2">
@@ -445,7 +456,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
-export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoLyricsData>) {
+export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoLyricsData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -456,6 +467,7 @@ export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMap
           placeholder="Describe the lyrics you want... (type [ or / for genre/mood suggestions)"
           maxLength={1000}
           customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+          nodeRefs={nodeRefs}
         />
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/1000</p>
       </MappableField>
@@ -539,7 +551,7 @@ export function SunoMusicVideoConfig({ data, onUpdate }: { readonly data: SunoMu
   )
 }
 
-export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<TranscribeData>) {
+export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<TranscribeData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -604,7 +616,7 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
-export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<LipSyncData>) {
+export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LipSyncData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -636,7 +648,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   )
 }
 
-export function AudioIsolationConfig({ data, onUpdate }: ConfigProps<AudioIsolationData>) {
+export function AudioIsolationConfig({ data, onUpdate, nodeRefs }: ConfigProps<AudioIsolationData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -654,7 +666,7 @@ export function AudioIsolationConfig({ data, onUpdate }: ConfigProps<AudioIsolat
   )
 }
 
-export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialogueData>) {
+export function TextToDialogueConfig({ data, onUpdate, nodeRefs }: ConfigProps<TextToDialogueData>) {
   const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
   const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
 
@@ -707,6 +719,7 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
               onChange={(v) => updateLine(i, { text: v })}
               placeholder={`Line ${i + 1}... (type [ or / for audio tags)`}
               className="text-sm"
+              nodeRefs={nodeRefs}
             />
           </div>
         ))}
@@ -754,7 +767,7 @@ export function TextToDialogueConfig({ data, onUpdate }: ConfigProps<TextToDialo
   )
 }
 
-export function VoiceChangerConfig({ data, onUpdate }: ConfigProps<VoiceChangerData>) {
+export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<VoiceChangerData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -797,7 +810,7 @@ export function VoiceChangerConfig({ data, onUpdate }: ConfigProps<VoiceChangerD
   )
 }
 
-export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
+export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -847,7 +860,7 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
   )
 }
 
-export function VoiceRemixConfig({ data, onUpdate }: ConfigProps<VoiceRemixData>) {
+export function VoiceRemixConfig({ data, onUpdate, nodeRefs }: ConfigProps<VoiceRemixData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -881,7 +894,7 @@ const VOICE_DESIGN_MODEL_TO_TTS_PROVIDER: Record<string, string> = {
   "eleven_multilingual_ttv_v2": "elevenlabs-multilingual",
 }
 
-export function VoiceDesignConfig({ data, onUpdate }: ConfigProps<VoiceDesignData>) {
+export function VoiceDesignConfig({ data, onUpdate, nodeRefs }: ConfigProps<VoiceDesignData>) {
   const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] || "elevenlabs-v3"
   return (
     <div className="flex flex-col gap-3">
@@ -903,6 +916,7 @@ export function VoiceDesignConfig({ data, onUpdate }: ConfigProps<VoiceDesignDat
           placeholder="Text to preview the generated voice with (min 100 characters, type [ for audio tags)..."
           maxLength={1000}
           provider={ttsProvider}
+          nodeRefs={nodeRefs}
         />
         {data.text && data.text.length < 100 && (
           <p className="text-[10px] text-amber-500 mt-0.5">{data.text.length}/100 characters (minimum 100 required)</p>
@@ -989,7 +1003,7 @@ export function VoiceDesignConfig({ data, onUpdate }: ConfigProps<VoiceDesignDat
   )
 }
 
-export function ForcedAlignmentConfig({ data, onUpdate }: ConfigProps<ForcedAlignmentData>) {
+export function ForcedAlignmentConfig({ data, onUpdate, nodeRefs }: ConfigProps<ForcedAlignmentData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
