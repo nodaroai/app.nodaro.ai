@@ -2,9 +2,13 @@ import { useState, useRef, useCallback, useMemo, useEffect, type ReactNode } fro
 import { createPortal } from "react-dom"
 import { Textarea } from "@/components/ui/textarea"
 import { AUDIO_TAGS, SSML_BREAK_OPTIONS, isV2Model, isV3Model } from "@/lib/audio-tags"
+import type { NodeRefItem } from "@/lib/node-refs"
 
 /** Regex to match bracket tags like [whispers], [Verse 2], <break time="1s" /> */
 const TAG_PATTERN = /(\[[^\]]+\]|<break[^>]*\/>)/g
+
+/** Combined pattern for highlighting both tags and node refs */
+const COMBINED_PATTERN = /(\[[^\]]+\]|<break[^>]*\/>|\{[^}]+\})/g
 
 interface TagTextareaProps {
   readonly value: string
@@ -15,6 +19,7 @@ interface TagTextareaProps {
   readonly maxLength?: number
   readonly provider?: string
   readonly customTags?: SuggestionItem[]
+  readonly nodeRefs?: readonly NodeRefItem[]
 }
 
 export interface SuggestionItem {
@@ -23,7 +28,7 @@ export interface SuggestionItem {
   category: string
 }
 
-type TriggerChar = "[" | "<" | "/"
+type TriggerChar = "[" | "<" | "/" | "{"
 
 function getAllSuggestions(): SuggestionItem[] {
   const items: SuggestionItem[] = AUDIO_TAGS.map((t) => ({
@@ -39,7 +44,16 @@ function getAllSuggestions(): SuggestionItem[] {
 
 const ALL_SUGGESTIONS = getAllSuggestions()
 
-export function TagTextarea({ value, onChange, placeholder, rows, className, maxLength, provider, customTags }: TagTextareaProps) {
+/** Map node type to a human-readable category for the dropdown */
+function nodeTypeCategory(type: string): string {
+  if (["text-prompt", "ai-writer", "list", "loop"].includes(type)) return "Text"
+  if (["generate-image", "upload-image", "edit-image", "image-to-image", "character", "face", "object", "location", "scene"].includes(type)) return "Image"
+  if (["image-to-video", "text-to-video", "video-to-video", "upload-video", "youtube-video", "combine-videos", "extend-video"].includes(type)) return "Video"
+  if (["text-to-speech", "generate-music", "text-to-audio", "upload-audio", "suno-generate"].includes(type)) return "Audio"
+  return "Node"
+}
+
+export function TagTextarea({ value, onChange, placeholder, rows, className, maxLength, provider, customTags, nodeRefs }: TagTextareaProps) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [triggerInfo, setTriggerInfo] = useState<{ char: TriggerChar; position: number } | null>(null)
   const [filterText, setFilterText] = useState("")
@@ -50,12 +64,24 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
 
+  const nodeRefSuggestions = useMemo((): SuggestionItem[] => {
+    if (!nodeRefs || nodeRefs.length === 0) return []
+    return nodeRefs.map((ref) => ({
+      tag: `{${ref.label}}`,
+      label: ref.label,
+      category: nodeTypeCategory(ref.type),
+    }))
+  }, [nodeRefs])
+
   const filtered = useMemo(() => {
     if (!showDropdown || !triggerInfo) return []
     const q = filterText.toLowerCase()
 
     let items: SuggestionItem[]
-    if (customTags) {
+    if (triggerInfo.char === "{") {
+      // Node ref mode: show upstream nodes
+      items = nodeRefSuggestions
+    } else if (customTags) {
       // Custom tags mode: [ and / both show custom tags, < is disabled
       if (triggerInfo.char === "<") return []
       items = customTags
@@ -69,7 +95,7 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
 
     if (!q) return items
     return items.filter((s) => s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q))
-  }, [showDropdown, triggerInfo, filterText, customTags])
+  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions])
 
   const groupedFiltered = useMemo(() => {
     const map = new Map<string, SuggestionItem[]>()
@@ -115,8 +141,8 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
 
     onChange(newValue)
 
-    // Check model compatibility (skip for custom tags like Suno)
-    if (!customTags) {
+    // Check model compatibility (skip for custom tags and node refs)
+    if (!customTags && triggerInfo.char !== "{") {
       const isAudioTag = tag.startsWith("[")
       const isSsmlTag = tag.startsWith("<")
       if (isSsmlTag && !isV2Model(provider)) {
@@ -147,7 +173,10 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
     const cursor = e.target.selectionStart
     const charBefore = newValue[cursor - 1]
 
-    if (charBefore === "[" || (!customTags && charBefore === "<") || charBefore === "/") {
+    // Check if { trigger should open node ref dropdown
+    const isBraceTrigger = charBefore === "{" && nodeRefs && nodeRefs.length > 0
+
+    if (charBefore === "[" || (!customTags && charBefore === "<") || charBefore === "/" || isBraceTrigger) {
       const trigger = charBefore as TriggerChar
       setTriggerInfo({ char: trigger, position: cursor - 1 })
       setFilterText("")
@@ -159,15 +188,16 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
       // Update filter text
       const textSinceTrigger = newValue.slice(triggerInfo.position + 1, cursor)
 
-      // Dismiss if user typed a closing bracket or went before trigger
-      if (cursor <= triggerInfo.position || textSinceTrigger.includes("]") || textSinceTrigger.includes(">")) {
+      // Dismiss if user typed a closing bracket/brace or went before trigger
+      const closingChars = triggerInfo.char === "{" ? "}" : triggerInfo.char === "<" ? ">" : "]"
+      if (cursor <= triggerInfo.position || textSinceTrigger.includes(closingChars)) {
         dismiss()
       } else {
         setFilterText(textSinceTrigger)
         setSelectedIndex(0)
       }
     }
-  }, [maxLength, onChange, showDropdown, triggerInfo, customTags, dismiss, updateDropdownPos])
+  }, [maxLength, onChange, showDropdown, triggerInfo, customTags, nodeRefs, dismiss, updateDropdownPos])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!showDropdown || flatFiltered.length === 0) return
@@ -222,19 +252,25 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
     if (el) el.scrollIntoView({ block: "nearest" })
   }, [selectedIndex, showDropdown])
 
+  // Determine which highlight pattern to use
+  const hasNodeRefs = nodeRefs && nodeRefs.length > 0
+  const highlightPattern = hasNodeRefs ? COMBINED_PATTERN : TAG_PATTERN
+
   // Build highlighted backdrop content
   const highlightedContent = useMemo((): ReactNode[] => {
     if (!value) return []
     const parts: ReactNode[] = []
     let lastIndex = 0
     let match: RegExpExecArray | null
-    const re = new RegExp(TAG_PATTERN.source, "g")
+    const re = new RegExp(highlightPattern.source, "g")
     while ((match = re.exec(value)) !== null) {
       if (match.index > lastIndex) {
         parts.push(value.slice(lastIndex, match.index))
       }
+      const text = match[0]
+      const isNodeRef = text.startsWith("{")
       parts.push(
-        <mark key={match.index} className="tag-highlight">{match[0]}</mark>,
+        <mark key={match.index} className={isNodeRef ? "node-ref-highlight" : "tag-highlight"}>{text}</mark>,
       )
       lastIndex = re.lastIndex
     }
@@ -246,7 +282,7 @@ export function TagTextarea({ value, onChange, placeholder, rows, className, max
       parts.push("\n")
     }
     return parts
-  }, [value])
+  }, [value, highlightPattern])
 
   // Sync scroll from textarea to backdrop
   const backdropRef = useRef<HTMLDivElement | null>(null)

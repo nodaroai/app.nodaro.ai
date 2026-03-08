@@ -121,6 +121,7 @@ import {
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs } from "./execution-graph";
 import { resolveNodeInputs } from "./node-input-resolver";
+import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { pollJobWithNodeUpdate } from "./poll-job";
 import {
   runImageGeneration,
@@ -213,6 +214,13 @@ export function executeNode(
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges);
 
+  // Build label→output map for resolving {Node Label} references in text fields
+  const refMap = buildNodeRefMap(node.id, nodes, edges);
+  // Resolve refs in upstream-provided prompt so downstream code sees clean text
+  if (inputs.prompt && refMap.size > 0) {
+    inputs.prompt = resolveTextRefs(inputs.prompt, refMap) ?? inputs.prompt;
+  }
+
   if (node.type === "generate-script") {
     const prompt = overridePrompt ?? inputs.prompt ?? "";
     if (!prompt) {
@@ -300,7 +308,7 @@ export function executeNode(
       ? collectAncestorRefs(node.id, nodes, edges)
       : [];
 
-    const prompt = overridePrompt || inputs.prompt || imgData.prompt?.trim();
+    const prompt = overridePrompt || inputs.prompt || resolveTextRefs(imgData.prompt?.trim(), refMap);
     if (!prompt) {
       toast.error(`Node "${imgData.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -543,7 +551,7 @@ export function executeNode(
 
     if (audioUrl && !audioUrl.startsWith("http")) audioUrl = undefined;
 
-    const prompt = (inputs.prompt ?? i2vData.motionPrompt) as string | undefined;
+    const prompt = (inputs.prompt ?? resolveTextRefs(i2vData.motionPrompt as string | undefined, refMap)) as string | undefined;
     const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as
       | string
       | undefined;
@@ -611,7 +619,7 @@ export function executeNode(
     const prompt =
       overridePrompt ??
       (typeof inputs.prompt === "string" ? inputs.prompt : undefined) ??
-      t2vData.prompt?.trim();
+      resolveTextRefs(t2vData.prompt?.trim(), refMap);
     if (!prompt) {
       toast.error(`Node "${t2vData.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -654,7 +662,7 @@ export function executeNode(
     const text =
       overridePrompt ??
       (ttsData.textSource === "direct" && ttsData.directText?.trim()
-        ? ttsData.directText.trim()
+        ? resolveTextRefs(ttsData.directText.trim(), refMap) ?? ttsData.directText.trim()
         : typeof inputs.prompt === "string"
           ? inputs.prompt
           : "");
@@ -687,7 +695,7 @@ export function executeNode(
     const prompt =
       overridePrompt ??
       inputs.prompt ??
-      (node.data as GenerateMusicData).prompt?.trim();
+      resolveTextRefs((node.data as GenerateMusicData).prompt?.trim(), refMap);
     if (!prompt) {
       toast.error(
         `Node "${(node.data as GenerateMusicData).label}": no prompt found`,
@@ -720,7 +728,7 @@ export function executeNode(
     const prompt =
       overridePrompt ??
       inputs.prompt ??
-      (node.data as TextToAudioData).prompt?.trim();
+      resolveTextRefs((node.data as TextToAudioData).prompt?.trim(), refMap);
     if (!prompt) {
       toast.error(
         `Node "${(node.data as TextToAudioData).label}": no prompt found`,
@@ -998,7 +1006,7 @@ export function executeNode(
 
   if (node.type === "suno-generate") {
     const d = node.data as SunoGenerateData;
-    const prompt = overridePrompt ?? inputs.prompt ?? d.prompt?.trim();
+    const prompt = overridePrompt ?? inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
     if (!prompt) {
       toast.error(`Node "${d.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -1034,7 +1042,7 @@ export function executeNode(
 
   if (node.type === "suno-cover") {
     const d = node.data as SunoCoverData;
-    const prompt = inputs.prompt ?? d.prompt?.trim();
+    const prompt = inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
     if (!prompt) {
       toast.error(`Node "${d.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -1111,7 +1119,7 @@ export function executeNode(
 
   if (node.type === "suno-lyrics") {
     const d = node.data as SunoLyricsData;
-    const prompt = inputs.prompt ?? d.prompt?.trim();
+    const prompt = inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
     if (!prompt) {
       toast.error(`Node "${d.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -1774,7 +1782,7 @@ export function executeNode(
 
   if (node.type === "extend-video") {
     const evData = node.data as unknown as ExtendVideoData;
-    const prompt = overridePrompt ?? inputs.prompt ?? evData.prompt;
+    const prompt = overridePrompt ?? inputs.prompt ?? resolveTextRefs(evData.prompt, refMap);
 
     const kieTaskId = resolveUpstreamKieTaskId(node.id, evData as unknown as Record<string, unknown>);
 

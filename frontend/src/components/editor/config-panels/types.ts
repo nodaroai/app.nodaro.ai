@@ -1,4 +1,5 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
+import type { NodeRefItem } from "@/lib/node-refs"
 
 export interface SourceNodeInfo {
   readonly id: string
@@ -18,4 +19,5 @@ export interface ConfigProps<T> {
   readonly onMapField: (field: string, sourceNodeId: string | null) => void
   readonly nodes: ReadonlyArray<WorkflowNode>
   readonly onUpdateNode?: (nodeId: string, data: Record<string, unknown>) => void
+  readonly nodeRefs?: ReadonlyArray<NodeRefItem>
 }

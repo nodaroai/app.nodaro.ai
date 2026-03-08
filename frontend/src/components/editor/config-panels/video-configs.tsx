@@ -31,13 +31,14 @@ import type {
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
+import { TagTextarea } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { getConnectedProviderModel } from "./helpers"
 import { ConnectedMediaList } from "./connected-media-list"
 import type { ConfigProps } from "./types"
 
 
-export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode }: ConfigProps<ImageToVideoData>) {
+export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, onUpdateNode, nodeRefs }: ConfigProps<ImageToVideoData>) {
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
@@ -519,7 +520,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<VideoToVideoData>) {
+export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoToVideoData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
@@ -537,26 +538,28 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
+        <TagTextarea
           value={data.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe what to change or continue..."
           rows={3}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
     </div>
   )
 }
 
-export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<MotionTransferData>) {
+export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<MotionTransferData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
+        <TagTextarea
           value={data.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value.slice(0, 2500) })}
+          onChange={(v) => onUpdate({ prompt: v.slice(0, 2500) })}
           placeholder="Optional: Describe the motion transfer..."
           rows={2}
+          nodeRefs={nodeRefs}
         />
         <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
       </MappableField>
@@ -591,7 +594,7 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
   )
 }
 
-export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<VideoUpscaleData>) {
+export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoUpscaleData>) {
   const provider = data.provider || "topaz"
   return (
     <div className="flex flex-col gap-3">
@@ -634,7 +637,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes }: ConfigProps<TextToVideoData>) {
+export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, nodeRefs }: ConfigProps<TextToVideoData>) {
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const category: ProviderCategory = "video"
   const models = getModels(category, data.provider)
@@ -648,11 +651,12 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
+        <TagTextarea
           rows={3}
           value={data.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe the video to generate..."
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
@@ -763,18 +767,19 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </Select>
       </MappableField>
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
+        <TagTextarea
           rows={2}
           value={data.negativePrompt}
-          onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+          onChange={(v) => onUpdate({ negativePrompt: v })}
           placeholder="Things to avoid..."
+          nodeRefs={nodeRefs}
         />
       </MappableField>
     </div>
   )
 }
 
-export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ExtendVideoData>) {
+export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<ExtendVideoData>) {
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
@@ -791,11 +796,12 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
+        <TagTextarea
           value={data.prompt || ""}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe how the video should continue..."
           rows={3}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
 

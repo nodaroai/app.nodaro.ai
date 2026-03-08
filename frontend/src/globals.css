@@ -493,6 +493,17 @@ html, body {
   color: #ff4da6;
   background: color-mix(in srgb, #ff0073 18%, transparent);
 }
+.node-ref-highlight {
+  color: #38BDF8;
+  background: color-mix(in srgb, #38BDF8 12%, transparent);
+  border-radius: 3px;
+  padding: 1px 2px;
+  margin: 0 -2px;
+}
+.dark .node-ref-highlight {
+  color: #7DD3FC;
+  background: color-mix(in srgb, #38BDF8 18%, transparent);
+}
 
 /* NodeResizer: ensure resize handles stay interactive above card content */
 .react-flow__resize-control {
