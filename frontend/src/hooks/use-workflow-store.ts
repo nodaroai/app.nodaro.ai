@@ -351,14 +351,47 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       // stale polling callbacks (from a previously loaded workflow) from
       // falsely marking the current workflow as unsaved.
       if (!state.nodes.some((n) => n.id === nodeId)) return state
-      return {
-        nodes: state.nodes.map((node) =>
-          node.id === nodeId
-            ? { ...node, data: { ...node.data, ...data } as SceneNodeData }
-            : node,
-        ),
-        isDirty: true,
+
+      // Detect label rename for {Node Label} ref sync
+      let oldLabel: string | undefined
+      if (typeof data.label === "string") {
+        const existing = state.nodes.find((n) => n.id === nodeId)
+        if (existing) {
+          const prev = (existing.data as Record<string, unknown>).label as string | undefined
+          if (prev && prev !== data.label) oldLabel = prev
+        }
       }
+
+      let nodes = state.nodes.map((node) =>
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, ...data } as SceneNodeData }
+          : node,
+      )
+
+      // Propagate label rename to all nodes referencing {oldLabel}
+      if (oldLabel) {
+        const newLabel = data.label as string
+        const oldRef = `{${oldLabel}}`
+        const newRef = `{${newLabel}}`
+        const REF_TEXT_FIELDS = ["text", "prompt", "directText", "motionPrompt"] as const
+        nodes = nodes.map((node) => {
+          if (node.id === nodeId) return node
+          const d = node.data as Record<string, unknown>
+          let changed = false
+          const patch: Record<string, unknown> = {}
+          for (const field of REF_TEXT_FIELDS) {
+            const val = d[field]
+            if (typeof val === "string" && val.includes(oldRef)) {
+              patch[field] = val.replaceAll(oldRef, newRef)
+              changed = true
+            }
+          }
+          if (!changed) return node
+          return { ...node, data: { ...d, ...patch } as SceneNodeData }
+        })
+      }
+
+      return { nodes, isDirty: true }
     })
     if (isExecOnly) setSkipUndoCapture(false)
   },

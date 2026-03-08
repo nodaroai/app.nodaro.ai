@@ -505,6 +505,31 @@ html, body {
   background: color-mix(in srgb, #38BDF8 18%, transparent);
 }
 
+/* TagTextarea inside text-prompt canvas nodes */
+.text-prompt-tag-textarea {
+  color: rgba(255, 255, 255, 0.8);
+  height: 100%;
+}
+.text-prompt-tag-textarea .tag-textarea-container {
+  height: 100%;
+}
+.text-prompt-tag-textarea .tag-textarea-backdrop {
+  padding: 0.75rem;
+  font-size: inherit;
+  line-height: inherit;
+}
+.text-prompt-tag-textarea .tag-textarea-input {
+  caret-color: rgba(255, 255, 255, 0.8) !important;
+}
+.text-prompt-tag-textarea .tag-textarea-input::placeholder {
+  color: rgba(255, 255, 255, 0.25) !important;
+}
+@media (min-width: 768px) {
+  .text-prompt-tag-textarea .tag-textarea-backdrop {
+    font-size: inherit;
+  }
+}
+
 /* NodeResizer: ensure resize handles stay interactive above card content */
 .react-flow__resize-control {
   z-index: 9999 !important;
