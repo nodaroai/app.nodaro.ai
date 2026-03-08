@@ -30,12 +30,11 @@ export function lazyWithRetry<T extends React.ComponentType<any>>(
 
       // Retry once (cache-bust via fresh import)
       return factory().catch((retryErr) => {
-        // Avoid infinite reload loops: only reload once per session
-        const reloaded = sessionStorage.getItem(RELOAD_KEY)
-        if (!reloaded) {
-          sessionStorage.setItem(RELOAD_KEY, "1")
-          window.location.reload()
-        }
+        // Reload to get fresh index.html with new chunk hashes.
+        // The flag is cleared on successful load in main.tsx,
+        // so this only prevents infinite loops within a single reload.
+        sessionStorage.setItem(RELOAD_KEY, "1")
+        window.location.reload()
         throw retryErr
       })
     }),
