@@ -45,7 +45,7 @@ export function GalleryView({
   const showInputs = activeTab === "all" || activeTab === "inputs"
 
   return (
-    <div className="flex-1 overflow-auto p-4 sm:p-6">
+    <div className="flex-1 overflow-auto p-3 sm:p-6" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
       <div className="max-w-6xl mx-auto">
         {/* Tab toggle */}
         <div className="flex items-center justify-center mb-6">
@@ -76,7 +76,7 @@ export function GalleryView({
             {inputItems.length === 0 && activeTab !== "all" ? (
               <div className="text-sm text-muted-foreground text-center py-16">No inputs configured</div>
             ) : inputItems.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 {inputItems.map(({ node, result, title }) => (
                   <GlassCard key={node.id}>
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-2 truncate">
@@ -113,7 +113,7 @@ export function GalleryView({
             {outputItems.length === 0 && activeTab !== "all" ? (
               <div className="text-sm text-muted-foreground text-center py-16">No outputs configured</div>
             ) : outputItems.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {outputItems.map(({ node, outputType, status, result, title }) => (
                   <GalleryCard
                     key={node.id}

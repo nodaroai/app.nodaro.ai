@@ -118,7 +118,7 @@ export function FullscreenView({
         type="button"
         onClick={goPrev}
         disabled={currentIndex === 0}
-        className={`absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center transition-colors z-10 ${
+        className={`absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors z-10 touch-manipulation ${
           currentIndex === 0
             ? "bg-muted/40 text-muted-foreground/30 cursor-default"
             : "bg-muted/80 hover:bg-muted text-foreground cursor-pointer"
@@ -132,7 +132,7 @@ export function FullscreenView({
         type="button"
         onClick={goNext}
         disabled={currentIndex >= items.length - 1}
-        className={`absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center transition-colors z-10 ${
+        className={`absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors z-10 touch-manipulation ${
           currentIndex >= items.length - 1
             ? "bg-muted/40 text-muted-foreground/30 cursor-default"
             : "bg-muted/80 hover:bg-muted text-foreground cursor-pointer"
@@ -142,12 +142,12 @@ export function FullscreenView({
       </button>
 
       {/* Content */}
-      <div className="px-16 py-12 w-full flex items-center justify-center">
+      <div className="px-4 sm:px-16 py-6 sm:py-12 w-full flex items-center justify-center">
         {current.outputType === "image" && current.url ? (
           <CachedImage
             src={current.url}
             alt={current.title}
-            className="max-w-[80vw] max-h-[70vh] rounded-xl object-contain"
+            className="max-w-[90vw] sm:max-w-[80vw] max-h-[70vh] rounded-xl object-contain"
           />
         ) : current.outputType === "video" && current.url ? (
           <video
@@ -155,7 +155,7 @@ export function FullscreenView({
             src={current.url}
             controls
             autoPlay
-            className="max-w-[80vw] max-h-[70vh] rounded-xl"
+            className="max-w-[90vw] sm:max-w-[80vw] max-h-[70vh] rounded-xl"
           />
         ) : current.outputType === "audio" && current.url ? (
           <GlassCard className="w-full max-w-md">

@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { NodeSection } from "../node-section"
+import { useIsMobile } from "@/hooks/use-is-mobile"
 import type { EditableViewProps } from "./types"
 
 interface HorizontalViewProps extends EditableViewProps {
@@ -27,8 +28,46 @@ export function HorizontalView({
   containerRef,
   handleDividerMouseDown,
 }: HorizontalViewProps) {
+  const isMobile = useIsMobile()
   const leftColumnStyle = useMemo(() => ({ width: `${splitRatio}%` }), [splitRatio])
   const rightColumnStyle = useMemo(() => ({ width: `${100 - splitRatio}%` }), [splitRatio])
+
+  // On mobile, stack vertically instead of side-by-side
+  if (isMobile) {
+    return (
+      <div className="flex-1 overflow-auto p-3" style={{ paddingBottom: 'max(1rem, var(--safe-area-bottom))' }}>
+        <div className="space-y-6">
+          <NodeSection
+            label="In"
+            nodes={orderedInputNodes}
+            isEditing={isEditing}
+            sensors={sensors}
+            onDragEnd={handleInputDragEnd}
+            onAdd={() => setPickerSection("inputs")}
+            onRemove={handleRemoveNode}
+            settings={settings}
+            updateCardMeta={updateCardMeta}
+            renderCard={renderInputCard}
+          />
+
+          <div className="border-t border-border" />
+
+          <NodeSection
+            label="Out"
+            nodes={orderedOutputNodes}
+            isEditing={isEditing}
+            sensors={sensors}
+            onDragEnd={handleOutputDragEnd}
+            onAdd={() => setPickerSection("outputs")}
+            onRemove={handleRemoveNode}
+            settings={settings}
+            updateCardMeta={updateCardMeta}
+            renderCard={renderOutputCard}
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 overflow-auto p-4 sm:p-6">
