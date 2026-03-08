@@ -163,7 +163,7 @@ function BaseNodeComponent({
         leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
       }}
     >
-      <NodeToolbar align="center" isVisible={isHovered} position={Position.Top} offset={4}>
+      <NodeToolbar align="end" isVisible={isHovered} position={Position.Top} offset={4}>
         <div
           className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl px-1 py-1 flex items-center gap-1"
           onMouseEnter={() => {

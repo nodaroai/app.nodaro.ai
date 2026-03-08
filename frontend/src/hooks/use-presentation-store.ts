@@ -142,6 +142,10 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
         try {
           const status = await getSharedExecutionStatus(token, execId)
+
+          // Guard: if the execution changed while the request was in flight, discard
+          if (get().executionId !== execId) return
+
           const nodeStates = (status.node_states ?? {}) as Record<string, NodeState>
 
           set({
@@ -164,6 +168,8 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
           pollTimeoutId = setTimeout(poll, 2000)
         } catch (err) {
+          // Guard: if the execution changed, don't report error for stale request
+          if (get().executionId !== execId) return
           set({
             executionStatus: "failed",
             errorMessage: err instanceof Error ? err.message : "Connection lost",

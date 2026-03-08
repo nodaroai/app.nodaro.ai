@@ -271,6 +271,10 @@ function startPolling(
 
     try {
       const status = await getAppExecutionStatus(executionId)
+
+      // Guard: if the execution changed while the request was in flight, discard
+      if (get().executionId !== executionId) return
+
       const nodeStates = (status.node_states ?? {}) as Record<string, NodeState>
 
       set({
@@ -298,6 +302,8 @@ function startPolling(
 
       pollTimeoutId = setTimeout(poll, 2000)
     } catch (err) {
+      // Guard: if the execution changed, don't report error for stale request
+      if (get().executionId !== executionId) return
       set({
         executionStatus: "failed",
         errorMessage: err instanceof Error ? err.message : "Connection lost",

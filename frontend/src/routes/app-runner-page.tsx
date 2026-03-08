@@ -343,27 +343,27 @@ export default function AppRunnerPage() {
     usePresentationStore.setState({
       inputValues: slot.inputValues,
       nodeStates: slot.nodeStates,
-      executionStatus: slot.executionStatus === "running" ? "running" : slot.executionStatus,
+      executionStatus: slot.executionStatus,
       completedNodes: slot.completedNodes,
       totalNodes: slot.totalNodes,
     })
 
-    // Handle app runner store execution state
+    // Set app runner store — changing executionId causes poll guard to
+    // discard any in-flight responses from a previous execution
     if (slot.executionId && slot.executionStatus === "running") {
       useAppRunnerStore.getState().resumeExecution(slot.executionId)
     } else {
-      newRun() // clears poll timeout
-      if (slot.executionId) {
-        useAppRunnerStore.setState({
-          executionId: slot.executionId,
-          executionStatus: slot.executionStatus as "idle" | "running" | "completed" | "failed",
-          nodeStates: slot.nodeStates,
-          completedNodes: slot.completedNodes,
-          totalNodes: slot.totalNodes,
-        })
-      }
+      useAppRunnerStore.setState({
+        activeRunId: slotId,
+        executionId: slot.executionId ?? null,
+        executionStatus: slot.executionStatus as "idle" | "running" | "completed" | "failed",
+        nodeStates: slot.nodeStates,
+        completedNodes: slot.completedNodes,
+        totalNodes: slot.totalNodes,
+        errorMessage: null,
+      })
     }
-  }, [activeSlotId, saveCurrentSlotInputs, slots, newRun])
+  }, [activeSlotId, saveCurrentSlotInputs, slots])
 
   // Delete slot (from DB too)
   const handleDeleteSlot = useCallback((slotId: string) => {
