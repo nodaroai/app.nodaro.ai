@@ -1,10 +1,15 @@
 /**
  * Embed page — lightweight app runner for iframe embedding.
  * No header, compact layout, theme query param, postMessage API.
+ *
+ * Theme can be set via:
+ *   - URL query param: ?theme=light or ?theme=dark (default: dark)
+ *   - postMessage: { type: "nodaro:setTheme", theme: "light" | "dark" }
  */
 
 import { useEffect } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
+import { useTheme } from "next-themes"
 import { Loader2, RotateCcw } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
@@ -18,7 +23,8 @@ export default function EmbedPage() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
   const { loading: authLoading } = useAuth()
-  const theme = searchParams.get("theme") ?? "dark"
+  const { setTheme } = useTheme()
+  const themeParam = searchParams.get("theme")
 
   const loadApp = useAppRunnerStore((s) => s.loadApp)
   const app = useAppRunnerStore((s) => s.app)
@@ -35,10 +41,12 @@ export default function EmbedPage() {
   const updateInputValue = useAppRunnerStore((s) => s.updateInputValue)
   const reset = useAppRunnerStore((s) => s.reset)
 
-  // Apply theme
+  // Apply theme from URL param on mount
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme !== "light")
-  }, [theme])
+    if (themeParam === "light" || themeParam === "dark") {
+      setTheme(themeParam)
+    }
+  }, [themeParam, setTheme])
 
   // Load app
   useEffect(() => {
@@ -118,12 +126,19 @@ export default function EmbedPage() {
           appRun()
           break
         }
+        case "nodaro:setTheme": {
+          const theme = data.theme as string | undefined
+          if (theme === "light" || theme === "dark") {
+            setTheme(theme)
+          }
+          break
+        }
       }
     }
 
     window.addEventListener("message", handler)
     return () => window.removeEventListener("message", handler)
-  }, [updateInputValue, appRun, app])
+  }, [updateInputValue, appRun, setTheme, app])
 
   // Notify parent frame of execution status changes
   // Use document.referrer origin or same-origin as target (not wildcard)

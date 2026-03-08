@@ -9,6 +9,10 @@ export default function AuthCallback() {
   useEffect(() => {
     const supabase = createClient()
 
+    // If opened as a popup (e.g., from embedded iframe), close the window
+    // after auth succeeds — session syncs to the opener via localStorage.
+    const isPopup = !!window.opener
+
     // Consume the saved redirect URL once (e.g., from /present/:shareToken)
     let redirectUrl = localStorage.getItem(AUTH_REDIRECT_KEY) ?? "/projects"
     localStorage.removeItem(AUTH_REDIRECT_KEY)
@@ -17,11 +21,19 @@ export default function AuthCallback() {
       redirectUrl = "/projects"
     }
 
+    function onAuthSuccess() {
+      if (isPopup) {
+        window.close()
+        return
+      }
+      navigate(redirectUrl, { replace: true })
+    }
+
     // Supabase automatically exchanges the code/hash tokens via onAuthStateChange.
     // We just need to listen for the session to appear.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-        navigate(redirectUrl, { replace: true })
+        onAuthSuccess()
       }
     })
 
@@ -29,12 +41,16 @@ export default function AuthCallback() {
     // or if the code exchange already happened before this listener attached
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate(redirectUrl, { replace: true })
+        onAuthSuccess()
       }
     })
 
     // Safety timeout — if nothing happens in 5s, go to login
     const timeout = setTimeout(() => {
+      if (isPopup) {
+        window.close()
+        return
+      }
       navigate("/login", { replace: true })
     }, 5000)
 

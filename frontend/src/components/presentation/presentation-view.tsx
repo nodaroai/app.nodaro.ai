@@ -8,6 +8,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, RotateCcw } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   KeyboardSensor,
   PointerSensor,
@@ -245,6 +246,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const handleRunClick = useCallback(() => {
     if (isFullscreen) {
       if (!user) {
+        const isInIframe = window.parent !== window
+        if (isInIframe) {
+          // Google OAuth blocks loading inside iframes — open login in a popup.
+          // Session syncs back via localStorage (same origin).
+          const w = 500, h = 650
+          const left = window.screenX + (window.outerWidth - w) / 2
+          const top = window.screenY + (window.outerHeight - h) / 2
+          window.open(
+            `${window.location.origin}/login`,
+            "nodaro-login",
+            `width=${w},height=${h},left=${left},top=${top},popup=1`,
+          )
+          return
+        }
         // Save current URL so user returns here after login (consumed by auth-callback)
         localStorage.setItem(AUTH_REDIRECT_KEY, window.location.pathname + window.location.search)
         navigate("/login")
@@ -506,6 +521,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           </h1>
           {/* Mobile-only: compact right-side controls */}
           <div className="flex items-center gap-1.5 md:hidden shrink-0">
+            {isFullscreen && <ThemeToggle />}
             {user && hasCredits() && <CreditBalance userId={user.id} />}
             {(mode === "tab" || (isFullscreen && !isShareReadOnly)) && (
               <RunTargetSelector
@@ -548,7 +564,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   type="button"
                   onClick={handleRunClick}
                   className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-                  disabled={!allInputsFilled || !user}
+                  disabled={!!user && !allInputsFilled}
                 >
                   {!user ? (
                     <><LogIn className="h-4 w-4" />Sign in to Run</>
@@ -563,6 +579,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
         {/* Desktop-only right-side controls */}
         <div className="hidden md:flex items-center gap-2 shrink-0">
+          {isFullscreen && <ThemeToggle />}
           {user && hasCredits() && <CreditBalance userId={user.id} />}
 
           {/* Edit/View toggle — only for editable view modes */}
