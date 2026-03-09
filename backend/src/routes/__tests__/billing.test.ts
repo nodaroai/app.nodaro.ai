@@ -266,7 +266,7 @@ describe("GET /v1/billing/transactions", () => {
         stripe_transaction_id: "stripe_txn_2",
         type: "topup",
         amount_usd: 10,
-        credits_granted: 55,
+        credits_granted: 150,
         tier: null,
         created_at: "2026-01-20T12:00:00Z",
       },

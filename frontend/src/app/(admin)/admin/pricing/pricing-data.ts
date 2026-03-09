@@ -31,10 +31,10 @@ export interface TopUpPackage {
 }
 
 export const TOPUP_PACKAGES: readonly TopUpPackage[] = [
-  { name: "Small", price: 10, credits: 275, perCredit: 0.036 },
-  { name: "Medium", price: 25, credits: 750, perCredit: 0.033 },
-  { name: "Large", price: 50, credits: 1650, perCredit: 0.030 },
-  { name: "XL", price: 100, credits: 3500, perCredit: 0.029 },
+  { name: "Small", price: 10, credits: 150, perCredit: 0.067 },
+  { name: "Medium", price: 25, credits: 450, perCredit: 0.056 },
+  { name: "Large", price: 50, credits: 1000, perCredit: 0.050 },
+  { name: "XL", price: 100, credits: 2200, perCredit: 0.045 },
 ] as const
 
 export interface LLMPricing {
@@ -110,8 +110,8 @@ export interface ModelReferenceData {
 export const CREDIT_VALUE_USD = [REMOVED]
 
 /** [comment removed] */
-export const SELL_PRICE_PER_CREDIT_MAX = 0.04   // Basic tier ($10/275cr)
-export const SELL_PRICE_PER_CREDIT_MIN = 0.027  // Business tier
+export const SELL_PRICE_PER_CREDIT_MAX = [REMOVED]  // Top-up ($10/150cr)
+export const SELL_PRICE_PER_CREDIT_MIN = [REMOVED]  // Business tier ($129/5600cr)
 
 /**
  * [comment removed]

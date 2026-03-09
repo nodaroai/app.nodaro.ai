@@ -53,10 +53,10 @@ Supabase (PostgreSQL)
 
 | Package | Price | Credits | Per Credit | Paddle Price Key |
 |---------|-------|---------|------------|-----------------|
-| Pack A | $10 | 55 | $0.18 | `credits_55` |
-| Pack B | $25 | 150 | $0.17 | `credits_150` |
-| Pack C | $50 | 330 | $0.15 | `credits_330` |
-| Pack D | $100 | 700 | $0.14 | `credits_700` |
+| Pack A | $10 | 150 | $0.07 | `credits_150` |
+| Pack B | $25 | 450 | $0.06 | `credits_450` |
+| Pack C | $50 | 1,000 | $0.05 | `credits_1000` |
+| Pack D | $100 | 2,200 | $0.05 | `credits_2200` |
 
 Top-up credits never expire and are deducted after subscription credits.
 
