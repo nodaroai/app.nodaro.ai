@@ -9,7 +9,7 @@ import {
   PRICING_TIERS,
   getTierPrice,
   getTierPriceId,
-  getAnnualSavingsPercent,
+  getAnnualSavingsDollars,
   type BillingCycle,
 } from "@/lib/pricing-data"
 import { createCheckoutSession } from "@/lib/api"
@@ -57,10 +57,8 @@ export default function PricingPage() {
     handleSubscribe(tier.id, priceId)
   }, [authLoading, subLoading, user, isActiveSub, searchParams, billingCycle])
 
-  // Max savings across all paid tiers (for the toggle badge)
-  const maxSavings = Math.max(
-    ...PRICING_TIERS.filter((t) => t.priceMonthly > 0).map(getAnnualSavingsPercent),
-  )
+  // Whether any paid tier has annual savings (for the toggle badge)
+  const hasAnnualSavings = PRICING_TIERS.some((t) => t.priceMonthly > 0 && t.priceAnnual < t.priceMonthly)
 
   async function handleSubscribe(tierId: string, priceId: string | null) {
     if (!priceId) {
@@ -159,7 +157,7 @@ export default function PricingPage() {
             onClick={() => setBillingCycle("annual")}
           >
             Annual
-            {maxSavings > 0 && (
+            {hasAnnualSavings && (
               <span
                 className={cn(
                   "text-xs font-semibold px-2 py-0.5 rounded-full",
@@ -168,7 +166,7 @@ export default function PricingPage() {
                     : "bg-green-500/10 text-green-600 dark:text-green-400",
                 )}
               >
-                Save {maxSavings}%
+                2 months free
               </span>
             )}
           </button>
@@ -182,7 +180,7 @@ export default function PricingPage() {
             const isCurrent = tier.id === currentTierId
             const displayPrice = getTierPrice(tier, billingCycle)
             const priceId = getTierPriceId(tier, billingCycle)
-            const savings = getAnnualSavingsPercent(tier)
+            const savingsDollars = getAnnualSavingsDollars(tier)
 
             return (
               <div
@@ -229,7 +227,7 @@ export default function PricingPage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {tier.priceMonthly > 0
                       ? billingCycle === "annual"
-                        ? `$${tier.priceAnnual * 12}/yr \u00b7 Save ${savings}%`
+                        ? `$${tier.priceAnnual * 12}/yr \u00b7 Save $${savingsDollars}`
                         : "Billed monthly"
                       : `${tier.credits} free credits (one-time)`}
                   </p>

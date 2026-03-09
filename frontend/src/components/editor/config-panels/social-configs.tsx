@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertCircle, ExternalLink } from "lucide-react"
+import { TagTextarea } from "./tag-textarea"
 import type { SocialPostData, SocialPlatformType, SocialConnection } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { getSocialConnections } from "@/lib/api"
@@ -68,7 +68,7 @@ function useSocialConnections(platform: SocialPlatformType) {
   return { connections, loading }
 }
 
-function SocialConfigBase({ data, onUpdate, platform }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
+function SocialConfigBase({ data, onUpdate, platform, nodeRefs }: ConfigProps<SocialPostData> & { platform: SocialPlatformType }) {
   const d = data as SocialPostData
   const { connections, loading } = useSocialConnections(platform)
   const actions = PLATFORM_ACTIONS[platform]
@@ -157,12 +157,14 @@ function SocialConfigBase({ data, onUpdate, platform }: ConfigProps<SocialPostDa
         <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
           {platform === "youtube" ? "Description" : "Caption"}
         </Label>
-        <Textarea
+        <TagTextarea
           value={d.caption || ""}
-          onChange={(e) => onUpdate({ caption: e.target.value })}
+          onChange={(v) => onUpdate({ caption: v })}
           placeholder={`Write your ${platform === "x" ? "tweet" : "caption"}...`}
           className="mt-1.5 min-h-[80px]"
           maxLength={charLimit}
+          rows={3}
+          nodeRefs={nodeRefs}
         />
         <p className={`text-[10px] mt-1 ${captionLen > charLimit * 0.9 ? "text-amber-500" : "text-muted-foreground"}`}>
           {captionLen}/{charLimit}
@@ -174,12 +176,14 @@ function SocialConfigBase({ data, onUpdate, platform }: ConfigProps<SocialPostDa
         <>
           <div>
             <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Title</Label>
-            <Input
+            <TagTextarea
               value={d.title || ""}
-              onChange={(e) => onUpdate({ title: e.target.value })}
+              onChange={(v) => onUpdate({ title: v })}
               placeholder="Video title..."
               className="mt-1.5"
               maxLength={100}
+              rows={1}
+              nodeRefs={nodeRefs}
             />
           </div>
           <div>

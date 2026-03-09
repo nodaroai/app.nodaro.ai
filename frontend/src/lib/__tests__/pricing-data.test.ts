@@ -165,8 +165,8 @@ describe("getAnnualSavingsPercent", () => {
 
   it("returns correct savings for basic tier", () => {
     const basic = PRICING_TIERS.find((t) => t.id === "basic")!
-    // (12 - 9) / 12 * 100 = 25%
-    expect(getAnnualSavingsPercent(basic)).toBe(Math.round(((12 - 9) / 12) * 100))
+    // (12 - 10) / 12 * 100 = ~17%
+    expect(getAnnualSavingsPercent(basic)).toBe(Math.round(((12 - 10) / 12) * 100))
   })
 
   it("returns correct savings for pro tier", () => {

@@ -158,14 +158,14 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
+        <TagTextarea
           rows={3}
           value={data.prompt}
-          onChange={(e) => {
-            const v = e.target.value
+          onChange={(v) => {
             if (v.length <= maxPromptLen) onUpdate({ prompt: v })
           }}
           placeholder={isSfx ? "Describe the sound effect (max 450 chars)..." : "Describe the sound effect (e.g. dog barking, rain on window)..."}
+          nodeRefs={nodeRefs}
         />
         {isSfx && (
           <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/{maxPromptLen}</p>
@@ -865,20 +865,22 @@ export function VoiceRemixConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voice
     <div className="flex flex-col gap-3">
       <div>
         <Label>Voice Description</Label>
-        <Textarea
+        <TagTextarea
           rows={3}
           value={data.voiceDescription || ""}
-          onChange={(e) => onUpdate({ voiceDescription: e.target.value })}
+          onChange={(v) => onUpdate({ voiceDescription: v })}
           placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
+          nodeRefs={nodeRefs}
         />
       </div>
       <div>
         <Label>Preview Text</Label>
-        <Textarea
+        <TagTextarea
           rows={2}
           value={data.text || ""}
-          onChange={(e) => onUpdate({ text: e.target.value })}
+          onChange={(v) => onUpdate({ text: v })}
           placeholder="Text to preview the generated voice with..."
+          nodeRefs={nodeRefs}
         />
       </div>
       <p className="text-xs text-muted-foreground">
@@ -1008,11 +1010,12 @@ export function ForcedAlignmentConfig({ data, onUpdate, nodeRefs }: ConfigProps<
     <div className="flex flex-col gap-3">
       <div>
         <Label>Transcript</Label>
-        <Textarea
+        <TagTextarea
           rows={5}
           value={data.transcript || ""}
-          onChange={(e) => onUpdate({ transcript: e.target.value })}
+          onChange={(v) => onUpdate({ transcript: v })}
           placeholder="Enter the transcript to align with the audio..."
+          nodeRefs={nodeRefs}
         />
       </div>
       <p className="text-xs text-muted-foreground">
