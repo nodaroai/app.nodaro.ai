@@ -457,7 +457,7 @@ describe("provision-credits", () => {
 
       expect(mockRpc).toHaveBeenCalledWith("add_topup_credits", {
         p_user_id: "user-001",
-        p_credits: 750,
+        p_credits: 450,
       })
 
       const calledTables = mockFrom.mock.calls.map((c: unknown[]) => c[0])
