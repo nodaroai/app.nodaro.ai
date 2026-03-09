@@ -9,7 +9,7 @@ export const STRIPE_PRODUCTS = {
   basic: {
     productId: "prod_U6gPUNpvVGjE2f",
     monthly: "price_1T8T2r6EOX16l3P8KLqPT0Gp",
-    yearly: "price_1T8T376EOX16l3P8eW5VKwoe",
+    yearly: "price_1T92PK6EOX16l3P8f7VcNi21",
   },
   standard: {
     productId: "prod_U6gOhMrAS056Lg",
@@ -23,7 +23,7 @@ export const STRIPE_PRODUCTS = {
   },
   business: {
     productId: "prod_U6gM9ZW1j1wcGN",
-    monthly: "price_1T8T0C6EOX16l3P8ffdUbr2t",
+    monthly: "price_1T92U26EOX16l3P8fDbjHHi7",
     yearly: "price_1T8T0s6EOX16l3P8VRjmbJhr",
   },
 } as const
