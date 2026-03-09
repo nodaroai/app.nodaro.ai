@@ -48,7 +48,6 @@ export function PlatformCard({ platform, connections, onConnectionChange }: Plat
         window.removeEventListener("message", handler)
       }
       const handler = (e: MessageEvent) => {
-        if (e.origin !== window.location.origin) return
         if (e.data?.type === "social-auth-success" && e.data.platform === platform) {
           cleanup()
           toast.success(`Connected to ${PLATFORM_LABELS[platform]}!`)

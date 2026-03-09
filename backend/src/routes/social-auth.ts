@@ -219,7 +219,7 @@ function successHtml(platform: string, username: string): string {
 <p>You can close this window.</p>
 <script>
   if (window.opener) {
-    window.opener.postMessage({ type: "social-auth-success", platform: ${JSON.stringify(platform)} }, window.location.origin);
+    window.opener.postMessage({ type: "social-auth-success", platform: ${JSON.stringify(platform)} }, "*");
   }
   setTimeout(() => window.close(), 2000);
 </script>
@@ -234,7 +234,7 @@ function errorHtml(message: string): string {
 <p>You can close this window and try again.</p>
 <script>
   if (window.opener) {
-    window.opener.postMessage({ type: "social-auth-error", message: ${JSON.stringify(message)} }, window.location.origin);
+    window.opener.postMessage({ type: "social-auth-error", message: ${JSON.stringify(message)} }, "*");
   }
 </script>
 </body></html>`
