@@ -50,7 +50,7 @@ vi.mock("@/billing/stripe-config.js", () => ({
     return map[priceId] || "free"
   },
   TIER_CREDITS: {
-    free: 250,
+    free: 150,
     basic: 475,
     standard: 1175,
     pro: 2650,

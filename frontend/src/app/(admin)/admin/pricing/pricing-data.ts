@@ -16,7 +16,7 @@ export interface SubscriptionTier {
 }
 
 export const SUBSCRIPTION_TIERS: readonly SubscriptionTier[] = [
-  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 250, perCredit: null, llmRequests: "20/mo", estimatedCost: 5, marginMonthly: null, marginAnnual: null, notes: "50 cr/day, VEO 3 blocked, watermark" },
+  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 150, perCredit: null, llmRequests: "20/mo", estimatedCost: 3, marginMonthly: null, marginAnnual: null, notes: "One-time credits, 30 cr/day, VEO 3 blocked, watermark" },
   { name: "Basic", priceMonthly: 12, priceAnnual: 9, credits: 475, perCredit: 0.025, llmRequests: "100/mo", estimatedCost: 9.5, marginMonthly: 21, marginAnnual: -6 },
   { name: "Standard", priceMonthly: 29, priceAnnual: 24, credits: 1175, perCredit: 0.025, llmRequests: "300/mo", estimatedCost: 23.5, marginMonthly: 19, marginAnnual: 2 },
   { name: "Pro", priceMonthly: 59, priceAnnual: 49, credits: 2650, perCredit: 0.022, llmRequests: "1,000/mo", estimatedCost: 53, marginMonthly: 10, marginAnnual: -8 },

@@ -398,12 +398,12 @@ describe("provision-credits", () => {
 
     it("caps subscription_credits at min(current, 50)", async () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
-      // User has 400 credits — should be capped to free tier (50)
+      // User has 400 credits — should be capped to free tier (150)
       mockSelect("profiles", { subscription_credits: 400 })
 
       await handleSubscriptionCanceled(baseCanceledData)
 
-      const freeCredits = TIER_CREDITS.free // 50
+      const freeCredits = TIER_CREDITS.free // 150
       expect(mockLogTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: freeCredits - 400, // negative (credits removed)
