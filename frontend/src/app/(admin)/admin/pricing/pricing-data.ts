@@ -20,7 +20,7 @@ export const SUBSCRIPTION_TIERS: readonly SubscriptionTier[] = [
   { name: "Basic", priceMonthly: 12, priceAnnual: 9, credits: 475, perCredit: 0.025, llmRequests: "100/mo", estimatedCost: 9.5, marginMonthly: 21, marginAnnual: -6 },
   { name: "Standard", priceMonthly: 29, priceAnnual: 24, credits: 1175, perCredit: 0.025, llmRequests: "300/mo", estimatedCost: 23.5, marginMonthly: 19, marginAnnual: 2 },
   { name: "Pro", priceMonthly: 59, priceAnnual: 49, credits: 2650, perCredit: 0.022, llmRequests: "1,000/mo", estimatedCost: 53, marginMonthly: 10, marginAnnual: -8 },
-  { name: "Business", priceMonthly: 129, priceAnnual: 99, credits: 5600, perCredit: 0.023, llmRequests: "Unlimited", estimatedCost: 112, marginMonthly: 13, marginAnnual: -13 },
+  { name: "Business", priceMonthly: 129, priceAnnual: 109, credits: 5600, perCredit: 0.023, llmRequests: "Unlimited", estimatedCost: 112, marginMonthly: 13, marginAnnual: -3 },
 ] as const
 
 export interface TopUpPackage {

@@ -111,7 +111,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     id: "business",
     name: "Business",
     priceMonthly: 129,
-    priceAnnual: 99,
+    priceAnnual: 109,
     priceIdMonthly: "price_1T92U26EOX16l3P8fDbjHHi7",
     priceIdAnnual: "price_1T8T0s6EOX16l3P8VRjmbJhr",
     credits: 5600,

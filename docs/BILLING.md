@@ -47,7 +47,7 @@ Supabase (PostgreSQL)
 | Basic | $12/mo | $9/mo ($108/yr) | 95 | 100 | 10 GB | `basic_monthly` |
 | Standard | $29/mo | $24/mo ($288/yr) | 235 | 300 | 25 GB | `standard_monthly` |
 | Pro | $59/mo | $49/mo ($588/yr) | 530 | 1,000 | 50 GB | `pro_monthly` |
-| Business | $129/mo | $99/mo ($1,188/yr) | 1,120 | Unlimited | 200 GB | `business_monthly` |
+| Business | $129/mo | $109/mo ($1,308/yr) | 1,120 | Unlimited | 200 GB | `business_monthly` |
 
 ## Top-up Packages
 
