@@ -256,7 +256,7 @@ describe("GET /v1/billing/transactions", () => {
         id: "txn-1",
         stripe_transaction_id: "stripe_txn_1",
         type: "subscription",
-        amount_usd: 49,
+        amount_usd: 29,
         credits_granted: 235,
         tier: "standard",
         created_at: "2026-01-15T12:00:00Z",

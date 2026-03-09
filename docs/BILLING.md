@@ -44,10 +44,10 @@ Supabase (PostgreSQL)
 | Tier | Monthly | Annual | Credits/mo | LLM Requests | Storage | Paddle Price Key |
 |------|---------|--------|-----------|-------------|---------|-----------------|
 | Free | $0 | $0 | 50 | 20 | 1 GB | n/a |
-| Basic | $24/mo | $19/mo ($228/yr) | 95 | 100 | 10 GB | `basic_monthly` |
-| Standard | $49/mo | $39/mo ($468/yr) | 235 | 300 | 25 GB | `standard_monthly` |
-| Pro | $99/mo | $79/mo ($948/yr) | 530 | 1,000 | 50 GB | `pro_monthly` |
-| Business | $189/mo | $149/mo ($1,788/yr) | 1,120 | Unlimited | 200 GB | `business_monthly` |
+| Basic | $12/mo | $9/mo ($108/yr) | 95 | 100 | 10 GB | `basic_monthly` |
+| Standard | $29/mo | $24/mo ($288/yr) | 235 | 300 | 25 GB | `standard_monthly` |
+| Pro | $59/mo | $49/mo ($588/yr) | 530 | 1,000 | 50 GB | `pro_monthly` |
+| Business | $129/mo | $109/mo ($1,308/yr) | 1,120 | Unlimited | 200 GB | `business_monthly` |
 
 ## Top-up Packages
 

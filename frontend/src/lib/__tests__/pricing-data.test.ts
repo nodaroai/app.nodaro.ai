@@ -125,11 +125,11 @@ describe("getTierPrice", () => {
   const tier: PricingTier = PRICING_TIERS.find((t) => t.id === "pro")!
 
   it("returns monthly price for monthly cycle", () => {
-    expect(getTierPrice(tier, "monthly")).toBe(99)
+    expect(getTierPrice(tier, "monthly")).toBe(59)
   })
 
   it("returns annual price for annual cycle", () => {
-    expect(getTierPrice(tier, "annual")).toBe(79)
+    expect(getTierPrice(tier, "annual")).toBe(49)
   })
 
   it("returns 0 for free tier regardless of cycle", () => {
@@ -165,14 +165,14 @@ describe("getAnnualSavingsPercent", () => {
 
   it("returns correct savings for basic tier", () => {
     const basic = PRICING_TIERS.find((t) => t.id === "basic")!
-    // (24 - 19) / 24 * 100 = ~21%
-    expect(getAnnualSavingsPercent(basic)).toBe(Math.round(((24 - 19) / 24) * 100))
+    // (12 - 9) / 12 * 100 = 25%
+    expect(getAnnualSavingsPercent(basic)).toBe(Math.round(((12 - 9) / 12) * 100))
   })
 
   it("returns correct savings for pro tier", () => {
     const pro = PRICING_TIERS.find((t) => t.id === "pro")!
-    // (99 - 79) / 99 * 100 = ~20%
-    expect(getAnnualSavingsPercent(pro)).toBe(Math.round(((99 - 79) / 99) * 100))
+    // (59 - 49) / 59 * 100 = ~17%
+    expect(getAnnualSavingsPercent(pro)).toBe(Math.round(((59 - 49) / 59) * 100))
   })
 
   it("returns positive savings for all paid tiers", () => {
