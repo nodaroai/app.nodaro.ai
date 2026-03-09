@@ -336,15 +336,15 @@ describe("CreditsService", () => {
         tier: "free",
         subscription_credits: 30,
         topup_credits: 10,
-        daily_spent_credits: 50, // already at cap of 50
+        daily_spent_credits: 30, // already at cap of 30
         last_daily_reset: new Date().toISOString(), // today, so no reset
       }
 
       const result = await CreditsService.checkCreditsWithProfile(userId, dailyCapProfile, "flux")
       expect(result.allowed).toBe(false)
       expect(result.error).toContain("Daily credit limit reached")
-      expect(result.dailyLimit).toBe(50)
-      expect(result.dailySpent).toBe(50)
+      expect(result.dailyLimit).toBe(30)
+      expect(result.dailySpent).toBe(30)
       expect(result.watermark).toBe(true)
     })
 
