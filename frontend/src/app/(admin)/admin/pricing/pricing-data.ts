@@ -16,7 +16,7 @@ export interface SubscriptionTier {
 }
 
 export const SUBSCRIPTION_TIERS: readonly SubscriptionTier[] = [
-  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 250, perCredit: null, llmRequests: "20/mo", estimatedCost: 5, marginMonthly: null, marginAnnual: null, notes: "50 cr/day, VEO 3 blocked, watermark" },
+  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 150, perCredit: null, llmRequests: "20/mo", estimatedCost: 3, marginMonthly: null, marginAnnual: null, notes: "One-time credits, 30 cr/day, VEO 3 blocked, watermark" },
   { name: "Basic", priceMonthly: 12, priceAnnual: 9, credits: 475, perCredit: 0.025, llmRequests: "100/mo", estimatedCost: 9.5, marginMonthly: 21, marginAnnual: -6 },
   { name: "Standard", priceMonthly: 29, priceAnnual: 24, credits: 1175, perCredit: 0.025, llmRequests: "300/mo", estimatedCost: 23.5, marginMonthly: 19, marginAnnual: 2 },
   { name: "Pro", priceMonthly: 59, priceAnnual: 49, credits: 2650, perCredit: 0.022, llmRequests: "1,000/mo", estimatedCost: 53, marginMonthly: 10, marginAnnual: -8 },
@@ -31,10 +31,10 @@ export interface TopUpPackage {
 }
 
 export const TOPUP_PACKAGES: readonly TopUpPackage[] = [
-  { name: "Small", price: 10, credits: 275, perCredit: 0.036 },
-  { name: "Medium", price: 25, credits: 750, perCredit: 0.033 },
-  { name: "Large", price: 50, credits: 1650, perCredit: 0.030 },
-  { name: "XL", price: 100, credits: 3500, perCredit: 0.029 },
+  { name: "Small", price: 10, credits: 150, perCredit: 0.067 },
+  { name: "Medium", price: 25, credits: 450, perCredit: 0.056 },
+  { name: "Large", price: 50, credits: 1000, perCredit: 0.050 },
+  { name: "XL", price: 100, credits: 2200, perCredit: 0.045 },
 ] as const
 
 export interface LLMPricing {
@@ -110,8 +110,8 @@ export interface ModelReferenceData {
 export const CREDIT_VALUE_USD = [REMOVED]
 
 /** [comment removed] */
-export const SELL_PRICE_PER_CREDIT_MAX = 0.04   // Basic tier ($10/275cr)
-export const SELL_PRICE_PER_CREDIT_MIN = 0.027  // Business tier
+export const SELL_PRICE_PER_CREDIT_MAX = [REMOVED]  // Top-up ($10/150cr)
+export const SELL_PRICE_PER_CREDIT_MIN = [REMOVED]  // Business tier ($129/5600cr)
 
 /**
  * [comment removed]

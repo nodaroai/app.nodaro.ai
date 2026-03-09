@@ -221,7 +221,7 @@ describe("TOPUP_PACKAGES", () => {
       expect(pkg.priceId).toBeTruthy()
       expect(pkg.credits).toBeGreaterThan(0)
       expect(pkg.price).toBeGreaterThan(0)
-      expect(pkg.perCredit).toMatch(/^\$\d+\.\d{2}$/)
+      expect(pkg.perCredit).toMatch(/^\$\d+\.\d{2,3}$/)
     }
   })
 

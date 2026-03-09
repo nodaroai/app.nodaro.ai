@@ -231,7 +231,7 @@ export default function PricingPage() {
                       ? billingCycle === "annual"
                         ? `$${tier.priceAnnual * 12}/yr \u00b7 Save ${savings}%`
                         : "Billed monthly"
-                      : `${tier.credits} credits / month`}
+                      : `${tier.credits} free credits (one-time)`}
                   </p>
                 </div>
 

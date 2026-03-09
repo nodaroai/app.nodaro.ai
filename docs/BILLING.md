@@ -43,7 +43,7 @@ Supabase (PostgreSQL)
 
 | Tier | Monthly | Annual | Credits/mo | LLM Requests | Storage | Paddle Price Key |
 |------|---------|--------|-----------|-------------|---------|-----------------|
-| Free | $0 | $0 | 50 | 20 | 1 GB | n/a |
+| Free | $0 | $0 | 150 (one-time) | 20 | 1 GB | n/a |
 | Basic | $12/mo | $9/mo ($108/yr) | 95 | 100 | 10 GB | `basic_monthly` |
 | Standard | $29/mo | $24/mo ($288/yr) | 235 | 300 | 25 GB | `standard_monthly` |
 | Pro | $59/mo | $49/mo ($588/yr) | 530 | 1,000 | 50 GB | `pro_monthly` |
@@ -53,10 +53,10 @@ Supabase (PostgreSQL)
 
 | Package | Price | Credits | Per Credit | Paddle Price Key |
 |---------|-------|---------|------------|-----------------|
-| Pack A | $10 | 55 | $0.18 | `credits_55` |
-| Pack B | $25 | 150 | $0.17 | `credits_150` |
-| Pack C | $50 | 330 | $0.15 | `credits_330` |
-| Pack D | $100 | 700 | $0.14 | `credits_700` |
+| Pack A | $10 | 150 | $0.07 | `credits_150` |
+| Pack B | $25 | 450 | $0.06 | `credits_450` |
+| Pack C | $50 | 1,000 | $0.05 | `credits_1000` |
+| Pack D | $100 | 2,200 | $0.05 | `credits_2200` |
 
 Top-up credits never expire and are deducted after subscription credits.
 

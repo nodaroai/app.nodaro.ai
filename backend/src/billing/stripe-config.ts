@@ -41,14 +41,14 @@ export const PRICE_TO_PLAN: Record<string, { plan: string; interval: "monthly" |
 }
 
 export const TOP_UPS: Record<string, number> = {
-  "price_1T8T5M6EOX16l3P85i5sCtUs": 275,
-  "price_1T8T5k6EOX16l3P8a1goDXGm": 750,
-  "price_1T8T5w6EOX16l3P8mNU7sLkU": 1650,
-  "price_1T8T6B6EOX16l3P8CmcSaJyR": 3500,
+  "price_1T8T5M6EOX16l3P85i5sCtUs": 150,
+  "price_1T8T5k6EOX16l3P8a1goDXGm": 450,
+  "price_1T8T5w6EOX16l3P8mNU7sLkU": 1000,
+  "price_1T8T6B6EOX16l3P8CmcSaJyR": 2200,
 }
 
 export const TIER_CREDITS: Record<string, number> = {
-  free: 250,
+  free: 150,
   basic: 475,
   standard: 1175,
   pro: 2650,
@@ -78,7 +78,7 @@ export const RETENTION_DAYS = {
 } as const
 
 export const FREE_TIER_RESTRICTIONS = {
-  dailyCreditCap: 50,
+  dailyCreditCap: 30,
   blockedModels: ["veo3", "veo3.1", "sora2-pro"],
   watermark: true,
 } as const

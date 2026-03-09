@@ -50,7 +50,7 @@ vi.mock("@/billing/stripe-config.js", () => ({
     return map[priceId] || "free"
   },
   TIER_CREDITS: {
-    free: 250,
+    free: 150,
     basic: 475,
     standard: 1175,
     pro: 2650,
@@ -266,7 +266,7 @@ describe("GET /v1/billing/transactions", () => {
         stripe_transaction_id: "stripe_txn_2",
         type: "topup",
         amount_usd: 10,
-        credits_granted: 55,
+        credits_granted: 150,
         tier: null,
         created_at: "2026-01-20T12:00:00Z",
       },
