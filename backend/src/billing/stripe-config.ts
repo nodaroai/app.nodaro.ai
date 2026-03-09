@@ -49,10 +49,10 @@ export const TOP_UPS: Record<string, number> = {
 
 export const TIER_CREDITS: Record<string, number> = {
   free: 150,
-  basic: 475,
-  standard: 1175,
-  pro: 2650,
-  business: 5600,
+  basic: 250,
+  standard: 850,
+  pro: 2000,
+  business: 4800,
 }
 
 export const TIER_LLM_LIMITS: Record<string, number> = {

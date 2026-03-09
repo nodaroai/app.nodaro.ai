@@ -50,14 +50,14 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     id: "basic",
     name: "Basic",
     priceMonthly: 12,
-    priceAnnual: 9,
+    priceAnnual: 10,
     priceIdMonthly: "price_1T8T2r6EOX16l3P8KLqPT0Gp",
     priceIdAnnual: "price_1T92PK6EOX16l3P8f7VcNi21",
-    credits: 475,
+    credits: 250,
     llmRequests: 100,
     storage: "10 GB",
     features: [
-      "475 credits / month",
+      "250 credits / month",
       "100 LLM requests / month",
       "10 GB storage",
       "All standard models",
@@ -73,11 +73,11 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     priceAnnual: 24,
     priceIdMonthly: "price_1T8T1m6EOX16l3P8TuFGxcZr",
     priceIdAnnual: "price_1T8T266EOX16l3P8g39cb6jm",
-    credits: 1175,
+    credits: 850,
     llmRequests: 300,
     storage: "25 GB",
     features: [
-      "1,175 credits / month",
+      "850 credits / month",
       "300 LLM requests / month",
       "25 GB storage",
       "All models incl. premium",
@@ -93,11 +93,11 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     priceAnnual: 49,
     priceIdMonthly: "price_1T8Swg6EOX16l3P8NNctdzT3",
     priceIdAnnual: "price_1T8Syr6EOX16l3P8z92jaRh6",
-    credits: 2650,
+    credits: 2000,
     llmRequests: 1000,
     storage: "50 GB",
     features: [
-      "2,650 credits / month",
+      "2,000 credits / month",
       "1,000 LLM requests / month",
       "50 GB storage",
       "All models incl. premium",
@@ -114,11 +114,11 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     priceAnnual: 109,
     priceIdMonthly: "price_1T92U26EOX16l3P8fDbjHHi7",
     priceIdAnnual: "price_1T8T0s6EOX16l3P8VRjmbJhr",
-    credits: 5600,
+    credits: 4800,
     llmRequests: null,
     storage: "200 GB",
     features: [
-      "5,600 credits / month",
+      "4,800 credits / month",
       "Unlimited LLM requests",
       "200 GB storage",
       "All models incl. premium",
@@ -156,6 +156,12 @@ export function getTierPriceId(tier: PricingTier, cycle: BillingCycle): string |
 export function getAnnualSavingsPercent(tier: PricingTier): number {
   if (tier.priceMonthly <= 0) return 0
   return Math.round(((tier.priceMonthly - tier.priceAnnual) / tier.priceMonthly) * 100)
+}
+
+/** Calculate how much $/year is saved by choosing annual over monthly billing. */
+export function getAnnualSavingsDollars(tier: PricingTier): number {
+  if (tier.priceMonthly <= 0) return 0
+  return (tier.priceMonthly - tier.priceAnnual) * 12
 }
 
 /** Determine billing cycle from a Stripe price ID by matching against all tiers. */
