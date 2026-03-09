@@ -69,10 +69,16 @@ export default function EmbedPage() {
 
     const onWheel = (e: WheelEvent) => {
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage(
-          { type: "nodaro:wheel", deltaX: e.deltaX, deltaY: e.deltaY },
-          "*",
-        )
+        // Try direct scrollBy first (works same-origin, no parent code needed)
+        try {
+          window.parent.scrollBy(e.deltaX, e.deltaY)
+        } catch {
+          // Cross-origin: fall back to postMessage (parent must listen)
+          window.parent.postMessage(
+            { type: "nodaro:wheel", deltaX: e.deltaX, deltaY: e.deltaY },
+            "*",
+          )
+        }
       }
     }
     window.addEventListener("wheel", onWheel, { passive: true })
@@ -86,10 +92,14 @@ export default function EmbedPage() {
       if (window.parent && window.parent !== window && e.touches.length === 1) {
         const deltaY = touchStartY - e.touches[0].clientY
         touchStartY = e.touches[0].clientY
-        window.parent.postMessage(
-          { type: "nodaro:touch", deltaX: 0, deltaY },
-          "*",
-        )
+        try {
+          window.parent.scrollBy(0, deltaY)
+        } catch {
+          window.parent.postMessage(
+            { type: "nodaro:touch", deltaX: 0, deltaY },
+            "*",
+          )
+        }
       }
     }
     window.addEventListener("touchstart", onTouchStart, { passive: true })
