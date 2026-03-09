@@ -5,7 +5,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Sparkles, Trash2, Info } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { TagTextarea } from "./tag-textarea"
 import {
   Select,
   SelectContent,
@@ -40,7 +40,7 @@ import {
   SceneGraphPreviewInline,
 } from "./composition-shared"
 
-export function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<VideoComposerData>) {
+export function VideoComposerConfig({ data, onUpdate, sources, nodeRefs }: ConfigProps<VideoComposerData>) {
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
 
   return (
@@ -49,12 +49,13 @@ export function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<Vid
 
       <div>
         <Label className="mb-1.5 block">Composition Prompt</Label>
-        <Textarea
+        <TagTextarea
           placeholder="Describe the style of video you want: cinematic product showcase with slow fades, energetic social reel with zoom cuts..."
           value={data.compositionPrompt ?? ""}
-          onChange={(e) => onUpdate({ compositionPrompt: e.target.value })}
+          onChange={(v) => onUpdate({ compositionPrompt: v })}
           rows={3}
           className="text-sm"
+          nodeRefs={nodeRefs}
         />
       </div>
 
@@ -84,17 +85,18 @@ export function VideoComposerConfig({ data, onUpdate, sources }: ConfigProps<Vid
 const LazyAfterEffectsPreview = lazy(() => import("@/components/editor/after-effects-preview").then(m => ({ default: m.AfterEffectsPreview })))
 const LazyAfterEffectsPlayerPreview = lazy(() => import("@/components/editor/after-effects-player-preview").then(m => ({ default: m.AfterEffectsPlayerPreview })))
 
-export function AfterEffectsConfig({ data, onUpdate }: { data: AfterEffectsData; onUpdate: (d: Partial<AfterEffectsData>) => void }) {
+export function AfterEffectsConfig({ data, onUpdate, nodeRefs }: ConfigProps<AfterEffectsData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label className="mb-1.5 block">Effect Prompt</Label>
-        <Textarea
+        <TagTextarea
           placeholder="Describe the look: cinematic film grain with warm color grading, vignette, letterbox..."
           value={data.effectPrompt ?? ""}
-          onChange={(e) => onUpdate({ effectPrompt: e.target.value })}
+          onChange={(v) => onUpdate({ effectPrompt: v })}
           rows={3}
           className="text-sm"
+          nodeRefs={nodeRefs}
         />
       </div>
 
@@ -159,17 +161,18 @@ export function AfterEffectsConfig({ data, onUpdate }: { data: AfterEffectsData;
 
 const LazyLottieOverlayPreview = lazy(() => import("@/components/editor/lottie-overlay-preview").then(m => ({ default: m.LottieOverlayPreview })))
 
-export function LottieOverlayConfig({ data, onUpdate }: { data: LottieOverlayData; onUpdate: (d: Partial<LottieOverlayData>) => void }) {
+export function LottieOverlayConfig({ data, onUpdate, nodeRefs }: ConfigProps<LottieOverlayData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label className="mb-1.5 block">Overlay Prompt</Label>
-        <Textarea
+        <TagTextarea
           placeholder="Describe overlays: add confetti at 3 seconds, floating particles throughout..."
           value={data.overlayPrompt ?? ""}
-          onChange={(e) => onUpdate({ overlayPrompt: e.target.value })}
+          onChange={(v) => onUpdate({ overlayPrompt: v })}
           rows={3}
           className="text-sm"
+          nodeRefs={nodeRefs}
         />
       </div>
 
@@ -226,17 +229,18 @@ export function LottieOverlayConfig({ data, onUpdate }: { data: LottieOverlayDat
 
 const LazyThreeDTitlePreview = lazy(() => import("@/components/editor/three-d-title-preview").then(m => ({ default: m.ThreeDTitlePreview })))
 
-export function ThreeDTitleConfig({ data, onUpdate }: { data: ThreeDTitleData; onUpdate: (d: Partial<ThreeDTitleData>) => void }) {
+export function ThreeDTitleConfig({ data, onUpdate, nodeRefs }: ConfigProps<ThreeDTitleData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label className="mb-1.5 block">Title Prompt</Label>
-        <Textarea
+        <TagTextarea
           placeholder="Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera..."
           value={data.titlePrompt ?? ""}
-          onChange={(e) => onUpdate({ titlePrompt: e.target.value })}
+          onChange={(v) => onUpdate({ titlePrompt: v })}
           rows={3}
           className="text-sm"
+          nodeRefs={nodeRefs}
         />
       </div>
 
@@ -323,7 +327,7 @@ export function ThreeDTitleConfig({ data, onUpdate }: { data: ThreeDTitleData; o
 const LazyMotionGraphicsPreview = lazy(() => import("@/components/editor/motion-graphics-preview").then(m => ({ default: m.MotionGraphicsPreview })))
 const LazyMotionGraphicsPlayerPreview = lazy(() => import("@/components/editor/motion-graphics-player-preview").then(m => ({ default: m.MotionGraphicsPlayerPreview })))
 
-export function MotionGraphicsConfig({ data, onUpdate }: { data: MotionGraphicsData; onUpdate: (d: Partial<MotionGraphicsData>) => void }) {
+export function MotionGraphicsConfig({ data, onUpdate, nodeRefs }: ConfigProps<MotionGraphicsData>) {
   const [showInfo, setShowInfo] = useState(false)
 
   return (
@@ -369,12 +373,13 @@ export function MotionGraphicsConfig({ data, onUpdate }: { data: MotionGraphicsD
           </div>
         )}
 
-        <Textarea
+        <TagTextarea
           placeholder="Describe the motion graphic: modern lower third with name, title card, animated shapes..."
           value={data.motionPrompt ?? ""}
-          onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
+          onChange={(v) => onUpdate({ motionPrompt: v })}
           rows={3}
           className="text-sm"
+          nodeRefs={nodeRefs}
         />
       </div>
 

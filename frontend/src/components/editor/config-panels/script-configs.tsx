@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { TagTextarea } from "./tag-textarea"
 import {
   Select,
   SelectContent,
@@ -30,7 +31,7 @@ import type {
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 
-export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateScriptData>) {
+export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<GenerateScriptData>) {
   const [copied, setCopied] = useState(false)
   const script = data.generatedScript
   const results = data.generatedResults ?? []
@@ -95,11 +96,12 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
         </Select>
       </div>
       <MappableField field="styleGuide" label="Style Guide" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
+        <TagTextarea
           rows={3}
           value={data.styleGuide}
-          onChange={(e) => onUpdate({ styleGuide: e.target.value })}
+          onChange={(v) => onUpdate({ styleGuide: v })}
           placeholder="e.g. children's book illustration, watercolor..."
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="tone" label="Tone" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -271,7 +273,7 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
   )
 }
 
-export function ImageToTextConfig({ data, onUpdate }: ConfigProps<ImageToTextData>) {
+export function ImageToTextConfig({ data, onUpdate, nodeRefs }: ConfigProps<ImageToTextData>) {
   const imageToTextData = data as ImageToTextData
   const results = imageToTextData.generatedResults ?? []
   const activeIndex = imageToTextData.activeResultIndex ?? 0
@@ -295,12 +297,13 @@ export function ImageToTextConfig({ data, onUpdate }: ConfigProps<ImageToTextDat
 
       <div>
         <Label>Custom Prompt (optional)</Label>
-        <Textarea
+        <TagTextarea
           value={imageToTextData.customPrompt ?? ""}
-          onChange={(e) => onUpdate({ customPrompt: e.target.value })}
+          onChange={(v) => onUpdate({ customPrompt: v })}
           placeholder="Override the detail level with a custom instruction..."
           rows={3}
           maxLength={2000}
+          nodeRefs={nodeRefs}
         />
         <p className="text-xs text-muted-foreground mt-1">
           If provided, overrides the detail level preset.
