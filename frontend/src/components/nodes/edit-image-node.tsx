@@ -30,7 +30,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "recraft-upscale", 1)
+  const credits = useModelCredits(nodeData.provider ?? "recraft-upscale", 2)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

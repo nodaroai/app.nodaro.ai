@@ -13,7 +13,7 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as VideoComposerData | undefined
   const nodeData = currentNodeData ?? (data as VideoComposerData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits("video-composer", 2)
+  const credits = useModelCredits("video-composer", 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"

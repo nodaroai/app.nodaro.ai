@@ -21,7 +21,7 @@ const generateMusicBody = z.object({
 })
 
 export async function generateMusicRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-music", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "musicgen" }) }, async (req, reply) => {
+  app.post("/v1/generate-music", { preHandler: creditGuard(() => "generate-music") }, async (req, reply) => {
     const parsed = generateMusicBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -41,8 +41,8 @@ export async function generateMusicRoutes(app: FastifyInstance) {
       })
     }
 
-    // Determine model identifier for credit check (default to musicgen)
-    const modelIdentifier = provider ?? "musicgen"
+    // Use node-type identifier (avoids collision with video "minimax")
+    const modelIdentifier = "generate-music"
 
     // Build enriched prompt with genre/mood if provided
     const parts = [prompt]

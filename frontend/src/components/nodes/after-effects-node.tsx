@@ -13,7 +13,7 @@ function AfterEffectsNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as AfterEffectsData | undefined
   const nodeData = currentNodeData ?? (data as AfterEffectsData)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits("after-effects", 2)
+  const credits = useModelCredits("after-effects", 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"

@@ -16,7 +16,7 @@ const generateScriptBody = z.object({
 })
 
 export async function generateScriptRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-script", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "gemini" }) }, async (req, reply) => {
+  app.post("/v1/generate-script", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "generate-script" }) }, async (req, reply) => {
     const parsed = generateScriptBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -37,7 +37,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
     }
 
     // Determine model identifier for credit check (default to gemini)
-    const modelIdentifier = provider ?? "gemini"
+    const modelIdentifier = provider ?? "generate-script"
 
     const { data: job, error } = await supabase
       .from("jobs")

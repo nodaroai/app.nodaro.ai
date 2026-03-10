@@ -22,7 +22,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const credits = useModelCredits("elevenlabs-dialogue", 1)
+  const credits = useModelCredits("elevenlabs-dialogue", 4)
 
   const dialogue = nodeData.dialogue ?? []
   const uniqueVoices = new Set(dialogue.map((l) => l.voice))

@@ -205,7 +205,7 @@ export async function runKieTask(
   input: Record<string, unknown>,
   maxAttempts: number = MAX_POLL_ATTEMPTS,
   onProgress?: ProgressCallback
-): Promise<{ resultJson: KieResultJson; costTime?: number }> {
+): Promise<{ resultJson: KieResultJson; costTime?: number; rawRecordInfo?: Record<string, unknown> }> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -370,7 +370,9 @@ export async function runKieTask(
         )
       }
 
-      return { resultJson, costTime: detailData.data.costTime }
+      // Capture the full raw response for credit audit (credit-related fields may be hidden)
+      const rawRecordInfo = detailData as unknown as Record<string, unknown>
+      return { resultJson, costTime: detailData.data.costTime, rawRecordInfo }
     }
 
     // NOTE: KIE.ai API returns "fail" not "failed"!
@@ -411,7 +413,7 @@ export async function runVeoTask(
   model: string,
   prompt: string,
   imageUrls?: string[]
-): Promise<{ resultJson: KieResultJson; costTime?: number; taskId: string }> {
+): Promise<{ resultJson: KieResultJson; costTime?: number; taskId: string; rawRecordInfo?: Record<string, unknown> }> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -497,20 +499,20 @@ export async function runVeoTask(
   const taskId = createData.data.taskId
   console.log(`[KIE.ai VEO] Task created: ${taskId}`)
 
-  const resultUrls = await pollVeoRecordInfo(taskId, "VEO", apiKey)
-  return { resultJson: { resultUrls }, costTime: undefined, taskId }
+  const { resultUrls, rawRecordInfo } = await pollVeoRecordInfo(taskId, "VEO", apiKey)
+  return { resultJson: { resultUrls }, costTime: undefined, taskId, rawRecordInfo }
 }
 
 /**
  * Shared VEO record-info polling loop.
  * Polls GET /api/v1/veo/record-info?taskId= until successFlag=1 (success) or 2/3 (failure).
- * Returns resultUrls on success; throws on failure or timeout.
+ * Returns resultUrls + raw response on success; throws on failure or timeout.
  */
 async function pollVeoRecordInfo(
   taskId: string,
   label: string,
   apiKey: string,
-): Promise<string[]> {
+): Promise<{ resultUrls: string[]; rawRecordInfo?: Record<string, unknown> }> {
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
     attempts++
@@ -559,7 +561,7 @@ async function pollVeoRecordInfo(
         throw createSanitizedError(`${label} succeeded but no resultUrls found`, "Video generation")
       }
       console.log(`[KIE.ai ${label}] Complete! URLs: ${resultUrls.join(", ")}`)
-      return resultUrls
+      return { resultUrls, rawRecordInfo: detailData as unknown as Record<string, unknown> }
     }
 
     if (successFlag === 2 || successFlag === 3) {
@@ -640,7 +642,7 @@ export async function runVeoExtendTask(
 
   console.log(`[KIE.ai VEO Extend] Task created: ${extendTaskId}`)
 
-  const resultUrls = await pollVeoRecordInfo(extendTaskId, "VEO Extend", apiKey)
+  const { resultUrls } = await pollVeoRecordInfo(extendTaskId, "VEO Extend", apiKey)
   return { resultJson: { resultUrls }, taskId: extendTaskId }
 }
 
@@ -754,6 +756,6 @@ export async function runVeo4kTask(
   const fourKTaskId = createData.data?.taskId ?? taskId
   console.log(`[KIE.ai VEO 4K] Task processing: ${fourKTaskId}`)
 
-  const resultUrls = await pollVeoRecordInfo(fourKTaskId, "VEO 4K", apiKey)
+  const { resultUrls } = await pollVeoRecordInfo(fourKTaskId, "VEO 4K", apiKey)
   return { resultJson: { resultUrls }, taskId: fourKTaskId }
 }

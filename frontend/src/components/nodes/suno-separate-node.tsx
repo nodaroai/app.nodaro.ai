@@ -16,7 +16,8 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const audioUrl = nodeData.generatedAudioUrl ?? nodeData.vocalUrl
-  const credits = useModelCredits("suno-separate", 2)
+  const separateCreditId = nodeData.type === "split_stem" ? "suno-separate-stem" : "suno-separate"
+  const credits = useModelCredits(separateCreditId, nodeData.type === "split_stem" ? 10 : 5)
 
   return (
     <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>

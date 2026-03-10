@@ -24,7 +24,7 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "elevenlabs-turbo", 1)
+  const credits = useModelCredits(nodeData.provider ?? "elevenlabs-turbo", 4)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

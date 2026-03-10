@@ -7,6 +7,7 @@ import { hasCredits } from "@/lib/edition";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/hooks/use-model-credits";
+import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import type { GeneratedResult } from "@/types/nodes";
 import {
   NODE_CREDIT_COSTS,
@@ -73,15 +74,9 @@ export async function handleRun(
         });
         const { edges: allEdges } = useWorkflowStore.getState();
         const estimatedCost = executableNodes.reduce((sum, node) => {
-          const data = node.data as Record<string, unknown>;
-          const provider = data.provider as string | undefined;
-          let cost: number;
-          if (provider) {
-            const cached = getCachedCredits(provider);
-            cost = cached !== undefined ? cached : (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1);
-          } else {
-            cost = NODE_CREDIT_COSTS[node.type ?? ""] ?? 1;
-          }
+          const modelId = getModelIdentifier(node);
+          const cached = getCachedCredits(modelId);
+          const cost = cached !== undefined ? cached : (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1);
           const multiplier = getFanOutMultiplier(node, nodes, allEdges);
           return sum + cost * multiplier;
         }, 0);

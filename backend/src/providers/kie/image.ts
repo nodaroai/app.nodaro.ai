@@ -13,6 +13,7 @@ import type {
 import { createSanitizedError, runKieTask } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
+import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
 // Nano Banana 2 uses its own output_format from extraParams (jpg default), so it is NOT included.
@@ -159,11 +160,11 @@ export class KieImageProvider
 
     // Flux Kontext uses a special endpoint (not standard createTask)
     const isKontext = provider === "flux-kontext" || provider === "flux-kontext-max"
-    const { resultJson } = isKontext
+    const result = isKontext
       ? await runFluxKontextTask(modelConfig.model, input)
       : await runKieTask(modelConfig.model, input)
 
-    const imageUrl = resultJson.resultUrls?.[0]
+    const imageUrl = result.resultJson.resultUrls?.[0]
     if (!imageUrl) {
       throw createSanitizedError(
         "image task succeeded but no URL in resultUrls",
@@ -174,6 +175,17 @@ export class KieImageProvider
     console.log(
       `[KIE.ai] Image completed: ${imageUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
+
+    // Log credit audit entry (fire-and-forget)
+    const rawInfo = "rawRecordInfo" in result ? result.rawRecordInfo : undefined
+    logCreditAudit({
+      modelKey: provider,
+      expectedKieCredits: modelConfig.credits,
+      modelConfig: { ...(extraParams ?? {}), provider },
+      rawResponseSample: rawInfo,
+      actualKieCredits: extractCreditFields(rawInfo)?.credits as number | undefined,
+      notes: "image-generation",
+    })
 
     return { url: imageUrl, cost: modelConfig.cost }
   }

@@ -30,7 +30,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const credits = useModelCredits("kling-motion", 5)
+  const credits = useModelCredits("motion-transfer", 32)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

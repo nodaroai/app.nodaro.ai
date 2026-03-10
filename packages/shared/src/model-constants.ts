@@ -30,13 +30,15 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution"> =
   "flux-flex": "resolution",
   "flux-i2i": "resolution",
   "flux-pro-i2i": "resolution",
+  "seedream": "quality",
+  "seedream-edit": "quality",
   "seedream-5-lite": "quality",
   "seedream-5-lite-i2i": "quality",
 }
 
 
 // Models where quality=high triggers composite credit identifier
-export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream", "seedream-5-lite", "seedream-5-lite-i2i"])
+export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "seedream", "seedream-edit", "seedream-5-lite", "seedream-5-lite-i2i"])
 
 // Models where resolution=2K triggers composite credit identifier
 export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux-flex", "flux-i2i"])
@@ -181,7 +183,6 @@ export const LIP_SYNC_PROVIDERS = [
   "kling-avatar",
   "kling-avatar-pro",
   "infinitalk",
-  "hailuo-avatar",
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
 
@@ -278,4 +279,50 @@ export const RENDERING_SPEED_SUPPORT = new Set([
 export const GUIDANCE_SCALE_SUPPORT: Record<string, { min: number; max: number; step: number; default: number }> = {
   "qwen-i2i": { min: 1, max: 20, step: 0.5, default: 7 },
   "qwen-edit": { min: 1, max: 20, step: 0.5, default: 7 },
+}
+
+// =====================================================================
+// Video variable pricing — duration-based and audio-addon pricing
+// =====================================================================
+
+/**
+ * Video models where credit cost varies by duration.
+ * Maps provider key → duration tier breakpoints.
+ * Values are verified by the pricing verification script (backend/scripts/verify-kie-pricing.ts).
+ * TODO: Run verification script and update costs after confirming actual KIE pricing.
+ */
+export const DURATION_PRICED_PROVIDERS = new Set([
+  "kling-3.0",
+  // Other models may be added after verification confirms variable pricing
+])
+
+/**
+ * Video models where enabling audio/sound incurs an additional cost.
+ * The audio addon is expressed as a separate composite identifier suffix.
+ */
+export const AUDIO_ADDON_PROVIDERS = new Set([
+  "kling-3.0",
+  // Other models may be added after verification
+])
+
+/**
+ * Video variable pricing config — which params affect credit cost per model.
+ * "duration" = cost varies by video length
+ * "duration+audio" = cost varies by length AND audio on/off
+ */
+export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio"> = {
+  "kling-3.0": "duration+audio",
+}
+
+/**
+ * Duration tier breakpoints for variable-priced video models.
+ * Maps provider → array of { maxSeconds, suffix } in ascending order.
+ * The first tier whose maxSeconds >= requested duration is used.
+ */
+export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; suffix: string }>> = {
+  "kling-3.0": [
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 10, suffix: "10s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
 }

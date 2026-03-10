@@ -19,7 +19,7 @@ import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateScriptData
-  const credits = useModelCredits("gemini", 0)
+  const credits = useModelCredits("generate-script", 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const generateSceneImage = useWorkflowStore((s) => s.generateSceneImage)

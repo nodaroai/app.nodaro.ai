@@ -79,7 +79,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "kling-avatar", 2)
+  const lipSyncProvider = nodeData.provider ?? "kling-avatar"
+  const credits = useModelCredits(lipSyncProvider, lipSyncProvider === "kling-avatar" ? 13 : 19)
 
   // Get all connected nodes to this node (deduplicated by node ID)
   const connectedNodes = useMemo(() => {
