@@ -28,8 +28,8 @@ const TEXT_SIZES = {
 function LogoImg({ className, alt = "" }: { className?: string; alt?: string }) {
   return (
     <>
-      <img src="/logo-light.svg" alt={alt} className={cn("dark:hidden", className)} />
-      <img src="/logo-dark.svg" alt={alt} className={cn("hidden dark:block", className)} />
+      <img src="/logo-light.svg?v=2" alt={alt} className={cn("dark:hidden", className)} />
+      <img src="/logo-dark.svg?v=2" alt={alt} className={cn("hidden dark:block", className)} />
     </>
   )
 }
