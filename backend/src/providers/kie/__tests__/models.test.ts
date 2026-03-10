@@ -24,8 +24,8 @@ describe("getKieModelConfig", () => {
     const config = getKieModelConfig("video", "veo3")
     expect(config).not.toBeNull()
     expect(config!.model).toBe("veo3")
-    expect(config!.credits).toBe(400)
-    expect(config!.cost).toBe(2.0)
+    expect(config!.credits).toBe(250)
+    expect(config!.cost).toBe(1.25)
     expect(config!.allowedDurations).toEqual([8])
   })
 
@@ -33,7 +33,7 @@ describe("getKieModelConfig", () => {
     const config = getKieModelConfig("tts", "elevenlabs-turbo")
     expect(config).not.toBeNull()
     expect(config!.model).toBe("elevenlabs/text-to-speech-turbo-2-5")
-    expect(config!.credits).toBe(10)
+    expect(config!.credits).toBe(6)
   })
 
   it("returns null for unknown category/provider", () => {
@@ -62,8 +62,8 @@ describe("isKieSupported", () => {
 describe("getKieCost", () => {
   it("returns cost for a known model", () => {
     expect(getKieCost("image", "nano-banana")).toBe(0.02)
-    expect(getKieCost("video", "veo3")).toBe(2.0)
-    expect(getKieCost("music", "suno")).toBe(0.1)
+    expect(getKieCost("video", "veo3")).toBe(1.25)
+    expect(getKieCost("music", "suno")).toBe(0.06)
   })
 
   it("returns 0 for an unknown model", () => {

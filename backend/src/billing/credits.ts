@@ -76,9 +76,9 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   //
   // ── Image Generation ──
   "nano-banana": 2,              // 4 KIE cr, $0.02
-  "nano-banana-2": 2,             // 4 KIE cr, $0.02 (1K default)
-  "nano-banana-2:2K": 3,          // ~6 KIE cr, $0.03
-  "nano-banana-2:4K": 5,          // ~10 KIE cr, $0.05
+  "nano-banana-2": 3,             // 8 KIE cr, $0.04 (1K default)
+  "nano-banana-2:2K": 4,          // 12 KIE cr, $0.06
+  "nano-banana-2:4K": 6,          // 18 KIE cr, $0.09
   "nano-banana-pro": 6,          // 18 KIE cr, $0.09 (1K/2K default)
   "nano-banana-pro:4K": 8,       // 24 KIE cr, $0.12
   ***REDACTED-OSS-SCRUB***
@@ -95,19 +95,19 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "qwen": 2,                     // 4 KIE cr, $0.02
   "seedream": 3,                 // 6.5 KIE cr, $0.032
   ***REDACTED-OSS-SCRUB***
-  "seedream-5-lite": 3,          // 6.5 KIE cr, $0.032 (basic default)
-  "seedream-5-lite:high": 5,     // ~10 KIE cr, $0.05 estimated (4K)
+  ***REDACTED-OSS-SCRUB***
+  "seedream-5-lite:high": 5,     // estimated (4K)
   "flux-flex": 5,                // 14 KIE cr, $0.07 (1K default)
   "flux-flex:2K": 8,             // 24 KIE cr, $0.12
   ***REDACTED-OSS-SCRUB***
-  "flux-kontext": 4,             // ~10 KIE cr, $0.05
-  "flux-kontext-max": 7,         // ~20 KIE cr, $0.10
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Image Editing ──
-  "recraft-upscale": 2,          // 6 KIE cr, $0.03
-  "recraft-remove-bg": 2,            // KIE backend, $0.03
-  "nano-banana-edit": 2,         // 6 KIE cr, $0.03
-  "topaz-image-upscale": 2,      // 6 KIE cr, $0.03
-  "grok-upscale": 2,             // 4 KIE cr, $0.02
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "topaz-image-upscale": 4,      // 10 KIE cr, $0.05 (2K default)
+  "grok-upscale": 4,             // 10 KIE cr, $0.05
   // ── Image-to-Image ──
   "flux-i2i": 5,                 // 14 KIE cr, $0.07 (1K default)
   "flux-i2i:2K": 8,              // 24 KIE cr, $0.12
@@ -122,89 +122,86 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ideogram-remix": 6,           // 18 KIE cr, $0.09 (BALANCED default)
   "ideogram-remix:TURBO": 4,     // 12 KIE cr, $0.06
   "ideogram-remix:QUALITY": 8,   // 24 KIE cr, $0.12
-  "ideogram-reframe": 6,         // 18 KIE cr, $0.09 (BALANCED default)
-  "ideogram-reframe:TURBO": 4,   // 12 KIE cr, $0.06
-  "ideogram-reframe:QUALITY": 8, // 24 KIE cr, $0.12
+  "ideogram-reframe": 3,         // 7 KIE cr, $0.035 (V3 Reframe BALANCED)
+  "ideogram-reframe:TURBO": 2,   // 3.5 KIE cr, $0.0175
+  "ideogram-reframe:QUALITY": 4, // 10 KIE cr, $0.05
   "qwen-i2i": 2,                 // 4 KIE cr, $0.02
-  "qwen-edit": 2,                // 4 KIE cr, $0.02
+  ***REDACTED-OSS-SCRUB***
   "seedream-edit": 3,            // 6.5 KIE cr, $0.032
   ***REDACTED-OSS-SCRUB***
-  "seedream-5-lite-i2i": 3,      // 6.5 KIE cr, $0.032 (basic default)
-  "seedream-5-lite-i2i:high": 5, // ~10 KIE cr, $0.05 estimated (4K)
+  ***REDACTED-OSS-SCRUB***
+  "seedream-5-lite-i2i:high": 5, // estimated (4K)
   // ── Video Generation (I2V / T2V) ──
-  "minimax": 25,                 // 80 KIE cr, $0.40
-  "veo3": 125,                   // 400 KIE cr, $2.00
-  "veo3.1": 79,                  // 250 KIE cr, $1.25
-  "kling": 22,                   // 70 KIE cr, $0.35
-  "kling-turbo": 16,             // 50 KIE cr, $0.25
-  "kling-3.0": 32,               // $0.50 (flat fallback — variable pricing entries below)
-  "kling-3.0:5s": 32,             // 5s duration (TODO: verify with pricing script)
-  "kling-3.0:10s": 32,            // 10s duration (TODO: verify — may be higher)
-  "kling-3.0:15s": 32,            // 15s duration (TODO: verify — may be higher)
-  "kling-3.0:5s:audio": 32,       // 5s + audio (TODO: verify audio addon cost)
-  "kling-3.0:10s:audio": 32,      // 10s + audio (TODO: verify)
-  "kling-3.0:15s:audio": 32,      // 15s + audio (TODO: verify)
-  "grok-i2v": 19,                // 60 KIE cr, $0.30
-  "sora2-pro": 63,               // 200 KIE cr, $1.00
-  "seedance": 32,                // 100 KIE cr, $0.50
-  "wan-i2v": 25,                 // 80 KIE cr, $0.40
-  "wan-turbo": 13,               // 40 KIE cr, $0.20
-  "hailuo-2.3-pro": 32,          // 100 KIE cr, $0.50
-  "hailuo-2.3": 19,              // 60 KIE cr, $0.30
-  "hailuo-standard": 16,         // 50 KIE cr, $0.25
-  "sora2": 38,                   // 120 KIE cr, $0.60
-  "bytedance-lite": 16,          // 50 KIE cr, $0.25
-  "bytedance-pro": 22,           // 70 KIE cr, $0.35
-  "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30
-  "kling-master": 22,            // 70 KIE cr, $0.35
-  "runway-kie": 32,              // 100 KIE cr, $0.50
+  "minimax": 18,                 // 57 KIE cr, $0.285 (6s, 1080p)
+  "veo3": 79,                    // 250 KIE cr, $1.25 (VEO 3.1 Quality)
+  "veo3.1": 19,                  // 60 KIE cr, $0.30 (VEO 3.1 Fast)
+  "kling": 18,                   // 55 KIE cr, $0.275 (5s, no audio)
+  "kling-turbo": 14,             // 42 KIE cr, $0.21 (5s)
+  "kling-3.0": 63,               // 200 KIE cr, $1.00 (5s, audio, 1080P — 40 cr/sec)
+  "grok-i2v": 7,                 // 20 KIE cr, $0.10 (6s, 720p)
+  "sora2-pro": 47,               // 150 KIE cr, $0.75 (Pro Standard 10s)
+  "seedance": 32,                // 100 KIE cr, $0.50 (not in KIE pricing data)
+  "wan-i2v": 22,                 // 70 KIE cr, $0.35 (5s, 720p)
+  "wan-turbo": 13,               // 40 KIE cr, $0.20 (5s, 480p I2V default)
+  "hailuo-2.3-pro": 15,          // 45 KIE cr, $0.225 (6s, 768p)
+  "hailuo-2.3": 10,              // 30 KIE cr, $0.15 (6s, 768p)
+  "hailuo-standard": 10,         // 30 KIE cr, $0.15 (6s, 768p)
+  "sora2": 10,                   // 30 KIE cr, $0.15 (Standard 10s)
+  "bytedance-lite": 16,          // 50 KIE cr, $0.25 (not in KIE pricing data)
+  "bytedance-pro": 22,           // 70 KIE cr, $0.35 (not in KIE pricing data)
+  "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30 (not in KIE pricing data)
+  "kling-master": 50,            // 160 KIE cr, $0.80 (Master 5s)
+  "runway-kie": 4,               // 12 KIE cr, $0.06 (5s, 720p)
   // ── Video Extend ──
-  "veo-extend": 40,              // ~125 KIE cr, $0.63 (VEO 3.1 extend)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   // ── VEO Upscale ──
-  "veo-1080p": 25,               // ~80 KIE cr, $0.40 (VEO 3.1 1080p)
-  "veo-4k": 79,                  // ~250 KIE cr, $1.25 (VEO 3.1 4K)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Video-to-Video / Motion ──
-  "wan": 25,                     // 80 KIE cr, $0.40 (also used for T2V wan key)
-  "luma-modify": 32,             // ~100 KIE cr, $0.50
-  "topaz-video": 19,              // 60 KIE cr, $0.30
-  "motion-transfer": 32,         // 100 KIE cr, $0.50
-  "kling-motion": 32,            // 100 KIE cr, $0.50
+  "wan": 22,                     // 70 KIE cr, $0.35 (V2V 5s 720p)
+  "wan-t2v": 33,                 // 104.5 KIE cr, $0.5225 (T2V 5s 1080p default)
+  "wan-turbo-t2v": 25,           // 80 KIE cr, $0.40 (T2V 5s 720p default)
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "motion-transfer": 10,         // 30 KIE cr, $0.15 (kling 2.6 motion, 6 cr/sec * 5s)
+  "kling-motion": 10,            // 30 KIE cr, $0.15
   // ── Lip Sync ──
-  "kling-avatar": 13,            // 40 KIE cr, $0.20
-  "kling-avatar-pro": 19,        // 60 KIE cr, $0.30
-  "hailuo-avatar": 19,           // ~$0.30 estimated
+  "kling-avatar": 13,            // 40 KIE cr, $0.20 (8 cr/sec * 5s)
+  "kling-avatar-pro": 25,        // 80 KIE cr, $0.40 (16 cr/sec * 5s)
+  ***REDACTED-OSS-SCRUB***
   // ── Audio / TTS / Music ──
   "elevenlabs-v3": 4,             // direct ElevenLabs API, $0.05
-  "elevenlabs-turbo": 4,         // 10 KIE cr flat, $0.05
-  "elevenlabs-multilingual": 4,  // 10 KIE cr flat, $0.05
-  "elevenlabs": 4,               // alias for turbo
-  "elevenlabs-sfx": 4,           // 10 KIE cr flat, $0.05
+  ***REDACTED-OSS-SCRUB***
+  "elevenlabs-multilingual": 4,  // 12 KIE cr per 1K chars, $0.06
+  "elevenlabs": 2,               // alias for turbo
+  ***REDACTED-OSS-SCRUB***
   "tangoflux": 4,                // Replicate SFX, ~$0.05 estimated
-  "suno": 7,                     // 20 KIE cr, $0.10
-  "suno-v5": 13,                 // 40 KIE cr, $0.20
-  "suno-generate": 7,            // ~20 KIE cr
-  "suno-cover": 7,               // ~20 KIE cr
-  "suno-extend": 7,              // ~20 KIE cr
-  "suno-lyrics": 2,              // cheap text-only
-  "suno-separate": 5,            // vocal separation
-  "suno-separate-stem": 10,      // full stem separation
-  "suno-music-video": 5,
+  "suno": 4,                     // 12 KIE cr, $0.06 (per generation, same for v4/v5)
+  "suno-v5": 4,                  // 12 KIE cr, $0.06
+  "suno-generate": 4,            // 12 KIE cr
+  "suno-cover": 4,               // 12 KIE cr
+  "suno-extend": 4,              // 12 KIE cr
+  ***REDACTED-OSS-SCRUB***
+  "suno-separate": 4,            // 10 KIE cr, vocal separation
+  "suno-separate-stem": 16,      // 50 KIE cr, full stem separation
+  "suno-music-video": 1,         // 2 KIE cr
   "musicgen": 7,                 // Replicate Meta MusicGen
   "lyria": 7,                    // Replicate Google Lyria 2
   "bark": 7,                     // Replicate Suno Bark
-  "elevenlabs-isolation": 1,     // 1 KIE cr, $0.005
+  "elevenlabs-isolation": 1,     // 0.2 cr/sec * ~10s = 2 KIE cr
   "whisper": 4,                   // Replicate whisper transcription
   "incredibly-fast-whisper": 4,   // Replicate fast whisper
-  "elevenlabs-stt": 4,           // 10 KIE cr, $0.05
-  "elevenlabs-dialogue": 4,     // 10 KIE cr, $0.05
+  "elevenlabs-stt": 2,           // 3.5 KIE cr per minute, $0.0175
+  "elevenlabs-dialogue": 5,     // 14 KIE cr per 1K chars, $0.07
   "voice-clone": 5,              // ElevenLabs instant voice clone
   "elevenlabs-voice-changer": 4,  // ElevenLabs speech-to-speech
   "elevenlabs-dubbing": 8,        // ElevenLabs dubbing (async)
   "elevenlabs-voice-remix": 4,    // ElevenLabs voice remix/preview
   "elevenlabs-voice-design": 5,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
-  "infinitalk": 19,              // 60 KIE cr, $0.30
+  "infinitalk": 19,              // 60 KIE cr, $0.30 (12 cr/sec * 5s at 720p)
   // ── Processing ──
   "topaz": 1,                     // processing
   "ffmpeg": 1,
@@ -242,10 +239,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "speed-ramp": 0,
   "loop-video": 0,
   "fade-video": 0,
-  "generate-music": 7,
-  "text-to-audio": 4,
+  "generate-music": 4,
+  "text-to-audio": 1,
   "audio-isolation": 1,
-  "text-to-dialogue": 4,
+  "text-to-dialogue": 5,
   "image-to-text": 5,
   "voice-changer": 4,
   "dubbing": 8,

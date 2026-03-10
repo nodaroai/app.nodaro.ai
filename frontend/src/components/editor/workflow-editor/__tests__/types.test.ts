@@ -106,8 +106,8 @@ describe("NODE_CREDIT_COSTS", () => {
     expect(NODE_CREDIT_COSTS["composite"]).toBe(0)
   })
 
-  it("has image-to-video at 22 credits", () => {
-    expect(NODE_CREDIT_COSTS["image-to-video"]).toBe(22)
+  it("has image-to-video at 25 credits", () => {
+    expect(NODE_CREDIT_COSTS["image-to-video"]).toBe(25)
   })
 
   it("has lip-sync at 13 credits", () => {

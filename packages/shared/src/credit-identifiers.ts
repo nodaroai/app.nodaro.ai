@@ -44,6 +44,14 @@ export function buildCreditModelIdentifier(
   return provider
 }
 
+// T2V-specific credit overrides: some providers have different costs for T2V
+// vs I2V/V2V due to different default resolutions or colliding with image model names.
+const T2V_CREDIT_OVERRIDES: Record<string, string> = {
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+}
+
 /**
  * Compute composite model identifier for video models with duration/audio-based pricing.
  * Examples: "kling-3.0:5s", "kling-3.0:10s:audio"
@@ -51,12 +59,20 @@ export function buildCreditModelIdentifier(
  * @param provider - Video model key (e.g., "kling-3.0")
  * @param duration - Video duration in seconds
  * @param sound - Whether audio/sound is enabled
+ * @param nodeType - Node type for T2V-specific cost overrides
  */
 export function buildVideoCreditModelIdentifier(
   provider: string,
   duration?: number | string,
   sound?: boolean,
+  nodeType?: "image-to-video" | "text-to-video",
 ): string {
+  // T2V overrides: some providers cost more for text-to-video than image-to-video
+  if (nodeType === "text-to-video") {
+    const override = T2V_CREDIT_OVERRIDES[provider]
+    if (override) return override
+  }
+
   if (!DURATION_PRICED_PROVIDERS.has(provider)) {
     return provider
   }

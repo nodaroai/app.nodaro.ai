@@ -30,7 +30,11 @@ export async function extendVideoRoutes(app: FastifyInstance) {
   app.post("/v1/extend-video", {
     preHandler: creditGuard((req) => {
       const body = req.body as Record<string, unknown>
-      return (body?.provider as string) ?? "veo-extend"
+      const provider = (body?.provider as string) ?? "veo-extend"
+      if (provider === "veo-extend" && body?.model === "quality") {
+        return "veo-extend:quality"
+      }
+      return provider
     }),
   }, async (req, reply) => {
     const parsed = extendVideoBody.safeParse(req.body)

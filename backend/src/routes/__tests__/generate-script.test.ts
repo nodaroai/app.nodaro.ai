@@ -43,6 +43,7 @@ vi.mock("@/lib/admin-check.js", () => ({
 
 vi.mock("@/lib/request-helpers.js", () => ({
   extractWorkflowId: vi.fn().mockReturnValue(undefined),
+  extractForcePrivate: vi.fn().mockReturnValue(false),
 }))
 
 vi.mock("@/lib/config.js", () => ({

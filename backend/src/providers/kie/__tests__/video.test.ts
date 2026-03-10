@@ -100,7 +100,7 @@ describe("KieVideoProvider.imageToVideo", () => {
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/veo-video.mp4")
-    expect(result.cost).toBe(2.0)
+    expect(result.cost).toBe(1.25)
   })
 
   it("calls runVeoTask for veo3.1", async () => {
@@ -176,19 +176,19 @@ describe("KieVideoProvider.imageToVideo", () => {
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/kling3-video.mp4")
-    expect(result.cost).toBe(0.50)
+    expect(result.cost).toBe(1.00)
   })
 
   it("returns correct cost for each model", async () => {
     const r1 = await provider.imageToVideo("https://img.png", "test", "minimax")
-    expect(r1.cost).toBe(0.40)
+    expect(r1.cost).toBe(0.285)
 
     vi.clearAllMocks()
     mocks.mockRunKieTask.mockResolvedValue({
       resultJson: { resultUrls: ["https://cdn.kie.ai/video.mp4"] },
     })
     const r2 = await provider.imageToVideo("https://img.png", "test", "kling-turbo")
-    expect(r2.cost).toBe(0.25)
+    expect(r2.cost).toBe(0.21)
   })
 })
 
@@ -206,7 +206,7 @@ describe("KieVideoProvider.textToVideo", () => {
       undefined,
     )
     expect(result.url).toBe("https://cdn.kie.ai/video.mp4")
-    expect(result.cost).toBe(0.40)
+    expect(result.cost).toBe(0.285)
   })
 
   it("throws for unsupported model", async () => {
@@ -227,7 +227,7 @@ describe("KieVideoProvider.textToVideo", () => {
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/veo-video.mp4")
-    expect(result.cost).toBe(2.0)
+    expect(result.cost).toBe(1.25)
   })
 
   it("passes aspect ratio when provided", async () => {
@@ -260,6 +260,6 @@ describe("KieVideoProvider.textToVideo", () => {
     const callArgs = mocks.mockKling3Generate.mock.calls[0][0]
     expect(callArgs.imageUrls).toBeUndefined()
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
-    expect(result.cost).toBe(0.50)
+    expect(result.cost).toBe(1.00)
   })
 })
