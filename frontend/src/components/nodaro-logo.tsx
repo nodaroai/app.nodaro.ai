@@ -12,7 +12,7 @@ interface NodaroLogoProps {
 
 const ICON_SIZES = {
   sm: "h-[22px] w-auto",
-  md: "h-[28px] w-auto",
+  md: "h-[24px] w-auto",
   lg: "h-9 w-auto",
   xl: "h-[42px] w-auto",
 } as const
