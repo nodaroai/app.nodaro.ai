@@ -162,7 +162,7 @@ frontend/src/
   app/gallery/            — Public community gallery
   routes/                 — Route wrapper components (workflow-editor-page, etc.)
   layouts/                — DashboardLayout, AdminLayout
-  components/nodes/       — 30+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node)
+  components/nodes/       — 40+ custom node components (including 3d-title-node, motion-graphics-node, composite-node, extend-video-node, webhook-trigger-node, schedule-trigger-node, social-node, speech-to-video-node, sora-storyboard-node, 7 suno-*-nodes)
   components/editor/
     config-panel.tsx      — Thin dispatcher (~520 lines), delegates to config-panels/
     config-panels/        — 24 files: per-category node config components (image, video, audio, composition, entity, trigger, social, etc.) + tag-textarea.tsx (autocomplete for audio tags & Suno metatags)
@@ -193,7 +193,7 @@ backend/src/
   worker.ts               — BullMQ job processor (video-worker)
   render-worker.ts        — BullMQ render worker (Remotion, concurrency:1)
   orchestrator.ts         — BullMQ workflow orchestrator entry point (concurrency:2)
-  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers, social-auth, social-publish)
+  routes/                 — API routes (jobs, workflows, projects, admin-*, billing, gallery, download, user-settings, ai-writer, after-effects-ai, lottie-overlay-ai, three-d-title-ai, motion-graphics-ai, audio-isolation, text-to-dialogue, render-video, voices, voice-clones, voice-changer, dubbing, voice-remix, voice-design, forced-alignment, extend-video, workflow-execution, webhook-triggers, social-auth, social-publish, speech-to-video, sora-storyboard, suno)
   prompts/                — AI system prompts (after-effects-system.ts, lottie-overlay-system.ts, three-d-title-system.ts, motion-graphics-system.ts)
   utils/watermark.ts      — Image + video watermark functions
   providers/              — AI provider abstraction; KIE clients: `client.ts` (core + VEO), `kontext-client.ts` (Flux Kontext), `runway-client.ts` (Runway gen + extend), `luma-client.ts` (Luma Modify)
@@ -269,6 +269,7 @@ backend/src/
 - [ ] Project Folders
 - [ ] Version history per node
 - [x] New KIE models: Nano Banana 2, Seedream 5 Lite (image); Flux Kontext/Max (image edit); Runway KIE (video); Luma Modify (V2V); VEO/Runway Extend (video extend); VEO 1080p/4K upscale
+- [x] New KIE models Phase 2: Ideogram V3 (image); Kling 3.0 motion control; Topaz 4K/8K tiers; Sora watermark remover; 7 Suno ops (mashup, replace-section, style-boost, add-instrumental, add-vocals, convert-wav, upload-extend); Speech-to-Video (Wan 2.2); Sora Storyboard
 - [ ] Video generation with start+end frames (2 images → video) for supporting models
 - [ ] /v1/available-models endpoint (filter by edition + API keys)
 - [x] TTS voice browser with categories, search, audio previews
@@ -282,5 +283,5 @@ backend/src/
 
 ---
 
-*Last updated: 2026-03-08*
-*Version: 1.53.0*
+*Last updated: 2026-03-10*
+*Version: 1.54.0*

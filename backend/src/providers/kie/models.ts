@@ -763,24 +763,26 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
   // input_urls: array of image URLs (character reference)
   // video_urls: array of video URLs (motion source)
   // character_orientation: "image" (max 10s) or "video" (max 30s)
+  ***REDACTED-OSS-SCRUB***
   "kling": {
     model: "kling-2.6/motion-control",
-    credits: 30,
-    cost: 0.15,  // 6 cr/sec * ~5s = 30 KIE credits (720p default)
+    credits: 60,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "input_urls",  // Array format for input images
     extraParams: { character_orientation: "image", resolution: "720p" },
   },
 
   // Kling 3.0 Motion Control - uses createTask endpoint
-  // background_source: "input_video" or "input_image"
-  // mode: "std" or "pro"
+  // character_orientation: "image" or "video"
+  // mode: "720p" or "1080p" (NOT "std"/"pro" like video generation)
+  // background_source: "input_video" or "input_image" (optional)
+  ***REDACTED-OSS-SCRUB***
   "kling-3.0": {
     model: "kling-3.0/motion-control",
-    credits: 12,
-    ***REDACTED-OSS-SCRUB*** (720p, std mode default)
-    // NOTE: 1080p/pro = 20 KIE cr ($0.10) — handled via composite identifier
+    credits: 120,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "input_urls",
-    extraParams: { background_source: "input_video", mode: "std" },
+    extraParams: { character_orientation: "video", mode: "720p" },
   },
 }
 

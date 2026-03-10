@@ -577,8 +577,39 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
+const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video", "sora-storyboard"])
+
 export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<MotionTransferData>) {
   const provider = data.provider || "kling"
+
+  // Detect video duration from connected upstream video node's output
+  const connectedVideoUrl = useMemo(() => {
+    for (const s of sources) {
+      if (MOTION_VIDEO_NODE_TYPES.has(s.type)) {
+        const url = (s.nodeData?.generatedVideoUrl as string) || (s.nodeData?.videoUrl as string)
+        if (url) return url
+      }
+    }
+    return undefined
+  }, [sources])
+
+  useEffect(() => {
+    if (!connectedVideoUrl) {
+      if (data.videoDuration != null) onUpdate({ videoDuration: undefined })
+      return
+    }
+    const video = document.createElement("video")
+    video.preload = "metadata"
+    video.src = connectedVideoUrl
+    video.onloadedmetadata = () => {
+      if (video.duration && video.duration !== Infinity && isFinite(video.duration)) {
+        const dur = Math.ceil(video.duration)
+        if (dur !== data.videoDuration) onUpdate({ videoDuration: dur })
+      }
+    }
+    return () => { video.onloadedmetadata = null; video.src = "" }
+  }, [connectedVideoUrl])
+
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -588,8 +619,8 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="kling">Kling 2.6 (10 CR)</SelectItem>
-            <SelectItem value="kling-3.0">Kling 3.0 (4-7 CR)</SelectItem>
+            <SelectItem value="kling">Kling 2.6</SelectItem>
+            <SelectItem value="kling-3.0">Kling 3.0</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -603,20 +634,18 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         />
         <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
       </MappableField>
-      {provider === "kling" && (
-        <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <Select
-            value={data.characterOrientation || "video"}
-            onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
-          >
-            <SelectTrigger aria-label="Character Orientation"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="image">Image (same as picture, max 10s)</SelectItem>
-              <SelectItem value="video">Video (consistent with video, max 30s)</SelectItem>
-            </SelectContent>
-          </Select>
-        </MappableField>
-      )}
+      <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={data.characterOrientation || "video"}
+          onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
+        >
+          <SelectTrigger aria-label="Character Orientation"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="image">Image (same as picture{provider === "kling" ? ", max 10s" : ""})</SelectItem>
+            <SelectItem value="video">Video (consistent with video{provider === "kling" ? ", max 30s" : ""})</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
       {provider === "kling-3.0" && (
         <MappableField field="backgroundSource" label="Background Source" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
@@ -638,11 +667,16 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         >
           <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="720p">720p{provider === "kling-3.0" ? " (4 CR)" : ""}</SelectItem>
-            <SelectItem value="1080p">1080p{provider === "kling-3.0" ? " (7 CR)" : ""}</SelectItem>
+            <SelectItem value="720p">720p</SelectItem>
+            <SelectItem value="1080p">1080p</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
+      {data.videoDuration != null && (
+        <p className="text-xs text-muted-foreground px-1">
+          ~{data.videoDuration}s video detected. Cost scales with duration.
+        </p>
+      )}
       <p className="text-xs text-muted-foreground px-1">
         {provider === "kling-3.0"
           ? "Uses Kling 3.0 Motion Control via KIE.ai. Connect image and video inputs."

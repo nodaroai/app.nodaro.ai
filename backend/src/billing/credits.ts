@@ -172,10 +172,32 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "wan-turbo-t2v": 25,           // 80 KIE cr, $0.40 (T2V 5s 720p default)
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  "motion-transfer": 10,         // 30 KIE cr, $0.15 (kling 2.6 motion, 6 cr/sec * 5s)
-  "kling-motion": 10,            // 30 KIE cr, $0.15
-  "kling-3.0-motion": 4,         // 12 KIE cr, $0.06 (720p, std)
-  "kling-3.0-motion:1080p": 7,   // 20 KIE cr, $0.10 (1080p, pro)
+  // ── Motion Transfer (per-second pricing, duration-tiered) ──
+  ***REDACTED-OSS-SCRUB***
+  "kling-3.0-motion": 38,        // 10s default: 120 KIE cr, $0.60
+  "kling-3.0-motion:5s": 19,     // 60 KIE cr, $0.30
+  "kling-3.0-motion:10s": 38,    // 120 KIE cr, $0.60
+  "kling-3.0-motion:15s": 57,    // 180 KIE cr, $0.90
+  "kling-3.0-motion:30s": 113,   // 360 KIE cr, $1.80
+  ***REDACTED-OSS-SCRUB***
+  "kling-3.0-motion:1080p": 63,  // 10s default: 200 KIE cr, $1.00
+  "kling-3.0-motion:1080p:5s": 32,   // 100 KIE cr, $0.50
+  "kling-3.0-motion:1080p:10s": 63,  // 200 KIE cr, $1.00
+  "kling-3.0-motion:1080p:15s": 94,  // 300 KIE cr, $1.50
+  "kling-3.0-motion:1080p:30s": 188, // 600 KIE cr, $3.00
+  ***REDACTED-OSS-SCRUB***
+  "motion-transfer": 19,         // 10s default: 60 KIE cr, $0.30
+  "kling-motion": 19,            // alias
+  "motion-transfer:5s": 10,      // 30 KIE cr, $0.15
+  "motion-transfer:10s": 19,     // 60 KIE cr, $0.30
+  "motion-transfer:15s": 29,     // 90 KIE cr, $0.45
+  "motion-transfer:30s": 57,     // 180 KIE cr, $0.90
+  ***REDACTED-OSS-SCRUB***
+  "motion-transfer:1080p": 29,   // 10s default: 90 KIE cr, $0.45
+  "motion-transfer:1080p:5s": 15,    // 45 KIE cr, $0.225
+  "motion-transfer:1080p:10s": 29,   // 90 KIE cr, $0.45
+  "motion-transfer:1080p:15s": 43,   // 135 KIE cr, $0.675
+  "motion-transfer:1080p:30s": 85,   // 270 KIE cr, $1.35
   // ── Lip Sync ──
   "kling-avatar": 13,            // 40 KIE cr, $0.20 (8 cr/sec * 5s)
   "kling-avatar-pro": 25,        // 80 KIE cr, $0.40 (16 cr/sec * 5s)

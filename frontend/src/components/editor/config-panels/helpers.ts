@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
+import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
   prompt: ["text-prompt"],
@@ -135,6 +135,15 @@ export function getModelIdentifier(node: WorkflowNode): string {
   // Extend-video: VEO quality costs more than fast
   if (nodeType === "extend-video" && provider === "veo-extend" && data.model === "quality") {
     return "veo-extend:quality"
+  }
+
+  // Motion transfer: duration-tiered pricing
+  if (nodeType === "motion-transfer") {
+    return buildMotionCreditModelIdentifier(
+      (data.provider as string) ?? "kling",
+      (data.resolution as string) ?? "720p",
+      data.videoDuration as number | undefined,
+    )
   }
 
   // Video nodes with duration/audio-based variable pricing or T2V cost overrides

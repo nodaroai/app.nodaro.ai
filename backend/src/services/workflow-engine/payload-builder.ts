@@ -8,7 +8,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
 import { buildImagePrompt } from "../../../../packages/shared/src/prompt-builder.js"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import type { CharacterDef } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
@@ -709,9 +709,8 @@ export function buildPayload(
     case "motion-transfer": {
       const mtProvider = (data.provider as string) ?? "kling"
       const mtResolution = (data.resolution as string) ?? "720p"
-      const mtModelId = mtProvider === "kling-3.0"
-        ? (mtResolution === "1080p" ? "kling-3.0-motion:1080p" : "kling-3.0-motion")
-        : "motion-transfer"
+      const mtVideoDuration = data.videoDuration as number | undefined
+      const mtModelId = buildMotionCreditModelIdentifier(mtProvider, mtResolution, mtVideoDuration)
       return {
         jobName: "motion-transfer",
         queueName: "video-generation",
@@ -724,6 +723,7 @@ export function buildPayload(
           backgroundSource: data.backgroundSource,
           characterOrientation: data.characterOrientation,
           resolution: mtResolution,
+          videoDuration: mtVideoDuration,
           usageLogId,
         },
       }

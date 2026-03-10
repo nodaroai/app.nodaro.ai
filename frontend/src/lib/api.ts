@@ -2165,6 +2165,7 @@ export async function motionTransferApi(
   userId?: string,
   provider?: "kling" | "kling-3.0",
   backgroundSource?: "input_video" | "input_image",
+  videoDuration?: number,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, videoUrl }
   if (prompt) body.prompt = prompt
@@ -2173,6 +2174,7 @@ export async function motionTransferApi(
   if (userId) body.userId = userId
   if (provider) body.provider = provider
   if (backgroundSource) body.backgroundSource = backgroundSource
+  if (videoDuration) body.videoDuration = videoDuration
   const res = await fetch(`${API_BASE_URL}/v1/motion-transfer`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
