@@ -11,18 +11,24 @@ interface NodaroLogoProps {
 }
 
 const ICON_SIZES = {
-  sm: "h-[22px] w-auto",
-  md: "h-[24px] w-auto",
+  sm: "h-[18px] w-[18px] mt-[4px] mr-[5px]",
+  md: "h-[18px] w-[18px] mt-[4px] mr-[5px]",
   lg: "h-9 w-auto",
-  xl: "h-[38px] w-auto",
+  xl: "h-[32px] w-auto mr-[6px]",
 } as const
 
+const ICON_ONLY_SIZES = {
+  sm: "h-[18px] w-[18px] mt-[4px]",
+  md: "h-[18px] w-[18px] mt-[4px]",
+  lg: "h-9 w-auto",
+  xl: "h-[32px] w-auto",
+} as const
 
 const TEXT_SIZES = {
   sm: "text-[16px] leading-[23px]",
   md: "text-[20px] leading-[33px]",
   lg: "text-2xl",
-  xl: "text-[36px] leading-[47px]",
+  xl: "text-[36px] leading-[44px]",
 } as const
 
 function LogoImg({ className, alt = "" }: { className?: string; alt?: string }) {
@@ -42,7 +48,7 @@ export function NodaroLogo({
 }: NodaroLogoProps) {
   if (variant === "icon") {
     return (
-      <span className={cn(ICON_SIZES[size], "inline-flex", className)}>
+      <span className={cn(ICON_ONLY_SIZES[size], "inline-flex", className)}>
         <LogoImg alt="Nodaro" className="h-full w-full" />
       </span>
     )
@@ -50,7 +56,7 @@ export function NodaroLogo({
 
   return (
     <span className={cn("inline-flex items-center", className)}>
-      <span className={cn(ICON_SIZES[size], "inline-flex shrink-0 -mr-1")}>
+      <span className={cn(ICON_SIZES[size], "inline-flex shrink-0")}>
         <LogoImg className="h-full w-full" />
       </span>
       <span
