@@ -17,17 +17,19 @@ CREATE TABLE IF NOT EXISTS credit_cost_audit (
 );
 
 -- Indexes for common queries
-CREATE INDEX idx_credit_cost_audit_created_at ON credit_cost_audit (created_at DESC);
-CREATE INDEX idx_credit_cost_audit_mismatch ON credit_cost_audit (mismatch) WHERE mismatch = true;
-CREATE INDEX idx_credit_cost_audit_model_key ON credit_cost_audit (model_key);
+CREATE INDEX IF NOT EXISTS idx_credit_cost_audit_created_at ON credit_cost_audit (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_credit_cost_audit_mismatch ON credit_cost_audit (mismatch) WHERE mismatch = true;
+CREATE INDEX IF NOT EXISTS idx_credit_cost_audit_model_key ON credit_cost_audit (model_key);
 
 -- RLS: only admins can read/write
 ALTER TABLE credit_cost_audit ENABLE ROW LEVEL SECURITY;
 
 -- Service role can insert (backend inserts audit entries)
-CREATE POLICY "service_role_all" ON credit_cost_audit
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
-
--- Admin users can read via the admin endpoint (using is_admin() function)
-CREATE POLICY "admin_read" ON credit_cost_audit
-  FOR SELECT TO authenticated USING (is_admin());
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'credit_cost_audit' AND policyname = 'service_role_all') THEN
+    CREATE POLICY "service_role_all" ON credit_cost_audit FOR ALL TO service_role USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'credit_cost_audit' AND policyname = 'admin_read') THEN
+    CREATE POLICY "admin_read" ON credit_cost_audit FOR SELECT TO authenticated USING (is_admin());
+  END IF;
+END $$;
