@@ -151,9 +151,9 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   // ── Video-to-Video / Motion ──
   "wan":               { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },
   "topaz-video":       { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
-  "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },
-  "kling-motion":      { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
-  "kling-3.0-motion":  { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
+  "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 6 cr/sec * 10s default (720p)
+  "kling-motion":      { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },
+  "kling-3.0-motion":  { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 12 cr/sec * 10s default (720p)
   // ── Lip Sync ──
   "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
   "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },

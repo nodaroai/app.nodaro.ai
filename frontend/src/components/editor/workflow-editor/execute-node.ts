@@ -2084,6 +2084,7 @@ export function executeNode(
           ctx.userId,
           mtData.provider || undefined,
           mtData.backgroundSource || undefined,
+          mtData.videoDuration || undefined,
         ),
       "generatedVideoUrl",
       "Motion Transfer",

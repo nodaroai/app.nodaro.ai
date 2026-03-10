@@ -8,7 +8,7 @@
  * - imageUrl: Character reference image
  * - videoUrl: Motion source video
  * - prompt: Optional text prompt (max 2500 chars)
- * - characterOrientation: "image" (max 10s) or "video" (max 30s) — Kling 2.6 only
+ * - characterOrientation: "image" or "video" — both Kling 2.6 and 3.0
  * - resolution: "720p" or "1080p"
  * - provider: "kling" (2.6) or "kling-3.0"
  * - backgroundSource: "input_video" or "input_image" — Kling 3.0 only
@@ -22,6 +22,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { MOTION_TRANSFER_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
@@ -31,16 +32,8 @@ const motionTransferBody = z.object({
   resolution: z.enum(["720p", "1080p"]).default("720p"),
   provider: z.enum(MOTION_TRANSFER_PROVIDERS).default("kling"),
   backgroundSource: z.enum(["input_video", "input_image"]).optional(),
+  videoDuration: z.number().min(1).max(60).optional(),
 })
-
-/** Build credit model identifier based on provider + resolution. */
-function buildMotionCreditId(provider: string, resolution: string): string {
-  if (provider === "kling-3.0") {
-    return resolution === "1080p" ? "kling-3.0-motion:1080p" : "kling-3.0-motion"
-  }
-  // Kling 2.6 — original flat credit identifier
-  return "motion-transfer"
-}
 
 export async function motionTransferRoutes(app: FastifyInstance) {
   app.post("/v1/motion-transfer", {
@@ -48,7 +41,8 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       const body = req.body as Record<string, unknown>
       const provider = (body?.provider as string) ?? "kling"
       const resolution = (body?.resolution as string) ?? "720p"
-      return buildMotionCreditId(provider, resolution)
+      const videoDuration = (body?.videoDuration as number) ?? undefined
+      return buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
     }),
   }, async (req, reply) => {
     const parsed = motionTransferBody.safeParse(req.body)
@@ -61,7 +55,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, videoUrl, prompt, characterOrientation, resolution, provider, backgroundSource } = parsed.data
+    const { imageUrl, videoUrl, prompt, characterOrientation, resolution, provider, backgroundSource, videoDuration } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -70,7 +64,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = buildMotionCreditId(provider, resolution)
+    const modelIdentifier = buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
 
     const { data: job, error } = await supabase
       .from("jobs")

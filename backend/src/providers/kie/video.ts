@@ -640,16 +640,17 @@ export class KieVideoProvider
       `[KIE.ai] ==============================================`
     )
 
-    // Kling 3.0 Motion Control — uses createTask with mode + background_source
+    // Kling 3.0 Motion Control — uses createTask with mode + character_orientation
     if (provider === "kling-3.0") {
-      const mode = resolution === "1080p" ? "pro" : "std"
-      const backgroundSource = options?.backgroundSource ?? "input_video"
-
       const input: Record<string, unknown> = {
         input_urls: [imageUrl],
         video_urls: [videoUrl],
-        background_source: backgroundSource,
-        mode,
+        character_orientation: characterOrientation,
+        mode: resolution,  // "720p" or "1080p"
+      }
+
+      if (options?.backgroundSource) {
+        input.background_source = options.backgroundSource
       }
 
       if (prompt) {

@@ -10,6 +10,7 @@ import {
   DURATION_PRICED_PROVIDERS,
   AUDIO_ADDON_PROVIDERS,
   VIDEO_DURATION_TIERS,
+  MOTION_DURATION_TIERS,
 } from "./model-constants.js"
 
 /**
@@ -96,4 +97,26 @@ export function buildVideoCreditModelIdentifier(
   }
 
   return identifier
+}
+
+/**
+ * Compute composite model identifier for motion control with duration-tiered pricing.
+ * Examples: "kling-3.0-motion:10s", "kling-3.0-motion:1080p:15s", "motion-transfer:5s"
+ *
+ * @param provider - Motion control provider key ("kling" for 2.6, "kling-3.0")
+ * @param resolution - "720p" or "1080p"
+ * @param videoDuration - Reference video duration in seconds (defaults to 10s)
+ */
+export function buildMotionCreditModelIdentifier(
+  provider: string,
+  resolution: string,
+  videoDuration?: number,
+): string {
+  const durationSec = videoDuration ?? 10 // default 10s
+  const tier = MOTION_DURATION_TIERS.find(t => durationSec <= t.maxSeconds)
+    ?? MOTION_DURATION_TIERS[MOTION_DURATION_TIERS.length - 1]
+
+  const base = provider === "kling-3.0" ? "kling-3.0-motion" : "motion-transfer"
+  const resSuffix = resolution === "1080p" ? ":1080p" : ""
+  return `${base}${resSuffix}:${tier.suffix}`
 }

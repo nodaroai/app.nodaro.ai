@@ -694,6 +694,7 @@ export type MotionTransferData = {
   resolution: "720p" | "1080p"
   provider?: "kling" | "kling-3.0"
   backgroundSource?: "input_video" | "input_image"
+  videoDuration?: number // Detected from connected video (seconds), used for per-second pricing
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

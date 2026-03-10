@@ -10,6 +10,7 @@ import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credits"
+import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -30,7 +31,10 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const credits = useModelCredits("motion-transfer", 32)
+  const provider = nodeData.provider || "kling"
+  const resolution = nodeData.resolution || "720p"
+  const modelId = buildMotionCreditModelIdentifier(provider, resolution, nodeData.videoDuration)
+  const credits = useModelCredits(modelId, 38)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

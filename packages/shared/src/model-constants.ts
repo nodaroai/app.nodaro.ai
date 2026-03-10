@@ -335,3 +335,14 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 15, suffix: "15s" },
   ],
 }
+
+/**
+ * Duration tier breakpoints for motion control pricing (per-second billing).
+ * Same shape as VIDEO_DURATION_TIERS entries but with 30s tier for long reference videos.
+ */
+export const MOTION_DURATION_TIERS: ReadonlyArray<{ maxSeconds: number; suffix: string }> = [
+  { maxSeconds: 5, suffix: "5s" },
+  { maxSeconds: 10, suffix: "10s" },
+  { maxSeconds: 15, suffix: "15s" },
+  { maxSeconds: 30, suffix: "30s" },
+]
