@@ -11,10 +11,10 @@ interface NodaroLogoProps {
 }
 
 const ICON_SIZES = {
-  sm: "h-4 w-4",
-  md: "h-5 w-5",
-  lg: "h-7 w-7",
-  xl: "h-10 w-10",
+  sm: "h-5 w-auto",
+  md: "h-7 w-auto",
+  lg: "h-9 w-auto",
+  xl: "h-12 w-auto",
 } as const
 
 
