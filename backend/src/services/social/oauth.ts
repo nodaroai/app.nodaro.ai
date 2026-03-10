@@ -23,7 +23,7 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
     clientSecret: process.env.META_APP_SECRET || "",
     authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
-    scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list"],
+    scopes: ["instagram_business_basic", "instagram_content_publish", "instagram_manage_comments", "instagram_manage_messages"],
     redirectUri: getRedirectUri("instagram"),
   }),
   facebook: () => ({
@@ -31,7 +31,7 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
     clientSecret: process.env.META_APP_SECRET || "",
     authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
-    scopes: ["pages_manage_posts", "pages_read_engagement", "pages_show_list"],
+    scopes: ["pages_manage_posts", "pages_read_engagement", "pages_show_list", "instagram_business_basic"],
     redirectUri: getRedirectUri("facebook"),
   }),
   tiktok: () => ({
