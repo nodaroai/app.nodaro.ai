@@ -14,14 +14,17 @@ CREATE INDEX IF NOT EXISTS idx_gallery_favorites_job_id ON gallery_favorites(job
 -- RLS
 ALTER TABLE gallery_favorites ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can read own favorites" ON gallery_favorites
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own favorites" ON gallery_favorites
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own favorites" ON gallery_favorites
-  FOR DELETE USING (auth.uid() = user_id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'gallery_favorites' AND policyname = 'Users can read own favorites') THEN
+    CREATE POLICY "Users can read own favorites" ON gallery_favorites FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'gallery_favorites' AND policyname = 'Users can insert own favorites') THEN
+    CREATE POLICY "Users can insert own favorites" ON gallery_favorites FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'gallery_favorites' AND policyname = 'Users can delete own favorites') THEN
+    CREATE POLICY "Users can delete own favorites" ON gallery_favorites FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Force-private flag for jobs using uploaded/private input content
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS force_private BOOLEAN DEFAULT NULL;
