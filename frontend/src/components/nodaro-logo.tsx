@@ -11,22 +11,22 @@ interface NodaroLogoProps {
 }
 
 const ICON_SIZES = {
-  sm: "h-[18px] w-[18px] mt-[4px] mr-[5px]",
-  md: "h-[18px] w-[18px] mt-[4px] ml-[5px] mr-[5px]",
+  sm: "h-[18px] w-[18px] mt-[4px] mr-0",
+  md: "h-[18px] w-[18px] mt-[2px] ml-[5px] mr-0",
   lg: "h-9 w-auto",
-  xl: "h-[32px] w-auto mr-[6px]",
+  xl: "h-[32px] w-auto mr-[2px]",
 } as const
 
 const ICON_ONLY_SIZES = {
   sm: "h-[18px] w-[18px] mt-[4px]",
-  md: "h-[18px] w-[18px] mt-[4px]",
+  md: "h-[18px] w-[18px] mt-[2px]",
   lg: "h-9 w-auto",
   xl: "h-[32px] w-auto",
 } as const
 
 const TEXT_SIZES = {
-  sm: "text-[16px] leading-[23px]",
-  md: "text-[20px] leading-[33px]",
+  sm: "text-[20px] leading-[20px]",
+  md: "text-[20px] leading-[20px]",
   lg: "text-2xl",
   xl: "text-[36px] leading-[44px]",
 } as const
