@@ -147,6 +147,8 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "video-to-video" ||
     type === "text-to-video" ||
     type === "lip-sync" ||
+    type === "speech-to-video" ||
+    type === "sora-storyboard" ||
     type === "motion-transfer" ||
     type === "video-upscale" ||
     type === "extend-video" ||
@@ -174,7 +176,13 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "dubbing" ||
     type === "voice-remix" ||
     type === "voice-design" ||
-    type === "audio-isolation"
+    type === "audio-isolation" ||
+    type === "suno-mashup" ||
+    type === "suno-replace-section" ||
+    type === "suno-add-instrumental" ||
+    type === "suno-add-vocals" ||
+    type === "suno-convert-wav" ||
+    type === "suno-upload-extend"
   ) {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -184,7 +192,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedAudioUrl as string | undefined)
     );
   }
-  if (type === "suno-lyrics") {
+  if (type === "suno-lyrics" || type === "suno-style-boost") {
     return data.generatedText as string | undefined;
   }
   if (type === "transcribe") {
@@ -422,6 +430,8 @@ const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "youtube-video",
   "combine-videos",
   "lip-sync",
+  "speech-to-video",
+  "sora-storyboard",
   "motion-transfer",
   "video-upscale",
   "extend-video",
@@ -441,6 +451,12 @@ const AUDIO_SOURCE_TYPES = new Set([
   "suno-cover",
   "suno-extend",
   "suno-separate",
+  "suno-mashup",
+  "suno-replace-section",
+  "suno-add-instrumental",
+  "suno-add-vocals",
+  "suno-convert-wav",
+  "suno-upload-extend",
   "extract-audio",
   "mix-audio",
   "adjust-volume",

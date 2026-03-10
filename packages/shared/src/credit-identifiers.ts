@@ -24,6 +24,7 @@ export function buildCreditModelIdentifier(
   quality?: string,
   resolution?: string,
   renderingSpeed?: string,
+  targetResolution?: string,
 ): string {
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`
@@ -36,6 +37,10 @@ export function buildCreditModelIdentifier(
   }
   if (provider === "nano-banana-2" && (resolution === "2K" || resolution === "4K")) {
     return `${provider}:${resolution}`
+  }
+  // Topaz Image Upscale: 2K is default (no suffix), 4K/8K get composite identifiers
+  if (provider === "topaz-image-upscale" && targetResolution && targetResolution !== "2K") {
+    return `${provider}:${targetResolution}`
   }
   if (IDEOGRAM_PROVIDERS.has(provider)) {
     if (renderingSpeed === "TURBO") return `${provider}:TURBO`

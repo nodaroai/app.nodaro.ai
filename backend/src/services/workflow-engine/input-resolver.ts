@@ -239,6 +239,13 @@ function routeAudioOutput(
       ...(inputs.audioSources ?? []),
       { url: output, sourceNodeId },
     ]
+  } else if (targetType === "suno-mashup") {
+    // suno-mashup needs 2 audio URLs — first goes to audioUrl, second to audioUrl2
+    if (!inputs.audioUrl) {
+      inputs.audioUrl = output
+    } else {
+      inputs.audioUrl2 = output
+    }
   } else {
     inputs.audioUrl = output
   }
@@ -282,6 +289,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "ai-writer",
   "combine-text",
   "split-text",
+  "suno-style-boost",
 ])
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
@@ -291,6 +299,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "video-to-video",
   "text-to-video",
   "lip-sync",
+  "speech-to-video",
   "motion-transfer",
   "video-upscale",
   "extend-video",
@@ -318,6 +327,12 @@ const AUDIO_OUTPUT_NODE_TYPES = new Set([
   "suno-cover",
   "suno-extend",
   "suno-separate",
+  "suno-mashup",
+  "suno-replace-section",
+  "suno-add-instrumental",
+  "suno-add-vocals",
+  "suno-convert-wav",
+  "suno-upload-extend",
   "extract-audio",
   "mix-audio",
   "voice-changer",
@@ -326,7 +341,17 @@ const AUDIO_OUTPUT_NODE_TYPES = new Set([
   "voice-design",
 ])
 
-const SUNO_TRACK_NODE_TYPES = new Set(["suno-generate", "suno-cover", "suno-extend"])
+const SUNO_TRACK_NODE_TYPES = new Set([
+  "suno-generate",
+  "suno-cover",
+  "suno-extend",
+  "suno-mashup",
+  "suno-replace-section",
+  "suno-add-instrumental",
+  "suno-add-vocals",
+  "suno-convert-wav",
+  "suno-upload-extend",
+])
 
 // ---------------------------------------------------------------------------
 // Main routing function
@@ -402,7 +427,7 @@ function routeOutput(
 
   // --- Entity nodes → reference images (or imageUrl for lip-sync) ---
   if (ENTITY_NODE_TYPES.has(srcType)) {
-    if (targetType === "lip-sync") {
+    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "sora-storyboard") {
       inputs.imageUrl = output
     } else {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]

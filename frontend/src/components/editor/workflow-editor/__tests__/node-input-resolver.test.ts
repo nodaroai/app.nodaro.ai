@@ -372,4 +372,69 @@ describe("resolveNodeInputs", () => {
     const inputs = resolveNodeInputs(target, [inputNode, target], edges)
     expect(inputs.imageUrl).toBe("http://injected-image.png")
   })
+
+  it("resolves image, audio, and text inputs for speech-to-video", () => {
+    const imgNode = makeNode("u1", "upload-image", { url: "http://portrait.png" })
+    const audioNode = makeNode("a1", "upload-audio", { r2Url: "http://voice.mp3" })
+    const textNode = makeNode("t1", "text-prompt", { text: "A person speaking" })
+    const target = makeNode("s2v", "speech-to-video")
+    const edges = [
+      makeEdge("u1", "s2v"),
+      makeEdge("a1", "s2v"),
+      makeEdge("t1", "s2v"),
+    ]
+
+    const inputs = resolveNodeInputs(
+      target,
+      [imgNode, audioNode, textNode, target],
+      edges,
+    )
+    expect(inputs.imageUrl).toBe("http://portrait.png")
+    expect(inputs.audioUrl).toBe("http://voice.mp3")
+    expect(inputs.prompt).toBe("A person speaking")
+  })
+
+  it("resolves image inputs for sora-storyboard", () => {
+    const img1 = makeNode("u1", "upload-image", { url: "http://ref1.png" })
+    const img2 = makeNode("u2", "upload-image", { url: "http://ref2.png" })
+    const target = makeNode("sb", "sora-storyboard")
+    const edges = [makeEdge("u1", "sb"), makeEdge("u2", "sb")]
+
+    const inputs = resolveNodeInputs(
+      target,
+      [img1, img2, target],
+      edges,
+    )
+    // sora-storyboard treats images as imageUrl (last wins) or referenceImageUrls
+    // depending on source type; upload-image resolves as imageUrl for storyboard
+    expect(inputs.imageUrl).toBeDefined()
+  })
+
+  it("resolves audio input for suno-mashup", () => {
+    // suno-mashup gets audioUrl (single) from the resolver, not audioUrls
+    // execute-node.ts uses audioUrls ?? [] with audioUrl fallback
+    const audio1 = makeNode("a1", "upload-audio", {
+      r2Url: "http://audio1.mp3",
+    })
+    const target = makeNode("m1", "suno-mashup")
+    const edges = [makeEdge("a1", "m1")]
+
+    const inputs = resolveNodeInputs(
+      target,
+      [audio1, target],
+      edges,
+    )
+    expect(inputs.audioUrl).toBe("http://audio1.mp3")
+  })
+
+  it("resolves suno-style-boost output as prompt (text)", () => {
+    const styleBoost = makeNode("sb1", "suno-style-boost", {
+      generatedText: "boosted style text",
+    })
+    const target = makeNode("t1", "generate-image")
+    const edges = [makeEdge("sb1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [styleBoost, target], edges)
+    expect(inputs.prompt).toBe("boosted style text")
+  })
 })

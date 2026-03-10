@@ -106,6 +106,8 @@ export interface MotionTransferProvider {
     options?: ProviderOptions & {
       characterOrientation?: "image" | "video"
       resolution?: "720p" | "1080p"
+      provider?: string
+      backgroundSource?: "input_video" | "input_image"
     }
   ): Promise<ProviderResult>
 }

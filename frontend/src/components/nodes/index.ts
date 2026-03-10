@@ -32,6 +32,13 @@ import { SunoExtendNode } from "./suno-extend-node";
 import { SunoLyricsNode } from "./suno-lyrics-node";
 import { SunoSeparateNode } from "./suno-separate-node";
 import { SunoMusicVideoNode } from "./suno-music-video-node";
+import { SunoMashupNode } from "./suno-mashup-node";
+import { SunoReplaceSectionNode } from "./suno-replace-section-node";
+import { SunoStyleBoostNode } from "./suno-style-boost-node";
+import { SunoAddInstrumentalNode } from "./suno-add-instrumental-node";
+import { SunoAddVocalsNode } from "./suno-add-vocals-node";
+import { SunoConvertWavNode } from "./suno-convert-wav-node";
+import { SunoUploadExtendNode } from "./suno-upload-extend-node";
 import { TranscribeNode } from "./transcribe-node";
 import { AudioIsolationNode } from "./audio-isolation-node"
 import { TextToDialogueNode } from "./text-to-dialogue-node"
@@ -64,6 +71,8 @@ import { FadeVideoNode } from "./fade-video-node";
 import { TranscodeVideoNode } from "./transcode-video-node";
 import { ManualEditNode } from "./manual-edit-node";
 import { LipSyncNode } from "./lip-sync-node";
+import { SpeechToVideoNode } from "./speech-to-video-node";
+import { SoraStoryboardNode } from "./sora-storyboard-node";
 import { MotionTransferNode } from "./motion-transfer-node";
 import { VideoUpscaleNode } from "./video-upscale-node";
 import { ExtendVideoNode } from "./extend-video-node";
@@ -125,7 +134,16 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "suno-lyrics": SunoLyricsNode,
   "suno-separate": SunoSeparateNode,
   "suno-music-video": SunoMusicVideoNode,
+  "suno-mashup": SunoMashupNode,
+  "suno-replace-section": SunoReplaceSectionNode,
+  "suno-style-boost": SunoStyleBoostNode,
+  "suno-add-instrumental": SunoAddInstrumentalNode,
+  "suno-add-vocals": SunoAddVocalsNode,
+  "suno-convert-wav": SunoConvertWavNode,
+  "suno-upload-extend": SunoUploadExtendNode,
   "lip-sync": LipSyncNode,
+  "speech-to-video": SpeechToVideoNode,
+  "sora-storyboard": SoraStoryboardNode,
   "motion-transfer": MotionTransferNode,
   transcribe: TranscribeNode,
   "image-to-text": ImageToTextNode,

@@ -264,7 +264,7 @@ export function resolveNodeInputs(
       src.type === "object" ||
       src.type === "location"
     ) {
-      if (node.type === "lip-sync") {
+      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "sora-storyboard") {
         inputs.imageUrl = output;
       } else {
         inputs.referenceImageUrls = [
@@ -346,6 +346,8 @@ export function resolveNodeInputs(
       src.type === "video-to-video" ||
       src.type === "text-to-video" ||
       src.type === "lip-sync" ||
+      src.type === "speech-to-video" ||
+      src.type === "sora-storyboard" ||
       src.type === "motion-transfer" ||
       src.type === "video-upscale" ||
       src.type === "extend-video" ||
@@ -476,6 +478,12 @@ export function resolveNodeInputs(
       src.type === "suno-cover" ||
       src.type === "suno-extend" ||
       src.type === "suno-separate" ||
+      src.type === "suno-mashup" ||
+      src.type === "suno-replace-section" ||
+      src.type === "suno-add-instrumental" ||
+      src.type === "suno-add-vocals" ||
+      src.type === "suno-convert-wav" ||
+      src.type === "suno-upload-extend" ||
       src.type === "extract-audio" ||
       src.type === "mix-audio" ||
       src.type === "voice-changer" ||
@@ -510,7 +518,7 @@ export function resolveNodeInputs(
           inputs.sunoTaskId = srcData.sunoTaskId as string;
         }
       }
-    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "image-to-text" || src.type === "forced-alignment") {
+    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment") {
       inputs.prompt = output;
     } else if (src.type === "ai-writer") {
       inputs.prompt = output;

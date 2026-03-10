@@ -27,7 +27,7 @@ import type {
   CharacterDefinition,
   ManualReferenceImage,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
+import { IMAGE_GEN_MODELS, IMAGE_I2I_MODELS, IMAGE_EDIT_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, I2I_STRENGTH_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { MappableField } from "./mappable-field"
 import { ReferenceImageList } from "./reference-image-list"
@@ -421,6 +421,36 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
               <p className="text-[10px] text-muted-foreground mt-0.5">Affects generation speed and credit cost</p>
             </div>
           )}
+          {currentProvider === "ideogram-v3" && (
+            <>
+              <div>
+                <Label className="text-xs">Style Type</Label>
+                <Select
+                  value={data.styleType || "AUTO"}
+                  onValueChange={(v) => onUpdate({ styleType: v })}
+                >
+                  <SelectTrigger aria-label="Style Type" className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AUTO">Auto</SelectItem>
+                    <SelectItem value="GENERAL">General</SelectItem>
+                    <SelectItem value="REALISTIC">Realistic</SelectItem>
+                    <SelectItem value="DESIGN">Design</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="expandPrompt"
+                  checked={data.expandPrompt ?? false}
+                  onChange={(e) => onUpdate({ expandPrompt: e.target.checked })}
+                  className="rounded border-border"
+                />
+                <Label htmlFor="expandPrompt" className="text-xs cursor-pointer">Expand Prompt</Label>
+                <p className="text-[10px] text-muted-foreground">Auto-enhance prompt for better results</p>
+              </div>
+            </>
+          )}
           {supportsSeed && (
             <div>
               <Label className="text-xs">Seed</Label>
@@ -722,20 +752,36 @@ export function EditImageConfig({ data, onUpdate, sources, fieldMappings, onMapF
         </>
       )}
       {showUpscaleFactor && (
-        <MappableField field="upscaleFactor" label="Upscale Factor" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <Select
-            value={data.upscaleFactor || "2"}
-            onValueChange={(v) => onUpdate({ upscaleFactor: v })}
-          >
-            <SelectTrigger aria-label="Upscale Factor"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">1x (Enhance only)</SelectItem>
-              <SelectItem value="2">2x</SelectItem>
-              <SelectItem value="4">4x</SelectItem>
-              <SelectItem value="8">8x</SelectItem>
-            </SelectContent>
-          </Select>
-        </MappableField>
+        <>
+          <MappableField field="upscaleFactor" label="Upscale Factor" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.upscaleFactor || "2"}
+              onValueChange={(v) => onUpdate({ upscaleFactor: v })}
+            >
+              <SelectTrigger aria-label="Upscale Factor"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1x (Enhance only)</SelectItem>
+                <SelectItem value="2">2x</SelectItem>
+                <SelectItem value="4">4x</SelectItem>
+                <SelectItem value="8">8x</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <MappableField field="targetResolution" label="Target Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.targetResolution || "2K"}
+              onValueChange={(v) => onUpdate({ targetResolution: v as "2K" | "4K" | "8K" })}
+            >
+              <SelectTrigger aria-label="Target Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TOPAZ_IMAGE_RESOLUTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Higher resolution costs more credits</p>
+          </MappableField>
+        </>
       )}
       {!isNanoBananaEdit && !showUpscaleFactor && (
         <p className="text-xs text-muted-foreground px-1">

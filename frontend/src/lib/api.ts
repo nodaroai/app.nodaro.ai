@@ -111,6 +111,8 @@ export async function generateImage(
   negativePrompt?: string,
   seed?: number,
   renderingSpeed?: string,
+  styleType?: string,
+  expandPrompt?: boolean,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
@@ -140,6 +142,12 @@ export async function generateImage(
   if (renderingSpeed) {
     body.renderingSpeed = renderingSpeed
   }
+  if (styleType) {
+    body.styleType = styleType
+  }
+  if (expandPrompt != null) {
+    body.expandPrompt = expandPrompt
+  }
   if (userId) {
     body.userId = userId
   }
@@ -164,6 +172,7 @@ export async function editImage(
   userId?: string,
   options?: {
     upscaleFactor?: string
+    targetResolution?: string
     aspectRatio?: string
     negativePrompt?: string
     style?: string
@@ -183,6 +192,9 @@ export async function editImage(
   }
   if (options?.upscaleFactor) {
     body.upscaleFactor = options.upscaleFactor
+  }
+  if (options?.targetResolution) {
+    body.targetResolution = options.targetResolution
   }
   if (options?.aspectRatio) {
     body.aspectRatio = options.aspectRatio
@@ -781,6 +793,7 @@ export interface GenerateVideoOptions {
   videoSize?: string       // Sora2 Pro size: standard/high
   seed?: number            // Seed (Wan Turbo, Bytedance)
   cameraFixed?: boolean    // Camera fixed (Bytedance, Seedance)
+  removeWatermark?: boolean // Sora2/Sora2-Pro watermark removal post-processing
   userId?: string
 }
 
@@ -820,6 +833,7 @@ export async function generateVideo(
       videoSize: opts.videoSize,
       seed: opts.seed,
       cameraFixed: opts.cameraFixed,
+      removeWatermark: opts.removeWatermark,
     }
     if (opts.userId) {
       body.userId = opts.userId
@@ -871,6 +885,7 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   multiShot?: boolean
   shots?: Array<{ prompt: string; duration: number }>
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
+  removeWatermark?: boolean
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt, provider, ...options }
   if (userId) {
@@ -1660,6 +1675,175 @@ export async function sunoMusicVideoApi(params: {
   return res.json()
 }
 
+export async function sunoMashupApi(params: {
+  audioUrl1: string
+  audioUrl2: string
+  model?: string
+  customMode?: boolean
+  style?: string
+  title?: string
+  negativeStyle?: string
+  vocalGender?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl1: params.audioUrl1, audioUrl2: params.audioUrl2 }
+  if (params.model) body.model = params.model
+  body.customMode = params.customMode ?? false
+  if (params.style) body.style = params.style
+  if (params.title) body.title = params.title
+  if (params.negativeStyle) body.negativeStyle = params.negativeStyle
+  if (params.vocalGender) body.vocalGender = params.vocalGender
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/mashup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Suno mashup")
+  }
+  return res.json()
+}
+
+export async function sunoReplaceSectionApi(params: {
+  audioUrl: string
+  infillStartS: number
+  infillEndS: number
+  prompt?: string
+  tags?: string
+  title?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl: params.audioUrl, infillStartS: params.infillStartS, infillEndS: params.infillEndS }
+  if (params.prompt) body.prompt = params.prompt
+  if (params.tags) body.tags = params.tags
+  if (params.title) body.title = params.title
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/replace-section`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Suno replace section")
+  }
+  return res.json()
+}
+
+export async function sunoStyleBoostApi(params: {
+  content: string
+  userId?: string
+}): Promise<{ text: string }> {
+  const body: Record<string, unknown> = { content: params.content }
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/style-boost`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Suno style boost")
+  }
+  return res.json()
+}
+
+export async function sunoAddInstrumentalApi(params: {
+  audioUrl: string
+  model?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl: params.audioUrl }
+  if (params.model) body.model = params.model
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/add-instrumental`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Suno add instrumental")
+  }
+  return res.json()
+}
+
+export async function sunoAddVocalsApi(params: {
+  audioUrl: string
+  model?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl: params.audioUrl }
+  if (params.model) body.model = params.model
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/add-vocals`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Suno add vocals")
+  }
+  return res.json()
+}
+
+export async function sunoConvertWavApi(params: {
+  audioUrl: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl: params.audioUrl }
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/convert-wav`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Suno WAV conversion")
+  }
+  return res.json()
+}
+
+export async function sunoUploadExtendApi(params: {
+  audioUrl: string
+  prompt?: string
+  model?: string
+  style?: string
+  title?: string
+  negativeStyle?: string
+  vocalGender?: string
+  continueAt?: number
+  defaultParamFlag?: boolean
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {
+    audioUrl: params.audioUrl,
+    defaultParamFlag: params.defaultParamFlag ?? true,
+    model: params.model || "V5",
+  }
+  if (params.prompt) body.prompt = params.prompt
+  if (params.style) body.style = params.style
+  if (params.title) body.title = params.title
+  if (params.continueAt != null) body.continueAt = params.continueAt
+  if (params.negativeStyle) body.negativeStyle = params.negativeStyle
+  if (params.vocalGender) body.vocalGender = params.vocalGender
+  if (params.userId) body.userId = params.userId
+  const res = await fetch(`${API_BASE_URL}/v1/suno/upload-extend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Suno upload extend")
+  }
+  return res.json()
+}
+
 export async function transcribeApi(audioUrl: string, provider?: string, language?: string, userId?: string, diarize?: boolean, tagAudioEvents?: boolean): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl }
   if (provider) body.provider = provider
@@ -1697,6 +1881,72 @@ export async function imageToTextApi(
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to describe image")
+  }
+  return res.json()
+}
+
+export async function soraStoryboardApi(opts: {
+  shots: Array<{ scene: string; duration: number }>
+  nFrames?: string
+  imageUrls?: string[]
+  aspectRatio?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {
+    shots: opts.shots,
+  }
+  if (opts.nFrames) body.nFrames = opts.nFrames
+  if (opts.imageUrls && opts.imageUrls.length > 0) body.imageUrls = opts.imageUrls
+  if (opts.aspectRatio) body.aspectRatio = opts.aspectRatio
+  if (opts.userId) body.userId = opts.userId
+  const res = await fetch(`${API_BASE_URL}/v1/sora-storyboard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start Sora Storyboard generation")
+  }
+  return res.json()
+}
+
+export async function speechToVideoApi(opts: {
+  imageUrl: string
+  audioUrl: string
+  prompt: string
+  resolution?: string
+  negativePrompt?: string
+  seed?: number
+  numFrames?: number
+  fps?: number
+  inferenceSteps?: number
+  guidanceScale?: number
+  shift?: number
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {
+    imageUrl: opts.imageUrl,
+    audioUrl: opts.audioUrl,
+    prompt: opts.prompt,
+  }
+  if (opts.resolution) body.resolution = opts.resolution
+  if (opts.negativePrompt) body.negativePrompt = opts.negativePrompt
+  if (opts.seed !== undefined) body.seed = opts.seed
+  if (opts.numFrames !== undefined) body.numFrames = opts.numFrames
+  if (opts.fps !== undefined) body.fps = opts.fps
+  if (opts.inferenceSteps !== undefined) body.inferenceSteps = opts.inferenceSteps
+  if (opts.guidanceScale !== undefined) body.guidanceScale = opts.guidanceScale
+  if (opts.shift !== undefined) body.shift = opts.shift
+  if (opts.userId) body.userId = opts.userId
+  const res = await fetch(`${API_BASE_URL}/v1/speech-to-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(body)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start speech-to-video generation")
   }
   return res.json()
 }
@@ -1912,13 +2162,17 @@ export async function motionTransferApi(
   prompt?: string,
   characterOrientation?: "image" | "video",
   resolution?: "720p" | "1080p",
-  userId?: string
+  userId?: string,
+  provider?: "kling" | "kling-3.0",
+  backgroundSource?: "input_video" | "input_image",
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, videoUrl }
   if (prompt) body.prompt = prompt
   if (characterOrientation) body.characterOrientation = characterOrientation
   if (resolution) body.resolution = resolution
   if (userId) body.userId = userId
+  if (provider) body.provider = provider
+  if (backgroundSource) body.backgroundSource = backgroundSource
   const res = await fetch(`${API_BASE_URL}/v1/motion-transfer`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

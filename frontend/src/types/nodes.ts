@@ -456,6 +456,8 @@ export type GenerateImageData = {
   quality?: string
   seed?: number
   renderingSpeed?: string
+  styleType?: string
+  expandPrompt?: boolean
   referenceImageUrl?: string
   referenceImageUrls?: readonly ManualReferenceImage[]
   referenceImageOrder?: readonly string[]
@@ -477,6 +479,7 @@ export type EditImageData = {
   prompt: string  // Used for nano-banana-edit (edit instructions)
   provider: EditImageProvider
   upscaleFactor?: string
+  targetResolution?: "2K" | "4K" | "8K"
   aspectRatio?: string
   negativePrompt?: string
   style?: string
@@ -548,6 +551,7 @@ export type ImageToVideoData = {
   selectedStartFrameNodeId?: string  // ID of node selected for start frame
   selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)
   selectedAudioNodeId?: string       // ID of node selected for audio track (optional)
+  removeWatermark?: boolean          // Sora2/Sora2-Pro: post-generation watermark removal (4 CR)
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
@@ -594,6 +598,7 @@ export type TextToVideoData = {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  removeWatermark?: boolean          // Sora2/Sora2-Pro: post-generation watermark removal (4 CR)
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
@@ -634,14 +639,61 @@ export type LipSyncData = {
   selectedAudioNodeId?: string   // ID of node selected for audio track
 }
 
+export type SpeechToVideoData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  resolution: "480p" | "580p" | "720p"
+  negativePrompt?: string
+  seed?: number
+  numFrames?: number
+  fps?: number
+  inferenceSteps?: number
+  guidanceScale?: number
+  shift?: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+// Sora 2 Pro Storyboard: Multi-shot video from scene descriptions
+// KIE.ai model: sora-2-pro-storyboard
+export type SoraStoryboardShot = {
+  scene: string
+  duration: number
+}
+
+export type SoraStoryboardData = {
+  [key: string]: unknown
+  label: string
+  shots: SoraStoryboardShot[]
+  nFrames: "10" | "15" | "25"
+  aspectRatio: "portrait" | "landscape"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
 // Motion Transfer: Apply motion from video to image character
-// KIE.ai model: kling-2.6/motion-control
+// KIE.ai models: kling-2.6/motion-control, kling-3.0/motion-control
 export type MotionTransferData = {
   [key: string]: unknown
   label: string
   prompt: string // Optional, max 2500 chars
   characterOrientation: "image" | "video" // image = max 10s, video = max 30s
   resolution: "720p" | "1080p"
+  provider?: "kling" | "kling-3.0"
+  backgroundSource?: "input_video" | "input_image"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -849,6 +901,117 @@ export type SunoMusicVideoData = {
   currentJobId?: string
   currentJobProgress?: number
   fieldMappings?: FieldMappings
+}
+
+export type SunoMashupData = {
+  [key: string]: unknown
+  label: string
+  model: SunoModel
+  customMode: boolean
+  style: string
+  title: string
+  negativeStyle: string
+  vocalGender: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type SunoReplaceSectionData = {
+  [key: string]: unknown
+  label: string
+  infillStartS: number
+  infillEndS: number
+  prompt: string
+  tags: string
+  title: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type SunoStyleBoostData = {
+  [key: string]: unknown
+  label: string
+  content: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedText?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+}
+
+export type SunoAddInstrumentalData = {
+  [key: string]: unknown
+  label: string
+  model: "V4_5PLUS" | "V5"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type SunoAddVocalsData = {
+  [key: string]: unknown
+  label: string
+  model: "V4_5PLUS" | "V5"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type SunoConvertWavData = {
+  [key: string]: unknown
+  label: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+export type SunoUploadExtendData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  model: SunoModel
+  style: string
+  title: string
+  negativeStyle: string
+  vocalGender: string
+  continueAt: number
+  defaultParamFlag: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
 }
 
 export type AudioIsolationData = {
@@ -1807,6 +1970,13 @@ export type SceneNodeData =
   | SunoLyricsData
   | SunoSeparateData
   | SunoMusicVideoData
+  | SunoMashupData
+  | SunoReplaceSectionData
+  | SunoStyleBoostData
+  | SunoAddInstrumentalData
+  | SunoAddVocalsData
+  | SunoConvertWavData
+  | SunoUploadExtendData
   | TranscribeData
   | ImageToTextData
   | AudioIsolationData
@@ -1838,6 +2008,8 @@ export type SceneNodeData =
   | TranscodeVideoData
   | ManualEditData
   | LipSyncData
+  | SpeechToVideoData
+  | SoraStoryboardData
   | MotionTransferData
   | VideoUpscaleData
   | ExtendVideoData
@@ -1896,6 +2068,13 @@ export type SceneNodeType =
   | "suno-lyrics"
   | "suno-separate"
   | "suno-music-video"
+  | "suno-mashup"
+  | "suno-replace-section"
+  | "suno-style-boost"
+  | "suno-add-instrumental"
+  | "suno-add-vocals"
+  | "suno-convert-wav"
+  | "suno-upload-extend"
   | "transcribe"
   | "image-to-text"
   | "audio-isolation"
@@ -1927,6 +2106,8 @@ export type SceneNodeType =
   | "transcode-video"
   | "manual-edit"
   | "lip-sync"
+  | "speech-to-video"
+  | "sora-storyboard"
   | "motion-transfer"
   | "video-upscale"
   | "extend-video"
@@ -2298,6 +2479,69 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["audio"],
     outputs: ["video"],
     defaultData: { label: "Suno Music Video", taskId: "", audioId: "", fieldMappings: {} } as SunoMusicVideoData,
+  },
+  {
+    type: "suno-mashup",
+    label: "Suno Mashup",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["audio1", "audio2"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Mashup", model: "V5", customMode: false, style: "", title: "", negativeStyle: "", vocalGender: "", fieldMappings: {} } as SunoMashupData,
+  },
+  {
+    type: "suno-replace-section",
+    label: "Suno Replace Section",
+    category: "ai",
+    creditCost: 2,
+    inputs: ["audio"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Replace Section", infillStartS: 0, infillEndS: 30, prompt: "", tags: "", title: "", fieldMappings: {} } as SunoReplaceSectionData,
+  },
+  {
+    type: "suno-style-boost",
+    label: "Suno Style Boost",
+    category: "ai",
+    creditCost: 1,
+    inputs: ["text"],
+    outputs: ["text"],
+    defaultData: { label: "Suno Style Boost", content: "", fieldMappings: {} } as SunoStyleBoostData,
+  },
+  {
+    type: "suno-add-instrumental",
+    label: "Suno Add Instrumental",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["audio"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Add Instrumental", model: "V5", fieldMappings: {} } as SunoAddInstrumentalData,
+  },
+  {
+    type: "suno-add-vocals",
+    label: "Suno Add Vocals",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["audio"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Add Vocals", model: "V5", fieldMappings: {} } as SunoAddVocalsData,
+  },
+  {
+    type: "suno-convert-wav",
+    label: "Suno Convert WAV",
+    category: "ai",
+    creditCost: 1,
+    inputs: ["audio"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Convert WAV", fieldMappings: {} } as SunoConvertWavData,
+  },
+  {
+    type: "suno-upload-extend",
+    label: "Suno Upload Extend",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["audio"],
+    outputs: ["audio"],
+    defaultData: { label: "Suno Upload Extend", prompt: "", model: "V5", style: "", title: "", negativeStyle: "", vocalGender: "", continueAt: 0, defaultParamFlag: true, fieldMappings: {} } as SunoUploadExtendData,
   },
   {
     type: "transcribe",
@@ -2712,6 +2956,43 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as LipSyncData,
+  },
+  // Speech-to-Video (Wan 2.2 S2V)
+  {
+    type: "speech-to-video",
+    label: "Speech to Video",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["image", "audio", "prompt"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Speech to Video",
+      prompt: "A person speaking naturally",
+      resolution: "480p",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as SpeechToVideoData,
+  },
+  // Sora 2 Pro Storyboard (multi-shot video)
+  {
+    type: "sora-storyboard",
+    label: "Sora Storyboard",
+    category: "ai",
+    creditCost: 47,
+    inputs: ["image"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Sora Storyboard",
+      shots: [{ scene: "", duration: 5 }],
+      nFrames: "10",
+      aspectRatio: "landscape",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as SoraStoryboardData,
   },
   // Motion Transfer (Kling 2.6 Motion Control)
   {

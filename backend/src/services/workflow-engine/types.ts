@@ -103,6 +103,7 @@ export interface ResolvedInputs {
   videoUrl?: string
   videoUrls?: string[]
   audioUrl?: string
+  audioUrl2?: string
   audioUrls?: string[]
   audioSources?: Array<{
     url: string
@@ -113,6 +114,7 @@ export interface ResolvedInputs {
   sunoTrackId?: string
   sunoTaskId?: string
   uploadUrl?: string
+  uploadUrlList?: string[]
   startFrameUrl?: string
   endFrameUrl?: string
   kieTaskId?: string

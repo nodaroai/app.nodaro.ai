@@ -22,6 +22,8 @@ const generateImageBody = z.object({
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
   renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
+  styleType: z.string().optional(),
+  expandPrompt: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -44,7 +46,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -94,6 +96,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
       negativePrompt,
       seed,
       renderingSpeed,
+      styleType,
+      expandPrompt,
       usageLogId,
     })
 

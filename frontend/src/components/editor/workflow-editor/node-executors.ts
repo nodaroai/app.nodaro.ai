@@ -47,6 +47,8 @@ export function runImageGeneration(
   negativePrompt?: string,
   seed?: number,
   renderingSpeed?: string,
+  styleType?: string,
+  expandPrompt?: boolean,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -67,6 +69,8 @@ export function runImageGeneration(
       negativePrompt,
       seed,
       renderingSpeed,
+      styleType,
+      expandPrompt,
     )
       .then(({ jobId }) => {
         toast.info("Image generation started", {
@@ -170,6 +174,7 @@ export function runEditImage(
   provider?: EditImageData["provider"],
   options?: {
     upscaleFactor?: string
+    targetResolution?: string
     aspectRatio?: string
     negativePrompt?: string
     style?: string
@@ -425,6 +430,7 @@ export function runVideoGeneration(
   videoSize?: string,
   seed?: number,
   cameraFixed?: boolean,
+  removeWatermark?: boolean,
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -456,6 +462,7 @@ export function runVideoGeneration(
       videoSize,
       seed,
       cameraFixed,
+      removeWatermark,
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
@@ -685,6 +692,7 @@ export function runTextToVideoGeneration(
       type: "image" | "video";
       urls: string[];
     }>;
+    removeWatermark?: boolean;
   },
 ): Promise<void> {
   const { updateNodeData } = useWorkflowStore.getState();

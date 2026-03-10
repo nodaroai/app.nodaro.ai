@@ -9,6 +9,11 @@ import {
   durationToNFrames,
   supportsEndFrame,
   getEndFrameParam,
+  KIE_IMAGE_MODELS,
+  KIE_MOTION_TRANSFER_MODELS,
+  KIE_SPEECH_TO_VIDEO_MODELS,
+  KIE_STORYBOARD_MODELS,
+  KIE_SPECIAL_MODELS,
 } from "../models.js"
 
 describe("getKieModelConfig", () => {
@@ -116,5 +121,73 @@ describe("getEndFrameParam", () => {
     expect(getEndFrameParam("video", "kling-turbo")).toBe("tail_image_url")
     // veo3 uses imageUrls array format -- no separate endFrameParam
     expect(getEndFrameParam("video", "veo3")).toBeUndefined()
+  })
+})
+
+describe("KIE_IMAGE_MODELS — ideogram-v3", () => {
+  it("exists with correct model ID", () => {
+    const config = KIE_IMAGE_MODELS["ideogram-v3"]
+    expect(config).toBeDefined()
+    expect(config.model).toBe("ideogram/v3-text-to-image")
+  })
+
+  it("is accessible via getKieModelConfig", () => {
+    const config = getKieModelConfig("image", "ideogram-v3")
+    expect(config).not.toBeNull()
+    expect(config!.model).toBe("ideogram/v3-text-to-image")
+  })
+})
+
+describe("KIE_MOTION_TRANSFER_MODELS — kling-3.0", () => {
+  it("exists with correct model ID", () => {
+    const config = KIE_MOTION_TRANSFER_MODELS["kling-3.0"]
+    expect(config).toBeDefined()
+    expect(config.model).toBe("kling-3.0/motion-control")
+  })
+
+  it("is accessible via getKieModelConfig", () => {
+    const config = getKieModelConfig("motion-transfer", "kling-3.0")
+    expect(config).not.toBeNull()
+    expect(config!.model).toBe("kling-3.0/motion-control")
+  })
+})
+
+describe("KIE_SPEECH_TO_VIDEO_MODELS — wan-s2v", () => {
+  it("exists with correct model ID", () => {
+    const config = KIE_SPEECH_TO_VIDEO_MODELS["wan-s2v"]
+    expect(config).toBeDefined()
+    expect(config.model).toBe("wan/2-2-a14b-speech-to-video-turbo")
+  })
+
+  it("is accessible via getKieModelConfig", () => {
+    const config = getKieModelConfig("speech-to-video", "wan-s2v")
+    expect(config).not.toBeNull()
+    expect(config!.model).toBe("wan/2-2-a14b-speech-to-video-turbo")
+  })
+})
+
+describe("KIE_STORYBOARD_MODELS — sora-storyboard", () => {
+  it("exists with correct model ID", () => {
+    const config = KIE_STORYBOARD_MODELS["sora-storyboard"]
+    expect(config).toBeDefined()
+    expect(config.model).toBe("sora-2-pro-storyboard")
+  })
+
+  it("is accessible via getKieModelConfig", () => {
+    const config = getKieModelConfig("storyboard", "sora-storyboard")
+    expect(config).not.toBeNull()
+    expect(config!.model).toBe("sora-2-pro-storyboard")
+  })
+})
+
+describe("KIE_SPECIAL_MODELS — sora-watermark-remove", () => {
+  it("exists in the special models map", () => {
+    const config = KIE_SPECIAL_MODELS["sora-watermark-remove"]
+    expect(config).toBeDefined()
+  })
+
+  it("is accessible via getKieModelConfig", () => {
+    const config = getKieModelConfig("special", "sora-watermark-remove")
+    expect(config).not.toBeNull()
   })
 })

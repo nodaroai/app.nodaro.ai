@@ -68,8 +68,8 @@ export const FFMPEG_NODES: readonly FFmpegNode[] = [
 export type DBCategory = "image" | "video" | "audio" | "processing" | "other"
 
 const CATEGORY_PATTERNS: ReadonlyArray<readonly [DBCategory, ReadonlyArray<string>]> = [
-  ["image", ["nano", "flux", "grok", "gpt-image", "recraft", "ideogram", "midjourney"]],
-  ["video", ["veo", "kling", "minimax", "wan", "sora", "grok-i2v", "runway", "pika", "hailuo", "topaz-video", "motion-transfer"]],
+  ["image", ["nano", "flux", "grok", "gpt-image", "recraft", "ideogram", "midjourney", "imagen", "seedream", "qwen", "z-image", "topaz-image"]],
+  ["video", ["veo", "kling", "minimax", "wan", "sora", "grok-i2v", "runway", "pika", "hailuo", "topaz-video", "motion-transfer", "speech-to-video", "bytedance", "seedance"]],
   ["audio", ["suno", "elevenlabs", "infinitalk", "tango", "musicgen", "audioldm", "bark"]],
   ["processing", ["ffmpeg", "topaz"]],
 ]
@@ -126,6 +126,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "flux":              { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },
   "grok":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },
   "gpt-image":         { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },
+  "ideogram-v3":       { provider: "KIE.ai",    providerCostUsd: 0.035, markupPct: 25 },
   // ── Image Editing ──
   "recraft-upscale":   { provider: "KIE.ai",    providerCostUsd: 0.003, markupPct: 25 },
   "recraft-remove-bg": { provider: "KIE.ai",    providerCostUsd: 0,     markupPct: 25 },
@@ -152,6 +153,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "topaz-video":       { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
   "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },
   "kling-motion":      { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
+  "kling-3.0-motion":  { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   // ── Lip Sync ──
   "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
   "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
@@ -170,9 +172,20 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "suno-separate":       { provider: "KIE.ai",  providerCostUsd: 0.050, markupPct: 25 },
   "suno-separate-stem": { provider: "KIE.ai",   providerCostUsd: 0.250, markupPct: 25 },
   "suno-music-video":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },
+  "suno-mashup":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
+  "suno-replace-section": { provider: "KIE.ai", providerCostUsd: 0.030, markupPct: 25 },
+  "suno-style-boost":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },
+  "suno-add-instrumental": { provider: "KIE.ai", providerCostUsd: 0.060, markupPct: 25 },
+  "suno-add-vocals":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
+  "suno-convert-wav":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },
+  "suno-upload-extend": { provider: "KIE.ai",   providerCostUsd: 0.060, markupPct: 25 },
   "infinitalk":        { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
   // ── Processing ──
   "topaz":             { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
+  "topaz-image-upscale": { provider: "KIE.ai",  providerCostUsd: 0.050, markupPct: 25 },
+  "sora-watermark-remove": { provider: "KIE.ai", providerCostUsd: 0.050, markupPct: 25 },
+  "speech-to-video":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
+  "sora-storyboard":   { provider: "KIE.ai",    providerCostUsd: 0.750, markupPct: 25 },
   "ffmpeg":            { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "render-video":      { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "video-composer":    { provider: "Anthropic", providerCostUsd: 0.010, markupPct: 25 },

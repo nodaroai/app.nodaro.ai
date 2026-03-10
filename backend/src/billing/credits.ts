@@ -107,6 +107,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   "topaz-image-upscale": 4,      // 10 KIE cr, $0.05 (2K default)
+  "topaz-image-upscale:4K": 7,   // 20 KIE cr, $0.10
+  "topaz-image-upscale:8K": 13,  // 40 KIE cr, $0.20
   "grok-upscale": 4,             // 10 KIE cr, $0.05
   // ── Image-to-Image ──
   "flux-i2i": 5,                 // 14 KIE cr, $0.07 (1K default)
@@ -125,6 +127,9 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ideogram-reframe": 3,         // 7 KIE cr, $0.035 (V3 Reframe BALANCED)
   "ideogram-reframe:TURBO": 2,   // 3.5 KIE cr, $0.0175
   "ideogram-reframe:QUALITY": 4, // 10 KIE cr, $0.05
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "qwen-i2i": 2,                 // 4 KIE cr, $0.02
   ***REDACTED-OSS-SCRUB***
   "seedream-edit": 3,            // 6.5 KIE cr, $0.032
@@ -152,6 +157,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "bytedance-pro-fast": 19,      // 60 KIE cr, $0.30 (not in KIE pricing data)
   "kling-master": 50,            // 160 KIE cr, $0.80 (Master 5s)
   "runway-kie": 4,               // 12 KIE cr, $0.06 (5s, 720p)
+  // ── Sora Watermark Removal ──
+  "sora-watermark-remove": 4,    // 10 KIE cr, $0.05
   // ── Video Extend ──
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -167,6 +174,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   "motion-transfer": 10,         // 30 KIE cr, $0.15 (kling 2.6 motion, 6 cr/sec * 5s)
   "kling-motion": 10,            // 30 KIE cr, $0.15
+  "kling-3.0-motion": 4,         // 12 KIE cr, $0.06 (720p, std)
+  "kling-3.0-motion:1080p": 7,   // 20 KIE cr, $0.10 (1080p, pro)
   // ── Lip Sync ──
   "kling-avatar": 13,            // 40 KIE cr, $0.20 (8 cr/sec * 5s)
   "kling-avatar-pro": 25,        // 80 KIE cr, $0.40 (16 cr/sec * 5s)
@@ -187,6 +196,13 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-separate": 4,            // 10 KIE cr, vocal separation
   "suno-separate-stem": 16,      // 50 KIE cr, full stem separation
   "suno-music-video": 1,         // 2 KIE cr
+  "suno-mashup": 4,              // 12 KIE cr
+  "suno-replace-section": 2,     // 6 KIE cr
+  "suno-style-boost": 1,         // 2 KIE cr
+  "suno-add-instrumental": 4,    // 12 KIE cr
+  "suno-add-vocals": 4,          // 12 KIE cr
+  "suno-convert-wav": 1,         // 2 KIE cr
+  "suno-upload-extend": 4,       // 12 KIE cr
   "musicgen": 7,                 // Replicate Meta MusicGen
   "lyria": 7,                    // Replicate Google Lyria 2
   "bark": 7,                     // Replicate Suno Bark
@@ -202,6 +218,14 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-voice-design": 5,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 3, // ElevenLabs forced alignment
   "infinitalk": 19,              // 60 KIE cr, $0.30 (12 cr/sec * 5s at 720p)
+  // ── Sora 2 Pro Storyboard ──
+  "sora-storyboard": 47,          // 150 KIE cr, $0.75 (10 frames)
+  "sora-storyboard:15": 85,       // 270 KIE cr, $1.35 (15/25 frames)
+  "sora-storyboard:25": 85,       // 270 KIE cr, $1.35 (25 frames, same cost as 15)
+  // ── Speech-to-Video ──
+  "speech-to-video": 4,           // 12 KIE cr, $0.06 (480p)
+  "speech-to-video:580p": 6,      // 18 KIE cr, $0.09
+  "speech-to-video:720p": 8,      // 24 KIE cr, $0.12
   // ── Processing ──
   "topaz": 1,                     // processing
   "ffmpeg": 1,

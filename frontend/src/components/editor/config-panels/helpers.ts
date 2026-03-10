@@ -158,5 +158,6 @@ export function buildCreditModelIdentifier(provider: string, data: Record<string
     data.quality as string | undefined,
     data.resolution as string | undefined,
     data.renderingSpeed as string | undefined,
+    data.targetResolution as string | undefined,
   )
 }

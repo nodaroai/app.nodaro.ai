@@ -173,6 +173,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "video-to-video":
         case "text-to-video":
         case "extend-video":
+        case "sora-storyboard":
           // Clear generated video results, keep settings
           data.generatedResults = []
           data.generatedVideoUrl = undefined
@@ -204,10 +205,23 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         case "dubbing":
         case "voice-remix":
         case "voice-design":
+        case "suno-mashup":
+        case "suno-replace-section":
+        case "suno-add-instrumental":
+        case "suno-add-vocals":
+        case "suno-convert-wav":
+        case "suno-upload-extend":
           // Clear generated audio results, keep settings
           data.generatedResults = []
           data.generatedAudioUrl = undefined
           data.generatedVoiceId = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          break
+
+        case "suno-style-boost":
+          data.generatedResults = []
+          data.generatedText = undefined
           data.activeResultIndex = 0
           data.executionStatus = undefined
           break

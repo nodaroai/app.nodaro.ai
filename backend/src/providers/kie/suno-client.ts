@@ -26,6 +26,7 @@ const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
 // =============================================================================
 
 export type SunoModel = "V4" | "V4_5" | "V4_5PLUS" | "V4_5ALL" | "V5"
+export type SunoAddTrackModel = "V4_5PLUS" | "V5"
 
 export interface SunoGenerateParams {
   /** Song description (simple mode) or ignored when custom lyrics provided */
@@ -147,6 +148,98 @@ export interface SunoMusicVideoParams {
 export interface SunoMusicVideoResult {
   taskId: string
   videoUrl: string
+}
+
+export interface SunoMashupParams {
+  /** List of exactly 2 audio URLs to combine */
+  uploadUrlList: [string, string]
+  /** Suno model version */
+  model?: SunoModel
+  /** Whether to use custom mode */
+  customMode?: boolean
+  /** Music style tags */
+  style?: string
+  /** Song title */
+  title?: string
+  /** Negative style tags to avoid */
+  negativeStyle?: string
+  /** Vocal gender */
+  vocalGender?: string
+}
+
+export interface SunoReplaceSectionParams {
+  /** Suno task ID of the original track */
+  taskId: string
+  /** Suno audio ID of the track */
+  audioId: string
+  /** Start time of section to replace (seconds) */
+  infillStartS: number
+  /** End time of section to replace (seconds, 6-60s, max 50% of song) */
+  infillEndS: number
+  /** Replacement prompt */
+  prompt: string
+  /** Style / genre tags */
+  tags: string
+  /** Song title */
+  title?: string
+}
+
+export interface SunoStyleBoostParams {
+  /** Content text to enhance style for */
+  content: string
+}
+
+export interface SunoStyleBoostResult {
+  text: string
+}
+
+export interface SunoAddInstrumentalParams {
+  /** Suno task ID of the original track */
+  taskId: string
+  /** Suno audio ID of the track */
+  audioId: string
+  /** Model version (V4_5PLUS or V5 only) */
+  model?: SunoAddTrackModel
+}
+
+export interface SunoAddVocalsParams {
+  /** Suno task ID of the original track */
+  taskId: string
+  /** Suno audio ID of the track */
+  audioId: string
+  /** Model version (V4_5PLUS or V5 only) */
+  model?: SunoAddTrackModel
+}
+
+export interface SunoConvertWavParams {
+  /** Suno task ID of the original track */
+  taskId: string
+  /** Suno audio ID of the track */
+  audioId: string
+}
+
+export interface SunoConvertWavResult {
+  taskId: string
+  audioUrl: string
+}
+
+export interface SunoUploadExtendParams {
+  /** URL of uploaded audio to extend from */
+  uploadUrl: string
+  /** Timestamp (in seconds) to continue from */
+  continueAt: number
+  /** Whether to use default parameters */
+  defaultParamFlag?: boolean
+  /** Suno model version */
+  model?: SunoModel
+  /** Music style tags */
+  style?: string
+  /** Song title */
+  title?: string
+  /** Negative style tags to avoid */
+  negativeStyle?: string
+  /** Vocal gender */
+  vocalGender?: string
 }
 
 export interface SunoTrack {
@@ -1081,4 +1174,681 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
     `Suno music video task timed out after ${(SUNO_MAX_POLL_ATTEMPTS * SUNO_POLL_INTERVAL_MS) / 1000} seconds`,
     "Music video generation"
   )
+}
+
+// =============================================================================
+// MASHUP
+// =============================================================================
+
+/**
+ * Combine 2 tracks into a mashup via KIE.ai Suno API.
+ * Endpoint: POST /api/v1/generate/mashup
+ */
+export async function sunoMashup(
+  params: SunoMashupParams
+): Promise<SunoTaskResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Music mashup"
+    )
+  }
+
+  const model = params.model ?? "V5"
+
+  const body: Record<string, unknown> = {
+    upload_url_list: params.uploadUrlList,
+    model,
+    customMode: params.customMode ?? false,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  if (params.style) body.style = params.style
+  if (params.title) body.title = params.title
+  if (params.negativeStyle) body.negative_style = params.negativeStyle
+  if (params.vocalGender) body.vocal_gender = params.vocalGender
+
+  if (DEBUG) console.log(`[Suno] Creating mashup with model ${model}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/generate/mashup`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno] Mashup response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Mashup response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno mashup failed: ${response.status} - ${responseText}`,
+      "Music mashup"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno mashup response is not valid JSON: ${responseText}`,
+      "Music mashup"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno mashup error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Music mashup"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno mashup response missing taskId: ${JSON.stringify(createData)}`,
+      "Music mashup"
+    )
+  }
+
+  if (DEBUG) console.log(`[Suno] Mashup task created: ${taskId}`)
+  return pollSunoTask(taskId)
+}
+
+// =============================================================================
+// REPLACE SECTION
+// =============================================================================
+
+/**
+ * Replace a section of an existing Suno track.
+ * Endpoint: POST /api/v1/generate/replace-section
+ */
+export async function sunoReplaceSection(
+  params: SunoReplaceSectionParams
+): Promise<SunoTaskResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Replace section"
+    )
+  }
+
+  const body: Record<string, unknown> = {
+    taskId: params.taskId,
+    audioId: params.audioId,
+    infill_start_s: params.infillStartS,
+    infill_end_s: params.infillEndS,
+    prompt: params.prompt,
+    tags: params.tags,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  if (params.title) body.title = params.title
+
+  if (DEBUG) console.log(`[Suno] Replacing section for task ${params.taskId}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/generate/replace-section`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno] Replace section response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Replace section response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno replace section failed: ${response.status} - ${responseText}`,
+      "Replace section"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno replace section response is not valid JSON: ${responseText}`,
+      "Replace section"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno replace section error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Replace section"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno replace section response missing taskId: ${JSON.stringify(createData)}`,
+      "Replace section"
+    )
+  }
+
+  if (DEBUG) console.log(`[Suno] Replace section task created: ${taskId}`)
+  return pollSunoTask(taskId)
+}
+
+// =============================================================================
+// STYLE BOOST (SYNCHRONOUS)
+// =============================================================================
+
+/**
+ * Enhance style text via Suno style boost.
+ * Endpoint: POST /api/v1/style/generate — synchronous, returns immediately.
+ */
+export async function sunoStyleBoost(
+  params: SunoStyleBoostParams
+): Promise<SunoStyleBoostResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Style boost"
+    )
+  }
+
+  const body: Record<string, unknown> = {
+    content: params.content,
+  }
+
+  if (DEBUG) console.log(`[Suno] Style boost request`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/style/generate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno] Style boost response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Style boost response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno style boost failed: ${response.status} - ${responseText}`,
+      "Style boost"
+    )
+  }
+
+  let responseData: Record<string, unknown>
+  try {
+    responseData = JSON.parse(responseText) as Record<string, unknown>
+  } catch {
+    throw createSanitizedError(
+      `Suno style boost response is not valid JSON: ${responseText}`,
+      "Style boost"
+    )
+  }
+
+  if ((responseData.code as number) !== 0 && (responseData.code as number) !== 200) {
+    throw createSanitizedError(
+      `Suno style boost error (code ${responseData.code}): ${(responseData.msg ?? responseData.message ?? JSON.stringify(responseData)) as string}`,
+      "Style boost"
+    )
+  }
+
+  // Extract text from the response data
+  const data = responseData.data as Record<string, unknown> | string | undefined
+  let text: string
+  if (typeof data === "string") {
+    text = data
+  } else if (data && typeof data === "object") {
+    text = ((data as Record<string, unknown>).text ?? (data as Record<string, unknown>).style ?? (data as Record<string, unknown>).content ?? JSON.stringify(data)) as string
+  } else {
+    text = JSON.stringify(responseData.data ?? responseData)
+  }
+
+  if (DEBUG) console.log(`[Suno] Style boost completed: ${text.substring(0, 100)}...`)
+  return { text }
+}
+
+// =============================================================================
+// ADD INSTRUMENTAL
+// =============================================================================
+
+/**
+ * Add instrumental track to a Suno song.
+ * Endpoint: POST /api/v1/generate/add-instrumental
+ */
+export async function sunoAddInstrumental(
+  params: SunoAddInstrumentalParams
+): Promise<SunoTaskResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Add instrumental"
+    )
+  }
+
+  const model = params.model ?? "V5"
+
+  const body: Record<string, unknown> = {
+    taskId: params.taskId,
+    audioId: params.audioId,
+    model,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  if (DEBUG) console.log(`[Suno] Adding instrumental to task ${params.taskId}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/generate/add-instrumental`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno] Add instrumental response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Add instrumental response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno add instrumental failed: ${response.status} - ${responseText}`,
+      "Add instrumental"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno add instrumental response is not valid JSON: ${responseText}`,
+      "Add instrumental"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno add instrumental error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Add instrumental"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno add instrumental response missing taskId: ${JSON.stringify(createData)}`,
+      "Add instrumental"
+    )
+  }
+
+  if (DEBUG) console.log(`[Suno] Add instrumental task created: ${taskId}`)
+  return pollSunoTask(taskId)
+}
+
+// =============================================================================
+// ADD VOCALS
+// =============================================================================
+
+/**
+ * Add vocals to a Suno song.
+ * Endpoint: POST /api/v1/generate/add-vocals
+ */
+export async function sunoAddVocals(
+  params: SunoAddVocalsParams
+): Promise<SunoTaskResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Add vocals"
+    )
+  }
+
+  const model = params.model ?? "V5"
+
+  const body: Record<string, unknown> = {
+    taskId: params.taskId,
+    audioId: params.audioId,
+    model,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  if (DEBUG) console.log(`[Suno] Adding vocals to task ${params.taskId}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/generate/add-vocals`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno] Add vocals response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Add vocals response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno add vocals failed: ${response.status} - ${responseText}`,
+      "Add vocals"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno add vocals response is not valid JSON: ${responseText}`,
+      "Add vocals"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno add vocals error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Add vocals"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno add vocals response missing taskId: ${JSON.stringify(createData)}`,
+      "Add vocals"
+    )
+  }
+
+  if (DEBUG) console.log(`[Suno] Add vocals task created: ${taskId}`)
+  return pollSunoTask(taskId)
+}
+
+// =============================================================================
+// CONVERT WAV
+// =============================================================================
+
+/**
+ * Convert a Suno track to WAV format.
+ * Endpoint: POST /api/v1/wav/generate
+ * Poll: GET /api/v1/wav/record-info?taskId=
+ */
+export async function sunoConvertWav(
+  params: SunoConvertWavParams
+): Promise<SunoConvertWavResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "WAV conversion"
+    )
+  }
+
+  const body: Record<string, unknown> = {
+    taskId: params.taskId,
+    audioId: params.audioId,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  if (DEBUG) console.log(`[Suno] Converting to WAV for task ${params.taskId}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/wav/generate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno] WAV convert response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] WAV convert response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno WAV convert failed: ${response.status} - ${responseText}`,
+      "WAV conversion"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno WAV convert response is not valid JSON: ${responseText}`,
+      "WAV conversion"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno WAV convert error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "WAV conversion"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno WAV convert response missing taskId: ${JSON.stringify(createData)}`,
+      "WAV conversion"
+    )
+  }
+
+  if (DEBUG) console.log(`[Suno] WAV convert task created: ${taskId}`)
+  return pollSunoWavTask(taskId)
+}
+
+/**
+ * Poll a Suno WAV conversion task until completion.
+ * Uses wav/record-info endpoint (similar to mp4/record-info).
+ */
+async function pollSunoWavTask(taskId: string): Promise<SunoConvertWavResult> {
+  const apiKey = config.KIE_API_KEY!
+
+  for (let attempts = 1; attempts <= SUNO_MAX_POLL_ATTEMPTS; attempts++) {
+    await sleep(pollDelay(attempts))
+
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/wav/record-info?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[Suno] WAV poll attempt ${attempts} timeout, retrying...`)
+        continue
+      }
+      throw err
+    }
+
+    const detailText = await detailResponse.text()
+    let detailData: Record<string, unknown>
+    try {
+      detailData = JSON.parse(detailText) as Record<string, unknown>
+    } catch {
+      console.warn(`[Suno] WAV poll attempt ${attempts} invalid JSON`)
+      continue
+    }
+
+    const data = detailData.data as Record<string, unknown> | undefined
+    const status = data?.status as string | undefined
+    const resp = data?.response as Record<string, unknown> | undefined
+
+    if (DEBUG) console.log(
+      `[Suno] WAV task ${taskId} status: ${status ?? "unknown"} (attempt ${attempts})`
+    )
+    if (DEBUG) console.log(`[Suno] WAV raw response:`, JSON.stringify(detailData).substring(0, 500))
+
+    // Check for failure statuses
+    if (status === "FAILED" || status?.includes("FAILED") || status?.includes("ERROR")) {
+      const reason =
+        data?.failReason ??
+        data?.errorMessage ??
+        "Unknown error"
+      throw createSanitizedError(
+        `Suno WAV task failed: ${reason}`,
+        "WAV conversion"
+      )
+    }
+
+    // Success: look for audioUrl / wav_url in response
+    const audioUrl = (resp?.audioUrl ?? resp?.audio_url ?? resp?.wavUrl ?? resp?.wav_url) as string | undefined
+    if (audioUrl) {
+      if (DEBUG) console.log(`[Suno] WAV task ${taskId} completed`)
+      return { taskId, audioUrl }
+    }
+
+    // Check top-level success status with response data
+    if ((status === "SUCCESS" || status === "FIRST_SUCCESS") && resp) {
+      const possibleUrl = Object.values(resp).find(
+        (v) => typeof v === "string" && (v.endsWith(".wav") || v.includes("wav") || v.startsWith("http"))
+      ) as string | undefined
+      if (possibleUrl) {
+        if (DEBUG) console.log(`[Suno] WAV task ${taskId} completed (from status)`)
+        return { taskId, audioUrl: possibleUrl }
+      }
+    }
+  }
+
+  throw createSanitizedError(
+    `Suno WAV task timed out after ${(SUNO_MAX_POLL_ATTEMPTS * SUNO_POLL_INTERVAL_MS) / 1000} seconds`,
+    "WAV conversion"
+  )
+}
+
+// =============================================================================
+// UPLOAD EXTEND
+// =============================================================================
+
+/**
+ * Extend from uploaded audio via KIE.ai Suno API.
+ * Endpoint: POST /api/v1/generate/upload-extend
+ */
+export async function sunoUploadExtend(
+  params: SunoUploadExtendParams
+): Promise<SunoTaskResult> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(
+      "KIE_API_KEY is not configured",
+      "Upload extend"
+    )
+  }
+
+  const model = params.model ?? "V5"
+
+  const body: Record<string, unknown> = {
+    upload_url: params.uploadUrl,
+    continueAt: params.continueAt,
+    defaultParamFlag: params.defaultParamFlag ?? false,
+    model,
+    callBackUrl: "https://callback.placeholder",
+  }
+
+  if (params.style) body.style = params.style
+  if (params.title) body.title = params.title
+  if (params.negativeStyle) body.negative_style = params.negativeStyle
+  if (params.vocalGender) body.vocal_gender = params.vocalGender
+
+  if (DEBUG) console.log(`[Suno] Upload extend with model ${model}`)
+  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
+
+  const response = await fetch(
+    `${KIE_API_BASE}/api/v1/generate/upload-extend`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    }
+  )
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno] Upload extend response status: ${response.status}`)
+  if (DEBUG) console.log(`[Suno] Upload extend response: ${responseText.substring(0, 500)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `Suno upload extend failed: ${response.status} - ${responseText}`,
+      "Upload extend"
+    )
+  }
+
+  let createData: SunoCreateResponse
+  try {
+    createData = JSON.parse(responseText) as SunoCreateResponse
+  } catch {
+    throw createSanitizedError(
+      `Suno upload extend response is not valid JSON: ${responseText}`,
+      "Upload extend"
+    )
+  }
+
+  if (createData.code !== 0 && createData.code !== 200) {
+    throw createSanitizedError(
+      `Suno upload extend error (code ${createData.code}): ${createData.msg ?? createData.message ?? JSON.stringify(createData)}`,
+      "Upload extend"
+    )
+  }
+
+  const taskId = createData.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `Suno upload extend response missing taskId: ${JSON.stringify(createData)}`,
+      "Upload extend"
+    )
+  }
+
+  if (DEBUG) console.log(`[Suno] Upload extend task created: ${taskId}`)
+  return pollSunoTask(taskId)
 }

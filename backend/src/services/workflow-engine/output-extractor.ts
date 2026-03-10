@@ -270,6 +270,8 @@ const VIDEO_RESULT_TYPES = new Set([
   "video-to-video",
   "text-to-video",
   "lip-sync",
+  "speech-to-video",
+  "sora-storyboard",
   "motion-transfer",
   "video-upscale",
   "suno-music-video",
@@ -296,6 +298,12 @@ const AUDIO_RESULT_TYPES = new Set([
   "suno-cover",
   "suno-extend",
   "suno-separate",
+  "suno-mashup",
+  "suno-replace-section",
+  "suno-add-instrumental",
+  "suno-add-vocals",
+  "suno-convert-wav",
+  "suno-upload-extend",
   "text-to-dialogue",
   "voice-changer",
   "dubbing",
@@ -378,7 +386,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   }
 
   // Text-generating nodes
-  if (type === "ai-writer" || type === "suno-lyrics") {
+  if (type === "ai-writer" || type === "suno-lyrics" || type === "suno-style-boost") {
     const text = data.generatedText as string | undefined
     return text ? { text } : undefined
   }

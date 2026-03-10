@@ -50,6 +50,8 @@ const mockResizeVideoApi = vi.fn()
 const mockAdjustVolumeApi = vi.fn()
 const mockAddCaptionsApi = vi.fn()
 const mockMixAudioApi = vi.fn()
+const mockSpeechToVideoApi = vi.fn()
+const mockSoraStoryboardApi = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 let mockCharacterDefinitions: any[] = []
@@ -107,6 +109,13 @@ vi.mock("@/lib/api", () => ({
   sunoLyricsApi: vi.fn(),
   sunoSeparateApi: vi.fn(),
   sunoMusicVideoApi: vi.fn(),
+  sunoMashupApi: vi.fn(),
+  sunoReplaceSectionApi: vi.fn(),
+  sunoStyleBoostApi: vi.fn(),
+  sunoAddInstrumentalApi: vi.fn(),
+  sunoAddVocalsApi: vi.fn(),
+  sunoConvertWavApi: vi.fn(),
+  sunoUploadExtendApi: vi.fn(),
   transcribeApi: vi.fn(),
   downloadYouTubeAudio: vi.fn(),
   lipSyncApi: (...args: unknown[]) => mockLipSyncApi(...args),
@@ -124,6 +133,8 @@ vi.mock("@/lib/api", () => ({
   adjustVolumeApi: (...args: unknown[]) => mockAdjustVolumeApi(...args),
   addCaptionsApi: (...args: unknown[]) => mockAddCaptionsApi(...args),
   mixAudioApi: (...args: unknown[]) => mockMixAudioApi(...args),
+  speechToVideoApi: (...args: unknown[]) => mockSpeechToVideoApi(...args),
+  soraStoryboardApi: (...args: unknown[]) => mockSoraStoryboardApi(...args),
   combineVideos: vi.fn(),
   editImage: vi.fn(),
   imageToImage: vi.fn(),
@@ -409,6 +420,8 @@ describe("motion-transfer", () => {
       "front",
       "1080p",
       "u1",
+      undefined,
+      undefined,
     )
   })
 })
@@ -1177,6 +1190,199 @@ describe("mix-audio", () => {
       ["http://a.mp3", "http://b.mp3"],
       [100, 100],
       "u1",
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// speech-to-video
+// ---------------------------------------------------------------------------
+
+describe("speech-to-video", () => {
+  it("rejects when no image input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    const promise = executeNode(
+      makeNode("speech-to-video", { prompt: "talking" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No image input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("rejects when no audio track", async () => {
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://img.png" })
+    const promise = executeNode(
+      makeNode("speech-to-video", { prompt: "talking" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio track")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("rejects when no prompt", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://img.png",
+      audioUrl: "http://audio.mp3",
+    })
+    const promise = executeNode(
+      makeNode("speech-to-video", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No prompt")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls speechToVideoApi with correct args", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://portrait.png",
+      audioUrl: "http://voice.mp3",
+      prompt: "A person speaking",
+    })
+    mockSpeechToVideoApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("speech-to-video", {
+        prompt: "A person speaking",
+        resolution: "720p",
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Speech to Video",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockSpeechToVideoApi).toHaveBeenCalledWith({
+      imageUrl: "http://portrait.png",
+      audioUrl: "http://voice.mp3",
+      prompt: "A person speaking",
+      resolution: "720p",
+      negativePrompt: undefined,
+      seed: undefined,
+      numFrames: undefined,
+      fps: undefined,
+      inferenceSteps: undefined,
+      guidanceScale: undefined,
+      shift: undefined,
+      userId: "u1",
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// sora-storyboard
+// ---------------------------------------------------------------------------
+
+describe("sora-storyboard", () => {
+  it("rejects when no scene descriptions", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("sora-storyboard", { shots: [{ scene: "", duration: 5 }] }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No scene descriptions")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls soraStoryboardApi with correct args", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://ref.png",
+    })
+    mockSoraStoryboardApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("sora-storyboard", {
+        shots: [
+          { scene: "A sunset over ocean", duration: 5 },
+          { scene: "A mountain view", duration: 3 },
+        ],
+        nFrames: "20",
+        aspectRatio: "landscape",
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Sora Storyboard",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockSoraStoryboardApi).toHaveBeenCalledWith({
+      shots: [
+        { scene: "A sunset over ocean", duration: 5 },
+        { scene: "A mountain view", duration: 3 },
+      ],
+      nFrames: "20",
+      imageUrls: ["http://ref.png"],
+      aspectRatio: "landscape",
+      userId: "u1",
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// motion-transfer with kling-3.0 provider
+// ---------------------------------------------------------------------------
+
+describe("motion-transfer with kling-3.0 provider", () => {
+  it("passes provider and backgroundSource to motionTransferApi", async () => {
+    const imageNode = {
+      id: "img1",
+      type: "generate-image",
+      data: { label: "Img" },
+    }
+    const videoNode = {
+      id: "vid1",
+      type: "image-to-video",
+      data: { label: "Vid" },
+    }
+    mockNodes = [makeNode("motion-transfer", {}), imageNode, videoNode]
+    mockEdges = [
+      { id: "e1", source: "img1", target: "n1" },
+      { id: "e2", source: "vid1", target: "n1" },
+    ]
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.id === "img1") return "http://character.png"
+      if (node.id === "vid1") return "http://motion.mp4"
+      return undefined
+    })
+    mockResolveNodeInputs.mockReturnValue({})
+    mockMotionTransferApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("motion-transfer", {
+        prompt: "dancing",
+        characterOrientation: "front",
+        resolution: "1080p",
+        provider: "kling-3.0",
+        backgroundSource: "greenscreen",
+      }),
+      makeCtx(),
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockMotionTransferApi).toHaveBeenCalledWith(
+      "http://character.png",
+      "http://motion.mp4",
+      "dancing",
+      "front",
+      "1080p",
+      "u1",
+      "kling-3.0",
+      "greenscreen",
     )
   })
 })

@@ -182,6 +182,90 @@ describe("EXECUTABLE_TYPES", () => {
 })
 
 // ---------------------------------------------------------------------------
+// New nodes: EXECUTABLE_TYPES membership
+// ---------------------------------------------------------------------------
+
+describe("EXECUTABLE_TYPES — new nodes", () => {
+  it("contains suno-mashup", () => {
+    expect(EXECUTABLE_TYPES.has("suno-mashup")).toBe(true)
+  })
+
+  it("contains suno-replace-section", () => {
+    expect(EXECUTABLE_TYPES.has("suno-replace-section")).toBe(true)
+  })
+
+  it("contains suno-style-boost", () => {
+    expect(EXECUTABLE_TYPES.has("suno-style-boost")).toBe(true)
+  })
+
+  it("contains suno-add-instrumental", () => {
+    expect(EXECUTABLE_TYPES.has("suno-add-instrumental")).toBe(true)
+  })
+
+  it("contains suno-add-vocals", () => {
+    expect(EXECUTABLE_TYPES.has("suno-add-vocals")).toBe(true)
+  })
+
+  it("contains suno-convert-wav", () => {
+    expect(EXECUTABLE_TYPES.has("suno-convert-wav")).toBe(true)
+  })
+
+  it("contains suno-upload-extend", () => {
+    expect(EXECUTABLE_TYPES.has("suno-upload-extend")).toBe(true)
+  })
+
+  it("contains speech-to-video", () => {
+    expect(EXECUTABLE_TYPES.has("speech-to-video")).toBe(true)
+  })
+
+  it("contains sora-storyboard", () => {
+    expect(EXECUTABLE_TYPES.has("sora-storyboard")).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// New nodes: NODE_CREDIT_COSTS values
+// ---------------------------------------------------------------------------
+
+describe("NODE_CREDIT_COSTS — new nodes", () => {
+  it("has suno-mashup at 4 credits", () => {
+    expect(NODE_CREDIT_COSTS["suno-mashup"]).toBe(4)
+  })
+
+  it("has suno-replace-section at 2 credits", () => {
+    expect(NODE_CREDIT_COSTS["suno-replace-section"]).toBe(2)
+  })
+
+  it("has suno-style-boost at 1 credit", () => {
+    expect(NODE_CREDIT_COSTS["suno-style-boost"]).toBe(1)
+  })
+
+  it("has suno-add-instrumental at 4 credits", () => {
+    expect(NODE_CREDIT_COSTS["suno-add-instrumental"]).toBe(4)
+  })
+
+  it("has suno-add-vocals at 4 credits", () => {
+    expect(NODE_CREDIT_COSTS["suno-add-vocals"]).toBe(4)
+  })
+
+  it("has suno-convert-wav at 1 credit", () => {
+    expect(NODE_CREDIT_COSTS["suno-convert-wav"]).toBe(1)
+  })
+
+  it("has suno-upload-extend at 4 credits", () => {
+    expect(NODE_CREDIT_COSTS["suno-upload-extend"]).toBe(4)
+  })
+
+  it("has speech-to-video at 4 credits", () => {
+    expect(NODE_CREDIT_COSTS["speech-to-video"]).toBe(4)
+  })
+
+  it("has sora-storyboard at 47 credits", () => {
+    expect(NODE_CREDIT_COSTS["sora-storyboard"]).toBe(47)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // MAX_CONSECUTIVE_POLL_FAILURES
 // ---------------------------------------------------------------------------
 

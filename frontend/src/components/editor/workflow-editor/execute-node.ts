@@ -11,6 +11,13 @@ import {
   sunoLyricsApi,
   sunoSeparateApi,
   sunoMusicVideoApi,
+  sunoMashupApi,
+  sunoReplaceSectionApi,
+  sunoStyleBoostApi,
+  sunoAddInstrumentalApi,
+  sunoAddVocalsApi,
+  sunoConvertWavApi,
+  sunoUploadExtendApi,
   transcribeApi,
   imageToTextApi,
   voiceChangerApi,
@@ -20,6 +27,8 @@ import {
   forcedAlignmentApi,
   downloadYouTubeAudio,
   lipSyncApi,
+  speechToVideoApi,
+  soraStoryboardApi,
   motionTransferApi,
   videoUpscaleApi,
   extendVideo,
@@ -70,10 +79,19 @@ import type {
   SunoLyricsData,
   SunoSeparateData,
   SunoMusicVideoData,
+  SunoMashupData,
+  SunoReplaceSectionData,
+  SunoStyleBoostData,
+  SunoAddInstrumentalData,
+  SunoAddVocalsData,
+  SunoConvertWavData,
+  SunoUploadExtendData,
   TranscribeData,
   ImageToTextData,
   AIWriterNodeData,
   LipSyncData,
+  SpeechToVideoData,
+  SoraStoryboardData,
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
@@ -375,6 +393,8 @@ export function executeNode(
       result.nativeNegativePrompt,
       imgData.seed,
       imgData.renderingSpeed || undefined,
+      imgData.styleType || undefined,
+      imgData.expandPrompt,
     );
   }
 
@@ -431,6 +451,7 @@ export function executeNode(
 
     return runEditImage(node.id, imageUrl, ctx, prompt, provider, {
       upscaleFactor: editData.upscaleFactor,
+      targetResolution: editData.targetResolution,
       aspectRatio: editData.aspectRatio,
       negativePrompt: editData.negativePrompt,
       style: editData.style,
@@ -623,6 +644,7 @@ export function executeNode(
       i2vData.videoSize,
       i2vData.seed,
       i2vData.cameraFixed,
+      i2vData.removeWatermark,
     );
   }
 
@@ -667,6 +689,7 @@ export function executeNode(
       t2vProvider === "kling" ||
       t2vProvider === "kling-turbo" ||
       t2vProvider === "kling-3.0";
+    const t2vRemoveWm = t2vData.removeWatermark;
     const t2vOptions = isKlingVariant
       ? {
           duration: t2vData.duration,
@@ -687,9 +710,10 @@ export function executeNode(
                 urls: string[];
               }>
             | undefined,
+          ...(t2vRemoveWm && { removeWatermark: t2vRemoveWm }),
         }
-      : t2vData.negativePrompt
-        ? { negativePrompt: t2vData.negativePrompt }
+      : t2vData.negativePrompt || t2vRemoveWm
+        ? { ...(t2vData.negativePrompt && { negativePrompt: t2vData.negativePrompt }), ...(t2vRemoveWm && { removeWatermark: t2vRemoveWm }) }
         : undefined;
     return runTextToVideoGeneration(node.id, prompt, ctx, t2vProvider, t2vOptions);
   }
@@ -1319,6 +1343,182 @@ export function executeNode(
     );
   }
 
+  if (node.type === "suno-mashup") {
+    const d = node.data as SunoMashupData;
+    // Mashup needs 2 audio inputs - collect from audioUrls or fallback
+    const audioUrls = inputs.audioUrls ?? [];
+    const audioUrl1 = audioUrls[0] ?? inputs.audioUrl;
+    const audioUrl2 = audioUrls[1];
+    if (!audioUrl1 || !audioUrl2) {
+      toast.error(`Node "${d.label}": connect two audio sources for mashup`);
+      return Promise.reject(new Error("Need two audio inputs"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        sunoMashupApi({
+          audioUrl1,
+          audioUrl2,
+          model: d.model || undefined,
+          customMode: d.customMode ?? false,
+          style: d.style || undefined,
+          title: d.title || undefined,
+          negativeStyle: d.negativeStyle || undefined,
+          vocalGender: d.vocalGender || undefined,
+          userId: ctx.userId,
+        }),
+      "generatedAudioUrl",
+      "Suno Mashup",
+      ctx,
+    );
+  }
+
+  if (node.type === "suno-replace-section") {
+    const d = node.data as SunoReplaceSectionData;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        sunoReplaceSectionApi({
+          audioUrl,
+          infillStartS: d.infillStartS ?? 0,
+          infillEndS: d.infillEndS ?? 30,
+          prompt: d.prompt?.trim() || undefined,
+          tags: d.tags?.trim() || undefined,
+          title: d.title?.trim() || undefined,
+          userId: ctx.userId,
+        }),
+      "generatedAudioUrl",
+      "Suno Replace Section",
+      ctx,
+    );
+  }
+
+  if (node.type === "suno-style-boost") {
+    const d = node.data as SunoStyleBoostData;
+    const content = inputs.prompt ?? d.content?.trim();
+    if (!content) {
+      toast.error(`Node "${d.label}": no content provided`);
+      return Promise.reject(new Error("No content"));
+    }
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      generatedText: undefined,
+    });
+    return sunoStyleBoostApi({ content, userId: ctx.userId })
+      .then((result) => {
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          generatedText: result.text,
+          generatedResults: [{ url: "", timestamp: new Date().toISOString(), jobId: "" }],
+          activeResultIndex: 0,
+        });
+        toast.success("Style Boost completed");
+      })
+      .catch((err) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err instanceof Error ? err.message : "Style boost failed",
+        });
+        throw err;
+      });
+  }
+
+  if (node.type === "suno-add-instrumental") {
+    const d = node.data as SunoAddInstrumentalData;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        sunoAddInstrumentalApi({
+          audioUrl,
+          model: d.model || undefined,
+          userId: ctx.userId,
+        }),
+      "generatedAudioUrl",
+      "Suno Add Instrumental",
+      ctx,
+    );
+  }
+
+  if (node.type === "suno-add-vocals") {
+    const d = node.data as SunoAddVocalsData;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        sunoAddVocalsApi({
+          audioUrl,
+          model: d.model || undefined,
+          userId: ctx.userId,
+        }),
+      "generatedAudioUrl",
+      "Suno Add Vocals",
+      ctx,
+    );
+  }
+
+  if (node.type === "suno-convert-wav") {
+    const d = node.data as SunoConvertWavData;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        sunoConvertWavApi({
+          audioUrl,
+          userId: ctx.userId,
+        }),
+      "generatedAudioUrl",
+      "Suno Convert WAV",
+      ctx,
+    );
+  }
+
+  if (node.type === "suno-upload-extend") {
+    const d = node.data as SunoUploadExtendData;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        sunoUploadExtendApi({
+          audioUrl,
+          prompt: d.prompt?.trim() || undefined,
+          model: d.model || undefined,
+          style: d.style || undefined,
+          title: d.title || undefined,
+          negativeStyle: d.negativeStyle || undefined,
+          vocalGender: d.vocalGender || undefined,
+          continueAt: d.continueAt ?? undefined,
+          defaultParamFlag: d.defaultParamFlag ?? true,
+          userId: ctx.userId,
+        }),
+      "generatedAudioUrl",
+      "Suno Upload Extend",
+      ctx,
+    );
+  }
+
   if (node.type === "transcribe") {
     let audioUrl = inputs.audioUrl ?? inputs.videoUrl;
     if (!audioUrl) {
@@ -1717,6 +1917,114 @@ export function executeNode(
     );
   }
 
+  if (node.type === "speech-to-video") {
+    const s2vData = node.data as SpeechToVideoData;
+
+    let imageUrl: string | undefined = overrideMediaUrl;
+    if (!imageUrl && s2vData.selectedImageNodeId) {
+      const imageNode = nodes.find(
+        (n) => n.id === s2vData.selectedImageNodeId,
+      );
+      if (imageNode) {
+        imageUrl = extractNodeOutput(imageNode);
+      }
+    }
+    if (!imageUrl) {
+      imageUrl = inputs.imageUrl;
+    }
+
+    let audioUrl: string | undefined;
+    if (s2vData.selectedAudioNodeId) {
+      const audioNode = nodes.find(
+        (n) => n.id === s2vData.selectedAudioNodeId,
+      );
+      if (audioNode) {
+        audioUrl = extractNodeOutput(audioNode);
+      }
+    }
+    if (!audioUrl) {
+      audioUrl = inputs.audioUrl;
+    }
+
+    const prompt =
+      overridePrompt || inputs.prompt || s2vData.prompt || "";
+
+    if (!imageUrl) {
+      toast.error(`Node "${s2vData.label}": no image input found`);
+      return Promise.reject(new Error("No image input"));
+    }
+    if (!audioUrl) {
+      toast.error(`Node "${s2vData.label}": no audio track found`);
+      return Promise.reject(new Error("No audio track"));
+    }
+    if (!prompt) {
+      toast.error(`Node "${s2vData.label}": no prompt provided`);
+      return Promise.reject(new Error("No prompt"));
+    }
+
+    return runProcessingNode(
+      node.id,
+      () =>
+        speechToVideoApi({
+          imageUrl: imageUrl!,
+          audioUrl: audioUrl!,
+          prompt,
+          resolution: s2vData.resolution || "480p",
+          negativePrompt: s2vData.negativePrompt || undefined,
+          seed: s2vData.seed || undefined,
+          numFrames: s2vData.numFrames || undefined,
+          fps: s2vData.fps || undefined,
+          inferenceSteps: s2vData.inferenceSteps || undefined,
+          guidanceScale: s2vData.guidanceScale || undefined,
+          shift: s2vData.shift || undefined,
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Speech to Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "sora-storyboard") {
+    const sbData = node.data as SoraStoryboardData;
+
+    // Collect image URLs from connected upstream nodes
+    const imageUrls: string[] = [];
+    if (overrideMediaUrl) {
+      imageUrls.push(overrideMediaUrl);
+    }
+    if (inputs.imageUrl && !imageUrls.includes(inputs.imageUrl)) {
+      imageUrls.push(inputs.imageUrl);
+    }
+    if (inputs.referenceImageUrls) {
+      for (const url of inputs.referenceImageUrls) {
+        if (!imageUrls.includes(url)) imageUrls.push(url);
+      }
+    }
+
+    const shots = sbData.shots ?? [{ scene: "", duration: 5 }];
+    const hasScenes = shots.some((s) => s.scene.trim().length > 0);
+    if (!hasScenes) {
+      toast.error(`Node "${sbData.label}": at least one shot needs a scene description`);
+      return Promise.reject(new Error("No scene descriptions"));
+    }
+
+    return runProcessingNode(
+      node.id,
+      () =>
+        soraStoryboardApi({
+          shots,
+          nFrames: sbData.nFrames || "10",
+          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+          aspectRatio: sbData.aspectRatio || "landscape",
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Sora Storyboard",
+      ctx,
+    );
+  }
+
   if (node.type === "motion-transfer") {
     const mtData = node.data as unknown as MotionTransferData;
 
@@ -1774,6 +2082,8 @@ export function executeNode(
           mtData.characterOrientation || undefined,
           mtData.resolution || undefined,
           ctx.userId,
+          mtData.provider || undefined,
+          mtData.backgroundSource || undefined,
         ),
       "generatedVideoUrl",
       "Motion Transfer",

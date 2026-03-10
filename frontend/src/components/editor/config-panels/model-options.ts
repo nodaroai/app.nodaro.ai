@@ -11,6 +11,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "imagen4-fast", label: "Imagen 4 Fast", desc: "Fast Imagen, lower latency" },
   { value: "imagen4-ultra", label: "Imagen 4 Ultra", desc: "Highest quality Google image gen" },
   { value: "ideogram", label: "Ideogram", desc: "Excellent text rendering, character consistency" },
+  { value: "ideogram-v3", label: "Ideogram V3", desc: "Fast text-to-image, affordable" },
   { value: "qwen", label: "Qwen", desc: "Versatile, good at diverse styles" },
   { value: "seedream", label: "Seedream", desc: "Photorealistic, high detail" },
   { value: "seedream-5-lite", label: "Seedream 5 Lite", desc: "Latest Seedream, fast and sharp" },
@@ -116,11 +117,13 @@ export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> =
   "ideogram-edit": { min: 4, max: 8 },
   "ideogram-remix": { min: 4, max: 8 },
   "ideogram-reframe": { min: 4, max: 8 },
+  "ideogram-v3": { min: 1, max: 3 },
   "nano-banana-2": { min: 2, max: 5 },
   "seedream": { min: 3, max: 4 },
   "seedream-edit": { min: 3, max: 4 },
   "seedream-5-lite": { min: 3, max: 5 },
   "seedream-5-lite-i2i": { min: 3, max: 5 },
+  "topaz-image-upscale": { min: 4, max: 13 },
 }
 
 // =============================================================================
@@ -236,6 +239,7 @@ export const IMAGE_ASPECT_RATIOS: Record<string, readonly { value: string; label
   "imagen4-fast": IMAGEN4_RATIOS,
   "imagen4-ultra": IMAGEN4_RATIOS,
   "ideogram": IDEOGRAM_RATIOS,
+  "ideogram-v3": IDEOGRAM_RATIOS,
   "ideogram-remix": IDEOGRAM_RATIOS,
   "ideogram-reframe": IDEOGRAM_RATIOS,
   "qwen": IDEOGRAM_RATIOS,
@@ -265,6 +269,12 @@ const NANO_BANANA_RESOLUTIONS = [
 const FLUX_RESOLUTIONS = [
   { value: "1K", label: "1K (Standard)" },
   { value: "2K", label: "2K (High)" },
+] as const
+
+export const TOPAZ_IMAGE_RESOLUTIONS = [
+  { value: "2K", label: "2K (Standard)" },
+  { value: "4K", label: "4K (High)" },
+  { value: "8K", label: "8K (Ultra)" },
 ] as const
 
 export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly { value: string; label: string }[]> = {

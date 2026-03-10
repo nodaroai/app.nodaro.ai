@@ -191,6 +191,16 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     imageParam: "image_url",  // Single URL string
     extraParams: { image_size: "landscape_16_9", rendering_speed: "BALANCED" },
   },
+  // Ideogram V3 Base (text-to-image, no character consistency)
+  // See: docs.kie.ai/market/ideogram/v3-text-to-image.md
+  "ideogram-v3": {
+    model: "ideogram/v3-text-to-image",
+    credits: 7,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
+    // Handled via composite identifiers "ideogram-v3:TURBO", "ideogram-v3:QUALITY"
+    extraParams: { image_size: "landscape_16_9", style_type: "AUTO", rendering_speed: "BALANCED" },
+  },
 
   // Qwen family
   // See: docs.kie.ai/market/qwen/text-to-image.md
@@ -760,6 +770,18 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
     imageParam: "input_urls",  // Array format for input images
     extraParams: { character_orientation: "image", resolution: "720p" },
   },
+
+  // Kling 3.0 Motion Control - uses createTask endpoint
+  // background_source: "input_video" or "input_image"
+  // mode: "std" or "pro"
+  "kling-3.0": {
+    model: "kling-3.0/motion-control",
+    credits: 12,
+    ***REDACTED-OSS-SCRUB*** (720p, std mode default)
+    // NOTE: 1080p/pro = 20 KIE cr ($0.10) — handled via composite identifier
+    imageParam: "input_urls",
+    extraParams: { background_source: "input_video", mode: "std" },
+  },
 }
 
 // =============================================================================
@@ -892,6 +914,35 @@ export const KIE_DIALOGUE_MODELS: Record<string, KieModelConfig> = {
 }
 
 // =============================================================================
+// SPEECH-TO-VIDEO MODELS
+// =============================================================================
+export const KIE_SPEECH_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
+  "wan-s2v": {
+    model: "wan/2-2-a14b-speech-to-video-turbo",
+    credits: 12,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "image_url",
+    extraParams: { resolution: "480p" },
+  },
+}
+
+// =============================================================================
+// SORA 2 PRO STORYBOARD MODELS (Multi-shot video from scene descriptions)
+// =============================================================================
+export const KIE_STORYBOARD_MODELS: Record<string, KieModelConfig> = {
+  // Sora 2 Pro Storyboard — multi-shot video from scene descriptions
+  // See: docs.kie.ai/market/sora-2-pro-storyboard/index.md
+  "sora-storyboard": {
+    model: "sora-2-pro-storyboard",
+    credits: 150,
+    cost: 0.75,  // 150 KIE credits * $0.005 (10 frames default)
+    // NOTE: 15/25 frames = 270 KIE credits ($1.35)
+    extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
+  },
+}
+
+// =============================================================================
 // SPECIAL MODELS
 // =============================================================================
 export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
@@ -901,13 +952,22 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
     credits: 60,
     cost: 0.30,
   },
+
+  // Sora 2 Watermark Removal
+  // Uses the generated task's kieTaskId — NOT a standalone model
+  "sora-watermark-remove": {
+    model: "sora-2-watermark-remove",
+    credits: 10,
+    ***REDACTED-OSS-SCRUB***
+    extraParams: {},
+  },
 }
 
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "dialogue" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "storyboard" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "dialogue" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -932,6 +992,10 @@ export function getKieModelConfig(
       return KIE_VIDEO_UPSCALE_MODELS[provider] ?? null
     case "lip-sync":
       return KIE_LIP_SYNC_MODELS[provider] ?? null
+    case "speech-to-video":
+      return KIE_SPEECH_TO_VIDEO_MODELS[provider] ?? null
+    case "storyboard":
+      return KIE_STORYBOARD_MODELS[provider] ?? null
     case "music":
       return KIE_MUSIC_MODELS[provider] ?? null
     case "tts":

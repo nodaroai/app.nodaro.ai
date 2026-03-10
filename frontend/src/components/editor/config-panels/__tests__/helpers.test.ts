@@ -6,6 +6,7 @@ import {
   getConnectedProviderModel,
   extractDisplayValue,
   getModelIdentifier,
+  buildCreditModelIdentifier,
 } from "../helpers"
 import type { SourceNodeInfo } from "../types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -236,5 +237,31 @@ describe("getModelIdentifier", () => {
   it("returns 'unknown' when node has no type and no provider", () => {
     const node = makeNode({ type: undefined as any, data: { label: "X" } as any })
     expect(getModelIdentifier(node)).toBe("unknown")
+  })
+})
+
+describe("buildCreditModelIdentifier", () => {
+  it("returns 'topaz-image-upscale' for 2K (default, no suffix)", () => {
+    expect(buildCreditModelIdentifier("topaz-image-upscale", { targetResolution: "2K" })).toBe("topaz-image-upscale")
+  })
+
+  it("returns 'topaz-image-upscale:4K' for 4K", () => {
+    expect(buildCreditModelIdentifier("topaz-image-upscale", { targetResolution: "4K" })).toBe("topaz-image-upscale:4K")
+  })
+
+  it("returns 'topaz-image-upscale:8K' for 8K", () => {
+    expect(buildCreditModelIdentifier("topaz-image-upscale", { targetResolution: "8K" })).toBe("topaz-image-upscale:8K")
+  })
+
+  it("returns 'ideogram-v3:TURBO' for TURBO renderingSpeed", () => {
+    expect(buildCreditModelIdentifier("ideogram-v3", { renderingSpeed: "TURBO" })).toBe("ideogram-v3:TURBO")
+  })
+
+  it("returns 'ideogram-v3:QUALITY' for QUALITY renderingSpeed", () => {
+    expect(buildCreditModelIdentifier("ideogram-v3", { renderingSpeed: "QUALITY" })).toBe("ideogram-v3:QUALITY")
+  })
+
+  it("returns 'ideogram-v3' for BALANCED renderingSpeed (default, no suffix)", () => {
+    expect(buildCreditModelIdentifier("ideogram-v3", { renderingSpeed: "BALANCED" })).toBe("ideogram-v3")
   })
 })

@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => {
   const mockMotionTransfer = vi.fn()
   const mockVideoUpscale = vi.fn()
 
+  const mockSpeechToVideo = vi.fn()
+  const mockSoraStoryboard = vi.fn()
+
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/videos/raw.mp4")
   const mockMergeVideoAudio = vi.fn().mockResolvedValue("/tmp/workdir/merged.mp4")
   const mockCleanupWorkDir = vi.fn().mockResolvedValue(undefined)
@@ -34,6 +37,8 @@ const mocks = vi.hoisted(() => {
     mockLipSync,
     mockMotionTransfer,
     mockVideoUpscale,
+    mockSpeechToVideo,
+    mockSoraStoryboard,
     mockUploadToR2,
     mockMergeVideoAudio,
     mockCleanupWorkDir,
@@ -81,6 +86,13 @@ vi.mock("../../shared.js", () => ({
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
 }))
 
+vi.mock("@/providers/kie/video.js", () => ({
+  KieVideoProvider: class {
+    speechToVideo = mocks.mockSpeechToVideo
+    soraStoryboard = mocks.mockSoraStoryboard
+  },
+}))
+
 // ---------------------------------------------------------------------------
 // Import module under test
 // ---------------------------------------------------------------------------
@@ -121,6 +133,16 @@ const VIDEO_RESULT = {
 // Tests
 // ---------------------------------------------------------------------------
 
+const S2V_RESULT = {
+  url: "https://provider.example.com/s2v.mp4",
+  cost: 0.06,
+}
+
+const STORYBOARD_RESULT = {
+  url: "https://provider.example.com/storyboard.mp4",
+  cost: 0.75,
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockImageToVideo.mockResolvedValue(VIDEO_RESULT)
@@ -129,6 +151,8 @@ beforeEach(() => {
   mocks.mockLipSync.mockResolvedValue(VIDEO_RESULT)
   mocks.mockMotionTransfer.mockResolvedValue(VIDEO_RESULT)
   mocks.mockVideoUpscale.mockResolvedValue(VIDEO_RESULT)
+  mocks.mockSpeechToVideo.mockResolvedValue(S2V_RESULT)
+  mocks.mockSoraStoryboard.mockResolvedValue(STORYBOARD_RESULT)
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
   mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/videos/raw.mp4")
@@ -536,5 +560,118 @@ describe("video-upscale handler", () => {
     expect(mocks.mockVideoUpscale).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), "4", expect.anything(),
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// speech-to-video
+// ---------------------------------------------------------------------------
+
+describe("speech-to-video handler", () => {
+  const handler = videoAIHandlers["speech-to-video"]
+
+  it("happy path: generates, uploads, saves, commits credits", async () => {
+    const job = makeJob("speech-to-video", {
+      imageUrl: "https://img.png",
+      audioUrl: "https://audio.mp3",
+      prompt: "talking head",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockSpeechToVideo).toHaveBeenCalledWith(
+      "https://img.png", "https://audio.mp3", "talking head", undefined,
+      expect.objectContaining({}),
+    )
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
+    expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+  })
+
+  it("passes resolution and optional params", async () => {
+    const job = makeJob("speech-to-video", {
+      imageUrl: "https://img.png",
+      audioUrl: "https://audio.mp3",
+      prompt: "talking",
+      resolution: "720p",
+      seed: 42,
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockSpeechToVideo).toHaveBeenCalledWith(
+      "https://img.png", "https://audio.mp3", "talking", "720p",
+      expect.objectContaining({ seed: 42 }),
+    )
+  })
+
+  it("returns early when cancelled", async () => {
+    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+    const job = makeJob("speech-to-video", {
+      imageUrl: "https://img.png",
+      audioUrl: "https://audio.mp3",
+      prompt: "cancel",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// sora-storyboard
+// ---------------------------------------------------------------------------
+
+describe("sora-storyboard handler", () => {
+  const handler = videoAIHandlers["sora-storyboard"]
+
+  it("happy path: generates storyboard video, uploads, saves, commits credits", async () => {
+    const shots = [
+      { scene: "A sunset over the ocean", duration: 3 },
+      { scene: "A bird flying", duration: 2 },
+    ]
+    const job = makeJob("sora-storyboard", { shots })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockSoraStoryboard).toHaveBeenCalledWith(
+      shots, undefined, undefined, undefined, expect.any(Function),
+    )
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
+    expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+  })
+
+  it("passes nFrames, imageUrls, and aspectRatio when provided", async () => {
+    const shots = [{ scene: "test", duration: 5 }]
+    const job = makeJob("sora-storyboard", {
+      shots,
+      nFrames: "15",
+      imageUrls: ["https://img1.png"],
+      aspectRatio: "portrait",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockSoraStoryboard).toHaveBeenCalledWith(
+      shots, "15", ["https://img1.png"], "portrait", expect.any(Function),
+    )
+  })
+
+  it("passes progress callback that updates DB", async () => {
+    const shots = [{ scene: "test", duration: 5 }]
+    const job = makeJob("sora-storyboard", { shots })
+    await handler(job as never, makeCtx())
+
+    // Grab the onProgress callback from the call
+    const onProgress = mocks.mockSoraStoryboard.mock.calls[0][4]
+    await onProgress(60)
+
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ progress: 60 })
+  })
+
+  it("returns early when cancelled", async () => {
+    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+    const shots = [{ scene: "cancel", duration: 5 }]
+    const job = makeJob("sora-storyboard", { shots })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
   })
 })

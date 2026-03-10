@@ -32,6 +32,8 @@ import {
   KIE_MOTION_TRANSFER_MODELS,
   KIE_VIDEO_UPSCALE_MODELS,
   KIE_LIP_SYNC_MODELS,
+  KIE_SPEECH_TO_VIDEO_MODELS,
+  KIE_STORYBOARD_MODELS,
   durationToNFrames,
 } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -327,7 +329,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson, rawRecordInfo } = await runKieTask(
+    const { resultJson, rawRecordInfo, taskId: kieTaskId } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -357,7 +359,7 @@ export class KieVideoProvider
       notes: `i2v-standard ${provider}`,
     })
 
-    return { url: videoUrl, cost: modelConfig.cost }
+    return { url: videoUrl, cost: modelConfig.cost, ...(kieTaskId && { kieTaskId }) }
   }
 
   async textToVideo(
@@ -486,7 +488,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, taskId: kieTaskId } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -506,7 +508,7 @@ export class KieVideoProvider
       `[KIE.ai] Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: videoUrl, cost: modelConfig.cost }
+    return { url: videoUrl, cost: modelConfig.cost, ...(kieTaskId && { kieTaskId }) }
   }
 
   async videoToVideo(
@@ -601,12 +603,15 @@ export class KieVideoProvider
     options?: ProviderOptions & {
       characterOrientation?: "image" | "video"
       resolution?: "720p" | "1080p"
+      provider?: string
+      backgroundSource?: "input_video" | "input_image"
     }
   ): Promise<ProviderResult> {
-    const modelConfig = KIE_MOTION_TRANSFER_MODELS["kling"]
+    const provider = options?.provider ?? "kling"
+    const modelConfig = KIE_MOTION_TRANSFER_MODELS[provider]
     if (!modelConfig) {
       throw createSanitizedError(
-        "Motion transfer model not configured",
+        `Motion transfer model not configured for provider: ${provider}`,
         "Motion transfer"
       )
     }
@@ -618,6 +623,7 @@ export class KieVideoProvider
     console.log(
       `[KIE.ai] ========== MOTION TRANSFER REQUEST ==========`
     )
+    console.log(`[KIE.ai] Provider: ${provider}`)
     console.log(`[KIE.ai] Model: ${modelConfig.model}`)
     console.log(
       `[KIE.ai] Image URL (character source): ${imageUrl}`
@@ -629,15 +635,56 @@ export class KieVideoProvider
     console.log(
       `[KIE.ai] Character orientation: ${characterOrientation}`
     )
-    console.log(`[KIE.ai] Mode: ${resolution}`)
-    console.log(
-      `[KIE.ai] Max duration: ${characterOrientation === "image" ? "10s" : "30s"}`
-    )
+    console.log(`[KIE.ai] Resolution: ${resolution}`)
     console.log(
       `[KIE.ai] ==============================================`
     )
 
-    // Build input based on KIE.ai docs for kling-2.6/motion-control
+    // Kling 3.0 Motion Control — uses createTask with mode + background_source
+    if (provider === "kling-3.0") {
+      const mode = resolution === "1080p" ? "pro" : "std"
+      const backgroundSource = options?.backgroundSource ?? "input_video"
+
+      const input: Record<string, unknown> = {
+        input_urls: [imageUrl],
+        video_urls: [videoUrl],
+        background_source: backgroundSource,
+        mode,
+      }
+
+      if (prompt) {
+        input.prompt = prompt
+      }
+
+      console.log(
+        `[KIE.ai] Kling 3.0 Motion Transfer Request:`,
+        JSON.stringify(input, null, 2)
+      )
+
+      const { resultJson } = await runKieTask(
+        modelConfig.model,
+        input,
+        MAX_POLL_ATTEMPTS_VIDEO,
+        options?.onProgress
+      )
+
+      const outputUrl =
+        resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (!outputUrl) {
+        throw createSanitizedError(
+          "Kling 3.0 Motion transfer task succeeded but no URL found",
+          "Motion transfer"
+        )
+      }
+
+      console.log(
+        `[KIE.ai] Kling 3.0 Motion transfer completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+
+      return { url: outputUrl, cost: modelConfig.cost }
+    }
+
+    // Kling 2.6 Motion Control — original behavior
     // NOTE: Field is "mode" not "resolution" per KIE.ai API docs
     const input: Record<string, unknown> = {
       input_urls: [imageUrl], // Array of image URLs (character reference)
@@ -800,5 +847,181 @@ export class KieVideoProvider
     )
 
     return { url: videoUrl, cost: modelConfig.cost }
+  }
+
+  async speechToVideo(
+    imageUrl: string,
+    audioUrl: string,
+    prompt: string,
+    resolution?: string,
+    options?: {
+      negativePrompt?: string
+      seed?: number
+      numFrames?: number
+      fps?: number
+      inferenceSteps?: number
+      guidanceScale?: number
+      shift?: number
+      onProgress?: (progress: number) => Promise<void>
+    }
+  ): Promise<ProviderResult> {
+    const modelConfig = KIE_SPEECH_TO_VIDEO_MODELS["wan-s2v"]
+    if (!modelConfig) {
+      throw createSanitizedError(
+        "Speech-to-video model not configured",
+        "Speech-to-video generation"
+      )
+    }
+
+    console.log(
+      `[KIE.ai] ========== SPEECH-TO-VIDEO REQUEST ==========`
+    )
+    console.log(`[KIE.ai] Model: ${modelConfig.model}`)
+    console.log(`[KIE.ai] Image URL: ${imageUrl}`)
+    console.log(`[KIE.ai] Audio URL: ${audioUrl}`)
+    console.log(`[KIE.ai] Prompt: "${prompt}"`)
+    console.log(`[KIE.ai] Resolution: ${resolution ?? "480p"}`)
+    console.log(
+      `[KIE.ai] ==============================================`
+    )
+
+    const input: Record<string, unknown> = {
+      ...(modelConfig.extraParams ?? {}),
+      image_url: imageUrl,
+      audio_url: audioUrl,
+      prompt,
+    }
+
+    // Override resolution if provided
+    if (resolution) {
+      input.resolution = resolution
+    }
+
+    // Optional advanced params
+    if (options?.negativePrompt) {
+      input.negative_prompt = options.negativePrompt
+    }
+    if (options?.seed !== undefined && options.seed >= 0) {
+      input.seed = options.seed
+    }
+    if (options?.numFrames !== undefined) {
+      input.num_frames = options.numFrames
+    }
+    if (options?.fps !== undefined) {
+      input.fps = options.fps
+    }
+    if (options?.inferenceSteps !== undefined) {
+      input.inference_steps = options.inferenceSteps
+    }
+    if (options?.guidanceScale !== undefined) {
+      input.guidance_scale = options.guidanceScale
+    }
+    if (options?.shift !== undefined) {
+      input.shift = options.shift
+    }
+
+    console.log(
+      `[KIE.ai] Final input:`,
+      JSON.stringify(input, null, 2)
+    )
+
+    const { resultJson } = await runKieTask(
+      modelConfig.model,
+      input,
+      MAX_POLL_ATTEMPTS_VIDEO,
+      options?.onProgress
+    )
+
+    const videoUrl =
+      resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    if (!videoUrl) {
+      throw createSanitizedError(
+        "speech-to-video task succeeded but no URL found",
+        "Speech-to-video generation"
+      )
+    }
+
+    console.log(
+      `[KIE.ai] Speech-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+    )
+
+    return { url: videoUrl, cost: modelConfig.cost }
+  }
+
+  async soraStoryboard(
+    shots: Array<{ scene: string; duration: number }>,
+    nFrames?: string,
+    imageUrls?: string[],
+    aspectRatio?: string,
+    onProgress?: (progress: number) => Promise<void>
+  ): Promise<ProviderResult> {
+    const modelConfig = KIE_STORYBOARD_MODELS["sora-storyboard"]
+    if (!modelConfig) {
+      throw createSanitizedError(
+        "Sora Storyboard model not configured",
+        "Sora Storyboard generation"
+      )
+    }
+
+    const effectiveNFrames = nFrames ?? "10"
+
+    console.log(
+      `[KIE.ai] ========== SORA STORYBOARD REQUEST ==========`
+    )
+    console.log(`[KIE.ai] Model: ${modelConfig.model}`)
+    console.log(`[KIE.ai] Shots: ${shots.length}`)
+    console.log(`[KIE.ai] n_frames: ${effectiveNFrames}`)
+    console.log(`[KIE.ai] Aspect ratio: ${aspectRatio ?? "landscape"}`)
+    console.log(`[KIE.ai] Image URLs: ${imageUrls?.length ?? 0}`)
+    console.log(
+      `[KIE.ai] ==============================================`
+    )
+
+    const input: Record<string, unknown> = {
+      ...(modelConfig.extraParams ?? {}),
+      shots: shots.map((s) => ({
+        scene: s.scene,
+        duration: s.duration,
+      })),
+      n_frames: effectiveNFrames,
+    }
+
+    if (aspectRatio) {
+      input.aspect_ratio = aspectRatio
+    }
+
+    if (imageUrls && imageUrls.length > 0) {
+      input.image_urls = imageUrls
+    }
+
+    // Cost varies by n_frames: 10 = 150 KIE credits ($0.75), 15/25 = 270 KIE credits ($1.35)
+    const effectiveCost = effectiveNFrames === "10" ? modelConfig.cost : 1.35
+
+    console.log(
+      `[KIE.ai] Final input:`,
+      JSON.stringify(input, null, 2)
+    )
+
+    const { resultJson } = await runKieTask(
+      modelConfig.model,
+      input,
+      MAX_POLL_ATTEMPTS_VIDEO,
+      onProgress
+    )
+
+    const videoUrl =
+      resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    if (!videoUrl) {
+      throw createSanitizedError(
+        "Sora Storyboard task succeeded but no URL found",
+        "Sora Storyboard generation"
+      )
+    }
+
+    console.log(
+      `[KIE.ai] Sora Storyboard completed: ${videoUrl} (cost: $${effectiveCost.toFixed(4)})`
+    )
+
+    return { url: videoUrl, cost: effectiveCost }
   }
 }
