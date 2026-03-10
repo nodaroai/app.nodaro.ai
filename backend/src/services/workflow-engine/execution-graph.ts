@@ -8,10 +8,17 @@ import type { SimpleNode, SimpleEdge } from "./types.js"
 /**
  * Topological sort via Kahn's algorithm.
  * Returns array of levels where nodes in the same level can execute in parallel.
+ *
+ * When `preResolvedNodeIds` is provided, edges FROM those nodes are excluded
+ * from both in-degree computation and the children map.  This allows nodes
+ * whose only dependencies are pre-resolved (e.g. source nodes whose outputs
+ * are already available) to be promoted to earlier levels, enabling more
+ * parallelism.
  */
 export function buildExecutionLevels(
   nodes: SimpleNode[],
   edges: SimpleEdge[],
+  preResolvedNodeIds?: Set<string>,
 ): SimpleNode[][] {
   const inDegree = new Map<string, number>()
   const children = new Map<string, string[]>()
@@ -25,6 +32,9 @@ export function buildExecutionLevels(
 
   for (const edge of edges) {
     if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue
+    // Skip edges from pre-resolved nodes — their outputs are already available,
+    // so they shouldn't create execution-level dependencies.
+    if (preResolvedNodeIds?.has(edge.source)) continue
     inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1)
     children.get(edge.source)?.push(edge.target)
   }

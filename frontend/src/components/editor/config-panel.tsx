@@ -2,14 +2,13 @@
 
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { X, Play, Maximize2, Minimize2, Loader2, FastForward, ImageIcon } from "lucide-react"
+import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/components/credits/GenerateButton"
 import { createClient } from "@/lib/supabase"
@@ -115,6 +114,7 @@ import {
   LinkedinPostConfig,
   XPostConfig,
   FacebookPostConfig,
+  ResultsGallery,
 } from "./config-panels"
 
 const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync"])
@@ -223,6 +223,15 @@ export const RUN_BUTTON_TYPES = new Set([
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
 
+// Node types that produce media results (excludes text-only nodes like combine-text, split-text, sub-workflow, social posts)
+const RESULT_PRODUCING_TYPES = new Set([
+  ...GENERATE_BUTTON_TYPES,
+  ...RUN_BUTTON_TYPES,
+].filter(t =>
+  t !== "combine-text" && t !== "split-text" && t !== "sub-workflow" &&
+  t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
+  t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post"
+))
 
 export function ConfigPanel() {
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -232,8 +241,6 @@ export function ConfigPanel() {
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
-  const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
-
   const [userId, setUserId] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -616,6 +623,24 @@ export function ConfigPanel() {
 
           <Separator />
 
+          {/* Results Gallery — shown before run buttons for result-producing nodes */}
+          {(() => {
+            if (!RESULT_PRODUCING_TYPES.has(nodeType)) return null
+            const results = (nodeData.generatedResults ?? []) as Array<{ url?: string; jobId?: string; timestamp?: number }>
+            if (results.length === 0) return null
+            const activeIdx = (nodeData.activeResultIndex as number) ?? 0
+            const mediaType: "image" | "video" | "audio" = LIBRARY_VIDEO_TYPES.has(nodeType) ? "video" : LIBRARY_AUDIO_TYPES.has(nodeType) ? "audio" : "image"
+            return (
+              <ResultsGallery
+                nodeType={nodeType}
+                results={results}
+                activeIndex={activeIdx}
+                mediaType={mediaType}
+                onUpdate={update}
+              />
+            )
+          })()}
+
           <div className="flex flex-col gap-2 pt-2">
             {GENERATE_BUTTON_TYPES.has(nodeType) && (
               <GenerateButton
@@ -657,35 +682,12 @@ export function ConfigPanel() {
 
             {(() => {
               const d = nodeData
-              const results = (d.generatedResults ?? []) as Array<{ url?: string }>
-              const activeIdx = (d.activeResultIndex as number) ?? 0
-              const activeUrl = results[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string) ?? (d.url as string)
-              if (!activeUrl) return null
-              const mediaType: "image" | "video" | "audio" = LIBRARY_VIDEO_TYPES.has(nodeType) ? "video" : LIBRARY_AUDIO_TYPES.has(nodeType) ? "audio" : "image"
-              const thumbnailMediaUrl = (d.generatedImageUrl as string) ?? (d.generatedVideoUrl as string)
-              return (
-                <>
-                  <SaveToLibraryButton url={activeUrl} type={mediaType} compact={false} className="w-full" />
-                  {thumbnailMediaUrl && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setWorkflowThumbnail(thumbnailMediaUrl)}
-                    >
-                      <ImageIcon className="w-3.5 h-3.5 mr-2" />
-                      Set as Thumbnail
-                    </Button>
-                  )}
-                </>
-              )
-            })()}
-
-            {(() => {
-              const d = nodeData
               const listResults = d.__listResults as string[] | undefined
               const listInputs = d.__listInputs as string[] | undefined
-              if (!listResults || listResults.length <= 1) return null
+              // Only show iteration results when fan-out data exists AND the
+              // node still has visible results (user may have deleted them).
+              const hasResults = ((d.generatedResults ?? []) as unknown[]).length > 0
+              if (!listResults || listResults.length <= 1 || !hasResults) return null
               return (
                 <IterationResultsPanel
                   nodeId={selectedNode.id}

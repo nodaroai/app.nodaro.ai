@@ -626,11 +626,6 @@ function syncNodeStatesToStore(
         const prev = (data.generatedResults ?? []) as GeneratedResult[];
         const existingUrls = new Set(prev.map((r) => r.url));
 
-        // DEBUG: trace fan-out result sync (remove after confirming fix)
-        if (state.output.listResults) {
-          console.warn("[syncNodeStatesToStore] node", node.id, "listResults:", state.output.listResults, "listResultUrls:", listResultUrls.length, "prev:", prev.length);
-        }
-
         if (listResultUrls.length > 1) {
           const newResults = listResultUrls
             .filter((url) => !existingUrls.has(url))

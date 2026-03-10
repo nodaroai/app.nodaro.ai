@@ -64,6 +64,19 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           </button>
         </div>
       </div>
+      <MappableField field="provider" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
+        <Select
+          value={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")}
+          onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
+        >
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="elevenlabs-v3">ElevenLabs v3 (recommended)</SelectItem>
+            <SelectItem value="elevenlabs-turbo">ElevenLabs Turbo v2.5 (fast)</SelectItem>
+            <SelectItem value="elevenlabs-multilingual">ElevenLabs Multilingual v2</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
       {textSource === "direct" && (
         <div>
           <Label>Text</Label>
@@ -78,19 +91,6 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           <p className="text-[10px] text-muted-foreground mt-1">Type [ or / for audio tags</p>
         </div>
       )}
-      <MappableField field="provider" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
-        <Select
-          value={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")}
-          onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
-        >
-          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="elevenlabs-v3">ElevenLabs v3 (recommended)</SelectItem>
-            <SelectItem value="elevenlabs-turbo">ElevenLabs Turbo v2.5 (fast)</SelectItem>
-            <SelectItem value="elevenlabs-multilingual">ElevenLabs Multilingual v2</SelectItem>
-          </SelectContent>
-        </Select>
-      </MappableField>
       <div>
         <Label>Voice</Label>
         <VoiceBrowser

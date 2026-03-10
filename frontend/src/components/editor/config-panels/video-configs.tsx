@@ -121,6 +121,20 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         />
       )}
 
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+        <Select
+          value={data.provider || "minimax"}
+          onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
+        >
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {VIDEO_I2V_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
+          </SelectContent>
+        </Select>
+      </MappableField>
+
       {connectedTextPrompts.length > 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
@@ -162,19 +176,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </div>
       )}
 
-      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
-        <Select
-          value={data.provider || "minimax"}
-          onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {VIDEO_I2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-            ))}
-          </SelectContent>
-        </Select>
-      </MappableField>
       {(data.provider === "veo3" || data.provider === "veo3.1") && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 px-1">
@@ -656,15 +657,6 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea
-          rows={3}
-          value={data.prompt}
-          onChange={(v) => onUpdate({ prompt: v })}
-          placeholder="Describe the video to generate..."
-          nodeRefs={nodeRefs}
-        />
-      </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={data.provider || "minimax"}
@@ -680,6 +672,15 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             ))}
           </SelectContent>
         </Select>
+      </MappableField>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea
+          rows={3}
+          value={data.prompt}
+          onChange={(v) => onUpdate({ prompt: v })}
+          placeholder="Describe the video to generate..."
+          nodeRefs={nodeRefs}
+        />
       </MappableField>
       <div>
         <Label className="text-xs">Model</Label>
