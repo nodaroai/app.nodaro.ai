@@ -181,8 +181,8 @@ export default function SettingsPage() {
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {publicOutputs
-                ? "Your generated images, videos, and audio appear in the public gallery."
-                : "Your outputs are private and hidden from the gallery."}
+                ? "New AI-generated outputs will appear in the public gallery by default."
+                : "New outputs will be private by default. This does not change existing items."}
             </p>
           </div>
 

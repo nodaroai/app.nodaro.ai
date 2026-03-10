@@ -135,6 +135,8 @@ export interface OrchestratorContext {
   /** Called when a worker-queued node creates its job — allows the orchestrator
    *  to surface the jobId on nodeStates before execution completes. */
   onJobCreated?: (nodeId: string, jobId: string) => void
+  /** Node IDs that have upload-* ancestors — their jobs should be force_private */
+  uploadDescendantIds?: Set<string>
 }
 
 // ---------------------------------------------------------------------------

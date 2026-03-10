@@ -729,7 +729,7 @@ export function createRenderWorker() {
       // Fetch job + user profile
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, profiles!user_id(tier, public_outputs)")
+        .select("usage_log_id, user_id, force_private, profiles!user_id(tier, public_outputs)")
         .eq("id", jobId)
         .single()
 
@@ -739,7 +739,12 @@ export function createRenderWorker() {
       const profileData = (jobRecord as Record<string, unknown>)?.profiles as Record<string, unknown> | null
       const userTier = (profileData?.tier as string) ?? "free"
       const shouldWatermark = userTier === "free"
-      const isPublic = profileData?.public_outputs !== false
+      let isPublic = profileData?.public_outputs !== false
+
+      // Force private when job uses uploaded/private input content
+      if (isPublic && jobRecord?.force_private === true) {
+        isPublic = false
+      }
 
       console.log(`[render-worker] Job ${jobId} picked up (tier=${userTier})`)
 

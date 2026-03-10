@@ -71,18 +71,29 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
 // ---------------------------------------------------------------------------
 
 let _currentWorkflowId: string | null = null
+let _forcePrivate = false
 
 /** Call from WorkflowEditor on mount/change to set the active workflow. */
 export function setCurrentWorkflowId(id: string | null) {
   _currentWorkflowId = id
 }
 
-/** Spread workflowId into a body object when inside a workflow editor. */
+/** Set forcePrivate flag for the next API call (auto-resets after use). */
+export function setForcePrivate(value: boolean) {
+  _forcePrivate = value
+}
+
+/** Spread workflowId (and optional forcePrivate) into a body object. */
 function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
+  let result = body
   if (_currentWorkflowId) {
-    return { ...body, workflowId: _currentWorkflowId }
+    result = { ...result, workflowId: _currentWorkflowId }
   }
-  return body
+  if (_forcePrivate) {
+    result = { ...result, forcePrivate: true }
+    _forcePrivate = false // auto-reset after use
+  }
+  return result
 }
 
 

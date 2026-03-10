@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { TEXT_TO_VIDEO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const textToVideoBody = z.object({
@@ -50,6 +50,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
         input_data: { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, type: "text-to-video" },

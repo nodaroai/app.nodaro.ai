@@ -5,7 +5,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { decryptToken, encryptToken } from "../services/social/encryption.js"
 import { refreshAccessToken, type SocialPlatform } from "../services/social/oauth.js"
 import { platformPublishers, type PublishRequest } from "../services/social/platforms/index.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { CreditsService } from "../billing/credits.js"
 
 const VALID_ACTIONS = [

@@ -5,7 +5,7 @@ import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../billing/credits.js"
 import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const imageToTextBody = z.object({
   imageUrl: z.string().url(),
@@ -67,6 +67,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
           input_data: {

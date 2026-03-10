@@ -36,6 +36,7 @@ export const queryKeys = {
   gallery: {
     all: ["gallery"] as const,
     list: (filter: string) => ["gallery", "list", filter] as const,
+    favorites: (userId: string) => ["gallery", "favorites", userId] as const,
     reportCount: () => ["gallery", "report-count"] as const,
   },
 

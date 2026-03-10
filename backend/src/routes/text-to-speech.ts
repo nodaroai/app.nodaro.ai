@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { TTS_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const textToSpeechBody = z.object({
@@ -55,6 +55,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
         input_data: {

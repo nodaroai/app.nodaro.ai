@@ -13,7 +13,7 @@ import { validateAfterEffectsPlan } from "../lib/after-effects-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { getAnthropicClient, CLAUDE_MODEL } from "../lib/anthropic.js"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -69,6 +69,7 @@ export async function afterEffectsAIRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
           input_data: {

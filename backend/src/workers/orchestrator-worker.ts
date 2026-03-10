@@ -13,6 +13,7 @@ import { supabase } from "../lib/supabase.js"
 import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
+  getUploadDescendantIds,
   isSourceNode,
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
@@ -213,6 +214,9 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         .map(([id]) => id),
     )
     const levels = buildExecutionLevels(nodes, edges, preResolvedNodeIds)
+
+    // Compute nodes downstream of upload-* nodes — their jobs should be force_private
+    ctx.uploadDescendantIds = getUploadDescendantIds(nodes, edges)
 
     // Initialize all executable nodes as "pending" so they appear in the UI immediately
     const executableNodes = nodes.filter((n) => {
