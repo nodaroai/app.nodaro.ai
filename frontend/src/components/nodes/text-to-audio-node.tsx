@@ -22,7 +22,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "tangoflux", 1)
+  const credits = useModelCredits(nodeData.provider ?? "elevenlabs-sfx", 4)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

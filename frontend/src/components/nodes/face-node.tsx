@@ -25,7 +25,7 @@ const STYLE_LABELS: Record<string, string> = {
 
 function FaceNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as FaceNodeData
-  const credits = useModelCredits("nano-banana", 1)
+  const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 2)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const inConnectionCount = useConnectionCount(id)

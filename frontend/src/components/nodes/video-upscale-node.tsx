@@ -25,7 +25,9 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits("topaz", 3)
+  const upscaleProvider = (nodeData.provider as string | undefined) ?? "topaz-video"
+  const upscaleFallback = upscaleProvider === "veo-4k" ? 79 : upscaleProvider === "veo-1080p" ? 25 : 19
+  const credits = useModelCredits(upscaleProvider, upscaleFallback)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

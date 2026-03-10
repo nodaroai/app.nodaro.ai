@@ -64,6 +64,7 @@ import { billingRoutes } from "./routes/billing.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { adminGalleryReportsRoutes } from "./routes/admin-gallery-reports.js"
+import { adminCreditAuditRoutes } from "./routes/admin-credit-audit.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { downloadRoutes } from "./routes/download.js"
 import { renderVideoRoutes } from "./routes/render-video.js"
@@ -186,6 +187,7 @@ export async function buildApp() {
   await app.register(galleryRoutes)
   await app.register(userSettingsRoutes)
   await app.register(adminGalleryReportsRoutes)
+  await app.register(adminCreditAuditRoutes)
   await app.register(aiWriterRoutes)
   await app.register(downloadRoutes)
   await app.register(renderVideoRoutes)

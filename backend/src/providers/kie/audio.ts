@@ -17,6 +17,7 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
 import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS } from "./models.js"
+import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 
 // ---------------------------------------------------------------------------
 // KIE.ai voice resolution
@@ -110,7 +111,7 @@ export class KieAudioProvider
       input.lyrics = lyrics
     }
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, rawRecordInfo } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO
@@ -128,6 +129,16 @@ export class KieAudioProvider
     console.log(
       `[KIE.ai] Music completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
+
+    // Audit log for music generation
+    logCreditAudit({
+      modelKey: provider,
+      expectedKieCredits: modelConfig.credits,
+      modelConfig: { duration, provider },
+      rawResponseSample: rawRecordInfo,
+      actualKieCredits: extractCreditFields(rawRecordInfo)?.credits as number | undefined,
+      notes: `music ${provider}`,
+    })
 
     return { url: audioUrl, cost: modelConfig.cost }
   }

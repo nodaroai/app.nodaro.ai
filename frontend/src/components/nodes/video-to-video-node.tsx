@@ -31,7 +31,8 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const credits = useModelCredits((nodeData.provider as string | undefined) ?? "wan", 4)
+  const v2vProvider = (nodeData.provider as string | undefined) ?? "wan"
+  const credits = useModelCredits(v2vProvider, v2vProvider === "luma-modify" ? 32 : 25)
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"

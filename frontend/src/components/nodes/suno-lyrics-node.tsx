@@ -16,7 +16,7 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const activeText = nodeData.generatedText
-  const credits = useModelCredits("suno-lyrics", 1)
+  const credits = useModelCredits("suno-lyrics", 2)
 
   return (
     <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>

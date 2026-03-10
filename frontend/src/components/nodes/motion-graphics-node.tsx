@@ -12,7 +12,7 @@ import type { MotionGraphicsData } from "@/types/nodes"
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MotionGraphicsData | undefined
   const nodeData = currentNodeData ?? (data as MotionGraphicsData)
-  const credits = useModelCredits("motion-graphics", 2)
+  const credits = useModelCredits("motion-graphics", 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

@@ -389,7 +389,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Kling 3.0 - uses unified createTask/getTaskDetail (NOT recordInfo)
   "kling-3.0": {
     model: "kling-3.0/video",
-    credits: 10,
+    credits: 100,
     cost: 0.50,
     imageParam: "image_urls",
     extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
@@ -621,7 +621,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Kling 3.0 - uses kling3-client.ts (unified createTask endpoint)
   "kling-3.0": {
     model: "kling-3.0/video",
-    credits: 10,
+    credits: 100,
     cost: 0.50,
     extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],

@@ -16,6 +16,16 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
+// Fallback credit costs per video provider (shown until API responds)
+const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
+  minimax: 25, veo3: 125, "veo3.1": 79, kling: 22, "kling-turbo": 16,
+  "kling-3.0": 32, "grok-i2v": 19, "sora2-pro": 63, seedance: 32,
+  "wan-i2v": 25, "wan-turbo": 13, "hailuo-2.3-pro": 32, "hailuo-2.3": 19,
+  "hailuo-standard": 16, sora2: 38, "bytedance-lite": 16, "bytedance-pro": 22,
+  "bytedance-pro-fast": 19, "kling-master": 22, "runway-kie": 32,
+  runway: 20, pika: 20, sora: 20,
+}
+
 // Providers that support End Frame (second image for video ending)
 const END_FRAME_SUPPORTED_PROVIDERS = [
   "veo3", "veo3.1",
@@ -84,7 +94,8 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
-  const credits = useModelCredits(nodeData.provider ?? "minimax", nodeData.provider === "kling-3.0" ? 10 : 4)
+  const provider = nodeData.provider ?? "minimax"
+  const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined
   const listCompleted = (nodeData as Record<string, unknown>).__listCompleted as number | undefined
   const isNodeRunning = nodeData.executionStatus === "running"

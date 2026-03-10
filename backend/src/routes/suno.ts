@@ -78,7 +78,10 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/generate",
     {
-      preHandler: creditGuard(() => "suno-generate"),
+      preHandler: creditGuard((req) => {
+        const body = req.body as Record<string, unknown>
+        return (body?.model as string) === "V5" ? "suno-v5" : "suno-generate"
+      }),
     },
     async (req, reply) => {
       const parsed = sunoGenerateBody.safeParse(req.body)
@@ -137,7 +140,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-generate")
+      const creditType = model === "V5" ? "suno-v5" : "suno-generate"
+      const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
@@ -166,7 +170,10 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/cover",
     {
-      preHandler: creditGuard(() => "suno-cover"),
+      preHandler: creditGuard((req) => {
+        const body = req.body as Record<string, unknown>
+        return (body?.model as string) === "V5" ? "suno-v5" : "suno-cover"
+      }),
     },
     async (req, reply) => {
       const parsed = sunoCoverBody.safeParse(req.body)
@@ -222,7 +229,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-cover")
+      const creditType = model === "V5" ? "suno-v5" : "suno-cover"
+      const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
@@ -249,7 +257,10 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/extend",
     {
-      preHandler: creditGuard(() => "suno-extend"),
+      preHandler: creditGuard((req) => {
+        const body = req.body as Record<string, unknown>
+        return (body?.model as string) === "V5" ? "suno-v5" : "suno-extend"
+      }),
     },
     async (req, reply) => {
       const parsed = sunoExtendBody.safeParse(req.body)
@@ -307,7 +318,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-extend")
+      const creditType = model === "V5" ? "suno-v5" : "suno-extend"
+      const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 

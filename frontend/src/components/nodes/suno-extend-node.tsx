@@ -24,7 +24,8 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const credits = useModelCredits("suno-extend", 3)
+  const creditModel = nodeData.model === "V5" ? "suno-v5" : "suno-extend"
+  const credits = useModelCredits(creditModel, nodeData.model === "V5" ? 13 : 7)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)

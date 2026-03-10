@@ -21,7 +21,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   const results = (nodeData as Record<string, unknown>).generatedResults as readonly import("@/types/nodes").GeneratedResult[] | undefined
   const activeResult = results?.[0]
   const thumbnailUrl = activeResult?.thumbnailUrl
-  const credits = useModelCredits("suno-music-video", 1)
+  const credits = useModelCredits("suno-music-video", 5)
   const [previewOpen, setPreviewOpen] = useState(false)
 
   return (

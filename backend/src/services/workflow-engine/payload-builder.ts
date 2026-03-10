@@ -8,7 +8,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "../../../../packages/shared/src/ancestor-refs.js"
 import { buildImagePrompt } from "../../../../packages/shared/src/prompt-builder.js"
-import { buildCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier } from "../../../../packages/shared/src/credit-identifiers.js"
 import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 import type { CharacterDef } from "../../../../packages/shared/src/types.js"
 import { PLATFORM_SPECS } from "../../../../packages/shared/src/social-media-specs.js"
@@ -552,7 +552,11 @@ export function buildPayload(
       return {
         jobName: "image-to-video",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: buildVideoCreditModelIdentifier(
+          provider,
+          data.duration as number | string | undefined,
+          (data.sound ?? data.kling3Sound) as boolean | undefined,
+        ),
         payload: {
           jobId,
           imageUrl: resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl,
@@ -585,7 +589,11 @@ export function buildPayload(
       return {
         jobName: "text-to-video",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: buildVideoCreditModelIdentifier(
+          provider,
+          data.duration as number | string | undefined,
+          (data.sound ?? data.kling3Sound) as boolean | undefined,
+        ),
         payload: {
           jobId,
           prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
@@ -714,11 +722,11 @@ export function buildPayload(
     }
 
     case "generate-music": {
-      const provider = (data.provider as string) ?? "suno-v4"
+      const provider = (data.provider as string) ?? "musicgen"
       return {
         jobName: "generate-music",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: "generate-music",
         payload: {
           jobId,
           prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
@@ -815,7 +823,8 @@ export function buildPayload(
     // --- Suno ---
     case "suno-generate": {
       const hasCustomFields = !!(data.style || data.title || data.lyrics)
-      return simpleResult("suno-generate", "suno-generate", {
+      const sunoGenCreditId = (data.model as string) === "V5" ? "suno-v5" : "suno-generate"
+      return simpleResult("suno-generate", sunoGenCreditId, {
         jobId,
         prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         model: data.model,
@@ -837,7 +846,8 @@ export function buildPayload(
 
     case "suno-cover": {
       const hasCoverCustomFields = !!(data.style || data.title || data.lyrics)
-      return simpleResult("suno-cover", "suno-cover", {
+      const sunoCoverCreditId = (data.model as string) === "V5" ? "suno-v5" : "suno-cover"
+      return simpleResult("suno-cover", sunoCoverCreditId, {
         jobId,
         prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
         uploadUrl: resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
@@ -853,8 +863,9 @@ export function buildPayload(
       })
     }
 
-    case "suno-extend":
-      return simpleResult("suno-extend", "suno-extend", {
+    case "suno-extend": {
+      const sunoExtCreditId = (data.model as string) === "V5" ? "suno-v5" : "suno-extend"
+      return simpleResult("suno-extend", sunoExtCreditId, {
         jobId,
         audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
         taskId: resolvedInputs.sunoTaskId || data.sunoTaskId,
@@ -871,6 +882,7 @@ export function buildPayload(
         audioWeight: data.audioWeight,
         usageLogId,
       })
+    }
 
     case "suno-lyrics":
       return simpleResult("suno-lyrics", "suno-lyrics", {

@@ -34,6 +34,7 @@ import {
   KIE_LIP_SYNC_MODELS,
   durationToNFrames,
 } from "./models.js"
+import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 
 function snapToAllowedDuration(requested: number, allowed: number[]): number {
   if (!allowed || allowed.length === 0) return requested
@@ -55,18 +56,29 @@ async function runKling3(
   const snappedDuration = duration
     ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
     : 5
+  const sound = options?.sound ?? true
+  const mode = (options?.mode as "std" | "pro") ?? "pro"
   const result = await kling3Generate({
     prompt,
     imageUrls,
-    sound: options?.sound ?? true,
+    sound,
     duration: String(snappedDuration),
-    mode: (options?.mode as "std" | "pro") ?? "pro",
+    mode,
     aspectRatio,
     multiShots: options?.multiShots,
     multiPrompt: options?.multiPrompt,
     klingElements: options?.klingElements,
     onProgress: options?.onProgress,
   })
+
+  // Audit log for Kling 3.0 (known to have variable duration/audio pricing)
+  logCreditAudit({
+    modelKey: "kling-3.0",
+    expectedKieCredits: modelConfig.cost / 0.005, // Convert USD to KIE credits
+    modelConfig: { duration: snappedDuration, sound, mode },
+    notes: `kling-3.0 ${snappedDuration}s ${sound ? "audio" : "no-audio"} ${mode}`,
+  })
+
   return { url: result.videoUrl, cost: modelConfig.cost }
 }
 
@@ -315,7 +327,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, rawRecordInfo } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -334,6 +346,16 @@ export class KieVideoProvider
     console.log(
       `[KIE.ai] Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
+
+    // Audit log for standard I2V path
+    logCreditAudit({
+      modelKey: provider,
+      expectedKieCredits: modelConfig.credits,
+      modelConfig: { duration: input.duration ?? input.n_frames, sound: input.sound, provider },
+      rawResponseSample: rawRecordInfo,
+      actualKieCredits: extractCreditFields(rawRecordInfo)?.credits as number | undefined,
+      notes: `i2v-standard ${provider}`,
+    })
 
     return { url: videoUrl, cost: modelConfig.cost }
   }

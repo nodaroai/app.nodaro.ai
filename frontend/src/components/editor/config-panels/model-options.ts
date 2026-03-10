@@ -117,6 +117,8 @@ export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> =
   "ideogram-remix": { min: 4, max: 8 },
   "ideogram-reframe": { min: 4, max: 8 },
   "nano-banana-2": { min: 2, max: 5 },
+  "seedream": { min: 3, max: 4 },
+  "seedream-edit": { min: 3, max: 4 },
   "seedream-5-lite": { min: 3, max: 5 },
   "seedream-5-lite-i2i": { min: 3, max: 5 },
 }

@@ -77,7 +77,7 @@ function AIWriterNodeComponent({ id, data, selected }: NodeProps) {
   const activeText = activeResult?.text ?? nodeData.generatedText
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits("ai-writer", 2)
+  const credits = useModelCredits("ai-writer", 5)
   const template = getAIWriterTemplate(nodeData.templateId)
   const { user } = useAuth()
   const listTotal = (nodeData as Record<string, unknown>).__listTotal as number | undefined

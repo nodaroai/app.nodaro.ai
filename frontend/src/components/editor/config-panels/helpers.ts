@@ -1,6 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
+import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier } from "@nodaro-shared/credit-identifiers"
+import { DURATION_PRICED_PROVIDERS } from "@nodaro-shared/model-constants"
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {
   prompt: ["text-prompt"],
@@ -116,8 +117,28 @@ export function getModelIdentifier(node: WorkflowNode): string {
   // AI Writer always uses "ai-writer" for credit cost lookup (not the LLM provider name)
   if (node.type === "ai-writer") return "ai-writer"
   const data = node.data as Record<string, unknown>
+
+  const nodeType = node.type ?? "unknown"
+
+  // Suno generate/cover/extend use "model" field (V4/V5), not "provider"
+  if (nodeType.startsWith("suno-") && nodeType !== "suno-lyrics" && nodeType !== "suno-separate" && nodeType !== "suno-music-video") {
+    return (data.model as string) === "V5" ? "suno-v5" : nodeType
+  }
+
+  // Suno separate: "split_stem" costs more than "separate_vocal"
+  if (nodeType === "suno-separate") {
+    return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
+  }
+
   const provider = data.provider as string | undefined
-  if (!provider) return node.type ?? "unknown"
+  if (!provider) return nodeType
+
+  // Video nodes with duration/audio-based variable pricing
+  if (DURATION_PRICED_PROVIDERS.has(provider) && (nodeType === "image-to-video" || nodeType === "text-to-video")) {
+    const duration = data.duration as number | string | undefined
+    const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
+    return buildVideoCreditModelIdentifier(provider, duration, sound)
+  }
 
   return buildCreditModelIdentifier(provider, data)
 }

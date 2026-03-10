@@ -12,7 +12,7 @@ import type { ThreeDTitleData } from "@/types/nodes"
 function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ThreeDTitleData | undefined
   const nodeData = currentNodeData ?? (data as ThreeDTitleData)
-  const credits = useModelCredits("3d-title", 3)
+  const credits = useModelCredits("3d-title", 15)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

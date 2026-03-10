@@ -94,6 +94,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ideogram:QUALITY": 8,         // 24 KIE cr, $0.12
   "qwen": 2,                     // 4 KIE cr, $0.02
   "seedream": 3,                 // 6.5 KIE cr, $0.032
+  ***REDACTED-OSS-SCRUB***
   "seedream-5-lite": 3,          // 6.5 KIE cr, $0.032 (basic default)
   "seedream-5-lite:high": 5,     // ~10 KIE cr, $0.05 estimated (4K)
   "flux-flex": 5,                // 14 KIE cr, $0.07 (1K default)
@@ -127,6 +128,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "qwen-i2i": 2,                 // 4 KIE cr, $0.02
   "qwen-edit": 2,                // 4 KIE cr, $0.02
   "seedream-edit": 3,            // 6.5 KIE cr, $0.032
+  ***REDACTED-OSS-SCRUB***
   "seedream-5-lite-i2i": 3,      // 6.5 KIE cr, $0.032 (basic default)
   "seedream-5-lite-i2i:high": 5, // ~10 KIE cr, $0.05 estimated (4K)
   // ── Video Generation (I2V / T2V) ──
@@ -135,7 +137,13 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "veo3.1": 79,                  // 250 KIE cr, $1.25
   "kling": 22,                   // 70 KIE cr, $0.35
   "kling-turbo": 16,             // 50 KIE cr, $0.25
-  "kling-3.0": 32,               // $0.50
+  "kling-3.0": 32,               // $0.50 (flat fallback — variable pricing entries below)
+  "kling-3.0:5s": 32,             // 5s duration (TODO: verify with pricing script)
+  "kling-3.0:10s": 32,            // 10s duration (TODO: verify — may be higher)
+  "kling-3.0:15s": 32,            // 15s duration (TODO: verify — may be higher)
+  "kling-3.0:5s:audio": 32,       // 5s + audio (TODO: verify audio addon cost)
+  "kling-3.0:10s:audio": 32,      // 10s + audio (TODO: verify)
+  "kling-3.0:15s:audio": 32,      // 15s + audio (TODO: verify)
   "grok-i2v": 19,                // 60 KIE cr, $0.30
   "sora2-pro": 63,               // 200 KIE cr, $1.00
   "seedance": 32,                // 100 KIE cr, $0.50
@@ -159,9 +167,9 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Video-to-Video / Motion ──
   "wan": 25,                     // 80 KIE cr, $0.40 (also used for T2V wan key)
   "luma-modify": 32,             // ~100 KIE cr, $0.50
-  "topaz-video": 2,               // KIE backend, ~$0.03
+  "topaz-video": 19,              // 60 KIE cr, $0.30
   "motion-transfer": 32,         // 100 KIE cr, $0.50
-  "kling-motion": 2,             // KIE backend
+  "kling-motion": 32,            // 100 KIE cr, $0.50
   // ── Lip Sync ──
   "kling-avatar": 13,            // 40 KIE cr, $0.20
   "kling-avatar-pro": 19,        // 60 KIE cr, $0.30
@@ -172,6 +180,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-multilingual": 4,  // 10 KIE cr flat, $0.05
   "elevenlabs": 4,               // alias for turbo
   "elevenlabs-sfx": 4,           // 10 KIE cr flat, $0.05
+  "tangoflux": 4,                // Replicate SFX, ~$0.05 estimated
   "suno": 7,                     // 20 KIE cr, $0.10
   "suno-v5": 13,                 // 40 KIE cr, $0.20
   "suno-generate": 7,            // ~20 KIE cr
@@ -181,7 +190,12 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-separate": 5,            // vocal separation
   "suno-separate-stem": 10,      // full stem separation
   "suno-music-video": 5,
+  "musicgen": 7,                 // Replicate Meta MusicGen
+  "lyria": 7,                    // Replicate Google Lyria 2
+  "bark": 7,                     // Replicate Suno Bark
   "elevenlabs-isolation": 1,     // 1 KIE cr, $0.005
+  "whisper": 4,                   // Replicate whisper transcription
+  "incredibly-fast-whisper": 4,   // Replicate fast whisper
   "elevenlabs-stt": 4,           // 10 KIE cr, $0.05
   "elevenlabs-dialogue": 4,     // 10 KIE cr, $0.05
   "voice-clone": 5,              // ElevenLabs instant voice clone

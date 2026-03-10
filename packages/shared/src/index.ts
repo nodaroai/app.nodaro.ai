@@ -7,6 +7,10 @@ export {
   HIGH_QUALITY_PROVIDERS,
   TWO_K_RESOLUTION_PROVIDERS,
   IDEOGRAM_PROVIDERS,
+  DURATION_PRICED_PROVIDERS,
+  AUDIO_ADDON_PROVIDERS,
+  VIDEO_VARIABLE_PRICING,
+  VIDEO_DURATION_TIERS,
 } from "./model-constants.js"
 
 export {
@@ -21,7 +25,7 @@ export {
   collectAncestorRefs,
 } from "./ancestor-refs.js"
 
-export { buildCreditModelIdentifier } from "./credit-identifiers.js"
+export { buildCreditModelIdentifier, buildVideoCreditModelIdentifier } from "./credit-identifiers.js"
 
 export {
   buildImagePrompt,

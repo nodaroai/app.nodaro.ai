@@ -24,7 +24,8 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits(nodeData.provider || "veo-extend", 40)
+  const extendProvider = nodeData.provider || "veo-extend"
+  const credits = useModelCredits(extendProvider, extendProvider === "runway-extend" ? 32 : 40)
 
   function handleDeleteResult(indexToDelete: number) {
     const newResults = results.filter((_, i) => i !== indexToDelete)
