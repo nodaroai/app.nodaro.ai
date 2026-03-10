@@ -22,7 +22,7 @@ const TEXT_SIZES = {
   sm: "text-[16px] leading-[23px]",
   md: "text-[20px] leading-[33px]",
   lg: "text-2xl",
-  xl: "text-[36px] leading-[44px]",
+  xl: "text-[36px] leading-[47px]",
 } as const
 
 function LogoImg({ className, alt = "" }: { className?: string; alt?: string }) {
@@ -55,7 +55,7 @@ export function NodaroLogo({
       </span>
       <span
         className={cn(
-          "font-bold leading-none translate-y-[3px] text-zinc-900 dark:text-white",
+          "font-bold translate-y-[3px] text-zinc-900 dark:text-white",
           TEXT_SIZES[size],
         )}
       >
