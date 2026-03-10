@@ -91,6 +91,7 @@ interface WorkflowState {
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   readonly deleteNode: (nodeId: string) => void
   readonly deleteEdge: (edgeId: string) => void
+  readonly updateEdgeData: (edgeId: string, data: Record<string, unknown>) => void
   readonly duplicateNode: (nodeId: string) => void
   readonly selectNode: (nodeId: string | null) => void
   readonly setUserPromptTemplates: (templates: Record<string, string>) => void
@@ -450,6 +451,14 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       ),
       selectedNodeId:
         state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+      isDirty: true,
+    })),
+
+  updateEdgeData: (edgeId, data) =>
+    set((state) => ({
+      edges: state.edges.map((e) =>
+        e.id === edgeId ? { ...e, data: { ...e.data, ...data } } : e
+      ),
       isDirty: true,
     })),
 

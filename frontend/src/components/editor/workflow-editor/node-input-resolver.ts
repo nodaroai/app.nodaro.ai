@@ -1,5 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { buildScenePrompt } from "@/lib/prompt-builder";
+import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -10,6 +11,9 @@ import type {
   LoopNodeData,
 } from "@/types/nodes";
 import { extractNodeOutput } from "./execution-graph";
+
+/** Node types whose edges default to "each" output mode (fan-out) */
+const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
 
 export function extractNodeOutputAsList(
   node: WorkflowNode,
@@ -78,9 +82,52 @@ export function getListInputForNode(
       continue;
     }
 
+    // Check outputMode from edge data — only fan-out if mode is "each"
+    // List/loop/split-text edges default to "each"; all other edges default to "last"
+    const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined;
+    const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
+    if (outputMode !== "each") continue;
+
     const listOutput = extractNodeOutputAsList(sourceNode);
     if (listOutput && listOutput.length > 1) return listOutput;
   }
+
+  // Transitive fan-out: if a direct parent is a text-prompt whose own upstream
+  // is a list-like node with "each" mode, resolve the text template per item.
+  for (const edge of incomingEdges) {
+    const sourceNode = nodes.find((n) => n.id === edge.source);
+    if (!sourceNode || sourceNode.type !== "text-prompt") continue;
+
+    const sourceIncoming = edges.filter((e) => e.target === sourceNode.id);
+    for (const srcEdge of sourceIncoming) {
+      const listNode = nodes.find((n) => n.id === srcEdge.source);
+      if (!listNode || !DEFAULT_EACH_TYPES.has(listNode.type ?? "")) continue;
+
+      const gpEdgeMode = (srcEdge.data as Record<string, unknown> | undefined)
+        ?.outputMode as string | undefined;
+      if ((gpEdgeMode ?? "each") !== "each") continue;
+
+      const listItems = extractNodeOutputAsList(listNode);
+      if (!listItems || listItems.length <= 1) continue;
+
+      // Build ref map for the text-prompt to resolve nested refs
+      const refMap = buildNodeRefMap(sourceNode.id, nodes, edges);
+      const listData = listNode.data as Record<string, unknown>;
+      const listLabel =
+        (listData.label as string) || listNode.type || listNode.id;
+      const sourceText =
+        ((sourceNode.data as Record<string, unknown>).text as string) || "";
+
+      const resolvedItems: string[] = [];
+      for (const item of listItems) {
+        const itemMap = new Map(refMap);
+        itemMap.set(listLabel, item);
+        resolvedItems.push(resolveTextRefs(sourceText, itemMap) || sourceText);
+      }
+      if (resolvedItems.length > 1) return resolvedItems;
+    }
+  }
+
   return undefined;
 }
 
@@ -108,9 +155,6 @@ export function resolveNodeInputs(
   uploadUrl?: string;
 } {
   const incomingEdges = edges.filter((e) => e.target === node.id);
-  const sourceNodes = incomingEdges
-    .map((e) => nodes.find((n) => n.id === e.source))
-    .filter((n): n is WorkflowNode => n !== undefined);
 
   const inputs: {
     prompt?: string;
@@ -132,17 +176,53 @@ export function resolveNodeInputs(
     uploadUrl?: string;
   } = {};
 
-  for (const src of sourceNodes) {
-    const srcEdge = incomingEdges.find((e) => e.source === src.id);
-    const output = extractNodeOutput(src, srcEdge?.sourceHandle ?? undefined);
+  for (const srcEdge of incomingEdges) {
+    const src = nodes.find((n) => n.id === srcEdge.source);
+    if (!src) continue;
+
+    // Check for item:N/last/all output mode on nodes with fan-out list results
+    const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
+      ?.outputMode as string | undefined;
+    const srcListResults = (src.data as Record<string, unknown>)
+      .__listResults as string[] | undefined;
+    let output: string | undefined;
+    if (edgeMode && srcListResults && srcListResults.length > 0) {
+      if (edgeMode.startsWith("item:")) {
+        const idx = parseInt(edgeMode.split(":")[1], 10);
+        output = srcListResults[idx] ?? srcListResults[0];
+      } else if (edgeMode === "last") {
+        output = srcListResults[srcListResults.length - 1];
+      } else if (edgeMode === "all") {
+        output = srcListResults.join(", ");
+      }
+    }
+    if (!output) {
+      output = extractNodeOutput(src, srcEdge.sourceHandle ?? undefined);
+    }
     if (!output) continue;
 
     if (src.type === "text-prompt") {
       inputs.prompt = output;
     } else if (src.type === "list") {
-      inputs.prompt = output;
+      // Read output mode from the edge, not the node
+      const edgeMode = (srcEdge?.data as Record<string, unknown> | undefined)?.outputMode as string | undefined;
+      const outputMode = edgeMode ?? "each"; // list edges default to "each"
+      const items = ((src.data as Record<string, unknown>).items as string || "")
+        .split("\n")
+        .map((l: string) => l.trim())
+        .filter((l: string) => l.length > 0);
+      if (outputMode === "all") {
+        inputs.prompt = items.join(", ") || output;
+      } else if (outputMode === "last") {
+        inputs.prompt = items[items.length - 1] || output;
+      } else if (outputMode.startsWith("item:")) {
+        const idx = parseInt(outputMode.split(":")[1], 10);
+        inputs.prompt = items[idx] ?? items[0] ?? output;
+      } else {
+        // "each" mode — output first item; fan-out handled separately
+        inputs.prompt = output;
+      }
     } else if (src.type === "loop") {
-      const loopEdge = incomingEdges.find((e) => e.source === src.id);
       const loopData = src.data as LoopNodeData;
 
       const loopIncomingEdges = edges.filter(
@@ -163,7 +243,7 @@ export function resolveNodeInputs(
         }
       } else {
         const colIndex = (loopData.columns ?? []).findIndex(
-          (c) => c.handleId === loopEdge?.sourceHandle,
+          (c) => c.handleId === srcEdge.sourceHandle,
         );
         if (colIndex >= 0) {
           inputs.prompt = loopData.rows?.[0]?.[colIndex]?.trim() || "";

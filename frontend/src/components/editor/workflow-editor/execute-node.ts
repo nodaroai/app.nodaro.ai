@@ -220,6 +220,10 @@ export function executeNode(
   if (inputs.prompt && refMap.size > 0) {
     inputs.prompt = resolveTextRefs(inputs.prompt, refMap) ?? inputs.prompt;
   }
+  // Also resolve refs in the override prompt from list fan-out
+  if (overridePrompt && refMap.size > 0) {
+    overridePrompt = resolveTextRefs(overridePrompt, refMap) ?? overridePrompt;
+  }
 
   if (node.type === "generate-script") {
     const prompt = overridePrompt ?? inputs.prompt ?? "";

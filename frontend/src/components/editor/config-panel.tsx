@@ -223,6 +223,7 @@ export const RUN_BUTTON_TYPES = new Set([
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
 
+
 export function ConfigPanel() {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)

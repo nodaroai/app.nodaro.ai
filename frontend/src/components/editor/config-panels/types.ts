@@ -9,6 +9,7 @@ export interface SourceNodeInfo {
   readonly providerCategory?: string
   readonly targetHandle?: string
   readonly nodeData?: Record<string, unknown>
+  readonly edgeOutputMode?: string
 }
 
 export interface ConfigProps<T> {

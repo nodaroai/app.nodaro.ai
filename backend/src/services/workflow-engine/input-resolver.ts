@@ -10,8 +10,10 @@ import type {
   NodeExecutionState,
   ResolvedInputs,
 } from "./types.js"
-import { extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
+import { extractSourceNodeOutput, extractSourceNodeOutputAsList, getPrimaryOutput } from "./output-extractor.js"
 import { isSourceNode } from "./execution-graph.js"
+import { buildNodeRefMap } from "./payload-builder.js"
+import { resolveNodeRefs } from "../../../../packages/shared/src/node-refs.js"
 
 /**
  * Resolve all inputs for a target node from its upstream connected nodes.
@@ -34,12 +36,28 @@ export function resolveNodeInputs(
     let output: string | undefined
     const state = nodeStates[sourceNode.id]
 
-    if (state?.output) {
-      output = getPrimaryOutput(state.output, sourceNode.type, edge.sourceHandle)
-    } else if (isSourceNode(sourceNode.type)) {
-      const sourceOutput = extractSourceNodeOutput(sourceNode, triggerData)
-      if (sourceOutput) {
-        output = getPrimaryOutput(sourceOutput, sourceNode.type, edge.sourceHandle)
+    // Check for item:N/last/all output mode on nodes with fan-out list results
+    const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)
+      ?.outputMode as string | undefined
+    if (edgeOutputMode && state?.output?.listResults && state.output.listResults.length > 0) {
+      if (edgeOutputMode.startsWith("item:")) {
+        const idx = parseInt(edgeOutputMode.split(":")[1], 10)
+        output = state.output.listResults[idx] ?? state.output.listResults[0]
+      } else if (edgeOutputMode === "last") {
+        output = state.output.listResults[state.output.listResults.length - 1]
+      } else if (edgeOutputMode === "all") {
+        output = state.output.listResults.join(", ")
+      }
+    }
+
+    if (!output) {
+      if (state?.output) {
+        output = getPrimaryOutput(state.output, sourceNode.type, edge.sourceHandle)
+      } else if (isSourceNode(sourceNode.type)) {
+        const sourceOutput = extractSourceNodeOutput(sourceNode, triggerData)
+        if (sourceOutput) {
+          output = getPrimaryOutput(sourceOutput, sourceNode.type, edge.sourceHandle)
+        }
       }
     }
 
@@ -50,6 +68,157 @@ export function resolveNodeInputs(
   }
 
   return inputs
+}
+
+// ---------------------------------------------------------------------------
+// Fan-out detection — check if a node has list input from upstream
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if a node receives list input from any upstream source.
+ * Returns the list items (string[]) if a fan-out source is found, undefined otherwise.
+ * Mirrors frontend getListInputForNode() logic.
+ */
+export function getListInputForNode(
+  targetNode: SimpleNode,
+  edges: SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState>,
+  allNodes: SimpleNode[],
+  triggerData?: Record<string, unknown>,
+): string[] | undefined {
+  const incomingEdges = edges.filter((e) => e.target === targetNode.id)
+
+  for (const edge of incomingEdges) {
+    const sourceNode = allNodes.find((n) => n.id === edge.source)
+    if (!sourceNode) continue
+
+    // 1. Loop node — column routing via sourceHandle
+    if (sourceNode.type === "loop") {
+      const columns = sourceNode.data.columns as
+        | Array<{ id: string; handleId: string }>
+        | undefined
+      const colIndex = (columns ?? []).findIndex(
+        (c) => c.handleId === edge.sourceHandle,
+      )
+
+      // Check if loop has upstream "in" connection (connected mode)
+      const loopInEdges = edges.filter(
+        (e) => e.target === sourceNode.id && e.targetHandle === "in",
+      )
+      if (loopInEdges.length > 0) {
+        const upstreamEdge = loopInEdges[0]
+        const upstreamNode = allNodes.find((n) => n.id === upstreamEdge.source)
+        if (upstreamNode) {
+          // Get upstream output as text and split by newlines
+          const state = nodeStates[upstreamNode.id]
+          let upstreamText: string | undefined
+          if (state?.output) {
+            upstreamText = getPrimaryOutput(state.output, upstreamNode.type, upstreamEdge.sourceHandle)
+          } else if (isSourceNode(upstreamNode.type)) {
+            const srcOutput = extractSourceNodeOutput(upstreamNode, triggerData)
+            if (srcOutput) {
+              upstreamText = getPrimaryOutput(srcOutput, upstreamNode.type, upstreamEdge.sourceHandle)
+            }
+          }
+          if (upstreamText) {
+            const items = upstreamText
+              .split("\n")
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+            if (items.length > 1) return items
+          }
+        }
+      } else if (colIndex >= 0) {
+        // Manual mode: extract column values from rows
+        const rows = sourceNode.data.rows as string[][] | undefined
+        if (rows) {
+          const items = rows
+            .map((row) => row[colIndex]?.trim())
+            .filter(Boolean) as string[]
+          if (items.length > 1) return items
+        }
+      }
+      continue
+    }
+
+    // Check outputMode from edge data — only fan-out if mode is "each"
+    // List/loop/split-text edges default to "each"; all other edges default to "last"
+    const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"])
+    const edgeOutputMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
+    const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
+    if (outputMode !== "each") continue
+
+    // 2. List node — parse items by newline
+    if (sourceNode.type === "list") {
+      const items = extractSourceNodeOutputAsList(sourceNode, triggerData)
+      if (items && items.length > 1) return items
+      continue
+    }
+
+    // 3. Split-text node — read splitResults from completed state
+    if (sourceNode.type === "split-text") {
+      const state = nodeStates[sourceNode.id]
+      if (state?.output?.splitResults && state.output.splitResults.length > 1) {
+        return state.output.splitResults
+      }
+      continue
+    }
+
+    // 4. Any node with listResults from a prior fan-out execution
+    const state = nodeStates[sourceNode.id]
+    if (state?.output?.listResults && state.output.listResults.length > 1) {
+      return state.output.listResults
+    }
+  }
+
+  // Transitive fan-out: if a direct parent is a text-prompt whose own upstream
+  // is a list-like node with "each" mode, resolve the text template per item.
+  const DEFAULT_EACH_TYPES_SET = new Set(["list", "loop", "split-text"])
+  for (const edge of incomingEdges) {
+    const sourceNode = allNodes.find((n) => n.id === edge.source)
+    if (!sourceNode || sourceNode.type !== "text-prompt") continue
+
+    const sourceIncoming = edges.filter((e) => e.target === sourceNode.id)
+    for (const srcEdge of sourceIncoming) {
+      const listNode = allNodes.find((n) => n.id === srcEdge.source)
+      if (!listNode || !DEFAULT_EACH_TYPES_SET.has(listNode.type)) continue
+
+      const gpEdgeMode = (srcEdge.data as Record<string, unknown> | undefined)
+        ?.outputMode as string | undefined
+      if ((gpEdgeMode ?? "each") !== "each") continue
+
+      // Get list items
+      let listItems: string[] | undefined
+      if (listNode.type === "list") {
+        listItems = extractSourceNodeOutputAsList(listNode, triggerData)
+      } else if (listNode.type === "split-text") {
+        const st = nodeStates[listNode.id]
+        if (st?.output?.splitResults && st.output.splitResults.length > 1) {
+          listItems = st.output.splitResults
+        }
+      }
+      if (!listItems || listItems.length <= 1) continue
+
+      // Build ref map for the text-prompt to resolve nested refs
+      const refMap = buildNodeRefMap(sourceNode.id, {
+        nodes: allNodes,
+        edges,
+        nodeStates,
+      })
+      const listLabel = (listNode.data.label as string) || listNode.type || listNode.id
+      const sourceText = (sourceNode.data.text as string) || ""
+
+      const resolvedItems: string[] = []
+      for (const item of listItems) {
+        const itemMap = new Map(refMap)
+        itemMap.set(listLabel, item)
+        resolvedItems.push(resolveNodeRefs(sourceText, itemMap))
+      }
+      if (resolvedItems.length > 1) return resolvedItems
+    }
+  }
+
+  return undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +359,28 @@ function routeOutput(
   }
   if (edge.targetHandle === "audio") {
     routeAudioOutput(inputs, output, targetType, src.id)
+    return
+  }
+
+  // --- List node output mode routing (reads mode from edge data) ---
+  if (srcType === "list") {
+    const edgeMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
+    const outputMode = edgeMode ?? "each" // list edges default to "each"
+    const items = ((src.data.items as string | undefined) || "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+    if (outputMode === "all") {
+      inputs.prompt = items.join(", ") || output
+    } else if (outputMode === "last") {
+      inputs.prompt = items[items.length - 1] || output
+    } else if (outputMode.startsWith("item:")) {
+      const idx = parseInt(outputMode.split(":")[1], 10)
+      inputs.prompt = items[idx] ?? items[0] ?? output
+    } else {
+      // "each" mode — output first item; fan-out handled separately
+      inputs.prompt = output
+    }
     return
   }
 
