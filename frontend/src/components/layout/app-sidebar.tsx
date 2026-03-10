@@ -151,7 +151,7 @@ export function AppSidebar({
             )}
           >
             {isCollapsed ? (
-              <NodaroLogo variant="icon" size="md" className="!h-[24px]" />
+              <NodaroLogo variant="icon" size="md" />
             ) : (
               <NodaroLogo size="md" />
             )}
