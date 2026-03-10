@@ -593,6 +593,7 @@ export function buildPayload(
           provider,
           data.duration as number | string | undefined,
           (data.sound ?? data.kling3Sound) as boolean | undefined,
+          "text-to-video",
         ),
         payload: {
           jobId,
@@ -678,10 +679,13 @@ export function buildPayload(
 
     case "extend-video": {
       const evProvider = (data.provider as string) ?? "veo-extend"
+      const evModel = evProvider === "veo-extend"
+        ? (evProvider + (data.model === "quality" ? ":quality" : ""))
+        : evProvider
       return {
         jobName: "extend-video",
         queueName: "video-generation",
-        modelIdentifier: evProvider,
+        modelIdentifier: evModel,
         payload: {
           jobId,
           kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,

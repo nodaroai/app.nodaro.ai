@@ -53,17 +53,17 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/google/nano-banana-2.md
   "nano-banana-2": {
     model: "nano-banana-2",
-    credits: 4,
-    ***REDACTED-OSS-SCRUB*** (1K default)
-    // NOTE: 2K costs more, 4K costs even more — handled via composite identifiers
+    credits: 8,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     // Uses native aspect_ratio (NOT image_size like v1), supports resolution (1K/2K/4K)
     extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "jpg" },
   },
 
   "nano-banana-edit": {
     model: "google/nano-banana-edit",
-    credits: 6,
-    cost: 0.03,
+    credits: 4,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_urls",  // Nano Banana Edit uses image_urls array
     extraParams: { image_size: "16:9" },
@@ -182,8 +182,11 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   "ideogram-reframe": {
     model: "ideogram/v3-reframe",
-    credits: 18,
+    credits: 7,
     ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
+    // Handled via composite identifiers "ideogram-reframe:TURBO", "ideogram-reframe:QUALITY"
+    // V3 Reframe is cheaper than character models (character=18, v3=7 BALANCED)
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
     extraParams: { image_size: "landscape_16_9", rendering_speed: "BALANCED" },
@@ -208,7 +211,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   "qwen-edit": {
     model: "qwen/image-edit",
-    credits: 4,
+    credits: 5,
     ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
@@ -235,15 +238,15 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/seedream/5-lite-text-to-image.md
   "seedream-5-lite": {
     model: "seedream/5-lite-text-to-image",
-    credits: 6.5,
-    ***REDACTED-OSS-SCRUB*** (basic quality, same as 4.5)
+    credits: 5.5,
+    ***REDACTED-OSS-SCRUB***
     // NOTE: High quality (4K) may cost more — handled via composite identifier "seedream-5-lite:high"
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
   },
   "seedream-5-lite-i2i": {
     model: "seedream/5-lite-image-to-image",
-    credits: 6.5,
-    cost: 0.032,
+    credits: 5.5,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image",  // Single URL string
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
@@ -271,14 +274,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Recraft utilities
   "recraft-remove-bg": {
     model: "recraft/remove-background",
-    credits: 4,
-    cost: 0.02,
+    credits: 1,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
   },
   "recraft-upscale": {
     model: "recraft/crisp-upscale",
-    credits: 6,
-    cost: 0.03,
+    credits: 0.5,
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
   },
 
@@ -286,8 +289,9 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/topaz/image-upscale.md
   "topaz-image-upscale": {
     model: "topaz/image-upscale",
-    credits: 6,
-    cost: 0.03,  // 6 KIE credits * $0.005
+    credits: 10,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
     extraParams: { upscale_factor: "2" },
@@ -298,7 +302,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // NOTE: This uses task_id, not image_url — requires special handling
   "grok-upscale": {
     model: "grok-imagine/upscale",
-    credits: 4,
+    credits: 10,
     ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
     extraParams: {},
@@ -309,14 +313,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Uses inputImage param for I2I editing mode, pure T2I without it
   "flux-kontext": {
     model: "flux-kontext-pro",
-    credits: 10,
-    cost: 0.05,
+    credits: 5,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspectRatio: "16:9", outputFormat: "jpeg" },
   },
   "flux-kontext-max": {
     model: "flux-kontext-max",
-    credits: 20,
-    cost: 0.10,
+    credits: 10,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspectRatio: "16:9", outputFormat: "jpeg" },
   },
 }
@@ -330,8 +334,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Uses single image_url, NOT array!
   "minimax": {
     model: "hailuo/02-image-to-video-pro",
-    credits: 80,
-    cost: 0.40,
+    credits: 57,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // single URL (NOT array!)
     extraParams: { prompt_optimizer: false },
     allowedDurations: [5],  // Hailuo produces ~5 second videos
@@ -345,8 +349,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Source: docs.kie.ai FAQ: "Clips made directly in VEO 3.1 are limited to 8 seconds"
   "veo3": {
     model: "veo3",  // Quality model - higher quality, slower
-    credits: 400,
-    cost: 2.00,
+    credits: 250,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "imageUrls",  // Array format for VEO API
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
     allowedDurations: [8],  // FIXED: VEO3 always produces 8 second videos (not configurable)
@@ -355,8 +359,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
   "veo3.1": {
     model: "veo3_fast",  // Fast model - quicker generation, lower quality
-    credits: 250,
-    cost: 1.25,
+    credits: 60,
+    cost: 0.30,  // 60 KIE credits * $0.005 (VEO 3.1 Fast)
     imageParam: "imageUrls",
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
     allowedDurations: [8],  // FIXED: VEO3 Fast always produces 8 second videos (not configurable)
@@ -367,8 +371,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Kling family - VERIFIED: docs.kie.ai/market/kling/image-to-video
   "kling": {
     model: "kling-2.6/image-to-video",
-    credits: 70,
-    cost: 0.35,
+    credits: 55,
+    ***REDACTED-OSS-SCRUB***
+    // NOTE: 5s+audio=110, 10s=110, 10s+audio=220 — variable pricing by duration/audio
     imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
     extraParams: { sound: false, duration: "5" },
     allowedDurations: [5, 10],  // Kling supports 5 or 10 second videos
@@ -377,8 +382,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // VERIFIED: docs.kie.ai/market/kling/v2-5-turbo-image-to-video-pro
   "kling-turbo": {
     model: "kling/v2-5-turbo-image-to-video-pro",
-    credits: 50,
-    cost: 0.25,
+    credits: 42,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // single URL for start frame
     extraParams: { duration: "5", cfg_scale: 0.5 },
     allowedDurations: [5, 10],  // Kling Turbo supports 5 or 10 second videos
@@ -387,10 +393,12 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
 
   // Kling 3.0 - uses unified createTask/getTaskDetail (NOT recordInfo)
+  // Per-second pricing: 20-40 cr/sec depending on audio + resolution
+  // 720P no audio: 20/sec, 720P+audio: 30/sec, 1080P no audio: 27/sec, 1080P+audio: 40/sec
   "kling-3.0": {
     model: "kling-3.0/video",
-    credits: 100,
-    cost: 0.50,
+    credits: 200,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_urls",
     extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
@@ -400,8 +408,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Grok - VERIFIED: docs.kie.ai/market/grok-imagine/image-to-video
   "grok-i2v": {
     model: "grok-imagine/image-to-video",
-    credits: 60,
-    cost: 0.30,
+    credits: 20,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
     extraParams: { mode: "normal", duration: "6" },
     allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
@@ -412,8 +420,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // size: "standard" (720p) or "high" (1080p)
   "sora2-pro": {
     model: "sora-2-pro-image-to-video",
-    credits: 200,
-    cost: 1.00,
+    credits: 150,
+    cost: 0.75,  // 150 KIE credits * $0.005 (Pro Standard 10s)
     imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
     extraParams: { aspect_ratio: "landscape", n_frames: "10", size: "standard", remove_watermark: true },
     allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
@@ -436,8 +444,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 I2V - docs.kie.ai/market/wan/2-6-image-to-video
   "wan-i2v": {
     model: "wan/2-6-image-to-video",
-    credits: 80,
-    cost: 0.40,
+    credits: 70,
+    ***REDACTED-OSS-SCRUB***
+    // NOTE: 1080p=104.5, 10s-720p=140, 10s-1080p=209.5, 15s-720p=210, 15s-1080p=315
     imageParam: "image_urls",  // Array format (max 1)
     extraParams: { resolution: "720p" },
     allowedDurations: [5, 10, 15],
@@ -458,8 +467,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo 2.3 Pro I2V - docs.kie.ai/market/hailuo/2-3-image-to-video-pro
   "hailuo-2.3-pro": {
     model: "hailuo/2-3-image-to-video-pro",
-    credits: 100,
-    cost: 0.50,
+    credits: 45,
+    cost: 0.225,  // 45 KIE credits * $0.005 (6s, 768p default)
+    // NOTE: 6s-1080p=80, 10s-768p=90
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "768P" },
     allowedDurations: [6, 10],
@@ -469,8 +479,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo 2.3 Standard I2V - docs.kie.ai/market/hailuo/2-3-image-to-video-standard
   "hailuo-2.3": {
     model: "hailuo/2-3-image-to-video-standard",
-    credits: 60,
-    cost: 0.30,
+    credits: 30,
+    ***REDACTED-OSS-SCRUB***
+    // NOTE: 6s-1080p=50, 10s-768p=50
     imageParam: "image_url",  // Single URL string
     extraParams: { resolution: "768P" },
     allowedDurations: [6, 10],
@@ -480,8 +491,8 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo Standard (02) I2V - docs.kie.ai/market/hailuo/02-image-to-video-standard
   "hailuo-standard": {
     model: "hailuo/02-image-to-video-standard",
-    credits: 50,
-    cost: 0.25,
+    credits: 30,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // Single URL string
     extraParams: { prompt_optimizer: false, resolution: "768P" },
     allowedDurations: [6, 10],
@@ -492,8 +503,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Sora 2 (non-Pro) I2V - docs.kie.ai/market/sora2/sora-2-image-to-video
   "sora2": {
     model: "sora-2-image-to-video",
-    credits: 120,
-    cost: 0.60,
+    credits: 30,
+    cost: 0.15,  // 30 KIE credits * $0.005 (Standard 10s)
+    // NOTE: Standard 15s=35, stable 10s=35, stable 15s=40
     imageParam: "image_urls",  // Array format
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
     allowedDurations: [5, 10],
@@ -538,8 +550,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Kling V2.1 Master I2V - docs.kie.ai/market/kling/v2-1-master-image-to-video
   "kling-master": {
     model: "kling/v2-1-master-image-to-video",
-    credits: 70,
-    cost: 0.35,
+    credits: 160,
+    ***REDACTED-OSS-SCRUB***
+    ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",  // Single URL string
     extraParams: { duration: "5", cfg_scale: 0.5 },
     allowedDurations: [5, 10],
@@ -550,8 +563,9 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/runway-api/generate-ai-video.md
   "runway-kie": {
     model: "runway",
-    credits: 100,
-    cost: 0.50,
+    credits: 12,
+    ***REDACTED-OSS-SCRUB***
+    // NOTE: 10s-720p=30, 5s-1080p=30
     imageParam: "imageUrl",  // Single URL string (top-level body param)
     extraParams: { duration: 5, quality: "720p" },
     allowedDurations: [5, 10],
@@ -567,8 +581,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo/MiniMax - VERIFIED: docs.kie.ai/market/hailuo/02-text-to-video-pro
   "minimax": {
     model: "hailuo/02-text-to-video-pro",
-    credits: 80,
-    cost: 0.40,
+    credits: 57,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { prompt_optimizer: false },
     allowedDurations: [5],  // Hailuo produces ~5 second videos
   },
@@ -577,8 +591,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // IMPORTANT: VEO3 has NO duration parameter - always produces 8 second clips
   "veo3": {
     model: "veo3",  // Quality model - higher quality, slower
-    credits: 400,
-    cost: 2.00,
+    credits: 250,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { generationType: "TEXT_2_VIDEO" },
     allowedDurations: [8],  // FIXED: VEO3 always produces 8 second videos (not configurable)
   },
@@ -586,15 +600,16 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Kling family - VERIFIED: docs.kie.ai/market/kling/text-to-video
   "kling": {
     model: "kling-2.6/text-to-video",
-    credits: 70,
-    cost: 0.35,
+    credits: 55,
+    ***REDACTED-OSS-SCRUB***
+    // NOTE: 5s+audio=110, 10s=110, 10s+audio=220
     extraParams: { sound: false, aspect_ratio: "16:9", duration: "5" },
     allowedDurations: [5, 10],  // Kling supports 5 or 10 second videos
   },
   "kling-turbo": {
     model: "kling/v2-5-turbo-text-to-video-pro",
-    credits: 50,
-    cost: 0.25,
+    credits: 42,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { duration: "5", cfg_scale: 0.5 },
     allowedDurations: [5, 10],  // Kling Turbo supports 5 or 10 second videos
   },
@@ -602,8 +617,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Grok
   "grok": {
     model: "grok-imagine/text-to-video",
-    credits: 60,
-    cost: 0.30,
+    credits: 20,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { aspect_ratio: "16:9", mode: "normal", duration: "6", resolution: "720p" },
     allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
   },
@@ -611,18 +626,19 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Sora 2 Pro
   "sora2-pro": {
     model: "sora-2-pro-text-to-video",
-    credits: 200,
-    cost: 1.00,
+    credits: 150,
+    cost: 0.75,  // 150 KIE credits * $0.005 (Pro Standard 10s)
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
     allowedDurations: [5, 10],  // Sora Pro n_frames: 10 (~5s), 15 (~10s)
     usesNFrames: true,  // Uses n_frames parameter instead of duration
   },
 
   // Kling 3.0 - uses kling3-client.ts (unified createTask endpoint)
+  // Per-second pricing: 20-40 cr/sec depending on audio + resolution
   "kling-3.0": {
     model: "kling-3.0/video",
-    credits: 100,
-    cost: 0.50,
+    credits: 200,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { sound: true, duration: "5", mode: "pro", multi_shots: false },
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
@@ -639,8 +655,9 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 T2V - docs.kie.ai/market/wan/2-6-text-to-video
   "wan": {
     model: "wan/2-6-text-to-video",
-    credits: 80,
-    cost: 0.40,
+    credits: 104.5,
+    ***REDACTED-OSS-SCRUB***
+    // NOTE: 720p=70, 10s-720p=140, 10s-1080p=209.5, 15s-720p=210, 15s-1080p=315
     extraParams: { resolution: "1080p" },
     allowedDurations: [5, 10, 15],
   },
@@ -648,8 +665,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Sora 2 (non-Pro) T2V - docs.kie.ai/market/sora2/sora-2-text-to-video
   "sora2": {
     model: "sora-2-text-to-video",
-    credits: 120,
-    cost: 0.60,
+    credits: 30,
+    cost: 0.15,  // 30 KIE credits * $0.005 (Standard 10s)
     extraParams: { aspect_ratio: "landscape", n_frames: "10", remove_watermark: true },
     allowedDurations: [5, 10],
     usesNFrames: true,
@@ -658,8 +675,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo Standard (02) T2V - docs.kie.ai/market/hailuo/02-text-to-video-standard
   "hailuo-standard": {
     model: "hailuo/02-text-to-video-standard",
-    credits: 50,
-    cost: 0.25,
+    credits: 30,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { prompt_optimizer: false },
     allowedDurations: [6, 10],
   },
@@ -685,8 +702,9 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.2 Turbo T2V - docs.kie.ai/market/wan/2-2-a14b-text-to-video-turbo
   "wan-turbo": {
     model: "wan/2-2-a14b-text-to-video-turbo",
-    credits: 40,
-    cost: 0.20,
+    credits: 80,
+    ***REDACTED-OSS-SCRUB***
+    // NOTE: 480p=40, 580p=60
     extraParams: { aspect_ratio: "16:9", resolution: "720p" },
     allowedDurations: [5],
   },
@@ -694,8 +712,8 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Runway (KIE) T2V - special endpoint: /api/v1/runway/generate
   "runway-kie": {
     model: "runway",
-    credits: 100,
-    cost: 0.50,
+    credits: 12,
+    ***REDACTED-OSS-SCRUB***
     extraParams: { duration: 5, quality: "720p", aspectRatio: "16:9" },
     allowedDurations: [5, 10],
   },
@@ -708,8 +726,8 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 - Standard createTask endpoint, input: video_urls array
   "wan": {
     model: "wan/2-6-video-to-video",
-    credits: 80,
-    cost: 0.40,
+    credits: 70,
+    ***REDACTED-OSS-SCRUB***
     imageParam: "video_urls",  // Array format: ["video_url"]
     extraParams: {},
   },
@@ -717,6 +735,7 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Luma Modify - special endpoint: /api/v1/modify/generate
   // See: docs.kie.ai/luma-api/generate-luma-modify-video.md
   // English prompts only, input video max 500MB/10s
+  // NOTE: Not in KIE pricing data — keeping estimated cost
   "luma-modify": {
     model: "luma-modify",
     credits: 100,
@@ -736,8 +755,8 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
   // character_orientation: "image" (max 10s) or "video" (max 30s)
   "kling": {
     model: "kling-2.6/motion-control",
-    credits: 100,
-    cost: 0.50,
+    credits: 30,
+    cost: 0.15,  // 6 cr/sec * ~5s = 30 KIE credits (720p default)
     imageParam: "input_urls",  // Array format for input images
     extraParams: { character_orientation: "image", resolution: "720p" },
   },
@@ -773,8 +792,8 @@ export const KIE_LIP_SYNC_MODELS: Record<string, KieModelConfig> = {
   },
   "kling-avatar-pro": {
     model: "kling/ai-avatar-pro",
-    credits: 60,
-    cost: 0.30,
+    credits: 80,
+    cost: 0.40,  // 16 cr/sec * ~5s = 80 KIE credits (1080p)
     imageParam: "image_url",
     extraParams: {},
   },
@@ -795,13 +814,13 @@ export const KIE_LIP_SYNC_MODELS: Record<string, KieModelConfig> = {
 export const KIE_MUSIC_MODELS: Record<string, KieModelConfig> = {
   "suno": {
     model: "suno/v4",
-    credits: 20,
-    cost: 0.10,  // 20 credits * $0.005
+    credits: 12,
+    ***REDACTED-OSS-SCRUB***
   },
   "suno-v5": {
     model: "suno/v5",
-    credits: 40,
-    cost: 0.20,  // 40 credits * $0.005
+    credits: 12,
+    ***REDACTED-OSS-SCRUB***
   },
 }
 
@@ -812,18 +831,18 @@ export const KIE_MUSIC_MODELS: Record<string, KieModelConfig> = {
 export const KIE_TTS_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-turbo": {
     model: "elevenlabs/text-to-speech-turbo-2-5",
-    credits: 10,
-    cost: 0.03,  // $0.03 per 1K chars
+    credits: 6,
+    ***REDACTED-OSS-SCRUB***
   },
   "elevenlabs-multilingual": {
     model: "elevenlabs/text-to-speech-multilingual-v2",
-    credits: 10,
-    cost: 0.06,  // $0.06 per 1K chars
+    credits: 12,
+    ***REDACTED-OSS-SCRUB***
   },
   // Legacy alias — maps to turbo at runtime in audio.ts
   "elevenlabs": {
     model: "elevenlabs/text-to-speech-turbo-2-5",
-    credits: 10,
+    credits: 6,
     cost: 0.03,
   },
 }
@@ -834,8 +853,8 @@ export const KIE_TTS_MODELS: Record<string, KieModelConfig> = {
 export const KIE_SOUND_EFFECT_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-sfx": {
     model: "elevenlabs/sound-effect-v2",
-    credits: 10,
-    cost: 0.0012,  // $0.0012 per second of generated audio
+    credits: 1.2,
+    ***REDACTED-OSS-SCRUB***
   },
 }
 
@@ -845,8 +864,8 @@ export const KIE_SOUND_EFFECT_MODELS: Record<string, KieModelConfig> = {
 export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-isolation": {
     model: "elevenlabs/audio-isolation",
-    credits: 1,
-    cost: 0.01,
+    credits: 2,
+    cost: 0.01,  // 0.2 cr/sec * ~10s = 2 KIE credits
   },
 }
 
@@ -856,8 +875,8 @@ export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
 export const KIE_STT_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-stt": {
     model: "elevenlabs/speech-to-text",
-    credits: 10,
-    ***REDACTED-OSS-SCRUB***
+    credits: 3.5,
+    cost: 0.0175,  // 3.5 KIE credits * $0.005 per minute
   },
 }
 
@@ -867,7 +886,7 @@ export const KIE_STT_MODELS: Record<string, KieModelConfig> = {
 export const KIE_DIALOGUE_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-dialogue": {
     model: "elevenlabs/text-to-dialogue-v3",
-    credits: 10,
+    credits: 14,
     ***REDACTED-OSS-SCRUB***
   },
 }

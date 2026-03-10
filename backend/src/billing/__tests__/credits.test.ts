@@ -105,7 +105,7 @@ describe("CreditsService", () => {
     })
 
     it("returns correct cost for veo3", () => {
-      expect(CreditsService.estimateWorkflowCredits([{ type: "veo3" }])).toBe(125)
+      expect(CreditsService.estimateWorkflowCredits([{ type: "veo3" }])).toBe(79)
     })
 
     it("returns 0 for an unknown node type", () => {
@@ -115,11 +115,11 @@ describe("CreditsService", () => {
     it("sums costs for mixed node types", () => {
       const nodes = [
         { type: "generate-image" },   // 2
-        { type: "veo3" },             // 125
+        { type: "veo3" },             // 79
         { type: "text-to-speech" },   // 4
         { type: "ffmpeg" },           // 1
       ]
-      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(132)
+      expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(86)
     })
 
     it("returns 0 for all zero-cost nodes", () => {
