@@ -451,20 +451,20 @@ describe("CreditsService", () => {
       expect(result.required).toBe(3)
     })
 
-    it("falls back to static cost for kling-3.0-motion (4 credits)", async () => {
+    it("falls back to static cost for kling-3.0-motion (38 credits, 10s default)", async () => {
       mockTable("model_pricing", null, { code: "PGRST116" })
       mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
       const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "kling-3.0-motion")
       expect(result.allowed).toBe(true)
-      expect(result.required).toBe(4)
+      expect(result.required).toBe(38)
     })
 
-    it("falls back to static cost for kling-3.0-motion:1080p (7 credits)", async () => {
+    it("falls back to static cost for kling-3.0-motion:1080p (63 credits, 10s default)", async () => {
       mockTable("model_pricing", null, { code: "PGRST116" })
       mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
       const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "kling-3.0-motion:1080p")
       expect(result.allowed).toBe(true)
-      expect(result.required).toBe(7)
+      expect(result.required).toBe(63)
     })
 
     it("falls back to static cost for topaz-image-upscale:4K (7 credits)", async () => {
