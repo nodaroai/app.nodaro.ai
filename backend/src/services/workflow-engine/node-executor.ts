@@ -110,6 +110,8 @@ const INLINE_NODES = new Set([
 export interface ExecuteNodeResult {
   output: NodeOutput
   jobId?: string
+  /** All job IDs from fan-out iterations. */
+  jobIds?: string[]
   usageLogId?: string
   creditsUsed?: number
 }
@@ -378,6 +380,7 @@ async function executeWorkerNode(
   if (payload.provider) inputData.provider = payload.provider
   if (payload.referenceImageUrls) inputData.referenceImageUrls = payload.referenceImageUrls
   if (payload.imageUrl || resolvedInputs.imageUrl) inputData.imageUrl = payload.imageUrl || resolvedInputs.imageUrl
+  if (payload.endFrameUrl) inputData.endFrameUrl = payload.endFrameUrl
   if (payload.videoUrl || resolvedInputs.videoUrl) inputData.videoUrl = payload.videoUrl || resolvedInputs.videoUrl
   if (payload.audioUrl || resolvedInputs.audioUrl) inputData.audioUrl = payload.audioUrl || resolvedInputs.audioUrl
   if (payload.model) inputData.model = payload.model

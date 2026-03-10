@@ -146,6 +146,73 @@ export function isExecutableNode(node: WorkflowNode): boolean {
   return EXECUTABLE_TYPES.has(node.type ?? "");
 }
 
+const FAN_OUT_EACH_TYPES = new Set(["list", "loop", "split-text"]);
+
+/**
+ * Estimate the fan-out multiplier for a node based on upstream list/loop nodes.
+ * Returns 1 if no fan-out, or the number of list items if fan-out is detected.
+ */
+export function getFanOutMultiplier(
+  node: WorkflowNode,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): number {
+  const incomingEdges = edges.filter((e) => e.target === node.id);
+
+  for (const edge of incomingEdges) {
+    const sourceNode = allNodes.find((n) => n.id === edge.source);
+    if (!sourceNode) continue;
+
+    const edgeMode = (edge.data as Record<string, unknown> | undefined)
+      ?.outputMode as string | undefined;
+    const mode =
+      edgeMode ??
+      (FAN_OUT_EACH_TYPES.has(sourceNode.type ?? "") ? "each" : "last");
+    if (mode !== "each") continue;
+
+    // Direct fan-out from list node
+    if (sourceNode.type === "list") {
+      const items = ((sourceNode.data as Record<string, unknown>).items as string || "")
+        .split("\n").map((s) => s.trim()).filter(Boolean);
+      if (items.length > 1) return items.length;
+    }
+
+    // Direct fan-out from loop node
+    if (sourceNode.type === "loop") {
+      const rows = (sourceNode.data as Record<string, unknown>).rows as
+        | string[][]
+        | undefined;
+      if (rows && rows.length > 1) return rows.length;
+    }
+
+    // Transitive: text-prompt upstream of list/loop
+    if (sourceNode.type === "text-prompt") {
+      const srcEdges = edges.filter((e) => e.target === sourceNode.id);
+      for (const srcEdge of srcEdges) {
+        const listNode = allNodes.find((n) => n.id === srcEdge.source);
+        if (!listNode || !FAN_OUT_EACH_TYPES.has(listNode.type ?? "")) continue;
+        const gpMode = (srcEdge.data as Record<string, unknown> | undefined)
+          ?.outputMode as string | undefined;
+        if ((gpMode ?? "each") !== "each") continue;
+
+        if (listNode.type === "list") {
+          const items = ((listNode.data as Record<string, unknown>).items as string || "")
+            .split("\n").map((s) => s.trim()).filter(Boolean);
+          if (items.length > 1) return items.length;
+        }
+        if (listNode.type === "loop") {
+          const rows = (listNode.data as Record<string, unknown>).rows as
+            | string[][]
+            | undefined;
+          if (rows && rows.length > 1) return rows.length;
+        }
+      }
+    }
+  }
+
+  return 1;
+}
+
 export interface ExecutionContext {
   userId: string | undefined;
   projectId: string | undefined;

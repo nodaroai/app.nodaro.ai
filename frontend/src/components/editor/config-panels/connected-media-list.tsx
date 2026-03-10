@@ -38,7 +38,13 @@ export function getSourceThumbnail(
     const results = nd.generatedResults as
       | Array<{ url?: string }>
       | undefined
-    const idx = (nd.activeResultIndex as number) ?? 0
+    // Edge output mode overrides which result to show
+    let idx = (nd.activeResultIndex as number) ?? 0
+    if (source.edgeOutputMode?.startsWith("item:")) {
+      idx = parseInt(source.edgeOutputMode.split(":")[1], 10)
+    } else if (source.edgeOutputMode === "last" && results && results.length > 0) {
+      idx = results.length - 1
+    }
     return (
       results?.[idx]?.url ||
       results?.[0]?.url ||

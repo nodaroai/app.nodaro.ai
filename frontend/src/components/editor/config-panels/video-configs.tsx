@@ -64,7 +64,13 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         imageUrl = (nodeData.url as string) || undefined
       } else if (s.type === "generate-image" || s.type === "edit-image" || s.type === "image-to-image" || s.type === "scene") {
         const results = nodeData.generatedResults as Array<{ url?: string }> | undefined
-        const activeIndex = (nodeData.activeResultIndex as number) ?? 0
+        // Edge output mode: "item:N" overrides activeResultIndex
+        let activeIndex = (nodeData.activeResultIndex as number) ?? 0
+        if (s.edgeOutputMode?.startsWith("item:")) {
+          activeIndex = parseInt(s.edgeOutputMode.split(":")[1], 10)
+        } else if (s.edgeOutputMode === "last" && results && results.length > 0) {
+          activeIndex = results.length - 1
+        }
         if (results && results.length > 0) {
           imageUrl = results[activeIndex]?.url || results[0]?.url
         }

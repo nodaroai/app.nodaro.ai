@@ -11,6 +11,7 @@ import type { GeneratedResult } from "@/types/nodes";
 import {
   NODE_CREDIT_COSTS,
   isExecutableNode,
+  getFanOutMultiplier,
   type ExecutionContext,
 } from "./types";
 import { collapseExpandedClones } from "./execution-graph";
@@ -70,14 +71,19 @@ export async function handleRun(
           },
           staleTime: 10_000,
         });
+        const { edges: allEdges } = useWorkflowStore.getState();
         const estimatedCost = executableNodes.reduce((sum, node) => {
           const data = node.data as Record<string, unknown>;
           const provider = data.provider as string | undefined;
+          let cost: number;
           if (provider) {
             const cached = getCachedCredits(provider);
-            if (cached !== undefined) return sum + cached;
+            cost = cached !== undefined ? cached : (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1);
+          } else {
+            cost = NODE_CREDIT_COSTS[node.type ?? ""] ?? 1;
           }
-          return sum + (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1);
+          const multiplier = getFanOutMultiplier(node, nodes, allEdges);
+          return sum + cost * multiplier;
         }, 0);
         if (balance.total < estimatedCost) {
           ctx.setInsufficientCreditsData({
@@ -544,6 +550,7 @@ interface NodeExecutionState {
     instrumentalUrl?: string;
     splitResults?: string[];
     combinedText?: string;
+    listResults?: string[];
   };
   error?: string;
 }
@@ -561,7 +568,20 @@ function syncNodeStatesToStore(
     const data = node.data as Record<string, unknown>;
     const currentStatus = data.executionStatus as string | undefined;
 
-    if (state.status === "completed" && currentStatus !== "completed") {
+    // Also re-sync results when node is already completed but generatedResults
+    // is empty/missing (e.g. polling caught the completed status before output
+    // was persisted, then the full output arrived in a later poll/SSE event).
+    const needsResultSync =
+      state.status === "completed" &&
+      currentStatus === "completed" &&
+      state.output?.listResults &&
+      state.output.listResults.length > 1 &&
+      !((data.generatedResults as GeneratedResult[] | undefined)?.length);
+
+    if (
+      (state.status === "completed" && currentStatus !== "completed") ||
+      needsResultSync
+    ) {
       const updates: Record<string, unknown> = {
         executionStatus: "completed",
       };
@@ -592,15 +612,43 @@ function syncNodeStatesToStore(
           updates.generatedText = state.output.combinedText;
         if (state.output.splitResults)
           updates.generatedSplitResults = state.output.splitResults;
+        // Sync fan-out list results so frontend resolveNodeInputs can use item:N
+        if (state.output.listResults && state.output.listResults.length > 0) {
+          updates.__listResults = state.output.listResults;
+          updates.__listTotal = state.output.listResults.length;
+          updates.__listCompleted = state.output.listResults.length;
+        }
 
-        const outputUrl =
-          state.output.imageUrl ??
-          state.output.videoUrl ??
-          state.output.audioUrl;
-        if (outputUrl) {
-          const prev = (data.generatedResults ?? []) as GeneratedResult[];
-          const alreadyHas = prev.some((r) => r.url === outputUrl);
-          if (!alreadyHas) {
+        // Add generated results — for fan-out nodes, include ALL list results
+        const listResultUrls = (state.output.listResults ?? []).filter(
+          (u) => u && u.startsWith("http"),
+        );
+        const prev = (data.generatedResults ?? []) as GeneratedResult[];
+        const existingUrls = new Set(prev.map((r) => r.url));
+
+        // DEBUG: trace fan-out result sync (remove after confirming fix)
+        if (state.output.listResults) {
+          console.warn("[syncNodeStatesToStore] node", node.id, "listResults:", state.output.listResults, "listResultUrls:", listResultUrls.length, "prev:", prev.length);
+        }
+
+        if (listResultUrls.length > 1) {
+          const newResults = listResultUrls
+            .filter((url) => !existingUrls.has(url))
+            .map((url, i) => ({
+              url,
+              timestamp: new Date().toISOString(),
+              jobId: `exec-${node.id}-${i}`,
+            }));
+          if (newResults.length > 0) {
+            updates.generatedResults = [...newResults, ...prev];
+            updates.activeResultIndex = 0;
+          }
+        } else {
+          const outputUrl =
+            state.output.imageUrl ??
+            state.output.videoUrl ??
+            state.output.audioUrl;
+          if (outputUrl && !existingUrls.has(outputUrl)) {
             updates.generatedResults = [
               {
                 url: outputUrl,

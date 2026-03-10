@@ -24,6 +24,8 @@ export interface NodeOutput {
   combinedText?: string
   kieTaskId?: string
   paramOutputs?: Record<string, string>
+  /** Accumulated results from fan-out (list/loop/split-text) execution */
+  listResults?: string[]
 }
 
 export type NodeExecutionStatus =
@@ -37,6 +39,8 @@ export interface NodeExecutionState {
   status: NodeExecutionStatus
   nodeType?: string
   jobId?: string
+  /** All job IDs from fan-out iterations (when node runs multiple times via list/loop). */
+  jobIds?: string[]
   usageLogId?: string
   creditsUsed?: number
   output?: NodeOutput
@@ -86,6 +90,7 @@ export interface SimpleEdge {
   target: string
   sourceHandle?: string | null
   targetHandle?: string | null
+  data?: Record<string, unknown>
 }
 
 // ---------------------------------------------------------------------------

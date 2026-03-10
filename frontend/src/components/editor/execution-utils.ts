@@ -104,6 +104,8 @@ export interface NodeState {
   status: string
   nodeType?: string
   jobId?: string
+  /** All job IDs from fan-out iterations (list/loop). */
+  jobIds?: string[]
   creditsUsed?: number
   error?: string
   startedAt?: string

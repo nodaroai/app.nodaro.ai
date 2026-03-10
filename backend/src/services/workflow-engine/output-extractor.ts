@@ -42,6 +42,7 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "splitResults",
   "combinedText",
   "kieTaskId",
+  "listResults",
 ]
 
 // Job output_data keys that all map to NodeOutput.plan
@@ -101,11 +102,13 @@ export function extractSourceNodeOutput(
 
     case "list": {
       const items = (data.items as string | undefined) || ""
-      const firstLine = items
+      const lines = items
         .split("\n")
-        .find((l) => l.trim().length > 0)
-        ?.trim()
-      return firstLine ? { text: firstLine } : undefined
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0)
+      if (lines.length === 0) return undefined
+      // Always return first item; per-edge output mode routing is in input-resolver
+      return { text: lines[0] }
     }
 
     case "loop": {
@@ -150,6 +153,44 @@ export function extractSourceNodeOutput(
       // Only produce timestamp output for actual scheduled triggers, not manual runs
       if (!triggerData) return undefined
       return { text: (triggerData.timestamp as string) ?? new Date().toISOString() }
+    }
+
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Extract the full list of items from a list-producing source node.
+ * Returns string[] if the node produces multiple items, undefined otherwise.
+ * Used by the orchestrator to detect fan-out scenarios.
+ */
+export function extractSourceNodeOutputAsList(
+  node: SimpleNode,
+  triggerData?: Record<string, unknown>,
+): string[] | undefined {
+  const data = node.data
+  const type = node.type
+
+  switch (type) {
+    case "list": {
+      const items = (data.items as string | undefined) || ""
+      const lines = items
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0)
+      return lines.length > 1 ? lines : undefined
+    }
+
+    case "loop": {
+      // Loop node without upstream "in" connection: extract from manual rows
+      const rows = data.rows as string[][] | undefined
+      if (rows && rows.length > 1) {
+        // Default to first column; column routing is handled by getListInputForNode
+        const items = rows.map((row) => row[0]?.trim()).filter(Boolean)
+        return items.length > 1 ? items : undefined
+      }
+      return undefined
     }
 
     default:

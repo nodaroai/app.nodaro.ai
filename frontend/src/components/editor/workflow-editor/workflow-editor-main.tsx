@@ -39,6 +39,7 @@ import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
 import {
   NODE_CREDIT_COSTS,
   isExecutableNode,
+  getFanOutMultiplier,
   type ExecutionContext,
 } from "./types";
 import {
@@ -102,6 +103,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
 
   const storeNodes = useWorkflowStore((s) => s.nodes);
+  const storeEdges = useWorkflowStore((s) => s.edges);
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData);
 
   const manualEditNode = useMemo(
@@ -149,7 +151,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }, [manualEditNode, updateNodeData]);
 
   // ---------------------------------------------------------------------------
-  // Credit estimate
+  // Credit estimate (accounts for fan-out from list/loop nodes)
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!hasCredits()) return;
@@ -157,14 +159,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const total = executableNodes.reduce((sum, node) => {
       const data = node.data as Record<string, unknown>;
       const provider = data.provider as string | undefined;
+      let cost: number;
       if (provider) {
         const cached = getCachedCredits(provider);
-        if (cached !== undefined) return sum + cached;
+        cost = cached !== undefined ? cached : (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1);
+      } else {
+        cost = NODE_CREDIT_COSTS[node.type ?? ""] ?? 1;
       }
-      return sum + (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1);
+      const multiplier = getFanOutMultiplier(node, storeNodes, storeEdges);
+      return sum + cost * multiplier;
     }, 0);
     setWorkflowCreditEstimate(total);
-  }, [storeNodes]);
+  }, [storeNodes, storeEdges]);
 
   const { data: statsData } = useStats("user", user?.id, {
     refetchInterval: 30_000,

@@ -124,11 +124,70 @@ function simpleResult(
   }
 }
 
+// ---------------------------------------------------------------------------
+// List-like node helpers for buildNodeRefMap edge-aware output extraction
+// ---------------------------------------------------------------------------
+
+const LIST_LIKE_TYPES = new Set(["list", "loop", "split-text"])
+
+/** Return the outputMode from connecting edges, defaulting to "each" for list-like nodes. */
+function getEdgeOutputMode(
+  connectingEdges: ReadonlyArray<SimpleEdge>,
+): string {
+  for (const edge of connectingEdges) {
+    const mode = (edge.data as Record<string, unknown> | undefined)
+      ?.outputMode as string | undefined
+    if (mode) return mode
+  }
+  return "each"
+}
+
+/** Parse the list of items from a list/loop/split-text node. */
+function extractListItems(
+  node: SimpleNode,
+  states: Record<string, NodeExecutionState>,
+): string[] {
+  const data = node.data
+  if (node.type === "list") {
+    return ((data.items as string | undefined) || "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+  }
+  if (node.type === "loop") {
+    const rows = data.rows as string[][] | undefined
+    return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
+  }
+  if (node.type === "split-text") {
+    const state = states[node.id]
+    if (state?.output?.splitResults) return state.output.splitResults
+    return (data.splitResults as string[] | undefined) ?? []
+  }
+  return []
+}
+
+/** Resolve a list of items using the given output mode. */
+function resolveListOutput(
+  items: string[],
+  mode: string,
+): string | undefined {
+  if (items.length === 0) return undefined
+  if (mode === "last") return items[items.length - 1]
+  if (mode.startsWith("item:")) {
+    const idx = parseInt(mode.split(":")[1], 10)
+    return items[idx] ?? items[0]
+  }
+  if (mode === "all") return items.join(", ")
+  // "each" — return first item; fan-out clones get their own item via execution engine
+  return items[0]
+}
+
 /**
  * Build a label→output map for resolving {Node Label} refs in text fields.
- * Uses BFS to traverse all upstream ancestors.
+ * Uses BFS with edge tracking so list/loop/split-text nodes respect the
+ * connecting edge's outputMode (e.g. "item:1", "last", "all").
  */
-function buildNodeRefMap(
+export function buildNodeRefMap(
   nodeId: string,
   ctx?: PayloadBuildContext,
 ): Map<string, string> {
@@ -139,47 +198,69 @@ function buildNodeRefMap(
   const edges = ctx.edges
   const states = ctx.nodeStates
   const visited = new Set<string>()
-  const queue: string[] = []
+  const queue: Array<{ id: string; connectingEdges: ReadonlyArray<SimpleEdge> }> = []
 
+  // Seed BFS with direct parents, grouping edges by source
+  const seedEdges = new Map<string, SimpleEdge[]>()
   for (const edge of edges) {
-    if (edge.target === nodeId && !visited.has(edge.source)) {
-      visited.add(edge.source)
-      queue.push(edge.source)
+    if (edge.target === nodeId) {
+      if (!seedEdges.has(edge.source)) seedEdges.set(edge.source, [])
+      seedEdges.get(edge.source)!.push(edge)
     }
+  }
+  for (const [sourceId, edgeGroup] of seedEdges) {
+    visited.add(sourceId)
+    queue.push({ id: sourceId, connectingEdges: edgeGroup })
   }
 
   while (queue.length > 0) {
-    const currentId = queue.shift()!
+    const { id: currentId, connectingEdges } = queue.shift()!
     const node = nodes.find((n) => n.id === currentId)
     if (!node) continue
 
     const label = (node.data.label as string) || node.type || currentId
 
-    // Get output from state or from node data
+    // List-like nodes always go through list extraction (even "each" is not
+    // regular behavior — it's fan-out, so the ref should resolve via items)
     let output: string | undefined
-    const state = states[currentId]
-    if (state?.output?.text) {
-      output = state.output.text
-    } else if (state?.output?.imageUrl) {
-      output = state.output.imageUrl
-    } else if (state?.output?.videoUrl) {
-      output = state.output.videoUrl
-    } else if (state?.output?.audioUrl) {
-      output = state.output.audioUrl
-    } else {
-      const saved = extractSavedNodeOutput(node)
-      if (saved) {
-        output = saved.text ?? saved.imageUrl ?? saved.videoUrl ?? saved.audioUrl
+    if (LIST_LIKE_TYPES.has(node.type)) {
+      const mode = getEdgeOutputMode(connectingEdges)
+      const items = extractListItems(node, states)
+      output = resolveListOutput(items, mode)
+    }
+
+    // All other nodes: extract from state or node data
+    if (output === undefined) {
+      const state = states[currentId]
+      if (state?.output?.text) {
+        output = state.output.text
+      } else if (state?.output?.imageUrl) {
+        output = state.output.imageUrl
+      } else if (state?.output?.videoUrl) {
+        output = state.output.videoUrl
+      } else if (state?.output?.audioUrl) {
+        output = state.output.audioUrl
+      } else {
+        const saved = extractSavedNodeOutput(node)
+        if (saved) {
+          output = saved.text ?? saved.imageUrl ?? saved.videoUrl ?? saved.audioUrl
+        }
       }
     }
 
     if (output) map.set(label, output)
 
+    // BFS: traverse to parents of current node
+    const nextEdges = new Map<string, SimpleEdge[]>()
     for (const edge of edges) {
       if (edge.target === currentId && !visited.has(edge.source)) {
-        visited.add(edge.source)
-        queue.push(edge.source)
+        if (!nextEdges.has(edge.source)) nextEdges.set(edge.source, [])
+        nextEdges.get(edge.source)!.push(edge)
       }
+    }
+    for (const [sourceId, edgeGroup] of nextEdges) {
+      visited.add(sourceId)
+      queue.push({ id: sourceId, connectingEdges: edgeGroup })
     }
   }
 

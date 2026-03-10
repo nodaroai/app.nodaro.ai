@@ -1,4 +1,4 @@
-import { useState } from "react"
+import React, { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -618,60 +618,89 @@ function ExecutionRow({
                 </thead>
                 <tbody className="divide-y divide-gray-100/50 dark:divide-[#2D2D2D]/50">
                   {nodeEntries.map(([nodeId, state]) => {
+                    const hasFanOut = state.jobIds && state.jobIds.length > 1
+                    const nodeName = state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)
                     return (
-                      <tr
-                        key={nodeId}
-                        className="hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors"
-                        onClick={() => onNodeClick(nodeId, state)}
-                      >
-                        <td className="px-8 py-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${NODE_STATUS_DOT[state.status] ?? "bg-gray-400"}`} />
-                            <span className="text-xs text-gray-600 dark:text-[#94A3B8]">
-                              {state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
-                            STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"
-                          }`}>
-                            {state.status}
-                          </span>
-                          {state.error && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <AlertCircle className="w-3 h-3 text-red-400 ml-1 inline" />
-                                </TooltipTrigger>
-                                <TooltipContent side="right" className="max-w-xs">
-                                  <p className="text-xs">{state.error}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <span className="text-xs text-gray-500 dark:text-[#94A3B8] font-mono">
-                            {formatDuration(state.startedAt, state.completedAt)}
-                          </span>
-                        </td>
-                        {hasCredits() && (
-                          <td className="px-3 py-1.5">
-                            <span className="text-xs text-[#ff0073] font-mono">
-                              {state.creditsUsed && state.creditsUsed > 0 ? (
-                                <span className="inline-flex items-center gap-0.5">
-                                  <Coins className="w-3 h-3" />
-                                  {state.creditsUsed}
+                      <React.Fragment key={nodeId}>
+                        {/* Main node row — for fan-out, shows aggregate; for normal, opens job */}
+                        <tr
+                          className="hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors"
+                          onClick={() => hasFanOut ? undefined : onNodeClick(nodeId, state)}
+                        >
+                          <td className="px-8 py-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${NODE_STATUS_DOT[state.status] ?? "bg-gray-400"}`} />
+                              <span className="text-xs text-gray-600 dark:text-[#94A3B8]">
+                                {nodeName}
+                              </span>
+                              {hasFanOut && (
+                                <span className="inline-flex px-1.5 py-0.5 text-[9px] font-medium rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400">
+                                  &times;{state.jobIds!.length}
                                 </span>
-                              ) : "-"}
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
+                              STATUS_COLORS[state.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"
+                            }`}>
+                              {state.status}
+                            </span>
+                            {state.error && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertCircle className="w-3 h-3 text-red-400 ml-1 inline" />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-xs">
+                                    <p className="text-xs">{state.error}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <span className="text-xs text-gray-500 dark:text-[#94A3B8] font-mono">
+                              {formatDuration(state.startedAt, state.completedAt)}
                             </span>
                           </td>
-                        )}
-                        <td className="px-3 py-1.5">
-                          <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 dark:text-[#64748B]" />
-                        </td>
-                      </tr>
+                          {hasCredits() && (
+                            <td className="px-3 py-1.5">
+                              <span className="text-xs text-[#ff0073] font-mono">
+                                {state.creditsUsed && state.creditsUsed > 0 ? (
+                                  <span className="inline-flex items-center gap-0.5">
+                                    <Coins className="w-3 h-3" />
+                                    {state.creditsUsed}
+                                  </span>
+                                ) : "-"}
+                              </span>
+                            </td>
+                          )}
+                          <td className="px-3 py-1.5">
+                            {!hasFanOut && <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 dark:text-[#64748B]" />}
+                          </td>
+                        </tr>
+                        {/* Fan-out iteration sub-rows */}
+                        {hasFanOut && state.jobIds!.map((jid, idx) => (
+                          <tr
+                            key={`${nodeId}-iter-${idx}`}
+                            className="hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors"
+                            onClick={() => onNodeClick(`${nodeId}-iter-${idx}`, { ...state, jobId: jid, jobIds: undefined })}
+                          >
+                            <td className="px-8 py-1 pl-14">
+                              <span className="text-[11px] text-gray-400 dark:text-[#64748B]">
+                                Iteration {idx + 1}
+                              </span>
+                            </td>
+                            <td className="px-3 py-1" />
+                            <td className="px-3 py-1" />
+                            {hasCredits() && <td className="px-3 py-1" />}
+                            <td className="px-3 py-1">
+                              <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 dark:text-[#64748B]" />
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     )
                   })}
                 </tbody>

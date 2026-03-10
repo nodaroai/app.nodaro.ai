@@ -810,3 +810,163 @@ describe("getListInputForNode", () => {
     expect(result).toBeUndefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Edge output mode routing
+// ---------------------------------------------------------------------------
+
+function makeEdgeWithData(
+  source: string,
+  target: string,
+  data: Record<string, unknown>,
+  sourceHandle?: string,
+): any {
+  return {
+    id: `${source}-${target}`,
+    source,
+    target,
+    sourceHandle: sourceHandle ?? undefined,
+    targetHandle: undefined,
+    data,
+  }
+}
+
+describe("getListInputForNode — edge output mode", () => {
+  it("fans out when list edge mode is 'each' (default)", () => {
+    const listNode = makeNode("l1", "list", { items: "a\nb\nc" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdge("l1", "gen1")]
+
+    const result = getListInputForNode(target, [listNode, target], edges)
+    expect(result).toEqual(["a", "b", "c"])
+  })
+
+  it("fans out when list edge mode is explicitly 'each'", () => {
+    const listNode = makeNode("l1", "list", { items: "a\nb\nc" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "each" })]
+
+    const result = getListInputForNode(target, [listNode, target], edges)
+    expect(result).toEqual(["a", "b", "c"])
+  })
+
+  it("does NOT fan out when edge mode is 'last'", () => {
+    const listNode = makeNode("l1", "list", { items: "a\nb\nc" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "last" })]
+
+    const result = getListInputForNode(target, [listNode, target], edges)
+    expect(result).toBeUndefined()
+  })
+
+  it("does NOT fan out when edge mode is 'all'", () => {
+    const listNode = makeNode("l1", "list", { items: "a\nb\nc" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "all" })]
+
+    const result = getListInputForNode(target, [listNode, target], edges)
+    expect(result).toBeUndefined()
+  })
+
+  it("does NOT fan out when edge mode is 'item:1'", () => {
+    const listNode = makeNode("l1", "list", { items: "a\nb\nc" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "item:1" })]
+
+    const result = getListInputForNode(target, [listNode, target], edges)
+    expect(result).toBeUndefined()
+  })
+})
+
+describe("resolveNodeInputs — list edge output mode routing", () => {
+  it("uses first item for default 'each' mode (fan-out handles rest)", () => {
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.type === "list") return "apple"
+      return undefined
+    })
+    const listNode = makeNode("l1", "list", { items: "apple\nbanana\ncherry" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdge("l1", "gen1")]
+
+    const inputs = resolveNodeInputs(target, [listNode, target], edges)
+    expect(inputs.prompt).toBe("apple")
+  })
+
+  it("uses last item when edge mode is 'last'", () => {
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.type === "list") return "apple"
+      return undefined
+    })
+    const listNode = makeNode("l1", "list", { items: "apple\nbanana\ncherry" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "last" })]
+
+    const inputs = resolveNodeInputs(target, [listNode, target], edges)
+    expect(inputs.prompt).toBe("cherry")
+  })
+
+  it("joins all items when edge mode is 'all'", () => {
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.type === "list") return "apple"
+      return undefined
+    })
+    const listNode = makeNode("l1", "list", { items: "apple\nbanana\ncherry" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "all" })]
+
+    const inputs = resolveNodeInputs(target, [listNode, target], edges)
+    expect(inputs.prompt).toBe("apple, banana, cherry")
+  })
+
+  it("uses specific item when edge mode is 'item:N' (0-indexed)", () => {
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.type === "list") return "apple"
+      return undefined
+    })
+    const listNode = makeNode("l1", "list", { items: "apple\nbanana\ncherry" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "item:1" })]
+
+    const inputs = resolveNodeInputs(target, [listNode, target], edges)
+    expect(inputs.prompt).toBe("banana")
+  })
+
+  it("uses item:0 for first item", () => {
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.type === "list") return "apple"
+      return undefined
+    })
+    const listNode = makeNode("l1", "list", { items: "apple\nbanana\ncherry" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "item:0" })]
+
+    const inputs = resolveNodeInputs(target, [listNode, target], edges)
+    expect(inputs.prompt).toBe("apple")
+  })
+
+  it("uses item:2 for third item", () => {
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.type === "list") return "apple"
+      return undefined
+    })
+    const listNode = makeNode("l1", "list", { items: "apple\nbanana\ncherry" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "item:2" })]
+
+    const inputs = resolveNodeInputs(target, [listNode, target], edges)
+    expect(inputs.prompt).toBe("cherry")
+  })
+
+  it("falls back to first item when item index is out of range", () => {
+    mockExtractNodeOutput.mockImplementation((node: any) => {
+      if (node.type === "list") return "apple"
+      return undefined
+    })
+    const listNode = makeNode("l1", "list", { items: "apple\nbanana\ncherry" })
+    const target = makeNode("gen1", "generate-image")
+    const edges = [makeEdgeWithData("l1", "gen1", { outputMode: "item:10" })]
+
+    const inputs = resolveNodeInputs(target, [listNode, target], edges)
+    expect(inputs.prompt).toBe("apple")
+  })
+})

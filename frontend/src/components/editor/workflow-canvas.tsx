@@ -106,29 +106,57 @@ const FIELD_LABELS: Record<string, string> = {
   resolution: "Resolution",
 }
 
+/** Node types that default to "each" output mode on their edges */
+const DEFAULT_EACH_EDGE_TYPES = new Set(["list", "loop", "split-text"])
+
+/** Get the edge output mode, considering edge data, source node type defaults.
+ *  Default: list/loop/split-text → "each"; all others → no mode (uses activeResultIndex). */
+function getEdgeOutputMode(edge: WorkflowEdge, sourceNode: { type?: string } | undefined): string | undefined {
+  const edgeMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
+  if (edgeMode) return edgeMode
+  // Default: list/loop/split-text edges default to "each", all others have no explicit mode
+  if (sourceNode?.type && DEFAULT_EACH_EDGE_TYPES.has(sourceNode.type)) return "each"
+  return undefined
+}
+
+/** Get the output mode suffix for an edge label. Returns undefined when default (no label needed). */
+function getOutputModeLabel(edge: WorkflowEdge, sourceNode: { type?: string } | undefined): string | undefined {
+  const explicitMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
+  // Only show label when explicitly set (overriding default)
+  if (!explicitMode) return undefined
+  // Default-each types: don't show if still "each"
+  if (sourceNode?.type && DEFAULT_EACH_EDGE_TYPES.has(sourceNode.type) && explicitMode === "each") return undefined
+  // Non-list types: don't show if no override (shouldn't reach here, but safety)
+  // Format item:N as "item 1" (1-indexed display)
+  if (explicitMode.startsWith("item:")) return `item ${parseInt(explicitMode.split(":")[1], 10) + 1}`
+  return explicitMode
+}
+
 function getEdgeLabel(
   edge: WorkflowEdge,
-  sourceNode: { id: string; type?: string } | undefined,
+  sourceNode: { id: string; type?: string; data?: Record<string, unknown> } | undefined,
   targetNode: { type?: string; data?: Record<string, unknown> } | undefined,
 ): { label: string } | undefined {
   const srcHandle = edge.sourceHandle
   const tgtHandle = edge.targetHandle
+  const modeLabel = getOutputModeLabel(edge, sourceNode)
+  const modeSuffix = modeLabel ? ` (${modeLabel})` : ""
 
   // If target has a named handle (not generic "in"), prefer the target role label
   if (tgtHandle && tgtHandle !== "in" && TARGET_LABELS[tgtHandle]) {
-    return { label: TARGET_LABELS[tgtHandle] }
+    return { label: TARGET_LABELS[tgtHandle] + modeSuffix }
   }
 
   // Entity nodes always represent a reference
   const srcType = sourceNode?.type
   if (srcType && ENTITY_NODE_TYPES.has(srcType)) {
-    return { label: "Reference" }
+    return { label: "Reference" + modeSuffix }
   }
 
   // Image → generate-image/edit-image/image-to-image = "Reference"
   const tgtType = targetNode?.type
   if (srcHandle === "image" && tgtType && REFERENCE_IMAGE_TARGETS.has(tgtType)) {
-    return { label: "Reference" }
+    return { label: "Reference" + modeSuffix }
   }
 
   // Check fieldMappings on target node — shows which field(s) this source is mapped to
@@ -142,14 +170,19 @@ function getEdgeLabel(
         }
       }
       if (matchedLabels.length > 0) {
-        return { label: matchedLabels.join(", ") }
+        return { label: matchedLabels.join(", ") + modeSuffix }
       }
     }
   }
 
   // Otherwise use source handle label
   if (srcHandle && SOURCE_LABELS[srcHandle]) {
-    return { label: SOURCE_LABELS[srcHandle] }
+    return { label: SOURCE_LABELS[srcHandle] + modeSuffix }
+  }
+
+  // No handle label but we still want to show mode
+  if (modeLabel) {
+    return { label: modeLabel }
   }
 
   return undefined
@@ -441,7 +474,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, outputMode: getEdgeOutputMode(edge, sourceNode) },
         style: shouldHighlight ? {
           ...edge.style,
           stroke: edgeColor,

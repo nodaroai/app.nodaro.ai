@@ -40,11 +40,17 @@ const AUDIO_OUTPUT_TYPES = new Set([
   "adjust-volume", "mix-audio",
 ])
 
-function getNodeThumbnail(srcData: Record<string, unknown>, nodeType: string): string | undefined {
+function getNodeThumbnail(srcData: Record<string, unknown>, nodeType: string, edgeOutputMode?: string): string | undefined {
   if (!IMAGE_OUTPUT_TYPES.has(nodeType)) return undefined
 
   const results = (srcData.generatedResults as readonly GeneratedResult[] | undefined) ?? []
-  const activeIdx = (srcData.activeResultIndex as number | undefined) ?? 0
+  let activeIdx = (srcData.activeResultIndex as number | undefined) ?? 0
+  // Edge output mode overrides which result to show
+  if (edgeOutputMode?.startsWith("item:")) {
+    activeIdx = parseInt(edgeOutputMode.split(":")[1], 10)
+  } else if (edgeOutputMode === "last" && results.length > 0) {
+    activeIdx = results.length - 1
+  }
   return (
     results[activeIdx]?.url ??
     (srcData.generatedImageUrl as string | undefined) ??
@@ -104,10 +110,11 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (!srcNode) return null
     const srcData = srcNode.data as Record<string, unknown>
+    const edgeMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
     return {
       id: srcNode.id,
       label: (srcData.label as string | undefined) ?? String(srcNode.type ?? "Image"),
-      thumbnailUrl: getNodeThumbnail(srcData, String(srcNode.type ?? "")),
+      thumbnailUrl: getNodeThumbnail(srcData, String(srcNode.type ?? ""), edgeMode),
     }
   }, [edges, nodes, id])
 
@@ -117,10 +124,11 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (!srcNode) return null
     const srcData = srcNode.data as Record<string, unknown>
+    const edgeMode = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined
     return {
       id: srcNode.id,
       label: (srcData.label as string | undefined) ?? String(srcNode.type ?? "Image"),
-      thumbnailUrl: getNodeThumbnail(srcData, String(srcNode.type ?? "")),
+      thumbnailUrl: getNodeThumbnail(srcData, String(srcNode.type ?? ""), edgeMode),
     }
   }, [edges, nodes, id])
 

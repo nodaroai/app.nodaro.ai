@@ -16,14 +16,16 @@ import {
   isSourceNode,
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
-import { resolveNodeInputs } from "../services/workflow-engine/input-resolver.js"
+import { resolveNodeInputs, getListInputForNode } from "../services/workflow-engine/input-resolver.js"
 import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
-import { executeNode } from "../services/workflow-engine/node-executor.js"
+import { executeNode, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import type {
   WorkflowExecutionJob,
   SimpleNode,
   SimpleEdge,
   NodeExecutionState,
+  NodeOutput,
+  ResolvedInputs,
   OrchestratorContext,
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
@@ -221,13 +223,31 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       }
     }
 
+    // 5b. Pre-scan for fan-out to get accurate initial total_nodes.
+    //     Source node outputs are already in nodeStates, so direct fan-out
+    //     from list/loop nodes can be detected. Transitive fan-out (through
+    //     text-prompts) is also detected since getListInputForNode handles it.
+    let totalExecutions = executableNodes.length
+    for (const node of executableNodes) {
+      const listItems = getListInputForNode(
+        node,
+        edges,
+        nodeStates,
+        nodes,
+        triggerData,
+      )
+      if (listItems && listItems.length > 1) {
+        totalExecutions += listItems.length - 1
+      }
+    }
+
     // 6. Update execution to running with accurate node count
     await supabase
       .from("workflow_executions")
       .update({
         status: "running",
         started_at: new Date().toISOString(),
-        total_nodes: executableNodes.length,
+        total_nodes: totalExecutions,
         node_states: nodeStates,
       })
       .eq("id", executionId)
@@ -236,7 +256,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       type: "execution:started",
       executionId,
       nodeStates: { ...nodeStates },
-      totalNodes: executableNodes.length,
+      totalNodes: totalExecutions,
       completedNodes: 0,
       failedNodes: 0,
     })
@@ -322,8 +342,8 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             failedNodes: failedCount,
           })
 
-          // Resolve inputs from upstream
-          const inputs = resolveNodeInputs(
+          // Check for list fan-out input
+          const listItems = getListInputForNode(
             node,
             edges,
             nodeStates,
@@ -331,15 +351,58 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             triggerData,
           )
 
-          // Execute
-          const result = await executeNode(
-            node,
-            inputs,
-            edges,
-            nodes,
-            nodeStates,
-            ctx,
-          )
+          let result: ExecuteNodeResult
+
+          if (listItems && listItems.length > 1) {
+            // Fan-out: execute node once per list item, sequentially
+            result = await executeNodeForList(
+              node,
+              listItems,
+              edges,
+              nodes,
+              nodeStates,
+              ctx,
+              executionId,
+              triggerData,
+              // Per-iteration progress callback — persist to DB so polling works.
+              // Only write completed_nodes (not node_states) to avoid a race where
+              // this fire-and-forget write arrives after the level-end persist and
+              // overwrites the completed node state with a stale "running" snapshot.
+              (iterationIndex: number) => {
+                completedCount++
+                updateExecution(executionId, {
+                  completed_nodes: completedCount,
+                }).catch(() => {})
+                emitExecutionEvent({
+                  type: "node:updated",
+                  executionId,
+                  nodeStates: { ...nodeStates },
+                  nodeId: node.id,
+                  totalNodes: totalExecutions,
+                  completedNodes: completedCount,
+                  failedNodes: failedCount,
+                })
+              },
+            )
+          } else {
+            // Normal single execution
+            const inputs = resolveNodeInputs(
+              node,
+              edges,
+              nodeStates,
+              nodes,
+              triggerData,
+            )
+
+            result = await executeNode(
+              node,
+              inputs,
+              edges,
+              nodes,
+              nodeStates,
+              ctx,
+            )
+          }
 
           // Update state
           nodeStates[node.id] = {
@@ -347,13 +410,18 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             nodeType: node.type,
             output: result.output,
             jobId: result.jobId,
+            jobIds: result.jobIds,
             usageLogId: result.usageLogId,
             creditsUsed: result.creditsUsed,
             startedAt: nodeStates[node.id]?.startedAt,
             completedAt: new Date().toISOString(),
           }
 
-          completedCount++
+          // For fan-out nodes, per-iteration progress was already emitted via callback;
+          // for normal nodes, increment by 1 here.
+          if (!result.jobIds || result.jobIds.length <= 1) {
+            completedCount++
+          }
           totalCredits += result.creditsUsed ?? 0
 
           emitExecutionEvent({
@@ -361,6 +429,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             executionId,
             nodeStates: { ...nodeStates },
             nodeId: node.id,
+            totalNodes: totalExecutions,
             completedNodes: completedCount,
             failedNodes: failedCount,
             totalCreditsUsed: totalCredits,
@@ -407,6 +476,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       // Persist state after each level
       await updateExecution(executionId, {
         node_states: nodeStates,
+        total_nodes: totalExecutions,
         completed_nodes: completedCount,
         failed_nodes: failedCount,
         total_credits_used: totalCredits,
@@ -416,6 +486,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         type: "level:completed",
         executionId,
         nodeStates: { ...nodeStates },
+        totalNodes: totalExecutions,
         completedNodes: completedCount,
         failedNodes: failedCount,
         totalCreditsUsed: totalCredits,
@@ -462,6 +533,135 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[orchestrator] Execution ${executionId} error:`, message)
     await failExecution(executionId, message)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fan-out execution — run a node once per list item
+// ---------------------------------------------------------------------------
+
+/**
+ * Execute a node once per list item sequentially, collecting results.
+ * The first result becomes the primary output; all results stored in listResults.
+ * Mirrors frontend executeNodeForList() logic.
+ */
+async function executeNodeForList(
+  node: SimpleNode,
+  items: string[],
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+  ctx: OrchestratorContext,
+  executionId: string,
+  triggerData?: Record<string, unknown>,
+  onIterationComplete?: (iterationIndex: number) => void,
+): Promise<ExecuteNodeResult> {
+  const allResults: string[] = []
+  const allJobIds: string[] = []
+  let firstOutput: NodeOutput | undefined
+  let totalCreditsUsed = 0
+  let lastJobId: string | undefined
+  let lastUsageLogId: string | undefined
+
+  for (let i = 0; i < items.length; i++) {
+    if (ctx.cancelled) {
+      throw new Error("Execution cancelled")
+    }
+
+    const item = items[i]
+
+    // Resolve normal inputs from upstream
+    const inputs = resolveNodeInputs(
+      node,
+      edges,
+      nodeStates,
+      allNodes,
+      triggerData,
+    )
+
+    // Override the appropriate input field based on item content
+    overrideInputWithListItem(inputs, item)
+
+    // Execute the node with the overridden input
+    const result = await executeNode(
+      node,
+      inputs,
+      edges,
+      allNodes,
+      nodeStates,
+      ctx,
+    )
+
+    // Extract the primary result URL/text from the output
+    const output = result.output
+    const resultValue =
+      output.imageUrl ||
+      output.videoUrl ||
+      output.audioUrl ||
+      output.text ||
+      ""
+    allResults.push(resultValue)
+
+    if (i === 0) {
+      firstOutput = output
+    }
+
+    totalCreditsUsed += result.creditsUsed ?? 0
+    if (result.jobId) {
+      lastJobId = result.jobId
+      allJobIds.push(result.jobId)
+    }
+    if (result.usageLogId) lastUsageLogId = result.usageLogId
+
+    // Emit progress update for fan-out + notify caller
+    onIterationComplete?.(i)
+    emitExecutionEvent({
+      type: "node:updated",
+      executionId,
+      nodeStates: { ...nodeStates },
+      nodeId: node.id,
+    })
+  }
+
+  // Build combined output: first result as primary + listResults for downstream fan-out
+  const combinedOutput: NodeOutput = {
+    ...(firstOutput ?? {}),
+    listResults: allResults,
+  }
+
+  return {
+    output: combinedOutput,
+    jobId: lastJobId,
+    jobIds: allJobIds.length > 1 ? allJobIds : undefined,
+    usageLogId: lastUsageLogId,
+    creditsUsed: totalCreditsUsed,
+  }
+}
+
+/**
+ * Override the appropriate input field in ResolvedInputs with the current list item.
+ * If the item looks like a URL, set it as the media URL; otherwise set as prompt.
+ */
+function overrideInputWithListItem(
+  inputs: ResolvedInputs,
+  item: string,
+): void {
+  const isUrl =
+    item.startsWith("http") ||
+    /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(item)
+
+  if (isUrl) {
+    // Determine media type from extension
+    if (/\.(mp4|mov|webm)(\?|$)/i.test(item)) {
+      inputs.videoUrl = item
+    } else if (/\.(mp3|wav|ogg)(\?|$)/i.test(item)) {
+      inputs.audioUrl = item
+    } else {
+      // Default to image for URLs (including generic http URLs)
+      inputs.imageUrl = item
+    }
+  } else {
+    inputs.prompt = item
   }
 }
 

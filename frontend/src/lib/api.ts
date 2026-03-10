@@ -2883,6 +2883,7 @@ interface ExecutionNodeState {
     instrumentalUrl?: string
     splitResults?: string[]
     combinedText?: string
+    listResults?: string[]
   }
   error?: string
 }
