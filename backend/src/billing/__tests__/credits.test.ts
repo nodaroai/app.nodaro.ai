@@ -427,6 +427,174 @@ describe("CreditsService", () => {
       expect(result.required).toBe(2)
     })
 
+    it("falls back to static cost for ideogram-v3 (2 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "ideogram-v3")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(2)
+    })
+
+    it("falls back to static cost for ideogram-v3:TURBO (1 credit)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "ideogram-v3:TURBO")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(1)
+    })
+
+    it("falls back to static cost for ideogram-v3:QUALITY (3 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "ideogram-v3:QUALITY")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(3)
+    })
+
+    it("falls back to static cost for kling-3.0-motion (4 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "kling-3.0-motion")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(4)
+    })
+
+    it("falls back to static cost for kling-3.0-motion:1080p (7 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "kling-3.0-motion:1080p")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(7)
+    })
+
+    it("falls back to static cost for topaz-image-upscale:4K (7 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "topaz-image-upscale:4K")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(7)
+    })
+
+    it("falls back to static cost for topaz-image-upscale:8K (13 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "topaz-image-upscale:8K")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(13)
+    })
+
+    it("falls back to static cost for sora-watermark-remove (4 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "sora-watermark-remove")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(4)
+    })
+
+    it("falls back to static cost for suno-mashup (4 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "suno-mashup")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(4)
+    })
+
+    it("falls back to static cost for suno-replace-section (2 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "suno-replace-section")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(2)
+    })
+
+    it("falls back to static cost for suno-style-boost (1 credit)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "suno-style-boost")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(1)
+    })
+
+    it("falls back to static cost for suno-add-instrumental (4 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "suno-add-instrumental")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(4)
+    })
+
+    it("falls back to static cost for suno-add-vocals (4 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "suno-add-vocals")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(4)
+    })
+
+    it("falls back to static cost for suno-convert-wav (1 credit)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "suno-convert-wav")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(1)
+    })
+
+    it("falls back to static cost for suno-upload-extend (4 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "suno-upload-extend")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(4)
+    })
+
+    it("falls back to static cost for speech-to-video (4 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "speech-to-video")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(4)
+    })
+
+    it("falls back to static cost for speech-to-video:580p (6 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "speech-to-video:580p")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(6)
+    })
+
+    it("falls back to static cost for speech-to-video:720p (8 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "speech-to-video:720p")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(8)
+    })
+
+    it("falls back to static cost for sora-storyboard (47 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "sora-storyboard")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(47)
+    })
+
+    it("falls back to static cost for sora-storyboard:15 (85 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "sora-storyboard:15")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(85)
+    })
+
+    it("falls back to static cost for sora-storyboard:25 (85 credits)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
+      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "sora-storyboard:25")
+      expect(result.allowed).toBe(true)
+      expect(result.required).toBe(85)
+    })
+
     it("uses subscription_tier when tier is missing", async () => {
       mockTable("model_pricing", {
         credit_cost: 1,

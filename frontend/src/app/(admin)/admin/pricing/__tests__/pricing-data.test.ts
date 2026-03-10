@@ -175,4 +175,87 @@ describe("MODEL_REFERENCE", () => {
     expect(MODEL_REFERENCE["runway"].providerCostUsd).toBeNull()
     expect(MODEL_REFERENCE["pika"].providerCostUsd).toBeNull()
   })
+
+  it("has ideogram-v3 entry", () => {
+    expect(MODEL_REFERENCE["ideogram-v3"]).toBeDefined()
+    expect(MODEL_REFERENCE["ideogram-v3"].provider).toBeTruthy()
+  })
+
+  it("has kling-3.0-motion entry", () => {
+    expect(MODEL_REFERENCE["kling-3.0-motion"]).toBeDefined()
+    expect(MODEL_REFERENCE["kling-3.0-motion"].provider).toBeTruthy()
+  })
+
+  it("has topaz-image-upscale entry", () => {
+    expect(MODEL_REFERENCE["topaz-image-upscale"]).toBeDefined()
+    expect(MODEL_REFERENCE["topaz-image-upscale"].provider).toBeTruthy()
+  })
+
+  it("has sora-watermark-remove entry", () => {
+    expect(MODEL_REFERENCE["sora-watermark-remove"]).toBeDefined()
+    expect(MODEL_REFERENCE["sora-watermark-remove"].provider).toBeTruthy()
+  })
+
+  it("has speech-to-video entry", () => {
+    expect(MODEL_REFERENCE["speech-to-video"]).toBeDefined()
+    expect(MODEL_REFERENCE["speech-to-video"].provider).toBeTruthy()
+  })
+
+  it("has sora-storyboard entry", () => {
+    expect(MODEL_REFERENCE["sora-storyboard"]).toBeDefined()
+    expect(MODEL_REFERENCE["sora-storyboard"].provider).toBeTruthy()
+  })
+
+  it("has suno-mashup entry", () => {
+    expect(MODEL_REFERENCE["suno-mashup"]).toBeDefined()
+    expect(MODEL_REFERENCE["suno-mashup"].provider).toBeTruthy()
+  })
+
+  it("has suno-replace-section entry", () => {
+    expect(MODEL_REFERENCE["suno-replace-section"]).toBeDefined()
+    expect(MODEL_REFERENCE["suno-replace-section"].provider).toBeTruthy()
+  })
+
+  it("has suno-style-boost entry", () => {
+    expect(MODEL_REFERENCE["suno-style-boost"]).toBeDefined()
+    expect(MODEL_REFERENCE["suno-style-boost"].provider).toBeTruthy()
+  })
+
+  it("has suno-add-instrumental entry", () => {
+    expect(MODEL_REFERENCE["suno-add-instrumental"]).toBeDefined()
+    expect(MODEL_REFERENCE["suno-add-instrumental"].provider).toBeTruthy()
+  })
+
+  it("has suno-add-vocals entry", () => {
+    expect(MODEL_REFERENCE["suno-add-vocals"]).toBeDefined()
+    expect(MODEL_REFERENCE["suno-add-vocals"].provider).toBeTruthy()
+  })
+
+  it("has suno-convert-wav entry", () => {
+    expect(MODEL_REFERENCE["suno-convert-wav"]).toBeDefined()
+    expect(MODEL_REFERENCE["suno-convert-wav"].provider).toBeTruthy()
+  })
+
+  it("has suno-upload-extend entry", () => {
+    expect(MODEL_REFERENCE["suno-upload-extend"]).toBeDefined()
+    expect(MODEL_REFERENCE["suno-upload-extend"].provider).toBeTruthy()
+  })
+})
+
+describe("detectCategory — new models", () => {
+  it("detects speech-to-video as video", () => {
+    expect(detectCategory("speech-to-video")).toBe("video")
+  })
+
+  it("detects suno-mashup as audio", () => {
+    expect(detectCategory("suno-mashup")).toBe("audio")
+  })
+
+  it("detects ideogram-v3 as image", () => {
+    expect(detectCategory("ideogram-v3")).toBe("image")
+  })
+
+  it("detects topaz-image-upscale as image", () => {
+    expect(detectCategory("topaz-image-upscale")).toBe("image")
+  })
 })

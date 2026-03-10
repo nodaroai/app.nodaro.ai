@@ -53,6 +53,8 @@ import {
   MotionTransferConfig,
   VideoUpscaleConfig,
   ExtendVideoConfig,
+  SpeechToVideoConfig,
+  SoraStoryboardConfig,
   TextToVideoConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
@@ -69,6 +71,13 @@ import {
   SunoLyricsConfig,
   SunoSeparateConfig,
   SunoMusicVideoConfig,
+  SunoMashupConfig,
+  SunoReplaceSectionConfig,
+  SunoStyleBoostConfig,
+  SunoAddInstrumentalConfig,
+  SunoAddVocalsConfig,
+  SunoConvertWavConfig,
+  SunoUploadExtendConfig,
   TranscribeConfig,
   ImageToTextConfig,
   LipSyncConfig,
@@ -117,8 +126,8 @@ import {
   ResultsGallery,
 } from "./config-panels"
 
-const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync"])
-const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
+const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "sora-storyboard"])
+const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "text-prompt": "Text Prompt",
@@ -159,6 +168,13 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-lyrics": "Suno Lyrics",
   "suno-separate": "Suno Separate",
   "suno-music-video": "Suno Music Video",
+  "suno-mashup": "Suno Mashup",
+  "suno-replace-section": "Suno Replace Section",
+  "suno-style-boost": "Suno Style Boost",
+  "suno-add-instrumental": "Suno Add Instrumental",
+  "suno-add-vocals": "Suno Add Vocals",
+  "suno-convert-wav": "Suno Convert WAV",
+  "suno-upload-extend": "Suno Upload Extend",
   "transcribe": "Transcribe",
   "image-to-text": "Describe Image",
   "ai-writer": "AI Agent",
@@ -177,6 +193,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "transcode-video": "Transcode Video",
   "manual-edit": "Manual Edit",
   "extend-video": "Extend Video",
+  "speech-to-video": "Speech to Video",
+  "sora-storyboard": "Sora Storyboard",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
   "loop": "Loop",
@@ -206,9 +224,11 @@ export function getNodeTypeDisplayName(type: string): string {
 export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
-  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync",
+  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video", "sora-storyboard",
   "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
-  "suno-lyrics", "suno-separate", "suno-music-video", "ai-writer",
+  "suno-lyrics", "suno-separate", "suno-music-video",
+  "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
+  "ai-writer",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text",
 ])
@@ -560,7 +580,16 @@ export function ConfigPanel() {
           {nodeType === "suno-lyrics" && <SunoLyricsConfig {...configProps} />}
           {nodeType === "suno-separate" && <SunoSeparateConfig {...configProps} />}
           {nodeType === "suno-music-video" && <SunoMusicVideoConfig {...configProps} />}
+          {nodeType === "suno-mashup" && <SunoMashupConfig {...configProps} />}
+          {nodeType === "suno-replace-section" && <SunoReplaceSectionConfig {...configProps} />}
+          {nodeType === "suno-style-boost" && <SunoStyleBoostConfig {...configProps} />}
+          {nodeType === "suno-add-instrumental" && <SunoAddInstrumentalConfig {...configProps} />}
+          {nodeType === "suno-add-vocals" && <SunoAddVocalsConfig {...configProps} />}
+          {nodeType === "suno-convert-wav" && <SunoConvertWavConfig {...configProps} />}
+          {nodeType === "suno-upload-extend" && <SunoUploadExtendConfig {...configProps} />}
           {nodeType === "lip-sync" && <LipSyncConfig {...configProps} />}
+          {nodeType === "speech-to-video" && <SpeechToVideoConfig {...configProps} />}
+          {nodeType === "sora-storyboard" && <SoraStoryboardConfig {...configProps} />}
           {nodeType === "motion-transfer" && <MotionTransferConfig {...configProps} />}
           {nodeType === "transcribe" && <TranscribeConfig {...configProps} />}
           {nodeType === "image-to-text" && <ImageToTextConfig {...configProps} />}

@@ -7,7 +7,7 @@
 // All other models get negative prompt appended to the prompt text as "Avoid: ...".
 export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "imagen4", "imagen4-fast", "imagen4-ultra",
-  "ideogram", "ideogram-remix",
+  "ideogram", "ideogram-remix", "ideogram-v3",
   "qwen", "qwen-edit",
 ])
 
@@ -34,6 +34,7 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution"> =
   "seedream-edit": "quality",
   "seedream-5-lite": "quality",
   "seedream-5-lite-i2i": "quality",
+  "topaz-image-upscale": "resolution",
 }
 
 
@@ -44,7 +45,7 @@ export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "se
 export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux-flex", "flux-i2i"])
 
 // Ideogram family models with TURBO/QUALITY pricing variants
-export const IDEOGRAM_PROVIDERS = new Set(["ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe"])
+export const IDEOGRAM_PROVIDERS = new Set(["ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe", "ideogram-v3"])
 
 // =====================================================================
 // Provider arrays (single source of truth for route Zod validation)
@@ -62,6 +63,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "imagen4-fast",
   "imagen4-ultra",
   "ideogram",
+  "ideogram-v3",
   "qwen",
   "seedream",
   "seedream-5-lite",
@@ -186,6 +188,13 @@ export const LIP_SYNC_PROVIDERS = [
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
 
+/** Motion transfer providers */
+export const MOTION_TRANSFER_PROVIDERS = [
+  "kling",
+  "kling-3.0",
+] as const
+export type MotionTransferProviderType = typeof MOTION_TRANSFER_PROVIDERS[number]
+
 /** Text-to-speech providers */
 export const TTS_PROVIDERS = [
   "elevenlabs-v3",
@@ -265,14 +274,14 @@ export const I2I_STRENGTH_SUPPORT: Record<string, { min: number; max: number; st
 
 /** Models that accept a seed parameter for reproducible generation */
 export const SEED_SUPPORT = new Set([
-  "ideogram", "ideogram-remix", "ideogram-reframe",
+  "ideogram", "ideogram-remix", "ideogram-reframe", "ideogram-v3",
   "qwen", "qwen-i2i", "qwen-edit",
   "flux", "flux-flex", "flux-i2i", "flux-pro-i2i", "flux-kontext", "flux-kontext-max",
 ])
 
 /** Ideogram models that support rendering_speed selection (TURBO/BALANCED/QUALITY) */
 export const RENDERING_SPEED_SUPPORT = new Set([
-  "ideogram", "ideogram-remix", "ideogram-reframe",
+  "ideogram", "ideogram-remix", "ideogram-reframe", "ideogram-v3",
 ])
 
 /** Models that accept guidance_scale for controlling prompt adherence */

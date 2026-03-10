@@ -6,12 +6,14 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { IMAGE_EDIT_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
+import { buildCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 const editImageBody = z.object({
   imageUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
   upscaleFactor: z.enum(["1", "2", "4", "8"]).optional(),
+  targetResolution: z.enum(["2K", "4K", "8K"]).optional(),
   aspectRatio: z.string().max(20).optional(),
   negativePrompt: z.string().max(5000).optional(),
   style: z.string().max(500).optional(),
@@ -20,7 +22,12 @@ const editImageBody = z.object({
 })
 
 export async function editImageRoutes(app: FastifyInstance) {
-  app.post("/v1/edit-image", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "recraft-upscale" }) }, async (req, reply) => {
+  app.post("/v1/edit-image", { preHandler: creditGuard((req) => {
+    const body = req.body as Record<string, unknown>
+    const provider = (body?.provider as string) ?? "recraft-upscale"
+    const targetResolution = body?.targetResolution as string | undefined
+    return buildCreditModelIdentifier(provider, undefined, undefined, undefined, targetResolution)
+  }) }, async (req, reply) => {
     const parsed = editImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -31,7 +38,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, referenceImageUrls } = parsed.data
+    const { imageUrl, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -50,7 +57,8 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = provider ?? "recraft-upscale"
+    const baseProvider = provider ?? "recraft-upscale"
+    const modelIdentifier = buildCreditModelIdentifier(baseProvider, undefined, undefined, undefined, targetResolution)
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -59,7 +67,7 @@ export async function editImageRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, referenceImageUrls, type: "edit-image" },
+        input_data: { imageUrl, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls, type: "edit-image" },
       })
       .select("id")
       .single()
@@ -80,6 +88,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       prompt,
       provider,
       upscaleFactor,
+      targetResolution,
       aspectRatio,
       negativePrompt,
       style,

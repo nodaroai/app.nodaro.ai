@@ -24,7 +24,7 @@ import {
 } from "../shared.js"
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, removeWatermark } = job.data as {
     jobId: string
     imageUrl: string
     endFrameUrl?: string
@@ -46,8 +46,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     videoSize?: string
     seed?: number
     cameraFixed?: boolean
+    removeWatermark?: boolean
   }
-  console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
+  console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}${removeWatermark ? " [remove watermark]" : ""}`)
 
   // Map frontend shots/elements to provider format for Kling 3.0
   const multiPrompt = shots?.map((s) => ({ prompt: s.prompt, duration: s.duration }))
@@ -64,6 +65,26 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   }
 
   const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, videoSize, seed, cameraFixed, generateAudio })
+
+  // Sora 2 watermark removal post-processing step
+  if (removeWatermark && (provider === "sora2" || provider === "sora2-pro")) {
+    const kieTaskId = result.kieTaskId as string | undefined
+    if (kieTaskId) {
+      console.log(`[worker] Running Sora 2 watermark removal for task ${kieTaskId}`)
+      const { runKieTask } = await import("../../providers/kie/client.js")
+      const { resultJson } = await runKieTask("sora-2-watermark-remove", { task_id: kieTaskId }, 120)
+      const cleanUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (cleanUrl) {
+        console.log(`[worker] Watermark removed: ${cleanUrl}`)
+        result.url = cleanUrl
+      } else {
+        console.warn(`[worker] Watermark removal succeeded but no URL returned, using original`)
+      }
+    } else {
+      console.warn(`[worker] removeWatermark requested but no kieTaskId available (provider: ${provider})`)
+    }
+  }
+
   await job.updateProgress(40)
 
   // Upload the generated video to R2
@@ -154,7 +175,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark } = job.data as {
     jobId: string
     prompt: string
     provider?: string
@@ -167,8 +188,9 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     multiShot?: boolean
     shots?: Array<{ prompt: string; duration: number }>
     elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>
+    removeWatermark?: boolean
   }
-  console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})`)
+  console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${removeWatermark ? " [remove watermark]" : ""}`)
 
   // Map frontend shots/elements to provider format for Kling 3.0
   const multiPrompt = shots?.map((s) => ({ prompt: s.prompt, duration: s.duration }))
@@ -179,6 +201,26 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   }))
 
   const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements })
+
+  // Sora 2 watermark removal post-processing step
+  if (removeWatermark && (provider === "sora2" || provider === "sora2-pro")) {
+    const kieTaskId = result.kieTaskId as string | undefined
+    if (kieTaskId) {
+      console.log(`[worker] Running Sora 2 watermark removal for task ${kieTaskId}`)
+      const { runKieTask } = await import("../../providers/kie/client.js")
+      const { resultJson } = await runKieTask("sora-2-watermark-remove", { task_id: kieTaskId }, 120)
+      const cleanUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (cleanUrl) {
+        console.log(`[worker] Watermark removed: ${cleanUrl}`)
+        result.url = cleanUrl
+      } else {
+        console.warn(`[worker] Watermark removal succeeded but no URL returned, using original`)
+      }
+    } else {
+      console.warn(`[worker] removeWatermark requested but no kieTaskId available (provider: ${provider})`)
+    }
+  }
+
   await job.updateProgress(50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
@@ -247,16 +289,72 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
+const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, ctx) {
+  const { imageUrl, audioUrl, prompt, resolution, negativePrompt, seed, numFrames, fps, inferenceSteps, guidanceScale, shift } = job.data as {
+    jobId: string
+    imageUrl: string
+    audioUrl: string
+    prompt: string
+    resolution?: string
+    negativePrompt?: string
+    seed?: number
+    numFrames?: number
+    fps?: number
+    inferenceSteps?: number
+    guidanceScale?: number
+    shift?: number
+  }
+  console.log(`[worker] speech-to-video ${ctx.jobId} (resolution: ${resolution ?? "480p"})`)
+
+  const { KieVideoProvider } = await import("../../providers/kie/video.js")
+  const kieVideo = new KieVideoProvider()
+  const result = await kieVideo.speechToVideo(imageUrl, audioUrl, prompt, resolution, {
+    negativePrompt,
+    seed,
+    numFrames,
+    fps,
+    inferenceSteps,
+    guidanceScale,
+    shift,
+  })
+  await job.updateProgress(50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase
+    .from("jobs")
+    .update({
+      status: "completed",
+      progress: 100,
+      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+      completed_at: new Date().toISOString(),
+      provider: "kie",
+      provider_cost: result.cost,
+    })
+    .eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: kie, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
 const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job, ctx) {
-  const { imageUrl, videoUrl, prompt, characterOrientation, resolution } = job.data as {
+  const { imageUrl, videoUrl, prompt, characterOrientation, resolution, provider, backgroundSource } = job.data as {
     jobId: string
     imageUrl: string
     videoUrl: string
     prompt?: string
     characterOrientation?: "image" | "video"
     resolution?: "720p" | "1080p"
+    provider?: string
+    backgroundSource?: "input_video" | "input_image"
   }
-  console.log(`[worker] motion-transfer ${ctx.jobId} (orientation: ${characterOrientation ?? "image"}, resolution: ${resolution ?? "720p"})`)
+  const mtProvider = provider ?? "kling"
+  console.log(`[worker] motion-transfer ${ctx.jobId} (provider: ${mtProvider}, orientation: ${characterOrientation ?? "image"}, resolution: ${resolution ?? "720p"})`)
 
   const onProgress: ProgressCallback = async (progress: number) => {
     console.log(`[worker] Job ${ctx.jobId} motion-transfer progress: ${progress}%`)
@@ -266,12 +364,14 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
   const result = await motionTransfer(
     imageUrl,
     videoUrl,
-    "kling",
+    mtProvider,
     prompt,
     {
       onProgress,
       characterOrientation: characterOrientation ?? "image",
       resolution: resolution ?? "720p",
+      provider: mtProvider,
+      backgroundSource,
     }
   )
   await job.updateProgress(50)
@@ -405,12 +505,55 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
 }
 
+const handleSoraStoryboard: HandlerFn = async function handleSoraStoryboard(job, ctx) {
+  const { shots, nFrames, imageUrls, aspectRatio } = job.data as {
+    jobId: string
+    shots: Array<{ scene: string; duration: number }>
+    nFrames?: string
+    imageUrls?: string[]
+    aspectRatio?: string
+  }
+  console.log(`[worker] sora-storyboard ${ctx.jobId} (nFrames: ${nFrames ?? "10"}, shots: ${shots.length})`)
+
+  const { KieVideoProvider } = await import("../../providers/kie/video.js")
+  const kieVideo = new KieVideoProvider()
+
+  const onProgress: ProgressCallback = async (progress: number) => {
+    console.log(`[worker] Job ${ctx.jobId} sora-storyboard progress: ${progress}%`)
+    await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+  }
+
+  const result = await kieVideo.soraStoryboard(shots, nFrames, imageUrls, aspectRatio, onProgress)
+  await job.updateProgress(50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await job.updateProgress(100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  await supabase.from("jobs").update({
+    status: "completed",
+    progress: 100,
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    completed_at: new Date().toISOString(),
+    provider: "kie",
+    provider_cost: result.cost,
+  }).eq("id", ctx.jobId)
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: kie, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
 export const videoAIHandlers: Record<string, HandlerFn> = {
   "image-to-video": handleImageToVideo,
   "video-to-video": handleVideoToVideo,
   "text-to-video": handleTextToVideo,
   "lip-sync": handleLipSync,
+  "speech-to-video": handleSpeechToVideo,
   "motion-transfer": handleMotionTransfer,
   "video-upscale": handleVideoUpscale,
   "extend-video": handleExtendVideo,
+  "sora-storyboard": handleSoraStoryboard,
 }

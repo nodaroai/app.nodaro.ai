@@ -40,6 +40,7 @@ const SYNC_HTTP_NODES = new Set([
   "3d-title",
   "motion-graphics",
   "image-to-text",
+  "suno-style-boost",
   "instagram-post",
   "tiktok-post",
   "youtube-upload",
@@ -57,6 +58,7 @@ const SYNC_HTTP_ROUTES: Record<string, string> = {
   "3d-title": "/v1/three-d-title-ai/generate",
   "motion-graphics": "/v1/motion-graphics-ai/generate",
   "image-to-text": "/v1/image-to-text/describe",
+  "suno-style-boost": "/v1/suno/style-boost",
   "instagram-post": "/v1/social/publish",
   "tiktok-post": "/v1/social/publish",
   "youtube-upload": "/v1/social/publish",
@@ -74,6 +76,7 @@ const SYNC_HTTP_MODEL_IDS: Record<string, string> = {
   "3d-title": "3d-title",
   "motion-graphics": "motion-graphics",
   "image-to-text": "image-to-text",
+  "suno-style-boost": "suno-style-boost",
   "instagram-post": "social-publish",
   "tiktok-post": "social-publish",
   "youtube-upload": "social-publish",
@@ -297,6 +300,12 @@ function buildSyncHttpBody(
         imageUrl: resolvedInputs.imageUrl || data.imageUrl,
         customPrompt: resolvedInputs.prompt || data.prompt,
         detailLevel: data.detailLevel || "detailed",
+        userId: ctx.userId,
+      }
+
+    case "suno-style-boost":
+      return {
+        content: resolvedInputs.prompt || data.content || data.prompt,
         userId: ctx.userId,
       }
 

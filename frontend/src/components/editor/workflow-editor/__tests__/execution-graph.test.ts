@@ -418,4 +418,116 @@ describe("extractNodeOutput", () => {
     const node = makeNode("1", "sub-workflow-input", {})
     expect(extractNodeOutput(node)).toBeUndefined()
   })
+
+  // --- New nodes: video output ---
+
+  it("returns video url from speech-to-video with generatedResults", () => {
+    const node = makeNode("1", "speech-to-video", {
+      generatedResults: [
+        { url: "http://speech-vid.mp4", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://speech-vid.mp4")
+  })
+
+  it("falls back to generatedVideoUrl for speech-to-video with no results", () => {
+    const node = makeNode("1", "speech-to-video", {
+      generatedVideoUrl: "http://fallback-speech.mp4",
+    })
+    expect(extractNodeOutput(node)).toBe("http://fallback-speech.mp4")
+  })
+
+  it("returns video url from sora-storyboard with generatedResults", () => {
+    const node = makeNode("1", "sora-storyboard", {
+      generatedResults: [
+        { url: "http://storyboard.mp4", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://storyboard.mp4")
+  })
+
+  it("falls back to generatedVideoUrl for sora-storyboard with no results", () => {
+    const node = makeNode("1", "sora-storyboard", {
+      generatedVideoUrl: "http://fallback-storyboard.mp4",
+    })
+    expect(extractNodeOutput(node)).toBe("http://fallback-storyboard.mp4")
+  })
+
+  // --- New nodes: audio output ---
+
+  it("returns audio url from suno-mashup with generatedResults", () => {
+    const node = makeNode("1", "suno-mashup", {
+      generatedResults: [
+        { url: "http://mashup.mp3", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://mashup.mp3")
+  })
+
+  it("returns audio url from suno-replace-section with generatedResults", () => {
+    const node = makeNode("1", "suno-replace-section", {
+      generatedResults: [
+        { url: "http://replace.mp3", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://replace.mp3")
+  })
+
+  it("returns audio url from suno-add-instrumental with generatedResults", () => {
+    const node = makeNode("1", "suno-add-instrumental", {
+      generatedResults: [
+        { url: "http://instrumental.mp3", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://instrumental.mp3")
+  })
+
+  it("returns audio url from suno-add-vocals with generatedResults", () => {
+    const node = makeNode("1", "suno-add-vocals", {
+      generatedResults: [
+        { url: "http://vocals.mp3", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://vocals.mp3")
+  })
+
+  it("returns audio url from suno-convert-wav with generatedResults", () => {
+    const node = makeNode("1", "suno-convert-wav", {
+      generatedResults: [
+        { url: "http://converted.wav", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://converted.wav")
+  })
+
+  it("returns audio url from suno-upload-extend with generatedResults", () => {
+    const node = makeNode("1", "suno-upload-extend", {
+      generatedResults: [
+        { url: "http://upload-extend.mp3", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://upload-extend.mp3")
+  })
+
+  // --- New node: text output ---
+
+  it("returns generatedText from suno-style-boost", () => {
+    const node = makeNode("1", "suno-style-boost", {
+      generatedText: "Boosted style text",
+    })
+    expect(extractNodeOutput(node)).toBe("Boosted style text")
+  })
+
+  it("returns undefined for suno-style-boost without generatedText", () => {
+    const node = makeNode("1", "suno-style-boost", {})
+    expect(extractNodeOutput(node)).toBeUndefined()
+  })
 })

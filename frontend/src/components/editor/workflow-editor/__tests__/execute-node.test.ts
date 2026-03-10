@@ -42,6 +42,13 @@ const mockDubbingApi = vi.fn()
 const mockVoiceRemixApi = vi.fn()
 const mockVoiceDesignApi = vi.fn()
 const mockForcedAlignmentApi = vi.fn()
+const mockSunoMashupApi = vi.fn()
+const mockSunoReplaceSectionApi = vi.fn()
+const mockSunoStyleBoostApi = vi.fn()
+const mockSunoAddInstrumentalApi = vi.fn()
+const mockSunoAddVocalsApi = vi.fn()
+const mockSunoConvertWavApi = vi.fn()
+const mockSunoUploadExtendApi = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 let mockCharacterDefinitions: any[] = []
@@ -99,6 +106,13 @@ vi.mock("@/lib/api", () => ({
   sunoLyricsApi: vi.fn(),
   sunoSeparateApi: vi.fn(),
   sunoMusicVideoApi: vi.fn(),
+  sunoMashupApi: (...args: unknown[]) => mockSunoMashupApi(...args),
+  sunoReplaceSectionApi: (...args: unknown[]) => mockSunoReplaceSectionApi(...args),
+  sunoStyleBoostApi: (...args: unknown[]) => mockSunoStyleBoostApi(...args),
+  sunoAddInstrumentalApi: (...args: unknown[]) => mockSunoAddInstrumentalApi(...args),
+  sunoAddVocalsApi: (...args: unknown[]) => mockSunoAddVocalsApi(...args),
+  sunoConvertWavApi: (...args: unknown[]) => mockSunoConvertWavApi(...args),
+  sunoUploadExtendApi: (...args: unknown[]) => mockSunoUploadExtendApi(...args),
   textToDialogueApi: (...args: unknown[]) => mockTextToDialogueApi(...args),
   voiceChangerApi: (...args: unknown[]) => mockVoiceChangerApi(...args),
   dubbingApi: (...args: unknown[]) => mockDubbingApi(...args),
@@ -108,6 +122,8 @@ vi.mock("@/lib/api", () => ({
   transcribeApi: vi.fn(),
   downloadYouTubeAudio: vi.fn(),
   lipSyncApi: vi.fn(),
+  speechToVideoApi: vi.fn(),
+  soraStoryboardApi: vi.fn(),
   motionTransferApi: vi.fn(),
   videoUpscaleApi: vi.fn(),
   mergeVideoAudioApi: vi.fn(),
@@ -402,6 +418,8 @@ describe("generate-image", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
     )
   })
 
@@ -418,6 +436,8 @@ describe("generate-image", () => {
       "n1",
       "override prompt",
       expect.anything(),
+      undefined,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -555,6 +575,7 @@ describe("image-to-video", () => {
       "n1",
       "http://frame.png",
       expect.anything(),
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -2292,5 +2313,322 @@ describe("text-to-audio", () => {
       expect.anything(),
       undefined,
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-mashup
+// ---------------------------------------------------------------------------
+
+describe("suno-mashup", () => {
+  it("rejects when fewer than 2 audio inputs", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      audioUrls: ["http://a1.mp3"],
+      audioUrl: "http://a1.mp3",
+    })
+    const promise = executeNode(
+      makeNode("suno-mashup", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("Need two audio inputs")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate with 2 audio inputs", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      audioUrls: ["http://a1.mp3", "http://a2.mp3"],
+    })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-mashup", { model: "chirp-v4", style: "rock" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Mashup",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockSunoMashupApi).toHaveBeenCalledWith({
+      audioUrl1: "http://a1.mp3",
+      audioUrl2: "http://a2.mp3",
+      model: "chirp-v4",
+      customMode: false,
+      style: "rock",
+      title: undefined,
+      negativeStyle: undefined,
+      vocalGender: undefined,
+      userId: "u1",
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-replace-section
+// ---------------------------------------------------------------------------
+
+describe("suno-replace-section", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-replace-section", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate with timing params", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://song.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-replace-section", {
+        infillStartS: 10,
+        infillEndS: 25,
+        prompt: "guitar solo",
+        tags: "rock",
+        title: "My Song",
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Replace Section",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockSunoReplaceSectionApi).toHaveBeenCalledWith({
+      audioUrl: "http://song.mp3",
+      infillStartS: 10,
+      infillEndS: 25,
+      prompt: "guitar solo",
+      tags: "rock",
+      title: "My Song",
+      userId: "u1",
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-style-boost
+// ---------------------------------------------------------------------------
+
+describe("suno-style-boost", () => {
+  it("rejects when no content", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-style-boost", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No content")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls sunoStyleBoostApi with text content", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "pop lyrics about love" })
+    mockSunoStyleBoostApi.mockResolvedValue({ text: "boosted pop lyrics" })
+    await executeNode(
+      makeNode("suno-style-boost", {}),
+      makeCtx(),
+    )
+    expect(mockSunoStyleBoostApi).toHaveBeenCalledWith({
+      content: "pop lyrics about love",
+      userId: "u1",
+    })
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({
+        executionStatus: "completed",
+        generatedText: "boosted pop lyrics",
+      }),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-add-instrumental
+// ---------------------------------------------------------------------------
+
+describe("suno-add-instrumental", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-add-instrumental", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate with audio input and model", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://vocals.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-add-instrumental", { model: "chirp-v4" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Add Instrumental",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockSunoAddInstrumentalApi).toHaveBeenCalledWith({
+      audioUrl: "http://vocals.mp3",
+      model: "chirp-v4",
+      userId: "u1",
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-add-vocals
+// ---------------------------------------------------------------------------
+
+describe("suno-add-vocals", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-add-vocals", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate with audio input and model", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://instrumental.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-add-vocals", { model: "chirp-v4" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Add Vocals",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockSunoAddVocalsApi).toHaveBeenCalledWith({
+      audioUrl: "http://instrumental.mp3",
+      model: "chirp-v4",
+      userId: "u1",
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-convert-wav
+// ---------------------------------------------------------------------------
+
+describe("suno-convert-wav", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-convert-wav", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate with audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://song.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-convert-wav", {}),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Convert WAV",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockSunoConvertWavApi).toHaveBeenCalledWith({
+      audioUrl: "http://song.mp3",
+      userId: "u1",
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// suno-upload-extend
+// ---------------------------------------------------------------------------
+
+describe("suno-upload-extend", () => {
+  it("rejects when no audio input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(
+      makeNode("suno-upload-extend", {}),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio input")
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("calls pollJobWithNodeUpdate with audio input and params", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://clip.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-upload-extend", {
+        prompt: "extend the chorus",
+        model: "chirp-v4",
+        style: "pop",
+        title: "My Song",
+        continueAt: 60,
+        defaultParamFlag: false,
+      }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedAudioUrl",
+      "Suno Upload Extend",
+      expect.anything(),
+      undefined,
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockSunoUploadExtendApi).toHaveBeenCalledWith({
+      audioUrl: "http://clip.mp3",
+      prompt: "extend the chorus",
+      model: "chirp-v4",
+      style: "pop",
+      title: "My Song",
+      negativeStyle: undefined,
+      vocalGender: undefined,
+      continueAt: 60,
+      defaultParamFlag: false,
+      userId: "u1",
+    })
   })
 })

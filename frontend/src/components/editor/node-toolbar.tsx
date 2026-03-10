@@ -60,6 +60,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "video-to-video", label: "Video to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "text-to-video", label: "Text to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI", group: "Video" },
+  { type: "speech-to-video", label: "Speech to Video", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Video" },
+  { type: "sora-storyboard", label: "Sora Storyboard", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "extend-video", label: "Extend Video", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Video" },
   // AI — Audio & Speech
@@ -80,6 +82,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "suno-lyrics", label: "Suno Lyrics", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-separate", label: "Suno Separate", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-music-video", label: "Suno Music Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-mashup", label: "Suno Mashup", icon: <Merge className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-replace-section", label: "Suno Replace Section", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-style-boost", label: "Suno Style Boost", icon: <Sparkles className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-add-instrumental", label: "Suno Add Instrumental", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-add-vocals", label: "Suno Add Vocals", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-convert-wav", label: "Suno Convert WAV", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-upload-extend", label: "Suno Upload Extend", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   // AI — Quality
   { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI", group: "Quality" },
   // Processing — Video

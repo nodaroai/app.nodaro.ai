@@ -392,6 +392,8 @@ export function buildPayload(
           negativePrompt: result.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
+          styleType: data.styleType,
+          expandPrompt: data.expandPrompt,
           usageLogId,
         },
       }
@@ -441,16 +443,18 @@ export function buildPayload(
         }
       }
 
+      const targetResolution = data.targetResolution as string | undefined
       return {
         jobName: "edit-image",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: buildCreditModelIdentifier(provider, undefined, undefined, undefined, targetResolution),
         payload: {
           jobId,
           imageUrl: mainImageUrl,
           prompt: editPrompt,
           provider,
           upscaleFactor: data.upscaleFactor,
+          targetResolution,
           aspectRatio: data.aspectRatio,
           negativePrompt: data.negativePrompt,
           style: data.style,
@@ -579,6 +583,7 @@ export function buildPayload(
           elements: data.elements,
           grokMode: data.grokMode,
           videoSize: data.videoSize,
+          removeWatermark: data.removeWatermark,
           usageLogId,
         },
       }
@@ -611,6 +616,7 @@ export function buildPayload(
           multiShot: data.multiShot,
           shots: data.shots,
           elements: data.elements,
+          removeWatermark: data.removeWatermark,
           usageLogId,
         },
       }
@@ -649,13 +655,79 @@ export function buildPayload(
       }
     }
 
-    case "motion-transfer":
-      return simpleResult("motion-transfer", "motion-transfer", {
-        jobId,
-        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-        usageLogId,
-      })
+    case "speech-to-video": {
+      const s2vResolution = (data.resolution as string) ?? "480p"
+      const s2vModelId = s2vResolution === "720p"
+        ? "speech-to-video:720p"
+        : s2vResolution === "580p"
+          ? "speech-to-video:580p"
+          : "speech-to-video"
+      return {
+        jobName: "speech-to-video",
+        queueName: "video-generation",
+        modelIdentifier: s2vModelId,
+        payload: {
+          jobId,
+          imageUrl: resolvedInputs.imageUrl || data.imageUrl,
+          audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+          prompt: resolvedInputs.prompt || data.prompt,
+          resolution: s2vResolution,
+          negativePrompt: data.negativePrompt,
+          seed: data.seed,
+          numFrames: data.numFrames,
+          fps: data.fps,
+          inferenceSteps: data.inferenceSteps,
+          guidanceScale: data.guidanceScale,
+          shift: data.shift,
+          usageLogId,
+        },
+      }
+    }
+
+    case "sora-storyboard": {
+      const sbNFrames = (data.nFrames as string) ?? "10"
+      const sbModelId = sbNFrames === "10" ? "sora-storyboard" : "sora-storyboard:15"
+      // Collect image URLs from resolved inputs if available
+      const sbImageUrls: string[] = []
+      if (resolvedInputs.imageUrl) sbImageUrls.push(resolvedInputs.imageUrl)
+      if (resolvedInputs.referenceImageUrls) sbImageUrls.push(...resolvedInputs.referenceImageUrls)
+      return {
+        jobName: "sora-storyboard",
+        queueName: "video-generation",
+        modelIdentifier: sbModelId,
+        payload: {
+          jobId,
+          shots: data.shots,
+          nFrames: sbNFrames,
+          imageUrls: sbImageUrls.length > 0 ? sbImageUrls : (data.imageUrls ?? undefined),
+          aspectRatio: data.aspectRatio ?? "landscape",
+          usageLogId,
+        },
+      }
+    }
+
+    case "motion-transfer": {
+      const mtProvider = (data.provider as string) ?? "kling"
+      const mtResolution = (data.resolution as string) ?? "720p"
+      const mtModelId = mtProvider === "kling-3.0"
+        ? (mtResolution === "1080p" ? "kling-3.0-motion:1080p" : "kling-3.0-motion")
+        : "motion-transfer"
+      return {
+        jobName: "motion-transfer",
+        queueName: "video-generation",
+        modelIdentifier: mtModelId,
+        payload: {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          imageUrl: resolvedInputs.imageUrl || data.imageUrl,
+          provider: mtProvider,
+          backgroundSource: data.backgroundSource,
+          characterOrientation: data.characterOrientation,
+          resolution: mtResolution,
+          usageLogId,
+        },
+      }
+    }
 
     case "video-upscale": {
       const vuProvider = (data.provider as string) ?? "topaz"
@@ -909,6 +981,75 @@ export function buildPayload(
         jobId,
         taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
         audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        usageLogId,
+      })
+
+    case "suno-mashup":
+      return simpleResult("suno-mashup", "suno-mashup", {
+        jobId,
+        uploadUrlList: resolvedInputs.uploadUrlList || [
+          resolvedInputs.audioUrl,
+          resolvedInputs.audioUrl2,
+        ].filter(Boolean),
+        model: data.model,
+        customMode: data.customMode,
+        style: data.style,
+        title: data.title,
+        negativeStyle: data.negativeStyle,
+        vocalGender: data.vocalGender,
+        usageLogId,
+      })
+
+    case "suno-replace-section":
+      return simpleResult("suno-replace-section", "suno-replace-section", {
+        jobId,
+        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        infillStartS: data.infillStartS,
+        infillEndS: data.infillEndS,
+        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+        tags: data.tags,
+        title: data.title,
+        usageLogId,
+      })
+
+    case "suno-add-instrumental":
+      return simpleResult("suno-add-instrumental", "suno-add-instrumental", {
+        jobId,
+        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        model: data.model,
+        usageLogId,
+      })
+
+    case "suno-add-vocals":
+      return simpleResult("suno-add-vocals", "suno-add-vocals", {
+        jobId,
+        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        model: data.model,
+        usageLogId,
+      })
+
+    case "suno-convert-wav":
+      return simpleResult("suno-convert-wav", "suno-convert-wav", {
+        jobId,
+        taskId: resolvedInputs.sunoTaskId || data.sunoTaskId || data.taskId,
+        audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
+        usageLogId,
+      })
+
+    case "suno-upload-extend":
+      return simpleResult("suno-upload-extend", "suno-upload-extend", {
+        jobId,
+        uploadUrl: resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
+        continueAt: data.continueAt ?? 0,
+        defaultParamFlag: data.defaultParamFlag ?? false,
+        model: data.model,
+        style: data.style,
+        title: data.title,
+        negativeStyle: data.negativeStyle,
+        vocalGender: data.vocalGender,
         usageLogId,
       })
 

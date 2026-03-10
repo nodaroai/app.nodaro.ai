@@ -220,6 +220,8 @@ export async function motionTransfer(
   options?: ProviderOptions & {
     characterOrientation?: "image" | "video"
     resolution?: "720p" | "1080p"
+    provider?: string
+    backgroundSource?: "input_video" | "input_image"
   }
 ): Promise<RouteResult> {
   return routeAndExecute(

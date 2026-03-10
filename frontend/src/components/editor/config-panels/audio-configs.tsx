@@ -28,6 +28,13 @@ import type {
   SunoLyricsData,
   SunoSeparateData,
   SunoMusicVideoData,
+  SunoMashupData,
+  SunoReplaceSectionData,
+  SunoStyleBoostData,
+  SunoAddInstrumentalData,
+  SunoAddVocalsData,
+  SunoConvertWavData,
+  SunoUploadExtendData,
   TranscribeData,
   LipSyncData,
   TextToDialogueData,
@@ -547,6 +554,176 @@ export function SunoMusicVideoConfig({ data, onUpdate }: { readonly data: SunoMu
           <video src={data.generatedVideoUrl} controls className="w-full" />
         </div>
       )}
+    </div>
+  )
+}
+
+export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoMashupData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">Combine two audio tracks into a mashup. Connect two audio sources to the left handles.</p>
+      <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoMashupData["model"] })}>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
+            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <div className="flex items-center gap-2">
+        <Checkbox id="mashup-custom-mode" checked={data.customMode} onCheckedChange={(v) => onUpdate({ customMode: !!v })} />
+        <Label htmlFor="mashup-custom-mode" className="text-xs">Custom Mode</Label>
+      </div>
+      <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
+      </MappableField>
+      <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+      </MappableField>
+      <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+      </MappableField>
+      <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? "" : v })}>
+          <SelectTrigger aria-label="Vocal Gender"><SelectValue placeholder="Auto" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto</SelectItem>
+            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+    </div>
+  )
+}
+
+export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoReplaceSectionData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">Replace a section of an existing track. Connect an audio source.</p>
+      <MappableField field="infillStartS" label="Start Time (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input type="number" min={0} step={1} value={data.infillStartS ?? 0} onChange={(e) => onUpdate({ infillStartS: parseFloat(e.target.value) || 0 })} placeholder="0" />
+      </MappableField>
+      <MappableField field="infillEndS" label="End Time (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input type="number" min={0} step={1} value={data.infillEndS ?? 30} onChange={(e) => onUpdate({ infillEndS: parseFloat(e.target.value) || 30 })} placeholder="30" />
+      </MappableField>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+      </MappableField>
+      <MappableField field="tags" label="Tags (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea rows={2} value={data.tags ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ tags: v }) }} placeholder="Style tags..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+      </MappableField>
+      <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
+      </MappableField>
+    </div>
+  )
+}
+
+export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoStyleBoostData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">Enhance and improve style text using Suno AI.</p>
+      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= 3000) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={3000} />
+        <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/3000</p>
+      </MappableField>
+    </div>
+  )
+}
+
+export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoAddInstrumentalData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">Add instrumental accompaniment to a track. Connect an audio source.</p>
+      <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+    </div>
+  )
+}
+
+export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoAddVocalsData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">Add vocals to an instrumental track. Connect an audio source.</p>
+      <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+    </div>
+  )
+}
+
+export function SunoConvertWavConfig({ data }: { readonly data: SunoConvertWavData; readonly onUpdate: (updates: Partial<SunoConvertWavData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">Convert a Suno track to WAV format. Connect an audio source.</p>
+      <p className="text-[10px] text-muted-foreground">No additional settings required. The connected audio will be converted to high-quality WAV.</p>
+    </div>
+  )
+}
+
+export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoUploadExtendData>) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">Extend a track from uploaded audio. Connect an audio source.</p>
+      <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoUploadExtendData["model"] })}>
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="V5">Suno V5 (latest)</SelectItem>
+            <SelectItem value="V4_5ALL">Suno V4.5 All</SelectItem>
+            <SelectItem value="V4_5PLUS">Suno V4.5 Plus</SelectItem>
+            <SelectItem value="V4_5">Suno V4.5</SelectItem>
+            <SelectItem value="V4">Suno V4</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <MappableField field="prompt" label="Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+      </MappableField>
+      <MappableField field="continueAt" label="Continue At (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input type="number" min={0} step={1} value={data.continueAt ?? 0} onChange={(e) => onUpdate({ continueAt: parseFloat(e.target.value) || 0 })} placeholder="0" />
+      </MappableField>
+      <div className="flex items-center gap-2">
+        <Checkbox id="upload-extend-default" checked={data.defaultParamFlag} onCheckedChange={(v) => onUpdate({ defaultParamFlag: !!v })} />
+        <Label htmlFor="upload-extend-default" className="text-xs">Use Default Parameters</Label>
+      </div>
+      <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
+      </MappableField>
+      <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea rows={2} value={data.style ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ style: v }) }} placeholder="e.g. pop, rock, jazz..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+      </MappableField>
+      <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea rows={2} value={data.negativeStyle ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }} placeholder="Styles to avoid..." maxLength={500} customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} />
+      </MappableField>
+      <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? "" : v })}>
+          <SelectTrigger aria-label="Vocal Gender"><SelectValue placeholder="Auto" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto</SelectItem>
+            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
     </div>
   )
 }

@@ -205,7 +205,7 @@ export async function runKieTask(
   input: Record<string, unknown>,
   maxAttempts: number = MAX_POLL_ATTEMPTS,
   onProgress?: ProgressCallback
-): Promise<{ resultJson: KieResultJson; costTime?: number; rawRecordInfo?: Record<string, unknown> }> {
+): Promise<{ resultJson: KieResultJson; costTime?: number; rawRecordInfo?: Record<string, unknown>; taskId?: string }> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -372,7 +372,7 @@ export async function runKieTask(
 
       // Capture the full raw response for credit audit (credit-related fields may be hidden)
       const rawRecordInfo = detailData as unknown as Record<string, unknown>
-      return { resultJson, costTime: detailData.data.costTime, rawRecordInfo }
+      return { resultJson, costTime: detailData.data.costTime, rawRecordInfo, taskId }
     }
 
     // NOTE: KIE.ai API returns "fail" not "failed"!

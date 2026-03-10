@@ -20,6 +20,8 @@ import {
   getFirstModel,
   type ProviderCategory,
 } from "@/lib/providers-config"
+import { Button } from "@/components/ui/button"
+import { X, Plus } from "lucide-react"
 import type {
   ImageToVideoData,
   VideoToVideoData,
@@ -27,6 +29,8 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
+  SpeechToVideoData,
+  SoraStoryboardData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
@@ -358,6 +362,22 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </div>
       )}
 
+      {(data.provider === "sora2" || data.provider === "sora2-pro") && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="i2vRemoveWatermark"
+              checked={data.removeWatermark || false}
+              onChange={(e) => onUpdate({ removeWatermark: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="i2vRemoveWatermark" className="text-xs">Remove Watermark (+4 CR)</label>
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">Runs a post-processing step to remove the Sora watermark.</p>
+        </div>
+      )}
+
       {data.provider === "seedance" && (
         <>
           <div>
@@ -558,8 +578,21 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<MotionTransferData>) {
+  const provider = data.provider || "kling"
   return (
     <div className="flex flex-col gap-3">
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={provider}
+          onValueChange={(v) => onUpdate({ provider: v as MotionTransferData["provider"] })}
+        >
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="kling">Kling 2.6 (10 CR)</SelectItem>
+            <SelectItem value="kling-3.0">Kling 3.0 (4-7 CR)</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
       <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           value={data.prompt}
@@ -570,18 +603,34 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         />
         <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
       </MappableField>
-      <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select
-          value={data.characterOrientation || "video"}
-          onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
-        >
-          <SelectTrigger aria-label="Character Orientation"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="image">Image (same as picture, max 10s)</SelectItem>
-            <SelectItem value="video">Video (consistent with video, max 30s)</SelectItem>
-          </SelectContent>
-        </Select>
-      </MappableField>
+      {provider === "kling" && (
+        <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select
+            value={data.characterOrientation || "video"}
+            onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
+          >
+            <SelectTrigger aria-label="Character Orientation"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="image">Image (same as picture, max 10s)</SelectItem>
+              <SelectItem value="video">Video (consistent with video, max 30s)</SelectItem>
+            </SelectContent>
+          </Select>
+        </MappableField>
+      )}
+      {provider === "kling-3.0" && (
+        <MappableField field="backgroundSource" label="Background Source" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select
+            value={data.backgroundSource || "input_video"}
+            onValueChange={(v) => onUpdate({ backgroundSource: v as MotionTransferData["backgroundSource"] })}
+          >
+            <SelectTrigger aria-label="Background Source"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="input_video">Input Video</SelectItem>
+              <SelectItem value="input_image">Input Image</SelectItem>
+            </SelectContent>
+          </Select>
+        </MappableField>
+      )}
       <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.resolution || "720p"}
@@ -589,13 +638,15 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         >
           <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="720p">720p</SelectItem>
-            <SelectItem value="1080p">1080p</SelectItem>
+            <SelectItem value="720p">720p{provider === "kling-3.0" ? " (4 CR)" : ""}</SelectItem>
+            <SelectItem value="1080p">1080p{provider === "kling-3.0" ? " (7 CR)" : ""}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
       <p className="text-xs text-muted-foreground px-1">
-        Uses Kling 2.6 Motion Control via KIE.ai. Connect image and video inputs.
+        {provider === "kling-3.0"
+          ? "Uses Kling 3.0 Motion Control via KIE.ai. Connect image and video inputs."
+          : "Uses Kling 2.6 Motion Control via KIE.ai. Connect image and video inputs."}
       </p>
     </div>
   )
@@ -760,6 +811,22 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </div>
       )}
 
+      {(data.provider === "sora2" || data.provider === "sora2-pro") && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="t2vRemoveWatermark"
+              checked={data.removeWatermark || false}
+              onChange={(e) => onUpdate({ removeWatermark: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="t2vRemoveWatermark" className="text-xs">Remove Watermark (+4 CR)</label>
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">Runs a post-processing step to remove the Sora watermark.</p>
+        </div>
+      )}
+
       <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
           value={data.aspectRatio}
@@ -846,6 +913,257 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
       <p className="text-xs text-muted-foreground px-1">
         Extends a VEO or Runway video with a new prompt. Connect an upstream Image to Video or Text to Video node that produces a kieTaskId.
+      </p>
+    </div>
+  )
+}
+
+
+export function SpeechToVideoConfig({ data, onUpdate }: ConfigProps<SpeechToVideoData>) {
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Resolution */}
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">Resolution</Label>
+        <Select
+          value={data.resolution || "480p"}
+          onValueChange={(v) => onUpdate({ resolution: v as "480p" | "580p" | "720p" })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="480p">480p (4 credits)</SelectItem>
+            <SelectItem value="580p">580p (6 credits)</SelectItem>
+            <SelectItem value="720p">720p (8 credits)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Prompt */}
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">Prompt</Label>
+        <Textarea
+          value={data.prompt || ""}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe the speaking scene..."
+          className="min-h-[80px] text-sm"
+        />
+      </div>
+
+      {/* Negative Prompt */}
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">Negative Prompt</Label>
+        <Textarea
+          value={data.negativePrompt || ""}
+          onChange={(e) => onUpdate({ negativePrompt: e.target.value || undefined })}
+          placeholder="What to avoid..."
+          className="min-h-[60px] text-sm"
+        />
+      </div>
+
+      {/* Advanced Settings */}
+      <button
+        type="button"
+        className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+      >
+        {showAdvanced ? "Hide" : "Show"} Advanced Settings
+      </button>
+
+      {showAdvanced && (
+        <div className="flex flex-col gap-3 border-t pt-3 border-muted-foreground/10">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">Seed (optional)</Label>
+            <Input
+              type="number"
+              value={data.seed ?? ""}
+              onChange={(e) => onUpdate({ seed: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Random"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">Num Frames (16-81)</Label>
+            <Input
+              type="number"
+              value={data.numFrames ?? ""}
+              onChange={(e) => onUpdate({ numFrames: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Default"
+              min={16}
+              max={81}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">FPS (8-24)</Label>
+            <Input
+              type="number"
+              value={data.fps ?? ""}
+              onChange={(e) => onUpdate({ fps: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Default"
+              min={8}
+              max={24}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">Inference Steps (1-50)</Label>
+            <Input
+              type="number"
+              value={data.inferenceSteps ?? ""}
+              onChange={(e) => onUpdate({ inferenceSteps: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Default"
+              min={1}
+              max={50}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">Guidance Scale (0-20)</Label>
+            <Input
+              type="number"
+              step="0.1"
+              value={data.guidanceScale ?? ""}
+              onChange={(e) => onUpdate({ guidanceScale: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Default"
+              min={0}
+              max={20}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">Shift (0-20)</Label>
+            <Input
+              type="number"
+              step="0.1"
+              value={data.shift ?? ""}
+              onChange={(e) => onUpdate({ shift: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Default"
+              min={0}
+              max={20}
+            />
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground px-1">
+        Generates a talking video from an image and audio using Wan 2.2 Speech-to-Video. Connect a portrait image, speech audio, and prompt.
+      </p>
+    </div>
+  )
+}
+
+
+export function SoraStoryboardConfig({ data, onUpdate }: ConfigProps<SoraStoryboardData>) {
+  const shots = data.shots ?? [{ scene: "", duration: 5 }]
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Frames / Duration */}
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">Duration (n_frames)</Label>
+        <Select
+          value={data.nFrames || "10"}
+          onValueChange={(v) => onUpdate({ nFrames: v as "10" | "15" | "25" })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="10">10 frames (~5s) - 47 credits</SelectItem>
+            <SelectItem value="15">15 frames (~10s) - 85 credits</SelectItem>
+            <SelectItem value="25">25 frames (~15s) - 85 credits</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Aspect Ratio */}
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">Aspect Ratio</Label>
+        <Select
+          value={data.aspectRatio || "landscape"}
+          onValueChange={(v) => onUpdate({ aspectRatio: v as "portrait" | "landscape" })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="landscape">Landscape (16:9)</SelectItem>
+            <SelectItem value="portrait">Portrait (9:16)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Shots Editor */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs text-muted-foreground">Shots ({shots.length}/10)</Label>
+          {shots.length < 10 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-xs px-2"
+              onClick={() => {
+                onUpdate({ shots: [...shots, { scene: "", duration: 5 }] })
+              }}
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Add Shot
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {shots.map((shot, i) => (
+            <div key={i} className="flex flex-col gap-1.5 p-2 rounded-lg border border-muted-foreground/10 bg-muted/5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium text-muted-foreground">Shot {i + 1}</span>
+                {shots.length > 1 && (
+                  <button
+                    type="button"
+                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted-foreground/10 text-muted-foreground/60 hover:text-red-400 transition-colors"
+                    onClick={() => {
+                      const newShots = shots.filter((_, idx) => idx !== i)
+                      onUpdate({ shots: newShots })
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              <Textarea
+                placeholder="Describe the scene..."
+                value={shot.scene}
+                onChange={(e) => {
+                  const newShots = [...shots]
+                  newShots[i] = { ...shot, scene: e.target.value }
+                  onUpdate({ shots: newShots })
+                }}
+                className="min-h-[60px] text-sm"
+                rows={2}
+              />
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Duration (s)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={shot.duration}
+                  onChange={(e) => {
+                    const val = Number(e.target.value)
+                    if (val >= 1 && val <= 10) {
+                      const newShots = [...shots]
+                      newShots[i] = { ...shot, duration: val }
+                      onUpdate({ shots: newShots })
+                    }
+                  }}
+                  className="w-16 h-7 text-xs"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground px-1">
+        Generates a multi-shot video from scene descriptions using Sora 2 Pro Storyboard. Each shot has its own scene description and duration. Optionally connect reference images.
       </p>
     </div>
   )
