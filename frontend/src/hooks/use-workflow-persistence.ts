@@ -32,6 +32,7 @@ interface NodeExecutionState {
     instrumentalUrl?: string
     splitResults?: string[]
     combinedText?: string
+    listResults?: string[]
   }
   error?: string
 }
@@ -281,12 +282,32 @@ function applyBackendExecutionState(
         if (state.output.combinedText) data.generatedText = state.output.combinedText
         if (state.output.splitResults) data.generatedSplitResults = state.output.splitResults
 
-        // Build a generated result entry from the output
-        const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
-        if (outputUrl) {
-          const results = (data.generatedResults ?? []) as GeneratedResult[]
-          const alreadyHas = results.some(r => r.url === outputUrl)
-          if (!alreadyHas) {
+        // Build generated result entries from the output
+        const listResultUrls = (state.output.listResults ?? []).filter(
+          (u: string) => u && u.startsWith("http"),
+        )
+        const results = (data.generatedResults ?? []) as GeneratedResult[]
+        const existingUrls = new Set(results.map(r => r.url))
+
+        if (listResultUrls.length > 1) {
+          // Fan-out: multiple results from list execution
+          const newResults = listResultUrls
+            .filter((url: string) => !existingUrls.has(url))
+            .map((url: string, i: number) => ({
+              url,
+              timestamp: new Date().toISOString(),
+              jobId: `exec-${node.id}-${i}`,
+            }))
+          if (newResults.length > 0) {
+            data.generatedResults = [...newResults, ...results]
+            data.activeResultIndex = 0
+          }
+          data.__listResults = state.output.listResults
+          data.__listTotal = state.output.listResults!.length
+          data.__listCompleted = state.output.listResults!.length
+        } else {
+          const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
+          if (outputUrl && !existingUrls.has(outputUrl)) {
             data.generatedResults = [
               { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}` },
               ...results,
@@ -323,6 +344,12 @@ function applyCompletedExecutionResults(
     if (!state || state.status !== "completed" || !state.output) return node
 
     const data = node.data as Record<string, unknown>
+
+    // Skip nodes that were already marked completed in the saved workflow.
+    // Their results were already synced (via SSE or a previous load).
+    // Any changes the user made (e.g. deleting images) should be respected.
+    if (data.executionStatus === "completed") return node
+
     const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
 
     // Skip if node already has results (don't overwrite newer manual runs)
@@ -358,7 +385,29 @@ function applyCompletedExecutionResults(
     if (state.output.combinedText) newData.generatedText = state.output.combinedText
     if (state.output.splitResults) newData.generatedSplitResults = state.output.splitResults
 
-    if (outputUrl) {
+    // Handle fan-out list results — create a generatedResult entry for each URL
+    const listResultUrls = (state.output.listResults ?? []).filter(
+      (u: string) => u && u.startsWith("http"),
+    )
+    if (listResultUrls.length > 1) {
+      // Fan-out: multiple results from list execution
+      const existingUrls = new Set(existingResults.map(r => r.url))
+      const newResults = listResultUrls
+        .filter((url: string) => !existingUrls.has(url))
+        .map((url: string, i: number) => ({
+          url,
+          timestamp: new Date().toISOString(),
+          jobId: `exec-${node.id}-${i}`,
+        }))
+      if (newResults.length > 0) {
+        newData.generatedResults = [...newResults, ...existingResults]
+        newData.activeResultIndex = 0
+      }
+      // Sync fan-out metadata so downstream item:N resolution works
+      newData.__listResults = state.output.listResults
+      newData.__listTotal = state.output.listResults!.length
+      newData.__listCompleted = state.output.listResults!.length
+    } else if (outputUrl) {
       newData.generatedResults = [
         { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}` },
         ...existingResults,

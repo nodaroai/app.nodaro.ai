@@ -203,7 +203,16 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     }
 
     // 4. Build execution levels (topological sort)
-    const levels = buildExecutionLevels(nodes, edges)
+    //    Pass pre-resolved node IDs so their outgoing edges don't create
+    //    execution-level barriers.  This lets downstream nodes whose only
+    //    dependencies are source/skipped/pre-completed nodes run earlier
+    //    (in parallel with unrelated nodes at the same level).
+    const preResolvedNodeIds = new Set(
+      Object.entries(nodeStates)
+        .filter(([, s]) => s.status === "completed")
+        .map(([id]) => id),
+    )
+    const levels = buildExecutionLevels(nodes, edges, preResolvedNodeIds)
 
     // Initialize all executable nodes as "pending" so they appear in the UI immediately
     const executableNodes = nodes.filter((n) => {

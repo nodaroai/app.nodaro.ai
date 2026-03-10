@@ -14,5 +14,6 @@ export { CombineTextConfig, SaveToStorageConfig, WebhookOutputConfig, SplitTextC
 export { SubWorkflowInputConfig, SubWorkflowOutputConfig, SubWorkflowConfig } from "./sub-workflow-configs"
 export { WebhookTriggerConfig, ScheduleTriggerConfig } from "./trigger-configs"
 export { InstagramPostConfig, TiktokPostConfig, YoutubeUploadConfig, LinkedinPostConfig, XPostConfig, FacebookPostConfig } from "./social-configs"
+export { ResultsGallery } from "./results-gallery"
 export { getConnectedSources, getModelIdentifier, buildCreditModelIdentifier } from "./helpers"
 export type { SourceNodeInfo, ConfigProps } from "./types"

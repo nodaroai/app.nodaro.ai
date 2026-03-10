@@ -65,11 +65,32 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     } else if (indexToDelete < activeIndex) {
       newActiveIndex = activeIndex - 1
     }
-    updateNodeData(id, {
+    const updates: Record<string, unknown> = {
       generatedResults: newResults,
       activeResultIndex: newActiveIndex,
       generatedImageUrl: newResults[newActiveIndex]?.url,
-    })
+    }
+    // Keep __listResults in sync so the config panel's iteration results
+    // panel reflects deletions.  Remove the deleted URL; clear all __list*
+    // metadata when no results remain.
+    const listResults = (nodeData as Record<string, unknown>).__listResults as string[] | undefined
+    if (listResults) {
+      const deletedUrl = results[indexToDelete]?.url
+      const newListResults = deletedUrl
+        ? listResults.filter((u) => u !== deletedUrl)
+        : listResults
+      if (newListResults.length <= 1) {
+        updates.__listResults = undefined
+        updates.__listInputs = undefined
+        updates.__listTotal = undefined
+        updates.__listCompleted = undefined
+      } else {
+        updates.__listResults = newListResults
+        updates.__listTotal = newListResults.length
+        updates.__listCompleted = newListResults.length
+      }
+    }
+    updateNodeData(id, updates)
   }
 
   return (
