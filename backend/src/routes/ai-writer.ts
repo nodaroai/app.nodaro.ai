@@ -6,7 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { getAnthropicClient } from "../lib/anthropic.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { AI_WRITER_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const aiWriterBody = z.object({
@@ -71,6 +71,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
           input_data: {
@@ -221,6 +222,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
           input_data: {

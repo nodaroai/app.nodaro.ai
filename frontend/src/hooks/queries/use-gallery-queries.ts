@@ -15,21 +15,60 @@ export interface GalleryItem {
   readonly model: string | null
 }
 
-export function useGalleryInfinite(filter: string, userId?: string) {
+export function useGalleryInfinite(filter: string, userId?: string, favoritesOnly?: boolean) {
   return useInfiniteQuery({
-    queryKey: queryKeys.gallery.list(userId ? `${filter}:user:${userId}` : filter),
+    queryKey: queryKeys.gallery.list(
+      [filter, userId ? `user:${userId}` : "", favoritesOnly ? "fav" : ""].filter(Boolean).join(":"),
+    ),
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams({ limit: "20" })
       if (filter && filter !== "all") params.set("type", filter)
       if (userId) params.set("userId", userId)
+      if (favoritesOnly) params.set("favoritesOnly", "true")
       if (pageParam) params.set("cursor", pageParam)
-      const res = await fetch(`/v1/gallery?${params.toString()}`)
+      const res = await fetch(`/v1/gallery?${params.toString()}`, {
+        headers: favoritesOnly ? await getAuthHeaders() : {},
+      })
       if (!res.ok) throw new Error("Failed to fetch gallery")
       return res.json() as Promise<{ data: GalleryItem[]; nextCursor: string | null; totalCount?: number }>
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 30_000,
+  })
+}
+
+export function useGalleryFavorites(userId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.gallery.favorites(userId ?? ""),
+    queryFn: async () => {
+      const res = await fetch("/v1/gallery/favorites", {
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) return [] as string[]
+      const json = await res.json()
+      return (json.data ?? []) as string[]
+    },
+    enabled: !!userId,
+    staleTime: 60_000,
+  })
+}
+
+export function useToggleFavoriteMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ jobId }: { jobId: string }) => {
+      const res = await fetch("/v1/gallery/favorite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+        body: JSON.stringify({ jobId }),
+      })
+      if (!res.ok) throw new Error("Failed to toggle favorite")
+      return res.json() as Promise<{ favorited: boolean }>
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.gallery.all })
+    },
   })
 }
 

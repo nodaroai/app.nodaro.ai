@@ -338,6 +338,7 @@ async function executeWorkerNode(
   nodeStates?: Record<string, NodeExecutionState>,
 ): Promise<ExecuteNodeResult> {
   // 1. Create placeholder job record (we need the jobId for payload building)
+  const isUploadDescendant = ctx.uploadDescendantIds?.has(node.id) ?? false
   const { data: job, error: jobError } = await supabase
     .from("jobs")
     .insert({
@@ -346,6 +347,7 @@ async function executeWorkerNode(
       user_id: ctx.userId,
       status: "pending",
       input_data: { type: node.type },
+      ...(isUploadDescendant && { force_private: true }),
     })
     .select("id")
     .single()

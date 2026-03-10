@@ -45,6 +45,7 @@ import {
   generateImage,
   getJobStatus,
   generateAIWriterStream,
+  setForcePrivate,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
@@ -205,6 +206,34 @@ function runProcessingNode(
  * Main node execution dispatch. Routes each node type to its executor.
  * Accepts optional overrides for list execution chaining.
  */
+const UPLOAD_NODE_TYPES = new Set(["upload-image", "upload-video", "upload-audio"]);
+
+/** Check if a node has any upload-* ancestors via BFS backward through edges. */
+function hasUploadAncestor(nodeId: string, nodes: readonly { id: string; type: string }[], edges: readonly { source: string; target: string }[]): boolean {
+  // Build parent map once: target → source IDs
+  const parents = new Map<string, string[]>();
+  for (const edge of edges) {
+    const list = parents.get(edge.target) ?? [];
+    list.push(edge.source);
+    parents.set(edge.target, list);
+  }
+  const nodeTypeMap = new Map(nodes.map((n) => [n.id, n.type]));
+
+  const visited = new Set<string>();
+  const queue = [nodeId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    for (const srcId of parents.get(current) ?? []) {
+      const srcType = nodeTypeMap.get(srcId);
+      if (srcType && UPLOAD_NODE_TYPES.has(srcType)) return true;
+      queue.push(srcId);
+    }
+  }
+  return false;
+}
+
 export function executeNode(
   node: WorkflowNode,
   ctx: ExecutionContext,
@@ -213,6 +242,10 @@ export function executeNode(
 ): Promise<void> {
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges);
+
+  // Set forcePrivate flag if this node uses uploaded/private content as input
+  // Always explicitly set (true/false) to prevent stale state in parallel execution
+  setForcePrivate(hasUploadAncestor(node.id, nodes, edges));
 
   // Build label→output map for resolving {Node Label} references in text fields
   const refMap = buildNodeRefMap(node.id, nodes, edges);

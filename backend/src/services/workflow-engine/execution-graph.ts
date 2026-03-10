@@ -113,6 +113,51 @@ export function isSkipNode(nodeType: string): boolean {
   return SKIP_NODE_TYPES.has(nodeType)
 }
 
+/** Node types representing user-uploaded private content */
+const UPLOAD_NODE_TYPES = new Set([
+  "upload-image",
+  "upload-video",
+  "upload-audio",
+])
+
+/**
+ * Compute all node IDs that are downstream descendants of upload-* nodes.
+ * These nodes use private uploaded content as input and should be force_private.
+ * Uses BFS forward from upload nodes through edges.
+ */
+export function getUploadDescendantIds(
+  nodes: SimpleNode[],
+  edges: SimpleEdge[],
+): Set<string> {
+  const uploadNodeIds = new Set(
+    nodes.filter((n) => UPLOAD_NODE_TYPES.has(n.type)).map((n) => n.id),
+  )
+  if (uploadNodeIds.size === 0) return new Set()
+
+  // Build adjacency list (source → targets)
+  const children = new Map<string, string[]>()
+  for (const edge of edges) {
+    const list = children.get(edge.source) ?? []
+    list.push(edge.target)
+    children.set(edge.source, list)
+  }
+
+  // BFS forward from upload nodes
+  const descendants = new Set<string>()
+  const queue = [...uploadNodeIds]
+  while (queue.length > 0) {
+    const nodeId = queue.shift()!
+    for (const childId of children.get(nodeId) ?? []) {
+      if (!descendants.has(childId)) {
+        descendants.add(childId)
+        queue.push(childId)
+      }
+    }
+  }
+
+  return descendants
+}
+
 // ---------------------------------------------------------------------------
 // Media type sets — used for routing inputs
 // ---------------------------------------------------------------------------

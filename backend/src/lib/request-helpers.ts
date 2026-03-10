@@ -14,3 +14,15 @@ export function extractWorkflowId(body: unknown): string | null {
   }
   return null
 }
+
+/**
+ * Extracts an optional forcePrivate flag from the raw request body.
+ * Like workflowId, this is NOT part of Zod schemas — it's injected by the
+ * frontend/orchestrator when the node uses uploaded/private input content.
+ */
+export function extractForcePrivate(body: unknown): boolean {
+  if (body && typeof body === "object" && "forcePrivate" in body) {
+    return (body as Record<string, unknown>).forcePrivate === true
+  }
+  return false
+}

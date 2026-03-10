@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 
+// Gallery only shows AI-generated creative content — NOT processing/application results
 const IMAGE_JOBS = new Set([
   "generate-image", "edit-image", "image-to-image",
   "generate-character", "generate-character-asset",
@@ -13,18 +14,18 @@ const IMAGE_JOBS = new Set([
 
 const VIDEO_JOBS = new Set([
   "image-to-video", "text-to-video", "video-to-video",
-  "lip-sync", "motion-transfer", "video-upscale",
-  "combine-videos", "suno-music-video",
-  "merge-video-audio", "resize-video", "trim-video", "add-captions",
-  "fade-video", "loop-video",
+  "lip-sync", "motion-transfer",
+  // Excluded: video-upscale, combine-videos, suno-music-video, merge-video-audio,
+  //           resize-video, trim-video, add-captions, fade-video, loop-video (processing)
 ])
 
 const AUDIO_JOBS = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
-  "suno-generate", "suno-cover", "suno-extend", "suno-separate",
-  "extract-audio", "mix-audio", "adjust-volume", "extract-youtube-audio",
-  "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing",
+  "suno-generate", "suno-cover", "suno-extend",
+  "text-to-dialogue", "voice-changer", "dubbing",
   "voice-remix", "voice-design",
+  // Excluded: suno-separate, extract-audio, mix-audio, adjust-volume,
+  //           extract-youtube-audio, audio-isolation (processing)
 ])
 
 function getOutputType(jobName: string): "image" | "video" | "audio" | null {
@@ -61,6 +62,10 @@ const reportBody = z.object({
   details: z.string().max(1000).optional(),
 })
 
+const favoriteBody = z.object({
+  jobId: z.string().uuid(),
+})
+
 const adminDeleteParams = z.object({
   jobId: z.string().uuid(),
 })
@@ -74,6 +79,7 @@ export async function galleryRoutes(app: FastifyInstance) {
    *   limit  - items per page (default 20, max 50)
    *   type   - optional filter: "image" | "video" | "audio"
    *   userId - optional: filter to only this user's items
+   *   favoritesOnly - optional: "true" to show only user's favorites (requires userId)
    */
   app.get("/v1/gallery", async (req, reply) => {
     const query = req.query as Record<string, string | undefined>
@@ -81,6 +87,21 @@ export async function galleryRoutes(app: FastifyInstance) {
     const typeFilter = query.type as string | undefined
     const cursor = query.cursor as string | undefined
     const userIdFilter = query.userId as string | undefined
+    const favoritesOnly = query.favoritesOnly === "true"
+
+    // Pre-fetch favorite job IDs if filtering by favorites
+    let favoriteJobIds: string[] | null = null
+    if (favoritesOnly && userIdFilter) {
+      const { data: favs } = await supabase
+        .from("gallery_favorites")
+        .select("job_id")
+        .eq("user_id", userIdFilter)
+        .order("created_at", { ascending: false })
+      favoriteJobIds = favs?.map((f) => f.job_id) ?? []
+      if (favoriteJobIds.length === 0) {
+        return reply.send({ data: [], nextCursor: null, totalCount: 0 })
+      }
+    }
 
     // Count query (only on first page — when no cursor)
     let totalCount: number | null = null
@@ -94,6 +115,9 @@ export async function galleryRoutes(app: FastifyInstance) {
 
       if (userIdFilter) {
         countQuery = countQuery.eq("user_id", userIdFilter)
+      }
+      if (favoriteJobIds) {
+        countQuery = countQuery.in("id", favoriteJobIds)
       }
 
       if (typeFilter && ["image", "video", "audio"].includes(typeFilter)) {
@@ -139,6 +163,9 @@ export async function galleryRoutes(app: FastifyInstance) {
 
       if (userIdFilter) {
         dbQuery = dbQuery.eq("user_id", userIdFilter)
+      }
+      if (favoriteJobIds) {
+        dbQuery = dbQuery.in("id", favoriteJobIds)
       }
 
       if (pageCursor) {
@@ -221,6 +248,77 @@ export async function galleryRoutes(app: FastifyInstance) {
       nextCursor,
       ...(totalCount !== null && { totalCount }),
     })
+  })
+
+  /**
+   * POST /v1/gallery/favorite - Toggle favorite on a gallery item (auth required)
+   */
+  app.post("/v1/gallery/favorite", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+
+    const parsed = favoriteBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+      })
+    }
+
+    const { jobId } = parsed.data
+    const userId = req.userId
+
+    // Check if already favorited
+    const { data: existing } = await supabase
+      .from("gallery_favorites")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("job_id", jobId)
+      .limit(1)
+
+    if (existing && existing.length > 0) {
+      // Remove favorite
+      await supabase
+        .from("gallery_favorites")
+        .delete()
+        .eq("user_id", userId)
+        .eq("job_id", jobId)
+      return reply.send({ favorited: false })
+    }
+
+    // Add favorite
+    const { error } = await supabase
+      .from("gallery_favorites")
+      .insert({ user_id: userId, job_id: jobId })
+
+    if (error) {
+      console.error("[gallery] Favorite insert failed:", error)
+      return reply.status(500).send({ error: "Failed to favorite item" })
+    }
+
+    return reply.send({ favorited: true })
+  })
+
+  /**
+   * GET /v1/gallery/favorites - Get user's favorite job IDs (auth required)
+   */
+  app.get("/v1/gallery/favorites", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+
+    const { data, error } = await supabase
+      .from("gallery_favorites")
+      .select("job_id")
+      .eq("user_id", req.userId)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("[gallery] Favorites fetch failed:", error)
+      return reply.status(500).send({ error: "Failed to fetch favorites" })
+    }
+
+    return reply.send({ data: (data ?? []).map((f) => f.job_id) })
   })
 
   /**

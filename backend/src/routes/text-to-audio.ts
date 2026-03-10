@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { TEXT_TO_AUDIO_PROVIDERS } from "../../../packages/shared/src/model-constants.js"
 
 const textToAudioBody = z.object({
@@ -43,6 +43,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
         input_data: { prompt, provider, duration, loop, promptInfluence, type: "text-to-audio" },

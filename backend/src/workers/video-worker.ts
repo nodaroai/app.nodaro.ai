@@ -37,7 +37,7 @@ export function createVideoWorker() {
       // Fetch job record (with should_watermark from reservation) + user profile for public_outputs
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, should_watermark, profiles!user_id(public_outputs)")
+        .select("usage_log_id, user_id, should_watermark, force_private, profiles!user_id(public_outputs)")
         .eq("id", jobId)
         .single()
       const usageLogId = jobRecord?.usage_log_id
@@ -59,6 +59,11 @@ export function createVideoWorker() {
         if (isPromptBlocked(promptText)) {
           isPublicOutput = false
         }
+      }
+
+      // Force private when job uses uploaded/private input content
+      if (isPublicOutput && jobRecord?.force_private === true) {
+        isPublicOutput = false
       }
 
       const ctx: JobContext = { jobId, jobUserId, usageLogId, shouldWatermark }

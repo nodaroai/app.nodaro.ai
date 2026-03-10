@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2 } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2, Heart } from "lucide-react"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -14,7 +14,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useGalleryInfinite, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
+import { useGalleryInfinite, useGalleryFavorites, useToggleFavoriteMutation, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -280,6 +280,7 @@ export default function GalleryPage() {
   const [myItemsOnly, setMyItemsOnly] = useState(() => {
     try { return localStorage.getItem("gallery:myItemsOnly") === "true" } catch { return false }
   })
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -288,8 +289,19 @@ export default function GalleryPage() {
     try { localStorage.setItem("gallery:myItemsOnly", String(checked)) } catch { /* noop */ }
   }, [])
 
+  const toggleFavorites = useCallback((checked: boolean) => {
+    setFavoritesOnly(checked)
+  }, [])
+
   // React Query hooks
-  const { data, isLoading: loading, isFetchingNextPage: loadingMore, hasNextPage: hasMore, fetchNextPage } = useGalleryInfinite(filter, myItemsOnly && user?.id ? user.id : undefined)
+  const { data, isLoading: loading, isFetchingNextPage: loadingMore, hasNextPage: hasMore, fetchNextPage } = useGalleryInfinite(
+    filter,
+    (myItemsOnly || favoritesOnly) && user?.id ? user.id : undefined,
+    favoritesOnly,
+  )
+  const { data: favoriteIds } = useGalleryFavorites(user?.id)
+  const favoritesSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds])
+  const favoriteMutation = useToggleFavoriteMutation()
   const reportMutation = useReportGalleryItemMutation()
   const deleteMutation = useDeleteGalleryItemMutation()
 
@@ -441,6 +453,20 @@ export default function GalleryPage() {
     }
   }
 
+  async function handleToggleFavorite(item: GalleryItem, e?: React.MouseEvent) {
+    e?.stopPropagation()
+    if (!user) {
+      toast.error("Sign in to save favorites")
+      return
+    }
+    try {
+      const result = await favoriteMutation.mutateAsync({ jobId: item.id })
+      toast.success(result.favorited ? "Added to favorites" : "Removed from favorites")
+    } catch {
+      toast.error("Failed to update favorite")
+    }
+  }
+
   function openReportDialog(item: GalleryItem, e?: React.MouseEvent) {
     e?.stopPropagation()
     setReportItem(item)
@@ -504,11 +530,20 @@ export default function GalleryPage() {
           ))}
         </div>
         {user && (
-          <div className="flex items-center gap-2">
-            <Switch id="my-items" checked={myItemsOnly} onCheckedChange={toggleMyItems} />
-            <Label htmlFor="my-items" className="text-sm text-muted-foreground cursor-pointer select-none">
-              My items
-            </Label>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch id="my-items" checked={myItemsOnly} onCheckedChange={toggleMyItems} />
+              <Label htmlFor="my-items" className="text-sm text-muted-foreground cursor-pointer select-none">
+                My items
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="favorites" checked={favoritesOnly} onCheckedChange={toggleFavorites} />
+              <Label htmlFor="favorites" className="text-sm text-muted-foreground cursor-pointer select-none flex items-center gap-1">
+                <Heart className="h-3.5 w-3.5" />
+                Favorites
+              </Label>
+            </div>
           </div>
         )}
       </div>
@@ -542,6 +577,15 @@ export default function GalleryPage() {
 
                     {/* Action buttons (top-right corner on hover) */}
                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
+                      {user && (
+                        <button
+                          onClick={(e) => handleToggleFavorite(item, e)}
+                          className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
+                          title={favoritesSet.has(item.id) ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Heart className={cn("h-3.5 w-3.5", favoritesSet.has(item.id) ? "text-[#ff0073] fill-[#ff0073]" : "text-white")} />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => openReportDialog(item, e)}
                         className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
@@ -688,6 +732,21 @@ export default function GalleryPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
+                    {user && (
+                      <button
+                        onClick={() => handleToggleFavorite(selectedItem)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                          favoritesSet.has(selectedItem.id)
+                            ? "border-[#ff0073] text-[#ff0073] hover:bg-[#ff0073]/10"
+                            : "border-zinc-200 dark:border-zinc-700 text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800",
+                        )}
+                        title={favoritesSet.has(selectedItem.id) ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        <Heart className={cn("h-3.5 w-3.5", favoritesSet.has(selectedItem.id) && "fill-current")} />
+                        <span className="hidden sm:inline">{favoritesSet.has(selectedItem.id) ? "Favorited" : "Favorite"}</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => openReportDialog(selectedItem)}
                       className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"

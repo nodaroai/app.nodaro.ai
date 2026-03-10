@@ -4,7 +4,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 
 const combineVideosBody = z.object({
   videoUrls: z.array(safeUrlSchema).min(2, "At least 2 video URLs required"),
@@ -42,6 +42,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
         input_data: { videoUrls, transition, transitionDuration, audioMode, type: "combine-videos" },
