@@ -405,6 +405,7 @@ describe("GET /v1/admin/users/:id/balance", () => {
       tier: "pro",
       features: {},
       periodEnd: null,
+      appCreditsAllowance: 0,
     }
 
     vi.mocked(CreditsService.getBalance).mockResolvedValue(balanceData)
