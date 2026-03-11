@@ -10,6 +10,7 @@ interface OAuthConfig {
   tokenUrl: string
   scopes: string[]
   redirectUri: string
+  configId?: string
 }
 
 function getRedirectUri(platform: SocialPlatform): string {
@@ -23,8 +24,9 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
     clientSecret: process.env.META_APP_SECRET || "",
     authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
-    scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list", "pages_read_engagement"],
+    scopes: ["instagram_business_basic", "instagram_content_publish", "instagram_manage_comments", "instagram_manage_messages"],
     redirectUri: getRedirectUri("instagram"),
+    configId: process.env.META_INSTAGRAM_CONFIG_ID,
   }),
   facebook: () => ({
     clientId: process.env.META_APP_ID || "",
@@ -33,6 +35,7 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
     tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
     scopes: ["pages_manage_posts", "pages_read_engagement", "pages_show_list"],
     redirectUri: getRedirectUri("facebook"),
+    configId: process.env.META_FACEBOOK_CONFIG_ID,
   }),
   tiktok: () => ({
     clientId: process.env.TIKTOK_CLIENT_KEY || "",
@@ -104,9 +107,15 @@ export function generateAuthUrl(platform: SocialPlatform, userId: string): strin
     client_id: cfg.clientId,
     redirect_uri: cfg.redirectUri,
     response_type: "code",
-    scope: cfg.scopes.join(" "),
     state,
   })
+
+  // Facebook Login for Business uses config_id instead of scope
+  if (cfg.configId) {
+    params.set("config_id", cfg.configId)
+  } else {
+    params.set("scope", cfg.scopes.join(" "))
+  }
 
   // Platforms requiring PKCE (S256)
   if (codeVerifier) {
