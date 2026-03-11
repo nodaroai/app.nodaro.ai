@@ -103,15 +103,27 @@ export function buildVideoCreditModelIdentifier(
  * Compute composite model identifier for motion control with duration-tiered pricing.
  * Examples: "kling-3.0-motion:10s", "kling-3.0-motion:1080p:15s", "motion-transfer:5s"
  *
- * @param provider - Motion control provider key ("kling" for 2.6, "kling-3.0")
- * @param resolution - "720p" or "1080p"
- * @param videoDuration - Reference video duration in seconds (defaults to 10s)
+ * Wan Animate providers use resolution-tiered pricing (not per-second):
+ * "wan-animate-move" (480p default), "wan-animate-move:580p", "wan-animate-move:720p"
+ *
+ * @param provider - Motion control provider key ("kling" for 2.6, "kling-3.0", "wan-animate-move", "wan-animate-replace")
+ * @param resolution - "720p" or "1080p" (Kling), "480p" or "580p" or "720p" (Wan Animate)
+ * @param videoDuration - Reference video duration in seconds (defaults to 10s, unused for Wan Animate)
  */
 export function buildMotionCreditModelIdentifier(
   provider: string,
   resolution: string,
   videoDuration?: number,
 ): string {
+  // Wan Animate providers use resolution-tiered pricing (not duration-based)
+  if (provider === "wan-animate-move" || provider === "wan-animate-replace") {
+    // 480p is the default (base identifier), 580p and 720p get composite suffix
+    if (resolution === "580p" || resolution === "720p") {
+      return `${provider}:${resolution}`
+    }
+    return provider
+  }
+
   const durationSec = videoDuration ?? 10 // default 10s
   const tier = MOTION_DURATION_TIERS.find(t => durationSec <= t.maxSeconds)
     ?? MOTION_DURATION_TIERS[MOTION_DURATION_TIERS.length - 1]

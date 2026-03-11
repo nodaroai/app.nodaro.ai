@@ -2161,9 +2161,9 @@ export async function motionTransferApi(
   videoUrl: string,
   prompt?: string,
   characterOrientation?: "image" | "video",
-  resolution?: "720p" | "1080p",
+  resolution?: "720p" | "1080p" | "480p" | "580p",
   userId?: string,
-  provider?: "kling" | "kling-3.0",
+  provider?: "kling" | "kling-3.0" | "wan-animate-move" | "wan-animate-replace",
   backgroundSource?: "input_video" | "input_image",
   videoDuration?: number,
 ): Promise<{ jobId: string }> {

@@ -29,7 +29,7 @@ const motionTransferBody = z.object({
   videoUrl: safeUrlSchema,
   prompt: z.string().max(2500).optional(),
   characterOrientation: z.enum(["image", "video"]).default("image"),
-  resolution: z.enum(["720p", "1080p"]).default("720p"),
+  resolution: z.enum(["480p", "580p", "720p", "1080p"]).default("720p"),
   provider: z.enum(MOTION_TRANSFER_PROVIDERS).default("kling"),
   backgroundSource: z.enum(["input_video", "input_image"]).optional(),
   videoDuration: z.number().min(1).max(60).optional(),

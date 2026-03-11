@@ -162,6 +162,7 @@ export type TextToVideoProvider = typeof TEXT_TO_VIDEO_PROVIDERS[number]
 export const VIDEO_TO_VIDEO_PROVIDERS = [
   "wan",
   "luma-modify",
+  "runway-aleph",
 ] as const
 export type VideoToVideoProvider = typeof VIDEO_TO_VIDEO_PROVIDERS[number]
 
@@ -192,6 +193,8 @@ export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
 export const MOTION_TRANSFER_PROVIDERS = [
   "kling",
   "kling-3.0",
+  "wan-animate-move",
+  "wan-animate-replace",
 ] as const
 export type MotionTransferProviderType = typeof MOTION_TRANSFER_PROVIDERS[number]
 

@@ -23,7 +23,7 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
 import { kling3Generate } from "./kling3-client.js"
-import { runRunwayTask } from "./runway-client.js"
+import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
 import {
   KIE_VIDEO_MODELS,
@@ -542,6 +542,32 @@ export class KieVideoProvider
     const finalPrompt =
       prompt ?? "continue this video with smooth cinematic motion"
 
+    // Runway Aleph uses a special API endpoint
+    if (provider === "runway-aleph") {
+      const alephInput: Record<string, unknown> = {
+        prompt: finalPrompt,
+        videoUrl,
+      }
+      if (options?.aspectRatio) {
+        alephInput.aspectRatio = options.aspectRatio
+      }
+      if (options?.seed !== undefined && options.seed >= 0) {
+        alephInput.seed = options.seed
+      }
+      const { resultJson, taskId: alephTaskId } = await runAlephTask(alephInput)
+      const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (!outputUrl) {
+        throw createSanitizedError(
+          "Runway Aleph task succeeded but no URL found",
+          "Video generation"
+        )
+      }
+      console.log(
+        `[KIE.ai] Runway Aleph completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+      return { url: outputUrl, cost: modelConfig.cost, kieTaskId: alephTaskId }
+    }
+
     // Luma Modify uses a special API endpoint
     if (provider === "luma-modify") {
       const { resultJson } = await runLumaModifyTask({
@@ -602,7 +628,7 @@ export class KieVideoProvider
     prompt?: string,
     options?: ProviderOptions & {
       characterOrientation?: "image" | "video"
-      resolution?: "720p" | "1080p"
+      resolution?: "480p" | "580p" | "720p" | "1080p"
       provider?: string
       backgroundSource?: "input_video" | "input_image"
     }
@@ -680,6 +706,44 @@ export class KieVideoProvider
 
       console.log(
         `[KIE.ai] Kling 3.0 Motion transfer completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+
+      return { url: outputUrl, cost: modelConfig.cost }
+    }
+
+    // Wan 2.2 Animate (Move/Replace) — standard createTask
+    // Input: image_url (string) + video_url (string) + resolution
+    if (provider === "wan-animate-move" || provider === "wan-animate-replace") {
+      const wanResolution = options?.resolution ?? "480p"
+      const input: Record<string, unknown> = {
+        image_url: imageUrl,
+        video_url: videoUrl,
+        resolution: wanResolution,
+      }
+
+      console.log(
+        `[KIE.ai] Wan Animate ${provider === "wan-animate-move" ? "Move" : "Replace"} Request:`,
+        JSON.stringify(input, null, 2)
+      )
+
+      const { resultJson } = await runKieTask(
+        modelConfig.model,
+        input,
+        MAX_POLL_ATTEMPTS_VIDEO,
+        options?.onProgress
+      )
+
+      const outputUrl =
+        resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (!outputUrl) {
+        throw createSanitizedError(
+          `Wan Animate task succeeded but no URL found`,
+          "Motion transfer"
+        )
+      }
+
+      console.log(
+        `[KIE.ai] Wan Animate completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
 
       return { url: outputUrl, cost: modelConfig.cost }

@@ -172,6 +172,7 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "wan-turbo-t2v": 25,           // 80 KIE cr, $0.40 (T2V 5s 720p default)
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Motion Transfer (per-second pricing, duration-tiered) ──
   ***REDACTED-OSS-SCRUB***
   "kling-3.0-motion": 38,        // 10s default: 120 KIE cr, $0.60
@@ -198,6 +199,13 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "motion-transfer:1080p:10s": 29,   // 90 KIE cr, $0.45
   "motion-transfer:1080p:15s": 43,   // 135 KIE cr, $0.675
   "motion-transfer:1080p:30s": 85,   // 270 KIE cr, $1.35
+  // Wan Animate (Move + Replace) — resolution-tiered pricing
+  "wan-animate-move": 2,          // 6 KIE cr, $0.03 (480p default)
+  "wan-animate-move:580p": 3,     // 9.5 KIE cr, $0.0475
+  "wan-animate-move:720p": 4,     // 12.5 KIE cr, $0.0625
+  "wan-animate-replace": 2,       // 6 KIE cr, $0.03 (480p default)
+  "wan-animate-replace:580p": 3,  // 9.5 KIE cr, $0.0475
+  "wan-animate-replace:720p": 4,  // 12.5 KIE cr, $0.0625
   // ── Lip Sync ──
   "kling-avatar": 13,            // 40 KIE cr, $0.20 (8 cr/sec * 5s)
   "kling-avatar-pro": 25,        // 80 KIE cr, $0.40 (16 cr/sec * 5s)

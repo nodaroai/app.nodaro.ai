@@ -752,6 +752,16 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.50,
     extraParams: {},
   },
+
+  // Runway Aleph - special endpoint: /api/v1/aleph/generate
+  // See: docs.kie.ai/runway-api/generate-aleph-video.md
+  // V2V conversion — takes reference video + prompt → AI-generated video
+  "runway-aleph": {
+    model: "runway-aleph",
+    credits: 110,
+    ***REDACTED-OSS-SCRUB***
+    extraParams: {},
+  },
 }
 
 // =============================================================================
@@ -783,6 +793,30 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
     ***REDACTED-OSS-SCRUB***
     imageParam: "input_urls",
     extraParams: { character_orientation: "video", mode: "720p" },
+  },
+
+  // Wan 2.2 Animate Move - standard createTask endpoint
+  // See: docs.kie.ai/market/wan/2-2-animate-move.md
+  // Moves character from image within the video scene (~1s output)
+  "wan-animate-move": {
+    model: "wan/2-2-animate-move",
+    credits: 6,
+    cost: 0.03,  // 6 KIE credits * $0.005 (480p default)
+    // NOTE: 580p = 9.5 KIE cr ($0.0475), 720p = 12.5 KIE cr ($0.0625)
+    imageParam: "image_url",  // Single URL string
+    extraParams: { resolution: "480p" },
+  },
+
+  // Wan 2.2 Animate Replace - standard createTask endpoint
+  // See: docs.kie.ai/market/wan/2-2-animate-replace.md
+  // Replaces character in video with character from image (~1s output)
+  "wan-animate-replace": {
+    model: "wan/2-2-animate-replace",
+    credits: 6,
+    cost: 0.03,  // 6 KIE credits * $0.005 (480p default)
+    // NOTE: 580p = 9.5 KIE cr ($0.0475), 720p = 12.5 KIE cr ($0.0625)
+    imageParam: "image_url",  // Single URL string
+    extraParams: { resolution: "480p" },
   },
 }
 

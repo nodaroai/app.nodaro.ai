@@ -349,7 +349,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
     videoUrl: string
     prompt?: string
     characterOrientation?: "image" | "video"
-    resolution?: "720p" | "1080p"
+    resolution?: "480p" | "580p" | "720p" | "1080p"
     provider?: string
     backgroundSource?: "input_video" | "input_image"
   }

@@ -621,6 +621,8 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
           <SelectContent>
             <SelectItem value="kling">Kling 2.6</SelectItem>
             <SelectItem value="kling-3.0">Kling 3.0</SelectItem>
+            <SelectItem value="wan-animate-move">Wan Animate Move</SelectItem>
+            <SelectItem value="wan-animate-replace">Wan Animate Replace</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -634,18 +636,20 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         />
         <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
       </MappableField>
-      <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select
-          value={data.characterOrientation || "video"}
-          onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
-        >
-          <SelectTrigger aria-label="Character Orientation"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="image">Image (same as picture{provider === "kling" ? ", max 10s" : ""})</SelectItem>
-            <SelectItem value="video">Video (consistent with video{provider === "kling" ? ", max 30s" : ""})</SelectItem>
-          </SelectContent>
-        </Select>
-      </MappableField>
+      {provider !== "wan-animate-move" && provider !== "wan-animate-replace" && (
+        <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select
+            value={data.characterOrientation || "video"}
+            onValueChange={(v) => onUpdate({ characterOrientation: v as MotionTransferData["characterOrientation"] })}
+          >
+            <SelectTrigger aria-label="Character Orientation"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="image">Image (same as picture{provider === "kling" ? ", max 10s" : ""})</SelectItem>
+              <SelectItem value="video">Video (consistent with video{provider === "kling" ? ", max 30s" : ""})</SelectItem>
+            </SelectContent>
+          </Select>
+        </MappableField>
+      )}
       {provider === "kling-3.0" && (
         <MappableField field="backgroundSource" label="Background Source" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
@@ -662,13 +666,23 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
       )}
       <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
-          value={data.resolution || "720p"}
+          value={data.resolution || (provider === "wan-animate-move" || provider === "wan-animate-replace" ? "480p" : "720p")}
           onValueChange={(v) => onUpdate({ resolution: v as MotionTransferData["resolution"] })}
         >
           <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="720p">720p</SelectItem>
-            <SelectItem value="1080p">1080p</SelectItem>
+            {provider === "wan-animate-move" || provider === "wan-animate-replace" ? (
+              <>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="580p">580p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+              </>
+            ) : (
+              <>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+              </>
+            )}
           </SelectContent>
         </Select>
       </MappableField>
@@ -678,9 +692,10 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         </p>
       )}
       <p className="text-xs text-muted-foreground px-1">
-        {provider === "kling-3.0"
-          ? "Uses Kling 3.0 Motion Control via KIE.ai. Connect image and video inputs."
-          : "Uses Kling 2.6 Motion Control via KIE.ai. Connect image and video inputs."}
+        {({ "kling-3.0": "Uses Kling 3.0 Motion Control via KIE.ai. Connect image and video inputs.",
+           "wan-animate-move": "Moves character from image within the video scene (~1s output).",
+           "wan-animate-replace": "Replaces character in video with character from image (~1s output).",
+        } as Record<string, string>)[provider] ?? "Uses Kling 2.6 Motion Control via KIE.ai. Connect image and video inputs."}
       </p>
     </div>
   )
