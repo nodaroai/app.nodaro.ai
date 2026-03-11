@@ -166,6 +166,7 @@ describe("CreditsService — extended", () => {
         p_model_identifier: "flux",
         p_provider_cost_usd: 0.05,
         p_display_cost_usd: 0.0625,
+        p_is_app_run: false,
       })
 
       expect(result.usageLogId).toBe("usage-log-abc")

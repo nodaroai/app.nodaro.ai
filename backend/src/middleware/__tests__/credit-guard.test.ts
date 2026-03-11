@@ -401,6 +401,6 @@ describe("reserveCreditsForJob", () => {
       creditsReserved: 1,
       watermark: false,
     })
-    expect(mockReserveCredits).toHaveBeenCalledWith("user-1", "job-1", "ffmpeg", 0, 0, undefined)
+    expect(mockReserveCredits).toHaveBeenCalledWith("user-1", "job-1", "ffmpeg", 0, 0, { watermarkOverride: undefined })
   })
 })

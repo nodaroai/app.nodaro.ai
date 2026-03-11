@@ -171,9 +171,9 @@ describe("MODEL_REFERENCE", () => {
     expect(MODEL_REFERENCE["render-video"].markupPct).toBe(0)
   })
 
-  it("replicate models have null providerCostUsd (dynamic)", () => {
-    expect(MODEL_REFERENCE["runway"].providerCostUsd).toBeNull()
-    expect(MODEL_REFERENCE["pika"].providerCostUsd).toBeNull()
+  it("KIE.ai video models have numeric providerCostUsd", () => {
+    expect(typeof MODEL_REFERENCE["runway-kie"].providerCostUsd).toBe("number")
+    expect(typeof MODEL_REFERENCE["runway-aleph"].providerCostUsd).toBe("number")
   })
 
   it("has ideogram-v3 entry", () => {
