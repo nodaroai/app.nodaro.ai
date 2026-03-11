@@ -126,9 +126,11 @@ async function fetchPlatformUserInfo(
       const pagesRes = await fetch(
         `https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`,
       )
-      const pagesData = await pagesRes.json() as { data: Array<{ instagram_business_account?: { id: string; username: string; profile_picture_url: string } }> }
-      const igAccount = pagesData.data?.[0]?.instagram_business_account
-      if (!igAccount) throw new Error("No Instagram Business account found. Please connect a business or creator account.")
+      const pagesData = await pagesRes.json() as Record<string, unknown>
+      console.log("[instagram-oauth] /me/accounts response:", JSON.stringify(pagesData))
+      const pages = pagesData.data as Array<{ instagram_business_account?: { id: string; username: string; profile_picture_url: string } }> | undefined
+      const igAccount = pages?.[0]?.instagram_business_account
+      if (!igAccount) throw new Error(`No Instagram Business account found. API response: ${JSON.stringify(pagesData)}`)
       return {
         id: igAccount.id,
         username: igAccount.username,
@@ -141,9 +143,11 @@ async function fetchPlatformUserInfo(
       const pagesRes = await fetch(
         `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,picture&access_token=${accessToken}`,
       )
-      const pagesData = await pagesRes.json() as { data: Array<{ id: string; name: string; access_token: string; picture?: { data?: { url: string } } }> }
-      const page = pagesData.data?.[0]
-      if (!page) throw new Error("No Facebook pages found.")
+      const pagesData = await pagesRes.json() as Record<string, unknown>
+      console.log("[facebook-oauth] /me/accounts response:", JSON.stringify(pagesData))
+      const pages = pagesData.data as Array<{ id: string; name: string; access_token: string; picture?: { data?: { url: string } } }> | undefined
+      const page = pages?.[0]
+      if (!page) throw new Error(`No Facebook pages found. API response: ${JSON.stringify(pagesData)}`)
       return {
         id: page.id,
         username: page.name,
