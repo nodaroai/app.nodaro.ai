@@ -17,6 +17,8 @@ export interface CreditCheckResult {
   subscriptionCredits?: number
   topupCredits?: number
   watermark?: boolean
+  /** App credits allowance shortage (only set when app run is blocked for free users) */
+  appCreditsAllowance?: number
 }
 
 export interface UserBalance {
@@ -29,6 +31,8 @@ export interface UserBalance {
   tier: string
   features: Record<string, unknown>
   periodEnd: string | null
+  /** Credits earned for app usage (free tier only — earned by running flows) */
+  appCreditsAllowance: number
 }
 
 export interface ReserveResult {
@@ -55,6 +59,7 @@ export interface CreditProfile {
   topup_credits?: number | null
   daily_spent_credits?: number | null
   last_daily_reset?: string | null
+  app_credits_allowance?: number | null
 }
 
 /**
@@ -217,7 +222,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-multilingual": 4,  // 12 KIE cr per 1K chars, $0.06
   "elevenlabs": 2,               // alias for turbo
   ***REDACTED-OSS-SCRUB***
-  "tangoflux": 4,                // Replicate SFX, ~$0.05 estimated
+  // Replicate disabled
+  ***REDACTED-OSS-SCRUB***
   "suno": 4,                     // 12 KIE cr, $0.06 (per generation, same for v4/v5)
   "suno-v5": 4,                  // 12 KIE cr, $0.06
   "suno-generate": 4,            // 12 KIE cr
@@ -234,12 +240,14 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-add-vocals": 4,          // 12 KIE cr
   "suno-convert-wav": 1,         // 2 KIE cr
   "suno-upload-extend": 4,       // 12 KIE cr
-  "musicgen": 7,                 // Replicate Meta MusicGen
-  "lyria": 7,                    // Replicate Google Lyria 2
-  "bark": 7,                     // Replicate Suno Bark
+  // Replicate disabled
+  // "musicgen": 7,                 // Replicate Meta MusicGen
+  // "lyria": 7,                    // Replicate Google Lyria 2
+  // "bark": 7,                     // Replicate Suno Bark
   "elevenlabs-isolation": 1,     // 0.2 cr/sec * ~10s = 2 KIE cr
-  "whisper": 4,                   // Replicate whisper transcription
-  "incredibly-fast-whisper": 4,   // Replicate fast whisper
+  // Replicate disabled
+  // "whisper": 4,                   // Replicate whisper transcription
+  // "incredibly-fast-whisper": 4,   // Replicate fast whisper
   "elevenlabs-stt": 2,           // 3.5 KIE cr per minute, $0.0175
   "elevenlabs-dialogue": 5,     // 14 KIE cr per 1K chars, $0.07
   "voice-clone": 5,              // ElevenLabs instant voice clone
@@ -261,10 +269,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "topaz": 1,                     // processing
   "ffmpeg": 1,
   "render-video": 15,            // Remotion compute
-  // ── Replicate (dynamic per-second) ──
-  "runway": 20,                   // Replicate, ~$0.30 typical
-  "pika": 20,                    // Replicate, ~$0.30 typical
-  "sora": 20,                    // Replicate, ~$0.30 typical
+  // Replicate disabled
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // "sora": 20,                    // Replicate, ~$0.30 typical
   // ── LLM ──
   "ai-writer": 5,                // Claude Sonnet
   "scene-graph-ai": 10,          // Claude Sonnet
@@ -591,7 +599,8 @@ export class CreditsService {
    */
   static async checkCredits(
     userId: string,
-    modelIdentifier: string
+    modelIdentifier: string,
+    isAppRun?: boolean,
   ): Promise<CreditCheckResult> {
     // Self-hosted: always allow
     if (creditsDisabled()) {
@@ -601,7 +610,7 @@ export class CreditsService {
     // Get user's profile
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset")
+      .select("tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset, app_credits_allowance")
       .eq("id", userId)
       .single()
 
@@ -612,7 +621,7 @@ export class CreditsService {
       }
     }
 
-    return CreditsService.checkCreditsWithProfile(userId, profile as CreditProfile, modelIdentifier)
+    return CreditsService.checkCreditsWithProfile(userId, profile as CreditProfile, modelIdentifier, isAppRun)
   }
 
   /**
@@ -623,7 +632,8 @@ export class CreditsService {
   static async checkCreditsWithProfile(
     userId: string,
     profile: CreditProfile,
-    modelIdentifier: string
+    modelIdentifier: string,
+    isAppRun?: boolean,
   ): Promise<CreditCheckResult> {
     if (creditsDisabled()) {
       return { allowed: true, balance: 999999, watermark: false }
@@ -684,6 +694,21 @@ export class CreditsService {
         subscriptionCredits,
         topupCredits,
         watermark,
+      }
+    }
+
+    // App run check: free tier users with no topup must have earned enough app allowance
+    if (isAppRun && isFree && topupCredits === 0) {
+      const appAllowance = profile.app_credits_allowance ?? 0
+      if (appAllowance < pricing.creditCost) {
+        return {
+          allowed: false,
+          error: `Insufficient app credits. You have ${appAllowance} app credits but need ${pricing.creditCost}. Earn app credits by running flows in the editor.`,
+          balance: totalBalance,
+          required: pricing.creditCost,
+          appCreditsAllowance: appAllowance,
+          watermark,
+        }
       }
     }
 
@@ -760,7 +785,7 @@ export class CreditsService {
     modelIdentifier: string,
     providerCostUsd: number,
     displayCostUsd: number,
-    watermarkOverride?: boolean,
+    options?: { watermarkOverride?: boolean; isAppRun?: boolean },
   ): Promise<ReserveResult> {
     // Self-hosted: skip reservation
     if (creditsDisabled()) {
@@ -771,6 +796,7 @@ export class CreditsService {
     const pricing = await getModelCreditCostFromDB(modelIdentifier)
 
     // Determine watermark: use override from creditGuard if available, otherwise query
+    const { watermarkOverride, isAppRun } = options ?? {}
     let watermark: boolean
     if (watermarkOverride !== undefined) {
       watermark = watermarkOverride
@@ -816,6 +842,7 @@ export class CreditsService {
       p_model_identifier: modelIdentifier,
       p_provider_cost_usd: providerCostUsd,
       p_display_cost_usd: displayCostUsd,
+      p_is_app_run: isAppRun ?? false,
     })
 
     if (reserveError) {
@@ -1066,7 +1093,8 @@ export class CreditsService {
         subscription_tier,
         daily_spent_credits,
         last_daily_reset,
-        current_period_end
+        current_period_end,
+        app_credits_allowance
       `)
       .eq("id", userId)
       .single()
@@ -1083,6 +1111,7 @@ export class CreditsService {
         tier: "free",
         features: {},
         periodEnd: null,
+        appCreditsAllowance: 0,
       }
     }
 
@@ -1109,7 +1138,46 @@ export class CreditsService {
       tier: userTier,
       features: (tierConfig.features as Record<string, unknown>) ?? {},
       periodEnd: profile.current_period_end ?? null,
+      appCreditsAllowance: profile.app_credits_allowance ?? 0,
     }
+  }
+
+  /**
+   * Quick eligibility check for app runs (free-tier users only).
+   * Returns null if eligible, or an error object if blocked.
+   * Paid/topped-up users always pass.
+   */
+  static async checkAppRunEligibility(userId: string): Promise<{
+    allowed: boolean
+    error?: string
+    appCreditsAllowance?: number
+  }> {
+    if (creditsDisabled()) return { allowed: true }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tier, subscription_tier, topup_credits, app_credits_allowance")
+      .eq("id", userId)
+      .single()
+
+    if (!profile) return { allowed: true } // fail open — per-node check will catch
+
+    const userTier = resolveTier(profile as Record<string, unknown>)
+    if (userTier !== "free") return { allowed: true }
+
+    const topup = (profile.topup_credits as number) ?? 0
+    if (topup > 0) return { allowed: true }
+
+    const allowance = (profile.app_credits_allowance as number) ?? 0
+    if (allowance <= 0) {
+      return {
+        allowed: false,
+        error: "You need app credits to run this app. Earn them by running flows in the editor, or upgrade your plan.",
+        appCreditsAllowance: allowance,
+      }
+    }
+
+    return { allowed: true, appCreditsAllowance: allowance }
   }
 
   /**

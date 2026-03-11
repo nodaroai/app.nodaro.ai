@@ -11,6 +11,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { hasCredits } from "../lib/config.js"
+import { CreditsService } from "../billing/credits.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
@@ -218,32 +220,44 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    // Run rate limit check
-    if (appRow.max_runs_per_user_per_day != null) {
-      const todayStart = new Date()
-      todayStart.setUTCHours(0, 0, 0, 0)
+    // Run rate limit + app credits allowance checks in parallel
+    const rateLimitPromise = appRow.max_runs_per_user_per_day != null
+      ? (async () => {
+          const todayStart = new Date()
+          todayStart.setUTCHours(0, 0, 0, 0)
+          const { count, error: rlError } = await supabase
+            .from("app_runs")
+            .select("id", { count: "exact", head: true })
+            .eq("app_id", appRow.id)
+            .eq("runner_id", req.userId)
+            .gte("created_at", todayStart.toISOString())
+          if (rlError) return { blocked: true as const, status: 500, code: "internal_error", message: "Failed to check rate limit" }
+          if ((count ?? 0) >= appRow.max_runs_per_user_per_day!)
+            return { blocked: true as const, status: 429, code: "rate_limit_exceeded", message: `Daily run limit of ${appRow.max_runs_per_user_per_day} reached for this app` }
+          return { blocked: false as const }
+        })()
+      : Promise.resolve({ blocked: false as const })
 
-      const { count, error: rlError } = await supabase
-        .from("app_runs")
-        .select("id", { count: "exact", head: true })
-        .eq("app_id", appRow.id)
-        .eq("runner_id", req.userId)
-        .gte("created_at", todayStart.toISOString())
+    const allowancePromise = hasCredits()
+      ? CreditsService.checkAppRunEligibility(req.userId)
+      : Promise.resolve({ allowed: true })
 
-      if (rlError) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: "Failed to check rate limit" },
-        })
-      }
+    const [rateLimitResult, allowanceResult] = await Promise.all([rateLimitPromise, allowancePromise])
 
-      if ((count ?? 0) >= appRow.max_runs_per_user_per_day) {
-        return reply.status(429).send({
-          error: {
-            code: "rate_limit_exceeded",
-            message: `Daily run limit of ${appRow.max_runs_per_user_per_day} reached for this app`,
-          },
-        })
-      }
+    if (rateLimitResult.blocked) {
+      return reply.status(rateLimitResult.status).send({
+        error: { code: rateLimitResult.code, message: rateLimitResult.message },
+      })
+    }
+
+    if (!allowanceResult.allowed) {
+      return reply.status(402).send({
+        error: {
+          code: "insufficient_app_credits",
+          message: allowanceResult.error,
+          appCreditsAllowance: allowanceResult.appCreditsAllowance,
+        },
+      })
     }
 
     // Create workflow_execution under runner's userId

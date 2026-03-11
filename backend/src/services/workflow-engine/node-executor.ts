@@ -413,6 +413,7 @@ async function executeWorkerNode(
         modelIdentifier,
         0, // provider cost calculated in worker
         0, // display cost calculated in worker
+        { isAppRun: ctx.isAppRun },
       )
       usageLogId = reservation.usageLogId
       creditsUsed = reservation.creditsReserved

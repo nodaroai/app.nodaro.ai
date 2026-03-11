@@ -100,11 +100,11 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
 
     // Validate specific settings
     if (key === "ai_provider") {
-      if (typeof value !== "string" || !["replicate", "kie"].includes(value)) {
+      if (typeof value !== "string" || value !== "kie") {
         return reply.status(400).send({
           error: {
             code: "validation_error",
-            message: "ai_provider must be 'replicate' or 'kie'",
+            message: "ai_provider must be 'kie'",
           },
         })
       }

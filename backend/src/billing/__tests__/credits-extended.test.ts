@@ -156,7 +156,7 @@ describe("CreditsService — extended", () => {
         "flux",
         0.05,
         0.0625,
-        false,
+        { watermarkOverride: false },
       )
 
       expect(mockRpc).toHaveBeenCalledWith("reserve_credits", {
@@ -186,7 +186,7 @@ describe("CreditsService — extended", () => {
       })
 
       await expect(
-        CreditsService.reserveCredits("user-123", "job-456", "flux", 0.05, 0.0625, false)
+        CreditsService.reserveCredits("user-123", "job-456", "flux", 0.05, 0.0625, { watermarkOverride: false })
       ).rejects.toThrow("Credit reservation failed: insufficient_credits")
     })
   })

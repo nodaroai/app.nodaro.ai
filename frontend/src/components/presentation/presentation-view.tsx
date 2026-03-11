@@ -22,6 +22,7 @@ import {
 } from "@dnd-kit/sortable"
 import { Button } from "@/components/ui/button"
 import { CreditBalance } from "@/components/credits/CreditBalance"
+import { AppCreditsIndicator } from "@/components/credits/AppCreditsIndicator"
 import { hasCredits } from "@/lib/edition"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
@@ -564,6 +565,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           <div className="flex items-center gap-1.5 md:hidden shrink-0">
             {isFullscreen && <ThemeToggle />}
             {user && hasCredits() && <CreditBalance userId={user.id} />}
+            {user && hasCredits() && isAppRunner && <AppCreditsIndicator userId={user.id} estimatedCost={estimatedCost} />}
             {(mode === "tab" || (isFullscreen && !isShareReadOnly)) && (
               <RunTargetSelector
                 nodes={nodes}
@@ -633,6 +635,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           )}
           {isFullscreen && <ThemeToggle />}
           {user && hasCredits() && <CreditBalance userId={user.id} />}
+          {user && hasCredits() && isAppRunner && <AppCreditsIndicator userId={user.id} estimatedCost={estimatedCost} />}
 
           {/* Edit/View toggle — only for editable view modes */}
           {isOwner && mode === "tab" && canEdit && (

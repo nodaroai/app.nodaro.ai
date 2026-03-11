@@ -9,7 +9,7 @@ export interface AppSettings {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  ai_provider: "replicate",
+  ai_provider: "kie",
   ***REDACTED-OSS-SCRUB***
 }
 
@@ -21,7 +21,7 @@ async function fetchAppSettings(): Promise<AppSettings> {
   const data = await res.json()
   const settings = data.settings as Record<string, unknown>
   return {
-    ai_provider: (settings.ai_provider as "replicate" | "kie") ?? "replicate",
+    ai_provider: (settings.ai_provider as "replicate" | "kie") ?? "kie",
     cost_markup_percent: (settings.cost_markup_percent as number) ?? 25,
   }
 }
