@@ -122,23 +122,20 @@ async function fetchPlatformUserInfo(
 ): Promise<{ id: string; username?: string; avatarUrl?: string; metadata?: Record<string, unknown> }> {
   switch (platform) {
     case "instagram": {
-      // Debug: check what permissions the token has
-      const permRes = await fetch(`https://graph.facebook.com/v25.0/me/permissions?access_token=${accessToken}`)
-      const permData = await permRes.json()
-      console.log("[instagram-oauth] token permissions:", JSON.stringify(permData))
-      const meRes = await fetch(`https://graph.facebook.com/v25.0/me?fields=id,name&access_token=${accessToken}`)
-      const meData = await meRes.json()
-      console.log("[instagram-oauth] /me response:", JSON.stringify(meData))
-
-      // Get Instagram Business account via Facebook Graph API
+      // Try /me/accounts first (works for direct page admins)
       const pagesRes = await fetch(
         `https://graph.facebook.com/v25.0/me/accounts?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`,
       )
       const pagesData = await pagesRes.json() as Record<string, unknown>
-      console.log("[instagram-oauth] /me/accounts response:", JSON.stringify(pagesData))
       const pages = pagesData.data as Array<{ instagram_business_account?: { id: string; username: string; profile_picture_url: string } }> | undefined
-      const igAccount = pages?.[0]?.instagram_business_account
-      if (!igAccount) throw new Error(`No Instagram Business account found. API response: ${JSON.stringify(pagesData)}`)
+      let igAccount = pages?.[0]?.instagram_business_account
+
+      // Fallback: for business-managed pages, discover via /me/businesses
+      if (!igAccount) {
+        igAccount = await findIgAccountViaBusiness(accessToken)
+      }
+
+      if (!igAccount) throw new Error("No Instagram Business account found. Make sure your Instagram is linked to a Facebook Page.")
       return {
         id: igAccount.id,
         username: igAccount.username,
@@ -147,15 +144,20 @@ async function fetchPlatformUserInfo(
       }
     }
     case "facebook": {
-      // Get user's pages
+      // Try /me/accounts first (works for direct page admins)
       const pagesRes = await fetch(
         `https://graph.facebook.com/v25.0/me/accounts?fields=id,name,access_token,picture&access_token=${accessToken}`,
       )
       const pagesData = await pagesRes.json() as Record<string, unknown>
-      console.log("[facebook-oauth] /me/accounts response:", JSON.stringify(pagesData))
       const pages = pagesData.data as Array<{ id: string; name: string; access_token: string; picture?: { data?: { url: string } } }> | undefined
-      const page = pages?.[0]
-      if (!page) throw new Error(`No Facebook pages found. API response: ${JSON.stringify(pagesData)}`)
+      let page = pages?.[0]
+
+      // Fallback: for business-managed pages, discover via /me/businesses
+      if (!page) {
+        page = await findPageViaBusiness(accessToken)
+      }
+
+      if (!page) throw new Error("No Facebook pages found. Make sure you have a Facebook Page in your Business Portfolio.")
       return {
         id: page.id,
         username: page.name,
@@ -215,8 +217,38 @@ async function fetchPlatformUserInfo(
   }
 }
 
-// Note: encryptToken is needed for facebook page_access_token in metadata
-// It's imported at the top of the file
+// Fallback: discover pages via /me/businesses for business-managed pages
+// where /me/accounts returns empty (common with Facebook Login for Business)
+async function findPageViaBusiness(accessToken: string): Promise<{ id: string; name: string; access_token: string; picture?: { data?: { url: string } } } | undefined> {
+  const bizRes = await fetch(`https://graph.facebook.com/v25.0/me/businesses?fields=id,name&access_token=${accessToken}`)
+  const bizData = await bizRes.json() as { data?: Array<{ id: string; name: string }> }
+  if (!bizData.data?.length) return undefined
+
+  for (const biz of bizData.data) {
+    const pagesRes = await fetch(
+      `https://graph.facebook.com/v25.0/${biz.id}/owned_pages?fields=id,name,access_token,picture&access_token=${accessToken}`,
+    )
+    const pagesData = await pagesRes.json() as { data?: Array<{ id: string; name: string; access_token: string; picture?: { data?: { url: string } } }> }
+    if (pagesData.data?.[0]) return pagesData.data[0]
+  }
+  return undefined
+}
+
+async function findIgAccountViaBusiness(accessToken: string): Promise<{ id: string; username: string; profile_picture_url: string } | undefined> {
+  const bizRes = await fetch(`https://graph.facebook.com/v25.0/me/businesses?fields=id,name&access_token=${accessToken}`)
+  const bizData = await bizRes.json() as { data?: Array<{ id: string; name: string }> }
+  if (!bizData.data?.length) return undefined
+
+  for (const biz of bizData.data) {
+    const pagesRes = await fetch(
+      `https://graph.facebook.com/v25.0/${biz.id}/owned_pages?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`,
+    )
+    const pagesData = await pagesRes.json() as { data?: Array<{ instagram_business_account?: { id: string; username: string; profile_picture_url: string } }> }
+    const igAccount = pagesData.data?.find(p => p.instagram_business_account)?.instagram_business_account
+    if (igAccount) return igAccount
+  }
+  return undefined
+}
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
