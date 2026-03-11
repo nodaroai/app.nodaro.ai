@@ -106,6 +106,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       resolution,
       provider,
       backgroundSource,
+      videoDuration,
       usageLogId,
     })
 

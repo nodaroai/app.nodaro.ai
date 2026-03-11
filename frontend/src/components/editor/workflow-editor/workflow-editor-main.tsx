@@ -38,6 +38,7 @@ import { InsufficientCreditsModal } from "@/components/credits/InsufficientCredi
 import { StorageExceededModal } from "@/components/credits/StorageExceededModal";
 import {
   NODE_CREDIT_COSTS,
+  estimateNodeCredits,
   isExecutableNode,
   getFanOutMultiplier,
   type ExecutionContext,
@@ -162,9 +163,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       let cost: number;
       if (provider) {
         const cached = getCachedCredits(provider);
-        cost = cached !== undefined ? cached : (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1);
+        cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data });
       } else {
-        cost = NODE_CREDIT_COSTS[node.type ?? ""] ?? 1;
+        cost = estimateNodeCredits({ type: node.type, data });
       }
       const multiplier = getFanOutMultiplier(node, storeNodes, storeEdges);
       return sum + cost * multiplier;

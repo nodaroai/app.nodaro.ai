@@ -319,7 +319,7 @@ export async function creditsRoutes(app: FastifyInstance) {
    */
   app.post<{
     Body: {
-      nodes: Array<{ type: string }>
+      nodes: Array<{ type: string; data?: Record<string, unknown> }>
     }
   }>("/v1/credits/estimate-workflow", async (req, reply) => {
     const { nodes } = req.body

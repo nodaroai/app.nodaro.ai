@@ -124,7 +124,7 @@ export function buildMotionCreditModelIdentifier(
     return provider
   }
 
-  const durationSec = videoDuration ?? 10 // default 10s
+  const durationSec = Math.floor(videoDuration ?? 10) // default 10s; floor to match KIE per-second billing
   const tier = MOTION_DURATION_TIERS.find(t => durationSec <= t.maxSeconds)
     ?? MOTION_DURATION_TIERS[MOTION_DURATION_TIERS.length - 1]
 

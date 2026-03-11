@@ -163,7 +163,7 @@ export async function presentationRoutes(app: FastifyInstance) {
     const isOwner = !!req.userId && workflow.user_id === req.userId
 
     // Estimate credit cost from executable nodes
-    const wfNodes = (workflow.nodes ?? []) as Array<{ type: string }>
+    const wfNodes = (workflow.nodes ?? []) as Array<{ type: string; data?: Record<string, unknown> }>
     const estimatedCost = estimateWorkflowCredits(wfNodes)
 
     // Extract presentation settings from workflow settings

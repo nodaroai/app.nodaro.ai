@@ -47,6 +47,7 @@ const AdminModels = lazy(() => import("@/app/(admin)/admin/models/page"))
 const AdminReports = lazy(() => import("@/app/(admin)/admin/reports/page"))
 const AdminPricingPage = lazy(() => import("@/app/(admin)/admin/pricing/page"))
 const AdminSettings = lazy(() => import("@/app/(admin)/admin/settings/page"))
+const AdminApps = lazy(() => import("@/app/(admin)/admin/apps/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -201,6 +202,10 @@ export const router = createBrowserRouter([
       {
         path: "settings",
         element: <SuspenseWrapper><AdminSettings /></SuspenseWrapper>,
+      },
+      {
+        path: "apps",
+        element: <SuspenseWrapper><AdminApps /></SuspenseWrapper>,
       },
     ],
   },

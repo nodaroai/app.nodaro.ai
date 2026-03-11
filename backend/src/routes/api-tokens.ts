@@ -606,7 +606,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         ? sortByOrder(outputNodes, presSettings.outputOrder)
         : outputNodes
 
-      const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string }>)
+      const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)
 
       const inputs = sortedInputs.map((node) => {
         const fieldSchema = getInputFieldSchema(node.type ?? "")

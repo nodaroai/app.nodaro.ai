@@ -33,13 +33,26 @@ export interface AdminUser {
   readonly created_at: string
 }
 
-interface AdminJob {
+export interface AdminJob {
   readonly id: string
   readonly status: string
+  readonly job_type: string | null
   readonly credits_estimated: number | null
+  readonly provider: string | null
+  readonly provider_cost: number | null
+  readonly display_cost: number | null
+  readonly error_message: string | null
+  readonly input_data: Record<string, unknown> | null
+  readonly output_data: Record<string, unknown> | null
   readonly created_at: string
+  readonly started_at: string | null
+  readonly completed_at: string | null
+  readonly user_id: string
   readonly user_email: string
+  readonly workflow_id: string | null
   readonly workflow_name: string
+  readonly workflow_execution_id: string | null
+  readonly workflow_project_id: string | null
 }
 
 interface AdminUsageLog {
@@ -109,6 +122,26 @@ export function useAdminUsers(page: number, pageSize = 50) {
   })
 }
 
+// workflow_execution_id column exists in DB but not in generated Supabase types
+interface JobRow {
+  id: string
+  status: string
+  job_type: string | null
+  credits_estimated: number | null
+  provider: string | null
+  provider_cost: number | null
+  display_cost: number | null
+  error_message: string | null
+  input_data: Record<string, unknown> | null
+  output_data: Record<string, unknown> | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  user_id: string
+  workflow_id: string | null
+  workflow_execution_id: string | null
+}
+
 export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string) {
   return useQuery({
     queryKey: queryKeys.admin.jobs(page, pageSize, statusFilter),
@@ -116,28 +149,105 @@ export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string)
       const supabase = createClient()
       let query = supabase
         .from("jobs")
-        .select("id, status, credits_estimated, created_at, user_id, workflow_id")
+        .select("id, status, job_type, credits_estimated, provider, provider_cost, display_cost, error_message, input_data, output_data, created_at, started_at, completed_at, user_id, workflow_id, workflow_execution_id") as unknown as {
+          order: (col: string, opts: { ascending: boolean }) => typeof query
+          range: (from: number, to: number) => typeof query
+          eq: (col: string, val: string) => typeof query
+          then: Promise<{ data: JobRow[] | null; error: Error | null }>["then"]
+        }
+      query = query
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1)
       if (statusFilter) query = query.eq("status", statusFilter)
-      const { data: jobs, error } = await query
+      const { data: jobs, error } = await (query as unknown as PromiseLike<{ data: JobRow[] | null; error: Error | null }>)
       if (error) throw error
       if (!jobs || jobs.length === 0) return []
       const userIds = [...new Set(jobs.map((j) => j.user_id))]
       const workflowIds = [...new Set(jobs.map((j) => j.workflow_id).filter(Boolean) as string[])]
       const [usersRes, workflowsRes] = await Promise.all([
         supabase.from("profiles").select("id, email").in("id", userIds),
-        supabase.from("workflows").select("id, name").in("id", workflowIds),
+        supabase.from("workflows").select("id, name, project_id").in("id", workflowIds),
       ])
       const userMap = new Map((usersRes.data ?? []).map((u) => [u.id, u.email]))
-      const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, w.name]))
+      const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, { name: w.name, project_id: w.project_id }]))
       return jobs.map((j) => ({
         id: j.id,
         status: j.status,
+        job_type: j.job_type ?? null,
         credits_estimated: j.credits_estimated,
+        provider: j.provider ?? null,
+        provider_cost: j.provider_cost ?? null,
+        display_cost: j.display_cost ?? null,
+        error_message: j.error_message ?? null,
+        input_data: (j.input_data ?? null) as Record<string, unknown> | null,
+        output_data: (j.output_data ?? null) as Record<string, unknown> | null,
         created_at: j.created_at,
+        started_at: j.started_at ?? null,
+        completed_at: j.completed_at ?? null,
+        user_id: j.user_id,
         user_email: userMap.get(j.user_id) ?? "Unknown",
-        workflow_name: wfMap.get(j.workflow_id ?? "") ?? "Unknown",
+        workflow_id: j.workflow_id ?? null,
+        workflow_name: wfMap.get(j.workflow_id ?? "")?.name ?? "Unknown",
+        workflow_execution_id: j.workflow_execution_id ?? null,
+        workflow_project_id: wfMap.get(j.workflow_id ?? "")?.project_id ?? null,
+      }))
+    },
+    enabled: hasAdmin(),
+    staleTime: 15_000,
+  })
+}
+
+// published_apps and app_runs tables exist in DB but not in generated Supabase types
+interface AppRow {
+  id: string
+  name: string
+  slug: string
+  workflow_id: string
+  creator_id: string
+  icon_url: string | null
+  version: number
+  is_active: boolean
+  is_listed: boolean
+  estimated_credits: number | null
+  created_at: string
+  thumbnail_node_id: string | null
+}
+
+export interface AdminApp extends AppRow {
+  readonly creator_email: string
+  readonly run_count: number
+  readonly workflow_project_id: string | null
+}
+
+export function useAdminApps(page: number, pageSize = 50) {
+  return useQuery({
+    queryKey: queryKeys.admin.apps(page, pageSize),
+    queryFn: async () => {
+      const supabase = createClient()
+      const { data, error } = await (supabase
+        .from("published_apps" as "assets")
+        .select("id, name, slug, workflow_id, creator_id, icon_url, version, is_active, is_listed, estimated_credits, created_at, thumbnail_node_id") as unknown as PromiseLike<{ data: AppRow[] | null; error: Error | null }>)
+      if (error) throw error
+      if (!data || data.length === 0) return []
+      const creatorIds = [...new Set(data.map((a) => a.creator_id).filter(Boolean))]
+      const workflowIds = [...new Set(data.map((a) => a.workflow_id).filter(Boolean))]
+      const [creatorsRes, workflowsRes] = await Promise.all([
+        supabase.from("profiles").select("id, email").in("id", creatorIds),
+        supabase.from("workflows").select("id, project_id").in("id", workflowIds),
+      ])
+      const creatorMap = new Map((creatorsRes.data ?? []).map((c) => [c.id, c.email]))
+      const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, w.project_id]))
+      const appIds = data.map((a) => a.id)
+      const { data: runs } = await (supabase
+        .from("app_runs" as "assets")
+        .select("app_id, count")
+        .in("app_id", appIds) as unknown as PromiseLike<{ data: { app_id: string; count: number }[] | null; error: Error | null }>)
+      const runMap = new Map((runs ?? []).map((r) => [r.app_id, r.count]))
+      return data.map((a) => ({
+        ...a,
+        creator_email: creatorMap.get(a.creator_id) ?? "Unknown",
+        run_count: runMap.get(a.id) ?? 0,
+        workflow_project_id: wfMap.get(a.workflow_id) ?? null,
       }))
     },
     enabled: hasAdmin(),

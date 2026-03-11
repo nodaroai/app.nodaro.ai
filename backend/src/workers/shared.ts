@@ -127,31 +127,38 @@ export async function commitJobCredits(usageLogId: string | null | undefined, jo
 
 /**
  * Refund credits after job failure (cloud edition only).
- * Only refunds for system errors, NOT for provider errors (where we got charged).
+ * Defaults to refunding (safe for the user). Only skips refund when there
+ * is evidence the provider actually completed processing and charged us
+ * (e.g., we received the result but failed during post-processing like
+ * R2 upload, watermark, or transcode).
+ *
+ * Pre-processing failures (createTask errors, content moderation, NSFW
+ * rejections, validation errors, timeouts) are always refunded because
+ * the provider never processed the job.
  */
 export async function refundJobCredits(usageLogId: string | null | undefined, jobId: string, errorMessage: string): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
   try {
-    // Don't refund if the provider already charged us.
-    // Check for known provider error patterns (case-insensitive).
+    // Only skip refund when post-processing failed AFTER the provider
+    // successfully completed its work (meaning we were charged by the provider).
+    // These patterns indicate we received a result but failed on our side.
     const lower = errorMessage?.toLowerCase() ?? ""
-    const isProviderError =
-      lower.includes("provider error") ||
-      lower.includes("provider returned") ||
-      lower.includes("provider rejected") ||
-      lower.includes("api error") ||
-      lower.includes("kie.ai") ||
-      lower.includes("replicate") ||
-      lower.includes("model error") ||
-      lower.includes("content moderation") ||
-      lower.includes("nsfw")
+    const isPostProcessingFailure =
+      lower.includes("failed to upload") ||
+      lower.includes("upload to r2") ||
+      lower.includes("r2 upload") ||
+      lower.includes("failed to download image") ||
+      lower.includes("failed to download video") ||
+      lower.includes("watermark failed") ||
+      lower.includes("transcode failed") ||
+      lower.includes("ffmpeg failed after")
 
-    if (!isProviderError) {
+    if (isPostProcessingFailure) {
+      console.log(`[worker] Post-processing failure after provider completed - not refunding credits for job ${jobId}: ${errorMessage}`)
+    } else {
       await CreditsService.refundCredits(usageLogId)
       console.log(`[worker] Credits refunded for job ${jobId}`)
-    } else {
-      console.log(`[worker] Provider error - not refunding credits for job ${jobId}: ${errorMessage}`)
     }
   } catch (error) {
     console.error(`[worker] Failed to refund credits for job ${jobId}:`, error)

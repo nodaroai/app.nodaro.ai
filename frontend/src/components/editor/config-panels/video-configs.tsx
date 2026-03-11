@@ -582,33 +582,45 @@ const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "vid
 export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<MotionTransferData>) {
   const provider = data.provider || "kling"
 
-  // Detect video duration from connected upstream video node's output
-  const connectedVideoUrl = useMemo(() => {
+  // Detect video duration from connected upstream video node's metadata or URL
+  const connectedVideoInfo = useMemo(() => {
     for (const s of sources) {
       if (MOTION_VIDEO_NODE_TYPES.has(s.type)) {
-        const url = (s.nodeData?.generatedVideoUrl as string) || (s.nodeData?.videoUrl as string)
-        if (url) return url
+        // Try metadata duration first (instant, no network)
+        const meta = s.nodeData?.metadata as { durationSeconds?: number } | undefined
+        if (meta?.durationSeconds && meta.durationSeconds > 0) {
+          return { durationSeconds: meta.durationSeconds }
+        }
+        const url = (s.nodeData?.generatedVideoUrl as string) || (s.nodeData?.videoUrl as string) || (s.nodeData?.url as string)
+        if (url) return { url }
       }
     }
     return undefined
   }, [sources])
 
   useEffect(() => {
-    if (!connectedVideoUrl) {
+    if (!connectedVideoInfo) {
       if (data.videoDuration != null) onUpdate({ videoDuration: undefined })
       return
     }
+    // If we already have duration from metadata, use it directly
+    if ("durationSeconds" in connectedVideoInfo) {
+      const dur = Math.floor(connectedVideoInfo.durationSeconds!)
+      if (dur !== data.videoDuration) onUpdate({ videoDuration: dur })
+      return
+    }
+    // Fallback: load video metadata from URL
     const video = document.createElement("video")
     video.preload = "metadata"
-    video.src = connectedVideoUrl
+    video.src = connectedVideoInfo.url!
     video.onloadedmetadata = () => {
       if (video.duration && video.duration !== Infinity && isFinite(video.duration)) {
-        const dur = Math.ceil(video.duration)
+        const dur = Math.floor(video.duration)
         if (dur !== data.videoDuration) onUpdate({ videoDuration: dur })
       }
     }
     return () => { video.onloadedmetadata = null; video.src = "" }
-  }, [connectedVideoUrl])
+  }, [connectedVideoInfo])
 
   return (
     <div className="flex flex-col gap-3">
