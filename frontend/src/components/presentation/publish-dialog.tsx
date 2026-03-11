@@ -39,7 +39,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   const [publishing, setPublishing] = useState(false)
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null)
   const [publishCopied, setPublishCopied] = useState(false)
-  const [thumbnailNodeId, setThumbnailNodeId] = useState<string>("")
+  const [thumbnailNodeId, setThumbnailNodeId] = useState<string>("__none__")
 
   const handlePublish = useCallback(async () => {
     if (!publishName.trim()) {
@@ -54,7 +54,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         name: publishName.trim(),
         slug,
         description: publishDesc.trim() || undefined,
-        thumbnailNodeId: thumbnailNodeId || null,
+        thumbnailNodeId: thumbnailNodeId === "__none__" ? null : thumbnailNodeId,
       })
       setPublishedSlug(result.slug)
       toast.success("App published!")
@@ -258,7 +258,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Left</p>
                           <Select
-                            value={presentationSettings.compareLeft ?? ""}
+                            value={presentationSettings.compareLeft || undefined}
                             onValueChange={(v) => handleCompareChange("compareLeft", v)}
                           >
                             <SelectTrigger className="w-full h-8 text-xs">
@@ -274,7 +274,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Right</p>
                           <Select
-                            value={presentationSettings.compareRight ?? ""}
+                            value={presentationSettings.compareRight || undefined}
                             onValueChange={(v) => handleCompareChange("compareRight", v)}
                           >
                             <SelectTrigger className="w-full h-8 text-xs">
@@ -303,7 +303,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                           <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="__none__">None</SelectItem>
                           {nodeOptions.map(({ id, label }) => (
                             <SelectItem key={id} value={id}>{label}</SelectItem>
                           ))}
