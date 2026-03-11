@@ -40,24 +40,24 @@ describe("buildRoutingDecision", () => {
     ***REDACTED-OSS-SCRUB***
   })
 
-  it("replicate mode returns ['replicate'] chain for shared capability", async () => {
+  it("non-kie mode returns empty chain (replicate disabled)", async () => {
     mockSettings.ai_provider = "replicate"
 
     const result = await buildRoutingDecision("image-generation", "flux")
 
-    expect(result.providerChain).toEqual(["replicate"])
+    expect(result.providerChain).toEqual([])
     expect(result.markupPercent).toBe(0)
-    expect(result.activeProvider).toBe("replicate")
+    expect(result.activeProvider).toBe("kie")
   })
 
-  it("replicate mode returns empty chain for KIE-only capability", async () => {
+  it("non-kie mode returns empty chain for KIE-only capability", async () => {
     mockSettings.ai_provider = "replicate"
 
     const result = await buildRoutingDecision("video-to-video", "wan-2.6")
 
     expect(result.providerChain).toEqual([])
     expect(result.markupPercent).toBe(0)
-    expect(result.activeProvider).toBe("replicate")
+    expect(result.activeProvider).toBe("kie")
   })
 
   it("kie mode returns ['kie'] chain for KIE-only capability with markup", async () => {
@@ -70,10 +70,10 @@ describe("buildRoutingDecision", () => {
     expect(result.activeProvider).toBe("kie")
   })
 
-  it("kie mode returns ['kie', 'replicate'] chain for shared capability", async () => {
+  it("kie mode returns ['kie'] chain for shared capability (replicate disabled)", async () => {
     const result = await buildRoutingDecision("image-to-video", "minimax")
 
-    expect(result.providerChain).toEqual(["kie", "replicate"])
+    expect(result.providerChain).toEqual(["kie"])
     ***REDACTED-OSS-SCRUB***
     expect(result.activeProvider).toBe("kie")
   })
@@ -94,23 +94,15 @@ describe("applyMarkup", () => {
 })
 
 describe("resolveMarkup", () => {
-  it("returns 0 for replicate mode, configured markup for KIE provider, and 10 for replicate fallback", () => {
-    const replicateDecision: RoutingDecision = {
-      providerChain: ["replicate"],
-      markupPercent: 0,
-      activeProvider: "replicate",
-      settings: { ai_provider: "replicate", cost_markup_percent: 0 },
-    }
-    expect(resolveMarkup(replicateDecision, "kie")).toBe(0)
-    expect(resolveMarkup(replicateDecision, "replicate")).toBe(0)
-
+  it("returns configured markup for KIE mode regardless of providerUsed (replicate disabled)", () => {
     const kieDecision: RoutingDecision = {
-      providerChain: ["kie", "replicate"],
+      providerChain: ["kie"],
       ***REDACTED-OSS-SCRUB***
       activeProvider: "kie",
       settings: { ai_provider: "kie", ***REDACTED-OSS-SCRUB*** },
     }
     ***REDACTED-OSS-SCRUB***
-    expect(resolveMarkup(kieDecision, "replicate")).toBe(10)
+    // With replicate disabled, even replicate providerUsed returns the same KIE markup
+    ***REDACTED-OSS-SCRUB***
   })
 })

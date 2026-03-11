@@ -194,7 +194,7 @@ describe("POST /v1/text-to-audio", () => {
       url: "/v1/text-to-audio",
       payload: {
         prompt: "thunder rolling",
-        provider: "tangoflux",
+        provider: "elevenlabs-sfx",
         duration: 10,
         loop: true,
         promptInfluence: 0.7,
@@ -208,7 +208,7 @@ describe("POST /v1/text-to-audio", () => {
       expect.objectContaining({
         input_data: expect.objectContaining({
           prompt: "thunder rolling",
-          provider: "tangoflux",
+          provider: "elevenlabs-sfx",
           duration: 10,
           loop: true,
           promptInfluence: 0.7,
@@ -222,7 +222,7 @@ describe("POST /v1/text-to-audio", () => {
       expect.objectContaining({
         jobId: "job-1",
         prompt: "thunder rolling",
-        provider: "tangoflux",
+        provider: "elevenlabs-sfx",
         duration: 10,
         loop: true,
         promptInfluence: 0.7,

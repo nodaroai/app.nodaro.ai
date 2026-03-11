@@ -219,7 +219,7 @@ describe("POST /v1/generate-music", () => {
     expect(body.error.code).toBe("internal_error")
   })
 
-  it("uses musicgen as default provider when none specified", async () => {
+  it("uses minimax as default provider when none specified", async () => {
     const { mockInsert } = mockJobInsert({
       data: { id: "job-1" },
       error: null,
@@ -236,11 +236,11 @@ describe("POST /v1/generate-music", () => {
 
     expect(res.statusCode).toBe(200)
 
-    // The Zod schema has .default("musicgen"), so provider is always set
+    // The Zod schema has .default("minimax"), so provider is always set
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         input_data: expect.objectContaining({
-          provider: "musicgen",
+          provider: "minimax",
           type: "generate-music",
         }),
       })
@@ -249,7 +249,7 @@ describe("POST /v1/generate-music", () => {
     expect(videoQueue.add).toHaveBeenCalledWith(
       "generate-music",
       expect.objectContaining({
-        provider: "musicgen",
+        provider: "minimax",
       })
     )
   })

@@ -173,7 +173,7 @@ describe("PUT /v1/admin/settings/:key", () => {
 
   it("returns 200 and invalidates cache on successful upsert", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
-      data: { key: "ai_provider", value: "replicate", updated_at: "2024-01-01" },
+      data: { key: "ai_provider", value: "kie", updated_at: "2024-01-01" },
       error: null,
     })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
@@ -182,10 +182,10 @@ describe("PUT /v1/admin/settings/:key", () => {
 
     const res = await app.inject({
       method: "PUT", url: "/v1/admin/settings/ai_provider",
-      payload: { value: "replicate", userId: "admin-1" },
+      payload: { value: "kie", userId: "admin-1" },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().value).toBe("replicate")
+    expect(res.json().value).toBe("kie")
     expect(invalidateSettingsCache).toHaveBeenCalled()
   })
 

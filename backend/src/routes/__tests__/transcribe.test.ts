@@ -213,7 +213,7 @@ describe("POST /v1/transcribe", () => {
     )
   })
 
-  it("passes non-default provider (incredibly-fast-whisper) through", async () => {
+  it("passes non-default provider (elevenlabs-stt) through", async () => {
     mockJobInsert("job-3")
 
     const res = await app.inject({
@@ -222,7 +222,7 @@ describe("POST /v1/transcribe", () => {
       payload: {
         audioUrl: "https://example.com/audio.mp3",
         userId: VALID_UUID,
-        provider: "incredibly-fast-whisper",
+        provider: "elevenlabs-stt",
       },
     })
 
@@ -233,7 +233,7 @@ describe("POST /v1/transcribe", () => {
       "transcribe",
       expect.objectContaining({
         jobId: "job-3",
-        provider: "incredibly-fast-whisper",
+        provider: "elevenlabs-stt",
       })
     )
   })

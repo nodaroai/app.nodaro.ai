@@ -33,7 +33,7 @@ import { useAppSettings, useUpdateSettingMutation } from "../use-app-settings-qu
 import type { AppSettings } from "../use-app-settings-queries"
 
 const DEFAULT_SETTINGS: AppSettings = {
-  ai_provider: "replicate",
+  ai_provider: "kie",
   ***REDACTED-OSS-SCRUB***
 }
 
