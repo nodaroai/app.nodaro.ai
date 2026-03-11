@@ -122,9 +122,17 @@ async function fetchPlatformUserInfo(
 ): Promise<{ id: string; username?: string; avatarUrl?: string; metadata?: Record<string, unknown> }> {
   switch (platform) {
     case "instagram": {
+      // Debug: check what permissions the token has
+      const permRes = await fetch(`https://graph.facebook.com/v25.0/me/permissions?access_token=${accessToken}`)
+      const permData = await permRes.json()
+      console.log("[instagram-oauth] token permissions:", JSON.stringify(permData))
+      const meRes = await fetch(`https://graph.facebook.com/v25.0/me?fields=id,name&access_token=${accessToken}`)
+      const meData = await meRes.json()
+      console.log("[instagram-oauth] /me response:", JSON.stringify(meData))
+
       // Get Instagram Business account via Facebook Graph API
       const pagesRes = await fetch(
-        `https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`,
+        `https://graph.facebook.com/v25.0/me/accounts?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`,
       )
       const pagesData = await pagesRes.json() as Record<string, unknown>
       console.log("[instagram-oauth] /me/accounts response:", JSON.stringify(pagesData))
@@ -141,7 +149,7 @@ async function fetchPlatformUserInfo(
     case "facebook": {
       // Get user's pages
       const pagesRes = await fetch(
-        `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,picture&access_token=${accessToken}`,
+        `https://graph.facebook.com/v25.0/me/accounts?fields=id,name,access_token,picture&access_token=${accessToken}`,
       )
       const pagesData = await pagesRes.json() as Record<string, unknown>
       console.log("[facebook-oauth] /me/accounts response:", JSON.stringify(pagesData))

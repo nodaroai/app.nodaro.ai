@@ -23,7 +23,7 @@ export const instagramPublisher: PlatformPublisher = {
       }
 
       const containerRes = await fetch(
-        `https://graph.facebook.com/v21.0/${igUserId}/media`,
+        `https://graph.facebook.com/v25.0/${igUserId}/media`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -43,7 +43,7 @@ export const instagramPublisher: PlatformPublisher = {
 
       // Step 3: Publish
       const publishRes = await fetch(
-        `https://graph.facebook.com/v21.0/${igUserId}/media_publish`,
+        `https://graph.facebook.com/v25.0/${igUserId}/media_publish`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -63,7 +63,7 @@ export const instagramPublisher: PlatformPublisher = {
       let platformPostUrl: string | undefined
       try {
         const mediaRes = await fetch(
-          `https://graph.facebook.com/v21.0/${result.id}?fields=shortcode&access_token=${accessToken}`,
+          `https://graph.facebook.com/v25.0/${result.id}?fields=shortcode&access_token=${accessToken}`,
         )
         if (mediaRes.ok) {
           const mediaData = await mediaRes.json() as { shortcode?: string }
@@ -94,7 +94,7 @@ async function waitForContainer(accessToken: string, containerId: string, maxWai
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${containerId}?fields=status_code&access_token=${accessToken}`,
+      `https://graph.facebook.com/v25.0/${containerId}?fields=status_code&access_token=${accessToken}`,
     )
     const data = await res.json() as { status_code: string }
     if (data.status_code === "FINISHED") return

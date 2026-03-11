@@ -22,8 +22,8 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
   instagram: () => ({
     clientId: process.env.META_APP_ID || "",
     clientSecret: process.env.META_APP_SECRET || "",
-    authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
-    tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
+    authUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+    tokenUrl: "https://graph.facebook.com/v25.0/oauth/access_token",
     scopes: ["instagram_business_basic", "instagram_content_publish", "instagram_manage_comments", "instagram_manage_messages"],
     redirectUri: getRedirectUri("instagram"),
     configId: process.env.META_INSTAGRAM_CONFIG_ID,
@@ -31,8 +31,8 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
   facebook: () => ({
     clientId: process.env.META_APP_ID || "",
     clientSecret: process.env.META_APP_SECRET || "",
-    authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
-    tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
+    authUrl: "https://www.facebook.com/v25.0/dialog/oauth",
+    tokenUrl: "https://graph.facebook.com/v25.0/oauth/access_token",
     scopes: ["pages_manage_posts", "pages_read_engagement", "pages_show_list"],
     redirectUri: getRedirectUri("facebook"),
     configId: process.env.META_FACEBOOK_CONFIG_ID,
