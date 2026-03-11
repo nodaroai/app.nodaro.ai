@@ -240,7 +240,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     const allowancePromise = hasCredits()
       ? CreditsService.checkAppRunEligibility(req.userId)
-      : Promise.resolve({ allowed: true })
+      : Promise.resolve({ allowed: true as const, error: undefined, appCreditsAllowance: undefined })
 
     const [rateLimitResult, allowanceResult] = await Promise.all([rateLimitPromise, allowancePromise])
 
