@@ -23,7 +23,7 @@ const OAUTH_CONFIGS: Record<SocialPlatform, () => OAuthConfig> = {
     clientSecret: process.env.META_APP_SECRET || "",
     authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
     tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
-    scopes: ["instagram_basic", "instagram_content_publish", "pages_show_list", "pages_read_engagement"],
+    scopes: ["instagram_business_basic", "instagram_content_publish", "instagram_manage_comments", "instagram_manage_messages"],
     redirectUri: getRedirectUri("instagram"),
   }),
   facebook: () => ({
