@@ -228,7 +228,26 @@ describe("refundJobCredits", () => {
     "Model error: unsupported format",
     "Content moderation flagged",
     "NSFW content detected",
-  ])("does NOT refund for provider error: %s", async (msg) => {
+    "Generation failed. Please try again or contact support if the issue persists.",
+    "createTask failed: 500 - Internal Server Error",
+    "Invalid input parameters. Please check your settings and try again.",
+    "Generation timed out. Please try again.",
+    "cancelled",
+  ])("refunds for pre-processing / provider creation error: %s", async (msg) => {
+    await refundJobCredits("usage-log-1", "job-1", msg)
+    expect(mocks.mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
+  })
+
+  it.each([
+    "Failed to upload to R2",
+    "Upload to R2 failed for video",
+    "R2 upload error: connection refused",
+    "Failed to download image: 404",
+    "Failed to download video: 500",
+    "Watermark failed: ffmpeg exited with code 1",
+    "Transcode failed: invalid codec",
+    "ffmpeg failed after watermark step",
+  ])("does NOT refund for post-processing failure: %s", async (msg) => {
     await refundJobCredits("usage-log-1", "job-1", msg)
     expect(mocks.mockRefundCredits).not.toHaveBeenCalled()
   })

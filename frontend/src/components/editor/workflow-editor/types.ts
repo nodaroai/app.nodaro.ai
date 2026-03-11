@@ -1,5 +1,6 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import { StorageExceededError } from "@/lib/api";
+import { buildMotionCreditModelIdentifier } from "@nodaro-shared/credit-identifiers";
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -37,7 +38,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "lip-sync": 13,
   "speech-to-video": 4,
   "sora-storyboard": 47,
-  "motion-transfer": 32,
+  "motion-transfer": 38,
   "video-upscale": 19,
   "extend-video": 40,
   "transcribe": 4,
@@ -81,6 +82,41 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "x-post": 1,
   "facebook-post": 1,
 };
+
+/** Motion-transfer composite credit costs (mirrors STATIC_CREDIT_COSTS in backend) */
+const MOTION_CREDIT_COSTS: Record<string, number> = {
+  "kling-3.0-motion:5s": 19,
+  "kling-3.0-motion:10s": 38,
+  "kling-3.0-motion:15s": 57,
+  "kling-3.0-motion:30s": 113,
+  "kling-3.0-motion:1080p:5s": 32,
+  "kling-3.0-motion:1080p:10s": 63,
+  "kling-3.0-motion:1080p:15s": 94,
+  "kling-3.0-motion:1080p:30s": 188,
+  "motion-transfer:5s": 10,
+  "motion-transfer:10s": 19,
+  "motion-transfer:15s": 29,
+  "motion-transfer:30s": 57,
+  "motion-transfer:1080p:5s": 15,
+  "motion-transfer:1080p:10s": 29,
+  "motion-transfer:1080p:15s": 43,
+  "motion-transfer:1080p:30s": 85,
+}
+
+/**
+ * Estimate credit cost for a single node, reading node data for variable-cost nodes.
+ */
+export function estimateNodeCredits(node: { type?: string; data?: Record<string, unknown> }): number {
+  const nodeType = node.type ?? ""
+  if (nodeType === "motion-transfer" && node.data) {
+    const provider = (node.data.provider as string) ?? "kling"
+    const resolution = (node.data.resolution as string) ?? "720p"
+    const videoDuration = node.data.videoDuration as number | undefined
+    const modelId = buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
+    return MOTION_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["motion-transfer"] ?? 0
+  }
+  return NODE_CREDIT_COSTS[nodeType] ?? 0
+}
 
 export const EXECUTABLE_TYPES = new Set([
   "generate-script",

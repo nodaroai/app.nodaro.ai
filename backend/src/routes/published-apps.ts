@@ -97,7 +97,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Estimate credits
     const nodes = workflow.nodes || []
     const edges = workflow.edges || []
-    const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string }>)
+    const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)
 
     // Generate slug with collision retry
     const MAX_SLUG_RETRIES = 5

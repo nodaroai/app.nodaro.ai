@@ -463,8 +463,17 @@ async function pollJobToCompletion(
       throw new Error("Execution cancelled")
     }
 
-    // Check timeout
+    // Check timeout — cancel job + refund credits to prevent credit leak
     if (Date.now() - startTime > NODE_TIMEOUT_MS) {
+      // Mark job as cancelled so the worker's shouldSaveJobResult() bails out
+      await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId)
+      // Refund reserved credits (safe no-op if already committed/refunded by worker)
+      if (hasCredits() && usageLogId) {
+        try {
+          await CreditsService.refundCredits(usageLogId)
+          console.log(`[orchestrator] Refunded credits for timed-out job ${jobId}`)
+        } catch { /* already committed or refunded by worker */ }
+      }
       throw new Error(`Node timeout after ${NODE_TIMEOUT_MS / 1000}s`)
     }
 

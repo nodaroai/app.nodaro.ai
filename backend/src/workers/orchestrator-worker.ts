@@ -49,8 +49,8 @@ export function createOrchestratorWorker() {
     {
       connection,
       concurrency: 2,
-      lockDuration: 600_000, // 10 min
-      stalledInterval: 120_000, // 2 min
+      lockDuration: 3_600_000, // 60 min — must match WORKFLOW_TIMEOUT_MS to prevent stalled-job retries
+      stalledInterval: 900_000, // 15 min
     },
   )
 

@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
+import { buildMotionCreditModelIdentifier } from "../../../packages/shared/src/credit-identifiers.js"
 
 // ============================================================
 // Types
@@ -1120,14 +1121,24 @@ export class CreditsService {
   }
 
   /**
-   * Estimate credits for a workflow (legacy function for backward compatibility)
+   * Estimate credits for a workflow, reading node data for variable-cost nodes.
    */
-  static estimateWorkflowCredits(nodes: ReadonlyArray<{ type: string }>): number {
-    return nodes.reduce((sum, node) => sum + (STATIC_CREDIT_COSTS[node.type] ?? 0), 0)
+  static estimateWorkflowCredits(nodes: ReadonlyArray<{ type: string; data?: Record<string, unknown> }>): number {
+    return nodes.reduce((sum, node) => {
+      // Motion-transfer: use provider/resolution/duration for accurate estimate
+      if (node.type === "motion-transfer" && node.data) {
+        const provider = (node.data.provider as string) ?? "kling"
+        const resolution = (node.data.resolution as string) ?? "720p"
+        const videoDuration = node.data.videoDuration as number | undefined
+        const modelId = buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
+        return sum + (STATIC_CREDIT_COSTS[modelId] ?? STATIC_CREDIT_COSTS["motion-transfer"] ?? 0)
+      }
+      return sum + (STATIC_CREDIT_COSTS[node.type] ?? 0)
+    }, 0)
   }
 }
 
 // Export legacy function for backward compatibility
-export function estimateWorkflowCredits(nodes: ReadonlyArray<{ type: string }>): number {
+export function estimateWorkflowCredits(nodes: ReadonlyArray<{ type: string; data?: Record<string, unknown> }>): number {
   return CreditsService.estimateWorkflowCredits(nodes)
 }

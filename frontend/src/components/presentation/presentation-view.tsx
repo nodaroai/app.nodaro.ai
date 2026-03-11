@@ -34,7 +34,7 @@ import {
   getNodeLabel,
   getNodeResult,
 } from "@/lib/presentation-utils"
-import { NODE_CREDIT_COSTS, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
+import { EXECUTABLE_TYPES, estimateNodeCredits } from "@/components/editor/workflow-editor/types"
 import { shareWorkflow } from "@/lib/api"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { toast } from "sonner"
@@ -222,7 +222,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     let total = 0
     for (const node of nodes) {
       if (node.type && EXECUTABLE_TYPES.has(node.type)) {
-        total += NODE_CREDIT_COSTS[node.type] ?? 0
+        total += estimateNodeCredits(node as { type: string; data?: Record<string, unknown> })
       }
     }
     return total
