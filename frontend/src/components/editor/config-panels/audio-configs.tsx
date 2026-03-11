@@ -180,12 +180,13 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
-          value={data.provider || "tangoflux"}
+          value={data.provider || "elevenlabs-sfx"}
           onValueChange={(v) => onUpdate({ provider: v as TextToAudioData["provider"] })}
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="tangoflux">TangoFlux (default)</SelectItem>
+            {/* Replicate disabled */}
+            {/* <SelectItem value="tangoflux">TangoFlux (default)</SelectItem> */}
             <SelectItem value="elevenlabs-sfx">ElevenLabs SFX v2</SelectItem>
           </SelectContent>
         </Select>
@@ -732,11 +733,12 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.provider || "whisper"} onValueChange={(v) => onUpdate({ provider: v as TranscribeData["provider"] })}>
+        <Select value={data.provider || "elevenlabs-stt"} onValueChange={(v) => onUpdate({ provider: v as TranscribeData["provider"] })}>
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="whisper">Whisper (default)</SelectItem>
-            <SelectItem value="incredibly-fast-whisper">Incredibly Fast Whisper</SelectItem>
+            {/* Replicate disabled */}
+            {/* <SelectItem value="whisper">Whisper (default)</SelectItem> */}
+            {/* <SelectItem value="incredibly-fast-whisper">Incredibly Fast Whisper</SelectItem> */}
             <SelectItem value="elevenlabs-stt">ElevenLabs STT</SelectItem>
           </SelectContent>
         </Select>

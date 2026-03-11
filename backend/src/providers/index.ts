@@ -14,7 +14,8 @@
  */
 
 import { registerKieProviders } from "./kie/index.js"
-import { registerReplicateProviders } from "./replicate/index.js"
+// Replicate disabled — KIE.ai is the sole provider
+// import { registerReplicateProviders } from "./replicate/index.js"
 
 let initialized = false
 
@@ -22,7 +23,8 @@ export function initProviders(): void {
   if (initialized) return
 
   registerKieProviders()
-  registerReplicateProviders()
+  // Replicate disabled — KIE.ai is the sole provider
+  // registerReplicateProviders()
 
   initialized = true
   console.log("[providers] All providers registered")

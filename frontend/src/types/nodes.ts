@@ -1853,7 +1853,7 @@ export type SceneNodeDataType = {
   sourceSceneIndex: number
   autoSyncWithScript: boolean
   audioAssignments: AudioAssignment[]
-  videoProvider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0" | "runway" | "pika"
+  videoProvider: "minimax" | "veo" | "veo3" | "veo3.1" | "kling" | "kling-3.0"
   generatedVideoResults: GeneratedResult[]
   activeVideoResultIndex: number
   generatedVideoUrl: string
@@ -2389,7 +2389,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 25,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Text to Video", prompt: "", provider: "runway", model: "gen-3-alpha", duration: 5, aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
+    defaultData: { label: "Text to Video", prompt: "", provider: "minimax", duration: 5, aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
   },
   {
     type: "text-to-speech",
@@ -2416,7 +2416,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 5,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Generate Music", prompt: "", provider: "musicgen", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
+    defaultData: { label: "Generate Music", prompt: "", provider: "suno", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
   },
   {
     type: "text-to-audio",
@@ -2425,7 +2425,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Text to Audio", prompt: "", provider: "tangoflux", duration: 10, fieldMappings: {} },
+    defaultData: { label: "Text to Audio", prompt: "", provider: "elevenlabs-sfx", duration: 10, fieldMappings: {} },
   },
   {
     type: "suno-generate",
@@ -2551,7 +2551,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["text"],
-    defaultData: { label: "Transcribe", provider: "whisper", language: "auto", fieldMappings: {} },
+    defaultData: { label: "Transcribe", provider: "elevenlabs-stt", language: "auto", fieldMappings: {} },
   },
   {
     type: "image-to-text",

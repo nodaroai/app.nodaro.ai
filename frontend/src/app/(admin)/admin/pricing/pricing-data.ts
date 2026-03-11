@@ -102,7 +102,7 @@ export const CATEGORY_COLORS: Record<DBCategory, string> = {
 
 export interface ModelReferenceData {
   readonly provider: string
-  readonly providerCostUsd: number | null  // null = dynamic (Replicate predict_time based)
+  readonly providerCostUsd: number | null  // null = variable (per-second billing or config-dependent)
   readonly markupPct: number
 }
 
@@ -115,77 +115,111 @@ export const SELL_PRICE_PER_CREDIT_MIN = [REMOVED]  // Business tier ($129/5600c
 
 /**
  * [comment removed]
- * KIE.ai costs from https://docs.kie.ai pricing tables.
- * null = dynamic (per-second billing, calculated at runtime).
+ * [comment removed]
+ * null = variable (per-second billing or config-dependent, calculated at runtime).
  * [formula removed]
+ *
+ * For per-second models (kling 3.0, motion-transfer, lip-sync), the cost shown
+ * is for the DEFAULT configuration (typically 5-10s at default resolution).
  */
 export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   // ── Image Generation ──
-  "nano-banana":       { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },
-  "nano-banana-pro":   { provider: "KIE.ai",    providerCostUsd: 0.090, markupPct: 25 },
-  "flux":              { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },
-  "grok":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },
-  "gpt-image":         { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },
-  "ideogram-v3":       { provider: "KIE.ai",    providerCostUsd: 0.035, markupPct: 25 },
+  "nano-banana":       { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
+  "nano-banana-2":     { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },  // 8 KIE cr (1K default)
+  "nano-banana-pro":   { provider: "KIE.ai",    providerCostUsd: 0.090, markupPct: 25 },  // 18 KIE cr (1K/2K)
+  "flux":              { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr (flux-2 pro 1K)
+  "flux-flex":         { provider: "KIE.ai",    providerCostUsd: 0.070, markupPct: 25 },  // 14 KIE cr (Flex 1K)
+  "flux-kontext":      { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr (Pro)
+  "flux-kontext-max":  { provider: "KIE.ai",    providerCostUsd: 0.050, markupPct: 25 },  // 10 KIE cr (Max)
+  "grok":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
+  "gpt-image":         { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (gpt image 1.5 medium)
+  "imagen4":           { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },  // 8 KIE cr (default)
+  "imagen4-fast":      { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
+  "imagen4-ultra":     { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
+  "ideogram":          { provider: "KIE.ai",    providerCostUsd: 0.090, markupPct: 25 },  // 18 KIE cr (character BALANCED)
+  "ideogram-v3":       { provider: "KIE.ai",    providerCostUsd: 0.035, markupPct: 25 },  // 7 KIE cr (BALANCED)
+  "qwen":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
+  "z-image":           { provider: "KIE.ai",    providerCostUsd: 0.004, markupPct: 25 },  // 0.8 KIE cr
+  "seedream":          { provider: "KIE.ai",    providerCostUsd: 0.0275, markupPct: 25 }, // 5.5 KIE cr
+  "seedream-5-lite":   { provider: "KIE.ai",    providerCostUsd: 0.0275, markupPct: 25 }, // 5.5 KIE cr
   // ── Image Editing ──
-  "recraft-upscale":   { provider: "KIE.ai",    providerCostUsd: 0.003, markupPct: 25 },
-  "recraft-remove-bg": { provider: "KIE.ai",    providerCostUsd: 0,     markupPct: 25 },
-  "nano-banana-edit":  { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },
+  "recraft-upscale":   { provider: "KIE.ai",    providerCostUsd: 0.0025, markupPct: 25 }, // 0.5 KIE cr
+  "recraft-remove-bg": { provider: "KIE.ai",    providerCostUsd: 0,      markupPct: 25 }, // 1 KIE cr (free)
+  "nano-banana-edit":  { provider: "KIE.ai",    providerCostUsd: 0.020,  markupPct: 25 }, // 4 KIE cr
+  "topaz-image-upscale": { provider: "KIE.ai",  providerCostUsd: 0.050,  markupPct: 25 }, // 10 KIE cr (2K default)
+  "grok-upscale":      { provider: "KIE.ai",    providerCostUsd: 0.050,  markupPct: 25 }, // 10 KIE cr (360p→720p)
   // ── Image-to-Image ──
-  "flux-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },
-  "flux-pro-i2i":      { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },
-  "grok-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },
-  "gpt-image-i2i":     { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },
-  // ── Video Generation (I2V / T2V) ──
-  "minimax":           { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },
-  "veo3":              { provider: "KIE.ai",    providerCostUsd: 2.000, markupPct: 25 },
-  "veo3.1":            { provider: "KIE.ai",    providerCostUsd: 1.250, markupPct: 25 },
-  "kling":             { provider: "KIE.ai",    providerCostUsd: 0.275, markupPct: 25 },
-  "kling-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.210, markupPct: 25 },
-  "kling-3.0":         { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },
-  "grok-i2v":          { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },
-  "sora2-pro":         { provider: "KIE.ai",    providerCostUsd: 0.750, markupPct: 25 },
-  "runway":            { provider: "Replicate", providerCostUsd: null,  markupPct: 10 },
-  "pika":              { provider: "Replicate", providerCostUsd: null,  markupPct: 10 },
-  "sora":              { provider: "Replicate", providerCostUsd: null,  markupPct: 10 },
+  "flux-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.070, markupPct: 25 },  // 14 KIE cr (Flux 2 Flex i2i 1K)
+  "flux-pro-i2i":      { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr (flux-2 pro i2i 1K)
+  "grok-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
+  "gpt-image-i2i":     { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (gpt image 1.5 medium)
+  // ── Video Generation (I2V / T2V) — costs for default config ──
+  "minimax":           { provider: "KIE.ai",    providerCostUsd: 0.285, markupPct: 25 },  // 57 KIE cr (hailuo 02 Pro 6s 1080p)
+  "veo3":              { provider: "KIE.ai",    providerCostUsd: 1.250, markupPct: 25 },  // 250 KIE cr (VEO 3.1 Quality)
+  "veo3.1":            { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr (VEO 3.1 Fast)
+  "kling":             { provider: "KIE.ai",    providerCostUsd: 0.275, markupPct: 25 },  // 55 KIE cr (2.6, 5s, no audio)
+  "kling-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.210, markupPct: 25 },  // 42 KIE cr (2.5 turbo 5s)
+  "kling-3.0":         { provider: "KIE.ai",    providerCostUsd: 1.000, markupPct: 25 },  // 40 cr/sec × 5s = 200 KIE cr (audio, 1080P)
+  "kling-master":      { provider: "KIE.ai",    providerCostUsd: 0.800, markupPct: 25 },  // 160 KIE cr (Master 5s)
+  "seedance":          { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },  // ~100 KIE cr (estimated)
+  "grok-i2v":          { provider: "KIE.ai",    providerCostUsd: 0.100, markupPct: 25 },  // 20 KIE cr (6s 720p)
+  "sora2-pro":         { provider: "KIE.ai",    providerCostUsd: 0.750, markupPct: 25 },  // 150 KIE cr (Pro Standard 10s)
+  "sora2":             { provider: "KIE.ai",    providerCostUsd: 0.150, markupPct: 25 },  // 30 KIE cr (Standard 10s)
+  "wan-i2v":           { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // 70 KIE cr (wan 2.6, 5s, 720p)
+  "wan-turbo":         { provider: "KIE.ai",    providerCostUsd: 0.200, markupPct: 25 },  // 40 KIE cr (wan 2.2, 5s, 480p)
+  "hailuo-2.3-pro":    { provider: "KIE.ai",    providerCostUsd: 0.225, markupPct: 25 },  // 45 KIE cr (6s, 768p)
+  "hailuo-2.3":        { provider: "KIE.ai",    providerCostUsd: 0.150, markupPct: 25 },  // 30 KIE cr (Std 6s, 768p)
+  "hailuo-standard":   { provider: "KIE.ai",    providerCostUsd: 0.150, markupPct: 25 },  // 30 KIE cr (Std 6s, 768p)
+  "bytedance-lite":    { provider: "KIE.ai",    providerCostUsd: 0.250, markupPct: 25 },  // ~50 KIE cr (estimated)
+  "bytedance-pro":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // ~70 KIE cr (estimated)
+  "bytedance-pro-fast": { provider: "KIE.ai",   providerCostUsd: 0.300, markupPct: 25 },  // ~60 KIE cr (estimated)
+  "runway-kie":        { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (5s, 720p)
+  "runway-aleph":      { provider: "KIE.ai",    providerCostUsd: 0.550, markupPct: 25 },  // 110 KIE cr
+  // ── Video Extend / Upscale ──
+  "veo-extend":        { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr (VEO 3.1 Fast)
+  "veo-1080p":         { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr
+  "veo-4k":            { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 120 KIE cr
   // ── Video-to-Video / Motion ──
-  "wan":               { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },
-  "topaz-video":       { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
-  "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 6 cr/sec * 10s default (720p)
-  "kling-motion":      { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },
-  "kling-3.0-motion":  { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 12 cr/sec * 10s default (720p)
+  "wan":               { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // 70 KIE cr (V2V 5s 720p)
+  "luma-modify":       { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },  // ~100 KIE cr (estimated)
+  "topaz-video":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (upscale 1x/2x/4x)
+  "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 6 cr/sec × 10s (kling 2.6 720p)
+  "kling-motion":      { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // alias for motion-transfer
+  "kling-3.0-motion":  { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 12 cr/sec × 10s (kling 3.0 720p)
+  "sora-watermark-remove": { provider: "KIE.ai", providerCostUsd: 0.050, markupPct: 25 }, // 10 KIE cr
   // ── Lip Sync ──
-  "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
-  "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
-  "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },
+  "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: 0.200, markupPct: 25 },  // 8 KIE cr/sec × ~5s (Standard 720p)
+  "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },  // 16 KIE cr/sec × ~5s (Pro 1080p)
+  "infinitalk":        { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 12 KIE cr/sec × ~5s (720p)
+  "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // estimated
   // ── Audio / TTS / Music ──
-  "elevenlabs-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
-  "elevenlabs-multilingual": { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
-  "elevenlabs":        { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },
-  "elevenlabs-sfx":    { provider: "KIE.ai",    providerCostUsd: 0.0012, markupPct: 25 },
-  "suno":              { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
+  "elevenlabs-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },  // 6 KIE cr
+  "elevenlabs-multilingual": { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 }, // 12 KIE cr
+  "elevenlabs":        { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },  // alias for turbo
+  "elevenlabs-sfx":    { provider: "KIE.ai",    providerCostUsd: 0.0012, markupPct: 25 }, // 0.24 KIE cr
+  "elevenlabs-dialogue": { provider: "KIE.ai",  providerCostUsd: 0.070, markupPct: 25 },  // 14 KIE cr
+  "elevenlabs-stt":    { provider: "KIE.ai",    providerCostUsd: 0.0175, markupPct: 25 }, // 3.5 KIE cr
+  "elevenlabs-isolation": { provider: "KIE.ai", providerCostUsd: 0.001, markupPct: 25 },  // 0.2 KIE cr
+  "suno":              { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
   "suno-v5":           { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "suno-generate":     { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "suno-cover":        { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "suno-extend":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
-  "suno-lyrics":       { provider: "KIE.ai",    providerCostUsd: 0.002, markupPct: 25 },
-  "suno-separate":       { provider: "KIE.ai",  providerCostUsd: 0.050, markupPct: 25 },
-  "suno-separate-stem": { provider: "KIE.ai",   providerCostUsd: 0.250, markupPct: 25 },
-  "suno-music-video":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },
-  "suno-mashup":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
-  "suno-replace-section": { provider: "KIE.ai", providerCostUsd: 0.030, markupPct: 25 },
-  "suno-style-boost":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },
+  "suno-lyrics":       { provider: "KIE.ai",    providerCostUsd: 0.002, markupPct: 25 },  // 0.4 KIE cr
+  "suno-separate":     { provider: "KIE.ai",    providerCostUsd: 0.050, markupPct: 25 },  // 10 KIE cr (vocal)
+  "suno-separate-stem": { provider: "KIE.ai",   providerCostUsd: 0.250, markupPct: 25 },  // 50 KIE cr (multi-stem)
+  "suno-music-video":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },  // 2 KIE cr
+  "suno-mashup":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
+  "suno-replace-section": { provider: "KIE.ai", providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr
+  "suno-style-boost":  { provider: "KIE.ai",    providerCostUsd: 0.002, markupPct: 25 },  // 0.4 KIE cr
   "suno-add-instrumental": { provider: "KIE.ai", providerCostUsd: 0.060, markupPct: 25 },
   "suno-add-vocals":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
-  "suno-convert-wav":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },
+  "suno-convert-wav":  { provider: "KIE.ai",    providerCostUsd: 0.002, markupPct: 25 },  // 0.4 KIE cr
   "suno-upload-extend": { provider: "KIE.ai",   providerCostUsd: 0.060, markupPct: 25 },
-  "infinitalk":        { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
   // ── Processing ──
-  "topaz":             { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },
-  "topaz-image-upscale": { provider: "KIE.ai",  providerCostUsd: 0.050, markupPct: 25 },
-  "sora-watermark-remove": { provider: "KIE.ai", providerCostUsd: 0.050, markupPct: 25 },
-  "speech-to-video":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
-  "sora-storyboard":   { provider: "KIE.ai",    providerCostUsd: 0.750, markupPct: 25 },
+  "topaz":             { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },  // variable
+  "speech-to-video":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (480p)
+  "sora-storyboard":   { provider: "KIE.ai",    providerCostUsd: 0.750, markupPct: 25 },  // 150 KIE cr (Pro 10s)
   "ffmpeg":            { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "render-video":      { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "video-composer":    { provider: "Anthropic", providerCostUsd: 0.010, markupPct: 25 },

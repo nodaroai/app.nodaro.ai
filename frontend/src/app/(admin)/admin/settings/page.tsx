@@ -122,7 +122,7 @@ export default function AdminSettingsPage() {
       )}
 
       <div className="space-y-6">
-        {/* AI Provider Selection */}
+        {/* AI Provider Selection — Replicate disabled
         {isFeatureEnabled("providerSelection") && (
           <div className="border rounded-lg p-4 bg-card">
             <div className="flex items-center gap-2 mb-4">
@@ -156,6 +156,7 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         )}
+        */}
 
         {/* Cost Markup */}
         {isFeatureEnabled("costMarkup") && (

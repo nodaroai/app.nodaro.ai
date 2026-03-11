@@ -128,9 +128,10 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "grok-i2v",
   "veo",
   "runway-kie",
-  "runway",
-  "pika",
-  "sora",
+  // Replicate disabled
+  // "runway",
+  // "pika",
+  // "sora",
 ] as const
 export type ImageToVideoProvider = typeof IMAGE_TO_VIDEO_PROVIDERS[number]
 
@@ -152,9 +153,10 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "bytedance-pro",
   "wan-turbo",
   "runway-kie",
-  "runway",
-  "pika",
-  "sora",
+  // Replicate disabled
+  // "runway",
+  // "pika",
+  // "sora",
 ] as const
 export type TextToVideoProvider = typeof TEXT_TO_VIDEO_PROVIDERS[number]
 
@@ -209,24 +211,28 @@ export type TtsProvider = typeof TTS_PROVIDERS[number]
 
 /** Text-to-audio providers */
 export const TEXT_TO_AUDIO_PROVIDERS = [
-  "tangoflux",
+  // Replicate disabled
+  // "tangoflux",
   "elevenlabs-sfx",
 ] as const
 export type TextToAudioProvider = typeof TEXT_TO_AUDIO_PROVIDERS[number]
 
 /** Music generation providers */
 export const MUSIC_PROVIDERS = [
-  "musicgen",
+  // Replicate disabled
+  // "musicgen",
   "minimax",
-  "lyria",
-  "bark",
+  // Replicate disabled
+  // "lyria",
+  // "bark",
 ] as const
 export type MusicProvider = typeof MUSIC_PROVIDERS[number]
 
 /** Transcription providers */
 export const TRANSCRIBE_PROVIDERS = [
-  "whisper",
-  "incredibly-fast-whisper",
+  // Replicate disabled
+  // "whisper",
+  // "incredibly-fast-whisper",
   "elevenlabs-stt",
 ] as const
 export type TranscribeProvider = typeof TRANSCRIBE_PROVIDERS[number]

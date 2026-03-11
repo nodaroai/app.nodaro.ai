@@ -56,15 +56,17 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
       <div>
         <Label>Provider</Label>
         <Select
-          value={data.provider || "musicgen"}
+          value={data.provider || "suno"}
           onValueChange={(v) => onUpdate({ provider: v as GenerateMusicData["provider"], referenceSource: "none", referenceAudioUrl: "", referenceYouTubeUrl: "" })}
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="musicgen">MusicGen (Meta) - instrumental (default)</SelectItem>
+            {/* Replicate disabled */}
+            {/* <SelectItem value="musicgen">MusicGen (Meta) - instrumental (default)</SelectItem> */}
             <SelectItem value="minimax">MiniMax Music - vocals & lyrics</SelectItem>
-            <SelectItem value="lyria">Lyria 2 (Google) - high quality</SelectItem>
-            <SelectItem value="bark">Bark (Suno) - speech & music</SelectItem>
+            {/* Replicate disabled */}
+            {/* <SelectItem value="lyria">Lyria 2 (Google) - high quality</SelectItem> */}
+            {/* <SelectItem value="bark">Bark (Suno) - speech & music</SelectItem> */}
           </SelectContent>
         </Select>
       </div>
@@ -88,7 +90,8 @@ export function GenerateMusicConfig({ data, onUpdate, sources }: ConfigProps<Gen
           />
         )}
       </div>
-      {(data.provider === "musicgen" || data.provider === "lyria" || !data.provider) && (
+      {/* Replicate disabled: was musicgen/lyria/!provider, now just non-minimax */}
+      {!isMinimax && (
         <div>
           <Label htmlFor="music-duration">Duration (seconds)</Label>
           <Input

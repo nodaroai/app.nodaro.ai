@@ -34,8 +34,9 @@ export interface RoutingDecision {
 
 // ─── Constants ────────────────────────────────────────────────────
 
-/** Markup applied when KIE mode falls back to Replicate for an unsupported model */
-const [constant removed]
+// Replicate disabled — KIE.ai is the sole provider
+// /** Markup applied when KIE mode falls back to Replicate for an unsupported model */
+// const [constant removed]
 
 /**
  * Capabilities that only KIE.ai supports (no Replicate fallback exists).
@@ -63,14 +64,12 @@ export async function buildRoutingDecision(
 ): Promise<RoutingDecision> {
   const settings = await getAppSettings()
 
-  // ── Self-hosted / Replicate mode ──────────────────────────────
+  // ── Self-hosted / non-KIE mode (Replicate disabled) ─────────
   if (settings.ai_provider !== "kie") {
     return {
-      providerChain: KIE_ONLY_CAPABILITIES.has(capability)
-        ? [] // No provider available for KIE-only ops in Replicate mode
-        : ["replicate"],
+      providerChain: [],
       markupPercent: 0,
-      activeProvider: "replicate",
+      activeProvider: "kie",
       settings,
     }
   }
@@ -86,9 +85,9 @@ export async function buildRoutingDecision(
     }
   }
 
-  // Shared capabilities: KIE first, Replicate as unsupported-model fallback
+  // Shared capabilities: KIE only (Replicate fallback disabled)
   return {
-    providerChain: ["kie", "replicate"],
+    providerChain: ["kie"],
     markupPercent: settings.cost_markup_percent,
     activeProvider: "kie",
     settings,
@@ -119,6 +118,6 @@ export function resolveMarkup(
   providerUsed: ProviderUsed
 ): number {
   if (decision.activeProvider !== "kie") return 0
-  if (providerUsed === "kie") return decision.settings.cost_markup_percent
-  return FALLBACK_MARKUP_PERCENT
+  // Replicate disabled — all requests use KIE markup
+  return decision.settings.cost_markup_percent
 }

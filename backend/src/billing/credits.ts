@@ -217,7 +217,8 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-multilingual": 4,  // 12 KIE cr per 1K chars, $0.06
   "elevenlabs": 2,               // alias for turbo
   ***REDACTED-OSS-SCRUB***
-  "tangoflux": 4,                // Replicate SFX, ~$0.05 estimated
+  // Replicate disabled
+  ***REDACTED-OSS-SCRUB***
   "suno": 4,                     // 12 KIE cr, $0.06 (per generation, same for v4/v5)
   "suno-v5": 4,                  // 12 KIE cr, $0.06
   "suno-generate": 4,            // 12 KIE cr
@@ -234,12 +235,14 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-add-vocals": 4,          // 12 KIE cr
   "suno-convert-wav": 1,         // 2 KIE cr
   "suno-upload-extend": 4,       // 12 KIE cr
-  "musicgen": 7,                 // Replicate Meta MusicGen
-  "lyria": 7,                    // Replicate Google Lyria 2
-  "bark": 7,                     // Replicate Suno Bark
+  // Replicate disabled
+  // "musicgen": 7,                 // Replicate Meta MusicGen
+  // "lyria": 7,                    // Replicate Google Lyria 2
+  // "bark": 7,                     // Replicate Suno Bark
   "elevenlabs-isolation": 1,     // 0.2 cr/sec * ~10s = 2 KIE cr
-  "whisper": 4,                   // Replicate whisper transcription
-  "incredibly-fast-whisper": 4,   // Replicate fast whisper
+  // Replicate disabled
+  // "whisper": 4,                   // Replicate whisper transcription
+  // "incredibly-fast-whisper": 4,   // Replicate fast whisper
   "elevenlabs-stt": 2,           // 3.5 KIE cr per minute, $0.0175
   "elevenlabs-dialogue": 5,     // 14 KIE cr per 1K chars, $0.07
   "voice-clone": 5,              // ElevenLabs instant voice clone
@@ -261,10 +264,10 @@ const STATIC_CREDIT_COSTS: Record<string, number> = {
   "topaz": 1,                     // processing
   "ffmpeg": 1,
   "render-video": 15,            // Remotion compute
-  // ── Replicate (dynamic per-second) ──
-  "runway": 20,                   // Replicate, ~$0.30 typical
-  "pika": 20,                    // Replicate, ~$0.30 typical
-  "sora": 20,                    // Replicate, ~$0.30 typical
+  // Replicate disabled
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // "sora": 20,                    // Replicate, ~$0.30 typical
   // ── LLM ──
   "ai-writer": 5,                // Claude Sonnet
   "scene-graph-ai": 10,          // Claude Sonnet

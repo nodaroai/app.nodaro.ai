@@ -68,9 +68,10 @@ export const VIDEO_I2V_MODELS = [
   { value: "grok-i2v", label: "Grok", desc: "Creative, stylized motion" },
   { value: "veo", label: "VEO 2", desc: "Previous gen VEO" },
   { value: "runway-kie", label: "Runway (KIE)", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
-  { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
-  { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
-  { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
+  // Replicate disabled
+  // { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
+  // { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
+  // { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
@@ -90,9 +91,10 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "bytedance-pro", label: "Bytedance Pro", desc: "High quality, 5-10s" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast generation, 5s clips" },
   { value: "runway-kie", label: "Runway (KIE)", desc: "Runway Gen-3, 5-10s, 720p/1080p" },
-  { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
-  { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
-  { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
+  // Replicate disabled
+  // { value: "runway", label: "Runway", desc: "Smooth motion, via Replicate" },
+  // { value: "pika", label: "Pika", desc: "Stylized animation, via Replicate" },
+  // { value: "sora", label: "Sora", desc: "Legacy Sora, via Replicate" },
 ]
 
 export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: string; desc: string }[] = [
@@ -373,8 +375,9 @@ export const PROVIDERS_WITH_END_FRAME: string[] = [
   "kling-3.0",
   "hailuo-standard",
   "bytedance-lite",
-  "runway",
-  "pika",
+  // Replicate disabled
+  // "runway",
+  // "pika",
 ]
 
 // KIE.ai allowed durations per text-to-video provider
