@@ -9,7 +9,7 @@ export const facebookPublisher: PlatformPublisher = {
     const { action, caption, mediaUrl } = request
 
     if (action === "post-text") {
-      const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
+      const res = await fetch(`https://graph.facebook.com/v25.0/${pageId}/feed`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -23,7 +23,7 @@ export const facebookPublisher: PlatformPublisher = {
     }
 
     if (action === "post-image") {
-      const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/photos`, {
+      const res = await fetch(`https://graph.facebook.com/v25.0/${pageId}/photos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -42,7 +42,7 @@ export const facebookPublisher: PlatformPublisher = {
     }
 
     if (action === "post-video") {
-      const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/videos`, {
+      const res = await fetch(`https://graph.facebook.com/v25.0/${pageId}/videos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -57,7 +57,7 @@ export const facebookPublisher: PlatformPublisher = {
     }
 
     if (action === "post-story") {
-      const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/video_stories`, {
+      const res = await fetch(`https://graph.facebook.com/v25.0/${pageId}/video_stories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

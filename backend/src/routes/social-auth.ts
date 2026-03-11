@@ -132,7 +132,7 @@ async function fetchPlatformUserInfo(
 
       // Get Instagram Business account via Facebook Graph API
       const pagesRes = await fetch(
-        `https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`,
+        `https://graph.facebook.com/v25.0/me/accounts?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${accessToken}`,
       )
       const pagesData = await pagesRes.json() as Record<string, unknown>
       console.log("[instagram-oauth] /me/accounts response:", JSON.stringify(pagesData))
@@ -149,7 +149,7 @@ async function fetchPlatformUserInfo(
     case "facebook": {
       // Get user's pages
       const pagesRes = await fetch(
-        `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,picture&access_token=${accessToken}`,
+        `https://graph.facebook.com/v25.0/me/accounts?fields=id,name,access_token,picture&access_token=${accessToken}`,
       )
       const pagesData = await pagesRes.json() as Record<string, unknown>
       console.log("[facebook-oauth] /me/accounts response:", JSON.stringify(pagesData))
