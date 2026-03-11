@@ -691,8 +691,8 @@ export type MotionTransferData = {
   label: string
   prompt: string // Optional, max 2500 chars
   characterOrientation: "image" | "video" // image = max 10s, video = max 30s
-  resolution: "720p" | "1080p"
-  provider?: "kling" | "kling-3.0"
+  resolution: "720p" | "1080p" | "480p" | "580p"
+  provider?: "kling" | "kling-3.0" | "wan-animate-move" | "wan-animate-replace"
   backgroundSource?: "input_video" | "input_image"
   videoDuration?: number // Detected from connected video (seconds), used for per-second pricing
   fieldMappings: FieldMappings

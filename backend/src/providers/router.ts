@@ -219,7 +219,7 @@ export async function motionTransfer(
   prompt?: string,
   options?: ProviderOptions & {
     characterOrientation?: "image" | "video"
-    resolution?: "720p" | "1080p"
+    resolution?: "480p" | "580p" | "720p" | "1080p"
     provider?: string
     backgroundSource?: "input_video" | "input_image"
   }

@@ -23,26 +23,27 @@ import {
 
 const DEBUG = config.NODE_ENV === "development"
 
-export async function runRunwayTask(
+/**
+ * Shared task creation: POST to a KIE endpoint, parse response, extract taskId.
+ * Used by Runway generate, Runway extend, and Aleph generate.
+ */
+async function postKieEndpoint(
+  path: string,
   input: Record<string, unknown>,
-): Promise<{ resultJson: KieResultJson; taskId: string }> {
+  label: string,
+): Promise<{ taskId: string; apiKey: string }> {
   const apiKey = config.KIE_API_KEY
-
   if (!apiKey) {
-    throw createSanitizedError(
-      "KIE_API_KEY is not configured",
-      "Video generation"
-    )
+    throw createSanitizedError("KIE_API_KEY is not configured", label)
   }
 
   if (DEBUG) {
-    console.log(`[KIE.ai Runway] Creating Runway task`)
-    console.log(`[KIE.ai Runway] Request body:`, JSON.stringify(input, null, 2))
+    console.log(`[KIE.ai ${label}] Creating task`)
+    console.log(`[KIE.ai ${label}] Request body:`, JSON.stringify(input, null, 2))
   }
 
-  // Step 1: Create task — body is top-level (prompt, duration, quality, etc.)
   const createResponse = await fetch(
-    `${KIE_API_BASE}/api/v1/runway/generate`,
+    `${KIE_API_BASE}${path}`,
     {
       method: "POST",
       headers: {
@@ -56,14 +57,14 @@ export async function runRunwayTask(
 
   const responseText = await createResponse.text()
   if (DEBUG) {
-    console.log(`[KIE.ai Runway] Response status: ${createResponse.status}`)
-    console.log(`[KIE.ai Runway] Response body: ${responseText.substring(0, 500)}`)
+    console.log(`[KIE.ai ${label}] Response status: ${createResponse.status}`)
+    console.log(`[KIE.ai ${label}] Response body: ${responseText.substring(0, 500)}`)
   }
 
   if (!createResponse.ok) {
     throw createSanitizedError(
-      `Runway generate failed: ${createResponse.status} - ${responseText}`,
-      "Video generation"
+      `${label} failed: ${createResponse.status} - ${responseText}`,
+      label
     )
   }
 
@@ -72,8 +73,8 @@ export async function runRunwayTask(
     createData = JSON.parse(responseText)
   } catch {
     throw createSanitizedError(
-      `Runway response is not valid JSON: ${responseText}`,
-      "Video generation"
+      `${label} response is not valid JSON: ${responseText}`,
+      label
     )
   }
 
@@ -83,21 +84,27 @@ export async function runRunwayTask(
     createData.code !== undefined
   ) {
     throw createSanitizedError(
-      `Runway generate error (code ${createData.code}): ${createData.message ?? createData.msg ?? JSON.stringify(createData)}`,
-      "Video generation"
+      `${label} error (code ${createData.code}): ${createData.message ?? createData.msg ?? JSON.stringify(createData)}`,
+      label
     )
   }
 
   if (!createData.data?.taskId) {
     throw createSanitizedError(
-      `Runway generate response missing taskId: ${JSON.stringify(createData)}`,
-      "Video generation"
+      `${label} response missing taskId: ${JSON.stringify(createData)}`,
+      label
     )
   }
 
   const taskId = createData.data.taskId
-  console.log(`[KIE.ai Runway] Task created: ${taskId}`)
+  console.log(`[KIE.ai ${label}] Task created: ${taskId}`)
+  return { taskId, apiKey }
+}
 
+export async function runRunwayTask(
+  input: Record<string, unknown>,
+): Promise<{ resultJson: KieResultJson; taskId: string }> {
+  const { taskId, apiKey } = await postKieEndpoint("/api/v1/runway/generate", input, "Runway generate")
   const videoUrl = await pollRunwayRecordDetail(taskId, "Runway", apiKey)
   return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
 }
@@ -196,59 +203,113 @@ export async function runRunwayExtendTask(
   prompt: string,
   quality: "720p" | "1080p" = "720p"
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
-  const apiKey = config.KIE_API_KEY
-  if (!apiKey) {
-    throw createSanitizedError("KIE_API_KEY is not configured", "Video extend")
-  }
-
-  const requestBody = { taskId, prompt, quality }
-
-  if (DEBUG) {
-    console.log(`[KIE.ai Runway Extend] Request body:`, JSON.stringify(requestBody, null, 2))
-  }
-
-  const createResponse = await fetch(
-    `${KIE_API_BASE}/api/v1/runway/extend`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(30_000),
-    }
+  const { taskId: extendTaskId, apiKey } = await postKieEndpoint(
+    "/api/v1/runway/extend",
+    { taskId, prompt, quality },
+    "Runway extend"
   )
-
-  const responseText = await createResponse.text()
-  if (!createResponse.ok) {
-    throw createSanitizedError(
-      `Runway extend failed: ${createResponse.status} - ${responseText}`,
-      "Video extend"
-    )
-  }
-
-  let createData: { code?: number; message?: string; msg?: string; data?: { taskId?: string } }
-  try {
-    createData = JSON.parse(responseText)
-  } catch {
-    throw createSanitizedError(`Runway extend response is not valid JSON: ${responseText}`, "Video extend")
-  }
-
-  if (createData.code !== 0 && createData.code !== 200 && createData.code !== undefined) {
-    throw createSanitizedError(
-      `Runway extend error (code ${createData.code}): ${createData.message ?? createData.msg ?? JSON.stringify(createData)}`,
-      "Video extend"
-    )
-  }
-
-  const extendTaskId = createData.data?.taskId
-  if (!extendTaskId) {
-    throw createSanitizedError(`Runway extend response missing taskId: ${JSON.stringify(createData)}`, "Video extend")
-  }
-
-  console.log(`[KIE.ai Runway Extend] Task created: ${extendTaskId}`)
-
   const videoUrl = await pollRunwayRecordDetail(extendTaskId, "Runway Extend", apiKey)
   return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId: extendTaskId }
+}
+
+/**
+ * Runway Aleph — video-to-video AI conversion.
+ * API: POST /api/v1/aleph/generate
+ * Poll: GET /api/v1/aleph/record-info?taskId=...
+ *
+ * Polling uses `successFlag` field: 0=processing, 1=success
+ * Result at data.response.resultVideoUrl
+ */
+export async function runAlephTask(
+  input: Record<string, unknown>,
+): Promise<{ resultJson: KieResultJson; taskId: string }> {
+  const { taskId, apiKey } = await postKieEndpoint("/api/v1/aleph/generate", input, "Aleph generate")
+  const videoUrl = await pollAlephRecordInfo(taskId, apiKey)
+  return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
+}
+
+/**
+ * Poll GET /api/v1/aleph/record-info?taskId= until successFlag=1.
+ * Returns resultVideoUrl on success; throws on failure or timeout.
+ */
+async function pollAlephRecordInfo(
+  taskId: string,
+  apiKey: string,
+): Promise<string> {
+  let attempts = 0
+  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    attempts++
+    await sleep(pollDelay(attempts))
+
+    let detailResponse: Response
+    try {
+      detailResponse = await fetch(
+        `${KIE_API_BASE}/api/v1/aleph/record-info?taskId=${taskId}`,
+        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+      )
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        if (DEBUG) console.log(`[KIE.ai Aleph] Poll attempt ${attempts} timeout, retrying...`)
+        continue
+      }
+      throw err
+    }
+
+    if (!detailResponse.ok) {
+      if (DEBUG) console.warn(`[KIE.ai Aleph] Poll attempt ${attempts} failed: ${detailResponse.status}`)
+      continue
+    }
+
+    const detailText = await detailResponse.text()
+    if (DEBUG) {
+      console.log(`[KIE.ai Aleph] Poll attempt ${attempts} response: ${detailText.substring(0, 300)}`)
+    }
+
+    let detailData: {
+      code?: number
+      data?: {
+        successFlag?: number
+        errorCode?: number
+        errorMessage?: string
+        response?: {
+          resultVideoUrl?: string
+          resultImageUrl?: string
+        }
+      }
+    }
+    try {
+      detailData = JSON.parse(detailText)
+    } catch {
+      if (DEBUG) console.warn(`[KIE.ai Aleph] Poll attempt ${attempts} invalid JSON`)
+      continue
+    }
+
+    const successFlag = detailData.data?.successFlag
+    if (successFlag === undefined || successFlag === null) {
+      if (DEBUG) console.warn(`[KIE.ai Aleph] Poll attempt ${attempts} missing successFlag`)
+      continue
+    }
+
+    if (DEBUG) {
+      console.log(`[KIE.ai Aleph] Task ${taskId} successFlag: ${successFlag} (attempt ${attempts})`)
+    }
+
+    if (successFlag === 1) {
+      const videoUrl = detailData.data?.response?.resultVideoUrl
+      if (!videoUrl) {
+        throw createSanitizedError("Aleph succeeded but no resultVideoUrl found", "Video generation")
+      }
+      console.log(`[KIE.ai Aleph] Complete! URL: ${videoUrl}`)
+      return videoUrl
+    }
+
+    if (detailData.data?.errorCode && detailData.data.errorCode !== 0) {
+      const errorMsg = detailData.data?.errorMessage ?? "Unknown error"
+      throw createSanitizedError(`Aleph failed: [${detailData.data.errorCode}] ${errorMsg}`, "Video generation")
+    }
+
+    // successFlag === 0 means still processing — continue polling
+  }
+
+  throw createSanitizedError(`Aleph timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`, "Video generation")
 }

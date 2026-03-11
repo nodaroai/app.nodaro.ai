@@ -98,6 +98,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
 export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: string; desc: string }[] = [
   { value: "wan", label: "Wan 2.6", desc: "High quality video-to-video" },
   { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },
+  { value: "runway-aleph", label: "Runway Aleph", desc: "Runway AI video-to-video conversion" },
 ]
 
 // =============================================================================
