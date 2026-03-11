@@ -139,6 +139,8 @@ export interface OrchestratorContext {
   onJobCreated?: (nodeId: string, jobId: string) => void
   /** Node IDs that have upload-* ancestors — their jobs should be force_private */
   uploadDescendantIds?: Set<string>
+  /** Whether this execution is running a published app (affects free-tier app credit allowance) */
+  isAppRun?: boolean
 }
 
 // ---------------------------------------------------------------------------

@@ -154,7 +154,7 @@ export async function reserveCreditsForJob(
       modelIdentifier,
       0, // provider cost calculated in worker
       0, // display cost calculated in worker
-      req.creditReservation?.watermark, // pass watermark from checkCredits
+      { watermarkOverride: req.creditReservation?.watermark },
     )
 
     // Store usageLogId, estimated credits, and watermark decision on the job

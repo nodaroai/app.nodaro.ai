@@ -2687,6 +2687,8 @@ export interface UserBalance {
   tier: string
   features: Record<string, unknown>
   periodEnd: string | null
+  /** Credits earned for app usage (free tier only — earned by running flows) */
+  appCreditsAllowance: number
 }
 
 export interface CreditCheckResult {

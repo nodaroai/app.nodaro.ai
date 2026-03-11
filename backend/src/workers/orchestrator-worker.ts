@@ -85,6 +85,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     triggerType,
     triggerData,
     cancelled: false,
+    isAppRun: !!appVersionId,
   }
 
   try {
