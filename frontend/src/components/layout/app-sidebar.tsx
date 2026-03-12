@@ -192,10 +192,22 @@ export function AppSidebar({
                   side="right"
                   className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                 >
-                  <p>{creditBalance.total} credits remaining</p>
-                  {creditBalance.dailyLimit != null && (
-                    <p className="text-zinc-500 dark:text-zinc-400">Today: {creditBalance.dailySpent}/{creditBalance.dailyLimit}</p>
-                  )}
+                  <p>{creditBalance.total} credits left</p>
+                  {creditBalance.tier === "free" ? (
+                    creditBalance.dailyLimit != null && (
+                      <p className="text-zinc-500 dark:text-zinc-400">Today &middot; {creditBalance.dailyLimit - creditBalance.dailySpent} credits left</p>
+                    )
+                  ) : creditBalance.periodEnd ? (
+                    <p className="text-zinc-500 dark:text-zinc-400">
+                      Renews {(() => {
+                        const end = new Date(creditBalance.periodEnd)
+                        const now = new Date()
+                        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                        if (daysLeft <= 14) return `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`
+                        return end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                      })()}
+                    </p>
+                  ) : null}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -204,44 +216,64 @@ export function AppSidebar({
               className="mx-2 mt-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left"
               onClick={() => navigate("/billing")}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400 capitalize">
-                  {creditBalance.tier === "free" ? "Free Plan" : `${creditBalance.tier} Plan`}
-                </span>
-                {(creditBalance.tier === "free" || creditBalance.total <= (PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150) * 0.1) && (
-                  <Link
-                    to="/_pricing"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-[10px] font-medium text-[#ff0073] hover:text-[#ff0073]/80 px-1.5 py-0.5 rounded border border-[#ff0073]/30 hover:bg-[#ff0073]/10 transition-colors"
-                  >
-                    Upgrade
-                  </Link>
-                )}
-              </div>
-              {(() => {
-                const tierAllocation = PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150
-                const usagePercent = Math.min(100, Math.round(((tierAllocation - creditBalance.subscription) / tierAllocation) * 100))
-                return (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-[#ff0073] font-mono">{creditBalance.total}</span>
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">/ {tierAllocation}</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-[#ff0073] transition-all"
-                        style={{ width: `${100 - usagePercent}%` }}
-                      />
-                    </div>
-                  </>
-                )
-              })()}
-              {creditBalance.dailyLimit != null && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-500 dark:text-zinc-400">Today</span>
-                  <span className="font-mono text-zinc-600 dark:text-zinc-300">
-                    {creditBalance.dailySpent}/{creditBalance.dailyLimit}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 capitalize">
+                    {creditBalance.tier === "free" ? "Free Plan" : `${creditBalance.tier} Plan`}
                   </span>
+                  {(creditBalance.tier === "free" || creditBalance.total <= (PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150) * 0.1) && (
+                    <Link
+                      to="/_pricing"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[10px] font-medium text-[#ff0073] hover:text-[#ff0073]/80 px-1.5 py-0.5 rounded border border-[#ff0073]/30 hover:bg-[#ff0073]/10 transition-colors"
+                    >
+                      Upgrade
+                    </Link>
+                  )}
+                </div>
+                {(() => {
+                  const tierAllocation = PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150
+                  const remainPercent = Math.min(100, Math.max(0, Math.round((creditBalance.total / tierAllocation) * 100)))
+                  return (
+                    <>
+                      <p className="text-sm font-semibold text-[#ff0073] font-mono">
+                        {creditBalance.total} <span className="text-[10px] font-normal text-zinc-500 dark:text-zinc-400">credits left</span>
+                      </p>
+                      <div className="mt-1 w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[#ff0073] transition-all"
+                          style={{ width: `${remainPercent}%` }}
+                        />
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+              {creditBalance.tier === "free" ? (
+                creditBalance.dailyLimit != null && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Today &middot; <span className="font-mono text-zinc-600 dark:text-zinc-300">{creditBalance.dailyLimit - creditBalance.dailySpent}</span> credits left
+                  </p>
+                )
+              ) : (
+                <div className="space-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {(() => {
+                    const tierAllocation = PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 0
+                    return tierAllocation > 0 && (
+                      <p>Monthly limit: <span className="font-mono text-zinc-600 dark:text-zinc-300">{tierAllocation}</span></p>
+                    )
+                  })()}
+                  {creditBalance.periodEnd && (
+                    <p>
+                      Renews {(() => {
+                        const end = new Date(creditBalance.periodEnd)
+                        const now = new Date()
+                        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                        if (daysLeft <= 14) return `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`
+                        return end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                      })()}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
