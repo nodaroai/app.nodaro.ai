@@ -220,7 +220,7 @@ Columns: `id`, `workflow_id`, `version`, `nodes`, `edges`, `created_at`
 
 Source: `supabase/migrations/001_initial_schema.sql`
 
-Columns: `id`, `workflow_id`, `user_id`, `parent_job_id`, `status`, `priority`, `progress`, `credits_estimated`, `credits_used`, `input_data`, `output_data`, `error_message`, `started_at`, `completed_at`, `created_at`
+Columns: `id`, `workflow_id`, `user_id`, `parent_job_id`, `status`, `priority`, `progress`, `credits`, `input_data`, `output_data`, `error_message`, `started_at`, `completed_at`, `created_at`
 
 ### `job_checkpoints`
 

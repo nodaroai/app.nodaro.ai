@@ -118,7 +118,7 @@ describe("POST /v1/jobs/cost-summary", () => {
         input_data: { type: "generate-image", provider: "nano-banana" },
         provider_cost: 0.02,
         display_cost: 0.025,
-        credits_estimated: 4,
+        credits: 4,
       },
       {
         id: "job-2",
@@ -126,7 +126,7 @@ describe("POST /v1/jobs/cost-summary", () => {
         input_data: { type: "generate-image", provider: "nano-banana" },
         provider_cost: 0.02,
         display_cost: 0.025,
-        credits_estimated: 4,
+        credits: 4,
       },
     ]
 
@@ -160,7 +160,7 @@ describe("POST /v1/jobs/cost-summary", () => {
         input_data: { type: "generate-image", provider: "flux" },
         provider_cost: 0.05,
         display_cost: 0.0625,
-        credits_estimated: 10,
+        credits: 10,
       },
       {
         id: "job-2",
@@ -168,7 +168,7 @@ describe("POST /v1/jobs/cost-summary", () => {
         input_data: { type: "generate-image", provider: "flux" },
         provider_cost: null,
         display_cost: null,
-        credits_estimated: 10,
+        credits: 10,
       },
     ]
 

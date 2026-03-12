@@ -400,7 +400,7 @@ function RecentActivity() {
 
 function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
   const label = job.job_type ? (JOB_TYPE_LABELS[job.job_type] ?? job.job_type) : "Job"
-  const credits = job.credits_estimated ?? 0
+  const credits = job.credits ?? 0
 
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors cursor-pointer" onClick={onClick}>

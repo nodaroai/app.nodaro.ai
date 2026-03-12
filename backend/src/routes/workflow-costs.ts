@@ -11,7 +11,7 @@ interface JobRow {
   readonly input_data: Record<string, unknown> | null
   readonly provider_cost: number | null
   readonly display_cost: number | null
-  readonly credits_estimated: number | null
+  readonly credits: number | null
 }
 
 interface BreakdownEntry {
@@ -43,7 +43,7 @@ export async function workflowCostRoutes(app: FastifyInstance) {
 
     const { data: jobs, error } = await supabase
       .from("jobs")
-      .select("id, status, input_data, provider_cost, display_cost, credits_estimated")
+      .select("id, status, input_data, provider_cost, display_cost, credits")
       .in("id", jobIds)
 
     if (error) {
@@ -66,7 +66,7 @@ export async function workflowCostRoutes(app: FastifyInstance) {
       const model = (inputData.provider as string) ?? "unknown"
       const key = `${nodeType}::${model}`
 
-      const credits = job.credits_estimated ?? 0
+      const credits = job.credits ?? 0
       const costUsd = job.display_cost ?? job.provider_cost ?? 0
       const isSuccess = job.status === "completed"
       const isFailed = job.status === "failed" || job.status === "cancelled"

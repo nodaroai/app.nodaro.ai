@@ -37,7 +37,7 @@ export interface AdminJob {
   readonly id: string
   readonly status: string
   readonly job_type: string | null
-  readonly credits_estimated: number | null
+  readonly credits: number | null
   readonly provider: string | null
   readonly provider_cost: number | null
   readonly display_cost: number | null
@@ -127,7 +127,7 @@ interface JobRow {
   id: string
   status: string
   job_type: string | null
-  credits_estimated: number | null
+  credits: number | null
   provider: string | null
   provider_cost: number | null
   display_cost: number | null
@@ -149,7 +149,7 @@ export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string)
       const supabase = createClient()
       let query = supabase
         .from("jobs")
-        .select("id, status, job_type, credits_estimated, provider, provider_cost, display_cost, error_message, input_data, output_data, created_at, started_at, completed_at, user_id, workflow_id, workflow_execution_id") as unknown as {
+        .select("id, status, job_type, credits, provider, provider_cost, display_cost, error_message, input_data, output_data, created_at, started_at, completed_at, user_id, workflow_id, workflow_execution_id") as unknown as {
           order: (col: string, opts: { ascending: boolean }) => typeof query
           range: (from: number, to: number) => typeof query
           eq: (col: string, val: string) => typeof query
@@ -174,7 +174,7 @@ export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string)
         id: j.id,
         status: j.status,
         job_type: j.job_type ?? null,
-        credits_estimated: j.credits_estimated,
+        credits: j.credits,
         provider: j.provider ?? null,
         provider_cost: j.provider_cost ?? null,
         display_cost: j.display_cost ?? null,

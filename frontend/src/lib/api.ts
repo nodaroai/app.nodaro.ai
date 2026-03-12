@@ -2081,7 +2081,7 @@ export interface Job {
   provider_cost?: number         // Actual cost from API response (self-hosted/admin only)
   display_cost?: number          // provider_cost with markup (self-hosted/admin only)
   cost?: number                  // What user pays (cloud edition regular users)
-  credits_estimated?: number | null // Credits charged (all editions)
+  credits?: number | null // Credits charged (all editions)
   job_type?: string | null        // Job type (e.g. "generate-image")
 }
 

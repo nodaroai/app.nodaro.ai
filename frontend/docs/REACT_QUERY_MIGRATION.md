@@ -983,7 +983,7 @@ interface AdminJob {
   readonly id: string
   readonly status: string
   readonly credits_used: number | null
-  readonly credits_estimated: number | null
+  readonly credits: number | null
   readonly created_at: string
   readonly user_email: string
   readonly workflow_name: string
@@ -1070,7 +1070,7 @@ export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string)
       const supabase = createClient()
       let query = supabase
         .from("jobs")
-        .select("id, status, credits_used, credits_estimated, created_at, user_id, workflow_id")
+        .select("id, status, credits, created_at, user_id, workflow_id")
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1)
       if (statusFilter) query = query.eq("status", statusFilter)
@@ -1089,7 +1089,7 @@ export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string)
         id: j.id,
         status: j.status,
         credits_used: j.credits_used,
-        credits_estimated: j.credits_estimated,
+        credits: j.credits,
         created_at: j.created_at,
         user_email: userMap.get(j.user_id) ?? "Unknown",
         workflow_name: wfMap.get(j.workflow_id ?? "") ?? "Unknown",
