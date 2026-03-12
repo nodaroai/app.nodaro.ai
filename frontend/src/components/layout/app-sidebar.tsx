@@ -80,31 +80,17 @@ export function AppSidebar({
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
 
-  // Load collapsed state from localStorage on mount, respecting defaultCollapsed
+  // Load collapsed state from localStorage on mount
   useEffect(() => {
     if (initializedFromStorage) return
 
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (defaultCollapsed) {
-      // For editor, always start collapsed
-      setCollapsed(true)
-    } else if (stored !== null) {
-      // For non-editor pages, use stored preference
+    if (stored !== null) {
       setCollapsed(stored === "true")
     }
     setInitializedFromStorage(true)
     setMounted(true)
-  }, [defaultCollapsed, setCollapsed, initializedFromStorage])
-
-  // When navigating to editor, auto-collapse on initial load only (not on every toggle)
-  // This runs once when defaultCollapsed becomes true (entering editor)
-  useEffect(() => {
-    if (defaultCollapsed && mounted) {
-      setCollapsed(true)
-    }
-    // Intentionally omit isCollapsed - we only want this to run when entering editor page
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultCollapsed, mounted])
+  }, [setCollapsed, initializedFromStorage])
 
   const toggleCollapsed = useCallback(() => {
     const newValue = !isCollapsed
