@@ -392,8 +392,25 @@ export function restorePollingForRunningJobs(
           }
         } catch {
           pollFailures++;
-          if (pollFailures >= 5) {
+          if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
             ctx.untrackInterval(poll);
+            // Final verification before marking as failed
+            try {
+              const finalJob = await getJobStatus(jobId);
+              if (finalJob.status === "completed") {
+                applyRestoredJobCompletion(nodeId, nodeType, finalJob, jobId);
+                return;
+              }
+              if (finalJob.status === "failed") {
+                updateNodeData(nodeId, {
+                  executionStatus: "failed",
+                  errorMessage: finalJob.error_message ?? "Unknown error",
+                  currentJobId: undefined,
+                  currentJobProgress: undefined,
+                });
+                return;
+              }
+            } catch { /* final check also failed */ }
             updateNodeData(nodeId, {
               executionStatus: "failed",
               currentJobId: undefined,
@@ -558,6 +575,27 @@ export function streamBackendExecution(
     } catch {
       pollFailures++;
       if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES && !finished) {
+        // Final verification before giving up
+        try {
+          const finalExec = await getWorkflowExecution(executionId);
+          const finalStates = (finalExec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
+          syncNodeStatesToStore(finalStates);
+          if (finalExec.status === "completed") {
+            cleanup();
+            toast.success("Backend execution completed");
+            return;
+          }
+          if (finalExec.status === "failed") {
+            cleanup();
+            toast.error("Backend execution failed", { description: finalExec.errorMessage });
+            return;
+          }
+          if (finalExec.status === "cancelled") {
+            cleanup();
+            toast.info("Backend execution cancelled");
+            return;
+          }
+        } catch { /* final check also failed */ }
         cleanup();
         toast.error("Lost connection to backend execution");
         return;

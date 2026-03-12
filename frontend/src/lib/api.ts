@@ -2090,7 +2090,7 @@ export async function getJobStatus(jobId: string): Promise<Job> {
   const res = await fetch(`${API_BASE_URL}/v1/jobs/${jobId}`, {
     headers: authHeaders,
   })
-  if (!res.ok) throw new Error("Failed to get job status")
+  if (!res.ok) throw new Error(`Failed to get job status (HTTP ${res.status})`)
   const body = await res.json()
   return body.data
 }

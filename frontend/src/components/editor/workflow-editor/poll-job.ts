@@ -36,6 +36,18 @@ export function pollJobToCompletion(
           pollFailures++;
           if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
             ctx.untrackInterval(poll);
+            // Final verification: the job may have completed while polling was failing
+            try {
+              const job = await getJobStatus(jobId);
+              if (job.status === "completed") {
+                resolve(job.output_data?.imageUrl ?? "");
+                return;
+              }
+              if (job.status === "failed") {
+                reject(new Error(job.error_message ?? "Failed"));
+                return;
+              }
+            } catch { /* final check also failed */ }
             reject(err);
           }
         }
@@ -163,6 +175,50 @@ export function pollJobWithNodeUpdate(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                // Final verification: the job may have completed while polling was failing
+                try {
+                  const job = await getJobStatus(jobId);
+                  if (job.status === "completed") {
+                    const url =
+                      outputKey === "generatedVideoUrl"
+                        ? job.output_data?.videoUrl
+                        : job.output_data?.audioUrl;
+                    if (url) {
+                      const thumbnailUrl =
+                        outputKey === "generatedVideoUrl"
+                          ? (job.output_data?.thumbnailUrl as string | undefined)
+                          : undefined;
+                      const existingResults =
+                        ((
+                          useWorkflowStore
+                            .getState()
+                            .nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown>
+                        )?.generatedResults as readonly GeneratedResult[] | undefined) ?? [];
+                      const newResult: GeneratedResult = {
+                        url: url as string,
+                        thumbnailUrl,
+                        timestamp: new Date().toISOString(),
+                        jobId,
+                      };
+                      const extraFields =
+                        extraOutputFields && job.output_data
+                          ? extraOutputFields(job.output_data as Record<string, unknown>)
+                          : {};
+                      updateNodeData(nodeId, {
+                        executionStatus: "completed",
+                        [outputKey]: url,
+                        generatedResults: [newResult, ...existingResults],
+                        activeResultIndex: 0,
+                        currentJobId: undefined,
+                        currentJobProgress: undefined,
+                        ...extraFields,
+                      });
+                      toast.success(`${label} complete`);
+                      resolve();
+                      return;
+                    }
+                  }
+                } catch { /* final check also failed */ }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   currentJobId: undefined,
