@@ -10,11 +10,11 @@ interface AuditModel {
   ourKey: string | null
   category: string
   tasks: number
-  actualAvgCredits: number
-  actualMinCredits: number
-  actualMaxCredits: number
-  expectedCredits: number | null
-  expectedCostUsd?: number
+  providerCredits: number
+  providerMin: number
+  providerMax: number
+  ourCredits: number | null
+  providerCostInCredits: number
   diff: number | null
   diffPercent: number | null
   status: "OK" | "UNDERPRICED" | "OVERPRICED" | "UNMAPPED"
@@ -113,7 +113,7 @@ export default function AdminCreditAudit() {
     <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Credit Audit</h1>
       <p className="text-sm text-muted-foreground mb-6">
-        Compare actual provider cost against our hardcoded credit pricing
+        Compare actual provider cost against what we charge users ([ratio wording removed])
       </p>
 
       {/* Config section */}
@@ -219,8 +219,9 @@ export default function AdminCreditAudit() {
                     <th className="text-left p-3 font-medium text-muted-foreground">Provider Model</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Our Key</th>
                     <th className="text-right p-3 font-medium text-muted-foreground">Tasks</th>
-                    <th className="text-right p-3 font-medium text-muted-foreground">Actual Credits</th>
-                    <th className="text-right p-3 font-medium text-muted-foreground">Expected</th>
+                    <th className="text-right p-3 font-medium text-muted-foreground">Provider CR</th>
+                    <th className="text-right p-3 font-medium text-muted-foreground">÷4</th>
+                    <th className="text-right p-3 font-medium text-muted-foreground">We Charge</th>
                     <th className="text-right p-3 font-medium text-muted-foreground">Diff</th>
                     <th className="text-right p-3 font-medium text-muted-foreground">%</th>
                   </tr>
@@ -247,14 +248,17 @@ export default function AdminCreditAudit() {
                           )}
                         </td>
                         <td className="p-3 text-right tabular-nums">{m.tasks}</td>
-                        <td className="p-3 text-right tabular-nums">
-                          {m.actualMinCredits === m.actualMaxCredits
-                            ? m.actualAvgCredits
-                            : `${m.actualMinCredits}–${m.actualMaxCredits}`
+                        <td className="p-3 text-right tabular-nums text-muted-foreground">
+                          {m.providerMin === m.providerMax
+                            ? m.providerCredits
+                            : `${m.providerMin}–${m.providerMax}`
                           }
                         </td>
-                        <td className="p-3 text-right tabular-nums text-muted-foreground">
-                          {m.expectedCredits ?? "—"}
+                        <td className="p-3 text-right tabular-nums">
+                          {m.providerCostInCredits}
+                        </td>
+                        <td className="p-3 text-right tabular-nums font-medium">
+                          {m.ourCredits ?? "—"}
                         </td>
                         <td className={`p-3 text-right tabular-nums font-medium ${
                           m.status === "UNDERPRICED" ? "text-red-400" :
@@ -273,7 +277,7 @@ export default function AdminCreditAudit() {
                   })}
                   {filteredModels.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                      <td colSpan={9} className="p-8 text-center text-muted-foreground">
                         No models match the current filter
                       </td>
                     </tr>

@@ -11,12 +11,18 @@ ALTER TABLE published_apps ADD COLUMN IF NOT EXISTS creator_display_name TEXT;
 ALTER TABLE published_apps ADD COLUMN IF NOT EXISTS total_run_count INT NOT NULL DEFAULT 0;
 ALTER TABLE published_apps ADD COLUMN IF NOT EXISTS favorite_count INT NOT NULL DEFAULT 0;
 
+-- Immutable wrapper for array_to_string (needed for GENERATED ALWAYS columns)
+CREATE OR REPLACE FUNCTION immutable_array_to_string(arr TEXT[], sep TEXT)
+RETURNS TEXT LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  SELECT array_to_string(arr, sep);
+$$;
+
 -- Full-text search vector (weighted: name A, description B, tags C)
 ALTER TABLE published_apps ADD COLUMN IF NOT EXISTS search_vector tsvector
   GENERATED ALWAYS AS (
-    setweight(to_tsvector('english', coalesce(name, '')), 'A') ||
-    setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
-    setweight(to_tsvector('english', coalesce(array_to_string(tags, ' '), '')), 'C')
+    setweight(to_tsvector('english'::regconfig, coalesce(name, '')), 'A') ||
+    setweight(to_tsvector('english'::regconfig, coalesce(description, '')), 'B') ||
+    setweight(to_tsvector('english'::regconfig, coalesce(immutable_array_to_string(tags, ' '), '')), 'C')
   ) STORED;
 
 -- App favorites table (follows gallery_favorites pattern)
