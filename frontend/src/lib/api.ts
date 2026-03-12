@@ -47,8 +47,21 @@ export class StorageExceededError extends Error {
   }
 }
 
+export class InsufficientCreditsError extends Error {
+  readonly code: string
+  readonly appCreditsAllowance: number
+
+  constructor(message: string, code: string, appCreditsAllowance: number) {
+    super(message)
+    this.name = "InsufficientCreditsError"
+    this.code = code
+    this.appCreditsAllowance = appCreditsAllowance
+  }
+}
+
 /**
  * Throws StorageExceededError if the parsed error JSON indicates storage_limit_exceeded.
+ * Throws InsufficientCreditsError for credit-related 402 errors.
  * Otherwise throws a plain Error with the message (or the given fallback).
  */
 function throwApiError(errJson: Record<string, unknown> | null, fallback: string): never {
@@ -60,6 +73,13 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
       (errObj.quotaBytes as number) ?? 0,
       (errObj.remainingBytes as number) ?? 0,
       (errObj.tier as string) ?? "free",
+    )
+  }
+  if (errObj?.code === "insufficient_app_credits" || errObj?.code === "insufficient_credits") {
+    throw new InsufficientCreditsError(
+      (errObj.message as string) ?? fallback,
+      errObj.code as string,
+      (errObj.appCreditsAllowance as number) ?? 0,
     )
   }
   throw new Error((errObj?.message as string) ?? fallback)

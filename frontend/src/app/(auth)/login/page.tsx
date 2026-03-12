@@ -69,7 +69,7 @@ export default function LoginPage() {
           )}
 
           <p className="text-xs text-muted-foreground/60 pt-1">
-            Start free with 250 credits. No credit card required.
+            Start free with up to 150 credits. No credit card required.
           </p>
         </div>
       </div>

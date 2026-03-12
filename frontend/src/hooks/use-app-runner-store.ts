@@ -12,6 +12,7 @@ import {
   getAppExecutionStatus,
   deleteAppRun,
   cancelWorkflowExecution,
+  InsufficientCreditsError,
   type PublishedApp,
   type AppRun,
 } from "@/lib/api"
@@ -46,6 +47,7 @@ interface AppRunnerState {
   completedNodes: number
   totalNodes: number
   errorMessage: string | null
+  insufficientCredits: boolean
 
   // Actions
   loadApp: (slug: string) => Promise<void>
@@ -85,6 +87,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   completedNodes: 0,
   totalNodes: 0,
   errorMessage: null,
+  insufficientCredits: false,
 
   loadApp: async (slug: string) => {
     if (get().loading) return
@@ -151,6 +154,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       completedNodes: 0,
       totalNodes: 0,
       errorMessage: null,
+      insufficientCredits: false,
     })
   },
 
@@ -162,6 +166,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     set({
       executionStatus: "running",
       errorMessage: null,
+      insufficientCredits: false,
       nodeStates: {},
       completedNodes: 0,
     })
@@ -176,9 +181,11 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       set({ executionId, activeRunId: runId })
       startPolling(set, get)
     } catch (err) {
+      const isInsufficientCredits = err instanceof InsufficientCreditsError
       set({
         executionStatus: "failed",
         errorMessage: err instanceof Error ? err.message : "Failed to run app",
+        insufficientCredits: isInsufficientCredits,
       })
     }
   },
@@ -246,6 +253,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       completedNodes: 0,
       totalNodes: 0,
       errorMessage: null,
+      insufficientCredits: false,
     })
   },
 }))

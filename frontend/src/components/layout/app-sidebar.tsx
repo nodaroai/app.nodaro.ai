@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
-import { Link, useLocation } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useGalleryReportCount } from "@/hooks/queries/use-gallery-queries"
 import {
   FolderOpen,
@@ -11,12 +11,12 @@ import {
   Menu,
   X,
   CreditCard,
-  Sparkles,
   Images,
   Archive,
   History,
   Plug,
   Rocket,
+  Coins,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -28,7 +28,9 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { isFeatureEnabled } from "@/lib/edition"
+import { isFeatureEnabled, hasCredits } from "@/lib/edition"
+import { useUserCredits } from "@/hooks/queries/use-credits-queries"
+import { PRICING_TIERS } from "@/lib/pricing-data"
 import { APP_VERSION } from "@/lib/version"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
@@ -47,11 +49,10 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: "/projects", label: "Projects", icon: FolderOpen },
   { href: "/apps", label: "My Apps", icon: Rocket },
   { href: "/executions", label: "Executions", icon: History },
-  { href: "/_gallery", label: "Gallery", icon: Images },
   { href: "/library", label: "Library", icon: Archive },
-  { href: "/_pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
-  { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
+  { href: "/_gallery", label: "Gallery", icon: Images },
   { href: "/integrations", label: "Integrations", icon: Plug },
+  { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ]
@@ -71,8 +72,10 @@ export function AppSidebar({
   className,
 }: AppSidebarProps) {
   const pathname = useLocation().pathname
+  const navigate = useNavigate()
   const { user, isAdmin, signOut } = useAuth()
   const { isCollapsed, setCollapsed } = useSidebar()
+  const { data: creditBalance } = useUserCredits(user?.id)
   const [mounted, setMounted] = useState(false)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
@@ -170,6 +173,113 @@ export function AppSidebar({
           )}
         </div>
 
+        {/* Credit card */}
+        {hasCredits() && creditBalance && (
+          isCollapsed ? (
+            <div className="px-2 pt-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/billing")}
+                    className="w-full h-9 flex items-center justify-center gap-1 rounded-md text-xs font-medium text-[#ff0073] hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <Coins className="h-4 w-4" />
+                    <span className="font-mono text-[11px]">{creditBalance.total}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="right"
+                  className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
+                >
+                  <p>{creditBalance.total} credits left</p>
+                  {creditBalance.tier === "free" ? (
+                    creditBalance.dailyLimit != null && (
+                      <p className="text-zinc-500 dark:text-zinc-400">Today &middot; {creditBalance.dailyLimit - creditBalance.dailySpent} credits left</p>
+                    )
+                  ) : creditBalance.periodEnd ? (
+                    <p className="text-zinc-500 dark:text-zinc-400">
+                      Renews {(() => {
+                        const end = new Date(creditBalance.periodEnd)
+                        const now = new Date()
+                        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                        if (daysLeft <= 14) return `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`
+                        return end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                      })()}
+                    </p>
+                  ) : null}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          ) : (
+            <div
+              className="mx-2 mt-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left"
+              onClick={() => navigate("/billing")}
+            >
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 capitalize">
+                    {creditBalance.tier === "free" ? "Free Plan" : `${creditBalance.tier} Plan`}
+                  </span>
+                  {(creditBalance.tier === "free" || creditBalance.total <= (PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150) * 0.1) && (
+                    <Link
+                      to="/_pricing"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[10px] font-medium text-[#ff0073] hover:text-[#ff0073]/80 px-1.5 py-0.5 rounded border border-[#ff0073]/30 hover:bg-[#ff0073]/10 transition-colors"
+                    >
+                      Upgrade
+                    </Link>
+                  )}
+                </div>
+                {(() => {
+                  const tierAllocation = PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150
+                  const remainPercent = Math.min(100, Math.max(0, Math.round((creditBalance.total / tierAllocation) * 100)))
+                  return (
+                    <>
+                      <p className="text-sm font-semibold text-[#ff0073] font-mono">
+                        {creditBalance.total} <span className="text-[10px] font-normal text-zinc-500 dark:text-zinc-400">credits left</span>
+                      </p>
+                      <div className="mt-1 w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[#ff0073] transition-all"
+                          style={{ width: `${remainPercent}%` }}
+                        />
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+              {creditBalance.tier === "free" ? (
+                creditBalance.dailyLimit != null && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Today &middot; <span className="font-mono text-zinc-600 dark:text-zinc-300">{creditBalance.dailyLimit - creditBalance.dailySpent}</span> credits left
+                  </p>
+                )
+              ) : (
+                <div className="space-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {(() => {
+                    const tierAllocation = PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 0
+                    return tierAllocation > 0 && (
+                      <p>Monthly limit: <span className="font-mono text-zinc-600 dark:text-zinc-300">{tierAllocation}</span></p>
+                    )
+                  })()}
+                  {creditBalance.periodEnd && (
+                    <p>
+                      Renews {(() => {
+                        const end = new Date(creditBalance.periodEnd)
+                        const now = new Date()
+                        const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                        if (daysLeft <= 14) return `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`
+                        return end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                      })()}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        )}
+
         {/* Navigation */}
         <nav className="flex-1 px-2 py-3 flex flex-col gap-1">
           {NAV_ITEMS.map((item) => {
@@ -240,48 +350,6 @@ export function AppSidebar({
 
         {/* Bottom section */}
         <div className="px-2 py-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
-          {/* Version */}
-          <div className="text-center">
-            <span className="text-xs text-muted-foreground">
-              {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
-            </span>
-          </div>
-
-          {/* Collapse toggle */}
-          <div className="hidden md:block">
-            {isCollapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Expand sidebar"
-                    className="w-full h-9 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
-                    onClick={toggleCollapsed}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="right"
-                  className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
-                >
-                  Expand sidebar
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full h-9 justify-start gap-3 px-3 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
-                onClick={toggleCollapsed}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="text-sm">Collapse</span>
-              </Button>
-            )}
-          </div>
-
           {/* User info */}
           {user && (
             <div
@@ -345,14 +413,50 @@ export function AppSidebar({
             </div>
           )}
 
-          {/* Theme toggle */}
-          {isCollapsed ? (
-            <div className="flex justify-center">
-              <ThemeToggle />
+          {/* Collapse toggle + Theme toggle */}
+          <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
+            <div className="hidden md:block">
+              {isCollapsed ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Expand sidebar"
+                      className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
+                      onClick={toggleCollapsed}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
+                  >
+                    Expand sidebar
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-2 px-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
+                  onClick={toggleCollapsed}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="text-sm">Collapse</span>
+                </Button>
+              )}
             </div>
-          ) : (
-            <ThemeToggle />
-          )}
+            {!isCollapsed && <ThemeToggle />}
+          </div>
+
+          {/* Version */}
+          <div className="text-center">
+            <span className="text-xs text-muted-foreground">
+              {isCollapsed ? `v${APP_VERSION.split(".").slice(0, 2).join(".")}` : `v${APP_VERSION}`}
+            </span>
+          </div>
         </div>
       </aside>
     </TooltipProvider>
