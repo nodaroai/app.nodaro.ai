@@ -122,6 +122,6 @@ export function createVideoWorker() {
         throw err
       }
     },
-    { connection: connection as unknown as ConnectionOptions, concurrency: 8, lockDuration: 900_000, stalledInterval: 300_000 },
+    { connection: connection as unknown as ConnectionOptions, concurrency: config.VIDEO_WORKER_CONCURRENCY, lockDuration: 900_000, stalledInterval: 300_000 },
   )
 }

@@ -437,9 +437,9 @@ async function executeWorkerNode(
   // 4. Update payload with usageLogId
   const enrichedPayload = { ...payload, usageLogId }
 
-  // 5. Enqueue to BullMQ
+  // 5. Enqueue to BullMQ (lower priority than interactive single-node runs)
   const queue = queueName === "video-render" ? renderQueue : videoQueue
-  await queue.add(jobName, enrichedPayload)
+  await queue.add(jobName, enrichedPayload, { priority: 10 })
 
   // 6. Poll for job completion
   return pollJobToCompletion(jobId, node.type, ctx, usageLogId, creditsUsed)

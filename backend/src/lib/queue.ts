@@ -11,5 +11,6 @@ export const videoQueue = new Queue("video-generation", {
     backoff: { type: "exponential", delay: 5000 },
     removeOnComplete: { count: 1000 },
     removeOnFail: { count: 5000 },
+    priority: 1, // interactive single-node jobs get high priority over orchestrator batch jobs
   },
 })
