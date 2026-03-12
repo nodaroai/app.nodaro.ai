@@ -135,7 +135,6 @@ export default function AppsPage() {
 
   // Edit dialog state
   const [editApp, setEditApp] = useState<PublishedApp | null>(null)
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
 
   const editMutation = useMutation({
     mutationFn: async ({ appId, data }: { appId: string; data: Record<string, unknown> }) => {
@@ -144,18 +143,13 @@ export default function AppsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-apps"] })
       qc.invalidateQueries({ queryKey: ["app-marketplace"] })
-      setEditDialogOpen(false)
+      setEditApp(null)
       toast.success("App updated")
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to update app")
     },
   })
-
-  const handleEdit = useCallback((app: PublishedApp) => {
-    setEditApp(app)
-    setEditDialogOpen(true)
-  }, [])
 
   const handleCopyUrl = useCallback((slug: string) => {
     navigator.clipboard.writeText(`${window.location.origin}/app/${slug}`)
@@ -395,12 +389,12 @@ export default function AppsPage() {
             onToggle={(appId, isActive) => toggleMutation.mutate({ appId, isActive })}
             onUpdateOrigins={(appId, origins) => originsMutation.mutate({ appId, origins })}
             onToggleListed={(appId, isListed) => listToggleMutation.mutate({ appId, isListed })}
-            onEdit={handleEdit}
+            onEdit={setEditApp}
           />
           <EditAppDialog
             app={editApp}
-            open={editDialogOpen}
-            onOpenChange={setEditDialogOpen}
+            open={editApp !== null}
+            onOpenChange={(open) => { if (!open) setEditApp(null) }}
             onSave={(appId, data) => editMutation.mutate({ appId, data })}
             isSaving={editMutation.isPending}
           />

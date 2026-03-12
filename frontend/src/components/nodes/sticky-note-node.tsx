@@ -6,27 +6,8 @@ import { StickyNote, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, Che
 import { useTheme } from "next-themes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
+import { NODE_COLORS, adjustColor, getEffectiveColor } from "@/lib/node-colors"
 import type { StickyNoteData } from "@/types/nodes"
-
-const COLORS = ["#0f172a", "#1e3a5f", "#1a2e1a", "#2d1a1a", "#2d1a2d", "#1a2d2d"]
-const LIGHT_COLORS_MAP: Record<string, string> = {
-  "#0f172a": "#f1f5f9",
-  "#1e3a5f": "#dbeafe",
-  "#1a2e1a": "#dcfce7",
-  "#2d1a1a": "#fee2e2",
-  "#2d1a2d": "#f3e8ff",
-  "#1a2d2d": "#ccfbf1",
-}
-
-function adjustColor(hex: string, amount: number): string {
-  const color = hex.replace("#", "")
-  if (color.length !== 6) return hex
-  const num = parseInt(color, 16)
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount))
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amount))
-  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amount))
-  return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`
-}
 
 function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as StickyNoteData
@@ -43,7 +24,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
   }, [selected, id, updateNode])
 
   const color = nodeData.color ?? "#0f172a"
-  const effectiveColor = isDark ? color : (LIGHT_COLORS_MAP[color] ?? color)
+  const effectiveColor = getEffectiveColor(color, isDark)
   const textStyle = nodeData.fontSize === "lg" || nodeData.fontSize === "xl" ? "heading" : "paragraph"
   const bold = nodeData.bold ?? false
   const italic = nodeData.italic ?? false
@@ -107,7 +88,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
           }}
         >
           {/* Color swatches */}
-          {COLORS.map((c) => (
+          {NODE_COLORS.map((c) => (
             <div
               key={c}
               onClick={(e) => { e.stopPropagation(); updateNodeData(id, { color: c }) }}

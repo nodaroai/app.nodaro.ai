@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Sparkles, CreditCard, Zap, Crown, ArrowRight, Loader2 } from "lucide-react"
+import { Sparkles, CreditCard, Crown, Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,6 @@ interface GetCreditsModalProps {
   tier: string
   balance: number
   required: number
-  appCreditsAllowance: number
 }
 
 export function GetCreditsModal({
@@ -31,7 +30,6 @@ export function GetCreditsModal({
   tier,
   balance,
   required,
-  appCreditsAllowance,
 }: GetCreditsModalProps) {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -65,35 +63,14 @@ export function GetCreditsModal({
             Get More Credits
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            You need <strong>{required}</strong> credits to run this app
-            but only have <strong>{balance}</strong>.
+            This app costs <strong>{required}</strong> credits per run.
+            You have <strong>{balance}</strong> credits
+            {required > 0 ? <> — enough for <strong>{Math.floor(balance / required)}</strong> more {Math.floor(balance / required) === 1 ? "run" : "runs"}</> : ""}.
           </p>
         </DialogHeader>
 
         <div className="space-y-6 py-2">
-          {/* Section 1: Free Credits path (free tier only) */}
-          {isFree && (
-            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
-              <div className="flex items-start gap-3">
-                <Zap className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
-                <div className="space-y-1.5">
-                  <h3 className="font-medium text-sm">Earn Free App Credits</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Run workflows in the editor to earn app credits.
-                    You currently have <strong>{appCreditsAllowance}</strong> app credits.
-                  </p>
-                  <a
-                    href="/projects"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
-                  >
-                    Go to Editor <ArrowRight className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Section 2: Subscribe / Upgrade */}
+          {/* Section 1: Subscribe / Upgrade */}
           {upgradeTiers.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
+import { getNodeResult, getOutputType } from "../../../packages/shared/src/presentation-utils.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -11,44 +12,29 @@ const VALID_CATEGORIES = [
 
 const VALID_OUTPUT_TYPES = ["image", "video", "audio", "text"] as const
 
-const IMAGE_NODE_TYPES = new Set(["generate-image", "upload-image", "edit-image", "image-to-image"])
-const VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "upload-video", "render-video", "extend-video"])
-
 /** Derive a preview media URL from snapshot nodes (thumbnail node or first image/video output). */
 function derivePreviewMedia(
   nodes: Array<Record<string, unknown>>,
   thumbnailNodeId?: string | null,
 ): { url: string; type: "image" | "video" } | null {
-  function getResultUrl(data: Record<string, unknown>): string | undefined {
-    const results = data.generatedResults as Array<Record<string, unknown>> | undefined
-    if (results && results.length > 0) {
-      const idx = (data.activeResultIndex as number) ?? 0
-      const active = results[idx] ?? results[0]
-      return (active?.url ?? active?.imageUrl ?? active?.videoUrl) as string | undefined
-    }
-    return (data.resultUrl ?? data.imageUrl ?? data.videoUrl) as string | undefined
-  }
-
   // Try thumbnail node first
   if (thumbnailNodeId) {
     const thumbNode = nodes.find((n) => n.id === thumbnailNodeId)
     if (thumbNode?.data) {
-      const url = getResultUrl(thumbNode.data as Record<string, unknown>)
-      if (url) {
-        const nodeType = thumbNode.type as string
-        return { url, type: VIDEO_NODE_TYPES.has(nodeType) ? "video" : "image" }
+      const result = getNodeResult(thumbNode.data as Record<string, unknown>)
+      if (result.url) {
+        const otype = getOutputType(thumbNode.type as string)
+        return { url: result.url, type: otype === "video" ? "video" : "image" }
       }
     }
   }
 
   // Fallback: first image or video node with a result
   for (const n of nodes) {
-    const nodeType = n.type as string
-    const isImage = IMAGE_NODE_TYPES.has(nodeType)
-    const isVideo = VIDEO_NODE_TYPES.has(nodeType)
-    if ((isImage || isVideo) && n.data) {
-      const url = getResultUrl(n.data as Record<string, unknown>)
-      if (url) return { url, type: isVideo ? "video" : "image" }
+    const otype = getOutputType(n.type as string)
+    if ((otype === "image" || otype === "video") && n.data) {
+      const result = getNodeResult(n.data as Record<string, unknown>)
+      if (result.url) return { url: result.url, type: otype }
     }
   }
 

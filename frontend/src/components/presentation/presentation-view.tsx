@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Maximize2, Minimize2, Sparkles, LayoutGrid, Copy } from "lucide-react"
+import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Plus, Maximize2, Minimize2, Sparkles, LayoutGrid, Copy } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   KeyboardSensor,
@@ -28,7 +28,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { CreditBalance } from "@/components/credits/CreditBalance"
-import { AppCreditsIndicator } from "@/components/credits/AppCreditsIndicator"
 import { GetCreditsModal } from "@/components/credits/GetCreditsModal"
 import { useUserCredits } from "@/hooks/queries/use-credits-queries"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
@@ -250,9 +249,6 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // Pre-check: does the user need more credits to run this app?
   const needsMoreCredits = useMemo(() => {
     if (!user || !isAppRunner || !hasCredits() || !userCredits || estimatedCost <= 0) return false
-    if (userCredits.tier === "free") {
-      return (userCredits.appCreditsAllowance + userCredits.topup) < estimatedCost
-    }
     return userCredits.total < estimatedCost
   }, [user, isAppRunner, userCredits, estimatedCost])
 
@@ -682,7 +678,6 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           <div className="flex items-center gap-1.5 md:hidden shrink-0">
             {isFullscreen && <ThemeToggle />}
             {user && hasCredits() && <CreditBalance userId={user.id} onClick={isAppRunner ? () => setShowGetCreditsModal(true) : undefined} />}
-            {user && hasCredits() && isAppRunner && <AppCreditsIndicator userId={user.id} estimatedCost={estimatedCost} />}
             {user && isAppRunner && (
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
@@ -714,10 +709,16 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <button
               type="button"
               onClick={onNewRun}
-              className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-foreground bg-muted hover:bg-muted/80 border border-border flex items-center gap-2 transition-all duration-200 touch-manipulation"
+              className={`h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
+                newRunLabel === "Retry" || newRunLabel === "Clear"
+                  ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
+                  : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
+              }`}
             >
-              <RotateCcw className="h-4 w-4" />
-              {newRunLabel ?? "Create New"}
+              {newRunLabel === "Retry" || newRunLabel === "Clear"
+                ? <RotateCcw className="h-4 w-4" />
+                : <Plus className="h-4 w-4" />}
+              {newRunLabel ?? "New Run"}
             </button>
 
             {isRunning ? (
@@ -801,7 +802,6 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           )}
           {isFullscreen && <ThemeToggle />}
           {user && hasCredits() && <CreditBalance userId={user.id} onClick={isAppRunner ? () => setShowGetCreditsModal(true) : undefined} />}
-          {user && hasCredits() && isAppRunner && <AppCreditsIndicator userId={user.id} estimatedCost={estimatedCost} />}
           {user && isAppRunner && (
             <TooltipProvider delayDuration={0}>
               <Tooltip>
@@ -978,7 +978,6 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           tier={userCredits.tier}
           balance={userCredits.total}
           required={estimatedCost}
-          appCreditsAllowance={userCredits.appCreditsAllowance}
         />
       )}
     </div>
