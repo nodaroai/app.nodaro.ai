@@ -82,6 +82,16 @@ const DB_PUBLISHED_APP = {
   is_listed: false,
   is_embeddable: false,
   estimated_credits: 10,
+  thumbnail_node_id: null,
+  category: "other",
+  output_types: [],
+  tags: [],
+  preview_media_url: null,
+  preview_media_type: null,
+  supports_remix: false,
+  creator_display_name: null,
+  total_run_count: 0,
+  favorite_count: 0,
   created_at: "2026-01-01T00:00:00Z",
 }
 
@@ -101,7 +111,25 @@ const CAMEL_PUBLISHED_APP = {
   isListed: false,
   isEmbeddable: false,
   estimatedCredits: 10,
+  thumbnailNodeId: null,
+  category: "other",
+  outputTypes: [],
+  tags: [],
+  previewMediaUrl: null,
+  previewMediaType: null,
+  supportsRemix: false,
+  creatorDisplayName: null,
+  totalRunCount: 0,
+  favoriteCount: 0,
   createdAt: "2026-01-01T00:00:00Z",
+}
+
+/** Mock helper: returns a chainable mock for profiles.select().eq().single() */
+function mockProfilesQuery() {
+  const mockSingle = vi.fn().mockResolvedValue({ data: { full_name: null, email: "test@example.com" }, error: null })
+  const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+  const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+  return { select: mockSelect } as never
 }
 
 let app: FastifyInstance
@@ -205,12 +233,13 @@ describe("POST /v1/apps/publish", () => {
   })
 
   it("returns 200 on success with version=1 for first publish", async () => {
-    let callCount = 0
+    let workflowCallCount = 0
+    let appsCallCount = 0
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "workflows") {
-        callCount++
-        if (callCount === 1) {
+        workflowCallCount++
+        if (workflowCallCount === 1) {
           // First call: select workflow
           const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW, error: null })
           const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
@@ -223,17 +252,18 @@ describe("POST /v1/apps/publish", () => {
           return { update: mockUpdate } as never
         }
       }
+      if (table === "profiles") return mockProfilesQuery()
       if (table === "published_apps") {
-        callCount++
-        if (callCount === 2) {
-          // Second call: check existing versions
+        appsCallCount++
+        if (appsCallCount === 1) {
+          // First apps call: check existing versions
           const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
           const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
           const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         } else {
-          // Third call: insert published app
+          // Second apps call: insert published app
           const mockSingle = vi.fn().mockResolvedValue({ data: DB_PUBLISHED_APP, error: null })
           const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
           const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
@@ -259,12 +289,13 @@ describe("POST /v1/apps/publish", () => {
   })
 
   it("returns 200 with version increment on re-publish", async () => {
-    let callCount = 0
+    let workflowCallCount = 0
+    let appsCallCount = 0
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "workflows") {
-        callCount++
-        if (callCount === 1) {
+        workflowCallCount++
+        if (workflowCallCount === 1) {
           const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW, error: null })
           const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
@@ -275,9 +306,10 @@ describe("POST /v1/apps/publish", () => {
           return { update: mockUpdate } as never
         }
       }
+      if (table === "profiles") return mockProfilesQuery()
       if (table === "published_apps") {
-        callCount++
-        if (callCount === 2) {
+        appsCallCount++
+        if (appsCallCount === 1) {
           // Return existing version 3
           const mockLimit = vi.fn().mockResolvedValue({
             data: [{ version: 3 }],
@@ -311,7 +343,7 @@ describe("POST /v1/apps/publish", () => {
   })
 
   it("returns 409 on slug conflict (duplicate key error 23505)", async () => {
-    let callCount = 0
+    let appsCallCount = 0
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "workflows") {
@@ -320,9 +352,10 @@ describe("POST /v1/apps/publish", () => {
         const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
         return { select: mockSelect } as never
       }
+      if (table === "profiles") return mockProfilesQuery()
       if (table === "published_apps") {
-        callCount++
-        if (callCount === 1) {
+        appsCallCount++
+        if (appsCallCount === 1) {
           // version check
           const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
           const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
