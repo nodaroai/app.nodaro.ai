@@ -136,7 +136,6 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "imagen4":           { provider: "KIE.ai",    providerCostUsd: 0.040, markupPct: 25 },  // 8 KIE cr (default)
   "imagen4-fast":      { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "imagen4-ultra":     { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
-  "ideogram":          { provider: "KIE.ai",    providerCostUsd: 0.090, markupPct: 25 },  // 18 KIE cr (character BALANCED)
   "ideogram-v3":       { provider: "KIE.ai",    providerCostUsd: 0.035, markupPct: 25 },  // 7 KIE cr (BALANCED)
   "qwen":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "z-image":           { provider: "KIE.ai",    providerCostUsd: 0.004, markupPct: 25 },  // 0.8 KIE cr
