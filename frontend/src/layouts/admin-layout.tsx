@@ -18,6 +18,7 @@ import {
   DollarSign,
   Flag,
   AppWindow,
+  Scale,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -43,6 +44,7 @@ const ADMIN_NAV = [
   { href: "/admin/apps", label: "Apps", icon: AppWindow },
   { href: "/admin/reports", label: "Reports", icon: Flag },
   { href: "/admin/pricing", label: "Pricing", icon: DollarSign },
+  { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ] as const
 

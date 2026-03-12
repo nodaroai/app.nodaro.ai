@@ -24,6 +24,8 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
   /** Number of parallel browser tabs for Remotion renders. null = Remotion default (50% CPU cores) */
   REMOTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).nullable().default(null),
+  /** KIE.ai account unique ID for credit audit API (constant per account) */
+  KIE_UNIQUE_ID: z.string().default(""),
   /** 64-char hex string (32 bytes) for AES-256-GCM encryption of social media OAuth tokens */
   SOCIAL_ENCRYPTION_KEY: z.string().default(""),
   /** Base URL for OAuth redirects (e.g. https://app.nodaro.ai or http://localhost:8000) */
