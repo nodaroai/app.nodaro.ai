@@ -7,7 +7,7 @@
 // All other models get negative prompt appended to the prompt text as "Avoid: ...".
 export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "imagen4", "imagen4-fast", "imagen4-ultra",
-  "ideogram", "ideogram-remix", "ideogram-v3",
+  "ideogram-remix", "ideogram-v3",
   "qwen", "qwen-edit",
 ])
 
@@ -17,7 +17,6 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "nano-banana",
   "nano-banana-pro",
   "nano-banana-2",
-  "ideogram",
 ])
 
 // Variable pricing: which setting type affects cost per provider
@@ -45,7 +44,7 @@ export const HIGH_QUALITY_PROVIDERS = new Set(["gpt-image", "gpt-image-i2i", "se
 export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux-flex", "flux-i2i"])
 
 // Ideogram family models with TURBO/QUALITY pricing variants
-export const IDEOGRAM_PROVIDERS = new Set(["ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe", "ideogram-v3"])
+export const IDEOGRAM_PROVIDERS = new Set(["ideogram-edit", "ideogram-remix", "ideogram-reframe", "ideogram-v3"])
 
 // =====================================================================
 // Provider arrays (single source of truth for route Zod validation)
@@ -62,7 +61,6 @@ export const IMAGE_GEN_PROVIDERS = [
   "imagen4",
   "imagen4-fast",
   "imagen4-ultra",
-  "ideogram",
   "ideogram-v3",
   "qwen",
   "seedream",
@@ -283,14 +281,14 @@ export const I2I_STRENGTH_SUPPORT: Record<string, { min: number; max: number; st
 
 /** Models that accept a seed parameter for reproducible generation */
 export const SEED_SUPPORT = new Set([
-  "ideogram", "ideogram-remix", "ideogram-reframe", "ideogram-v3",
+  "ideogram-remix", "ideogram-reframe", "ideogram-v3",
   "qwen", "qwen-i2i", "qwen-edit",
   "flux", "flux-flex", "flux-i2i", "flux-pro-i2i", "flux-kontext", "flux-kontext-max",
 ])
 
 /** Ideogram models that support rendering_speed selection (TURBO/BALANCED/QUALITY) */
 export const RENDERING_SPEED_SUPPORT = new Set([
-  "ideogram", "ideogram-remix", "ideogram-reframe", "ideogram-v3",
+  "ideogram-remix", "ideogram-reframe", "ideogram-v3",
 ])
 
 /** Models that accept guidance_scale for controlling prompt adherence */

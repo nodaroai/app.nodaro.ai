@@ -23,7 +23,7 @@ const FORCE_PNG_OUTPUT_PROVIDERS = new Set([
 
 // Models that use named image_size values instead of ratio strings (e.g. "landscape_16_9")
 const NAMED_IMAGE_SIZE_PROVIDERS = new Set([
-  "ideogram", "ideogram-edit", "ideogram-remix", "ideogram-reframe", "ideogram-v3",
+  "ideogram-edit", "ideogram-remix", "ideogram-reframe", "ideogram-v3",
   "qwen", "qwen-i2i", "qwen-edit",
 ])
 
@@ -31,7 +31,7 @@ const NAMED_IMAGE_SIZE_PROVIDERS = new Set([
 // Keep in sync with frontend/src/components/editor/config-panels/model-options.ts
 const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "imagen4", "imagen4-fast", "imagen4-ultra",  // up to 5000 chars
-  "ideogram", "ideogram-remix", "ideogram-v3", // up to 500 chars
+  "ideogram-remix", "ideogram-v3", // up to 500 chars
   "qwen", "qwen-edit",                          // up to 500 chars
 ])
 
@@ -144,9 +144,6 @@ export class KieImageProvider
             input.image_input = referenceImageUrls.slice(1)
           }
         }
-      } else if (provider === "ideogram") {
-        // Ideogram character requires reference_image_urls (not image_input)
-        input.reference_image_urls = referenceImageUrls
       } else {
         // Text-to-image models use "image_input" for reference images
         input.image_input = referenceImageUrls

@@ -154,16 +154,9 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
 
   // Ideogram family
-  // See: docs.kie.ai/market/ideogram/character.md
+  // NOTE: ideogram/character (v2) removed — unreliable, requires reference_image_urls.
+  // Use ideogram-v3 for text-to-image instead.
   // NOTE: Ideogram uses `image_size` with named values (square, square_hd, portrait_4_3, etc.)
-  "ideogram": {
-    model: "ideogram/character",
-    credits: 18,
-    cost: 0.09,  // 18 KIE credits * $0.005 (BALANCED rendering_speed default)
-    // NOTE: TURBO = 12 credits ($0.06), QUALITY = 24 credits ($0.12)
-    // Handled via composite identifiers "ideogram:TURBO", "ideogram:QUALITY"
-    extraParams: { image_size: "landscape_16_9", style: "AUTO", rendering_speed: "BALANCED" },
-  },
   "ideogram-edit": {
     model: "ideogram/character-edit",
     credits: 18,

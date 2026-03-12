@@ -1,0 +1,554 @@
+{
+  "nodes": [
+    {
+      "id": "prompt_1",
+      "type": "text-prompt",
+      "position": { "x": 50, "y": 1500 },
+      "data": {
+        "label": "Test Prompt",
+        "text": "A majestic mountain landscape at golden hour sunset, crystal clear alpine lake reflecting snow-capped peaks, wildflowers in foreground, dramatic cirrus clouds painted orange and purple, photorealistic",
+        "variables": {}
+      }
+    },
+    {
+      "id": "upload_1",
+      "type": "upload-image",
+      "position": { "x": 50, "y": 3100 },
+      "data": {
+        "label": "Ref Image (upload before run)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+
+    {
+      "id": "img_1",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 0 },
+      "data": {
+        "label": "nanoBanPro 1K (6cr)",
+        "prompt": "",
+        "provider": "nano-banana-pro",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "1K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_2",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 300 },
+      "data": {
+        "label": "nanoBanPro 2K (6cr)",
+        "prompt": "",
+        "provider": "nano-banana-pro",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "2K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_3",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "label": "nanoBanPro 4K (8cr)",
+        "prompt": "",
+        "provider": "nano-banana-pro",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "4K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_4",
+      "type": "generate-image",
+      "position": { "x": 800, "y": 0 },
+      "data": {
+        "label": "nanoBan2 1K (3cr)",
+        "prompt": "",
+        "provider": "nano-banana-2",
+        "model": "nano-banana-2",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "1K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_5",
+      "type": "generate-image",
+      "position": { "x": 800, "y": 300 },
+      "data": {
+        "label": "nanoBan2 2K (4cr)",
+        "prompt": "",
+        "provider": "nano-banana-2",
+        "model": "nano-banana-2",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "2K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_6",
+      "type": "generate-image",
+      "position": { "x": 800, "y": 600 },
+      "data": {
+        "label": "nanoBan2 4K (6cr)",
+        "prompt": "",
+        "provider": "nano-banana-2",
+        "model": "nano-banana-2",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "4K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_7",
+      "type": "generate-image",
+      "position": { "x": 1100, "y": 0 },
+      "data": {
+        "label": "flux 1K (2cr)",
+        "prompt": "",
+        "provider": "flux",
+        "model": "flux",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "1K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_8",
+      "type": "generate-image",
+      "position": { "x": 1100, "y": 300 },
+      "data": {
+        "label": "flux 2K (3cr)",
+        "prompt": "",
+        "provider": "flux",
+        "model": "flux",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "2K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_9",
+      "type": "generate-image",
+      "position": { "x": 1400, "y": 0 },
+      "data": {
+        "label": "fluxFlex 1K (5cr)",
+        "prompt": "",
+        "provider": "flux-flex",
+        "model": "flux-flex",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "1K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_10",
+      "type": "generate-image",
+      "position": { "x": 1400, "y": 300 },
+      "data": {
+        "label": "fluxFlex 2K (8cr)",
+        "prompt": "",
+        "provider": "flux-flex",
+        "model": "flux-flex",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "2K",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "img_11",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 1000 },
+      "data": {
+        "label": "gptImage medium (2cr)",
+        "prompt": "",
+        "provider": "gpt-image",
+        "model": "gpt-image",
+        "style": "",
+        "aspectRatio": "3:2",
+        "negativePrompt": "",
+        "quality": "medium",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_12",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 1300 },
+      "data": {
+        "label": "gptImage high (7cr)",
+        "prompt": "",
+        "provider": "gpt-image",
+        "model": "gpt-image",
+        "style": "",
+        "aspectRatio": "3:2",
+        "negativePrompt": "",
+        "quality": "high",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_13",
+      "type": "generate-image",
+      "position": { "x": 800, "y": 1000 },
+      "data": {
+        "label": "seedream basic (3cr)",
+        "prompt": "",
+        "provider": "seedream",
+        "model": "seedream",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "quality": "basic",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_14",
+      "type": "generate-image",
+      "position": { "x": 800, "y": 1300 },
+      "data": {
+        "label": "seedream high (4cr)",
+        "prompt": "",
+        "provider": "seedream",
+        "model": "seedream",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "quality": "high",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_15",
+      "type": "generate-image",
+      "position": { "x": 1100, "y": 1000 },
+      "data": {
+        "label": "seedream5Lite basic (2cr)",
+        "prompt": "",
+        "provider": "seedream-5-lite",
+        "model": "seedream-5-lite",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "quality": "basic",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_16",
+      "type": "generate-image",
+      "position": { "x": 1100, "y": 1300 },
+      "data": {
+        "label": "seedream5Lite high (5cr)",
+        "prompt": "",
+        "provider": "seedream-5-lite",
+        "model": "seedream-5-lite",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "quality": "high",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "img_20",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 1700 },
+      "data": {
+        "label": "ideoV3 TURBO (1cr)",
+        "prompt": "",
+        "provider": "ideogram-v3",
+        "model": "ideogram-v3",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "blurry, distorted",
+        "renderingSpeed": "TURBO",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_21",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 2000 },
+      "data": {
+        "label": "ideoV3 BALANCED (2cr)",
+        "prompt": "",
+        "provider": "ideogram-v3",
+        "model": "ideogram-v3",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "blurry, distorted",
+        "renderingSpeed": "BALANCED",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_22",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 2300 },
+      "data": {
+        "label": "ideoV3 QUALITY (3cr)",
+        "prompt": "",
+        "provider": "ideogram-v3",
+        "model": "ideogram-v3",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "blurry, distorted",
+        "renderingSpeed": "QUALITY",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "img_23",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 2700 },
+      "data": {
+        "label": "z-image (1cr)",
+        "prompt": "",
+        "provider": "z-image",
+        "model": "z-image",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_24",
+      "type": "generate-image",
+      "position": { "x": 800, "y": 2700 },
+      "data": {
+        "label": "nanoBanana (2cr)",
+        "prompt": "",
+        "provider": "nano-banana",
+        "model": "nano-banana",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_25",
+      "type": "generate-image",
+      "position": { "x": 1100, "y": 2700 },
+      "data": {
+        "label": "imagen4 (3cr)",
+        "prompt": "",
+        "provider": "imagen4",
+        "model": "imagen4",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "blurry, low quality",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_26",
+      "type": "generate-image",
+      "position": { "x": 1400, "y": 2700 },
+      "data": {
+        "label": "imagen4-fast (2cr)",
+        "prompt": "",
+        "provider": "imagen4-fast",
+        "model": "imagen4-fast",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_27",
+      "type": "generate-image",
+      "position": { "x": 1700, "y": 2700 },
+      "data": {
+        "label": "imagen4-ultra (4cr)",
+        "prompt": "",
+        "provider": "imagen4-ultra",
+        "model": "imagen4-ultra",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_28",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 3000 },
+      "data": {
+        "label": "qwen (2cr)",
+        "prompt": "",
+        "provider": "qwen",
+        "model": "qwen",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "blurry",
+        "seed": 42,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_29",
+      "type": "generate-image",
+      "position": { "x": 800, "y": 3000 },
+      "data": {
+        "label": "grok (2cr)",
+        "prompt": "",
+        "provider": "grok",
+        "model": "grok",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_30",
+      "type": "generate-image",
+      "position": { "x": 1100, "y": 3000 },
+      "data": {
+        "label": "fluxKontext (2cr)",
+        "prompt": "",
+        "provider": "flux-kontext",
+        "model": "flux-kontext",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_31",
+      "type": "generate-image",
+      "position": { "x": 1400, "y": 3000 },
+      "data": {
+        "label": "fluxKontextMax (4cr)",
+        "prompt": "",
+        "provider": "flux-kontext-max",
+        "model": "flux-kontext-max",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+
+    {
+      "id": "img_32",
+      "type": "generate-image",
+      "position": { "x": 500, "y": 3500 },
+      "data": {
+        "label": "nanoBanana +ref (2cr)",
+        "prompt": "",
+        "provider": "nano-banana",
+        "model": "nano-banana",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_33",
+      "type": "generate-image",
+      "position": { "x": 800, "y": 3500 },
+      "data": {
+        "label": "nanoBanPro 1K +ref (6cr)",
+        "prompt": "",
+        "provider": "nano-banana-pro",
+        "model": "gemini-2.5-flash-image",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "1K",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "img_34",
+      "type": "generate-image",
+      "position": { "x": 1100, "y": 3500 },
+      "data": {
+        "label": "nanoBan2 1K +ref (3cr)",
+        "prompt": "",
+        "provider": "nano-banana-2",
+        "model": "nano-banana-2",
+        "style": "",
+        "aspectRatio": "16:9",
+        "negativePrompt": "",
+        "resolution": "1K",
+        "fieldMappings": {}
+      }
+    }
+  ],
+
+  "edges": [
+    { "id": "e_p_1",  "source": "prompt_1", "target": "img_1",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_2",  "source": "prompt_1", "target": "img_2",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_3",  "source": "prompt_1", "target": "img_3",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_4",  "source": "prompt_1", "target": "img_4",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_5",  "source": "prompt_1", "target": "img_5",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_6",  "source": "prompt_1", "target": "img_6",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_7",  "source": "prompt_1", "target": "img_7",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_8",  "source": "prompt_1", "target": "img_8",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_9",  "source": "prompt_1", "target": "img_9",  "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_10", "source": "prompt_1", "target": "img_10", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_11", "source": "prompt_1", "target": "img_11", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_12", "source": "prompt_1", "target": "img_12", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_13", "source": "prompt_1", "target": "img_13", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_14", "source": "prompt_1", "target": "img_14", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_15", "source": "prompt_1", "target": "img_15", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_16", "source": "prompt_1", "target": "img_16", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_20", "source": "prompt_1", "target": "img_20", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_21", "source": "prompt_1", "target": "img_21", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_22", "source": "prompt_1", "target": "img_22", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_23", "source": "prompt_1", "target": "img_23", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_24", "source": "prompt_1", "target": "img_24", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_25", "source": "prompt_1", "target": "img_25", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_26", "source": "prompt_1", "target": "img_26", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_27", "source": "prompt_1", "target": "img_27", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_28", "source": "prompt_1", "target": "img_28", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_29", "source": "prompt_1", "target": "img_29", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_30", "source": "prompt_1", "target": "img_30", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_31", "source": "prompt_1", "target": "img_31", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_32", "source": "prompt_1", "target": "img_32", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_33", "source": "prompt_1", "target": "img_33", "sourceHandle": "prompt", "targetHandle": "in" },
+    { "id": "e_p_34", "source": "prompt_1", "target": "img_34", "sourceHandle": "prompt", "targetHandle": "in" },
+
+    { "id": "e_ref_32", "source": "upload_1", "target": "img_32", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_ref_33", "source": "upload_1", "target": "img_33", "sourceHandle": "image", "targetHandle": "in" },
+    { "id": "e_ref_34", "source": "upload_1", "target": "img_34", "sourceHandle": "image", "targetHandle": "in" }
+  ]
+}

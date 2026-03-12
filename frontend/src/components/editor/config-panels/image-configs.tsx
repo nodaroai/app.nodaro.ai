@@ -42,7 +42,6 @@ const IMAGE_SOURCE_TYPES = new Set(["upload-image", "generate-image", "edit-imag
 const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "nano-banana-pro": 8,
   "nano-banana-2": 4,
-  "ideogram": 5,
 }
 const DEFAULT_REF_IMAGE_MAX = 4
 

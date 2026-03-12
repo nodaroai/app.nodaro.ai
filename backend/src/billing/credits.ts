@@ -95,9 +95,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "imagen4": 3,                  // 8 KIE cr, $0.04
   "imagen4-fast": 2,             // 4 KIE cr, $0.02
   "imagen4-ultra": 4,            // 12 KIE cr, $0.06
-  "ideogram": 6,                 // 18 KIE cr, $0.09 (BALANCED default)
-  "ideogram:TURBO": 4,           // 12 KIE cr, $0.06
-  "ideogram:QUALITY": 8,         // 24 KIE cr, $0.12
   "qwen": 2,                     // 4 KIE cr, $0.02
   "seedream": 3,                 // 6.5 KIE cr, $0.032
   ***REDACTED-OSS-SCRUB***
