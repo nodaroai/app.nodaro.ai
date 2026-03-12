@@ -3642,6 +3642,18 @@ export async function publishApp(data: {
   )
 }
 
+/** Get latest published app for a workflow (owner only). Returns null if none. */
+export async function getAppByWorkflow(workflowId: string): Promise<PublishedApp | null> {
+  try {
+    return await apiRequest<PublishedApp>(
+      `/v1/apps/by-workflow/${encodeURIComponent(workflowId)}`,
+      "Failed to load app",
+    )
+  } catch {
+    return null
+  }
+}
+
 /** List creator's published apps. */
 export async function getMyApps(): Promise<PublishedApp[]> {
   return apiRequest<PublishedApp[]>(

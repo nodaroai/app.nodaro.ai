@@ -29,7 +29,6 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia }: Ima
           <CachedImage
             src={url}
             alt={label}
-            thumbnail
             className="w-full rounded-lg bg-black/20"
           />
           {/* Hover toolbar — top-right, no blur overlay */}
