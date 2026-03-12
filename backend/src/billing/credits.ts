@@ -76,7 +76,7 @@ export interface StorageProfile {
 // Fallback Static Credit Costs (used when model_pricing table doesn't exist)
 // ============================================================
 
-const STATIC_CREDIT_COSTS: Record<string, number> = {
+export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // 1 credit = $0.02. Formula: ceil(providerCost * 1.25 / 0.02)
   // Base entries = default/cheapest setting. Composite entries = specific setting.
   //

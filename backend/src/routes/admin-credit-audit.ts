@@ -10,15 +10,16 @@ import {
   KIE_SPEECH_TO_VIDEO_MODELS, KIE_STORYBOARD_MODELS, KIE_SPECIAL_MODELS,
 } from "../providers/kie/models.js"
 import type { KieModelConfig } from "../providers/kie/models.js"
+import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
 
 ***REDACTED-OSS-SCRUB***
 const KIE_CREDITS_PER_NODARO = 4
 
-// Build reverse map: KIE model ID → { ourKey, expectedCredits, category }
+// Build reverse map: KIE model ID → { ourKey, kieCredits, category }
 interface ModelMapping {
   ourKey: string
-  expectedCredits: number  // in Nodaro credits (KIE credits / 4)
-  expectedCostUsd: number
+  kieCredits: number      // raw KIE credits from our config
+  ourCredits: number      // what we charge users (from STATIC_CREDIT_COSTS)
   category: string
 }
 
@@ -30,8 +31,8 @@ function buildModelMap(): Map<string, ModelMapping[]> {
       const existing = map.get(config.model) ?? []
       existing.push({
         ourKey: key,
-        expectedCredits: config.credits / KIE_CREDITS_PER_NODARO,
-        expectedCostUsd: config.cost,
+        kieCredits: config.credits,
+        ourCredits: STATIC_CREDIT_COSTS[key] ?? 0,
         category,
       })
       map.set(config.model, existing)
@@ -147,14 +148,13 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     // Build our model mapping for comparison
     const modelMap = buildModelMap()
 
-    // Group by KIE model and aggregate
+    // Group by KIE model and aggregate (raw KIE credits)
     const byModel = new Map<string, {
       kieModel: string
       tasks: number
       totalCredits: number
       minCredits: number
       maxCredits: number
-      credits: number[]  // all values for variance detection
     }>()
 
     for (const record of records) {
@@ -167,7 +167,6 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         existing.totalCredits += record.consumeCredits
         existing.minCredits = Math.min(existing.minCredits, record.consumeCredits)
         existing.maxCredits = Math.max(existing.maxCredits, record.consumeCredits)
-        existing.credits.push(record.consumeCredits)
       } else {
         byModel.set(key, {
           kieModel: key,
@@ -175,20 +174,19 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           totalCredits: record.consumeCredits,
           minCredits: record.consumeCredits,
           maxCredits: record.consumeCredits,
-          credits: [record.consumeCredits],
         })
       }
     }
 
-    // Compare against our model configs (all values in Nodaro credits)
+    const round2 = (n: number) => Math.round(n * 100) / 100
+
+    // Compare: provider KIE credits vs what we charge users
     const results = []
     for (const [kieModel, stats] of byModel) {
       const mappings = modelMap.get(kieModel)
-      // Convert KIE credits to Nodaro credits (round to avoid float artifacts)
-      const round2 = (n: number) => Math.round(n * 100) / 100
-      const avgCredits = round2((stats.totalCredits / stats.tasks) / KIE_CREDITS_PER_NODARO)
-      const minCredits = round2(stats.minCredits / KIE_CREDITS_PER_NODARO)
-      const maxCredits = round2(stats.maxCredits / KIE_CREDITS_PER_NODARO)
+      const avgKieCredits = round2(stats.totalCredits / stats.tasks)
+      // What the provider actually costs us in Nodaro credit units
+      const providerCostInCredits = round2(avgKieCredits / KIE_CREDITS_PER_NODARO)
 
       if (!mappings?.length) {
         results.push({
@@ -196,44 +194,55 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           ourKey: null,
           category: "unknown",
           tasks: stats.tasks,
-          actualAvgCredits: avgCredits,
-          actualMinCredits: minCredits,
-          actualMaxCredits: maxCredits,
-          expectedCredits: null,
+          providerCredits: avgKieCredits,
+          providerMin: stats.minCredits,
+          providerMax: stats.maxCredits,
+          ourCredits: null,
+          providerCostInCredits,
           diff: null,
           diffPercent: null,
           status: "UNMAPPED",
-          variable: minCredits !== maxCredits,
+          variable: stats.minCredits !== stats.maxCredits,
         })
         continue
       }
 
-      // Use first mapping (there may be multiple keys mapping to same KIE model)
-      const mapping = mappings[0]
-      const diff = avgCredits - mapping.expectedCredits
-      const diffPercent = mapping.expectedCredits > 0
-        ? Math.round((diff / mapping.expectedCredits) * 10000) / 100
+      // When multiple keys map to same KIE model, pick the one whose
+      // KIE credits are closest to the actual average
+      const mapping = mappings.length === 1
+        ? mappings[0]
+        : mappings.reduce((best, m) =>
+            Math.abs(m.kieCredits - avgKieCredits) < Math.abs(best.kieCredits - avgKieCredits) ? m : best
+          )
+
+      // diff = how much more/less we charge vs provider cost (in Nodaro credits)
+      const diff = round2(mapping.ourCredits - providerCostInCredits)
+      const diffPercent = providerCostInCredits > 0
+        ? round2((diff / providerCostInCredits) * 100)
         : null
 
+      // UNDERPRICED = we charge less than it costs us, OVERPRICED = we charge much more
       let status = "OK"
-      if (Math.abs(diff) > 0.5) {
-        status = diff > 0 ? "UNDERPRICED" : "OVERPRICED"
+      if (diff < -0.5) {
+        status = "UNDERPRICED"
+      } else if (providerCostInCredits > 0 && diffPercent != null && diffPercent > 100) {
+        status = "OVERPRICED"
       }
 
       results.push({
         kieModel,
-        ourKey: mappings.map(m => m.ourKey).join(", "),
+        ourKey: mappings.length === 1 ? mapping.ourKey : mappings.map(m => m.ourKey).join(", "),
         category: mapping.category,
         tasks: stats.tasks,
-        actualAvgCredits: Math.round(avgCredits * 100) / 100,
-        actualMinCredits: minCredits,
-        actualMaxCredits: maxCredits,
-        expectedCredits: mapping.expectedCredits,
-        expectedCostUsd: mapping.expectedCostUsd,
-        diff: round2(diff),
+        providerCredits: avgKieCredits,
+        providerMin: stats.minCredits,
+        providerMax: stats.maxCredits,
+        ourCredits: mapping.ourCredits,
+        providerCostInCredits,
+        diff,
         diffPercent,
         status,
-        variable: minCredits !== maxCredits,
+        variable: stats.minCredits !== stats.maxCredits,
       })
     }
 
@@ -241,7 +250,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     results.sort((a, b) => {
       if (a.status !== "OK" && b.status === "OK") return -1
       if (a.status === "OK" && b.status !== "OK") return 1
-      return Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0)
+      return Math.abs(a.diff ?? 0) - Math.abs(b.diff ?? 0)
     })
 
     const mismatches = results.filter(r => r.status !== "OK")
