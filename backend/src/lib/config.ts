@@ -30,6 +30,14 @@ const envSchema = z.object({
   SOCIAL_ENCRYPTION_KEY: z.string().default(""),
   /** Base URL for OAuth redirects (e.g. https://app.nodaro.ai or http://localhost:8000) */
   PUBLIC_URL: z.string().default(""),
+  /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */
+  MAX_CONCURRENT_NODES_PER_EXECUTION: z.coerce.number().int().min(1).max(20).default(6),
+  /** BullMQ concurrency for the video worker (default 50). Safe to set high — work is I/O-bound (external API calls). */
+  VIDEO_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(50),
+  /** BullMQ concurrency for the orchestrator worker (default 20). I/O-bound — just DB polling and job dispatching. */
+  ORCHESTRATOR_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(20),
+  /** BullMQ concurrency for the render worker (default 2). CPU-bound — each render spawns headless Chrome. */
+  RENDER_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
 })
 
 export type Edition = "community" | "business" | "cloud"

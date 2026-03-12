@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { useNavigate } from "react-router-dom";
+import { isExpandedClone } from "@nodaro-shared/clone-utils";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,
@@ -156,7 +157,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!hasCredits()) return;
-    const executableNodes = storeNodes.filter((n) => isExecutableNode(n));
+    const executableNodes = storeNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n));
     const total = executableNodes.reduce((sum, node) => {
       const data = node.data as Record<string, unknown>;
       const provider = data.provider as string | undefined;
@@ -455,6 +456,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }, []);
 
   const onExecutionEnded = useCallback(() => {
+    setIsRunning(false);
     setActiveExecutionId(null);
     queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);

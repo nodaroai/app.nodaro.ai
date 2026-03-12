@@ -18,10 +18,10 @@
 		}
 	}
 	handle {
+		encode gzip
 		root * /app/frontend/dist
 		try_files {path} /index.html
 		file_server
-		encode gzip
 	}
 	@static path *.js *.css *.png *.svg *.ico *.woff2
 	header @static Cache-Control "public, max-age=31536000, immutable"

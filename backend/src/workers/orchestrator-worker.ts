@@ -32,6 +32,9 @@ import type {
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { filterCloneNodes } from "../../../packages/shared/src/clone-utils.js"
 
+/** Max nodes a single workflow execution can run concurrently. Prevents one large workflow from starving other users. */
+const MAX_CONCURRENT_NODES_PER_EXECUTION = config.MAX_CONCURRENT_NODES_PER_EXECUTION
+
 // ---------------------------------------------------------------------------
 // Worker creation
 // ---------------------------------------------------------------------------
@@ -48,7 +51,7 @@ export function createOrchestratorWorker() {
     },
     {
       connection,
-      concurrency: 2,
+      concurrency: config.ORCHESTRATOR_CONCURRENCY,
       lockDuration: 3_600_000, // 60 min — must match WORKFLOW_TIMEOUT_MS to prevent stalled-job retries
       stalledInterval: 900_000, // 15 min
     },
@@ -337,9 +340,8 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
       if (executableNodes.length === 0) continue
 
-      // Execute all nodes in this level in parallel
-      const results = await Promise.allSettled(
-        executableNodes.map(async (node) => {
+      // Execute nodes in this level with concurrency cap to prevent starving other users
+      const tasks = executableNodes.map((node) => async () => {
           // Mark as running
           nodeStates[node.id] = {
             status: "running",
@@ -450,8 +452,8 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           })
 
           return result
-        }),
-      )
+      })
+      const results = await settledWithLimit(tasks, MAX_CONCURRENT_NODES_PER_EXECUTION)
 
       // Check for failures
       for (let i = 0; i < results.length; i++) {
@@ -733,6 +735,37 @@ function emitExecutionEvent(event: ExecutionEvent): void {
   } catch {
     // Never let event emission break the orchestrator
   }
+}
+
+/**
+ * Like Promise.allSettled but limits how many tasks run concurrently.
+ * Uses a worker-pool pattern so a new task starts as soon as a slot frees up.
+ */
+async function settledWithLimit<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number,
+): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = new Array(tasks.length)
+  let nextIndex = 0
+
+  async function worker(): Promise<void> {
+    while (nextIndex < tasks.length) {
+      const idx = nextIndex++
+      try {
+        const value = await tasks[idx]()
+        results[idx] = { status: "fulfilled", value }
+      } catch (reason) {
+        results[idx] = { status: "rejected", reason }
+      }
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(limit, tasks.length) },
+    () => worker(),
+  )
+  await Promise.all(workers)
+  return results
 }
 
 async function checkExecutionControl(executionId: string): Promise<"running" | "cancelled" | "stopping"> {

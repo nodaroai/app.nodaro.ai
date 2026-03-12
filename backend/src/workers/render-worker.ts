@@ -936,7 +936,7 @@ export function createRenderWorker() {
     },
     {
       connection: connection as unknown as ConnectionOptions,
-      concurrency: 1,
+      concurrency: config.RENDER_WORKER_CONCURRENCY,
       lockDuration: 1_800_000, // 30 minutes
     },
   )

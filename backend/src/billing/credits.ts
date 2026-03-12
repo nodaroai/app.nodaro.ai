@@ -82,15 +82,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   //
   // ── Image Generation ──
   "nano-banana": 2,              // 4 KIE cr, $0.02
-  "nano-banana-2": 3,             // 8 KIE cr, $0.04 (1K default)
-  "nano-banana-2:2K": 4,          // 12 KIE cr, $0.06
-  "nano-banana-2:4K": 6,          // 18 KIE cr, $0.09
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "nano-banana-2:4K": 7,          // 18 KIE cr, $0.09
   "nano-banana-pro": 6,          // 18 KIE cr, $0.09 (1K/2K default)
   "nano-banana-pro:4K": 8,       // 24 KIE cr, $0.12
   ***REDACTED-OSS-SCRUB***
   "flux:2K": 3,                  // 7 KIE cr, $0.035
   "grok": 2,                     // 4 KIE cr, $0.02
-  "gpt-image": 2,                // 4 KIE cr, $0.02 (medium default)
+  ***REDACTED-OSS-SCRUB***
   "gpt-image:high": 7,           // 22 KIE cr, $0.11
   "imagen4": 3,                  // 8 KIE cr, $0.04
   "imagen4-fast": 2,             // 4 KIE cr, $0.02
@@ -122,7 +122,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   "flux-pro-i2i:2K": 3,          // 7 KIE cr, $0.035
   "grok-i2i": 2,                 // 4 KIE cr, $0.02
-  "gpt-image-i2i": 2,            // 4 KIE cr, $0.02 (medium default)
+  ***REDACTED-OSS-SCRUB***
   "gpt-image-i2i:high": 7,       // 22 KIE cr, $0.11
   "ideogram-edit": 6,            // 18 KIE cr, $0.09 (BALANCED default)
   "ideogram-edit:TURBO": 4,      // 12 KIE cr, $0.06
