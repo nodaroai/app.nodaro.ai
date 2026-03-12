@@ -423,7 +423,7 @@ async function executeWorkerNode(
         .from("jobs")
         .update({
           usage_log_id: reservation.usageLogId,
-          credits_estimated: reservation.creditsReserved,
+          credits: reservation.creditsReserved,
           should_watermark: reservation.watermark,
         })
         .eq("id", jobId)

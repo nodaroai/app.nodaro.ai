@@ -396,7 +396,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs with no execution record) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, status, input_data, credits_estimated, error_message, started_at, completed_at, created_at")
+      .select("id, status, input_data, credits, error_message, started_at, completed_at, created_at")
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
@@ -516,7 +516,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, workflow_id, user_id, status, input_data, credits_estimated, error_message, started_at, completed_at, created_at")
+      .select("id, workflow_id, user_id, status, input_data, credits, error_message, started_at, completed_at, created_at")
       .is("workflow_execution_id", null)
       .not("workflow_id", "is", null)
       .order("created_at", { ascending: false })
@@ -685,7 +685,7 @@ function jobToExecutionSummary(row: Record<string, unknown>) {
         status: mappedStatus,
         nodeType: jobType,
         jobId: row.id,
-        creditsUsed: row.credits_estimated ?? 0,
+        creditsUsed: row.credits ?? 0,
         error: row.error_message,
         startedAt: row.started_at,
         completedAt: row.completed_at,
@@ -694,7 +694,7 @@ function jobToExecutionSummary(row: Record<string, unknown>) {
     totalNodes: 1,
     completedNodes: mappedStatus === "completed" ? 1 : 0,
     failedNodes: mappedStatus === "failed" ? 1 : 0,
-    totalCreditsUsed: mappedStatus === "completed" ? (row.credits_estimated as number ?? 0) : 0,
+    totalCreditsUsed: mappedStatus === "completed" ? ((row.credits ?? 0) as number) : 0,
     errorMessage: row.error_message,
     startedAt: row.started_at,
     completedAt: row.completed_at,

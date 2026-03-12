@@ -96,7 +96,7 @@ function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boo
           </div>
           <div>
             <span className="text-muted-foreground">Credits</span>
-            <p>{job.credits_estimated ?? "-"}</p>
+            <p>{job.credits ?? "-"}</p>
           </div>
           <div>
             <span className="text-muted-foreground">Created</span>
@@ -257,7 +257,7 @@ export default function AdminJobsPage() {
                     : <span className="text-xs text-muted-foreground">Single</span>
                   }
                 </td>
-                <td className="px-3 py-2 text-xs">{job.credits_estimated ?? "-"}</td>
+                <td className="px-3 py-2 text-xs">{job.credits ?? "-"}</td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">{job.provider ?? "-"}</td>
                 <td className="px-3 py-2 text-xs">{job.display_cost != null ? `$${job.display_cost.toFixed(4)}` : "-"}</td>
                 <td className="px-3 py-2 text-xs max-w-[100px] truncate text-red-400" title={job.error_message ?? undefined}>
