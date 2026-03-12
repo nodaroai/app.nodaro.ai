@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
+import { getNodeResult, getOutputType } from "../../../packages/shared/src/presentation-utils.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -10,6 +11,35 @@ const VALID_CATEGORIES = [
 ] as const
 
 const VALID_OUTPUT_TYPES = ["image", "video", "audio", "text"] as const
+
+/** Derive a preview media URL from snapshot nodes (thumbnail node or first image/video output). */
+function derivePreviewMedia(
+  nodes: Array<Record<string, unknown>>,
+  thumbnailNodeId?: string | null,
+): { url: string; type: "image" | "video" } | null {
+  // Try thumbnail node first
+  if (thumbnailNodeId) {
+    const thumbNode = nodes.find((n) => n.id === thumbnailNodeId)
+    if (thumbNode?.data) {
+      const result = getNodeResult(thumbNode.data as Record<string, unknown>)
+      if (result.url) {
+        const otype = getOutputType(thumbNode.type as string)
+        return { url: result.url, type: otype === "video" ? "video" : "image" }
+      }
+    }
+  }
+
+  // Fallback: first image or video node with a result
+  for (const n of nodes) {
+    const otype = getOutputType(n.type as string)
+    if ((otype === "image" || otype === "video") && n.data) {
+      const result = getNodeResult(n.data as Record<string, unknown>)
+      if (result.url) return { url: result.url, type: otype }
+    }
+  }
+
+  return null
+}
 
 function generateSlug(name: string): string {
   const base = name
@@ -324,20 +354,44 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
     }
 
-    // Compute version
+    // Compute version + deactivate old versions
     const { data: existingApps } = await supabase
       .from("published_apps")
-      .select("version")
+      .select("id, version, is_listed")
       .eq("workflow_id", workflowId)
       .order("version", { ascending: false })
       .limit(1)
 
     const version = existingApps && existingApps.length > 0 ? existingApps[0].version + 1 : 1
 
+    // Auto-deactivate all previous versions so only the latest is active
+    if (existingApps && existingApps.length > 0) {
+      await supabase
+        .from("published_apps")
+        .update({ is_active: false, is_listed: false })
+        .eq("workflow_id", workflowId)
+        .eq("creator_id", userId)
+    }
+
+    // Carry forward listing status from previous version if not explicitly set
+    const prevWasListed = existingApps?.[0]?.is_listed ?? false
+    const effectiveIsListed = isListed ?? prevWasListed
+
     // Estimate credits
     const nodes = workflow.nodes || []
     const edges = workflow.edges || []
     const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)
+
+    // Auto-derive preview media from snapshot nodes if not provided
+    let effectivePreviewUrl = previewMediaUrl ?? null
+    let effectivePreviewType = previewMediaType ?? null
+    if (!effectivePreviewUrl) {
+      const derived = derivePreviewMedia(nodes as Array<Record<string, unknown>>, thumbnailNodeId)
+      if (derived) {
+        effectivePreviewUrl = derived.url
+        effectivePreviewType = derived.type
+      }
+    }
 
     // Get creator display name
     const creatorDisplayName = await getCreatorDisplayName(userId)
@@ -370,10 +424,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           category: category ?? "other",
           output_types: outputTypes ?? [],
           tags: tags ?? [],
-          preview_media_url: previewMediaUrl ?? null,
-          preview_media_type: previewMediaType ?? null,
+          preview_media_url: effectivePreviewUrl,
+          preview_media_type: effectivePreviewType,
           supports_remix: supportsRemix ?? false,
-          is_listed: isListed ?? false,
+          is_listed: effectiveIsListed,
           creator_display_name: creatorDisplayName,
         })
         .select()
@@ -424,7 +478,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
 
     const { data: apps, error } = await supabase
       .from("published_apps")
-      .select("*, app_runs(count)")
+      .select("*, app_runs(count), workflows!workflow_id(project_id)")
       .eq("creator_id", userId)
       .order("created_at", { ascending: false })
 
@@ -432,10 +486,11 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: "Failed to fetch apps" } })
     }
 
-    // Transform to camelCase + flatten count
+    // Transform to camelCase + flatten count + extract projectId
     const result = (apps || []).map((app: any) => ({
       id: app.id,
       workflowId: app.workflow_id,
+      projectId: app.workflows?.project_id ?? null,
       creatorId: app.creator_id,
       version: app.version,
       slug: app.slug,

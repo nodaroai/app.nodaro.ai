@@ -260,7 +260,7 @@ export default function EmbedPage() {
               className="h-8 border-border bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted touch-manipulation"
             >
               <Clock className="h-4 w-4 mr-1" />
-              Runs ({runSlots.slots.length})
+              Runs · {runSlots.slots.length}
             </Button>
           </div>
         ) : null

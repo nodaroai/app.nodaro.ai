@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { publishApp } from "@/lib/api"
+import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
@@ -59,6 +60,36 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     setPublishing(true)
     try {
       const slug = publishSlug.trim() || undefined
+
+      // Derive preview media from workflow nodes
+      let previewMediaUrl: string | undefined
+      let previewMediaType: string | undefined
+      if (nodes) {
+        const thumbId = thumbnailNodeId !== "__none__" ? thumbnailNodeId : null
+        const thumbNode = thumbId ? nodes.find((n) => n.id === thumbId) : null
+        if (thumbNode?.data) {
+          const result = getNodeResult(thumbNode.data as Record<string, unknown>)
+          if (result.url) {
+            previewMediaUrl = result.url
+            const otype = getOutputType(thumbNode.type)
+            previewMediaType = otype === "video" ? "video" : "image"
+          }
+        }
+        if (!previewMediaUrl) {
+          for (const n of nodes) {
+            const otype = getOutputType(n.type)
+            if ((otype === "image" || otype === "video") && n.data) {
+              const r = getNodeResult(n.data as Record<string, unknown>)
+              if (r.url) {
+                previewMediaUrl = r.url
+                previewMediaType = otype
+                break
+              }
+            }
+          }
+        }
+      }
+
       const result = await publishApp({
         workflowId,
         name: publishName.trim(),
@@ -71,6 +102,8 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
         outputTypes: outputTypes.length > 0 ? outputTypes : undefined,
         tags: tags.length > 0 ? tags : undefined,
         supportsRemix: supportsRemix || undefined,
+        previewMediaUrl,
+        previewMediaType,
       })
       setPublishedSlug(result.slug)
       toast.success("App published!")

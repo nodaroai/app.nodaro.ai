@@ -310,15 +310,21 @@ describe("POST /v1/apps/publish", () => {
       if (table === "published_apps") {
         appsCallCount++
         if (appsCallCount === 1) {
-          // Return existing version 3
+          // Return existing version 3 (with is_listed for carry-forward)
           const mockLimit = vi.fn().mockResolvedValue({
-            data: [{ version: 3 }],
+            data: [{ id: "prev-id", version: 3, is_listed: true }],
             error: null,
           })
           const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
           const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
+        } else if (appsCallCount === 2) {
+          // Deactivate old versions
+          const mockEq2 = vi.fn().mockResolvedValue({ error: null })
+          const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+          const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
+          return { update: mockUpdate } as never
         } else {
           // Insert with version 4
           const v4App = { ...DB_PUBLISHED_APP, version: 4 }

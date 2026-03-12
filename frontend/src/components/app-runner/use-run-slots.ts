@@ -312,7 +312,7 @@ export function useRunSlots({ slug, user, persistRuns }: UseRunSlotsOptions) {
     else if (isSlotFailed) handleRetry()
     else handleCreateNew()
   }, [isSlotIdle, isSlotFailed, handleClear, handleRetry, handleCreateNew])
-  const newRunLabel = isSlotIdle ? "Clear" : isSlotFailed ? "Retry" : "Create New"
+  const newRunLabel = isSlotIdle ? "Clear" : isSlotFailed ? "Retry" : "New Run"
 
   // Select slot
   const handleSelectSlot = useCallback((slotId: string) => {
