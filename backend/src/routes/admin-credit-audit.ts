@@ -11,10 +11,13 @@ import {
 } from "../providers/kie/models.js"
 import type { KieModelConfig } from "../providers/kie/models.js"
 
+***REDACTED-OSS-SCRUB***
+const KIE_CREDITS_PER_NODARO = 4
+
 // Build reverse map: KIE model ID → { ourKey, expectedCredits, category }
 interface ModelMapping {
   ourKey: string
-  expectedCredits: number
+  expectedCredits: number  // in Nodaro credits (KIE credits / 4)
   expectedCostUsd: number
   category: string
 }
@@ -27,7 +30,7 @@ function buildModelMap(): Map<string, ModelMapping[]> {
       const existing = map.get(config.model) ?? []
       existing.push({
         ourKey: key,
-        expectedCredits: config.credits,
+        expectedCredits: config.credits / KIE_CREDITS_PER_NODARO,
         expectedCostUsd: config.cost,
         category,
       })
@@ -177,11 +180,15 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       }
     }
 
-    // Compare against our model configs
+    // Compare against our model configs (all values in Nodaro credits)
     const results = []
     for (const [kieModel, stats] of byModel) {
       const mappings = modelMap.get(kieModel)
-      const avgCredits = stats.totalCredits / stats.tasks
+      // Convert KIE credits to Nodaro credits (round to avoid float artifacts)
+      const round2 = (n: number) => Math.round(n * 100) / 100
+      const avgCredits = round2((stats.totalCredits / stats.tasks) / KIE_CREDITS_PER_NODARO)
+      const minCredits = round2(stats.minCredits / KIE_CREDITS_PER_NODARO)
+      const maxCredits = round2(stats.maxCredits / KIE_CREDITS_PER_NODARO)
 
       if (!mappings?.length) {
         results.push({
@@ -189,14 +196,14 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           ourKey: null,
           category: "unknown",
           tasks: stats.tasks,
-          actualAvgCredits: Math.round(avgCredits * 100) / 100,
-          actualMinCredits: stats.minCredits,
-          actualMaxCredits: stats.maxCredits,
+          actualAvgCredits: avgCredits,
+          actualMinCredits: minCredits,
+          actualMaxCredits: maxCredits,
           expectedCredits: null,
           diff: null,
           diffPercent: null,
           status: "UNMAPPED",
-          variable: stats.minCredits !== stats.maxCredits,
+          variable: minCredits !== maxCredits,
         })
         continue
       }
@@ -219,14 +226,14 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         category: mapping.category,
         tasks: stats.tasks,
         actualAvgCredits: Math.round(avgCredits * 100) / 100,
-        actualMinCredits: stats.minCredits,
-        actualMaxCredits: stats.maxCredits,
+        actualMinCredits: minCredits,
+        actualMaxCredits: maxCredits,
         expectedCredits: mapping.expectedCredits,
         expectedCostUsd: mapping.expectedCostUsd,
-        diff: Math.round(diff * 100) / 100,
+        diff: round2(diff),
         diffPercent,
         status,
-        variable: stats.minCredits !== stats.maxCredits,
+        variable: minCredits !== maxCredits,
       })
     }
 

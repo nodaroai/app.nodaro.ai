@@ -90,7 +90,7 @@ function computeQuickStats(models: ReadonlyArray<DBModelPricing>) {
     { label: "Enabled models", value: `${enabledModels.length} / ${models.length}` },
     { label: "All images", value: imageRange },
     { label: "FFmpeg nodes", value: "Always free" },
-    { label: "Markup", value: "KIE 25% / Replicate 10%" },
+    { label: "Markup", value: "25%" },
     { label: "Sell price / credit", value: `$${SELL_PRICE_PER_CREDIT_MIN} - $${SELL_PRICE_PER_CREDIT_MAX}` },
   ] as const
 }
@@ -273,24 +273,7 @@ function InlineEditableCell({
   )
 }
 
-// ── Provider Badge ──────────────────────────────────────────────────
-
-const PROVIDER_BADGE_COLORS: Readonly<Record<string, string>> = {
-  "KIE.ai": "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
-  "Replicate": "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  "Self": "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-}
-
-function ProviderBadge({ provider }: { readonly provider?: string }) {
-  if (!provider) return <span className="text-[10px] text-muted-foreground italic">unknown</span>
-  return (
-    <Badge className={`text-[10px] border-0 ${PROVIDER_BADGE_COLORS[provider] ?? "bg-muted text-muted-foreground"}`}>
-      {provider}
-    </Badge>
-  )
-}
-
-// ── Detailed Model Table (with provider cost, markup, margin) ───────
+// ── Detailed Model Table (with base cost, markup, margin) ───────
 
 function DetailedModelTable({
   models,
@@ -352,8 +335,7 @@ function DetailedModelTable({
                 <thead className="bg-muted/20">
                   <tr className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="text-left px-3 py-2 font-medium">Model</th>
-                    <th className="text-left px-3 py-2 font-medium">Provider</th>
-                    <th className="text-right px-3 py-2 font-medium">Our Cost</th>
+                    <th className="text-right px-3 py-2 font-medium">Base Cost</th>
                     <th className="text-right px-3 py-2 font-medium">Markup</th>
                     <th className="text-right px-3 py-2 font-medium">+Markup</th>
                     <th className="text-right px-3 py-2 font-medium">Credits</th>
@@ -396,11 +378,7 @@ function DetailedModelTable({
                             </div>
                           </div>
                         </td>
-                        {/* Provider */}
-                        <td className="px-3 py-2.5">
-                          <ProviderBadge provider={ref?.provider} />
-                        </td>
-                        {/* Provider cost */}
+                        {/* Base cost */}
                         <td className="px-3 py-2.5 text-right font-mono text-xs">
                           {providerCost != null
                             ? `$${providerCost.toFixed(3)}`
