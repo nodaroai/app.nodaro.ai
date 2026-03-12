@@ -7,16 +7,19 @@ export { useUserCredits } from "@/hooks/queries/use-credits-queries"
 
 interface CreditBalanceProps {
   userId: string
+  onClick?: () => void
 }
 
-export function CreditBalance({ userId }: CreditBalanceProps) {
+export function CreditBalance({ userId, onClick }: CreditBalanceProps) {
   const { data: balance, isLoading, error } = useUserCredits(userId)
 
   if (!hasCredits()) return null
 
+  const baseClass = "flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md"
+
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md animate-pulse">
+      <div className={`${baseClass} animate-pulse`}>
         <div className="w-4 h-4 bg-muted-foreground/20 rounded" />
         <div className="w-12 h-4 bg-muted-foreground/20 rounded" />
       </div>
@@ -25,15 +28,15 @@ export function CreditBalance({ userId }: CreditBalanceProps) {
 
   if (error || !balance) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md">
+      <div className={baseClass}>
         <Coins className="w-4 h-4 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">&mdash;</span>
       </div>
     )
   }
 
-  return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md">
+  const content = (
+    <>
       <Coins className="w-4 h-4 text-muted-foreground" />
       <span className="text-sm font-medium font-mono">{balance.total.toLocaleString()}</span>
       <span className="text-xs text-muted-foreground">credits</span>
@@ -43,6 +46,24 @@ export function CreditBalance({ userId }: CreditBalanceProps) {
       >
         {balance.tier}
       </Badge>
+    </>
+  )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${baseClass} cursor-pointer hover:bg-muted/80 transition-colors`}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <div className={baseClass}>
+      {content}
     </div>
   )
 }
