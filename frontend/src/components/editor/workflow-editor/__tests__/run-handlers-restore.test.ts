@@ -75,6 +75,7 @@ vi.mock("../types", () => ({
       super("Workflow changed during execution")
     }
   },
+  MAX_CONSECUTIVE_POLL_FAILURES: 5,
   NODE_CREDIT_COSTS: { "generate-image": 1 } as Record<string, number>,
   isExecutableNode: (n: any) => {
     const EXECUTABLE = new Set([
