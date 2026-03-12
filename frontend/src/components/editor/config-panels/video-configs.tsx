@@ -704,10 +704,10 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         </p>
       )}
       <p className="text-xs text-muted-foreground px-1">
-        {({ "kling-3.0": "Uses Kling 3.0 Motion Control via KIE.ai. Connect image and video inputs.",
+        {({ "kling-3.0": "Uses Kling 3.0 Motion Control. Connect image and video inputs.",
            "wan-animate-move": "Moves character from image within the video scene (~1s output).",
            "wan-animate-replace": "Replaces character in video with character from image (~1s output).",
-        } as Record<string, string>)[provider] ?? "Uses Kling 2.6 Motion Control via KIE.ai. Connect image and video inputs."}
+        } as Record<string, string>)[provider] ?? "Uses Kling 2.6 Motion Control. Connect image and video inputs."}
       </p>
     </div>
   )
@@ -749,7 +749,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 
       <p className="text-xs text-muted-foreground px-1">
         {provider === "topaz"
-          ? "Uses Topaz Video Upscaler via KIE.ai. Max 50MB input video."
+          ? "Uses Topaz Video Upscaler. Max 50MB input video."
           : "Upscales a VEO video to higher resolution. Connect an upstream VEO video node."}
       </p>
     </div>

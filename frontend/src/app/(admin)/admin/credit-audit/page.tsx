@@ -58,7 +58,7 @@ export default function AdminCreditAudit() {
 
   async function runAudit() {
     if (!token.trim()) {
-      setError("Paste the authorization header value from kie.ai/logs Network tab")
+      setError("Paste the authorization header value from the provider logs Network tab")
       return
     }
     setLoading(true)
@@ -113,7 +113,7 @@ export default function AdminCreditAudit() {
     <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Credit Audit</h1>
       <p className="text-sm text-muted-foreground mb-6">
-        Compare actual KIE.ai credits consumed against our hardcoded pricing
+        Compare actual provider cost against our hardcoded credit pricing
       </p>
 
       {/* Config section */}
@@ -121,11 +121,11 @@ export default function AdminCreditAudit() {
         <div className="flex flex-col sm:flex-row gap-3 items-end">
           <div className="flex-1 min-w-0">
             <label className="text-xs font-medium text-muted-foreground mb-1 block">
-              KIE Session Token
+              Provider Session Token
             </label>
             <Input
               type="password"
-              placeholder="Paste authorization header from kie.ai/logs"
+              placeholder="Paste authorization header from provider logs"
               value={token}
               onChange={e => setToken(e.target.value)}
               className="font-mono text-xs"
@@ -149,7 +149,7 @@ export default function AdminCreditAudit() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Open kie.ai/logs → DevTools → Network → copy the <code className="text-[#ff0073]">authorization</code> header value from any request
+          Open provider dashboard logs → DevTools → Network → copy the <code className="text-[#ff0073]">authorization</code> header value from any request
         </p>
       </div>
 
@@ -216,7 +216,7 @@ export default function AdminCreditAudit() {
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">KIE Model</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Provider Model</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Our Key</th>
                     <th className="text-right p-3 font-medium text-muted-foreground">Tasks</th>
                     <th className="text-right p-3 font-medium text-muted-foreground">Actual Credits</th>

@@ -93,14 +93,11 @@ export default function AdminSettingsPage() {
               <p className="font-medium">Self-Hosted Edition</p>
               <p className="text-sm text-muted-foreground mt-1">
                 Provider selection is not available in the self-hosted edition.
-                All AI requests are routed through Replicate using your API token.
+                All AI requests use your configured API token.
               </p>
               <p className="text-sm text-muted-foreground mt-2">
-                Configure your Replicate API token in the <code className="bg-muted px-1 rounded">.env</code> file:
+                Configure your API token in the <code className="bg-muted px-1 rounded">.env</code> file.
               </p>
-              <pre className="mt-2 bg-muted p-2 rounded text-xs">
-                REPLICATE_API_TOKEN=your_token_here
-              </pre>
             </div>
           </div>
         </div>
