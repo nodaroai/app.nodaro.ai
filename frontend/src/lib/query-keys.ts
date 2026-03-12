@@ -32,6 +32,13 @@ export const queryKeys = {
     all: ["app-settings"] as const,
   },
 
+  // App Marketplace
+  appMarketplace: {
+    all: ["app-marketplace"] as const,
+    browse: (filter: string) => ["app-marketplace", "browse", filter] as const,
+    favorites: (userId: string) => ["app-marketplace", "favorites", userId] as const,
+  },
+
   // Gallery
   gallery: {
     all: ["gallery"] as const,
