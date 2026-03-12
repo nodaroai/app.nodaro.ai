@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
+import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Maximize2, Minimize2, Sparkles } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   KeyboardSensor,
@@ -21,8 +21,17 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable"
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { CreditBalance } from "@/components/credits/CreditBalance"
 import { AppCreditsIndicator } from "@/components/credits/AppCreditsIndicator"
+import { GetCreditsModal } from "@/components/credits/GetCreditsModal"
+import { useUserCredits } from "@/hooks/queries/use-credits-queries"
+import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { hasCredits } from "@/lib/edition"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
@@ -108,12 +117,13 @@ interface PresentationViewProps {
 }
 
 export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle }: PresentationViewProps) {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
   const [pickerSection, setPickerSection] = useState<"inputs" | "outputs" | null>(null)
   const [isOpeningNewTab, setIsOpeningNewTab] = useState(false)
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false)
+  const [showGetCreditsModal, setShowGetCreditsModal] = useState(false)
 
   // Native fullscreen toggle (browser Fullscreen API)
   const toggleNativeFullscreen = useCallback(() => {
@@ -185,6 +195,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const isAppRunner = isFullscreen && !!onNewRun
   const isShareReadOnly = isFullscreen && !!settings.shareReadOnly && !isAppRunner
 
+  // Credit check for app runner "Get Credits" button (hooks must be unconditional)
+  const appRunnerInsufficientCredits = useAppRunnerStore((s) => s.insufficientCredits)
+  const { data: userCredits } = useUserCredits(user?.id)
+
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
     // Update URL param
     setSearchParams((prev) => {
@@ -230,6 +244,22 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [isFullscreen, nodes])
 
   const estimatedCost = isFullscreen ? presEstimatedCost : tabEstimatedCost
+
+  // Pre-check: does the user need more credits to run this app?
+  const needsMoreCredits = useMemo(() => {
+    if (!user || !isAppRunner || !hasCredits() || !userCredits || estimatedCost <= 0) return false
+    if (userCredits.tier === "free") {
+      return (userCredits.appCreditsAllowance + userCredits.topup) < estimatedCost
+    }
+    return userCredits.total < estimatedCost
+  }, [user, isAppRunner, userCredits, estimatedCost])
+
+  // Auto-open modal when a 402 insufficient credits error occurs
+  useEffect(() => {
+    if (isAppRunner && appRunnerInsufficientCredits) {
+      setShowGetCreditsModal(true)
+    }
+  }, [isAppRunner, appRunnerInsufficientCredits])
 
   // Running state
   const isEditorRunning = useWorkflowStore((s) => {
@@ -566,6 +596,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             {isFullscreen && <ThemeToggle />}
             {user && hasCredits() && <CreditBalance userId={user.id} />}
             {user && hasCredits() && isAppRunner && <AppCreditsIndicator userId={user.id} estimatedCost={estimatedCost} />}
+            {user && isAppRunner && (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="sm" onClick={signOut} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{user.email}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             {(mode === "tab" || (isFullscreen && !isShareReadOnly)) && (
               <RunTargetSelector
                 nodes={nodes}
@@ -603,18 +645,29 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               </button>
             ) : (
               inputsReadOnly !== true && (
-                <button
-                  type="button"
-                  onClick={handleRunClick}
-                  className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-                  disabled={!!user && !allInputsFilled}
-                >
-                  {!user ? (
-                    <><LogIn className="h-4 w-4" />Sign in to Run</>
-                  ) : (
-                    <><Play className="h-4 w-4" />Run{costLabel}</>
-                  )}
-                </button>
+                needsMoreCredits ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowGetCreditsModal(true)}
+                    className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {userCredits?.tier === "free" ? "Get Free Credits" : "Get Credits"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleRunClick}
+                    className="h-9 md:h-8 px-3 md:px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                    disabled={!!user && !allInputsFilled}
+                  >
+                    {!user ? (
+                      <><LogIn className="h-4 w-4" />Sign in to Run</>
+                    ) : (
+                      <><Play className="h-4 w-4" />Run{costLabel}</>
+                    )}
+                  </button>
+                )
               )
             )}
           </div>
@@ -636,6 +689,23 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           {isFullscreen && <ThemeToggle />}
           {user && hasCredits() && <CreditBalance userId={user.id} />}
           {user && hasCredits() && isAppRunner && <AppCreditsIndicator userId={user.id} estimatedCost={estimatedCost} />}
+          {user && isAppRunner && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={signOut}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{user.email}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           {/* Edit/View toggle — only for editable view modes */}
           {isOwner && mode === "tab" && canEdit && (
@@ -784,6 +854,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           totalCount={mediaItems.length}
           onPrev={lightboxIndex > 0 ? handleLightboxPrev : undefined}
           onNext={lightboxIndex < mediaItems.length - 1 ? handleLightboxNext : undefined}
+        />
+      )}
+
+      {/* Get Credits modal for app runner */}
+      {isAppRunner && userCredits && (
+        <GetCreditsModal
+          open={showGetCreditsModal}
+          onClose={() => setShowGetCreditsModal(false)}
+          tier={userCredits.tier}
+          balance={userCredits.total}
+          required={estimatedCost}
+          appCreditsAllowance={userCredits.appCreditsAllowance}
         />
       )}
     </div>

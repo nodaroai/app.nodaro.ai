@@ -11,6 +11,7 @@ import {
   Loader2,
   HardDrive,
   FolderOpen,
+  Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -176,9 +177,13 @@ export default function BillingPage() {
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Monthly Credits</p>
+              <p className="text-sm text-muted-foreground">Credits / month</p>
               <p className="text-lg font-semibold">
-                {currentTier?.credits ?? 50}
+                {(balance?.tier ?? "free") === "free" ? (
+                  <span className="text-muted-foreground text-sm">one-time grant</span>
+                ) : (
+                  currentTier?.credits ?? 0
+                )}
               </p>
             </div>
             <div>
@@ -232,19 +237,25 @@ export default function BillingPage() {
         ) : balance ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
-              <p className="text-sm text-muted-foreground">Total</p>
+              <p className="text-sm text-muted-foreground">Remaining</p>
               <p className="text-2xl font-bold font-mono">{balance.total}</p>
+              {balance.topup > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {balance.subscription} {balance.tier === "free" ? "one-time" : "sub"} + {balance.topup} top-up
+                </p>
+              )}
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Subscription</p>
-              <p className="text-2xl font-bold font-mono">{balance.subscription}</p>
+              <p className="text-sm text-muted-foreground">Total Used</p>
+              <p className="text-2xl font-bold font-mono">
+                {(currentTier?.credits ?? 150) - balance.subscription}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                of {currentTier?.credits ?? 150} {balance.tier === "free" ? "one-time" : "/ month"}
+              </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Top-up</p>
-              <p className="text-2xl font-bold font-mono">{balance.topup}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Used Today</p>
+              <p className="text-sm text-muted-foreground">Today</p>
               <p className="text-2xl font-bold font-mono">
                 {balance.dailySpent}
                 {balance.dailyLimit != null && (
@@ -253,6 +264,13 @@ export default function BillingPage() {
                   </span>
                 )}
               </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <Zap className="h-3.5 w-3.5" />App Credits
+              </p>
+              <p className="text-2xl font-bold font-mono">{balance.appCreditsAllowance ?? 0}</p>
+              <p className="text-xs text-muted-foreground">earned via editor</p>
             </div>
           </div>
         ) : (
