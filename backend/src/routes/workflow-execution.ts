@@ -470,7 +470,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       }
     }
 
-    // Resolve cursor timestamp
+    // Resolve cursor timestamp (check both tables)
     let cursorTimestamp: string | undefined
     if (cursor) {
       const { data: cursorExec } = await supabase
@@ -480,10 +480,19 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         .single()
       if (cursorExec) {
         cursorTimestamp = cursorExec.created_at as string
+      } else {
+        const { data: cursorJob } = await supabase
+          .from("jobs")
+          .select("created_at")
+          .eq("id", cursor)
+          .single()
+        if (cursorJob) cursorTimestamp = cursorJob.created_at as string
       }
     }
 
-    // Build query
+    const statusFilter = status ? status.split(",").map((s) => s.trim()).filter(Boolean) : []
+
+    // --- Source 1: workflow_executions ---
     let execQuery = supabase
       .from("workflow_executions")
       .select("id, workflow_id, user_id, status, trigger_type, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
@@ -494,8 +503,6 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       execQuery = execQuery.eq("user_id", req.userId)
     }
 
-    // Filter by status
-    const statusFilter = status ? status.split(",").map((s) => s.trim()).filter(Boolean) : []
     if (statusFilter.length === 1) {
       execQuery = execQuery.eq("status", statusFilter[0])
     } else if (statusFilter.length > 1) {
@@ -506,20 +513,51 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       execQuery = execQuery.lt("created_at", cursorTimestamp)
     }
 
-    const { data: execData, error: execError } = await execQuery
+    // --- Source 2: standalone jobs (single-node runs) ---
+    let jobsQuery = supabase
+      .from("jobs")
+      .select("id, workflow_id, user_id, status, input_data, credits_estimated, error_message, started_at, completed_at, created_at")
+      .is("workflow_execution_id", null)
+      .not("workflow_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(limit + 1)
 
-    if (execError) {
+    if (!isAdminViewAll) {
+      jobsQuery = jobsQuery.eq("user_id", req.userId)
+    }
+
+    if (statusFilter.length > 0) {
+      const jobStatuses = mapExecStatusesToJobStatuses(statusFilter)
+      if (jobStatuses.length === 1) {
+        jobsQuery = jobsQuery.eq("status", jobStatuses[0])
+      } else if (jobStatuses.length > 1) {
+        jobsQuery = jobsQuery.in("status", jobStatuses)
+      }
+    }
+
+    if (cursorTimestamp) {
+      jobsQuery = jobsQuery.lt("created_at", cursorTimestamp)
+    }
+
+    const [execResult, jobsResult] = await Promise.all([execQuery, jobsQuery])
+
+    if (execResult.error) {
       return reply.status(500).send({
-        error: { code: "internal_error", message: execError.message },
+        error: { code: "internal_error", message: execResult.error.message },
       })
     }
 
-    const rows = execData ?? []
-    const hasMore = rows.length > limit
-    const pageRows = hasMore ? rows.slice(0, limit) : rows
+    // Merge both sources, sort by created_at desc, take limit + 1
+    const execRows = (execResult.data ?? []).map((row) => ({ ...toExecutionSummary(row), workflowId: row.workflow_id, userId: row.user_id, _source: "exec" as const }))
+    const jobRows = (jobsResult.data ?? []).map((row) => ({ ...jobToExecutionSummary(row), workflowId: row.workflow_id, userId: row.user_id, _source: "job" as const }))
+    const merged = [...execRows, ...jobRows]
+      .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
+
+    const hasMore = merged.length > limit
+    const pageRows = hasMore ? merged.slice(0, limit) : merged
 
     // Enrich with workflow names + project IDs
-    const workflowIds = [...new Set(pageRows.map((r) => r.workflow_id as string))]
+    const workflowIds = [...new Set(pageRows.map((r) => r.workflowId as string).filter(Boolean))]
     const workflowMap = new Map<string, { name: string; projectId: string }>()
     if (workflowIds.length > 0) {
       const { data: workflows } = await supabase
@@ -537,7 +575,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // For admin view, fetch owner emails
     const emailMap = new Map<string, string>()
     if (isAdminViewAll) {
-      const userIds = [...new Set(pageRows.map((r) => r.user_id as string))]
+      const userIds = [...new Set(pageRows.map((r) => r.userId as string).filter(Boolean))]
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles")
@@ -550,13 +588,24 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
 
     const items = pageRows.map((row) => {
-      const wf = workflowMap.get(row.workflow_id as string)
+      const wf = workflowMap.get(row.workflowId as string)
       return {
-        ...toExecutionSummary(row),
-        workflowId: row.workflow_id,
+        id: row.id,
+        status: row.status,
+        triggerType: row.triggerType,
+        nodeStates: row.nodeStates,
+        totalNodes: row.totalNodes,
+        completedNodes: row.completedNodes,
+        failedNodes: row.failedNodes,
+        totalCreditsUsed: row.totalCreditsUsed,
+        errorMessage: row.errorMessage,
+        startedAt: row.startedAt,
+        completedAt: row.completedAt,
+        createdAt: row.createdAt,
+        workflowId: row.workflowId,
         workflowName: wf?.name ?? null,
         projectId: wf?.projectId ?? null,
-        ...(isAdminViewAll ? { ownerEmail: emailMap.get(row.user_id as string) ?? null } : {}),
+        ...(isAdminViewAll ? { ownerEmail: emailMap.get(row.userId as string) ?? null } : {}),
       }
     })
 

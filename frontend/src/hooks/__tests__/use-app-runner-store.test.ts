@@ -1,12 +1,16 @@
 import { describe, it, expect, afterEach, vi } from "vitest"
 
-vi.mock("@/lib/api", () => ({
-  getPublishedApp: vi.fn(),
-  runPublishedApp: vi.fn(),
-  getAppRuns: vi.fn(),
-  getAppExecutionStatus: vi.fn(),
-  deleteAppRun: vi.fn(),
-}))
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>()
+  return {
+    ...actual,
+    getPublishedApp: vi.fn(),
+    runPublishedApp: vi.fn(),
+    getAppRuns: vi.fn(),
+    getAppExecutionStatus: vi.fn(),
+    deleteAppRun: vi.fn(),
+  }
+})
 
 import { useAppRunnerStore } from "../use-app-runner-store"
 import {
